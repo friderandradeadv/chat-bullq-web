@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Settings,
@@ -47,7 +48,9 @@ export function AppSidebar() {
     useAuthStore();
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
   const { resolvedTheme, setTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isDark = mounted && resolvedTheme === 'dark';
 
   const handleOrgSwitch = (orgId: string) => {
     setActiveOrg(orgId);
