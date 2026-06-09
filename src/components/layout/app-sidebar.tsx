@@ -8,7 +8,10 @@ import {
   Building2,
   ChevronUp,
   Zap,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { InboxTree } from '@/features/inbox-views/components/inbox-tree';
 import { JarvisTree } from '@/features/ai-agents/components/jarvis-tree';
 import { PipelinesTree } from '@/features/pipelines/components/pipelines-tree';
@@ -43,6 +46,8 @@ export function AppSidebar() {
   const { user, organizations, activeOrgId, setActiveOrg, logout } =
     useAuthStore();
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const handleOrgSwitch = (orgId: string) => {
     setActiveOrg(orgId);
@@ -119,6 +124,10 @@ export function AppSidebar() {
             <DropdownItem href="/settings">
               <Settings />
               <DropdownLabel>Configurações</DropdownLabel>
+            </DropdownItem>
+            <DropdownItem onClick={() => setTheme(isDark ? 'light' : 'dark')}>
+              {isDark ? <Sun /> : <Moon />}
+              <DropdownLabel>{isDark ? 'Modo claro' : 'Modo escuro'}</DropdownLabel>
             </DropdownItem>
             <DropdownDivider />
             <DropdownItem onClick={logout}>
