@@ -16,6 +16,7 @@ import { useTheme } from 'next-themes';
 import { InboxTree } from '@/features/inbox-views/components/inbox-tree';
 import { JarvisTree } from '@/features/ai-agents/components/jarvis-tree';
 import { PipelinesTree } from '@/features/pipelines/components/pipelines-tree';
+import { QueuesTree } from '@/features/queues/components/queues-tree';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { Avatar } from '@/components/ui/avatar';
@@ -93,6 +94,7 @@ export function AppSidebar() {
           <InboxTree />
           <PipelinesTree />
           <JarvisTree />
+          <QueuesTree />
           {navItems.map((item) => (
             <SidebarItem key={item.href} href={item.href}>
               <item.icon className="size-5" />
