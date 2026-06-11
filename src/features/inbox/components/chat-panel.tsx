@@ -1,11 +1,15 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState, useCallback } from 'react';
+import { Fragment, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban } from 'lucide-react';
+import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
-import { ChatInput } from './chat-input';
+import { scheduledMessagesService } from '../services/scheduled-messages.service';
+import { ChatInput, type ChatInputHandle } from './chat-input';
+import { ConversationSummaryModal } from './conversation-summary-modal';
+import { ForwardMessageModal } from './forward-message-modal';
+import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { ConversationHeader } from './conversation-header';
 import { StoryReplyCard } from './story-reply-card';
 import { AudioMessagePlayer } from './audio-message-player';
@@ -19,14 +23,13 @@ import {
 import { useSocket } from '../hooks/use-socket';
 import { useAuthStore } from '@/stores/auth-store';
 import { PendingActionsList } from '../pending-actions/pending-actions-list';
+import { formatPhone } from '@/lib/brazil-states';
 
 interface ChatPanelProps {
   conversation: Conversation;
   onConversationUpdate: () => void;
-  /** Forwarded to ConversationHeader so the agent-runs sidebar toggle
-   *  shows up in the chat header. */
-  onToggleAgentLogs?: () => void;
-  agentLogsOpen?: boolean;
+  panelOpen?: boolean;
+  onTogglePanel?: () => void;
 }
 
 const statusIcons: Record<string, React.ElementType> = {
@@ -159,7 +162,7 @@ function LinkPreviewCard({ url, isOutbound }: { url: string; isOutbound: boolean
       rel="noopener noreferrer"
       className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
         isOutbound
-          ? 'border-primary-foreground/20 bg-primary-foreground/10 hover:bg-primary-foreground/15'
+          ? 'border-black/10 bg-black/5 hover:bg-black/10 dark:border-white/15 dark:bg-white/10 dark:hover:bg-white/15'
           : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:bg-zinc-800'
       }`}
     >
@@ -187,7 +190,7 @@ function renderInlineTextWithLinks(text: string, isOutbound: boolean) {
           target="_blank"
           rel="noopener noreferrer"
           className={`underline underline-offset-2 wrap-break-word ${
-            isOutbound ? 'text-primary-foreground' : 'text-primary'
+            isOutbound ? 'text-emerald-700 dark:text-emerald-200' : 'text-primary'
           }`}
         >
           {part}
@@ -246,7 +249,7 @@ function TemplateButtonRow({
         const label = btn.title || btn.url || btn.payload || 'Botão';
         const baseClass = `block rounded-md border px-3 py-1.5 text-center text-xs font-medium transition-colors ${
           isOutbound
-            ? 'border-primary-foreground/30 bg-primary-foreground/10 hover:bg-primary-foreground/20'
+            ? 'border-black/10 bg-black/5 hover:bg-black/10 dark:border-white/15 dark:bg-white/10 dark:hover:bg-white/15'
             : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200 dark:hover:bg-zinc-800'
         }`;
         if (btn.url) {
@@ -296,7 +299,7 @@ function TemplateMessage({
           key={i}
           className={`overflow-hidden rounded-lg border ${
             isOutbound
-              ? 'border-primary-foreground/20 bg-primary-foreground/5'
+              ? 'border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10'
               : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/60'
           }`}
         >
@@ -349,7 +352,6 @@ function ContactAvatar({
   size?: 'sm' | 'md';
 }) {
   const [failed, setFailed] = useState(false);
-  const initials = (name || '??').slice(0, 2).toUpperCase();
   const dim = size === 'sm' ? 'h-7 w-7 text-[10px]' : 'h-10 w-10 text-sm';
   if (avatarUrl && !failed) {
     return (
@@ -363,19 +365,15 @@ function ContactAvatar({
   }
   return (
     <div
-      className={`${dim} flex shrink-0 items-center justify-center rounded-full bg-zinc-200 font-semibold text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400`}
+      className={`${dim} flex shrink-0 items-center justify-center rounded-full font-semibold text-white`}
+      style={{ backgroundColor: avatarColor(name) }}
     >
-      {initials}
+      {avatarInitials(name)}
     </div>
   );
 }
 
-export function ChatPanel({
-  conversation,
-  onConversationUpdate,
-  onToggleAgentLogs,
-  agentLogsOpen,
-}: ChatPanelProps) {
+export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTogglePanel }: ChatPanelProps) {
   const queryClient = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
   const { on, emit, onReconnect } = useSocket();
@@ -393,6 +391,69 @@ export function ChatPanel({
   });
 
   const messages = data?.messages || [];
+
+  // Internal notes (fonte única: tabela InternalNote). Mesmas notas da aba
+  // "Notas" do painel — aqui são injetadas no timeline do chat como cards
+  // âmbar. Compartilham a query key ['notes', id], então adicionar/excluir
+  // nota num lugar reflete no outro.
+  const { data: notesData = [] } = useQuery({
+    queryKey: ['notes', conversation.id],
+    queryFn: () => inboxService.getNotes(conversation.id),
+    staleTime: 15_000,
+  });
+
+  // Logs internos (atribuição, status, IA, arquivamento) — timeline LíderHub.
+  const { data: auditData = [] } = useQuery({
+    queryKey: ['audit-logs', conversation.id],
+    queryFn: () => inboxService.getAuditLogs(conversation.id),
+    staleTime: 15_000,
+  });
+
+  // ─── Busca dentro da conversa ───────────────────────────────────────────
+  const [convSearchOpen, setConvSearchOpen] = useState(false);
+  const [convSearch, setConvSearch] = useState('');
+  const [matchIdx, setMatchIdx] = useState(0);
+  const convSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const matchIds = useMemo(() => {
+    const q = convSearch.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return messages
+      .filter((m) => {
+        const c = (m.content ?? {}) as Record<string, any>;
+        const t = String(c.text ?? c.caption ?? '').toLowerCase();
+        return t.includes(q);
+      })
+      .map((m) => m.id);
+  }, [messages, convSearch]);
+
+  // Reset índice quando a busca muda.
+  useEffect(() => {
+    setMatchIdx(0);
+  }, [convSearch]);
+
+  // Rola até o match atual.
+  useEffect(() => {
+    if (matchIds.length === 0) return;
+    const id = matchIds[Math.min(matchIdx, matchIds.length - 1)];
+    document.getElementById(`msg-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [matchIdx, matchIds]);
+
+  const currentMatchId = matchIds.length > 0 ? matchIds[Math.min(matchIdx, matchIds.length - 1)] : null;
+
+  const gotoMatch = (dir: 1 | -1) => {
+    if (matchIds.length === 0) return;
+    setMatchIdx((i) => (i + dir + matchIds.length) % matchIds.length);
+  };
+
+  const toggleConvSearch = () => {
+    setConvSearchOpen((v) => {
+      const next = !v;
+      if (!next) setConvSearch('');
+      else setTimeout(() => convSearchInputRef.current?.focus(), 50);
+      return next;
+    });
+  };
 
   useEffect(() => {
     emit('join:conversation', { conversationId: conversation.id });
@@ -577,6 +638,8 @@ export function ChatPanel({
         type: 'TEXT',
         content: { text },
         replyToMessageId,
+        // Intervenção pontual: manda sem assumir a conversa nem pausar a IA.
+        ...(pontual && !isMine ? { oneOff: true } : {}),
       });
       setReplyingTo(null);
     } catch (err) {
@@ -592,6 +655,120 @@ export function ChatPanel({
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
       throw err;
+    }
+  };
+
+  const handleSendMedia = async (file: File, caption?: string) => {
+    try {
+      await inboxService.sendMediaMessage(conversation.id, file, caption);
+    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+      throw err;
+    }
+  };
+
+  // ─── Arrastar e soltar arquivos no chat (drag & drop) ───────────────────
+  const chatInputRef = useRef<ChatInputHandle>(null);
+  const dragCounter = useRef(0);
+  const [dragOver, setDragOver] = useState(false);
+  const hasFiles = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer?.types ?? []).includes('Files');
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragCounter.current++;
+    setDragOver(true);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (hasFiles(e)) e.preventDefault();
+  };
+  const handleDragLeave = () => {
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setDragOver(false);
+    }
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    if (!e.dataTransfer?.files?.length) return;
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragOver(false);
+    if (conversation.status === 'CLOSED') {
+      toast.error('Conversa encerrada — reabra para enviar.');
+      return;
+    }
+    // Empilha no preview do compositor — só envia quando confirmar.
+    chatInputRef.current?.addFiles(Array.from(e.dataTransfer.files));
+  };
+
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [msgMenu, setMsgMenu] = useState<{ msg: any; x: number; y: number } | null>(null);
+
+  const [forwardMsg, setForwardMsg] = useState<any | null>(null);
+
+  const copyMessageText = (m: any) => {
+    const t = m?.content?.text ?? m?.content?.caption ?? '';
+    if (t) {
+      navigator.clipboard.writeText(t).then(() => toast.success('Mensagem copiada'));
+    } else {
+      toast.info('Mensagem sem texto para copiar');
+    }
+  };
+
+  const handleFavorite = async (m: any) => {
+    try {
+      await inboxService.toggleFavorite(m.id);
+      queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+      toast.success(m.metadata?.favorited ? 'Removida dos favoritos' : 'Mensagem favoritada');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao favoritar');
+    }
+  };
+
+  const handleSendInternal = async (text: string) => {
+    // Nota interna = InternalNote (fonte única). Aparece na aba Notas e,
+    // via merge no timeline, também no chat.
+    await inboxService.createNote(conversation.id, text);
+    queryClient.invalidateQueries({ queryKey: ['notes', conversation.id] });
+  };
+
+  // --- Intervenção na conversa (paridade LíderHub) -------------------------
+  // A barra de intervenção aparece quando a conversa NÃO é minha — está com
+  // outro atendente OU a IA está conduzindo. "Intervenção pontual" só libera o
+  // compositor (sem reatribuir nem pausar IA). "Intervir na conversa" assume de
+  // vez (assignToMe) e pausa a IA (aiEnabled=false), igual ao LíderHub.
+  const [pontual, setPontual] = useState(false);
+  const [intervening, setIntervening] = useState(false);
+  // Some o estado pontual ao trocar de conversa — senão "vaza" pra próxima.
+  useEffect(() => setPontual(false), [conversation.id]);
+
+  const isMine = !!user && conversation.assignedToId === user.id;
+  const hasOtherAssignee =
+    !!conversation.assignedToId && conversation.assignedToId !== user?.id;
+  const isUnassigned = !conversation.assignedToId;
+  const aiConducting = conversation.aiEnabled !== false;
+  // Precisa intervir quando a conversa NÃO é minha: sem responsável,
+  // com outro responsável, ou com a IA conduzindo.
+  const needsIntervention =
+    conversation.status !== 'CLOSED' &&
+    !isMine &&
+    (hasOtherAssignee || aiConducting || isUnassigned);
+
+  const handleIntervir = async () => {
+    setIntervening(true);
+    try {
+      await inboxService.assignToMe(conversation.id);
+      if (conversation.aiEnabled !== false) {
+        await inboxService.toggleAi(conversation.id, false);
+      }
+      onConversationUpdate();
+      setPontual(false);
+      toast.success('Você assumiu a conversa. IA pausada.');
+    } catch {
+      toast.error('Não foi possível assumir a conversa.');
+    } finally {
+      setIntervening(false);
     }
   };
 
@@ -642,13 +819,86 @@ export function ChatPanel({
     // pelo conteúdo (default min-height de flex children) e empurra o
     // ChatInput pra fora do painel — quebra dramaticamente quando o pai
     // é um modal com altura fixa.
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="relative flex min-h-0 flex-1 min-w-[400px] flex-col"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Overlay de arrastar-e-soltar arquivos */}
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-0 z-50 m-3 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-primary/10 backdrop-blur-[1px]">
+          <div className="flex flex-col items-center gap-2 text-primary">
+            <Paperclip className="h-9 w-9" />
+            <p className="text-base font-semibold">Solte os arquivos aqui para enviar</p>
+          </div>
+        </div>
+      )}
+      {/* Abinha flutuante na borda direita pra abrir/fechar o painel do contato
+          (estilo igual ao toggle da sidebar esquerda). */}
+      {onTogglePanel && (
+        <button
+          onClick={onTogglePanel}
+          title={panelOpen ? 'Fechar painel' : 'Abrir painel'}
+          className="group absolute right-0 top-1/2 z-30 flex h-12 w-5 -translate-y-1/2 items-center justify-center rounded-l-md bg-zinc-100 text-zinc-500 opacity-60 ring-1 ring-zinc-200 transition-all duration-200 hover:bg-zinc-200 hover:text-zinc-900 hover:opacity-100 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-white"
+        >
+          {panelOpen ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
+      )}
       <ConversationHeader
         conversation={conversation}
         onUpdate={onConversationUpdate}
-        onToggleAgentLogs={onToggleAgentLogs}
-        agentLogsOpen={agentLogsOpen}
+        panelOpen={panelOpen}
+        onTogglePanel={onTogglePanel}
+        onToggleSearch={toggleConvSearch}
       />
+
+      {/* Barra de busca dentro da conversa */}
+      {convSearchOpen && (
+        <div className="flex items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+            <input
+              ref={convSearchInputRef}
+              value={convSearch}
+              onChange={(e) => setConvSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') gotoMatch(e.shiftKey ? -1 : 1);
+                if (e.key === 'Escape') toggleConvSearch();
+              }}
+              placeholder="Buscar nesta conversa…"
+              className="w-full rounded-md border border-zinc-200 bg-zinc-50 py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+          </div>
+          <span className="min-w-[52px] text-center text-[12px] tabular-nums text-zinc-400">
+            {convSearch.trim() ? `${matchIds.length ? matchIdx + 1 : 0}/${matchIds.length}` : ''}
+          </span>
+          <button
+            onClick={() => gotoMatch(-1)}
+            disabled={matchIds.length === 0}
+            title="Anterior"
+            className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-40 dark:hover:bg-zinc-800"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => gotoMatch(1)}
+            disabled={matchIds.length === 0}
+            title="Próximo"
+            className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-40 dark:hover:bg-zinc-800"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+          <button
+            onClick={toggleConvSearch}
+            title="Fechar busca"
+            className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <PendingActionsList conversationId={conversation.id} />
 
@@ -657,7 +907,7 @@ export function ChatPanel({
         messages={messages}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-zinc-50 p-4 dark:bg-zinc-900/50">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[#ece5dd] px-6 py-5 dark:bg-zinc-900">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -667,7 +917,7 @@ export function ChatPanel({
             Nenhuma mensagem ainda
           </div>
         ) : (
-          <div className="mx-auto max-w-2xl space-y-2">
+          <div className="mx-auto max-w-3xl space-y-2.5">
             {(() => {
               const reactionMap = new Map<string, string[]>();
               for (const msg of messages) {
@@ -680,10 +930,43 @@ export function ChatPanel({
                   }
                 }
               }
-              const visibleMessages = messages.filter((m) => m.type !== 'REACTION');
+              // Injeta as notas internas no timeline como pseudo-mensagens
+              // (reaproveita o render âmbar do branch isInternal), ordenadas
+              // junto com as mensagens por createdAt.
+              const noteMessages = (notesData as Array<{ id: string; content: string; createdAt: string; authorName?: string }>).map((n) => ({
+                id: `note-${n.id}`,
+                conversationId: conversation.id,
+                direction: 'OUTBOUND',
+                type: 'TEXT',
+                content: { text: n.content },
+                status: 'SENT',
+                senderName: n.authorName ?? 'Equipe',
+                createdAt: n.createdAt,
+                metadata: { isInternal: true, noteId: n.id },
+              }));
+              // Logs internos viram pseudo-mensagens "de sistema" (pílula central).
+              const auditMessages = (auditData as Array<{ id: string; label: string; createdAt: string }>).map((a) => ({
+                id: `audit-${a.id}`,
+                conversationId: conversation.id,
+                direction: 'SYSTEM',
+                type: 'SYSTEM',
+                content: { text: a.label },
+                status: 'SENT',
+                createdAt: a.createdAt,
+                metadata: { isSystem: true },
+              }));
+              const visibleMessages = ([
+                ...messages.filter((m) => m.type !== 'REACTION'),
+                ...noteMessages,
+                ...auditMessages,
+              ] as any[]).sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+              );
               let lastDateKey = '';
               return visibleMessages.map((msg) => {
                 const isOutbound = msg.direction === 'OUTBOUND';
+                const isSearchMatch = matchIds.includes(msg.id);
+                const isCurrentMatch = currentMatchId === msg.id;
                 const StatusIcon = statusIcons[msg.status] || Clock;
                 const reactions = reactionMap.get(msg.externalId || '') || [];
                 const isRevoked = !!msg.revokedAt;
@@ -691,18 +974,71 @@ export function ChatPanel({
                 const dateKey = `${msgDate.getFullYear()}-${msgDate.getMonth()}-${msgDate.getDate()}`;
                 const showDateSeparator = dateKey !== lastDateKey;
                 lastDateKey = dateKey;
+                const isInternal = !!(msg.metadata as Record<string, any>)?.isInternal;
+                const isSystem = !!(msg.metadata as Record<string, any>)?.isSystem;
+                const dateSeparator = showDateSeparator ? (
+                  <div className="flex justify-center pb-1 pt-3 first:pt-0">
+                    <span className="rounded-full bg-zinc-200/80 px-3 py-1 text-[11px] font-medium text-zinc-600 shadow-sm dark:bg-zinc-800 dark:text-zinc-300">
+                      {formatDateSeparator(msg.createdAt)}
+                    </span>
+                  </div>
+                ) : null;
+
+                // Log interno — pílula central discreta (atribuição, status, IA…).
+                if (isSystem) {
+                  return (
+                    <Fragment key={msg.id}>
+                      {dateSeparator}
+                      <div className="flex justify-center px-2 py-1">
+                        <span className="inline-flex max-w-[85%] items-center gap-1.5 rounded-full bg-zinc-200/60 px-3 py-1 text-center text-[11px] text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400">
+                          <Info className="h-3 w-3 shrink-0 opacity-70" />
+                          <span>
+                            {msg.content?.text}
+                            <span className="ml-1 opacity-60">· {formatTime(msg.createdAt)}</span>
+                          </span>
+                        </span>
+                      </div>
+                    </Fragment>
+                  );
+                }
+
+                // Internal note — só a equipe vê, renderiza como card âmbar central.
+                if (isInternal) {
+                  const noteText =
+                    typeof msg.content?.text === 'string' ? msg.content.text : '';
+                  return (
+                    <Fragment key={msg.id}>
+                      {dateSeparator}
+                      <div className="flex justify-center px-2 py-1.5">
+                        <div className="w-full max-w-[80%] rounded-lg border-l-[3px] border-amber-300 bg-amber-50/70 px-3.5 py-2.5 text-[13px] text-amber-900 dark:border-amber-700/60 dark:bg-amber-900/10 dark:text-amber-100">
+                          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                            <StickyNote className="h-3 w-3" /> Nota interna · só a equipe vê
+                          </div>
+                          <p className="whitespace-pre-wrap leading-relaxed">{noteText}</p>
+                          <p className="mt-1 text-right text-[10px] text-amber-500/70">
+                            {formatTime(msg.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    </Fragment>
+                  );
+                }
                 return (
                   <Fragment key={msg.id}>
-                  {showDateSeparator && (
-                    <div className="flex justify-center pb-1 pt-3 first:pt-0">
-                      <span className="rounded-full bg-zinc-200/80 px-3 py-1 text-[11px] font-medium text-zinc-600 shadow-sm dark:bg-zinc-800 dark:text-zinc-300">
-                        {formatDateSeparator(msg.createdAt)}
-                      </span>
-                    </div>
-                  )}
+                  {dateSeparator}
                   <div
                     id={`msg-${msg.id}`}
-                    className={`group flex items-end gap-2 ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setMsgMenu({ msg, x: e.clientX, y: e.clientY });
+                    }}
+                    className={`group flex items-end gap-2 rounded-lg px-1 py-0.5 transition-colors ${isOutbound ? 'justify-end' : 'justify-start'} ${
+                      isCurrentMatch
+                        ? 'bg-amber-200/70 ring-2 ring-amber-400 dark:bg-amber-500/25'
+                        : isSearchMatch
+                          ? 'bg-amber-100/60 dark:bg-amber-500/10'
+                          : ''
+                    }`}
                   >
                     {/* Botão "Responder" no hover. Aparece do lado de
                         FORA da bolha — esquerda quando outbound (msg
@@ -747,12 +1083,12 @@ export function ChatPanel({
                     )}
                     <div className="relative max-w-[75%]">
                       {conversation.isGroup && !isOutbound && msg.senderName && (
-                        <p className="mb-0.5 ml-1 text-xs font-semibold text-primary">
+                        <p className="mb-0.5 ml-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
                           {msg.senderName}
                         </p>
                       )}
                       {isOutbound && (msg.sender?.name || (msg.senderId && msg.senderId === user?.id && user?.name)) && (
-                        <p className="mb-0.5 mr-1 text-right text-xs font-semibold text-primary">
+                        <p className="mb-0.5 mr-1 text-right text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
                           {msg.sender?.name || user?.name}
                         </p>
                       )}
@@ -766,7 +1102,7 @@ export function ChatPanel({
                         <div
                           className={`mb-1 rounded-xl border px-3 py-2 text-xs ${
                             isOutbound
-                              ? 'border-primary/40 bg-primary/10 text-primary-foreground/80'
+                              ? 'border-black/10 bg-black/5 text-zinc-600 dark:border-white/15 dark:bg-white/10 dark:text-zinc-200'
                               : 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-400'
                           }`}
                         >
@@ -806,9 +1142,9 @@ export function ChatPanel({
                                 );
                               }
                             }}
-                            className={`mb-1 block w-full rounded-md border-l-2 border-primary px-2 py-1 text-left text-xs ${
+                            className={`mb-1 block w-full rounded-md border-l-2 border-emerald-600 px-2 py-1 text-left text-xs ${
                               isOutbound
-                                ? 'bg-primary/10 text-primary-foreground/80'
+                                ? 'bg-black/5 text-zinc-600 hover:bg-black/10 dark:bg-black/20 dark:text-zinc-200'
                                 : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800/70 dark:text-zinc-300 dark:hover:bg-zinc-800'
                             }`}
                           >
@@ -878,10 +1214,10 @@ export function ChatPanel({
                         </>
                       ) : (
                         <div
-                          className={`rounded-2xl px-4 py-2.5 ${
+                          className={`rounded-2xl px-4 py-2.5 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] ${
                             isOutbound
-                              ? 'rounded-br-md bg-primary text-primary-foreground'
-                              : 'rounded-bl-md bg-white shadow-sm dark:bg-zinc-800 dark:text-zinc-100'
+                              ? 'rounded-br-md bg-[#d9fdd3] text-zinc-800 dark:bg-[#005c4b] dark:text-zinc-50'
+                              : 'rounded-bl-md bg-white text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100'
                           }`}
                         >
                           {msg.type === 'TEXT' ? (
@@ -902,7 +1238,7 @@ export function ChatPanel({
                           ) : msg.type === 'TEMPLATE' ? (
                             <TemplateMessage content={msg.content} isOutbound={isOutbound} />
                           ) : (
-                            <p className="text-sm italic opacity-70">[{msg.type}]</p>
+                            <p className="text-sm italic opacity-70">Mensagem não suportada</p>
                           )}
                           <div
                             className={`mt-1 flex items-center gap-1 text-[10px] ${
@@ -915,9 +1251,9 @@ export function ChatPanel({
                                 <StatusIcon
                                   className={`h-3 w-3 ${
                                     msg.status === 'FAILED'
-                                      ? 'text-red-300'
+                                      ? 'text-red-500'
                                       : msg.status === 'READ'
-                                        ? 'text-blue-300'
+                                        ? 'text-sky-600 dark:text-sky-300'
                                         : ''
                                   }`}
                                 />
@@ -961,11 +1297,119 @@ export function ChatPanel({
       {replyingTo && (
         <ReplyPreviewBar message={replyingTo} onCancel={cancelReply} />
       )}
-      <ChatInput
-        onSend={handleSend}
-        onSendAudio={handleSendAudio}
-        disabled={conversation.status === 'CLOSED'}
-      />
+      {needsIntervention && !pontual ? (
+        <InterventionBar
+          conversation={conversation}
+          loading={intervening}
+          onPontual={() => setPontual(true)}
+          onIntervir={handleIntervir}
+        />
+      ) : (
+        <>
+          {pontual && !isMine && (
+            <div className="flex items-center justify-between gap-2 border-t border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-400">
+              <span className="flex items-center gap-1.5">
+                <Hand className="h-3.5 w-3.5" />
+                Intervenção pontual — você não é o responsável por esta conversa
+              </span>
+              <button
+                type="button"
+                onClick={() => setPontual(false)}
+                className="rounded px-1.5 py-0.5 font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+          <ChatInput
+            ref={chatInputRef}
+            onSend={handleSend}
+            onSendAudio={handleSendAudio}
+            onSendInternal={handleSendInternal}
+            onSendMedia={handleSendMedia}
+            onGenerateSummary={() => setSummaryOpen(true)}
+            onSchedule={async (scheduleText, scheduledAtISO) => {
+              try {
+                await scheduledMessagesService.create({
+                  conversationId: conversation.id,
+                  text: scheduleText,
+                  scheduledAt: scheduledAtISO,
+                });
+                toast.success('Mensagem agendada');
+                queryClient.invalidateQueries({
+                  queryKey: ['scheduled-messages', conversation.id],
+                });
+              } catch (err: any) {
+                toast.error(err?.response?.data?.message || 'Erro ao agendar');
+                throw err; // mantém o texto no compositor em caso de erro
+              }
+            }}
+            sendingFrom={
+              conversation.channel.phoneNumber
+                ? formatPhone(conversation.channel.phoneNumber)
+                : conversation.channel.name
+            }
+            signatureName={user?.name ?? null}
+            disabled={conversation.status === 'CLOSED'}
+          />
+        </>
+      )}
+      {summaryOpen && (
+        <ConversationSummaryModal
+          conversationId={conversation.id}
+          onClose={() => setSummaryOpen(false)}
+        />
+      )}
+      {forwardMsg && (
+        <ForwardMessageModal message={forwardMsg} onClose={() => setForwardMsg(null)} />
+      )}
+
+      {/* Menu de contexto da mensagem (botão direito) — estilo WhatsApp */}
+      {msgMenu && (
+        <>
+          <div className="fixed inset-0 z-[55]" onClick={() => setMsgMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMsgMenu(null); }} />
+          <div
+            className="fixed z-[56] w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-800"
+            style={{
+              left: Math.min(msgMenu.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 220),
+              top: Math.min(msgMenu.y, (typeof window !== 'undefined' ? window.innerHeight : 800) - 360),
+            }}
+          >
+            {[
+              { icon: Reply, label: 'Responder', onClick: () => startReply(msgMenu.msg) },
+              { icon: Smile, label: 'Reagir', onClick: () => toast.info('Reações em breve') },
+              {
+                icon: Star,
+                label: msgMenu.msg.metadata?.favorited ? 'Desfavoritar' : 'Favoritar',
+                onClick: () => handleFavorite(msgMenu.msg),
+              },
+              { icon: Forward, label: 'Encaminhar', onClick: () => setForwardMsg(msgMenu.msg) },
+              { icon: Copy, label: 'Copiar', onClick: () => copyMessageText(msgMenu.msg) },
+            ].map((item) => (
+              <button
+                key={item.label}
+                onClick={() => { item.onClick(); setMsgMenu(null); }}
+                className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700/60"
+              >
+                <item.icon className="h-4 w-4 shrink-0 text-zinc-400" />
+                {item.label}
+              </button>
+            ))}
+            {msgMenu.msg.direction === 'OUTBOUND' && !msgMenu.msg.metadata?.isInternal && (
+              <>
+                <div className="my-1 border-t border-zinc-100 dark:border-zinc-700" />
+                <button
+                  onClick={() => { handleRevoke(msgMenu.msg); setMsgMenu(null); }}
+                  className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  <Trash2 className="h-4 w-4 shrink-0" />
+                  Apagar
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1007,6 +1451,75 @@ function ReplyPreviewBar({
       >
         <X className="h-4 w-4" />
       </button>
+    </div>
+  );
+}
+
+/**
+ * Barra de intervenção (paridade LíderHub). Aparece no lugar do compositor
+ * quando a conversa está com outro atendente ou conduzida pela IA. Informa
+ * quem está conduzindo e oferece "Intervenção pontual" (libera o compositor
+ * sem reatribuir) ou "Intervir na conversa" (assume de vez + pausa a IA).
+ */
+function InterventionBar({
+  conversation,
+  loading,
+  onPontual,
+  onIntervir,
+}: {
+  conversation: Conversation;
+  loading: boolean;
+  onPontual: () => void;
+  onIntervir: () => void;
+}) {
+  const contactName = conversation.contact?.name || 'Este contato';
+  const assigneeName = conversation.assignedTo?.name;
+  const aiConducting = conversation.aiEnabled !== false;
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900/40 dark:bg-blue-950/30">
+      <span className="flex flex-1 min-w-0 items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+        {assigneeName ? (
+          <>
+            <span className="truncate">
+              <strong className="font-semibold">{contactName}</strong> está
+              associado a{' '}
+              <strong className="font-semibold">{assigneeName}</strong>
+            </span>
+          </>
+        ) : (
+          <>
+            <Bot className="h-4 w-4 shrink-0" />
+            <span className="truncate">
+              {aiConducting
+                ? 'A inteligência artificial está conduzindo este atendimento'
+                : `${contactName} ainda não tem responsável`}
+            </span>
+          </>
+        )}
+      </span>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={onPontual}
+          disabled={loading}
+          className="rounded-md px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-100 disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/40"
+        >
+          Intervenção pontual
+        </button>
+        <button
+          type="button"
+          onClick={onIntervir}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Hand className="h-4 w-4" />
+          )}
+          Intervir na conversa
+        </button>
+      </div>
     </div>
   );
 }

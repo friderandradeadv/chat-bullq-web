@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useResolvedMedia } from '../hooks/use-resolved-media';
-import type { Message } from '../services/inbox.service';
+import { inboxService, type Message, type TranscriptionResult } from '../services/inbox.service';
 
 /**
  * One file, all media bubbles. They share three concerns: lazy-resolve a
@@ -41,7 +41,7 @@ export function MediaImage({ message, isOutbound }: MediaProps) {
     <div>
       <div
         className={`group relative overflow-hidden rounded-lg ${
-          isOutbound ? 'bg-primary-foreground/10' : 'bg-zinc-100 dark:bg-zinc-700/40'
+          isOutbound ? 'bg-black/5 dark:bg-white/10' : 'bg-zinc-100 dark:bg-zinc-700/40'
         }`}
         style={{ minHeight: '120px', minWidth: '160px' }}
       >
@@ -72,9 +72,97 @@ export function MediaImage({ message, isOutbound }: MediaProps) {
       {caption && (
         <p className="mt-1.5 whitespace-pre-wrap break-words text-sm">{caption}</p>
       )}
+      <ImageTranscription message={message} isOutbound={isOutbound} />
       {zoomOpen && url && (
         <ImageLightbox url={url} alt={caption || 'Imagem'} onClose={() => setZoomOpen(false)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * On-demand OCR/vision transcription for an image bubble (Gemini). Mirrors the
+ * audio player's inline "Transcrever" UX. The extracted text is cached on the
+ * message and also feeds the AI document/data extraction (ZapSign).
+ */
+function ImageTranscription({ message, isOutbound }: MediaProps) {
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptionResult | null>(
+    message.metadata?.transcription ?? null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  // Sync with socket-pushed metadata updates.
+  useEffect(() => {
+    if (message.metadata?.transcription) setTranscript(message.metadata.transcription);
+  }, [message.metadata?.transcription]);
+
+  const handleTranscribe = async () => {
+    setTranscribing(true);
+    setError(null);
+    try {
+      const result = await inboxService.transcribeMessage(message.id);
+      setTranscript(result);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Erro ao transcrever');
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const muted = isOutbound ? 'text-zinc-500 dark:text-zinc-300' : 'text-zinc-500 dark:text-zinc-400';
+  const text = transcript?.text;
+  const isLong = !!text && text.length > 280;
+
+  return (
+    <div
+      className={`mt-1.5 max-w-[360px] border-t pt-1.5 ${
+        isOutbound ? 'border-black/10 dark:border-white/20' : 'border-zinc-200 dark:border-zinc-700'
+      }`}
+    >
+      {text ? (
+        <>
+          <div className={`mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide ${muted}`}>
+            <FileText className="h-3 w-3" /> Transcrição
+          </div>
+          <p
+            className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${
+              isOutbound ? 'text-zinc-700 dark:text-zinc-100' : 'text-zinc-700 dark:text-zinc-200'
+            } ${isLong && !expanded ? 'line-clamp-6' : ''}`}
+          >
+            {text}
+          </p>
+          {isLong && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className={`mt-1 text-[11px] font-medium hover:underline ${
+                isOutbound ? 'text-zinc-600 dark:text-zinc-200' : 'text-primary'
+              }`}
+            >
+              {expanded ? 'Ver menos' : 'Ver mais'}
+            </button>
+          )}
+        </>
+      ) : transcribing ? (
+        <span className={`inline-flex items-center gap-1.5 text-[12px] ${muted}`}>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Transcrevendo imagem…
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={handleTranscribe}
+          className={`inline-flex w-full items-center justify-center gap-1.5 rounded-md py-1 text-[12px] font-medium transition-colors ${
+            isOutbound
+              ? 'text-zinc-600 hover:bg-black/10 dark:text-zinc-200 dark:hover:bg-white/15'
+              : 'text-primary hover:bg-primary/10 dark:text-primary'
+          }`}
+        >
+          <FileText className="h-3.5 w-3.5" /> Transcrever imagem
+        </button>
+      )}
+      {error && <span className="mt-1 block text-[11px] text-red-500">{error}</span>}
     </div>
   );
 }
@@ -87,7 +175,7 @@ export function MediaVideo({ message, isOutbound }: MediaProps) {
     <div>
       <div
         className={`overflow-hidden rounded-lg ${
-          isOutbound ? 'bg-primary-foreground/10' : 'bg-zinc-100 dark:bg-zinc-700/40'
+          isOutbound ? 'bg-black/5 dark:bg-white/10' : 'bg-zinc-100 dark:bg-zinc-700/40'
         }`}
       >
         {url ? (
@@ -140,14 +228,14 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
         download={filename}
         className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
           isOutbound
-            ? 'border-primary-foreground/20 bg-primary-foreground/10 hover:bg-primary-foreground/15'
+            ? 'border-black/10 bg-black/5 hover:bg-black/10 dark:border-white/15 dark:bg-white/10 dark:hover:bg-white/15'
             : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:bg-zinc-800'
         }`}
       >
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${
             isOutbound
-              ? 'bg-primary-foreground/15'
+              ? 'bg-black/10 dark:bg-white/15'
               : 'bg-white shadow-sm dark:bg-zinc-700'
           }`}
         >
@@ -212,7 +300,7 @@ export function MediaLocation({ message, isOutbound }: MediaProps) {
       rel="noopener noreferrer"
       className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
         isOutbound
-          ? 'border-primary-foreground/20 bg-primary-foreground/10 hover:bg-primary-foreground/15'
+          ? 'border-black/10 bg-black/5 hover:bg-black/10 dark:border-white/15 dark:bg-white/10 dark:hover:bg-white/15'
           : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:bg-zinc-800'
       }`}
     >
@@ -245,7 +333,7 @@ function MediaSkeleton({
       type="button"
       onClick={onRetry}
       className={`flex w-full items-center gap-2 ${compact ? 'px-2 py-1.5' : 'px-3 py-6'} text-xs ${
-        isOutbound ? 'text-primary-foreground/80' : 'text-zinc-500 dark:text-zinc-400'
+        isOutbound ? 'text-zinc-500 dark:text-zinc-300' : 'text-zinc-500 dark:text-zinc-400'
       }`}
     >
       {error ? (

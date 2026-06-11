@@ -9,7 +9,7 @@
   --color-card-foreground: oklch(0.145 0 0);
   --color-popover: oklch(1 0 0);
   --color-popover-foreground: oklch(0.145 0 0);
-  --color-primary: oklch(0.205 0.08 265);
+  --color-primary: oklch(0.58 0.22 252);
   --color-primary-foreground: oklch(0.985 0 0);
   --color-secondary: oklch(0.97 0 0);
   --color-secondary-foreground: oklch(0.205 0 0);
@@ -111,4 +111,19 @@
   .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: oklch(0.45 0 0);
   }
+}
+
+/* Reveal da lista ao abrir/fechar os Arquivados (estilo LíderHub). */
+@keyframes archived-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-archived-reveal {
+  animation: archived-reveal 0.22s ease-out;
 }

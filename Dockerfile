@@ -28,6 +28,9 @@ RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 nextjs
 
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# O Next standalone NÃO embute public/ — sem isto, /flags/*, /favicon.ico e
+# qualquer asset estático dão 404 no container (a "versão quebrada").
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs
 EXPOSE 3000

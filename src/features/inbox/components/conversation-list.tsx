@@ -7,18 +7,21 @@ import {
   X,
   SlidersHorizontal,
   Check,
-  UserCheck,
-  XCircle,
-  RotateCcw,
   Loader2,
   ChevronDown,
   Inbox,
   Users,
   User,
-  FolderPlus,
   MailOpen,
   Archive,
   Tag as TagIcon,
+  CheckSquare,
+  Square,
+  EllipsisVertical,
+  Bot,
+  MessageCircle,
+  Clock,
+  Phone,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -36,19 +39,21 @@ import {
 } from '@/features/inbox-views/services/inbox-views.service';
 import { channelsService } from '@/features/channels/services/channels.service';
 import { tagsService } from '@/features/settings/services/tags.service';
-import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useSocket } from '../hooks/use-socket';
 import { useAuthStore } from '@/stores/auth-store';
 import { useInboxPreferences } from '../hooks/use-inbox-preferences';
 import { ConversationContextMenu } from './conversation-context-menu';
-import { BulkAiPopover } from './bulk-ai-popover';
-import { BulkPipelinePopover } from './bulk-pipeline-popover';
-import { pipelinesService } from '@/features/pipelines/services/pipelines.service';
+import { BulkActionsMenu } from './bulk-actions-menu';
+import { getBrazilState, formatPhone } from '@/lib/brazil-states';
+import { WhatsAppNewChatIcon } from '@/components/ui/icons';
+import { avatarColor, avatarInitials } from '@/lib/avatar';
+import { StateFlag } from '@/components/ui/state-flag';
+import { NewConversationModal } from './new-conversation-modal';
+import { useInboxFilterStore } from '../stores/inbox-filter-store';
 
 function ListAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: string | null }) {
   const [failed, setFailed] = useState(false);
-  const initials = name?.slice(0, 2).toUpperCase() || '??';
   if (avatarUrl && !failed) {
     return (
       <img
@@ -60,24 +65,40 @@ function ListAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: strin
     );
   }
   return (
-    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-[13px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-      {initials}
+    <div
+      className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-semibold text-white"
+      style={{ backgroundColor: avatarColor(name) }}
+    >
+      {avatarInitials(name)}
     </div>
   );
 }
 
 type ScopeFilter = 'ALL' | 'MINE';
+type StatusTab = 'ALL' | 'OPEN' | 'PENDING' | 'BOT' | 'GROUPS';
+
+// Rótulos amigáveis (estilo WhatsApp) para a prévia da última mensagem quando
+// ela não tem texto — em vez de mostrar o enum cru "[IMAGE]"/"[AUDIO]".
+const MEDIA_PREVIEW_LABELS: Record<string, string> = {
+  IMAGE: '📷 Foto',
+  AUDIO: '🎤 Mensagem de voz',
+  VIDEO: '🎥 Vídeo',
+  DOCUMENT: '📄 Documento',
+  STICKER: 'Figurinha',
+  LOCATION: '📍 Localização',
+  CONTACT: '👤 Contato',
+  TEMPLATE: 'Mensagem',
+  INTERACTIVE: 'Mensagem',
+  REACTION: 'Reação',
+};
+function mediaPreviewLabel(type: string): string {
+  return MEDIA_PREVIEW_LABELS[type] ?? 'Mensagem';
+}
 
 const scopeOptions: { label: string; value: ScopeFilter; icon: React.ElementType }[] = [
   { label: 'Todas as conversas', value: 'ALL', icon: Users },
   { label: 'Minhas conversas', value: 'MINE', icon: User },
 ];
-
-const channelIcons: Record<string, React.ElementType> = {
-  WHATSAPP_ZAPPFY: ZappfyIcon,
-  WHATSAPP_OFFICIAL: MetaIcon,
-  INSTAGRAM: InstagramIcon,
-};
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-amber-400',
@@ -132,34 +153,43 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     isLoaded: prefsLoaded,
     update: updatePrefs,
   } = useInboxPreferences();
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const [archivedOnly, setArchivedOnly] = useState(false);
-  // Default false = grupos NÃO aparecem no inbox geral (regra do JP).
-  // Toggle pra true exibe junto com individuais.
-  const [showGroups, setShowGroups] = useState(false);
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [tagSearch, setTagSearch] = useState('');
-  // showGroups conta como filtro ativo SÓ quando ON (default OFF é o
-  // comportamento padrão, não merece badge). Tags contam 1 por tag.
+  // Filter state lives in a shared store so the full-width top toolbar
+  // (search + Responsável + Status + Mais filtros, LíderHub style) and this
+  // list drive the same query.
+  const search = useInboxFilterStore((s) => s.search);
+  const scope = useInboxFilterStore((s) => s.scope);
+  const statusTab = useInboxFilterStore((s) => s.statusTab);
+  const selectedChannelId = useInboxFilterStore((s) => s.selectedChannelId);
+  const selectedTagIds = useInboxFilterStore((s) => s.selectedTagIds);
+  const unreadOnly = useInboxFilterStore((s) => s.unreadOnly);
+  const archivedOnly = useInboxFilterStore((s) => s.archivedOnly);
+  const showGroups = useInboxFilterStore((s) => s.showGroups);
+  const setStatusTab = useInboxFilterStore((s) => s.setStatusTab);
+  const setScope = useInboxFilterStore((s) => s.setScope);
+  const setSelectedChannelId = useInboxFilterStore((s) => s.setSelectedChannelId);
+  const setUnreadOnly = useInboxFilterStore((s) => s.setUnreadOnly);
+  const setArchivedOnly = useInboxFilterStore((s) => s.setArchivedOnly);
+  const setShowGroups = useInboxFilterStore((s) => s.setShowGroups);
+  const setSelectedTagIds = useInboxFilterStore((s) => s.setSelectedTagIds);
+  const setSearch = useInboxFilterStore((s) => s.setSearch);
+  const debouncedSearch = search;
   const activeFilterCount =
     (unreadOnly ? 1 : 0) +
     (archivedOnly ? 1 : 0) +
     (showGroups ? 1 : 0) +
     selectedTagIds.length;
-  const [scope, setScope] = useState<ScopeFilter>('ALL');
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const hydratedRef = useRef(false);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [listMenuOpen, setListMenuOpen] = useState(false);
+  const [newConvOpen, setNewConvOpen] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     conversation: Conversation;
     position: { x: number; y: number };
   } | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   // Hydrate state from saved preferences once they load
   useEffect(() => {
@@ -185,72 +215,22 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     }
   }, [prefsLoaded, savedPrefs]);
 
-  const toggleListFilter = useCallback(
-    (value: ListFilter) => {
-      if (value === 'unread') {
-        setUnreadOnly((v) => {
-          const next = !v;
-          updatePrefs({ unreadOnly: next });
-          return next;
-        });
-      } else if (value === 'archived') {
-        setArchivedOnly((v) => {
-          const next = !v;
-          updatePrefs({ archivedOnly: next });
-          return next;
-        });
-      } else if (value === 'groups') {
-        setShowGroups((v) => {
-          const next = !v;
-          updatePrefs({ showGroups: next });
-          return next;
-        });
-      }
-    },
-    [updatePrefs],
-  );
+  // Arquivadas quick-row toggle (the only filter still rendered inside the
+  // list; everything else moved to the top toolbar).
+  const toggleArchived = () => {
+    const next = !archivedOnly;
+    setArchivedOnly(next);
+    updatePrefs({ archivedOnly: next });
+  };
 
-  const clearListFilters = useCallback(() => {
+  const clearAllFilters = () => {
     setUnreadOnly(false);
     setArchivedOnly(false);
     setShowGroups(false);
     setSelectedTagIds([]);
-    updatePrefs({
-      unreadOnly: false,
-      archivedOnly: false,
-      showGroups: false,
-      tagIds: [],
-    });
-  }, [updatePrefs]);
-
-  const toggleTagFilter = useCallback(
-    (tagId: string) => {
-      setSelectedTagIds((prev) => {
-        const next = prev.includes(tagId)
-          ? prev.filter((id) => id !== tagId)
-          : [...prev, tagId];
-        updatePrefs({ tagIds: next });
-        return next;
-      });
-    },
-    [updatePrefs],
-  );
-
-  const handleScopeChange = useCallback(
-    (next: ScopeFilter) => {
-      setScope(next);
-      updatePrefs({ scope: next });
-    },
-    [updatePrefs],
-  );
-
-  const handleChannelChange = useCallback(
-    (next: string | null) => {
-      setSelectedChannelId(next);
-      updatePrefs({ selectedChannelId: next });
-    },
-    [updatePrefs],
-  );
+    setSearch('');
+    updatePrefs({ unreadOnly: false, archivedOnly: false, showGroups: false, tagIds: [] });
+  };
 
   const tagsKey = useMemo(
     () => [...selectedTagIds].sort().join(','),
@@ -258,34 +238,39 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   );
   const filterKey = `${unreadOnly ? 'u' : ''}|${archivedOnly ? 'a' : ''}|${showGroups ? 'g' : ''}|t:${tagsKey}`;
 
-  const handleSearchChange = useCallback((value: string) => {
-    setSearch(value);
-    clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => setDebouncedSearch(value), 300);
-  }, []);
-
-  useEffect(() => {
-    return () => clearTimeout(debounceTimer.current);
-  }, []);
+  const handleAccept = useCallback(
+    async (e: React.MouseEvent, conversationId: string) => {
+      e.stopPropagation();
+      if (acceptingId) return;
+      setAcceptingId(conversationId);
+      try {
+        await inboxService.assignToMe(conversationId);
+        queryClient.invalidateQueries({ queryKey: ['conversations', orgId] });
+        queryClient.invalidateQueries({ queryKey: ['conversation-counts', orgId] });
+        toast.success('Conversa aceita');
+      } catch {
+        toast.error('Erro ao aceitar conversa');
+      } finally {
+        setAcceptingId(null);
+      }
+    },
+    [acceptingId, orgId, queryClient],
+  );
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-
-  const { data: channels = [] } = useQuery({
-    queryKey: ['channels', orgId],
-    queryFn: () => channelsService.list(),
-  });
 
   const { data: tags = [] } = useQuery({
     queryKey: ['tags', orgId],
     queryFn: () => tagsService.list(),
   });
 
-  const filteredTags = useMemo(() => {
-    const q = tagSearch.trim().toLowerCase();
-    if (!q) return tags;
-    return tags.filter((t) => t.name.toLowerCase().includes(q));
-  }, [tags, tagSearch]);
+  const { data: statusCounts } = useQuery({
+    queryKey: ['conversation-counts', orgId],
+    queryFn: () => inboxService.getStatusCounts(),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
 
   // Drop selected tag ids that no longer exist (tag deleted in another tab).
   // Avoid sending stale ids to the backend — they'd just match nothing.
@@ -299,15 +284,10 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     }
   }, [tags, selectedTagIds, updatePrefs]);
 
-  const selectedChannel = useMemo(
-    () => channels.find((c) => c.id === selectedChannelId) ?? null,
-    [channels, selectedChannelId],
-  );
-
   // Reset scroll when filters/search change
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({ top: 0 });
-  }, [filterKey, debouncedSearch, selectedChannelId, scope, showGroups, tagsKey]);
+  }, [filterKey, debouncedSearch, selectedChannelId, scope, showGroups, tagsKey, statusTab]);
 
   const {
     data,
@@ -316,9 +296,10 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['conversations', orgId, viewId ?? null, filterKey, debouncedSearch, selectedChannelId, scope, currentUserId],
+    queryKey: ['conversations', orgId, viewId ?? null, filterKey, debouncedSearch, selectedChannelId, scope, statusTab, currentUserId],
     queryFn: ({ pageParam = 1 }) => {
       const params: Record<string, string> = { limit: '30', page: String(pageParam) };
+      if (statusTab !== 'ALL' && statusTab !== 'GROUPS') params.status = statusTab;
       if (unreadOnly) params.unread = 'true';
       // archived: dentro de view, só passa quando user explicitamente
       // ativou (override). Fora de view, passa sempre o estado atual.
@@ -327,10 +308,10 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       } else {
         params.archived = archivedOnly ? 'only' : 'exclude';
       }
-      // groups: dentro de view, só override se user MARCOU "Grupos"
-      // explicitamente (vira 'only' pra forçar). Fora de view, default
-      // esconde grupos (regra do JP).
-      if (viewId) {
+      // groups: a tab "Grupos" força only; fora dela, esconde grupos por padrão
+      if (statusTab === 'GROUPS') {
+        params.groups = 'only';
+      } else if (viewId) {
         if (showGroups) params.groups = 'only';
       } else {
         if (!showGroups) params.groups = 'exclude';
@@ -386,6 +367,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
     setLastClickedIndex(null);
+    setSelectionMode(false);
   }, []);
 
   const handleConversationClick = useCallback(
@@ -406,6 +388,12 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
           return next;
         });
         setLastClickedIndex(index);
+        return;
+      }
+
+      // In selection mode: click toggles selection, never opens the conversation.
+      if (selectionMode) {
+        toggleSelect(conv.id, index);
         return;
       }
 
@@ -480,6 +468,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       lastClickedIndex,
       conversations,
       selectedIds.size,
+      selectionMode,
       clearSelection,
       onSelect,
       queryClient,
@@ -506,6 +495,27 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   const invalidateConversations = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
   }, [queryClient]);
+
+  // Quick "Arquivar" right in the selection bar (the menu has it too, but at
+  // the bottom). Also refreshes the counts so the "Arquivados" badge bumps.
+  const handleQuickArchive = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkLoading(true);
+    try {
+      await inboxService.bulkArchive(ids);
+      toast.success(
+        `${ids.length} conversa${ids.length > 1 ? 's' : ''} arquivada${ids.length > 1 ? 's' : ''}`,
+      );
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation-counts'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao arquivar conversas');
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [selectedIds, clearSelection, queryClient]);
 
   // Realtime: refresh list on inbound messages, imported conversations, or
   // state transitions (assign/close/reopen/transfer).
@@ -581,105 +591,6 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     };
   }, [on, onReconnect, queryClient]);
 
-  const handleBulkAction = useCallback(
-    async (action: 'close' | 'assign' | 'reopen') => {
-      const ids = Array.from(selectedIds);
-      if (ids.length === 0) return;
-      setBulkLoading(true);
-      try {
-        if (action === 'close') await inboxService.bulkClose(ids);
-        else if (action === 'assign') await inboxService.bulkAssignToMe(ids);
-        else if (action === 'reopen') await inboxService.bulkReopen(ids);
-        clearSelection();
-        invalidateConversations();
-      } finally {
-        setBulkLoading(false);
-      }
-    },
-    [selectedIds, clearSelection, invalidateConversations],
-  );
-
-  const handleBulkSetAi = useCallback(
-    async (override: boolean | null) => {
-      const ids = Array.from(selectedIds);
-      if (ids.length === 0) return;
-      setBulkLoading(true);
-      try {
-        await inboxService.bulkSetAi(ids, override);
-        const label =
-          override === null
-            ? 'IA voltou ao padrão'
-            : override
-              ? 'IA forçada'
-              : 'IA pausada';
-        toast.success(`${label} em ${ids.length} conversa${ids.length > 1 ? 's' : ''}`);
-        clearSelection();
-        invalidateConversations();
-      } catch (err: any) {
-        toast.error(err?.response?.data?.message || 'Erro ao alterar IA em massa');
-      } finally {
-        setBulkLoading(false);
-      }
-    },
-    [selectedIds, clearSelection, invalidateConversations],
-  );
-
-  const handleBulkEngageAi = useCallback(async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    setBulkLoading(true);
-    try {
-      await inboxService.bulkEngageAi(ids);
-      toast.success(
-        `IA engajada em ${ids.length} conversa${ids.length > 1 ? 's' : ''}`,
-      );
-      clearSelection();
-      invalidateConversations();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erro ao engajar IA');
-    } finally {
-      setBulkLoading(false);
-    }
-  }, [selectedIds, clearSelection, invalidateConversations]);
-
-  // Bulk: drop selected conversations into a pipeline stage. Each
-  // conversation becomes a Card on (pipelineId, stageId). Uses
-  // allSettled so a single failure (e.g. duplicate) doesn't abort the
-  // batch — toast aggregates the result.
-  const handleBulkAddToPipeline = useCallback(
-    async (pipelineId: string, stageId: string) => {
-      const ids = Array.from(selectedIds);
-      if (ids.length === 0) return;
-      setBulkLoading(true);
-      try {
-        const results = await Promise.allSettled(
-          ids.map((conversationId) =>
-            pipelinesService.createCard(pipelineId, {
-              conversationId,
-              stageId,
-            }),
-          ),
-        );
-        const ok = results.filter((r) => r.status === 'fulfilled').length;
-        const failed = results.length - ok;
-        if (failed === 0) {
-          toast.success(
-            `${ok} conversa${ok > 1 ? 's' : ''} adicionada${ok > 1 ? 's' : ''} ao pipeline`,
-          );
-        } else if (ok === 0) {
-          toast.error(`Falha ao adicionar (${failed} ${failed > 1 ? 'erros' : 'erro'})`);
-        } else {
-          toast.warning(`${ok} adicionadas, ${failed} falharam`);
-        }
-        clearSelection();
-        invalidateConversations();
-      } finally {
-        setBulkLoading(false);
-      }
-    },
-    [selectedIds, clearSelection, invalidateConversations],
-  );
-
   // Bulk: pin the selected conversations into a brand-new inbox view.
   // Asks for the inbox name with a quick prompt (no full dialog overhead),
   // creates the view with conversationIds=selected, then navigates to it.
@@ -724,7 +635,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       : rt?.ad
         ? '📢 Respondeu ao anúncio · '
         : '';
-    return prefix + storyPrefix + (last.content?.text || `[${last.type}]`);
+    return prefix + storyPrefix + (last.content?.text || mediaPreviewLabel(last.type));
   };
 
   const formatTime = (date: string | null) => {
@@ -739,450 +650,215 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   };
 
+  // LíderHub-style tabs: the ACTIVE tab adopts its own semantic colour
+  // (icon + label + underline), not a single brand colour. `badge` = pill bg,
+  // `activeText` = colour when selected, `activeBorder` = underline colour.
+  const statusTabs: {
+    label: string;
+    value: StatusTab;
+    icon: React.ElementType;
+    badge: string;
+    activeText: string;
+    activeBorder: string;
+  }[] = [
+    { label: 'AI', value: 'BOT', icon: Bot, badge: 'bg-violet-500', activeText: 'text-violet-600 dark:text-violet-400', activeBorder: 'border-violet-500' },
+    { label: 'Ativos', value: 'OPEN', icon: MessageCircle, badge: 'bg-emerald-500', activeText: 'text-emerald-600 dark:text-emerald-400', activeBorder: 'border-emerald-500' },
+    { label: 'Pendentes', value: 'PENDING', icon: Clock, badge: 'bg-amber-500', activeText: 'text-amber-600 dark:text-amber-500', activeBorder: 'border-amber-500' },
+    { label: 'Grupos', value: 'GROUPS', icon: Users, badge: 'bg-sky-500', activeText: 'text-sky-600 dark:text-sky-400', activeBorder: 'border-sky-500' },
+  ];
+
+  const archivedCount = statusCounts?.['ARCHIVED'] ?? 0;
+
   return (
-    <div className="flex h-full w-80 flex-col border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      {/* Scope selector (All / Mine) */}
-      <div className="px-3 pt-3">
-        <Popover className="relative">
-          <PopoverButton className="flex w-full items-center gap-2 rounded-md border border-zinc-200/80 bg-white px-2.5 py-1.5 text-left text-[13px] text-zinc-700 outline-none transition-colors hover:bg-zinc-50 data-[open]:border-primary/40 data-[open]:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:data-[open]:bg-zinc-900">
-            {(() => {
-              const current = scopeOptions.find((o) => o.value === scope) ?? scopeOptions[0];
-              const Icon = current.icon;
-              return <Icon className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />;
-            })()}
-            <span className="flex-1 truncate font-medium">
-              {scopeOptions.find((o) => o.value === scope)?.label ?? 'Todas as conversas'}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-          </PopoverButton>
-          <PopoverPanel
-            anchor="bottom start"
-            transition
-            className="z-50 mt-1.5 w-[var(--button-width)] rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-          >
-            {({ close }) => (
-              <>
-                {scopeOptions.map((option) => {
-                  const Icon = option.icon;
-                  const isActive = scope === option.value;
-                  const disabled = option.value === 'MINE' && !currentUserId;
-                  return (
-                    <button
-                      key={option.value}
-                      onClick={() => { if (!disabled) { handleScopeChange(option.value); close(); } }}
-                      disabled={disabled}
-                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                        isActive
-                          ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
-                          : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                      }`}
-                    >
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      <span className="flex-1">{option.label}</span>
-                      {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
-                    </button>
-                  );
-                })}
-              </>
-            )}
-          </PopoverPanel>
-        </Popover>
-      </div>
-
-      {/* Channel selector — hidden when an inbox view is active, since the
-          view already pins the channel(s) via its saved filters. Letting
-          the user override here would just confuse the result. */}
-      {!viewId && (
-      <div className="px-3 pt-2">
-        <Popover className="relative">
-          <PopoverButton className="flex w-full items-center gap-2 rounded-md border border-zinc-200/80 bg-white px-2.5 py-1.5 text-left text-[13px] text-zinc-700 outline-none transition-colors hover:bg-zinc-50 data-[open]:border-primary/40 data-[open]:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900 dark:data-[open]:bg-zinc-900">
-            {(() => {
-              const Icon = selectedChannel
-                ? channelIcons[selectedChannel.type] || MessageSquare
-                : Inbox;
-              return <Icon className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />;
-            })()}
-            <span className="flex-1 truncate font-medium">
-              {selectedChannel ? selectedChannel.name : 'Todos os canais'}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-          </PopoverButton>
-          <PopoverPanel
-            anchor="bottom start"
-            transition
-            className="z-50 mt-1.5 w-[var(--button-width)] rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-          >
-            {({ close }) => (
-              <>
-                <button
-                  onClick={() => { handleChannelChange(null); close(); }}
-                  className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                    selectedChannelId === null
-                      ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
-                      : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                  }`}
-                >
-                  <Inbox className="h-3.5 w-3.5 shrink-0" />
-                  <span className="flex-1">Todos os canais</span>
-                  {selectedChannelId === null && <Check className="h-3.5 w-3.5 text-primary" />}
-                </button>
-                {channels.length > 0 && (
-                  <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
-                )}
-                {channels.map((channel) => {
-                  const Icon = channelIcons[channel.type] || MessageSquare;
-                  const isActive = selectedChannelId === channel.id;
-                  return (
-                    <button
-                      key={channel.id}
-                      onClick={() => { handleChannelChange(channel.id); close(); }}
-                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                        isActive
-                          ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
-                          : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                      }`}
-                    >
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      <span className="flex-1 truncate">{channel.name}</span>
-                      {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
-                    </button>
-                  );
-                })}
-              </>
-            )}
-          </PopoverPanel>
-        </Popover>
-      </div>
-      )}
-
-      {/* Search + Filter */}
-      <div className="flex items-center gap-1.5 px-3 pt-2 pb-2">
-        <div className="group relative flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-primary" />
-          <input
-            ref={searchRef}
-            type="text"
-            placeholder="Buscar conversas..."
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full rounded-md border-0 bg-zinc-100/80 py-1.5 pl-8 pr-8 text-[13px] text-zinc-900 outline-none ring-1 ring-transparent transition-all placeholder:text-zinc-400 focus:bg-white focus:ring-primary/30 focus:shadow-sm dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-900 dark:focus:ring-primary/30"
-          />
-          {search && (
+    <div className="flex h-full w-80 shrink-0 flex-col border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Cabeçalho "Conversas" — título + ⋮ menu + nova conversa (estilo LíderHub:
+          tira essas ações da linha das abas pra elas ficarem limpas e largas). */}
+      <div className="flex items-center justify-between border-b border-zinc-200/80 px-3.5 py-3 dark:border-zinc-800">
+        <h2 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">Conversas</h2>
+        <div className="flex items-center gap-0.5">
+          {/* Menu (3 pontos) — Selecionar conversas */}
+          <div className="relative">
             <button
-              onClick={() => { handleSearchChange(''); searchRef.current?.focus(); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+              title="Mais opções"
+              onClick={() => setListMenuOpen((v) => !v)}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                listMenuOpen || selectionMode
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300'
+              }`}
             >
-              <X className="h-3 w-3" />
+              <EllipsisVertical className="h-[18px] w-[18px]" />
             </button>
-          )}
+            {listMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setListMenuOpen(false)} />
+                <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                  <button
+                    onClick={() => { setSelectionMode(true); setListMenuOpen(false); }}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700/60"
+                  >
+                    <CheckSquare className="h-4 w-4 shrink-0 text-zinc-400" />
+                    Selecionar conversas
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          {/* Nova conversa — ícone "nova conversa" do WhatsApp (balão + lápis) */}
+          <button
+            title="Nova conversa"
+            onClick={() => setNewConvOpen(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 dark:text-zinc-400 dark:hover:text-emerald-500"
+          >
+            <WhatsAppNewChatIcon className="h-[19px] w-[19px]" />
+          </button>
         </div>
+      </div>
 
-        <Popover className="relative">
-          <PopoverButton
-            // Filtros funcionam sempre — dentro ou fora de uma view. Quando
-            // dentro de view, eles agem como override em cima dos filtros
-            // salvos da view (backend faz o merge no /inbox-views/:id/conv).
-            className={`relative flex h-[30px] w-[30px] items-center justify-center rounded-md transition-colors outline-none data-[open]:bg-zinc-100 data-[open]:text-zinc-600 dark:data-[open]:bg-zinc-800 dark:data-[open]:text-zinc-300 ${
-              activeFilterCount > 0
-                ? 'bg-primary/10 text-primary dark:bg-primary/20 data-[open]:bg-primary/10 data-[open]:text-primary dark:data-[open]:bg-primary/20 dark:data-[open]:text-primary'
-                : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300'
+      {/* Status tabs — AI / Ativos / Pendentes / Grupos (linha limpa e larga, igual
+          LíderHub). Com os Arquivados abertos, a linha inteira fica esmaecida e
+          nenhuma aba aparece selecionada (igual LíderHub). */}
+      <div
+        className={`flex items-stretch border-b border-zinc-200/80 transition-opacity duration-200 dark:border-zinc-800 ${
+          archivedOnly ? 'opacity-40' : 'opacity-100'
+        }`}
+      >
+        {statusTabs.map((tab) => {
+          const isActive = statusTab === tab.value && !archivedOnly;
+          const count = statusCounts?.[tab.value] ?? 0;
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => {
+                // Clicar numa aba enquanto os Arquivados estão abertos fecha-os.
+                if (archivedOnly) {
+                  setArchivedOnly(false);
+                  updatePrefs({ archivedOnly: false });
+                }
+                setStatusTab(isActive ? 'ALL' : tab.value);
+              }}
+              className={`flex flex-1 flex-col items-center justify-center gap-2 px-1 py-3.5 text-[11.5px] font-medium transition-colors border-b-2 ${
+                isActive
+                  ? `${tab.activeText} ${tab.activeBorder}`
+                  : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+              }`}
+            >
+              {/* Chat-balloon icon with conversation-count badge (LíderHub style) */}
+              <span className="relative">
+                <Icon className="h-6 w-6" strokeWidth={2} />
+                <span className={`absolute -right-2.5 -top-1.5 inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-[4px] text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-zinc-950 ${count > 0 ? tab.badge : 'bg-zinc-300 dark:bg-zinc-600'}`}>
+                  {count > 99 ? '99+' : count}
+                </span>
+              </span>
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Arquivados — abre/fecha a lista de arquivadas inline (igual LíderHub):
+          mostra a contagem, gira o chevron e destaca a linha quando aberto. */}
+      <button
+        onClick={toggleArchived}
+        title={archivedOnly ? 'Fechar arquivados' : 'Ver conversas arquivadas'}
+        className={`flex w-full items-center gap-2.5 border-b border-zinc-200/80 px-3 py-2 text-[12.5px] font-medium transition-colors dark:border-zinc-800 ${
+          archivedOnly
+            ? 'bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-100'
+            : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/60 dark:hover:text-zinc-300'
+        }`}
+      >
+        <Archive className="h-4 w-4 shrink-0" />
+        <span className="flex-1 text-left">Arquivados</span>
+        {archivedCount > 0 && (
+          <span
+            className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums transition-colors ${
+              archivedOnly
+                ? 'bg-zinc-700 text-white dark:bg-zinc-200 dark:text-zinc-900'
+                : 'bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
             }`}
           >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            {activeFilterCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
-                {activeFilterCount}
-              </span>
-            )}
-          </PopoverButton>
+            {archivedCount > 999 ? '999+' : archivedCount}
+          </span>
+        )}
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+            archivedOnly ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
 
-          <PopoverPanel
-            anchor="bottom end"
-            transition
-            className="z-50 mt-1.5 w-64 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-          >
-            <div>
-              <p className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Filtros
-              </p>
-              {filterOptions.map((f) => {
-                const isActive =
-                  f.value === 'unread'
-                    ? unreadOnly
-                    : f.value === 'archived'
-                      ? archivedOnly
-                      : showGroups;
-                const Icon = f.icon;
-                return (
-                  <button
-                    key={f.value}
-                    onClick={() => toggleListFilter(f.value)}
-                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                      isActive
-                        ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
-                        : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                      isActive
-                        ? 'border-primary bg-primary text-white'
-                        : 'border-zinc-300 dark:border-zinc-600'
-                    }`}>
-                      {isActive && <Check className="h-2.5 w-2.5" />}
-                    </div>
-                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="flex-1 leading-tight">
-                      <span className="block">{f.label}</span>
-                      <span className="block text-[10px] font-normal text-zinc-400 dark:text-zinc-500">
-                        {f.description}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-              {tags.length > 0 && (
-                <>
-                  <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                      Tags
-                    </p>
-                    {selectedTagIds.length > 0 && (
-                      <button
-                        onClick={() => {
-                          setSelectedTagIds([]);
-                          updatePrefs({ tagIds: [] });
-                        }}
-                        className="text-[10px] text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
-                      >
-                        Limpar
-                      </button>
-                    )}
-                  </div>
-                  <div className="px-1.5 pb-1">
-                    <div className="relative">
-                      <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-400" />
-                      <input
-                        type="text"
-                        placeholder="Buscar tag..."
-                        value={tagSearch}
-                        onChange={(e) => setTagSearch(e.target.value)}
-                        // Headless UI fecha o popover quando o foco vaza ou
-                        // quando ESC sobe — paramos a propagação pra ESC
-                        // limpar o campo sem fechar tudo.
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape' && tagSearch) {
-                            e.stopPropagation();
-                            setTagSearch('');
-                          }
-                        }}
-                        className="w-full rounded-md border-0 bg-zinc-100/80 py-1 pl-7 pr-7 text-[12px] text-zinc-900 outline-none ring-1 ring-transparent transition-all placeholder:text-zinc-400 focus:bg-white focus:ring-primary/30 dark:bg-zinc-800/60 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-900"
-                      />
-                      {tagSearch && (
-                        <button
-                          onClick={() => setTagSearch('')}
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
-                        >
-                          <X className="h-2.5 w-2.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="max-h-56 overflow-y-auto scrollbar-thin">
-                    {filteredTags.length === 0 ? (
-                      <p className="px-2.5 py-2 text-center text-[11px] text-zinc-400 dark:text-zinc-500">
-                        Nenhuma tag encontrada
-                      </p>
-                    ) : (
-                      filteredTags.map((tag) => {
-                        const isActive = selectedTagIds.includes(tag.id);
-                        return (
-                          <button
-                            key={tag.id}
-                            onClick={() => toggleTagFilter(tag.id)}
-                            className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                              isActive
-                                ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
-                                : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                            }`}
-                          >
-                            <div
-                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                                isActive
-                                  ? 'border-primary bg-primary text-white'
-                                  : 'border-zinc-300 dark:border-zinc-600'
-                              }`}
-                            >
-                              {isActive && <Check className="h-2.5 w-2.5" />}
-                            </div>
-                            <span
-                              className="h-2 w-2 shrink-0 rounded-full"
-                              style={{ backgroundColor: tag.color }}
-                            />
-                            <span className="flex-1 truncate">{tag.name}</span>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </>
-              )}
-              {activeFilterCount > 0 && (
-                <>
-                  <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
-                  <button
-                    onClick={clearListFilters}
-                    className="flex w-full items-center justify-center gap-1 rounded-md px-2.5 py-1.5 text-[12px] text-zinc-400 transition-colors hover:bg-zinc-50 hover:text-zinc-600 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-300"
-                  >
-                    <X className="h-3 w-3" />
-                    Limpar filtros
-                  </button>
-                </>
-              )}
-            </div>
-          </PopoverPanel>
-        </Popover>
-      </div>
-
-      {/* Active filter chips */}
-      {activeFilterCount > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-3 pb-2">
-          {filterOptions.map((option) => {
-            const isActive =
-              option.value === 'unread' ? unreadOnly : archivedOnly;
-            if (!isActive) return null;
-            return (
-              <span
-                key={option.value}
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary dark:bg-primary/20"
-              >
-                {option.label}
-                {option.value === 'unread' && (
-                  <span className="rounded-full bg-primary/20 px-1.5 text-[10px] font-semibold leading-none py-[3px] dark:bg-primary/30">
-                    {totalCount}
-                  </span>
-                )}
-                <button
-                  onClick={() => toggleListFilter(option.value)}
-                  className="rounded-full p-0.5 transition-colors hover:bg-primary/20 dark:hover:bg-primary/30"
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </span>
-            );
-          })}
-          {selectedTagIds.map((tagId) => {
-            const tag = tags.find((t) => t.id === tagId);
-            if (!tag) return null;
-            return (
-              <span
-                key={tag.id}
-                title={`Filtrando por tag: ${tag.name}`}
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                style={{
-                  backgroundColor: `${tag.color}1f`,
-                  color: tag.color,
-                }}
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ backgroundColor: tag.color }}
-                />
-                {tag.name}
-                <button
-                  onClick={() => toggleTagFilter(tag.id)}
-                  className="rounded-full p-0.5 transition-colors"
-                  style={{ backgroundColor: `${tag.color}14` }}
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </span>
-            );
-          })}
-          {activeFilterCount > 1 && (
-            <button
-              onClick={clearListFilters}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-            >
-              <X className="h-2.5 w-2.5" />
-              Limpar
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
+      {(selectionMode || selectedIds.size > 0) && (
         <div className="flex items-center gap-1.5 border-t border-b border-zinc-200/80 bg-primary/4 px-3 py-1.5 dark:border-zinc-800 dark:bg-primary/10">
           <button
             onClick={clearSelection}
+            title="Sair da seleção"
             className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
           >
             <X className="h-3.5 w-3.5" />
           </button>
+          {/* Select-all checkbox */}
+          <button
+            onClick={selectedIds.size === conversations.length ? clearSelection : selectAll}
+            title={selectedIds.size === conversations.length ? 'Desmarcar todas' : 'Selecionar todas'}
+            className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 hover:text-primary"
+          >
+            {selectedIds.size === conversations.length && conversations.length > 0 ? (
+              <CheckSquare className="h-4 w-4 text-primary" />
+            ) : (
+              <Square className="h-4 w-4" />
+            )}
+          </button>
           <span className="text-[12px] font-medium text-zinc-600 dark:text-zinc-300">
-            {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+            {selectedIds.size > 0
+              ? `${selectedIds.size} selecionada${selectedIds.size > 1 ? 's' : ''}`
+              : 'Clique nas conversas'}
           </span>
+          <div className="flex-1" />
+          {selectedIds.size > 0 && (
           <button
             onClick={selectAll}
             className="text-[11px] text-primary hover:underline"
           >
             Todas
           </button>
-          <div className="flex-1" />
-          <button
-            onClick={handleCreateInboxFromSelection}
-            disabled={bulkLoading}
-            title="Criar inbox com selecionadas"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-amber-50 hover:text-amber-600 disabled:opacity-50 dark:hover:bg-amber-500/10"
-          >
-            <FolderPlus className="h-3.5 w-3.5" />
-          </button>
-          <BulkAiPopover
-            count={selectedIds.size}
-            disabled={bulkLoading}
-            onSetOverride={handleBulkSetAi}
-            onEngage={handleBulkEngageAi}
-          />
-          <BulkPipelinePopover
-            count={selectedIds.size}
-            disabled={bulkLoading}
-            onConfirm={handleBulkAddToPipeline}
-          />
-          <button
-            onClick={() => handleBulkAction('assign')}
-            disabled={bulkLoading}
-            title="Assumir"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-50"
-          >
-            <UserCheck className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => handleBulkAction('close')}
-            disabled={bulkLoading}
-            title="Fechar"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-500/10"
-          >
-            <XCircle className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => handleBulkAction('reopen')}
-            disabled={bulkLoading}
-            title="Reabrir"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-emerald-50 hover:text-emerald-500 disabled:opacity-50 dark:hover:bg-emerald-500/10"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </button>
+          )}
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleQuickArchive}
+              disabled={bulkLoading}
+              title="Arquivar selecionadas"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            >
+              <Archive className="h-4 w-4" />
+            </button>
+          )}
+          {selectedIds.size > 0 && (
+            <BulkActionsMenu
+              conversationIds={Array.from(selectedIds)}
+              conversations={conversations}
+              disabled={bulkLoading}
+              onCreateInbox={handleCreateInboxFromSelection}
+              onDone={clearSelection}
+            />
+          )}
         </div>
       )}
 
       {/* Divider */}
-      {selectedIds.size === 0 && (
+      {!(selectionMode || selectedIds.size > 0) && (
         <div className="mx-3 border-t border-zinc-100 dark:border-zinc-800/60" />
       )}
 
       {/* Conversation list */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-thin">
+      <div
+        ref={scrollContainerRef}
+        className={`flex-1 overflow-y-auto scrollbar-thin ${
+          archivedOnly ? 'animate-archived-reveal' : ''
+        }`}
+      >
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex gap-3 px-3 py-3">
@@ -1203,7 +879,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
             </p>
             {(activeFilterCount > 0 || search) && (
               <button
-                onClick={() => { clearListFilters(); handleSearchChange(''); }}
+                onClick={clearAllFilters}
                 className="mt-2 text-xs text-primary hover:underline"
               >
                 Limpar filtros
@@ -1215,7 +891,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
             {conversations.map((conv, index) => {
               const isActive = conv.id === activeId;
               const isSelected = selectedIds.has(conv.id);
-              const inSelectionMode = selectedIds.size > 0;
+              const inSelectionMode = selectionMode || selectedIds.size > 0;
               return (
                 <button
                   key={conv.id}
@@ -1227,7 +903,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                       position: { x: e.clientX, y: e.clientY },
                     });
                   }}
-                  className={`group flex w-full gap-3 px-3 py-2.5 text-left transition-colors duration-100 ${
+                  className={`group flex w-full gap-3 px-4 py-3.5 text-left transition-colors duration-100 ${
                     isSelected
                       ? 'bg-primary/[0.06] dark:bg-primary/10'
                       : isActive
@@ -1235,137 +911,150 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                         : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
                   }`}
                 >
-                  <div className="group/avatar relative shrink-0">
-                    {/* Avatar visível por padrão; some no hover (ou se está selecionado / em selection mode) pra dar lugar à checkbox. */}
-                    <div
-                      className={`${
-                        inSelectionMode || isSelected
-                          ? 'invisible'
-                          : 'group-hover/avatar:invisible'
-                      }`}
-                    >
-                      <ListAvatar
-                        name={conv.contact.name}
-                        avatarUrl={conv.contact.avatarUrl}
-                      />
-                    </div>
-                    {/* Checkbox: aparece no hover sempre, fica visível travada
-                        quando já tem seleção ativa ou esse item é parte dela. */}
-                    <div
-                      role="checkbox"
-                      aria-checked={isSelected}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelect(conv.id, index);
-                      }}
-                      className={`absolute inset-0 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-2 transition-colors ${
-                        isSelected
-                          ? 'border-primary bg-primary text-white opacity-100'
-                          : inSelectionMode
-                            ? 'border-zinc-300 bg-zinc-100 text-transparent hover:border-primary/50 dark:border-zinc-600 dark:bg-zinc-800'
-                            : 'border-zinc-300 bg-white text-transparent opacity-0 hover:border-primary/50 group-hover/avatar:opacity-100 dark:border-zinc-600 dark:bg-zinc-900'
-                      }`}
-                      title={isSelected ? 'Desmarcar' : 'Selecionar'}
-                    >
-                      <Check className="h-4 w-4" />
-                    </div>
-                    {(() => {
-                      const ChannelIcon = channelIcons[conv.channel.type] || MessageSquare;
-                      return (
-                        <div className="absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 border-white bg-white dark:border-zinc-950 dark:bg-zinc-900">
-                          <ChannelIcon className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />
+                  {/* ── Avatar with tag ring + checkbox overlay ── */}
+                  {(() => {
+                    const primaryTag = (conv.tags ?? [])[0]?.tag ?? (conv.contact.tags ?? [])[0]?.tag;
+                    const ringColor = primaryTag?.color;
+                    return (
+                      <div className="group/avatar relative shrink-0">
+                        <div className={`${inSelectionMode || isSelected ? 'invisible' : 'group-hover/avatar:invisible'}`}>
+                          <div
+                            className="rounded-full"
+                            style={ringColor ? { border: `2.5px solid ${ringColor}` } : undefined}
+                          >
+                            <ListAvatar name={conv.contact.name} avatarUrl={conv.contact.avatarUrl} />
+                          </div>
                         </div>
-                      );
-                    })()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    {(() => {
-                      const unread = conv.unreadCount ?? 0;
-                      const hasUnread = unread > 0;
-                      return (
-                        <>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span
-                                className={`truncate text-[13px] ${
-                                  hasUnread
-                                    ? 'font-bold text-zinc-900 dark:text-zinc-50'
-                                    : 'font-medium ' +
-                                      (isActive || isSelected
-                                        ? 'text-zinc-900 dark:text-zinc-100'
-                                        : 'text-zinc-800 dark:text-zinc-200')
-                                }`}
-                              >
-                                {conv.contact.name || conv.contact.phone || 'Desconhecido'}
-                              </span>
-                              <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusColors[conv.status] || 'bg-zinc-300'}`} />
-                            </div>
-                            <div className="flex shrink-0 items-center gap-1.5">
-                              <span
-                                className={`text-[10px] tabular-nums ${
-                                  hasUnread
-                                    ? 'font-semibold text-red-600 dark:text-red-400'
-                                    : 'text-zinc-400 dark:text-zinc-500'
-                                }`}
-                              >
-                                {formatTime(conv.messages[0]?.createdAt ?? conv.lastMessageAt)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-0.5 flex items-center justify-between gap-1.5">
-                            <p
-                              className={`truncate text-[12px] ${
-                                hasUnread
-                                  ? 'font-semibold text-zinc-700 dark:text-zinc-200'
-                                  : 'text-zinc-500 dark:text-zinc-400'
-                              }`}
-                            >
-                              {getLastMessagePreview(conv)}
-                            </p>
-                            {hasUnread && (
-                              <span className="ml-1 inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white">
-                                {unread > 9 ? '9+' : unread}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      );
-                    })()}
-                    {(conv.tags?.length || conv.contact.tags?.length) ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {conv.tags?.map((t) => (
-                          <span
-                            key={`c-${t.tag.id}`}
-                            title={`Tag na conversa: ${t.tag.name}`}
-                            className="inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-medium"
-                            style={{
-                              backgroundColor: `${t.tag.color}1f`,
-                              color: t.tag.color,
-                            }}
-                          >
-                            <span
-                              className="h-1.5 w-1.5 rounded-full"
-                              style={{ backgroundColor: t.tag.color }}
-                            />
-                            {t.tag.name}
-                          </span>
-                        ))}
-                        {conv.contact.tags?.map((t) => (
-                          <span
-                            key={`ct-${t.tag.id}`}
-                            title={`Tag no contato: ${t.tag.name}`}
-                            className="inline-flex items-center gap-1 rounded-full border border-dashed px-1.5 py-px text-[10px] font-medium"
-                            style={{
-                              borderColor: `${t.tag.color}80`,
-                              color: t.tag.color,
-                            }}
-                          >
-                            {t.tag.name}
-                          </span>
-                        ))}
+                        <div
+                          role="checkbox"
+                          aria-checked={isSelected}
+                          onClick={(e) => { e.stopPropagation(); toggleSelect(conv.id, index); }}
+                          className={`absolute inset-0 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-2 transition-colors ${
+                            isSelected
+                              ? 'border-primary bg-primary text-white opacity-100'
+                              : inSelectionMode
+                                ? 'border-zinc-300 bg-zinc-100 text-transparent hover:border-primary/50 dark:border-zinc-600 dark:bg-zinc-800'
+                                : 'border-zinc-300 bg-white text-transparent opacity-0 hover:border-primary/50 group-hover/avatar:opacity-100 dark:border-zinc-600 dark:bg-zinc-900'
+                          }`}
+                          title={isSelected ? 'Desmarcar' : 'Selecionar'}
+                        >
+                          <Check className="h-4 w-4" />
+                        </div>
                       </div>
-                    ) : null}
-                  </div>
+                    );
+                  })()}
+
+                  {/* ── Content ── */}
+                  {(() => {
+                    const unread = conv.unreadCount ?? 0;
+                    const hasUnread = unread > 0;
+                    const lastMsg = conv.messages[0];
+                    const allTags = [...(conv.tags ?? []), ...(conv.contact.tags ?? [])];
+                    return (
+                      <div className="min-w-0 flex-1">
+                        {/* Row 1 — name + timestamp + dots */}
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className={`flex-1 truncate text-[13px] ${hasUnread ? 'font-bold text-zinc-900 dark:text-zinc-50' : 'font-semibold ' + (isActive || isSelected ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-800 dark:text-zinc-200')}`}>
+                            {conv.contact.name || conv.contact.phone || 'Desconhecido'}
+                          </span>
+                          <span className={`shrink-0 text-[11px] tabular-nums ${hasUnread ? 'font-semibold text-green-600 dark:text-green-400' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                            {formatTime(lastMsg?.createdAt ?? conv.lastMessageAt)}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setContextMenu({ conversation: conv, position: { x: e.clientX, y: e.clientY } });
+                            }}
+                            title="Ações"
+                            className="invisible shrink-0 group-hover:visible flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                          >
+                            <EllipsisVertical className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Row 2 — tick + preview */}
+                        <div className="mt-1 flex items-center gap-0.5 min-w-0">
+                          {lastMsg?.direction === 'OUTBOUND' && (
+                            <Check className="h-3 w-3 shrink-0 text-zinc-400 dark:text-zinc-500" />
+                          )}
+                          <p className={`flex-1 truncate text-[12px] ${hasUnread ? 'font-medium text-zinc-700 dark:text-zinc-200' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                            {getLastMessagePreview(conv)}
+                          </p>
+                        </div>
+
+                        {/* Row 3 — UF + tags + channel + assignee + badge */}
+                        <div className="mt-2 flex items-center gap-1 min-w-0">
+                          {/* Brazilian state from DDD */}
+                          {(() => {
+                            if (conv.isGroup) return null;
+                            const st = getBrazilState(conv.contact.phone);
+                            if (!st) return null;
+                            return (
+                              <span
+                                title={st.name}
+                                className="flex shrink-0 items-center gap-1 rounded bg-emerald-50 px-1 py-px text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                              >
+                                <StateFlag uf={st.uf} className="h-2.5 w-4 shrink-0 rounded-[1px] object-cover ring-1 ring-black/10" />
+                                {st.uf}
+                              </span>
+                            );
+                          })()}
+                          {/* Tag chips */}
+                          {allTags.slice(0, 2).map((t) => (
+                            <span
+                              key={t.tag.id}
+                              title={t.tag.name}
+                              className="flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[10px] font-medium"
+                              style={{ backgroundColor: `${t.tag.color}22`, color: t.tag.color }}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: t.tag.color }} />
+                              <span className="max-w-[48px] truncate">{t.tag.name}</span>
+                            </span>
+                          ))}
+                          {allTags.length > 2 && (
+                            <span className="shrink-0 text-[10px] text-zinc-400">+{allTags.length - 2}</span>
+                          )}
+                          {/* Conexão — nome da conexão (ex.: "RMC") que recebeu */}
+                          {conv.channel.name ? (
+                            <span
+                              title={`Conexão: ${conv.channel.name}${conv.channel.phoneNumber ? ` · ${formatPhone(conv.channel.phoneNumber)}` : ''}`}
+                              className="flex shrink-0 items-center gap-0.5 rounded bg-zinc-50 px-1 py-px text-[10px] font-medium text-zinc-400 dark:bg-zinc-800/60 dark:text-zinc-500"
+                            >
+                              <Phone className="h-2.5 w-2.5 shrink-0" />
+                              <span className="max-w-[70px] truncate">{conv.channel.name}</span>
+                            </span>
+                          ) : null}
+                          {/* Assignee pill — gradient (LíderHub style) */}
+                          {conv.assignedTo ? (
+                            <span className="flex min-w-0 items-center gap-0.5 overflow-hidden rounded-md bg-gradient-to-r from-sky-100 to-indigo-100 px-1.5 py-px text-[10px] font-medium text-sky-700 ring-1 ring-sky-500/15 dark:from-sky-900/30 dark:to-indigo-900/30 dark:text-sky-300 dark:ring-sky-400/15">
+                              <User className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate max-w-[90px]">{conv.assignedTo.name}</span>
+                            </span>
+                          ) : null}
+                          {/* Spacer */}
+                          <div className="flex-1" />
+                          {/* Unread badge */}
+                          {hasUnread && (
+                            <span className="shrink-0 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-green-500 px-1.5 text-[10px] font-bold leading-none text-white">
+                              {unread > 9 ? '9+' : unread}
+                            </span>
+                          )}
+                          {/* Accept pending */}
+                          {conv.status === 'PENDING' && (
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => handleAccept(e, conv.id)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleAccept(e as unknown as React.MouseEvent, conv.id)}
+                              className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-primary px-2 py-[3px] text-[10px] font-semibold text-white transition-opacity hover:bg-primary/80"
+                            >
+                              {acceptingId === conv.id ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : 'Aceitar'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </button>
               );
             })}
@@ -1385,6 +1074,21 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
           conversation={contextMenu.conversation}
           position={contextMenu.position}
           onClose={() => setContextMenu(null)}
+          onSelect={() => {
+            const id = contextMenu.conversation.id;
+            setSelectionMode(true);
+            setSelectedIds((prev) => new Set(prev).add(id));
+          }}
+        />
+      )}
+
+      {newConvOpen && (
+        <NewConversationModal
+          onClose={() => setNewConvOpen(false)}
+          onCreated={(conv) => {
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            onSelect(conv);
+          }}
         />
       )}
     </div>

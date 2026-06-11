@@ -7,77 +7,32 @@ import {
   XCircle,
   RotateCcw,
   RefreshCw,
-  MessageSquare,
-  Instagram,
-  Phone,
-  Mail,
-  Send,
-  Activity,
+  PanelRightOpen,
+  PanelRightClose,
+  Copy,
+  Check,
+  MoreHorizontal,
+  Search,
 } from 'lucide-react';
+import { formatPhone } from '@/lib/brazil-states';
+import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { ConversationAiToggle } from './conversation-ai-toggle';
 import { AssignmentPopover } from './assignment-popover';
 import { AgentPinPopover } from './agent-pin-popover';
 import { PipelinePopover } from './pipeline-popover';
+import { ArchiveModal } from './archive-modal';
 import { inboxService, type Conversation } from '../services/inbox.service';
 
 interface ConversationHeaderProps {
   conversation: Conversation;
   onUpdate: () => void;
-  /** When provided, renders a toggle button for the agent-runs sidebar. */
-  onToggleAgentLogs?: () => void;
-  agentLogsOpen?: boolean;
-}
-
-function ChannelBadge({ type, name }: { type: string; name: string }) {
-  const t = type.toUpperCase();
-  const isWhats = t.includes('WHATSAPP') || t.includes('ZAPPFY');
-  const isInsta = t.includes('INSTAGRAM');
-  const isTelegram = t.includes('TELEGRAM');
-  const isEmail = t.includes('EMAIL') || t.includes('MAIL');
-  const isSms = t.includes('SMS');
-
-  let Icon = MessageSquare;
-  let label = 'Chat';
-  let cls =
-    'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300';
-
-  if (isWhats) {
-    Icon = Phone;
-    label = 'WhatsApp';
-    cls = 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-  } else if (isInsta) {
-    Icon = Instagram;
-    label = 'Instagram';
-    cls = 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400';
-  } else if (isTelegram) {
-    Icon = Send;
-    label = 'Telegram';
-    cls = 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400';
-  } else if (isEmail) {
-    Icon = Mail;
-    label = 'Email';
-    cls = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
-  } else if (isSms) {
-    Icon = MessageSquare;
-    label = 'SMS';
-    cls = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
-  }
-
-  return (
-    <span
-      title={name}
-      className={`mt-1 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
-    >
-      <Icon className="h-3 w-3" />
-      {label}
-      <span className="font-normal normal-case opacity-70">· {name}</span>
-    </span>
-  );
+  panelOpen?: boolean;
+  onTogglePanel?: () => void;
+  onToggleSearch?: () => void;
 }
 
 function HeaderAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: string | null }) {
   const [failed, setFailed] = useState(false);
-  const initials = name?.slice(0, 2).toUpperCase() || '??';
   if (avatarUrl && !failed) {
     return (
       <img
@@ -89,21 +44,32 @@ function HeaderAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: str
     );
   }
   return (
-    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-sm font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-      {initials}
+    <div
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+      style={{ backgroundColor: avatarColor(name) }}
+    >
+      {avatarInitials(name)}
     </div>
   );
 }
 
-export function ConversationHeader({
-  conversation,
-  onUpdate,
-  onToggleAgentLogs,
-  agentLogsOpen,
-}: ConversationHeaderProps) {
+export function ConversationHeader({ conversation, onUpdate, panelOpen = true, onTogglePanel, onToggleSearch }: ConversationHeaderProps) {
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const handleCopyPhone = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const phone = conversation.contact.phone;
+    if (!phone) return;
+    navigator.clipboard.writeText(phone).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -139,56 +105,66 @@ export function ConversationHeader({
     }
   };
 
+  const handleArchiveConfirm = async (reason: string, nextResponsibleId: string | null) => {
+    await inboxService.archive(conversation.id);
+    if (nextResponsibleId) {
+      await inboxService.assignTo(conversation.id, nextResponsibleId).catch(() => null);
+    }
+    toast.success('Conversa arquivada');
+    setShowArchiveModal(false);
+    onUpdate();
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+  };
+
   return (
-    <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center gap-3">
-        <HeaderAvatar
-          name={conversation.contact.name}
-          avatarUrl={conversation.contact.avatarUrl}
-        />
-        <div className="flex flex-col">
-          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            {conversation.contact.name || conversation.contact.phone || 'Desconhecido'}
-          </div>
-          {conversation.contact.phone && conversation.contact.name && (
-            <div className="text-xs text-zinc-500">{conversation.contact.phone}</div>
-          )}
-          <ChannelBadge
-            type={conversation.channel.type}
-            name={conversation.channel.name}
+    <>
+    {showArchiveModal && (
+      <ArchiveModal
+        onConfirm={handleArchiveConfirm}
+        onClose={() => setShowArchiveModal(false)}
+      />
+    )}
+    <div className="flex h-[72px] items-center justify-between border-b border-zinc-200 bg-white px-5 dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Contact info — name+avatar toggles the right panel; copy button is separate */}
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onTogglePanel}
+          title={panelOpen ? 'Fechar painel do contato' : 'Abrir painel do contato'}
+          className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/60"
+        >
+          <HeaderAvatar
+            name={conversation.contact.name}
+            avatarUrl={conversation.contact.avatarUrl}
           />
-        </div>
+          <div className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {conversation.contact.name || formatPhone(conversation.contact.phone) || 'Desconhecido'}
+          </div>
+        </button>
+        {conversation.contact.phone && (
+          <button
+            type="button"
+            onClick={handleCopyPhone}
+            title="Copiar telefone"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          >
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        )}
       </div>
 
-      <div className="flex items-center gap-1.5">
-        <AgentPinPopover conversation={conversation} onChanged={onUpdate} />
-        <ConversationAiToggle
-          conversation={conversation}
-          disabled={isLoading}
-          onChange={async (next) => {
-            await handleAction(
-              () => inboxService.toggleAi(conversation.id, next),
-              next === null
-                ? 'IA voltou pro padrão (segue config global)'
-                : next
-                  ? 'IA forçada nesta conversa (sobrepõe global)'
-                  : 'IA pausada nesta conversa',
-            );
-          }}
-          onEngage={async () => {
-            await handleAction(async () => {
-              const result = await inboxService.engageAi(conversation.id);
-              if (!result.engaged) {
-                throw new Error(
-                  result.reason
-                    ? `IA não pôde engajar: ${result.reason}`
-                    : 'Não foi possível engajar a IA',
-                );
-              }
-              return result;
-            }, 'IA engajada — vai responder em segundos');
-          }}
-        />
+      <div className="flex shrink-0 items-center gap-1.5 pl-2">
+        {/* Buscar dentro da conversa */}
+        {onToggleSearch && (
+          <button
+            onClick={onToggleSearch}
+            title="Buscar nesta conversa"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        )}
+        {/* Always visible: sync */}
         <button
           onClick={handleSync}
           disabled={isSyncing}
@@ -197,57 +173,123 @@ export function ConversationHeader({
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
         </button>
-        {onToggleAgentLogs && (
+        {/* Always visible: Arquivar / Desarquivar */}
+        {!conversation.isArchived ? (
           <button
-            onClick={onToggleAgentLogs}
-            title={agentLogsOpen ? 'Fechar logs do agente' : 'Abrir logs do agente'}
+            onClick={() => setShowArchiveModal(true)}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            Arquivar chat
+          </button>
+        ) : (
+          <button
+            onClick={() =>
+              handleAction(
+                () => inboxService.unarchive(conversation.id),
+                'Conversa desarquivada',
+              )
+            }
+            disabled={isLoading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          >
+            Desarquivar
+          </button>
+        )}
+
+        {/* Overflow menu — secondary actions (LíderHub-clean header) */}
+        <div className="relative">
+          <button
+            onClick={() => setMoreOpen((v) => !v)}
+            title="Mais ações"
             className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-              agentLogsOpen
-                ? 'bg-primary/10 text-primary dark:bg-primary/15'
+              moreOpen
+                ? 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'
                 : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300'
             }`}
           >
-            <Activity className="h-3.5 w-3.5" />
+            <MoreHorizontal className="h-4 w-4" />
           </button>
-        )}
-        {conversation.status !== 'CLOSED' && (
-          <AssignmentPopover
-            conversation={conversation}
-            onChanged={onUpdate}
-          />
-        )}
-        <PipelinePopover conversation={conversation} onChanged={onUpdate} />
-        {conversation.status !== 'CLOSED' && (
-          <button
-            onClick={() =>
-              handleAction(
-                () => inboxService.closeConversation(conversation.id),
-                'Conversa encerrada',
-              )
-            }
-            disabled={isLoading}
-            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-red-50 hover:text-red-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-          >
-            <XCircle className="h-3.5 w-3.5" />
-            Encerrar
-          </button>
-        )}
-        {conversation.status === 'CLOSED' && (
-          <button
-            onClick={() =>
-              handleAction(
-                () => inboxService.reopenConversation(conversation.id),
-                'Conversa reaberta',
-              )
-            }
-            disabled={isLoading}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Reabrir
-          </button>
-        )}
+          {moreOpen && (
+            <>
+              {/* Click-away backdrop */}
+              <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
+              <div className="absolute right-0 top-full z-50 mt-1.5 flex w-56 flex-col gap-1 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="px-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                  Atendimento
+                </p>
+                <ConversationAiToggle
+                  conversation={conversation}
+                  disabled={isLoading}
+                  onChange={async (next) => {
+                    await handleAction(
+                      () => inboxService.toggleAi(conversation.id, next),
+                      next === null
+                        ? 'IA voltou pro padrão (segue config global)'
+                        : next
+                          ? 'IA forçada nesta conversa (sobrepõe global)'
+                          : 'IA pausada nesta conversa',
+                    );
+                  }}
+                  onEngage={async () => {
+                    await handleAction(async () => {
+                      const result = await inboxService.engageAi(conversation.id);
+                      if (!result.engaged) {
+                        throw new Error(
+                          result.reason
+                            ? `IA não pôde engajar: ${result.reason}`
+                            : 'Não foi possível engajar a IA',
+                        );
+                      }
+                      return result;
+                    }, 'IA engajada — vai responder em segundos');
+                  }}
+                />
+                <AgentPinPopover conversation={conversation} onChanged={onUpdate} />
+                {conversation.status !== 'CLOSED' && (
+                  <AssignmentPopover conversation={conversation} onChanged={onUpdate} />
+                )}
+                <PipelinePopover conversation={conversation} onChanged={onUpdate} />
+                <div className="my-0.5 border-t border-zinc-100 dark:border-zinc-800" />
+                {conversation.status !== 'CLOSED' ? (
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      handleAction(
+                        () => inboxService.closeConversation(conversation.id),
+                        'Conversa encerrada',
+                      );
+                    }}
+                    disabled={isLoading}
+                    className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-zinc-300 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                    Encerrar conversa
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      handleAction(
+                        () => inboxService.reopenConversation(conversation.id),
+                        'Conversa reaberta',
+                      );
+                    }}
+                    disabled={isLoading}
+                    className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reabrir conversa
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Panel toggle movido pra abinha flutuante na borda (ChatPanel) */}
       </div>
     </div>
+    </>
   );
 }

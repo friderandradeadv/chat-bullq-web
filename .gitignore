@@ -36,6 +36,3 @@ coverage/
 # Temp
 tmp/
 temp/
-
-# Screenshots / Playwright output
-shots/
