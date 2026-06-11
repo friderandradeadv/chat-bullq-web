@@ -5,50 +5,25 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
 import { ConversationList } from '@/features/inbox/components/conversation-list';
+import { InboxToolbar } from '@/features/inbox/components/inbox-toolbar';
 import { ChatPanel } from '@/features/inbox/components/chat-panel';
-import { AgentRunsSidebar } from '@/features/inbox/components/agent-runs-sidebar';
+import { ContactDetailsPanel } from '@/features/inbox/components/contact-details-panel';
 import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
-
-const AGENT_LOGS_PREF_KEY = 'inbox.agentLogsOpen';
 
 export default function InboxPage() {
   const searchParams = useSearchParams();
   const viewId = searchParams.get('view');
   const deepLinkConvId = searchParams.get('conversationId');
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
-  // Persisted across sessions via localStorage so each operator keeps their
-  // preferred layout (some live with the sidebar open, others want the chat
-  // full width). Read on mount, write whenever it flips.
-  const [agentLogsOpen, setAgentLogsOpen] = useState(false);
-  useEffect(() => {
-    try {
-      setAgentLogsOpen(localStorage.getItem(AGENT_LOGS_PREF_KEY) === '1');
-    } catch {
-      // SSR / privacy mode — fine, defaults to closed.
-    }
-  }, []);
-  const toggleAgentLogs = useCallback(() => {
-    setAgentLogsOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(AGENT_LOGS_PREF_KEY, next ? '1' : '0');
-      } catch {
-        // Ignore storage failures — runtime state still flips.
-      }
-      return next;
-    });
-  }, []);
+  const [panelOpen, setPanelOpen] = useState(true);
   const queryClient = useQueryClient();
 
-  // Switching inbox view should clear the open conversation so the right
-  // panel doesn't show a thread that may not even match the new filter.
+  // Switching inbox view should clear the open conversation.
   useEffect(() => {
     setActiveConversation(null);
   }, [viewId]);
 
-  // Deep-link from elsewhere (e.g. Jarvis Execuções drawer): when the URL
-  // carries ?conversationId=..., resolve it once and open in the chat panel.
-  // We don't loop on it — the user clicking another thread should override.
+  // Deep-link from elsewhere: resolve conversationId query param once.
   useEffect(() => {
     if (!deepLinkConvId) return;
     if (activeConversation?.id === deepLinkConvId) return;
@@ -58,17 +33,14 @@ export default function InboxPage() {
       .then((conv) => {
         if (!cancelled) setActiveConversation(conv);
       })
-      .catch(() => {
-        // Silent — broken link shouldn't break the inbox; user still sees
-        // the list and can pick another conversation.
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkConvId]);
 
-  // Keep the active conversation object in sync with the backend (enrichment, last message, etc.)
+  // Keep the active conversation object in sync with the backend.
   const { data: freshActive } = useQuery({
     queryKey: ['conversation', activeConversation?.id],
     queryFn: () => inboxService.getConversation(activeConversation!.id),
@@ -84,6 +56,9 @@ export default function InboxPage() {
 
   const handleConversationUpdate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    // "Intervir" muda o status (BOT→OPEN) e pausa a IA, então os badges das
+    // abas precisam ser recontados junto — senão o número fica defasado.
+    queryClient.invalidateQueries({ queryKey: ['conversation-counts'] });
     if (activeConversation) {
       queryClient.invalidateQueries({
         queryKey: ['messages', activeConversation.id],
@@ -95,27 +70,30 @@ export default function InboxPage() {
   }, [queryClient, activeConversation]);
 
   return (
-    <div className="flex h-full">
-      <ConversationList
-        activeId={activeConversation?.id || null}
-        onSelect={setActiveConversation}
-        viewId={viewId}
-      />
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Full-width top toolbar — search + Responsável + Status + Mais filtros (LíderHub style) */}
+      <InboxToolbar />
 
-      {activeConversation ? (
+      <div className="flex min-h-0 flex-1 overflow-x-auto">
+        <ConversationList
+          activeId={activeConversation?.id || null}
+          onSelect={setActiveConversation}
+          viewId={viewId}
+        />
+
+        {activeConversation ? (
         <>
           <ChatPanel
             key={activeConversation.id}
             conversation={activeConversation}
             onConversationUpdate={handleConversationUpdate}
-            onToggleAgentLogs={toggleAgentLogs}
-            agentLogsOpen={agentLogsOpen}
+            panelOpen={panelOpen}
+            onTogglePanel={() => setPanelOpen((v) => !v)}
           />
-          {agentLogsOpen && (
-            <AgentRunsSidebar
-              key={`logs-${activeConversation.id}`}
-              conversationId={activeConversation.id}
-              onClose={toggleAgentLogs}
+          {panelOpen && (
+            <ContactDetailsPanel
+              key={`panel-${activeConversation.id}`}
+              conversation={activeConversation}
             />
           )}
         </>
@@ -131,7 +109,8 @@ export default function InboxPage() {
             Selecione uma conversa para começar
           </p>
         </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

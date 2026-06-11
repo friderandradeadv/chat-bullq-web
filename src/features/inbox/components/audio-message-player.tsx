@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Loader2, Sparkles, ChevronDown, Check } from 'lucide-react';
+import { Play, Pause, Loader2, ChevronDown, Check, FileText } from 'lucide-react';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import { inboxService, type Message, type TranscriptionResult } from '../services/inbox.service';
 
@@ -74,16 +74,16 @@ export function AudioMessagePlayer({
   }, [message.metadata?.transcription]);
 
   const colorBubble = isOutbound
-    ? 'bg-primary text-primary-foreground'
+    ? 'bg-[#d9fdd3] text-zinc-800 shadow-sm dark:bg-[#005c4b] dark:text-zinc-50'
     : 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100';
   const colorAccent = isOutbound
-    ? 'bg-white/30'
+    ? 'bg-black/15 dark:bg-white/25'
     : 'bg-zinc-200 dark:bg-zinc-700';
   const colorAccentFilled = isOutbound
-    ? 'bg-white'
+    ? 'bg-emerald-600 dark:bg-emerald-300'
     : 'bg-primary';
   const colorMuted = isOutbound
-    ? 'text-primary-foreground/70'
+    ? 'text-zinc-500 dark:text-zinc-300'
     : 'text-zinc-500 dark:text-zinc-400';
 
   useEffect(() => {
@@ -179,7 +179,7 @@ export function AudioMessagePlayer({
           type="button"
           onClick={handleTogglePlay}
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-opacity ${
-            isOutbound ? 'bg-white/20 hover:bg-white/30' : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600'
+            isOutbound ? 'bg-black/10 hover:bg-black/20 dark:bg-white/15 dark:hover:bg-white/25' : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600'
           }`}
           aria-label={playing ? 'Pausar' : 'Reproduzir'}
         >
@@ -218,7 +218,7 @@ export function AudioMessagePlayer({
           <PopoverButton
             className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium outline-none transition-colors ${
               isOutbound
-                ? 'bg-white/15 hover:bg-white/25 text-primary-foreground'
+                ? 'bg-black/10 hover:bg-black/20 text-zinc-700 dark:bg-white/15 dark:hover:bg-white/25 dark:text-zinc-50'
                 : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600 dark:text-zinc-100'
             }`}
             aria-label="Velocidade de reprodução"
@@ -252,47 +252,49 @@ export function AudioMessagePlayer({
       </div>
 
       {error && (
-        <p className={`mt-1.5 text-[11px] ${isOutbound ? 'text-primary-foreground/70' : 'text-red-500'}`}>
+        <p className={`mt-1.5 text-[11px] ${isOutbound ? 'text-red-600 dark:text-red-300' : 'text-red-500'}`}>
           {error}
         </p>
       )}
 
-      {/* Transcription area */}
-      <div className={`mt-2 flex items-center gap-2 border-t pt-2 ${
-        isOutbound ? 'border-white/20' : 'border-zinc-200 dark:border-zinc-700'
+      {/* Transcrição — clique pra transcrever (estilo WhatsApp/LíderHub) */}
+      <div className={`mt-2 border-t pt-2 ${
+        isOutbound ? 'border-black/10 dark:border-white/20' : 'border-zinc-200 dark:border-zinc-700'
       }`}>
-        {!transcript && !transcribing && (
+        {transcript?.text ? (
+          <>
+            <div className={`mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide ${colorMuted}`}>
+              <FileText className="h-3 w-3" /> Transcrição
+            </div>
+            <p className={`whitespace-pre-wrap text-sm leading-relaxed ${
+              isOutbound ? 'text-zinc-700 dark:text-zinc-100' : 'text-zinc-700 dark:text-zinc-200'
+            }`}>
+              {transcript.text}
+            </p>
+          </>
+        ) : transcribing ? (
+          <span className={`inline-flex items-center gap-1.5 text-[12px] ${colorMuted}`}>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Transcrevendo áudio…
+          </span>
+        ) : (
           <button
             type="button"
             onClick={handleTranscribe}
-            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
+            className={`inline-flex w-full items-center justify-center gap-1.5 rounded-md py-1 text-[12px] font-medium transition-colors ${
               isOutbound
-                ? 'text-primary-foreground/80 hover:bg-white/15'
-                : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'text-zinc-600 hover:bg-black/10 dark:text-zinc-200 dark:hover:bg-white/15'
+                : 'text-primary hover:bg-primary/10 dark:text-primary'
             }`}
           >
-            <Sparkles className="h-3 w-3" />
-            Transcrever
+            <FileText className="h-3.5 w-3.5" />
+            Transcrever áudio
           </button>
         )}
-        {transcribing && (
-          <span className={`inline-flex items-center gap-1 text-[11px] ${colorMuted}`}>
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Transcrevendo...
-          </span>
-        )}
         {transcribeError && (
-          <span className="text-[11px] text-red-500">{transcribeError}</span>
+          <span className="mt-1 block text-[11px] text-red-500">{transcribeError}</span>
         )}
       </div>
-
-      {transcript?.text && (
-        <p className={`mt-1 whitespace-pre-wrap text-sm leading-relaxed ${
-          isOutbound ? 'text-primary-foreground/95' : 'text-zinc-700 dark:text-zinc-200'
-        }`}>
-          {transcript.text}
-        </p>
-      )}
     </div>
   );
 }

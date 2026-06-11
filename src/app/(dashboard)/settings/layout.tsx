@@ -2,17 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Radio, Users, Tags, Bell, Building2, KeyRound, Sparkles, BookUser } from 'lucide-react';
+import { Radio, Users, Tags, Bell, Building2, KeyRound, Sparkles, BookUser, Plug, Network } from 'lucide-react';
 
 const tabs = [
   { href: '/settings/channels', label: 'Canais', icon: Radio },
   { href: '/settings/general', label: 'Geral', icon: Building2 },
   { href: '/settings/ai', label: 'IA', icon: Sparkles },
   { href: '/settings/members', label: 'Membros', icon: Users },
+  { href: '/settings/departments', label: 'Departamentos', icon: Network },
   { href: '/settings/contacts', label: 'Contatos', icon: BookUser },
   { href: '/settings/tags', label: 'Tags', icon: Tags },
   { href: '/settings/notifications', label: 'Notificações', icon: Bell },
   { href: '/settings/api-keys', label: 'API Keys', icon: KeyRound },
+  { href: '/settings/integrations', label: 'Integrações', icon: Plug },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

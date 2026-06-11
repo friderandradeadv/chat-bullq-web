@@ -8,15 +8,25 @@ import {
   ChevronsUpDown,
   Building2,
   ChevronUp,
-  Zap,
   Sun,
   Moon,
+  BookUser,
+  Workflow,
+  Plug,
+  Zap,
+  ChevronDown,
+  ChevronRight,
+  MessageSquare,
+  Bot,
+  BookOpen,
+  AudioLines,
+  ClipboardList,
+  Cable,
+  KanbanSquare,
 } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { InboxTree } from '@/features/inbox-views/components/inbox-tree';
-import { JarvisTree } from '@/features/ai-agents/components/jarvis-tree';
-import { PipelinesTree } from '@/features/pipelines/components/pipelines-tree';
-
 import { useAuthStore } from '@/stores/auth-store';
 import { Avatar } from '@/components/ui/avatar';
 import {
@@ -25,8 +35,6 @@ import {
   SidebarBody,
   SidebarFooter,
   SidebarSection,
-  SidebarItem,
-  SidebarLabel,
   SidebarSpacer,
 } from '@/components/ui/sidebar';
 import {
@@ -37,15 +45,78 @@ import {
   DropdownLabel,
   DropdownDivider,
 } from '@/components/ui/dropdown';
+import { cn } from '@/lib/utils';
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/automations', label: 'Automações', icon: Zap },
-];
+// ─── Collapsible section header ───────────────────────────────────────────────
+
+function NavSection({
+  label,
+  defaultOpen = true,
+  children,
+}: {
+  label: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="flex flex-col gap-0.5">
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+      >
+        {label}
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+        )}
+      </button>
+      {open && <div className="flex flex-col gap-0.5">{children}</div>}
+    </div>
+  );
+}
+
+// ─── Simple nav link ──────────────────────────────────────────────────────────
+
+function NavItem({
+  href,
+  icon: Icon,
+  label,
+  badge,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  badge?: number;
+}) {
+  const pathname = usePathname();
+  const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
+        isActive
+          ? 'bg-zinc-950/5 text-zinc-950 dark:bg-white/10 dark:text-white'
+          : 'text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white',
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="flex-1 truncate">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-white">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export function AppSidebar() {
-  const { user, organizations, activeOrgId, setActiveOrg, logout } =
-    useAuthStore();
+  const { user, organizations, activeOrgId, setActiveOrg, logout } = useAuthStore();
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -59,26 +130,22 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
+      {/* Org selector */}
       <SidebarHeader>
         <Dropdown>
-          <DropdownButton className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm/6 font-semibold text-zinc-950 hover:bg-zinc-950/5 dark:text-white dark:hover:bg-white/5">
+          <DropdownButton className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm/6 font-semibold text-zinc-900 hover:bg-zinc-950/5 dark:text-white dark:hover:bg-white/5">
             <Avatar
               initials={activeOrg?.name?.slice(0, 2).toUpperCase()}
               className="size-6 bg-primary text-[10px] text-primary-foreground"
               square
             />
-            <span className="min-w-0 flex-1 truncate">
-              {activeOrg?.name ?? 'Organização'}
-            </span>
+            <span className="min-w-0 flex-1 truncate">{activeOrg?.name ?? 'Organização'}</span>
             <ChevronsUpDown className="ml-auto size-4 shrink-0 text-zinc-500" />
           </DropdownButton>
           {organizations.length > 1 && (
             <DropdownMenu anchor="bottom start" className="min-w-56">
               {organizations.map((org) => (
-                <DropdownItem
-                  key={org.id}
-                  onClick={() => handleOrgSwitch(org.id)}
-                >
+                <DropdownItem key={org.id} onClick={() => handleOrgSwitch(org.id)}>
                   <Building2 />
                   <DropdownLabel>{org.name}</DropdownLabel>
                 </DropdownItem>
@@ -90,15 +157,36 @@ export function AppSidebar() {
 
       <SidebarBody>
         <SidebarSection>
-          <InboxTree />
-          <PipelinesTree />
-          <JarvisTree />
-          {navItems.map((item) => (
-            <SidebarItem key={item.href} href={item.href}>
-              <item.icon className="size-5" />
-              <SidebarLabel>{item.label}</SidebarLabel>
-            </SidebarItem>
-          ))}
+          {/* Top-level — flat, LíderHub style */}
+          <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+          <NavItem href="/conexoes" icon={Cable} label="Conexões" />
+
+          {/* ATENDIMENTO */}
+          <div className="mt-3">
+            <NavSection label="Atendimento">
+              <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
+              <NavItem href="/contacts" icon={BookUser} label="Contatos" />
+              <NavItem href="/pipelines" icon={KanbanSquare} label="Kanban" />
+            </NavSection>
+          </div>
+
+          {/* AUTOMAÇÕES */}
+          <div className="mt-3">
+            <NavSection label="Automações">
+              <NavItem href="/ai-agents" icon={Bot} label="Agentes" />
+              <NavItem href="/base-conhecimento" icon={BookOpen} label="Base de Conhecimento" />
+              <NavItem href="/vozes" icon={AudioLines} label="Vozes" />
+              <NavItem href="/chatbot" icon={Workflow} label="Chatbot" />
+              <NavItem href="/automations" icon={Zap} label="Automações" />
+              <NavItem href="/settings/integrations" icon={Plug} label="Integrações" />
+            </NavSection>
+          </div>
+
+          {/* Tarefas + Configurações */}
+          <div className="mt-3 flex flex-col gap-0.5">
+            <NavItem href="/tarefas" icon={ClipboardList} label="Tarefas" />
+            <NavItem href="/settings" icon={Settings} label="Configurações" />
+          </div>
         </SidebarSection>
 
         <SidebarSpacer />
@@ -107,7 +195,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <button
           onClick={() => setTheme(isDark ? 'light' : 'dark')}
-          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-zinc-950/5 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-zinc-950/5 hover:text-zinc-900 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
         >
           {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           <span>{isDark ? 'Modo claro' : 'Modo escuro'}</span>
@@ -117,14 +205,14 @@ export function AppSidebar() {
             <Avatar
               src={user?.avatarUrl}
               initials={user?.name?.slice(0, 2).toUpperCase()}
-              className="size-10"
+              className="size-8"
               square
             />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm/5 font-medium text-zinc-950 dark:text-white">
+              <span className="block truncate text-sm/5 font-medium text-zinc-900 dark:text-white">
                 {user?.name}
               </span>
-              <span className="block truncate text-xs/5 font-normal text-zinc-500 dark:text-zinc-400">
+              <span className="block truncate text-xs/5 font-normal text-zinc-500">
                 {user?.email}
               </span>
             </span>

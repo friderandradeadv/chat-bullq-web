@@ -16,11 +16,14 @@ import {
   Inbox as InboxIcon,
   Filter,
   Pencil,
+  CheckSquare,
   Mail,
   X,
+  UserCog,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { tagsService, type Tag } from '@/features/settings/services/tags.service';
+import { membersService } from '@/features/settings/services/members.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { pipelinesService } from '@/features/pipelines/services/pipelines.service';
 import { inboxViewsService, type InboxView } from '@/features/inbox-views/services/inbox-views.service';
@@ -34,6 +37,8 @@ interface ConversationContextMenuProps {
   conversation: Conversation;
   position: { x: number; y: number };
   onClose: () => void;
+  /** Entra no modo seleção já marcando esta conversa. */
+  onSelect?: () => void;
 }
 
 const MENU_WIDTH = 224;
@@ -43,16 +48,19 @@ export function ConversationContextMenu({
   conversation,
   position,
   onClose,
+  onSelect,
 }: ConversationContextMenuProps) {
   const queryClient = useQueryClient();
   const orgId = useOrgId();
   const ref = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<'root' | Target | 'pipeline' | 'inbox-views'>('root');
+  const [view, setView] = useState<'root' | Target | 'pipeline' | 'inbox-views' | 'assign'>('root');
+  const [assigning, setAssigning] = useState(false);
   const [pendingTagId, setPendingTagId] = useState<string | null>(null);
   const [pendingPipelineId, setPendingPipelineId] = useState<string | null>(null);
   const [pendingViewId, setPendingViewId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [markingUnread, setMarkingUnread] = useState(false);
+  const [markingRead, setMarkingRead] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const isArchived = (conversation as any).isArchived === true;
   const alreadyUnread = (conversation.unreadCount ?? 0) > 0;
@@ -79,6 +87,28 @@ export function ConversationContextMenu({
     queryFn: () => inboxViewsService.list(),
     enabled: view === 'inbox-views',
   });
+
+  // Membros da org — só carrega quando o submenu "Alterar responsável" abre.
+  const { data: members = [], isLoading: membersLoading } = useQuery({
+    queryKey: ['org-members'],
+    queryFn: () => membersService.list(),
+    enabled: view === 'assign',
+  });
+
+  const handleAssign = async (userId: string | null) => {
+    setAssigning(true);
+    try {
+      await inboxService.assignTo(conversation.id, userId);
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
+      toast.success(userId ? 'Responsável alterado' : 'Responsável removido');
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao alterar responsável');
+    } finally {
+      setAssigning(false);
+    }
+  };
   const inboxViews = useMemo(
     () => inboxViewsRaw.filter((v) => v.metadata?.builtin !== true),
     [inboxViewsRaw],
@@ -136,6 +166,10 @@ export function ConversationContextMenu({
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
     queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
+    // Archiving/unarchiving moves the conversation in/out of the visible set,
+    // so the per-status tab badges must refresh too (otherwise they stay stale
+    // until the 30s refetch — the "Pendentes 3 mas lista vazia" symptom).
+    queryClient.invalidateQueries({ queryKey: ['conversation-counts'] });
   };
 
   const toggleInboxView = async (target: InboxView) => {
@@ -196,6 +230,34 @@ export function ConversationContextMenu({
       toast.error(err?.response?.data?.message || 'Erro ao marcar como não-lida');
     } finally {
       setMarkingUnread(false);
+    }
+  };
+
+  const markRead = async () => {
+    setMarkingRead(true);
+    try {
+      await inboxService.markAsRead(conversation.id);
+      queryClient.setQueriesData<any>(
+        { queryKey: ['conversations'] },
+        (old: any) => {
+          if (!old?.pages) return old;
+          return {
+            ...old,
+            pages: old.pages.map((p: any) => ({
+              ...p,
+              conversations: p.conversations.map((c: any) =>
+                c.id === conversation.id ? { ...c, unreadCount: 0 } : c,
+              ),
+            })),
+          };
+        },
+      );
+      toast.success('Marcada como lida');
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao marcar como lida');
+    } finally {
+      setMarkingRead(false);
     }
   };
 
@@ -322,9 +384,31 @@ export function ConversationContextMenu({
             <span className="flex-1">Adicionar a pipeline</span>
             <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
           </button>
+          <button
+            onClick={() => setView('assign')}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+          >
+            <UserCog className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+            <span className="flex-1">Alterar responsável</span>
+            {conversation.assignedTo && (
+              <span className="max-w-[80px] truncate text-[10px] font-medium text-primary">
+                {conversation.assignedTo.name}
+              </span>
+            )}
+            <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
+          </button>
 
           <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
 
+          {onSelect && (
+            <button
+              onClick={() => { onSelect(); onClose(); }}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            >
+              <CheckSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+              <span className="flex-1">Selecionar</span>
+            </button>
+          )}
           <button
             onClick={() => setRenameOpen(true)}
             className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
@@ -332,19 +416,33 @@ export function ConversationContextMenu({
             <Pencil className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
             <span className="flex-1">Renomear</span>
           </button>
-          <button
-            onClick={markUnread}
-            disabled={markingUnread || alreadyUnread}
-            title={alreadyUnread ? 'Conversa já está como não-lida' : undefined}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-          >
-            {markingUnread ? (
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
-            ) : (
-              <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
-            )}
-            <span className="flex-1">Marcar como não-lida</span>
-          </button>
+          {alreadyUnread ? (
+            <button
+              onClick={markRead}
+              disabled={markingRead}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            >
+              {markingRead ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+              )}
+              <span className="flex-1">Marcar como lida</span>
+            </button>
+          ) : (
+            <button
+              onClick={markUnread}
+              disabled={markingUnread}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            >
+              {markingUnread ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+              )}
+              <span className="flex-1">Marcar como não-lida</span>
+            </button>
+          )}
           <button
             onClick={toggleArchive}
             disabled={archiving}
@@ -467,6 +565,56 @@ export function ConversationContextMenu({
                     {isPending && (
                       <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
                     )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+
+      {view === 'assign' && (
+        <>
+          <button
+            onClick={() => setView('root')}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-400 transition-colors hover:bg-zinc-50 dark:text-zinc-500 dark:hover:bg-zinc-800/60"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            Alterar responsável
+          </button>
+          <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
+          <div className="overflow-y-auto scrollbar-thin" style={{ maxHeight: MENU_MAX_HEIGHT - 80 }}>
+            {conversation.assignedTo && (
+              <button
+                onClick={() => handleAssign(null)}
+                disabled={assigning}
+                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-500 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+              >
+                <X className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1">Remover responsável</span>
+              </button>
+            )}
+            {membersLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+              </div>
+            ) : members.length === 0 ? (
+              <p className="py-4 text-center text-[11px] text-zinc-400">Nenhum membro</p>
+            ) : (
+              members.map((m) => {
+                const isActive = conversation.assignedTo?.id === m.user.id;
+                return (
+                  <button
+                    key={m.user.id}
+                    onClick={() => handleAssign(m.user.id)}
+                    disabled={assigning}
+                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
+                      {(m.user.name || '?').slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="flex-1 truncate">{m.user.name}</span>
+                    {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
                   </button>
                 );
               })

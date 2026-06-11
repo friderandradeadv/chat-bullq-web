@@ -128,7 +128,7 @@ export function InboxTree() {
           }`}
         >
           <Inbox className="size-5" />
-          <span className="flex-1">Inbox</span>
+          <span className="flex-1">Conversas</span>
         </button>
       </div>
 

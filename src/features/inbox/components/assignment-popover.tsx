@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
-import { ChevronDown, Search, UserPlus, X, Check, User } from 'lucide-react';
+import { ChevronDown, Search, UserPlus, X, Check, User, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService, type Conversation } from '../services/inbox.service';
 import {
@@ -15,6 +15,12 @@ import { useAuthStore } from '@/stores/auth-store';
 interface Props {
   conversation: Conversation;
   onChanged?: () => void;
+  /**
+   * 'chip' (padrão) — botão compacto cinza usado no header/toolbar.
+   * 'card' — card full-width (avatar + nome + chevron) p/ a seção
+   * "Atendimento" do painel do contato. Clicar abre a troca de responsável.
+   */
+  variant?: 'chip' | 'card';
 }
 
 function MemberAvatar({
@@ -49,7 +55,11 @@ function MemberAvatar({
   );
 }
 
-export function AssignmentPopover({ conversation, onChanged }: Props) {
+export function AssignmentPopover({
+  conversation,
+  onChanged,
+  variant = 'chip',
+}: Props) {
   const qc = useQueryClient();
   const currentUser = useAuthStore((s) => s.user);
   const [search, setSearch] = useState('');
@@ -100,31 +110,61 @@ export function AssignmentPopover({ conversation, onChanged }: Props) {
     }
   };
 
+  // Fallback: o popover de membros nem sempre encontra o assignee na lista
+  // (ex.: membro desativado), mas a conversa já traz assignedTo embutido.
+  const assigneeName =
+    currentAssignee?.user.name ?? conversation.assignedTo?.name ?? null;
+  const assigneeAvatar =
+    currentAssignee?.user.avatarUrl ?? conversation.assignedTo?.avatarUrl ?? null;
+
   return (
     <Popover className="relative">
-      <PopoverButton
-        className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-        disabled={busy}
-      >
-        {currentAssignee ? (
-          <>
-            <MemberAvatar
-              name={currentAssignee.user.name}
-              avatarUrl={currentAssignee.user.avatarUrl}
-              size={18}
-            />
-            <span className="max-w-[120px] truncate">
-              {currentAssignee.user.name}
-            </span>
-          </>
-        ) : (
-          <>
-            <UserPlus className="h-3.5 w-3.5" />
-            <span>Atribuir</span>
-          </>
-        )}
-        <ChevronDown className="h-3 w-3 text-zinc-400" />
-      </PopoverButton>
+      {variant === 'card' ? (
+        <PopoverButton
+          className="group flex w-full items-center gap-2.5 rounded-lg bg-zinc-50 px-3 py-2 text-left transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          disabled={busy}
+          title="Clique para trocar o responsável"
+        >
+          {assigneeName ? (
+            <>
+              <MemberAvatar name={assigneeName} avatarUrl={assigneeAvatar} size={28} />
+              <span className="flex-1 truncate text-sm text-zinc-700 dark:text-zinc-300">
+                {assigneeName}
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <UserPlus className="h-3.5 w-3.5" />
+              </div>
+              <span className="flex-1 text-sm italic text-zinc-400">Não atribuído</span>
+            </>
+          )}
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform group-data-[open]:rotate-180" />
+          )}
+        </PopoverButton>
+      ) : (
+        <PopoverButton
+          className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+          disabled={busy}
+        >
+          {assigneeName ? (
+            <>
+              <MemberAvatar name={assigneeName} avatarUrl={assigneeAvatar} size={18} />
+              <span className="max-w-[120px] truncate">{assigneeName}</span>
+            </>
+          ) : (
+            <>
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>Atribuir</span>
+            </>
+          )}
+          <ChevronDown className="h-3 w-3 text-zinc-400" />
+        </PopoverButton>
+      )}
 
       <PopoverPanel
         anchor="bottom end"

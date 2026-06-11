@@ -14,14 +14,42 @@ export interface Contact {
   id: string;
   name: string | null;
   phone: string | null;
+  email?: string | null;
+  notes?: string | null;
   avatarUrl: string | null;
   tags?: TagLink[];
+}
+
+export interface DepartmentInfo {
+  id: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface ConversationNote {
+  id: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  /** Texto pronto em PT-BR (ex.: "Fulano atribuiu o atendimento a …"). */
+  label: string;
+  createdAt: string;
 }
 
 export interface ChannelInfo {
   id: string;
   type: string;
   name: string;
+  /** Número conectado da conexão (ex.: WhatsApp), sincronizado do provider. */
+  phoneNumber?: string | null;
+  /** Nome do perfil da conexão no provider. */
+  profileName?: string | null;
 }
 
 export interface AgentInfo {
@@ -59,6 +87,7 @@ export interface Conversation {
   contact: Contact;
   channel: ChannelInfo;
   assignedTo: AgentInfo | null;
+  department?: DepartmentInfo | null;
   messages: LastMessage[];
   tags?: TagLink[];
   _count: { messages: number };
@@ -169,9 +198,65 @@ export const inboxService = {
     content: Record<string, any>;
     /** ID interno da Message respondida — backend resolve externalId. */
     replyToMessageId?: string;
+    /** Nota interna — só a equipe vê, não vai pro cliente. */
+    isInternal?: boolean;
+    /** Intervenção pontual — envia sem assumir a conversa (não reatribui nem pausa IA). */
+    oneOff?: boolean;
   }): Promise<Message> {
     const { data } = await api.post('/messages', payload);
     return data.data;
+  },
+
+  /** Inicia/encontra conversa com um número (nova conversa). Retorna a conversa. */
+  async startConversation(channelId: string, phone: string): Promise<Conversation> {
+    const { data } = await api.post('/conversations/start', { channelId, phone });
+    return data.data;
+  },
+
+  /** Alterna favorito de uma mensagem. */
+  async toggleFavorite(messageId: string): Promise<Message> {
+    const { data } = await api.post(`/messages/${messageId}/favorite`);
+    return data.data;
+  },
+
+  /** Gera resumo IA da conversa e salva nas Notas da conversa. */
+  async summarizeConversation(
+    conversationId: string,
+    mode: 'simple' | 'detailed' = 'simple',
+    instructions?: string,
+  ): Promise<ConversationNote> {
+    const { data } = await api.post('/messages/summary', {
+      conversationId,
+      mode,
+      instructions,
+    });
+    return data.data ?? data;
+  },
+
+  /** Notas da conversa (aba "Notas" do painel). */
+  async getNotes(conversationId: string): Promise<ConversationNote[]> {
+    const { data } = await api.get(`/conversations/${conversationId}/notes`);
+    return data.data ?? data;
+  },
+
+  async createNote(
+    conversationId: string,
+    content: string,
+  ): Promise<ConversationNote> {
+    const { data } = await api.post(`/conversations/${conversationId}/notes`, {
+      content,
+    });
+    return data.data ?? data;
+  },
+
+  async deleteNote(conversationId: string, noteId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/notes/${noteId}`);
+  },
+
+  /** Logs internos da conversa (atribuição, status, IA, arquivamento). */
+  async getAuditLogs(conversationId: string): Promise<AuditLogEntry[]> {
+    const { data } = await api.get(`/conversations/${conversationId}/audit-logs`);
+    return data.data ?? data;
   },
 
   /**
@@ -301,9 +386,13 @@ export const inboxService = {
     );
   },
 
+  async bulkArchive(ids: string[]): Promise<void> {
+    await Promise.allSettled(ids.map((id) => api.post(`/conversations/${id}/archive`)));
+  },
+
   async updateConversation(
     conversationId: string,
-    patch: { subject?: string | null },
+    patch: { subject?: string | null; departmentId?: string | null; status?: string },
   ): Promise<Conversation> {
     const { data } = await api.patch(`/conversations/${conversationId}`, patch);
     return data.data ?? data;
@@ -311,6 +400,13 @@ export const inboxService = {
 
   async renameContact(contactId: string, name: string): Promise<void> {
     await api.patch(`/contacts/${contactId}`, { name });
+  },
+
+  /** Re-fetches the WhatsApp profile photo and re-hosts it; returns new avatarUrl. */
+  async syncContactAvatar(contactId: string): Promise<{ avatarUrl: string | null }> {
+    const { data } = await api.post(`/contacts/${contactId}/sync-avatar`);
+    const contact = data.data ?? data;
+    return { avatarUrl: contact?.avatarUrl ?? null };
   },
 
   async archive(conversationId: string): Promise<Conversation> {
@@ -337,6 +433,11 @@ export const inboxService = {
     return data.data;
   },
 
+  /** Same endpoint, but semantically for images (OCR/vision). */
+  async transcribeMessage(messageId: string, force = false): Promise<TranscriptionResult> {
+    return this.transcribeAudio(messageId, force);
+  },
+
   async uploadAudio(blob: Blob, filename = 'audio.webm'): Promise<{
     url: string;
     mimeType: string;
@@ -359,6 +460,49 @@ export const inboxService = {
         mediaUrl: upload.url,
         mimeType: upload.mimeType,
         fileSize: upload.size,
+      },
+    });
+  },
+
+  /** Sobe um arquivo (imagem/vídeo/documento) e retorna a URL pública. */
+  async uploadMedia(file: File): Promise<{
+    url: string;
+    mimeType: string;
+    size: number;
+    filename: string;
+  }> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    const { data } = await api.post('/messages/uploads/media', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data;
+  },
+
+  /** Envia uma mídia (imagem/vídeo/documento) escolhida no compositor. */
+  async sendMediaMessage(
+    conversationId: string,
+    file: File,
+    caption?: string,
+  ): Promise<Message> {
+    const upload = await this.uploadMedia(file);
+    const mime = upload.mimeType || file.type || '';
+    const type = mime.startsWith('image/')
+      ? 'IMAGE'
+      : mime.startsWith('video/')
+        ? 'VIDEO'
+        : mime.startsWith('audio/')
+          ? 'AUDIO'
+          : 'DOCUMENT';
+    return this.sendMessage({
+      conversationId,
+      type,
+      content: {
+        mediaUrl: upload.url,
+        mimeType: upload.mimeType,
+        fileSize: upload.size,
+        fileName: upload.filename,
+        ...(caption ? { caption } : {}),
       },
     });
   },

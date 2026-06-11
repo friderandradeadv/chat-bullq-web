@@ -62,7 +62,7 @@ export function SidebarLayout({
           transition
           className="fixed inset-y-0 left-0 w-full max-w-80 p-2 transition duration-300 ease-in-out data-[closed]:-translate-x-full"
         >
-          <div className="flex h-full flex-col rounded-lg bg-white shadow-sm ring-1 ring-zinc-950/5 dark:bg-zinc-900 dark:ring-white/10">
+          <div className="flex h-full flex-col rounded-lg bg-white shadow-sm ring-1 ring-zinc-200 dark:bg-[#0d0d0d] dark:ring-white/10">
             <div className="-mb-3 px-4 pt-3">
               <CloseButton
                 as="button"
@@ -84,7 +84,7 @@ export function SidebarLayout({
         }`}
       >
         <div
-          className={`flex h-full flex-col border-r border-zinc-950/5 bg-white dark:border-white/5 dark:bg-zinc-900 w-64 transition-transform duration-200 ease-in-out ${
+          className={`flex h-full flex-col border-r border-zinc-200 bg-white w-64 transition-transform duration-200 ease-in-out dark:border-white/5 dark:bg-[#0d0d0d] ${
             collapsed ? "-translate-x-full" : "translate-x-0"
           }`}
         >
@@ -105,7 +105,7 @@ export function SidebarLayout({
         onClick={toggleCollapsed}
         aria-label={collapsed ? "Abrir menu" : "Recolher menu"}
         title={collapsed ? "Abrir menu" : "Recolher menu"}
-        className={`group fixed bottom-4 z-30 hidden h-7 w-5 items-center justify-center rounded-r-md bg-white text-zinc-400 opacity-50 ring-1 ring-zinc-950/5 transition-all duration-200 ease-in-out hover:bg-zinc-50 hover:text-zinc-900 hover:opacity-100 dark:bg-zinc-900 dark:text-zinc-500 dark:ring-white/10 dark:hover:bg-zinc-800 dark:hover:text-white lg:flex ${
+        className={`group fixed bottom-4 z-30 hidden h-7 w-5 items-center justify-center rounded-r-md bg-zinc-100 text-zinc-500 opacity-70 ring-1 ring-zinc-200 transition-all duration-200 ease-in-out hover:bg-zinc-200 hover:text-zinc-900 hover:opacity-100 dark:bg-[#1a1a1a] dark:ring-white/10 dark:hover:bg-zinc-800 dark:hover:text-white lg:flex ${
           collapsed ? "left-0" : "left-64"
         }`}
       >
