@@ -1,21 +1,29 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
+  LayoutGrid,
+  Cable,
+  MessageSquare,
+  Users,
+  Columns3,
+  Bot,
+  BookOpen,
+  AudioLines,
+  Workflow,
+  Zap,
+  Puzzle,
+  ClipboardList,
   Settings,
   LogOut,
   ChevronsUpDown,
   Building2,
   ChevronUp,
-  Zap,
   Sun,
   Moon,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { InboxTree } from '@/features/inbox-views/components/inbox-tree';
-import { JarvisTree } from '@/features/ai-agents/components/jarvis-tree';
-import { PipelinesTree } from '@/features/pipelines/components/pipelines-tree';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { Avatar } from '@/components/ui/avatar';
@@ -25,6 +33,7 @@ import {
   SidebarBody,
   SidebarFooter,
   SidebarSection,
+  SidebarHeading,
   SidebarItem,
   SidebarLabel,
   SidebarSpacer,
@@ -38,11 +47,6 @@ import {
   DropdownDivider,
 } from '@/components/ui/dropdown';
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/automations', label: 'Automações', icon: Zap },
-];
-
 export function AppSidebar() {
   const { user, organizations, activeOrgId, setActiveOrg, logout } =
     useAuthStore();
@@ -51,6 +55,7 @@ export function AppSidebar() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const isDark = mounted && resolvedTheme === 'dark';
+  const pathname = usePathname();
 
   const handleOrgSwitch = (orgId: string) => {
     setActiveOrg(orgId);
@@ -90,15 +95,75 @@ export function AppSidebar() {
 
       <SidebarBody>
         <SidebarSection>
-          <InboxTree />
-          <PipelinesTree />
-          <JarvisTree />
-          {navItems.map((item) => (
-            <SidebarItem key={item.href} href={item.href}>
-              <item.icon className="size-5" />
-              <SidebarLabel>{item.label}</SidebarLabel>
-            </SidebarItem>
-          ))}
+          <SidebarItem href="/dashboard">
+            <LayoutGrid className="size-5" />
+            <SidebarLabel>Dashboard</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem href="/conexoes">
+            <Cable className="size-5" />
+            <SidebarLabel>Conexões</SidebarLabel>
+          </SidebarItem>
+        </SidebarSection>
+
+        <SidebarSection>
+          <SidebarHeading>Atendimento</SidebarHeading>
+          <SidebarItem href="/inbox">
+            <MessageSquare className="size-5" />
+            <SidebarLabel>Conversas</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem href="/contacts">
+            <Users className="size-5" />
+            <SidebarLabel>Contatos</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem href="/pipelines">
+            <Columns3 className="size-5" />
+            <SidebarLabel>Kanban</SidebarLabel>
+          </SidebarItem>
+        </SidebarSection>
+
+        <SidebarSection>
+          <SidebarHeading>Automações</SidebarHeading>
+          <SidebarItem href="/ai-agents">
+            <Bot className="size-5" />
+            <SidebarLabel>Agentes</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem href="/base-conhecimento">
+            <BookOpen className="size-5" />
+            <SidebarLabel>Base de Conhecimento</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem href="/vozes">
+            <AudioLines className="size-5" />
+            <SidebarLabel>Vozes</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem href="/chatbot">
+            <Workflow className="size-5" />
+            <SidebarLabel>Chatbot</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem href="/automations">
+            <Zap className="size-5" />
+            <SidebarLabel>Automações</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem href="/settings/integrations">
+            <Puzzle className="size-5" />
+            <SidebarLabel>Integrações</SidebarLabel>
+          </SidebarItem>
+        </SidebarSection>
+
+        <SidebarSection>
+          <SidebarItem href="/tarefas">
+            <ClipboardList className="size-5" />
+            <SidebarLabel>Tarefas</SidebarLabel>
+          </SidebarItem>
+          <SidebarItem
+            href="/settings"
+            current={
+              pathname.startsWith('/settings') &&
+              !pathname.startsWith('/settings/integrations')
+            }
+          >
+            <Settings className="size-5" />
+            <SidebarLabel>Configurações</SidebarLabel>
+          </SidebarItem>
         </SidebarSection>
 
         <SidebarSpacer />
