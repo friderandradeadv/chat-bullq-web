@@ -994,7 +994,15 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                     const unread = conv.unreadCount ?? 0;
                     const hasUnread = unread > 0;
                     const lastMsg = conv.messages[0];
-                    const allTags = [...(conv.tags ?? []), ...(conv.contact.tags ?? [])];
+                    // Dedupe: a mesma tag pode estar na conversa E no contato —
+                    // mostrar um chip só.
+                    const allTags = [
+                      ...new Map(
+                        [...(conv.tags ?? []), ...(conv.contact.tags ?? [])].map(
+                          (t) => [t.tag.id, t],
+                        ),
+                      ).values(),
+                    ];
                     return (
                       <div className="min-w-0 flex-1 flex flex-col justify-center">
                         {/* Row 1 — name + timestamp + dots */}

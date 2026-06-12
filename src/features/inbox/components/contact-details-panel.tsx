@@ -259,29 +259,51 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
     }
   };
 
+  // Toggle ciente de ONDE a tag está: remove de onde ela estiver (contato
+  // e/ou conversa — cobre o caso duplicado) ou adiciona ao CONTATO (o painel
+  // é das propriedades do contato; tag durável entre conversas). Antes só
+  // tags de conversa tinham X — tag de contato ficava "fixa" no painel.
   const handleToggleTag = async (tagId: string, close?: () => void) => {
-    const isOn = (conversation.tags ?? []).some((t) => t.tag.id === tagId);
+    const onConversation = (conversation.tags ?? []).some((t) => t.tag.id === tagId);
+    const onContact = (contact.tags ?? []).some((t) => t.tag.id === tagId);
     setPendingTagId(tagId);
     try {
-      if (isOn) {
+      if (onConversation) {
         await tagsService.removeFromConversation(conversation.id, tagId);
-      } else {
-        await tagsService.addToConversation(conversation.id, tagId);
+      }
+      if (onContact) {
+        await tagsService.removeFromContact(contact.id, tagId);
+      }
+      if (!onConversation && !onContact) {
+        await tagsService.addToContact(contact.id, tagId);
       }
       queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       close?.();
-    } catch {
-      // silent
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao alterar tag');
     } finally {
       setPendingTagId(null);
     }
   };
 
-  const allTags = [
-    ...(contact.tags ?? []).map(({ tag }) => ({ tag, kind: 'contact' as const })),
-    ...(conversation.tags ?? []).map(({ tag }) => ({ tag, kind: 'conversation' as const })),
-  ];
+  // Um chip por tag (dedupe contato × conversa). `onContact` define o visual:
+  // sólido = tag do contato; tracejado = só da conversa.
+  const allTags = (() => {
+    const map = new Map<
+      string,
+      { tag: { id: string; name: string; color: string }; onContact: boolean; onConversation: boolean }
+    >();
+    for (const { tag } of contact.tags ?? []) {
+      map.set(tag.id, { tag, onContact: true, onConversation: false });
+    }
+    for (const { tag } of conversation.tags ?? []) {
+      const cur = map.get(tag.id);
+      if (cur) cur.onConversation = true;
+      else map.set(tag.id, { tag, onContact: false, onConversation: true });
+    }
+    return [...map.values()];
+  })();
 
   // Ring/dot color from the first tag (pipeline stage), fallback to zinc
   const primaryTag = (conversation.tags ?? [])[0]?.tag ?? (contact.tags ?? [])[0]?.tag;
@@ -613,33 +635,33 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           <div className="order-3 flex items-start gap-2.5">
             <TagIcon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
             <div className="flex flex-wrap gap-1.5">
-              {allTags.map(({ tag, kind }) => (
+              {allTags.map(({ tag, onContact }) => (
                 <span
-                  key={`${kind}-${tag.id}`}
+                  key={tag.id}
+                  title={onContact ? 'Tag do contato' : 'Tag desta conversa'}
                   style={{
                     backgroundColor: `${tag.color}18`,
                     color: tag.color,
-                    borderColor: kind === 'conversation' ? `${tag.color}55` : 'transparent',
+                    borderColor: onContact ? 'transparent' : `${tag.color}55`,
                   }}
                   className={cn(
                     'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                    kind === 'conversation' ? 'border-dashed' : 'border-transparent',
+                    onContact ? 'border-transparent' : 'border-dashed',
                   )}
                 >
                   {tag.name}
-                  {kind === 'conversation' && (
-                    <button
-                      onClick={() => handleToggleTag(tag.id)}
-                      disabled={pendingTagId === tag.id}
-                      className="ml-1 rounded-full p-0.5 opacity-60 hover:opacity-100"
-                    >
-                      {pendingTagId === tag.id ? (
-                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                      ) : (
-                        <X className="h-2.5 w-2.5" />
-                      )}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleToggleTag(tag.id)}
+                    disabled={pendingTagId === tag.id}
+                    title="Remover tag"
+                    className="ml-1 rounded-full p-0.5 opacity-60 hover:opacity-100"
+                  >
+                    {pendingTagId === tag.id ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      <X className="h-2.5 w-2.5" />
+                    )}
+                  </button>
                 </span>
               ))}
               {/* Add tag popover */}
@@ -661,7 +683,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                         </p>
                       ) : (
                         allAvailableTags.map((tag) => {
-                          const isOn = (conversation.tags ?? []).some((t) => t.tag.id === tag.id);
+                          const isOn = allTags.some((t) => t.tag.id === tag.id);
                           const isPending = pendingTagId === tag.id;
                           return (
                             <button
