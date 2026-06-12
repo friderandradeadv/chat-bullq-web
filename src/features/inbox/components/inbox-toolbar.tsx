@@ -9,24 +9,24 @@ import {
   ChevronDown,
   Users,
   User,
+  UserX,
   Check,
   SlidersHorizontal,
   Inbox,
   MessageSquare,
   MailOpen,
   Archive,
+  Tag as TagIcon,
 } from 'lucide-react';
 import { channelsService } from '@/features/channels/services/channels.service';
 import { tagsService } from '@/features/settings/services/tags.service';
+import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
+import { membersService } from '@/features/settings/services/members.service';
 import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useAuthStore } from '@/stores/auth-store';
 import { useInboxPreferences } from '../hooks/use-inbox-preferences';
-import {
-  useInboxFilterStore,
-  type InboxScope,
-  type InboxStatusTab,
-} from '../stores/inbox-filter-store';
+import { useInboxFilterStore, UNASSIGNED } from '../stores/inbox-filter-store';
 
 const channelIcons: Record<string, React.ElementType> = {
   WHATSAPP_ZAPPFY: ZappfyIcon,
@@ -34,18 +34,19 @@ const channelIcons: Record<string, React.ElementType> = {
   INSTAGRAM: InstagramIcon,
 };
 
-const scopeOptions: { label: string; value: InboxScope; icon: React.ElementType }[] = [
-  { label: 'Todas as conversas', value: 'ALL', icon: Users },
-  { label: 'Minhas conversas', value: 'MINE', icon: User },
-];
+const checkboxClass = (active: boolean) =>
+  `flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+    active
+      ? 'border-primary bg-primary text-white'
+      : 'border-zinc-300 dark:border-zinc-600'
+  }`;
 
-const statusOptions: { label: string; value: InboxStatusTab; color: string }[] = [
-  { label: 'Todos', value: 'ALL', color: 'bg-zinc-400' },
-  { label: 'IA', value: 'BOT', color: 'bg-violet-500' },
-  { label: 'Ativos', value: 'OPEN', color: 'bg-emerald-500' },
-  { label: 'Pendentes', value: 'PENDING', color: 'bg-amber-500' },
-  { label: 'Grupos', value: 'GROUPS', color: 'bg-sky-500' },
-];
+const itemClass = (active: boolean) =>
+  `flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+    active
+      ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
+      : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
+  }`;
 
 export function InboxToolbar() {
   const orgId = useOrgId();
@@ -56,8 +57,6 @@ export function InboxToolbar() {
   const setSearch = useInboxFilterStore((s) => s.setSearch);
   const scope = useInboxFilterStore((s) => s.scope);
   const setScope = useInboxFilterStore((s) => s.setScope);
-  const statusTab = useInboxFilterStore((s) => s.statusTab);
-  const setStatusTab = useInboxFilterStore((s) => s.setStatusTab);
   const selectedChannelId = useInboxFilterStore((s) => s.selectedChannelId);
   const setSelectedChannelId = useInboxFilterStore((s) => s.setSelectedChannelId);
   const unreadOnly = useInboxFilterStore((s) => s.unreadOnly);
@@ -68,6 +67,10 @@ export function InboxToolbar() {
   const setShowGroups = useInboxFilterStore((s) => s.setShowGroups);
   const selectedTagIds = useInboxFilterStore((s) => s.selectedTagIds);
   const setSelectedTagIds = useInboxFilterStore((s) => s.setSelectedTagIds);
+  const selectedStatusIds = useInboxFilterStore((s) => s.selectedStatusIds);
+  const setSelectedStatusIds = useInboxFilterStore((s) => s.setSelectedStatusIds);
+  const selectedAssigneeIds = useInboxFilterStore((s) => s.selectedAssigneeIds);
+  const setSelectedAssigneeIds = useInboxFilterStore((s) => s.setSelectedAssigneeIds);
 
   const { data: channels = [] } = useQuery({
     queryKey: ['channels', orgId],
@@ -76,6 +79,14 @@ export function InboxToolbar() {
   const { data: tags = [] } = useQuery({
     queryKey: ['tags', orgId],
     queryFn: () => tagsService.list(),
+  });
+  const { data: contactStatuses = [] } = useQuery({
+    queryKey: ['contact-statuses', orgId],
+    queryFn: () => contactStatusesService.list(),
+  });
+  const { data: members = [] } = useQuery({
+    queryKey: ['members', orgId],
+    queryFn: () => membersService.list(),
   });
 
   // Local search text with debounce → store.
@@ -94,22 +105,20 @@ export function InboxToolbar() {
     return q ? tags.filter((t) => t.name.toLowerCase().includes(q)) : tags;
   }, [tags, tagSearch]);
 
-  const selectedChannel = useMemo(
-    () => channels.find((c) => c.id === selectedChannelId) ?? null,
-    [channels, selectedChannelId],
-  );
+  const [statusSearch, setStatusSearch] = useState('');
+  const filteredStatuses = useMemo(() => {
+    const q = statusSearch.trim().toLowerCase();
+    return q
+      ? contactStatuses.filter((s) => s.name.toLowerCase().includes(q))
+      : contactStatuses;
+  }, [contactStatuses, statusSearch]);
 
   const moreCount =
     (unreadOnly ? 1 : 0) +
     (archivedOnly ? 1 : 0) +
     (showGroups ? 1 : 0) +
-    selectedTagIds.length +
     (selectedChannelId ? 1 : 0);
 
-  const handleScope = (v: InboxScope) => {
-    setScope(v);
-    updatePrefs({ scope: v });
-  };
   const handleChannel = (v: string | null) => {
     setSelectedChannelId(v);
     updatePrefs({ selectedChannelId: v });
@@ -136,24 +145,67 @@ export function InboxToolbar() {
     setSelectedTagIds(next);
     updatePrefs({ tagIds: next });
   };
+  const toggleStatus = (id: string) => {
+    const next = selectedStatusIds.includes(id)
+      ? selectedStatusIds.filter((x) => x !== id)
+      : [...selectedStatusIds, id];
+    setSelectedStatusIds(next);
+    updatePrefs({ contactStatusIds: next });
+  };
+  const clearStatuses = () => {
+    setSelectedStatusIds([]);
+    updatePrefs({ contactStatusIds: [] });
+  };
+  const clearTags = () => {
+    setSelectedTagIds([]);
+    updatePrefs({ tagIds: [] });
+  };
+  // Responsável: "Todas"/"Minhas" são atalhos exclusivos; marcar membros (ou
+  // "Sem responsável") vira multi-select e força scope ALL pra não conflitar.
+  const selectAllScope = () => {
+    setScope('ALL');
+    setSelectedAssigneeIds([]);
+    updatePrefs({ scope: 'ALL', assigneeIds: [] });
+  };
+  const selectMineScope = () => {
+    setScope('MINE');
+    setSelectedAssigneeIds([]);
+    updatePrefs({ scope: 'MINE', assigneeIds: [] });
+  };
+  const toggleAssignee = (userId: string) => {
+    const next = selectedAssigneeIds.includes(userId)
+      ? selectedAssigneeIds.filter((x) => x !== userId)
+      : [...selectedAssigneeIds, userId];
+    setSelectedAssigneeIds(next);
+    if (scope !== 'ALL') setScope('ALL');
+    updatePrefs({ assigneeIds: next, scope: 'ALL' });
+  };
   const clearMore = () => {
     setUnreadOnly(false);
     setArchivedOnly(false);
     setShowGroups(false);
-    setSelectedTagIds([]);
     setSelectedChannelId(null);
-    updatePrefs({ unreadOnly: false, archivedOnly: false, showGroups: false, tagIds: [], selectedChannelId: null });
+    updatePrefs({
+      unreadOnly: false,
+      archivedOnly: false,
+      showGroups: false,
+      selectedChannelId: null,
+    });
   };
 
-  const currentScope = scopeOptions.find((o) => o.value === scope) ?? scopeOptions[0];
-  const currentStatus = statusOptions.find((o) => o.value === statusTab) ?? statusOptions[0];
-  const ScopeIcon = currentScope.icon;
+  const assigneeActive = scope === 'MINE' || selectedAssigneeIds.length > 0;
+  const selectedStatusObjs = contactStatuses.filter((s) =>
+    selectedStatusIds.includes(s.id),
+  );
 
   const pillBase =
     'flex items-center gap-1.5 rounded-md border px-3 py-2 text-[13px] font-medium outline-none transition-colors';
   const pillIdle =
     'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800';
   const pillActive = 'border-primary/40 bg-primary/[0.06] text-primary dark:bg-primary/10';
+
+  const panelClass =
+    'z-50 mt-1.5 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]';
 
   return (
     <div className="flex items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-950">
@@ -179,84 +231,229 @@ export function InboxToolbar() {
 
       <div className="flex-1" />
 
-      {/* Responsável */}
+      {/* Responsável — Todas/Minhas + multi-select de membros + sem responsável */}
       <Popover className="relative">
-        <PopoverButton className={`${pillBase} ${scope !== 'ALL' ? pillActive : pillIdle}`}>
-          <ScopeIcon className="h-4 w-4 shrink-0" />
+        <PopoverButton className={`${pillBase} ${assigneeActive ? pillActive : pillIdle}`}>
+          {scope === 'MINE' ? (
+            <User className="h-4 w-4 shrink-0" />
+          ) : (
+            <Users className="h-4 w-4 shrink-0" />
+          )}
           <span className="hidden sm:inline">Responsável</span>
+          {selectedAssigneeIds.length > 0 && (
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+              {selectedAssigneeIds.length}
+            </span>
+          )}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </PopoverButton>
-        <PopoverPanel
-          anchor="bottom end"
-          transition
-          className="z-50 mt-1.5 min-w-48 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-        >
+        <PopoverPanel anchor="bottom end" transition className={`${panelClass} w-60`}>
           {({ close }) => (
             <>
-              {scopeOptions.map((o) => {
-                const Icon = o.icon;
-                const isActive = scope === o.value;
-                const disabled = o.value === 'MINE' && !currentUserId;
-                return (
-                  <button
-                    key={o.value}
-                    disabled={disabled}
-                    onClick={() => { handleScope(o.value); close(); }}
-                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                      isActive
-                        ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
-                        : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="flex-1">{o.label}</span>
-                    {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
-                  </button>
-                );
-              })}
+              <button
+                onClick={() => { selectAllScope(); close(); }}
+                className={itemClass(scope === 'ALL' && selectedAssigneeIds.length === 0)}
+              >
+                <Users className="h-4 w-4 shrink-0" />
+                <span className="flex-1">Todas as conversas</span>
+                {scope === 'ALL' && selectedAssigneeIds.length === 0 && (
+                  <Check className="h-3.5 w-3.5 text-primary" />
+                )}
+              </button>
+              <button
+                disabled={!currentUserId}
+                onClick={() => { selectMineScope(); close(); }}
+                className={`${itemClass(scope === 'MINE')} disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                <User className="h-4 w-4 shrink-0" />
+                <span className="flex-1">Minhas conversas</span>
+                {scope === 'MINE' && <Check className="h-3.5 w-3.5 text-primary" />}
+              </button>
+
+              <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
+              <p className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                Membros
+              </p>
+              <button
+                onClick={() => toggleAssignee(UNASSIGNED)}
+                className={itemClass(selectedAssigneeIds.includes(UNASSIGNED))}
+              >
+                <span className={checkboxClass(selectedAssigneeIds.includes(UNASSIGNED))}>
+                  {selectedAssigneeIds.includes(UNASSIGNED) && <Check className="h-2.5 w-2.5" />}
+                </span>
+                <UserX className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                <span className="flex-1">Sem responsável</span>
+              </button>
+              <div className="max-h-52 overflow-y-auto scrollbar-thin">
+                {members.map((m) => {
+                  const isActive = selectedAssigneeIds.includes(m.user.id);
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => toggleAssignee(m.user.id)}
+                      className={itemClass(isActive)}
+                    >
+                      <span className={checkboxClass(isActive)}>
+                        {isActive && <Check className="h-2.5 w-2.5" />}
+                      </span>
+                      <span className="flex-1 truncate">
+                        {m.user.name}
+                        {m.user.id === currentUserId ? ' (você)' : ''}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </>
           )}
         </PopoverPanel>
       </Popover>
 
-      {/* Status */}
+      {/* Status — status do contato (Classes > Status), multi-select */}
       <Popover className="relative">
-        <PopoverButton className={`${pillBase} ${statusTab !== 'ALL' ? pillActive : pillIdle}`}>
-          <span className={`h-2 w-2 shrink-0 rounded-full ${currentStatus.color}`} />
+        <PopoverButton
+          className={`${pillBase} ${selectedStatusIds.length > 0 ? pillActive : pillIdle}`}
+        >
+          {selectedStatusObjs.length > 0 ? (
+            <span className="flex shrink-0 -space-x-1">
+              {selectedStatusObjs.slice(0, 3).map((s) => (
+                <span
+                  key={s.id}
+                  className="h-2.5 w-2.5 rounded-full ring-1 ring-white dark:ring-zinc-950"
+                  style={{ backgroundColor: s.color }}
+                />
+              ))}
+            </span>
+          ) : (
+            <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-400" />
+          )}
           <span className="hidden sm:inline">Status</span>
+          {selectedStatusIds.length > 0 && (
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+              {selectedStatusIds.length}
+            </span>
+          )}
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </PopoverButton>
-        <PopoverPanel
-          anchor="bottom end"
-          transition
-          className="z-50 mt-1.5 min-w-44 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-        >
-          {({ close }) => (
-            <>
-              {statusOptions.map((o) => {
-                const isActive = statusTab === o.value;
-                return (
-                  <button
-                    key={o.value}
-                    onClick={() => { setStatusTab(o.value); close(); }}
-                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                      isActive
-                        ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
-                        : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${o.color}`} />
-                    <span className="flex-1">{o.label}</span>
-                    {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
-                  </button>
-                );
-              })}
-            </>
+        <PopoverPanel anchor="bottom end" transition className={`${panelClass} w-60`}>
+          <button
+            onClick={clearStatuses}
+            className={itemClass(selectedStatusIds.length === 0)}
+          >
+            <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-400" />
+            <span className="flex-1">Todos</span>
+            {selectedStatusIds.length === 0 && <Check className="h-3.5 w-3.5 text-primary" />}
+          </button>
+          <button
+            onClick={() => toggleStatus(UNASSIGNED)}
+            className={itemClass(selectedStatusIds.includes(UNASSIGNED))}
+          >
+            <span className={checkboxClass(selectedStatusIds.includes(UNASSIGNED))}>
+              {selectedStatusIds.includes(UNASSIGNED) && <Check className="h-2.5 w-2.5" />}
+            </span>
+            <span className="h-2 w-2 shrink-0 rounded-full border border-dashed border-zinc-400" />
+            <span className="flex-1">Sem status</span>
+          </button>
+          {contactStatuses.length > 6 && (
+            <div className="px-1.5 pb-1 pt-0.5">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-400" />
+                <input
+                  value={statusSearch}
+                  onChange={(e) => setStatusSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape' && statusSearch) { e.stopPropagation(); setStatusSearch(''); } }}
+                  placeholder="Buscar status..."
+                  className="w-full rounded-md border-0 bg-zinc-100/80 py-1 pl-7 pr-2 text-[12px] outline-none ring-1 ring-transparent focus:bg-white focus:ring-primary/30 dark:bg-zinc-800/60 dark:text-zinc-100"
+                />
+              </div>
+            </div>
           )}
+          <div className="max-h-56 overflow-y-auto scrollbar-thin">
+            {filteredStatuses.map((s) => {
+              const isActive = selectedStatusIds.includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => toggleStatus(s.id)}
+                  title={s.description ?? undefined}
+                  className={itemClass(isActive)}
+                >
+                  <span className={checkboxClass(isActive)}>
+                    {isActive && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="flex-1 truncate">{s.name}</span>
+                </button>
+              );
+            })}
+            {filteredStatuses.length === 0 && (
+              <p className="px-2.5 py-2 text-center text-[12px] text-zinc-400">
+                Nenhum status encontrado
+              </p>
+            )}
+          </div>
         </PopoverPanel>
       </Popover>
 
-      {/* Mais filtros */}
+      {/* Etiquetas — multi-select com busca */}
+      <Popover className="relative">
+        <PopoverButton
+          className={`${pillBase} ${selectedTagIds.length > 0 ? pillActive : pillIdle}`}
+        >
+          <TagIcon className="h-4 w-4 shrink-0" />
+          <span className="hidden sm:inline">Etiquetas</span>
+          {selectedTagIds.length > 0 && (
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+              {selectedTagIds.length}
+            </span>
+          )}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </PopoverButton>
+        <PopoverPanel anchor="bottom end" transition className={`${panelClass} w-60`}>
+          <button onClick={clearTags} className={itemClass(selectedTagIds.length === 0)}>
+            <TagIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1">Todas</span>
+            {selectedTagIds.length === 0 && <Check className="h-3.5 w-3.5 text-primary" />}
+          </button>
+          <div className="px-1.5 pb-1 pt-0.5">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-400" />
+              <input
+                value={tagSearch}
+                onChange={(e) => setTagSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape' && tagSearch) { e.stopPropagation(); setTagSearch(''); } }}
+                placeholder="Buscar etiqueta..."
+                className="w-full rounded-md border-0 bg-zinc-100/80 py-1 pl-7 pr-2 text-[12px] outline-none ring-1 ring-transparent focus:bg-white focus:ring-primary/30 dark:bg-zinc-800/60 dark:text-zinc-100"
+              />
+            </div>
+          </div>
+          <div className="max-h-56 overflow-y-auto scrollbar-thin">
+            {filteredTags.map((tag) => {
+              const isActive = selectedTagIds.includes(tag.id);
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.id)}
+                  className={itemClass(isActive)}
+                >
+                  <span className={checkboxClass(isActive)}>
+                    {isActive && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
+                  <span className="flex-1 truncate">{tag.name}</span>
+                </button>
+              );
+            })}
+            {filteredTags.length === 0 && (
+              <p className="px-2.5 py-2 text-center text-[12px] text-zinc-400">
+                Nenhuma etiqueta encontrada
+              </p>
+            )}
+          </div>
+        </PopoverPanel>
+      </Popover>
+
+      {/* Mais filtros — canal + toggles */}
       <Popover className="relative">
         <PopoverButton className={`${pillBase} ${moreCount > 0 ? pillActive : pillIdle}`}>
           <SlidersHorizontal className="h-4 w-4 shrink-0" />
@@ -267,19 +464,10 @@ export function InboxToolbar() {
             </span>
           )}
         </PopoverButton>
-        <PopoverPanel
-          anchor="bottom end"
-          transition
-          className="z-50 mt-1.5 w-64 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-        >
+        <PopoverPanel anchor="bottom end" transition className={`${panelClass} w-64`}>
           {/* Channel */}
           <p className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">Canal</p>
-          <button
-            onClick={() => handleChannel(null)}
-            className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-              !selectedChannelId ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10' : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-            }`}
-          >
+          <button onClick={() => handleChannel(null)} className={itemClass(!selectedChannelId)}>
             <Inbox className="h-3.5 w-3.5 shrink-0" />
             <span className="flex-1">Todos os canais</span>
             {!selectedChannelId && <Check className="h-3.5 w-3.5 text-primary" />}
@@ -288,13 +476,7 @@ export function InboxToolbar() {
             const Icon = channelIcons[ch.type] || MessageSquare;
             const isActive = selectedChannelId === ch.id;
             return (
-              <button
-                key={ch.id}
-                onClick={() => handleChannel(ch.id)}
-                className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                  isActive ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10' : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                }`}
-              >
+              <button key={ch.id} onClick={() => handleChannel(ch.id)} className={itemClass(isActive)}>
                 <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span className="flex-1 truncate">{ch.name}</span>
                 {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
@@ -311,14 +493,8 @@ export function InboxToolbar() {
           ].map((f) => {
             const Icon = f.icon;
             return (
-              <button
-                key={f.label}
-                onClick={f.toggle}
-                className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                  f.active ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10' : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                }`}
-              >
-                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${f.active ? 'border-primary bg-primary text-white' : 'border-zinc-300 dark:border-zinc-600'}`}>
+              <button key={f.label} onClick={f.toggle} className={itemClass(f.active)}>
+                <span className={checkboxClass(f.active)}>
                   {f.active && <Check className="h-2.5 w-2.5" />}
                 </span>
                 <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -326,45 +502,6 @@ export function InboxToolbar() {
               </button>
             );
           })}
-
-          {tags.length > 0 && (
-            <>
-              <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
-              <p className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">Tags</p>
-              <div className="px-1.5 pb-1">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-zinc-400" />
-                  <input
-                    value={tagSearch}
-                    onChange={(e) => setTagSearch(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Escape' && tagSearch) { e.stopPropagation(); setTagSearch(''); } }}
-                    placeholder="Buscar tag..."
-                    className="w-full rounded-md border-0 bg-zinc-100/80 py-1 pl-7 pr-2 text-[12px] outline-none ring-1 ring-transparent focus:bg-white focus:ring-primary/30 dark:bg-zinc-800/60 dark:text-zinc-100"
-                  />
-                </div>
-              </div>
-              <div className="max-h-44 overflow-y-auto scrollbar-thin">
-                {filteredTags.map((tag) => {
-                  const isActive = selectedTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      onClick={() => toggleTag(tag.id)}
-                      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
-                        isActive ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10' : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60'
-                      }`}
-                    >
-                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${isActive ? 'border-primary bg-primary text-white' : 'border-zinc-300 dark:border-zinc-600'}`}>
-                        {isActive && <Check className="h-2.5 w-2.5" />}
-                      </span>
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
-                      <span className="flex-1 truncate">{tag.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
 
           {moreCount > 0 && (
             <>

@@ -13,6 +13,10 @@ export interface InboxPreferences {
   /** IDs de tags filtradas (OR — conversa precisa ter pelo menos uma).
    *  Match em tag de conversa OU tag de contato. */
   tagIds?: string[];
+  /** IDs de status de contato (Classes > Status) filtrados. OR. */
+  contactStatusIds?: string[];
+  /** IDs de responsáveis filtrados ('none' = sem responsável). OR. */
+  assigneeIds?: string[];
 }
 
 export interface UserPreferences {

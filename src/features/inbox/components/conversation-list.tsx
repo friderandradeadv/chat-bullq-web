@@ -161,6 +161,8 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   const statusTab = useInboxFilterStore((s) => s.statusTab);
   const selectedChannelId = useInboxFilterStore((s) => s.selectedChannelId);
   const selectedTagIds = useInboxFilterStore((s) => s.selectedTagIds);
+  const selectedStatusIds = useInboxFilterStore((s) => s.selectedStatusIds);
+  const selectedAssigneeIds = useInboxFilterStore((s) => s.selectedAssigneeIds);
   const unreadOnly = useInboxFilterStore((s) => s.unreadOnly);
   const archivedOnly = useInboxFilterStore((s) => s.archivedOnly);
   const showGroups = useInboxFilterStore((s) => s.showGroups);
@@ -171,13 +173,17 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   const setArchivedOnly = useInboxFilterStore((s) => s.setArchivedOnly);
   const setShowGroups = useInboxFilterStore((s) => s.setShowGroups);
   const setSelectedTagIds = useInboxFilterStore((s) => s.setSelectedTagIds);
+  const setSelectedStatusIds = useInboxFilterStore((s) => s.setSelectedStatusIds);
+  const setSelectedAssigneeIds = useInboxFilterStore((s) => s.setSelectedAssigneeIds);
   const setSearch = useInboxFilterStore((s) => s.setSearch);
   const debouncedSearch = search;
   const activeFilterCount =
     (unreadOnly ? 1 : 0) +
     (archivedOnly ? 1 : 0) +
     (showGroups ? 1 : 0) +
-    selectedTagIds.length;
+    selectedTagIds.length +
+    selectedStatusIds.length +
+    selectedAssigneeIds.length;
   const hydratedRef = useRef(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
@@ -213,6 +219,12 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     if (Array.isArray(savedPrefs.tagIds)) {
       setSelectedTagIds(savedPrefs.tagIds);
     }
+    if (Array.isArray(savedPrefs.contactStatusIds)) {
+      setSelectedStatusIds(savedPrefs.contactStatusIds);
+    }
+    if (Array.isArray(savedPrefs.assigneeIds)) {
+      setSelectedAssigneeIds(savedPrefs.assigneeIds);
+    }
   }, [prefsLoaded, savedPrefs]);
 
   // Arquivadas quick-row toggle (the only filter still rendered inside the
@@ -228,15 +240,32 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     setArchivedOnly(false);
     setShowGroups(false);
     setSelectedTagIds([]);
+    setSelectedStatusIds([]);
+    setSelectedAssigneeIds([]);
     setSearch('');
-    updatePrefs({ unreadOnly: false, archivedOnly: false, showGroups: false, tagIds: [] });
+    updatePrefs({
+      unreadOnly: false,
+      archivedOnly: false,
+      showGroups: false,
+      tagIds: [],
+      contactStatusIds: [],
+      assigneeIds: [],
+    });
   };
 
   const tagsKey = useMemo(
     () => [...selectedTagIds].sort().join(','),
     [selectedTagIds],
   );
-  const filterKey = `${unreadOnly ? 'u' : ''}|${archivedOnly ? 'a' : ''}|${showGroups ? 'g' : ''}|t:${tagsKey}`;
+  const statusesKey = useMemo(
+    () => [...selectedStatusIds].sort().join(','),
+    [selectedStatusIds],
+  );
+  const assigneesKey = useMemo(
+    () => [...selectedAssigneeIds].sort().join(','),
+    [selectedAssigneeIds],
+  );
+  const filterKey = `${unreadOnly ? 'u' : ''}|${archivedOnly ? 'a' : ''}|${showGroups ? 'g' : ''}|t:${tagsKey}|cs:${statusesKey}|as:${assigneesKey}`;
 
   const handleAccept = useCallback(
     async (e: React.MouseEvent, conversationId: string) => {
@@ -328,7 +357,13 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       if (debouncedSearch) params.search = debouncedSearch;
       if (selectedChannelId) params.channelId = selectedChannelId;
       if (selectedTagIds.length > 0) params.tagIds = selectedTagIds.join(',');
-      if (scope === 'MINE' && currentUserId) params.assignedToId = currentUserId;
+      if (selectedStatusIds.length > 0) params.contactStatusIds = selectedStatusIds.join(',');
+      // Multi-responsável vence o scope; "Minhas" continua sendo o atalho.
+      if (selectedAssigneeIds.length > 0) {
+        params.assignedToIds = selectedAssigneeIds.join(',');
+      } else if (scope === 'MINE' && currentUserId) {
+        params.assignedToId = currentUserId;
+      }
       if (viewId) {
         return inboxViewsService.getConversations(viewId, params);
       }
@@ -920,15 +955,16 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                         : 'border-l-transparent hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
                   }`}
                 >
-                  {/* ── Avatar with tag ring + checkbox overlay ── */}
+                  {/* ── Avatar with contact-status ring + checkbox overlay ── */}
                   {(() => {
-                    const primaryTag = (conv.tags ?? [])[0]?.tag ?? (conv.contact.tags ?? [])[0]?.tag;
-                    const ringColor = primaryTag?.color;
+                    const contactStatus = conv.contact.status;
+                    const ringColor = contactStatus?.color;
                     return (
                       <div className="group/avatar relative shrink-0">
                         <div className={`${inSelectionMode || isSelected ? 'invisible' : 'group-hover/avatar:invisible'}`}>
                           <div
                             className="rounded-full"
+                            title={contactStatus ? `Status: ${contactStatus.name}` : undefined}
                             style={ringColor ? { border: `2.5px solid ${ringColor}` } : undefined}
                           >
                             <ListAvatar name={conv.contact.name} avatarUrl={conv.contact.avatarUrl} />
