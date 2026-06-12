@@ -738,10 +738,10 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                 }
                 setStatusTab(isActive ? 'ALL' : tab.value);
               }}
-              className={`flex flex-1 flex-col items-center justify-center gap-1.5 px-2 py-2.5 text-[13px] transition-colors border-b-2 ${
+              className={`flex flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2.5 text-sm transition-colors ${
                 isActive
-                  ? `text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/40 ${tab.activeBorder}`
-                  : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  ? 'text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/40'
+                  : 'text-zinc-500 hover:text-zinc-700 hover:bg-muted/30 dark:text-zinc-400 dark:hover:text-zinc-200'
               }`}
             >
               {/* ícone + badge de contagem */}
@@ -903,12 +903,12 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                       position: { x: e.clientX, y: e.clientY },
                     });
                   }}
-                  className={`group flex w-full gap-3 px-4 py-3.5 text-left transition-colors duration-100 ${
+                  className={`group flex w-full gap-3 px-3 py-3 text-left transition-colors duration-100 border-l-2 ${
                     isSelected
-                      ? 'bg-primary/[0.06] dark:bg-primary/10'
+                      ? 'bg-primary/[0.06] dark:bg-primary/10 border-l-primary'
                       : isActive
-                        ? 'bg-primary/[0.06] dark:bg-primary/10'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
+                        ? 'bg-primary/[0.06] dark:bg-primary/10 border-l-primary'
+                        : 'border-l-transparent hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
                   }`}
                 >
                   {/* ── Avatar with tag ring + checkbox overlay ── */}
