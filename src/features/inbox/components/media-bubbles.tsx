@@ -224,74 +224,56 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
     }
   };
 
-  // Visualizador INTERNO (modal com blob). Navegar direto pra URL do
-  // provider não funciona: o Chrome transforma em download (config "baixar
-  // PDFs" / Content-Disposition) e fecha a aba — parecia que nada acontecia.
-  // O fetch funciona porque o CDN da Zappfy responde com CORS `*`.
-  const [viewer, setViewer] = useState<{
-    blobUrl: string;
-    kind: 'pdf' | 'image' | 'other';
-  } | null>(null);
+  // Pré-visualização em NOVA ABA via blob. Navegar direto pra URL do
+  // provider não funciona (Content-Disposition vira download e a aba fecha
+  // sozinha) — então baixamos via fetch (CDN da Zappfy dá CORS `*`), criamos
+  // um blob com o mime certo e abrimos `blob:` na aba nova: o Chrome
+  // renderiza o PDF/imagem inline. A aba é aberta ANTES do await pra não
+  // cair no bloqueador de popup.
   const [viewLoading, setViewLoading] = useState(false);
 
   const handleView = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (viewLoading || viewer) return;
+    if (viewLoading) return;
     setViewLoading(true);
+    const w = window.open('about:blank', '_blank');
     try {
       const u = await ensureUrl();
-      if (!u) return;
+      if (!u) {
+        w?.close();
+        return;
+      }
       const res = await fetch(u);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const effectiveMime = blob.type || mimeType || '';
-      const isPdf =
-        effectiveMime.includes('pdf') || /\.pdf$/i.test(filename);
-      const kind: 'pdf' | 'image' | 'other' = isPdf
-        ? 'pdf'
-        : effectiveMime.startsWith('image/')
-          ? 'image'
-          : 'other';
+      const isPdf = effectiveMime.includes('pdf') || /\.pdf$/i.test(filename);
       // Alguns providers devolvem octet-stream — força o mime certo pro
       // viewer nativo de PDF do navegador reconhecer o blob.
       const typed =
         isPdf && !blob.type.includes('pdf')
           ? new Blob([blob], { type: 'application/pdf' })
           : blob;
-      setViewer({ blobUrl: URL.createObjectURL(typed), kind });
+      const blobUrl = URL.createObjectURL(typed);
+      if (w) w.location.href = blobUrl;
+      else window.open(blobUrl, '_blank');
+      // Revoga depois — revogar imediatamente mataria o conteúdo da aba.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     } catch {
-      // Fetch falhou (CORS de outro provider, rede) — fallback: aba direta.
+      // Fetch falhou (CORS de outro provider, rede) — fallback: URL direta.
       const u = url ?? (await ensureUrl());
-      if (u) window.open(u, '_blank', 'noopener');
+      if (u && w) w.location.href = u;
+      else if (u) window.open(u, '_blank', 'noopener');
+      else w?.close();
     } finally {
       setViewLoading(false);
     }
   };
 
-  const closeViewer = () => {
-    if (viewer) URL.revokeObjectURL(viewer.blobUrl);
-    setViewer(null);
-  };
-
-  const downloadBlob = (href: string) => {
-    const a = document.createElement('a');
-    a.href = href;
-    a.download = filename;
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
-
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Com o viewer aberto já temos o blob — download local instantâneo.
-    if (viewer) {
-      downloadBlob(viewer.blobUrl);
-      return;
-    }
     const u = await ensureUrl();
     if (!u) return;
     const a = document.createElement('a');
@@ -355,118 +337,6 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
       {caption && (
         <p className="mt-1.5 whitespace-pre-wrap break-words text-sm">{caption}</p>
       )}
-      {viewer && (
-        <DocumentViewerModal
-          blobUrl={viewer.blobUrl}
-          kind={viewer.kind}
-          filename={filename}
-          onDownload={() => downloadBlob(viewer.blobUrl)}
-          onClose={closeViewer}
-        />
-      )}
-    </div>
-  );
-}
-
-/**
- * Visualizador de documento em modal (PDF via viewer nativo do navegador num
- * iframe com blob:, imagem via <img>). Independe de Content-Disposition do
- * provider e da config "baixar PDFs" do Chrome — nada de aba que vira
- * download e fecha sozinha.
- */
-function DocumentViewerModal({
-  blobUrl,
-  kind,
-  filename,
-  onDownload,
-  onClose,
-}: {
-  blobUrl: string;
-  kind: 'pdf' | 'image' | 'other';
-  filename: string;
-  onDownload: () => void;
-  onClose: () => void;
-}) {
-  // Close on ESC; lock body scroll while open (mesmo padrão do ImageLightbox).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex flex-col bg-black/85 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-    >
-      <div
-        className="flex shrink-0 items-center gap-2 px-4 py-3"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="min-w-0 flex-1 truncate text-sm font-medium text-white">
-          {filename}
-        </p>
-        <button
-          type="button"
-          onClick={onDownload}
-          title="Baixar"
-          className="rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
-        >
-          <Download className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          title="Fechar"
-          aria-label="Fechar"
-          className="rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-      <div
-        className="min-h-0 flex-1 px-4 pb-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {kind === 'pdf' ? (
-          <iframe
-            src={blobUrl}
-            title={filename}
-            className="h-full w-full rounded-lg border-0 bg-white"
-          />
-        ) : kind === 'image' ? (
-          <div className="flex h-full items-center justify-center">
-            <img
-              src={blobUrl}
-              alt={filename}
-              className="max-h-full max-w-full rounded-lg object-contain"
-            />
-          </div>
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-white/80">
-            <FileIcon className="h-10 w-10" />
-            <p className="text-sm">
-              Pré-visualização não disponível para este tipo de arquivo.
-            </p>
-            <button
-              type="button"
-              onClick={onDownload}
-              className="rounded-md bg-white/15 px-4 py-2 text-sm font-medium transition-colors hover:bg-white/25"
-            >
-              Baixar arquivo
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
