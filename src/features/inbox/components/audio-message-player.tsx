@@ -65,6 +65,9 @@ export function AudioMessagePlayer({
     message.metadata?.transcription ?? null,
   );
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
+  // A transcrição cacheada (ex.: gerada pelo Extrair com IA do ZapSign) NÃO
+  // abre sozinha — só quando o usuário clica. Cacheada = abre na hora.
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   // Sync internal transcript with prop when socket pushes updated metadata.
   useEffect(() => {
@@ -135,11 +138,17 @@ export function AudioMessagePlayer({
   }, [currentTime, duration]);
 
   const handleTranscribe = async () => {
+    if (transcript?.text) {
+      // Já transcrito (cache) — só revela.
+      setTranscriptOpen(true);
+      return;
+    }
     setTranscribing(true);
     setTranscribeError(null);
     try {
       const result = await inboxService.transcribeAudio(message.id);
       setTranscript(result);
+      setTranscriptOpen(true);
       onTranscribed?.(result);
     } catch (err: any) {
       setTranscribeError(
@@ -261,10 +270,19 @@ export function AudioMessagePlayer({
       <div className={`mt-2 border-t pt-2 ${
         isOutbound ? 'border-black/10 dark:border-white/20' : 'border-zinc-200 dark:border-zinc-700'
       }`}>
-        {transcript?.text ? (
+        {transcript?.text && transcriptOpen ? (
           <>
-            <div className={`mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide ${colorMuted}`}>
-              <FileText className="h-3 w-3" /> Transcrição
+            <div className={`mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide ${colorMuted}`}>
+              <span className="inline-flex items-center gap-1">
+                <FileText className="h-3 w-3" /> Transcrição
+              </span>
+              <button
+                type="button"
+                onClick={() => setTranscriptOpen(false)}
+                className="rounded px-1 py-0.5 font-medium normal-case tracking-normal opacity-70 transition-opacity hover:opacity-100"
+              >
+                Ocultar
+              </button>
             </div>
             <p className={`whitespace-pre-wrap text-sm leading-relaxed ${
               isOutbound ? 'text-zinc-700 dark:text-zinc-100' : 'text-zinc-700 dark:text-zinc-200'
@@ -288,7 +306,7 @@ export function AudioMessagePlayer({
             }`}
           >
             <FileText className="h-3.5 w-3.5" />
-            Transcrever áudio
+            {transcript?.text ? 'Ver transcrição' : 'Transcrever áudio'}
           </button>
         )}
         {transcribeError && (

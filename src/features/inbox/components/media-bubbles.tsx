@@ -5,6 +5,7 @@ import {
   Loader2,
   AlertCircle,
   Download,
+  Eye,
   FileText,
   FileArchive,
   FileSpreadsheet,
@@ -211,22 +212,68 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
   const caption = message.content?.caption as string | undefined;
   const Icon = pickDocIcon(mimeType, filename);
 
-  const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!url) {
-      e.preventDefault();
-      void retry();
+  // Resolve sob demanda quando ainda não temos URL (inbound lazy).
+  const ensureUrl = async (): Promise<string | null> => {
+    if (url) return url;
+    try {
+      const resolved = await inboxService.resolveMediaUrl(message.id);
+      return resolved.url;
+    } catch {
+      void retry(); // popula o estado de erro do hook pro subtexto
+      return null;
     }
   };
 
+  // Visualizar = abre numa aba nova (PDF/imagem o navegador mostra inline,
+  // sem forçar download). Abre a aba ANTES do await pra não cair no
+  // bloqueador de popup.
+  const handleView = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (url) {
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    const w = window.open('about:blank', '_blank');
+    const u = await ensureUrl();
+    if (u) {
+      if (w) w.location.href = u;
+      else window.open(u, '_blank', 'noopener');
+    } else {
+      w?.close();
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const u = await ensureUrl();
+    if (!u) return;
+    const a = document.createElement('a');
+    a.href = u;
+    a.download = filename;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const iconBtn = `flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
+    isOutbound
+      ? 'hover:bg-black/10 dark:hover:bg-white/15'
+      : 'hover:bg-zinc-200 dark:hover:bg-zinc-700'
+  }`;
+
   return (
     <div>
-      <a
-        href={url || '#'}
-        onClick={onClick}
-        target="_blank"
-        rel="noopener noreferrer"
-        download={filename}
-        className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleView}
+        onKeyDown={(e) => e.key === 'Enter' && handleView(e as unknown as React.MouseEvent)}
+        title="Visualizar documento"
+        className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
           isOutbound
             ? 'border-black/10 bg-black/5 hover:bg-black/10 dark:border-white/15 dark:bg-white/10 dark:hover:bg-white/15'
             : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:bg-zinc-800'
@@ -244,15 +291,22 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{filename}</p>
           <p className={`truncate text-[11px] ${isOutbound ? 'opacity-70' : 'text-zinc-500 dark:text-zinc-400'}`}>
-            {loading ? 'Preparando download…' : error ? 'Falhou — toque pra tentar de novo' : (mimeType || 'Arquivo')}
+            {loading ? 'Carregando…' : error ? 'Falhou — toque pra tentar de novo' : (mimeType || 'Arquivo')}
           </p>
         </div>
         {loading ? (
           <Loader2 className="h-4 w-4 shrink-0 animate-spin opacity-60" />
         ) : (
-          <Download className="h-4 w-4 shrink-0 opacity-60" />
+          <>
+            <button type="button" onClick={handleView} title="Visualizar" className={iconBtn}>
+              <Eye className="h-4 w-4 opacity-60" />
+            </button>
+            <button type="button" onClick={handleDownload} title="Baixar" className={iconBtn}>
+              <Download className="h-4 w-4 opacity-60" />
+            </button>
+          </>
         )}
-      </a>
+      </div>
       {caption && (
         <p className="mt-1.5 whitespace-pre-wrap break-words text-sm">{caption}</p>
       )}

@@ -1035,8 +1035,10 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                           </p>
                         </div>
 
-                        {/* Row 3 — UF + tags + channel + assignee + badge */}
+                        {/* Row 3 — chips à esquerda (truncam/clipam) + badge e
+                            Aceitar SEMPRE alinhados à direita, sem quebrar */}
                         <div className="mt-2 flex items-center gap-1 min-w-0">
+                          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
                           {/* Brazilian state from DDD */}
                           {(() => {
                             if (conv.isGroup) return null;
@@ -1084,8 +1086,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                               <span className="truncate max-w-[90px]">{conv.assignedTo.name}</span>
                             </span>
                           ) : null}
-                          {/* Spacer */}
-                          <div className="flex-1" />
+                          </div>
                           {/* Unread badge */}
                           {hasUnread && (
                             <span className="shrink-0 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-green-500 px-1.5 text-[10px] font-bold leading-none text-white">

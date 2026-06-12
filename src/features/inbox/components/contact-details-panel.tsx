@@ -565,26 +565,46 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
             </Popover>
           </div>
 
-          {/* Department — editable */}
+          {/* Department — editable (pill colorida, mesmo estilo de status/tags) */}
           <div className="order-4 flex items-center gap-2.5">
             <Building2 className="h-4 w-4 shrink-0 text-zinc-400" />
             <Popover className="relative">
-              <PopoverButton
-                disabled={savingDept}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-md border border-transparent px-1.5 py-0.5 text-sm transition-colors hover:border-zinc-200 hover:bg-zinc-50 disabled:opacity-50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900',
-                  conversation.department
-                    ? 'text-zinc-700 dark:text-zinc-300'
-                    : 'italic text-zinc-400',
-                )}
-              >
-                {savingDept ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <ChevronDown className="h-3 w-3 text-zinc-400" />
-                )}
-                {conversation.department ? conversation.department.name : 'Sem departamento'}
-              </PopoverButton>
+              {(() => {
+                const deptColor = conversation.department
+                  ? departments.find((d) => d.id === conversation.department?.id)
+                      ?.color ?? '#71717a'
+                  : null;
+                return (
+                  <PopoverButton
+                    disabled={savingDept}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                      !conversation.department &&
+                        'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
+                    )}
+                    style={
+                      deptColor
+                        ? {
+                            backgroundColor: `${deptColor}1a`,
+                            color: deptColor,
+                            borderColor: `${deptColor}40`,
+                          }
+                        : undefined
+                    }
+                  >
+                    {savingDept ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: deptColor ?? '#a1a1aa' }}
+                      />
+                    )}
+                    {conversation.department ? conversation.department.name : 'Sem departamento'}
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                  </PopoverButton>
+                );
+              })()}
               <PopoverPanel
                 anchor="bottom start"
                 transition
@@ -614,7 +634,10 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                               : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60',
                           )}
                         >
-                          <Building2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: dept.color || '#a1a1aa' }}
+                          />
                           <span className="flex-1 truncate">{dept.name}</span>
                           {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
                         </button>
