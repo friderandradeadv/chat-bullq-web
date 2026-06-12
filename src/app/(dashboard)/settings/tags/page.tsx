@@ -1,25 +1,63 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Pencil, Tags as TagsIcon } from 'lucide-react';
+import {
+  Dialog,
+  DialogPanel,
+  DialogTitle,
+  Popover,
+  PopoverButton,
+  PopoverPanel,
+} from '@headlessui/react';
+import {
+  Plus,
+  Search,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Tags as TagsIcon,
+  Tag as TagIcon,
+  Loader2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { tagsService, type Tag } from '@/features/settings/services/tags.service';
+import { ColorPicker } from '@/features/settings/components/color-picker';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
-const PRESET_COLORS = ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#10b981', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#6b7280'];
+const DEFAULT_COLOR = '#3B82F6';
+
+/** Pill colorida com ícone de tag — visual LíderHub */
+function TagPill({ name, color }: { name: string; color: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] font-medium"
+      style={{
+        backgroundColor: `${color}26`,
+        color,
+        borderColor: `${color}59`,
+      }}
+    >
+      <TagIcon className="h-3 w-3" />
+      {name}
+    </span>
+  );
+}
 
 export default function SettingsTagsPage() {
   const queryClient = useQueryClient();
-  const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState('#3b82f6');
-  const [newDescription, setNewDescription] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editColor, setEditColor] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-
   const orgId = useOrgId();
+
+  const [search, setSearch] = useState('');
+
+  // Drawer (criar/editar)
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState<Tag | null>(null);
+  const [name, setName] = useState('');
+  const [color, setColor] = useState(DEFAULT_COLOR);
+  const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+
   const { data: tags, isLoading } = useQuery({
     queryKey: ['tags', orgId],
     queryFn: () => tagsService.list(),
@@ -27,173 +65,282 @@ export default function SettingsTagsPage() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['tags'] });
 
-  const handleCreate = async () => {
-    if (!newName.trim()) return;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tags ?? [];
+    return (tags ?? []).filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        (t.description ?? '').toLowerCase().includes(q),
+    );
+  }, [tags, search]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setName('');
+    setColor(DEFAULT_COLOR);
+    setDescription('');
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (tag: Tag) => {
+    setEditing(tag);
+    setName(tag.name);
+    setColor(tag.color);
+    setDescription(tag.description ?? '');
+    setDrawerOpen(true);
+  };
+
+  const handleSave = async () => {
+    const finalName = name.trim();
+    if (!finalName) return;
+    const dup = (tags ?? []).find(
+      (t) =>
+        t.id !== editing?.id &&
+        t.name.toLowerCase() === finalName.toLowerCase(),
+    );
+    if (dup) {
+      toast.error(`Etiqueta "${finalName}" já existe`);
+      return;
+    }
+    setSaving(true);
     try {
-      await tagsService.create({
-        name: newName.trim(),
-        color: newColor,
-        description: newDescription.trim() || undefined,
-      });
-      setNewName('');
-      setNewDescription('');
-      toast.success('Tag criada');
+      if (editing) {
+        await tagsService.update(editing.id, {
+          name: finalName,
+          color,
+          description: description.trim() || undefined,
+        });
+        toast.success('Etiqueta atualizada');
+      } else {
+        await tagsService.create({
+          name: finalName,
+          color,
+          description: description.trim() || undefined,
+        });
+        toast.success(`Etiqueta "${finalName}" criada`);
+      }
+      setDrawerOpen(false);
       refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao criar tag');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao salvar etiqueta');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleUpdate = async (id: string) => {
+  const handleDelete = async (tag: Tag) => {
+    if (!confirm(`Remover a etiqueta "${tag.name}"?`)) return;
     try {
-      await tagsService.update(id, {
-        name: editName,
-        color: editColor,
-        description: editDescription.trim() || undefined,
-      });
-      setEditingId(null);
-      toast.success('Tag atualizada');
+      await tagsService.remove(tag.id);
+      toast.success('Etiqueta removida');
       refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao remover');
     }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Remover esta tag?')) return;
-    try {
-      await tagsService.remove(id);
-      toast.success('Tag removida');
-      refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao remover');
-    }
-  };
-
-  const startEdit = (tag: Tag) => {
-    setEditingId(tag.id);
-    setEditName(tag.name);
-    setEditColor(tag.color);
-    setEditDescription(tag.description ?? '');
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Tags</h2>
-          <p className="mt-0.5 text-sm text-zinc-500">Organize conversas e contatos com tags coloridas</p>
-        </div>
-      </div>
-
-      <div className="mt-6 flex items-end gap-3">
-        <div className="flex-1">
-          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Nome da tag</label>
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="Ex: VIP, Urgente, Lead..."
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Cor</label>
-          <div className="flex gap-1">
-            {PRESET_COLORS.map((c) => (
-              <button
-                key={c}
-                onClick={() => setNewColor(c)}
-                className={`h-8 w-8 rounded-md transition-transform ${newColor === c ? 'scale-110 ring-2 ring-offset-1 ring-zinc-400' : 'hover:scale-105'}`}
-                style={{ backgroundColor: c }}
-              />
-            ))}
-          </div>
-        </div>
+      {/* Header — estilo LíderHub */}
+      <div>
+        <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+          Etiquetas
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Organize suas conversas com etiquetas personalizadas.
+        </p>
         <button
-          onClick={handleCreate}
-          disabled={!newName.trim()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          onClick={openCreate}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
-          <Plus className="h-4 w-4" /> Criar
+          <Plus className="h-4 w-4" /> Criar Etiqueta
         </button>
       </div>
 
-      <div className="mt-3">
-        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Descrição (opcional)</label>
+      {/* Busca */}
+      <div className="relative mt-6">
+        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
         <input
-          value={newDescription}
-          onChange={(e) => setNewDescription(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-          placeholder="Quando usar esta tag..."
-          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Pesquisar etiquetas..."
+          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 pl-10 pr-4 text-sm outline-none transition-colors focus:border-zinc-300 focus:bg-white dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:bg-zinc-950"
         />
       </div>
 
-      <div className="mt-6 space-y-2">
-        {isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-lg border bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900" />
-          ))
-        ) : !tags?.length ? (
-          <div className="flex flex-col items-center py-12 text-center">
-            <TagsIcon className="h-10 w-10 text-zinc-200 dark:text-zinc-700" />
-            <p className="mt-3 text-sm text-zinc-500">Nenhuma tag criada</p>
-          </div>
-        ) : (
-          tags.map((tag) => (
-            <div key={tag.id} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-              {editingId === tag.id ? (
-                <div className="flex flex-1 items-center gap-3">
-                  <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                  />
-                  <div className="flex gap-1">
-                    {PRESET_COLORS.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setEditColor(c)}
-                        className={`h-6 w-6 rounded ${editColor === c ? 'ring-2 ring-offset-1 ring-zinc-400' : ''}`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
+      {/* Tabela — estilo LíderHub */}
+      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-zinc-200 bg-zinc-50/80 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60">
+              <th className="px-4 py-3">Nome</th>
+              <th className="px-4 py-3">Descrição</th>
+              <th className="px-4 py-3 text-center">Contatos</th>
+              <th className="w-12 px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <tr key={i} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/60">
+                  <td colSpan={4} className="px-4 py-4">
+                    <div className="h-6 w-40 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
+                  </td>
+                </tr>
+              ))
+            ) : !filtered.length ? (
+              <tr>
+                <td colSpan={4}>
+                  <div className="flex flex-col items-center py-14 text-center">
+                    <TagsIcon className="h-10 w-10 text-zinc-200 dark:text-zinc-700" />
+                    <p className="mt-3 text-sm text-zinc-500">
+                      {search ? 'Nenhuma etiqueta encontrada' : 'Nenhuma etiqueta criada'}
+                    </p>
                   </div>
-                  <input
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    placeholder="Descrição..."
-                    className="w-40 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                  />
-                  <button onClick={() => handleUpdate(tag.id)} className="rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">Salvar</button>
-                  <button onClick={() => setEditingId(null)} className="rounded px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-3">
-                    <div className="h-5 w-5 rounded-full" style={{ backgroundColor: tag.color }} />
-                    <div>
-                      <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{tag.name}</span>
-                      {tag.description && (
-                        <p className="text-xs text-zinc-400">{tag.description}</p>
+                </td>
+              </tr>
+            ) : (
+              filtered.map((tag) => (
+                <tr
+                  key={tag.id}
+                  className="border-b border-zinc-100 transition-colors last:border-0 hover:bg-zinc-50/60 dark:border-zinc-800/60 dark:hover:bg-zinc-900/40"
+                >
+                  <td className="px-4 py-3.5">
+                    <TagPill name={tag.name} color={tag.color} />
+                  </td>
+                  <td className="max-w-[320px] px-4 py-3.5 text-zinc-500 dark:text-zinc-400">
+                    <span className="line-clamp-2">
+                      {tag.description || (
+                        <span className="italic text-zinc-300 dark:text-zinc-600">
+                          Sem conteúdo
+                        </span>
                       )}
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => startEdit(tag)} className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => handleDelete(tag.id)} className="rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ))
-        )}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-300">
+                    {tag._count?.contacts ?? 0}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Popover className="relative">
+                      <PopoverButton className="rounded-md p-1.5 text-zinc-400 outline-none transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </PopoverButton>
+                      <PopoverPanel
+                        anchor="bottom end"
+                        transition
+                        className="z-50 mt-1 w-36 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900"
+                      >
+                        {({ close }) => (
+                          <>
+                            <button
+                              onClick={() => {
+                                close();
+                                openEdit(tag);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                            >
+                              <Pencil className="h-3.5 w-3.5" /> Editar
+                            </button>
+                            <button
+                              onClick={() => {
+                                close();
+                                handleDelete(tag);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Excluir
+                            </button>
+                          </>
+                        )}
+                      </PopoverPanel>
+                    </Popover>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {/* Drawer lateral — Nova/Editar Etiqueta (estilo LíderHub) */}
+      <Dialog
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        className="relative z-50"
+      >
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-y-0 right-0 flex max-w-full">
+          <DialogPanel className="flex h-full w-screen max-w-md flex-col bg-white shadow-2xl dark:bg-zinc-950">
+            <div className="border-b border-zinc-100 px-6 py-5 dark:border-zinc-800">
+              <DialogTitle className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                {editing ? 'Editar Etiqueta' : 'Nova Etiqueta'}
+              </DialogTitle>
+              <p className="mt-1 text-sm text-zinc-500">
+                {editing
+                  ? 'Atualize as informações da etiqueta'
+                  : 'Crie uma etiqueta para organizar suas conversas'}
+              </p>
+            </div>
+
+            <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Nome
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                    placeholder="Nome da etiqueta"
+                    autoFocus
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-400"
+                  />
+                  <ColorPicker value={color} onChange={setColor} />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Descrição
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Descrição (opcional)"
+                  rows={4}
+                  className="w-full resize-none rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-400"
+                />
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Preview
+                </p>
+                <TagPill name={name.trim() || 'etiqueta'} color={color} />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
+              <button
+                onClick={() => setDrawerOpen(false)}
+                className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!name.trim() || saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {editing ? 'Salvar alterações' : 'Criar Etiqueta'}
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
     </div>
   );
 }

@@ -12,7 +12,7 @@ const tabs = [
   { href: '/settings/departments', label: 'Departamentos', icon: Network },
   { href: '/settings/statuses', label: 'Status', icon: CircleDot },
   { href: '/settings/contacts', label: 'Contatos', icon: BookUser },
-  { href: '/settings/tags', label: 'Tags', icon: Tags },
+  { href: '/settings/tags', label: 'Etiquetas', icon: Tags },
   { href: '/settings/notifications', label: 'Notificações', icon: Bell },
   { href: '/settings/api-keys', label: 'API Keys', icon: KeyRound },
   { href: '/settings/integrations', label: 'Integrações', icon: Plug },

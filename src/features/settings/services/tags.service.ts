@@ -6,6 +6,7 @@ export interface Tag {
   name: string;
   color: string;
   description?: string | null;
+  _count?: { contacts: number; conversations: number };
 }
 
 export const tagsService = {
