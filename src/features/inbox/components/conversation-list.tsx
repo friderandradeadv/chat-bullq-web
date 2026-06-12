@@ -740,7 +740,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
               }}
               className={`flex flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2.5 text-sm transition-colors ${
                 isActive
-                  ? 'text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/40'
+                  ? 'text-zinc-900 dark:text-zinc-100 bg-zinc-100/30 dark:bg-zinc-900/40'
                   : 'text-zinc-500 hover:text-zinc-700 hover:bg-muted/30 dark:text-zinc-400 dark:hover:text-zinc-200'
               }`}
             >
