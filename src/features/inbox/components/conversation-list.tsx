@@ -738,16 +738,16 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                 }
                 setStatusTab(isActive ? 'ALL' : tab.value);
               }}
-              className={`flex flex-1 flex-col items-center justify-center gap-2 px-1 py-3.5 text-[11.5px] font-medium transition-colors border-b-2 ${
+              className={`flex flex-1 flex-col items-center justify-center gap-1.5 px-2 py-2.5 text-[13px] transition-colors border-b-2 ${
                 isActive
-                  ? `${tab.activeText} ${tab.activeBorder}`
+                  ? `text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900/40 ${tab.activeBorder}`
                   : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
               }`}
             >
-              {/* Chat-balloon icon with conversation-count badge (LíderHub style) */}
+              {/* ícone + badge de contagem */}
               <span className="relative">
-                <Icon className="h-6 w-6" strokeWidth={2} />
-                <span className={`absolute -right-2.5 -top-1.5 inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-[4px] text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-zinc-950 ${count > 0 ? tab.badge : 'bg-zinc-300 dark:bg-zinc-600'}`}>
+                <Icon className={`h-[22px] w-[22px] ${isActive ? tab.activeText : ''}`} strokeWidth={1.75} />
+                <span className={`absolute -right-2 -top-1.5 inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-[4px] text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-zinc-950 ${count > 0 ? tab.badge : 'bg-zinc-300 dark:bg-zinc-600'}`}>
                   {count > 99 ? '99+' : count}
                 </span>
               </span>
