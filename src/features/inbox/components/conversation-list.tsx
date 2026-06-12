@@ -719,7 +719,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
           LíderHub). Com os Arquivados abertos, a linha inteira fica esmaecida e
           nenhuma aba aparece selecionada (igual LíderHub). */}
       <div
-        className={`flex items-stretch border-b border-zinc-200/80 transition-opacity duration-200 dark:border-zinc-800 ${
+        className={`flex items-stretch transition-opacity duration-200 ${
           archivedOnly ? 'opacity-40' : 'opacity-100'
         }`}
       >
@@ -762,10 +762,10 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       <button
         onClick={toggleArchived}
         title={archivedOnly ? 'Fechar arquivados' : 'Ver conversas arquivadas'}
-        className={`flex w-full items-center gap-2.5 border-b border-zinc-200/80 px-3 py-2 text-[12.5px] font-medium transition-colors dark:border-zinc-800 ${
+        className={`flex w-full items-center gap-2.5 border-t border-zinc-200/80 px-4 py-1.5 text-xs transition-colors dark:border-zinc-800 ${
           archivedOnly
             ? 'bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-100'
-            : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900/60 dark:hover:text-zinc-300'
+            : 'bg-zinc-50/60 text-zinc-500/80 opacity-90 hover:bg-zinc-100/60 hover:text-zinc-700 dark:bg-zinc-900/20 dark:text-zinc-400 dark:hover:bg-zinc-900/60 dark:hover:text-zinc-300'
         }`}
       >
         <Archive className="h-4 w-4 shrink-0" />
