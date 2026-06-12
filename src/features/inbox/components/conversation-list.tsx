@@ -272,12 +272,12 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     staleTime: 15_000,
   });
 
-  // Título da aba com a contagem de pendentes, igual LíderHub: "(12) Chat - Frider Andrade"
+  // Título da aba com a contagem de pendentes, igual LíderHub: "(12) Chat | Frider Andrade"
   useEffect(() => {
     const pending = statusCounts?.['PENDING'] ?? 0;
-    document.title = pending > 0 ? `(${pending}) Chat - Frider Andrade` : 'Chat - Frider Andrade';
+    document.title = pending > 0 ? `(${pending}) Chat | Frider Andrade` : 'Chat | Frider Andrade';
     return () => {
-      document.title = 'Chat - Frider Andrade';
+      document.title = 'Chat | Frider Andrade';
     };
   }, [statusCounts]);
 
