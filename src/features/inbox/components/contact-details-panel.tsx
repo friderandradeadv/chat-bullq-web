@@ -1834,7 +1834,7 @@ export function ContactDetailsPanel({ conversation }: { conversation: Conversati
     <div className="flex w-80 shrink-0 flex-col border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       {/* Tab bar — same height as the conversation header so the icons line up
           on the same horizontal row (LíderHub style) */}
-      <div className="flex h-[72px] items-center border-b border-zinc-200 dark:border-zinc-800">
+      <div className="flex h-[67px] items-center border-b border-zinc-200 dark:border-zinc-800">
         {TABS.map(({ id, icon: Icon, label }) => {
           const isActive = activeTab === id;
           return (

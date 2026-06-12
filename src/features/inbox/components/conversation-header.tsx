@@ -124,7 +124,7 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
         onClose={() => setShowArchiveModal(false)}
       />
     )}
-    <div className="flex h-[72px] items-center justify-between border-b border-zinc-200 bg-white px-5 dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="flex h-[67px] items-center justify-between border-b border-zinc-200 bg-white px-3.5 dark:border-zinc-800 dark:bg-zinc-950">
       {/* Contact info — name+avatar toggles the right panel; copy button is separate */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <button
