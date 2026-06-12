@@ -122,13 +122,15 @@ export function ConversationContextMenu({
     return set;
   }, [inboxViewsRaw, conversation.id]);
 
-  const appliedConversation = useMemo(
+  // Estado LOCAL (não useMemo do prop): `conversation` é um snapshot de quando
+  // o menu abriu — o invalidate() refaz a lista, mas o prop não muda enquanto
+  // o menu está aberto. Sem isso, remover uma tag deixava o check ligado e o
+  // clique seguinte chamava REMOVE de novo (404) em vez de recolocar.
+  const [appliedConversation, setAppliedConversation] = useState(
     () => new Set((conversation.tags ?? []).map((t) => t.tag.id)),
-    [conversation.tags],
   );
-  const appliedContact = useMemo(
+  const [appliedContact, setAppliedContact] = useState(
     () => new Set((conversation.contact.tags ?? []).map((t) => t.tag.id)),
-    [conversation.contact.tags],
   );
 
   // Close on outside click or Escape
@@ -310,9 +312,17 @@ export function ConversationContextMenu({
         if (isOn) await tagsService.removeFromContact(conversation.contact.id, tag.id);
         else await tagsService.addToContact(conversation.contact.id, tag.id);
       }
+      const setApplied =
+        target === 'conversation' ? setAppliedConversation : setAppliedContact;
+      setApplied((prev) => {
+        const next = new Set(prev);
+        if (isOn) next.delete(tag.id);
+        else next.add(tag.id);
+        return next;
+      });
       invalidate();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao alterar tag');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao alterar tag');
     } finally {
       setPendingTagId(null);
     }
