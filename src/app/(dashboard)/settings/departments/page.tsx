@@ -21,17 +21,21 @@ const RULES: DistributionRule[] = ['ROUND_ROBIN', 'LEAST_BUSY', 'MANUAL'];
 
 const SUGGESTIONS = ['Jurídico', 'Comercial', 'Financeiro', 'Suporte', 'Atendimento'];
 
+const PRESET_COLORS = ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#10b981', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#6b7280'];
+
 export default function SettingsDepartmentsPage() {
   const queryClient = useQueryClient();
   const orgId = useOrgId();
 
   const [newName, setNewName] = useState('');
   const [newRule, setNewRule] = useState<DistributionRule>('ROUND_ROBIN');
+  const [newColor, setNewColor] = useState('#3b82f6');
   const [creating, setCreating] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editRule, setEditRule] = useState<DistributionRule>('ROUND_ROBIN');
+  const [editColor, setEditColor] = useState('#6B7280');
 
   const { data: departments, isLoading } = useQuery({
     queryKey: ['departments', orgId],
@@ -57,6 +61,9 @@ export default function SettingsDepartmentsPage() {
       await departmentsService.create({
         name: finalName,
         distributionRule: name ? 'ROUND_ROBIN' : newRule,
+        color: name
+          ? PRESET_COLORS[(departments?.length ?? 0) % PRESET_COLORS.length]
+          : newColor,
       });
       setNewName('');
       toast.success(`Departamento "${finalName}" criado`);
@@ -76,6 +83,7 @@ export default function SettingsDepartmentsPage() {
       await departmentsService.update(id, {
         name: editName.trim(),
         distributionRule: editRule,
+        color: editColor,
       });
       setEditingId(null);
       toast.success('Departamento atualizado');
@@ -104,6 +112,7 @@ export default function SettingsDepartmentsPage() {
     setEditingId(dept.id);
     setEditName(dept.name);
     setEditRule(dept.distributionRule);
+    setEditColor(dept.color ?? '#6B7280');
   };
 
   const existingNames = new Set(
@@ -154,6 +163,21 @@ export default function SettingsDepartmentsPage() {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            Cor
+          </label>
+          <div className="flex gap-1">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setNewColor(c)}
+                className={`h-8 w-8 rounded-md transition-transform ${newColor === c ? 'scale-110 ring-2 ring-zinc-400 ring-offset-1' : 'hover:scale-105'}`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
         </div>
         <button
           onClick={() => handleCreate()}
@@ -225,6 +249,16 @@ export default function SettingsDepartmentsPage() {
                       </option>
                     ))}
                   </select>
+                  <div className="flex gap-1">
+                    {PRESET_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setEditColor(c)}
+                        className={`h-6 w-6 rounded ${editColor === c ? 'ring-2 ring-zinc-400 ring-offset-1' : ''}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
                   <button
                     onClick={() => handleUpdate(dept.id)}
                     className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground"
@@ -241,7 +275,13 @@ export default function SettingsDepartmentsPage() {
               ) : (
                 <>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-lg"
+                      style={{
+                        backgroundColor: `${dept.color ?? '#6B7280'}1a`,
+                        color: dept.color ?? '#6B7280',
+                      }}
+                    >
                       <Building2 className="h-4 w-4" />
                     </div>
                     <div>

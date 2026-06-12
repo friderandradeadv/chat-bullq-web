@@ -6,6 +6,7 @@ export interface Department {
   id: string;
   name: string;
   description: string | null;
+  color: string;
   isDefault: boolean;
   distributionRule: DistributionRule;
 }
@@ -13,6 +14,7 @@ export interface Department {
 export interface CreateDepartmentPayload {
   name: string;
   description?: string;
+  color?: string;
   distributionRule?: DistributionRule;
   isDefault?: boolean;
 }

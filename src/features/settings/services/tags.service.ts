@@ -5,6 +5,7 @@ export interface Tag {
   organizationId: string;
   name: string;
   color: string;
+  description?: string | null;
 }
 
 export const tagsService = {
@@ -12,11 +13,11 @@ export const tagsService = {
     const { data } = await api.get('/tags');
     return data.data;
   },
-  async create(payload: { name: string; color?: string }): Promise<Tag> {
+  async create(payload: { name: string; color?: string; description?: string }): Promise<Tag> {
     const { data } = await api.post('/tags', payload);
     return data.data;
   },
-  async update(id: string, payload: { name?: string; color?: string }): Promise<Tag> {
+  async update(id: string, payload: { name?: string; color?: string; description?: string }): Promise<Tag> {
     const { data } = await api.patch(`/tags/${id}`, payload);
     return data.data;
   },

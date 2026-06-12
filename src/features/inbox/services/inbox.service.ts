@@ -10,6 +10,12 @@ export interface TagLink {
   tag: TagRef;
 }
 
+export interface ContactStatusRef {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Contact {
   id: string;
   name: string | null;
@@ -18,6 +24,7 @@ export interface Contact {
   notes?: string | null;
   avatarUrl: string | null;
   tags?: TagLink[];
+  status?: ContactStatusRef | null;
 }
 
 export interface DepartmentInfo {

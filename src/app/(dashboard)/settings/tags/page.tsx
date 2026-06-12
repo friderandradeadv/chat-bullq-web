@@ -13,9 +13,11 @@ export default function SettingsTagsPage() {
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('#3b82f6');
+  const [newDescription, setNewDescription] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   const orgId = useOrgId();
   const { data: tags, isLoading } = useQuery({
@@ -28,8 +30,13 @@ export default function SettingsTagsPage() {
   const handleCreate = async () => {
     if (!newName.trim()) return;
     try {
-      await tagsService.create({ name: newName.trim(), color: newColor });
+      await tagsService.create({
+        name: newName.trim(),
+        color: newColor,
+        description: newDescription.trim() || undefined,
+      });
       setNewName('');
+      setNewDescription('');
       toast.success('Tag criada');
       refresh();
     } catch (err) {
@@ -39,7 +46,11 @@ export default function SettingsTagsPage() {
 
   const handleUpdate = async (id: string) => {
     try {
-      await tagsService.update(id, { name: editName, color: editColor });
+      await tagsService.update(id, {
+        name: editName,
+        color: editColor,
+        description: editDescription.trim() || undefined,
+      });
       setEditingId(null);
       toast.success('Tag atualizada');
       refresh();
@@ -63,6 +74,7 @@ export default function SettingsTagsPage() {
     setEditingId(tag.id);
     setEditName(tag.name);
     setEditColor(tag.color);
+    setEditDescription(tag.description ?? '');
   };
 
   return (
@@ -107,6 +119,17 @@ export default function SettingsTagsPage() {
         </button>
       </div>
 
+      <div className="mt-3">
+        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Descrição (opcional)</label>
+        <input
+          value={newDescription}
+          onChange={(e) => setNewDescription(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+          placeholder="Quando usar esta tag..."
+          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+        />
+      </div>
+
       <div className="mt-6 space-y-2">
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
@@ -137,6 +160,12 @@ export default function SettingsTagsPage() {
                       />
                     ))}
                   </div>
+                  <input
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    placeholder="Descrição..."
+                    className="w-40 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  />
                   <button onClick={() => handleUpdate(tag.id)} className="rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">Salvar</button>
                   <button onClick={() => setEditingId(null)} className="rounded px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
                 </div>
@@ -144,7 +173,12 @@ export default function SettingsTagsPage() {
                 <>
                   <div className="flex items-center gap-3">
                     <div className="h-5 w-5 rounded-full" style={{ backgroundColor: tag.color }} />
-                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{tag.name}</span>
+                    <div>
+                      <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{tag.name}</span>
+                      {tag.description && (
+                        <p className="text-xs text-zinc-400">{tag.description}</p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-1">
                     <button onClick={() => startEdit(tag)} className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">

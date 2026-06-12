@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Radio, Users, Tags, Bell, Building2, KeyRound, Sparkles, BookUser, Plug, Network } from 'lucide-react';
+import { Radio, Users, Tags, Bell, Building2, KeyRound, Sparkles, BookUser, Plug, Network, CircleDot } from 'lucide-react';
 
 const tabs = [
   { href: '/settings/channels', label: 'Canais', icon: Radio },
@@ -10,6 +10,7 @@ const tabs = [
   { href: '/settings/ai', label: 'IA', icon: Sparkles },
   { href: '/settings/members', label: 'Membros', icon: Users },
   { href: '/settings/departments', label: 'Departamentos', icon: Network },
+  { href: '/settings/statuses', label: 'Status', icon: CircleDot },
   { href: '/settings/contacts', label: 'Contatos', icon: BookUser },
   { href: '/settings/tags', label: 'Tags', icon: Tags },
   { href: '/settings/notifications', label: 'Notificações', icon: Bell },

@@ -28,6 +28,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  CircleDot,
   ChevronDown,
   ChevronRight,
   Bot,
@@ -58,6 +59,7 @@ import { aiAgentsService, type FeedRun } from '@/features/ai-agents/services/ai-
 import { AssignmentPopover } from './assignment-popover';
 import { departmentsService } from '@/features/settings/services/departments.service';
 import { tagsService } from '@/features/settings/services/tags.service';
+import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useSocket } from '../hooks/use-socket';
 import { cn } from '@/lib/utils';
@@ -134,6 +136,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
   const queryClient = useQueryClient();
   const [savingDept, setSavingDept] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [savingContactStatus, setSavingContactStatus] = useState(false);
   const [syncingAvatar, setSyncingAvatar] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
@@ -153,6 +156,34 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
     queryFn: () => tagsService.list(),
     staleTime: 60_000,
   });
+
+  const { data: contactStatuses = [] } = useQuery({
+    queryKey: ['contact-statuses', orgId],
+    queryFn: () => contactStatusesService.list(),
+    staleTime: 60_000,
+  });
+
+  const handleSetContactStatus = async (
+    statusId: string | null,
+    close: () => void,
+  ) => {
+    if (statusId === (contact.status?.id ?? null)) {
+      close();
+      return;
+    }
+    setSavingContactStatus(true);
+    try {
+      await contactStatusesService.setContactStatus(contact.id, statusId);
+      queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['contact-statuses', orgId] });
+      close();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao alterar status do contato');
+    } finally {
+      setSavingContactStatus(false);
+    }
+  };
 
   const handleSetDepartment = async (deptId: string | null, close: () => void) => {
     setSavingDept(true);
@@ -429,8 +460,91 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
             </Popover>
           </div>
 
+          {/* Status do contato (funil) — editable */}
+          <div className="order-2 flex items-center gap-2.5">
+            <CircleDot className="h-4 w-4 shrink-0 text-zinc-400" />
+            <Popover className="relative">
+              <PopoverButton
+                disabled={savingContactStatus}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                  !contact.status &&
+                    'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
+                )}
+                style={
+                  contact.status
+                    ? {
+                        backgroundColor: `${contact.status.color}1a`,
+                        color: contact.status.color,
+                        borderColor: `${contact.status.color}40`,
+                      }
+                    : undefined
+                }
+              >
+                {savingContactStatus ? (
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                ) : (
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{
+                      backgroundColor: contact.status?.color ?? '#a1a1aa',
+                    }}
+                  />
+                )}
+                {contact.status?.name ?? 'Sem status'}
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </PopoverButton>
+              <PopoverPanel
+                anchor="bottom start"
+                transition
+                className="z-50 mt-1 w-52 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
+              >
+                {({ close }) => (
+                  <>
+                    {contact.status && (
+                      <button
+                        onClick={() => handleSetContactStatus(null, close)}
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-500 transition-colors hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+                      >
+                        <X className="h-3.5 w-3.5 shrink-0" />
+                        Remover status
+                      </button>
+                    )}
+                    {contactStatuses.map((s) => {
+                      const isActive = s.id === contact.status?.id;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => handleSetContactStatus(s.id, close)}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors',
+                            isActive
+                              ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
+                              : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60',
+                          )}
+                        >
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: s.color }}
+                          />
+                          <span className="flex-1 truncate">{s.name}</span>
+                          {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
+                        </button>
+                      );
+                    })}
+                    {contactStatuses.length === 0 && (
+                      <p className="px-3 py-2 text-center text-[11px] text-zinc-400">
+                        Nenhum status criado — crie em Configurações → Status
+                      </p>
+                    )}
+                  </>
+                )}
+              </PopoverPanel>
+            </Popover>
+          </div>
+
           {/* Department — editable */}
-          <div className="order-3 flex items-center gap-2.5">
+          <div className="order-4 flex items-center gap-2.5">
             <Building2 className="h-4 w-4 shrink-0 text-zinc-400" />
             <Popover className="relative">
               <PopoverButton
@@ -496,7 +610,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           </div>
 
           {/* Tags — editable */}
-          <div className="order-2 flex items-start gap-2.5">
+          <div className="order-3 flex items-start gap-2.5">
             <TagIcon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
             <div className="flex flex-wrap gap-1.5">
               {allTags.map(({ tag, kind }) => (
