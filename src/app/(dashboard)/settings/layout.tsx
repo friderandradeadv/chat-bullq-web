@@ -57,9 +57,9 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           Gerencie sua organização e integrações
         </p>
 
-        <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:gap-12">
+        <div className="mt-8 flex flex-col gap-8 md:flex-row md:gap-10">
           {/* Menu lateral — estilo LíderHub */}
-          <aside className="w-full shrink-0 lg:w-52">
+          <aside className="w-full shrink-0 md:w-52">
             <nav className="flex flex-col gap-6">
               {groups.map((group) => (
                 <div key={group.label}>
