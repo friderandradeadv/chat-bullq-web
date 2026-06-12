@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import {
   Search,
@@ -17,12 +18,22 @@ import {
   MailOpen,
   Archive,
   Tag as TagIcon,
+  Bell,
+  Settings,
+  LogOut,
+  CheckCheck,
+  Loader2,
 } from 'lucide-react';
 import { channelsService } from '@/features/channels/services/channels.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { membersService } from '@/features/settings/services/members.service';
+import {
+  notificationsSettingsService,
+  type Notification,
+} from '@/features/settings/services/notifications.service';
 import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
+import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useAuthStore } from '@/stores/auth-store';
 import { useInboxPreferences } from '../hooks/use-inbox-preferences';
@@ -50,8 +61,19 @@ const itemClass = (active: boolean) =>
 
 export function InboxToolbar() {
   const orgId = useOrgId();
+  const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const { update: updatePrefs } = useInboxPreferences();
+
+  // Badge do sino — contagem de notificações não lidas (poll leve).
+  const { data: unreadNotifs = 0 } = useQuery({
+    queryKey: ['notifications-unread', orgId],
+    queryFn: () => notificationsSettingsService.getUnreadCount(),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
 
   const search = useInboxFilterStore((s) => s.search);
   const setSearch = useInboxFilterStore((s) => s.setSearch);
@@ -199,7 +221,7 @@ export function InboxToolbar() {
   );
 
   const pillBase =
-    'flex items-center gap-1.5 rounded-md border px-3 py-2 text-[13px] font-medium outline-none transition-colors';
+    'flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium outline-none transition-colors';
   const pillIdle =
     'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800';
   const pillActive = 'border-primary/40 bg-primary/[0.06] text-primary dark:bg-primary/10';
@@ -209,15 +231,15 @@ export function InboxToolbar() {
 
   return (
     <div className="flex items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-950">
-      {/* Search — left */}
-      <div className="relative w-full max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+      {/* Search — borderless ocupando a esquerda (estilo LíderHub) */}
+      <div className="relative min-w-0 flex-1">
+        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
         <input
           type="text"
           value={text}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="Pesquisar conversas..."
-          className="w-full rounded-md border border-zinc-200 bg-white py-2 pl-9 pr-8 text-[13px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-primary/40 focus:ring-2 focus:ring-primary/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="w-full border-0 bg-transparent py-2 pl-8 pr-8 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100"
         />
         {text && (
           <button
@@ -228,8 +250,6 @@ export function InboxToolbar() {
           </button>
         )}
       </div>
-
-      <div className="flex-1" />
 
       {/* Responsável — Todas/Minhas + multi-select de membros + sem responsável */}
       <Popover className="relative">
@@ -516,6 +536,194 @@ export function InboxToolbar() {
           )}
         </PopoverPanel>
       </Popover>
+
+      {/* Divisor + sino + avatar (topo direito, estilo LíderHub) */}
+      <div className="mx-1 h-6 w-px shrink-0 bg-zinc-200 dark:bg-zinc-800" />
+
+      {/* Sino de notificações */}
+      <Popover className="relative shrink-0">
+        <PopoverButton
+          title="Notificações"
+          className="relative flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 outline-none transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+        >
+          <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          {unreadNotifs > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-red-500 px-[4px] text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-zinc-950">
+              {unreadNotifs > 99 ? '99+' : unreadNotifs}
+            </span>
+          )}
+        </PopoverButton>
+        <PopoverPanel
+          anchor="bottom end"
+          transition
+          className="z-50 mt-1.5 w-[380px] rounded-xl border border-zinc-200/80 bg-white shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
+        >
+          <NotificationsPanel />
+        </PopoverPanel>
+      </Popover>
+
+      {/* Avatar do usuário */}
+      <Popover className="relative shrink-0">
+        <PopoverButton className="outline-none" title={user?.name ?? 'Perfil'}>
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={user.name ?? 'avatar'}
+              className="h-8 w-8 rounded-full object-cover ring-1 ring-zinc-200 transition-opacity hover:opacity-85 dark:ring-zinc-700"
+            />
+          ) : (
+            <span
+              className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-semibold text-white transition-opacity hover:opacity-85"
+              style={{ backgroundColor: avatarColor(user?.name ?? null) }}
+            >
+              {avatarInitials(user?.name ?? null)}
+            </span>
+          )}
+        </PopoverButton>
+        <PopoverPanel
+          anchor="bottom end"
+          transition
+          className="z-50 mt-1.5 w-60 rounded-xl border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
+        >
+          {({ close }) => (
+            <>
+              <div className="px-3 py-2">
+                <p className="truncate text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
+                  {user?.name ?? 'Usuário'}
+                </p>
+                {user?.email && (
+                  <p className="truncate text-[11px] text-zinc-400">{user.email}</p>
+                )}
+              </div>
+              <div className="mx-2 border-t border-zinc-100 dark:border-zinc-800" />
+              <button
+                onClick={() => { close(); router.push('/settings/general'); }}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              >
+                <Settings className="h-4 w-4 shrink-0 text-zinc-400" />
+                Configurações
+              </button>
+              <button
+                onClick={() => { close(); logout(); }}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                Sair
+              </button>
+            </>
+          )}
+        </PopoverPanel>
+      </Popover>
     </div>
   );
+}
+
+/**
+ * Painel do sino — monta (e busca) só quando o popover abre. Layout espelha o
+ * LíderHub: header "Notificações", itens com bolinha azul de não-lida +
+ * tempo relativo, footer com "marcar todas como lidas".
+ */
+function NotificationsPanel() {
+  const orgId = useOrgId();
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['notifications-list', orgId],
+    queryFn: () => notificationsSettingsService.list(1, 12),
+  });
+  const notifications = data?.notifications ?? [];
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['notifications-list', orgId] });
+    queryClient.invalidateQueries({ queryKey: ['notifications-unread', orgId] });
+  };
+
+  const handleRead = async (n: Notification) => {
+    if (n.isRead) return;
+    try {
+      await notificationsSettingsService.markRead(n.id);
+      invalidate();
+    } catch {
+      // silencioso — o badge corrige no próximo poll
+    }
+  };
+
+  const handleReadAll = async () => {
+    try {
+      await notificationsSettingsService.markAllRead();
+      invalidate();
+    } catch {
+      // idem
+    }
+  };
+
+  return (
+    <div className="flex max-h-[480px] flex-col">
+      <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+        <h3 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">
+          Notificações
+        </h3>
+        {notifications.some((n) => !n.isRead) && (
+          <button
+            onClick={handleReadAll}
+            title="Marcar todas como lidas"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10"
+          >
+            <CheckCheck className="h-3.5 w-3.5" />
+            Marcar lidas
+          </button>
+        )}
+      </div>
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-300" />
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+            <Bell className="h-6 w-6 text-zinc-300 dark:text-zinc-600" />
+            <p className="mt-2 text-[13px] text-zinc-400">Nenhuma notificação</p>
+          </div>
+        ) : (
+          notifications.map((n) => (
+            <button
+              key={n.id}
+              onClick={() => handleRead(n)}
+              className={`flex w-full items-start gap-3 border-b border-zinc-50 px-4 py-3 text-left transition-colors last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40 ${
+                n.isRead ? 'opacity-70' : ''
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium leading-snug text-zinc-800 dark:text-zinc-100">
+                  {n.title}
+                </p>
+                {n.body && (
+                  <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-zinc-500 dark:text-zinc-400">
+                    {n.body}
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
+                <span className="text-[10.5px] text-zinc-400">
+                  {relativeTime(n.createdAt)}
+                </span>
+                {!n.isRead && <span className="h-2 w-2 rounded-full bg-sky-500" />}
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function relativeTime(date: string): string {
+  const diffMs = Date.now() - new Date(date).getTime();
+  const min = Math.floor(diffMs / 60_000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h}h`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return 'ontem';
+  return `há ${d}d`;
 }

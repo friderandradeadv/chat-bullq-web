@@ -305,9 +305,9 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
     return [...map.values()];
   })();
 
-  // Ring/dot color from the first tag (pipeline stage), fallback to zinc
-  const primaryTag = (conversation.tags ?? [])[0]?.tag ?? (contact.tags ?? [])[0]?.tag;
-  const ringColor = primaryTag?.color ?? '#a1a1aa';
+  // Ring do avatar = cor do STATUS do contato (não mais da etiqueta) —
+  // mesma regra da lista de conversas.
+  const ringColor = contact.status?.color ?? '#a1a1aa';
 
   return (
     <div className="flex flex-col items-center px-5 py-7">

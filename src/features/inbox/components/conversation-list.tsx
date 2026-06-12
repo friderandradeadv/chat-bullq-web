@@ -327,6 +327,19 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     scrollContainerRef.current?.scrollTo({ top: 0 });
   }, [filterKey, debouncedSearch, selectedChannelId, scope, showGroups, tagsKey, statusTab]);
 
+  // Swipe lateral ao trocar de aba (AI/Ativos/Pendentes/Grupos) — liga a
+  // classe de animação por um ciclo curto; remonta a animação sem remontar
+  // o container (preserva o IntersectionObserver do scroll infinito).
+  const [tabSwipe, setTabSwipe] = useState(false);
+  const prevTabRef = useRef(statusTab);
+  useEffect(() => {
+    if (prevTabRef.current === statusTab) return;
+    prevTabRef.current = statusTab;
+    setTabSwipe(true);
+    const t = setTimeout(() => setTabSwipe(false), 280);
+    return () => clearTimeout(t);
+  }, [statusTab]);
+
   const {
     data,
     isLoading,
@@ -900,7 +913,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       <div
         ref={scrollContainerRef}
         className={`flex-1 overflow-y-auto scrollbar-thin ${
-          archivedOnly ? 'animate-archived-reveal' : ''
+          archivedOnly ? 'animate-archived-reveal' : tabSwipe ? 'animate-tab-swipe' : ''
         }`}
       >
         {isLoading ? (
