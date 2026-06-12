@@ -60,13 +60,13 @@ function ListAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: strin
         src={avatarUrl}
         alt={name || 'avatar'}
         onError={() => setFailed(true)}
-        className="h-10 w-10 rounded-full bg-zinc-100 object-cover dark:bg-zinc-800"
+        className="h-9 w-9 rounded-full bg-zinc-100 object-cover dark:bg-zinc-800"
       />
     );
   }
   return (
     <div
-      className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-semibold text-white"
+      className="flex h-9 w-9 items-center justify-center rounded-full text-[13px] font-semibold text-white"
       style={{ backgroundColor: avatarColor(name) }}
     >
       {avatarInitials(name)}
@@ -861,8 +861,8 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       >
         {isLoading ? (
           Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex gap-3 px-3 py-3">
-              <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
+            <div key={i} className="flex gap-3 px-3 py-2">
+              <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
               <div className="flex-1 space-y-2 pt-0.5">
                 <div className="h-3.5 w-24 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
                 <div className="h-3 w-36 animate-pulse rounded bg-zinc-50 dark:bg-zinc-800/60" />
@@ -903,7 +903,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                       position: { x: e.clientX, y: e.clientY },
                     });
                   }}
-                  className={`group flex w-full gap-3 px-3 py-3 text-left transition-colors duration-100 border-l-2 ${
+                  className={`group flex w-full gap-3 px-3 py-2 text-left transition-colors duration-100 border-l-2 ${
                     isSelected
                       ? 'bg-primary/[0.06] dark:bg-primary/10 border-l-primary'
                       : isActive
@@ -929,7 +929,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                           role="checkbox"
                           aria-checked={isSelected}
                           onClick={(e) => { e.stopPropagation(); toggleSelect(conv.id, index); }}
-                          className={`absolute inset-0 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-2 transition-colors ${
+                          className={`absolute inset-0 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 transition-colors ${
                             isSelected
                               ? 'border-primary bg-primary text-white opacity-100'
                               : inSelectionMode
@@ -951,13 +951,13 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                     const lastMsg = conv.messages[0];
                     const allTags = [...(conv.tags ?? []), ...(conv.contact.tags ?? [])];
                     return (
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 flex flex-col justify-center">
                         {/* Row 1 — name + timestamp + dots */}
                         <div className="flex items-center gap-1 min-w-0">
-                          <span className={`flex-1 truncate text-[13px] ${hasUnread ? 'font-bold text-zinc-900 dark:text-zinc-50' : 'font-semibold ' + (isActive || isSelected ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-800 dark:text-zinc-200')}`}>
+                          <span className={`flex-1 truncate text-sm ${hasUnread ? 'font-bold text-zinc-900 dark:text-zinc-50' : 'font-semibold ' + (isActive || isSelected ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-800 dark:text-zinc-200')}`}>
                             {conv.contact.name || conv.contact.phone || 'Desconhecido'}
                           </span>
-                          <span className={`shrink-0 text-[11px] tabular-nums ${hasUnread ? 'font-semibold text-green-600 dark:text-green-400' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                          <span className={`shrink-0 text-xs tabular-nums ${hasUnread ? 'font-semibold text-green-600 dark:text-green-400' : 'text-zinc-400 dark:text-zinc-500'}`}>
                             {formatTime(lastMsg?.createdAt ?? conv.lastMessageAt)}
                           </span>
                           <button
