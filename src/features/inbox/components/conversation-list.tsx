@@ -272,6 +272,15 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     staleTime: 15_000,
   });
 
+  // Título da aba com a contagem de pendentes, igual LíderHub: "(12) Chat - Frider Andrade"
+  useEffect(() => {
+    const pending = statusCounts?.['PENDING'] ?? 0;
+    document.title = pending > 0 ? `(${pending}) Chat - Frider Andrade` : 'Chat - Frider Andrade';
+    return () => {
+      document.title = 'Chat - Frider Andrade';
+    };
+  }, [statusCounts]);
+
   // Drop selected tag ids that no longer exist (tag deleted in another tab).
   // Avoid sending stale ids to the backend — they'd just match nothing.
   useEffect(() => {
