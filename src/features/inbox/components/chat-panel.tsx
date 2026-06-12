@@ -24,6 +24,11 @@ import { useSocket } from '../hooks/use-socket';
 import { useAuthStore } from '@/stores/auth-store';
 import { PendingActionsList } from '../pending-actions/pending-actions-list';
 import { formatPhone } from '@/lib/brazil-states';
+import { useOrgId } from '@/hooks/use-org-query-key';
+import {
+  quickRepliesService,
+  type QuickReplyAttachment,
+} from '@/features/settings/services/quick-replies.service';
 
 interface ChatPanelProps {
   conversation: Conversation;
@@ -409,6 +414,14 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     staleTime: 15_000,
   });
 
+  // Mensagens rápidas da org — popup "/" no compositor (estilo LíderHub).
+  const orgId = useOrgId();
+  const { data: quickReplies = [] } = useQuery({
+    queryKey: ['quick-replies', orgId],
+    queryFn: () => quickRepliesService.list(),
+    staleTime: 60_000,
+  });
+
   // ─── Busca dentro da conversa ───────────────────────────────────────────
   const [convSearchOpen, setConvSearchOpen] = useState(false);
   const [convSearch, setConvSearch] = useState('');
@@ -661,6 +674,29 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
   const handleSendMedia = async (file: File, caption?: string) => {
     try {
       await inboxService.sendMediaMessage(conversation.id, file, caption);
+    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+      throw err;
+    }
+  };
+
+  // Mídia por URL (anexo de mensagem rápida) — o provider baixa da URL,
+  // mesmo caminho do envio do vídeo tutorial do ZapSign no backend.
+  const handleSendRemoteAttachment = async (
+    att: QuickReplyAttachment,
+    caption?: string,
+  ) => {
+    try {
+      await inboxService.sendMessage({
+        conversationId: conversation.id,
+        type: att.type,
+        content: {
+          mediaUrl: att.url,
+          ...(att.fileName ? { fileName: att.fileName } : {}),
+          ...(caption ? { caption } : {}),
+        },
+        ...(pontual && !isMine ? { oneOff: true } : {}),
+      });
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
       throw err;
@@ -1350,6 +1386,9 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                 : conversation.channel.name
             }
             signatureName={user?.name ?? null}
+            quickReplies={quickReplies}
+            contactName={conversation.contact?.name ?? null}
+            onSendRemoteAttachment={handleSendRemoteAttachment}
             disabled={conversation.status === 'CLOSED'}
           />
         </>

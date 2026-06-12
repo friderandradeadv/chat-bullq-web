@@ -1,11 +1,22 @@
 'use client';
 
-import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock } from 'lucide-react';
+import { useState, useRef, useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Zap, Film, Image as ImageIcon } from 'lucide-react';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '../hooks/use-audio-recorder';
 import { EmojiPicker } from './emoji-picker';
+import type {
+  QuickReply,
+  QuickReplyAttachment,
+} from '@/features/settings/services/quick-replies.service';
+
+const QR_ATT_ICON: Record<QuickReplyAttachment['type'], typeof FileText> = {
+  DOCUMENT: FileText,
+  VIDEO: Film,
+  AUDIO: Mic,
+  IMAGE: ImageIcon,
+};
 
 export interface ChatInputHandle {
   /** Empilha arquivos no preview do compositor (usado pelo drag & drop). */
@@ -27,6 +38,15 @@ interface ChatInputProps {
   sendingFrom?: string | null;
   /** Nome do atendente p/ o toggle "Assinatura" (assina as mensagens). */
   signatureName?: string | null;
+  /** Mensagens rápidas da org — digite "/" para abrir o seletor. */
+  quickReplies?: QuickReply[];
+  /** Nome do contato p/ substituir {{nome}} nas mensagens rápidas. */
+  contactName?: string | null;
+  /** Envia um anexo remoto (mídia por URL — usado pelas mensagens rápidas). */
+  onSendRemoteAttachment?: (
+    att: QuickReplyAttachment,
+    caption?: string,
+  ) => Promise<void>;
   disabled?: boolean;
 }
 
@@ -37,7 +57,7 @@ interface PendingFile {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { onSend, onSendAudio, onSendInternal, onSendMedia, onGenerateSummary, onSchedule, sendingFrom, signatureName, disabled },
+  { onSend, onSendAudio, onSendInternal, onSendMedia, onGenerateSummary, onSchedule, sendingFrom, signatureName, quickReplies, contactName, onSendRemoteAttachment, disabled },
   ref,
 ) {
   const [text, setText] = useState('');
@@ -50,6 +70,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleWhen, setScheduleWhen] = useState('');
   const [isScheduling, setIsScheduling] = useState(false);
+  // Mensagens rápidas "/" — anexos remotos pendentes + navegação do popup
+  const [pendingAtts, setPendingAtts] = useState<QuickReplyAttachment[]>([]);
+  const [qrIndex, setQrIndex] = useState(0);
+  const [qrDismissed, setQrDismissed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recorder = useAudioRecorder();
@@ -78,6 +102,69 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       setIsScheduling(false);
     }
   }, [text, scheduleWhen, onSchedule, isScheduling]);
+
+  // ── Mensagens rápidas "/" ──────────────────────────────────────────────
+  const slashQuery =
+    !internalMode && text.startsWith('/') ? text.slice(1).toLowerCase() : null;
+
+  const qrMatches = useMemo(() => {
+    if (slashQuery === null || !quickReplies?.length) return [];
+    if (!slashQuery) return quickReplies.slice(0, 8);
+    return quickReplies
+      .filter(
+        (r) =>
+          r.shortcut.toLowerCase().includes(slashQuery) ||
+          r.content.toLowerCase().includes(slashQuery),
+      )
+      .slice(0, 8);
+  }, [slashQuery, quickReplies]);
+
+  const qrOpen = slashQuery !== null && !qrDismissed && qrMatches.length > 0;
+
+  useEffect(() => {
+    // novo texto → reabre o popup e volta a seleção pro topo
+    setQrDismissed(false);
+    setQrIndex(0);
+  }, [text]);
+
+  const applyVars = useCallback(
+    (content: string) => {
+      const firstName = (contactName ?? '').trim().split(/\s+/)[0] ?? '';
+      return content.replace(/{{\s*nome\s*}}/gi, firstName);
+    },
+    [contactName],
+  );
+
+  const selectQuickReply = useCallback(
+    (reply: QuickReply) => {
+      setText(applyVars(reply.content));
+      setPendingAtts(reply.attachments ?? []);
+      setQrDismissed(true);
+      textareaRef.current?.focus();
+    },
+    [applyVars],
+  );
+
+  const sendQuickAttachments = useCallback(async () => {
+    if (!onSendRemoteAttachment) return;
+    const trimmed = text.trim();
+    const atts = pendingAtts;
+    let captionUsed = false;
+    for (let i = 0; i < atts.length; i++) {
+      const att = atts[i];
+      // caption vai na primeira mídia que suporta legenda (áudio não tem)
+      const useCaption = !captionUsed && att.type !== 'AUDIO' && !!trimmed;
+      await onSendRemoteAttachment(att, useCaption ? trimmed : att.caption);
+      if (useCaption) captionUsed = true;
+    }
+    // texto sobrou (ex.: só anexos de áudio) → envia como mensagem separada
+    if (trimmed && !captionUsed) {
+      await onSend(trimmed);
+    }
+    setPendingAtts([]);
+    setText('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+  }, [pendingAtts, text, onSendRemoteAttachment, onSend]);
 
   const addFiles = useCallback((files: File[]) => {
     const valid = files.filter((f) => f.size <= 64 * 1024 * 1024);
@@ -133,6 +220,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   }, [pending, onSendMedia, isSending, text]);
 
   const handleSubmit = useCallback(async () => {
+    if (pendingAtts.length > 0 && onSendRemoteAttachment) {
+      if (isSending) return;
+      setIsSending(true);
+      try {
+        await sendQuickAttachments();
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || err?.message || 'Erro ao enviar mensagem rápida');
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
     if (pending.length > 0) {
       await handleSendPending();
       return;
@@ -157,7 +256,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     } finally {
       setIsSending(false);
     }
-  }, [pending.length, handleSendPending, text, isSending, internalMode, onSend, onSendInternal, signatureOn, signatureName]);
+  }, [pendingAtts.length, onSendRemoteAttachment, sendQuickAttachments, pending.length, handleSendPending, text, isSending, internalMode, onSend, onSendInternal, signatureOn, signatureName]);
 
   const insertEmoji = (emoji: string) => {
     setText((t) => t + emoji);
@@ -173,6 +272,28 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (qrOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setQrIndex((i) => (i + 1) % qrMatches.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setQrIndex((i) => (i - 1 + qrMatches.length) % qrMatches.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        selectQuickReply(qrMatches[qrIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setQrDismissed(true);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -285,7 +406,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   // IDLE MODE: text input + mic button.
   const canRecord = !!onSendAudio;
-  const showMic = canRecord && !text.trim() && pending.length === 0;
+  const showMic = canRecord && !text.trim() && pending.length === 0 && pendingAtts.length === 0;
 
   return (
     <div className={`border-t px-5 py-3 transition-colors ${internalMode ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-900/10' : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950'}`}>
@@ -326,6 +447,34 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
         onChange={handleFileChange}
       />
+      {/* Anexos remotos da mensagem rápida selecionada (enviados por URL) */}
+      {pendingAtts.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {pendingAtts.map((att, i) => {
+            const Icon = QR_ATT_ICON[att.type];
+            return (
+              <span
+                key={i}
+                className="inline-flex max-w-[260px] items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary"
+                title={att.fileName || att.url}
+              >
+                <Icon className="h-3 w-3 shrink-0" />
+                <span className="truncate">{att.fileName || att.type.toLowerCase()}</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPendingAtts((prev) => prev.filter((_, idx) => idx !== i))
+                  }
+                  className="shrink-0 rounded-full p-0.5 hover:bg-primary/10"
+                  aria-label="Remover anexo"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
       {/* Preview dos arquivos selecionados/soltos — só envia ao confirmar */}
       {pending.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-900/60">
@@ -360,6 +509,43 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         </div>
       )}
       <div className="relative flex items-end gap-2">
+        {/* Popup de mensagens rápidas — digite "/" pra abrir (estilo LíderHub) */}
+        {qrOpen && (
+          <div className="absolute bottom-full left-0 z-[60] mb-2 max-h-80 w-full max-w-md overflow-y-auto rounded-xl border border-zinc-200 bg-white py-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <p className="flex items-center gap-1.5 px-3 pb-1.5 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <Zap className="h-3 w-3" /> Mensagens rápidas
+            </p>
+            {qrMatches.map((r, i) => {
+              const att = r.attachments?.[0];
+              const AttIcon = att ? QR_ATT_ICON[att.type] : null;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onMouseEnter={() => setQrIndex(i)}
+                  onClick={() => selectQuickReply(r)}
+                  className={`flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors ${
+                    i === qrIndex
+                      ? 'bg-primary/[0.07] dark:bg-primary/15'
+                      : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
+                  }`}
+                >
+                  <span className="mt-0.5 inline-flex shrink-0 items-center rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 font-mono text-[11px] font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    /{r.shortcut}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="line-clamp-1 text-[13px] text-zinc-600 dark:text-zinc-300">
+                      {r.content || (att?.fileName ?? '')}
+                    </span>
+                  </span>
+                  {AttIcon && (
+                    <AttIcon className="mt-1 h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {emojiOpen && (
           <EmojiPicker onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />
         )}
@@ -504,7 +690,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={(!text.trim() && pending.length === 0) || isSending}
+            disabled={(!text.trim() && pending.length === 0 && pendingAtts.length === 0) || isSending}
             className={`mb-1 rounded-lg p-2.5 text-white transition-colors disabled:opacity-50 ${
               internalMode && pending.length === 0 ? 'bg-amber-500 hover:bg-amber-600' : 'bg-primary text-primary-foreground hover:bg-primary/90'
             }`}

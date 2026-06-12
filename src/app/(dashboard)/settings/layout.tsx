@@ -14,6 +14,7 @@ import {
   Plug,
   Network,
   CircleDot,
+  Zap,
 } from 'lucide-react';
 
 // Menu lateral agrupado — estilo LíderHub (Configurações > EMPRESA / CLASSES / DESENVOLVEDOR)
@@ -25,6 +26,7 @@ const groups = [
       { href: '/settings/channels', label: 'Canais', icon: Radio },
       { href: '/settings/ai', label: 'IA', icon: Sparkles },
       { href: '/settings/members', label: 'Membros', icon: Users },
+      { href: '/settings/quick-replies', label: 'Mensagens rápidas', icon: Zap },
       { href: '/settings/notifications', label: 'Notificações', icon: Bell },
     ],
   },
