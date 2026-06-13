@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
 import { ConversationList } from '@/features/inbox/components/conversation-list';
 import { InboxToolbar } from '@/features/inbox/components/inbox-toolbar';
+import { InboxWorkspaceTabs } from '@/features/inbox-views/components/inbox-workspace-tabs';
 import { ChatPanel } from '@/features/inbox/components/chat-panel';
 import { ContactDetailsPanel } from '@/features/inbox/components/contact-details-panel';
 import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
@@ -71,6 +72,9 @@ export default function InboxPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* Toggle de workspaces — abas por área (RMC, Trabalhista, Bancário…) */}
+      <InboxWorkspaceTabs />
+
       {/* Full-width top toolbar — search + Responsável + Status + Mais filtros (LíderHub style) */}
       <InboxToolbar />
 
