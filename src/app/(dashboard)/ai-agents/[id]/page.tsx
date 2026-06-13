@@ -374,10 +374,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const CAPACITY_LIMIT = 50000;
+// Limite de capacidade do system prompt de UM agente, em caracteres.
+// NÃO é o limite de contexto do modelo (Claude tem ~200k tokens) — é um
+// guardrail de QUALIDADE: prompt muito longo dilui instruções e aumenta
+// alucinação. Calibrado pro Claude (Sonnet/Haiku/Opus): ~20k chars ≈ ~5k
+// tokens. Um subagente focado fica no verde; só um prompt realmente
+// sobrecarregado chega no vermelho ("divida em subagentes").
+// (LíderHub usa ~5k chars, mas no Claude isso deixaria todo agente sério
+//  no vermelho — alarme falso constante. Por isso NÃO copiamos o número.)
+const CAPACITY_LIMIT = 20000;
 
-/** Nível de capacidade do agente (igual LíderHub): chars usados / limite,
- *  com cor e alerta de sobrecarga (sinal pra dividir em subagentes). */
+/** Nível de capacidade do agente: chars do system prompt / limite, com cor e
+ *  alerta de sobrecarga (sinal pra dividir em subagentes — estratégia da Fase 4). */
 function CapacityMeter({ chars }: { chars: number }) {
   const pct = Math.min(chars / CAPACITY_LIMIT, 1);
   const level =
