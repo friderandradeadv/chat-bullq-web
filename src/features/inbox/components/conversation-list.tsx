@@ -23,7 +23,6 @@ import {
   Clock,
   Phone,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -690,7 +689,6 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   // Bulk: pin the selected conversations into a brand-new inbox view.
   // Asks for the inbox name with a quick prompt (no full dialog overhead),
   // creates the view with conversationIds=selected, then navigates to it.
-  const router = useRouter();
   const handleCreateInboxFromSelection = useCallback(async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -711,13 +709,14 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       toast.success(`Inbox "${view.name}" criada com ${ids.length} conversas`);
       clearSelection();
       queryClient.invalidateQueries({ queryKey: ['inbox-views'] });
-      router.push(`/inbox?view=${view.id}`);
+      // hard nav — ver inbox-workspace-switcher: router.push só-query trava no App Router.
+      window.location.href = `/inbox?view=${view.id}`;
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao criar inbox');
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedIds, clearSelection, queryClient, router]);
+  }, [selectedIds, clearSelection, queryClient]);
 
   const getLastMessagePreview = (conv: Conversation) => {
     const last = conv.messages[0];

@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import {
@@ -151,7 +151,6 @@ function ViewRow({
 
 export function InboxWorkspaceSwitcher() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const qc = useQueryClient();
   const activeViewId = searchParams.get('view');
   const [creating, setCreating] = useState(false);
@@ -167,7 +166,15 @@ export function InboxWorkspaceSwitcher() {
   const areas = views.filter((v) => v.metadata?.builtin !== true);
   const builtins = views.filter((v) => v.metadata?.builtin === true);
 
-  const go = (id: string | null) => router.push(id ? `/inbox?view=${id}` : '/inbox');
+  // Navegação DURA de propósito. `router.push` (e até window.history.pushState)
+  // com mudança SÓ de query string é inconsistente no App Router do Next 16:
+  // a 1ª navegação /inbox → ?view=X funciona, mas trocar de uma área pra outra
+  // (ou voltar pra "Todas") vira no-op — o `useSearchParams` não reage e a área
+  // "trava" (Matheus: "não consigo voltar pro escritório"). Recarregar já na
+  // área certa é 100% confiável e combina com a ideia de "entrar no workspace".
+  const go = (id: string | null) => {
+    window.location.href = id ? `/inbox?view=${id}` : '/inbox';
+  };
 
   const handleDelete = async (view: InboxView) => {
     if (!confirm(`Excluir a área "${view.name}"? As conversas não são apagadas — só esta visualização.`)) return;
@@ -175,7 +182,7 @@ export function InboxWorkspaceSwitcher() {
       await inboxViewsService.remove(view.id);
       toast.success('Área removida');
       qc.invalidateQueries({ queryKey: ['inbox-views'] });
-      if (activeViewId === view.id) router.push('/inbox');
+      if (activeViewId === view.id) window.location.href = '/inbox';
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao excluir');
     }
