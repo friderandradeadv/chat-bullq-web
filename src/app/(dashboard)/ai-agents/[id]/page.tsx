@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Trash2, Plus, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, X, Loader2, FlaskConical } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   aiAgentsService,
@@ -18,6 +18,7 @@ import {
   type MentionGroup,
 } from '@/features/ai-agents/components/prompt-mention-editor';
 import { AgentSkillsAndTools } from '@/features/ai-agents/components/agent-skills-tools';
+import { AgentTestPanel } from '@/features/ai-agents/components/agent-test-panel';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { departmentsService } from '@/features/settings/services/departments.service';
@@ -58,6 +59,7 @@ export default function AgentEditorPage() {
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [newChannelId, setNewChannelId] = useState('');
   const [newChannelMode, setNewChannelMode] = useState<AgentMode>('AUTONOMOUS');
+  const [showTest, setShowTest] = useState(false);
 
   useEffect(() => {
     if (!agent) return;
@@ -204,6 +206,13 @@ export default function AgentEditorPage() {
           {isActive ? 'Ativo' : 'Inativo'}
         </span>
         <button
+          onClick={() => setShowTest(true)}
+          className="shrink-0 flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          title="Testar agente numa conversa de teste"
+        >
+          <FlaskConical className="h-4 w-4" /> Testar
+        </button>
+        <button
           onClick={handleDelete}
           className="shrink-0 rounded-md p-2 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
           title="Excluir agente"
@@ -218,6 +227,17 @@ export default function AgentEditorPage() {
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
       </header>
+
+      {showTest && agent && (
+        <AgentTestPanel
+          agentId={agent.id}
+          agentName={name || agent.name}
+          systemPrompt={systemPrompt}
+          modelId={modelId}
+          temperature={temperature}
+          onClose={() => setShowTest(false)}
+        />
+      )}
 
       {/* Corpo: prompt (esquerda) + config (direita) */}
       <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-5 lg:grid-cols-[1fr_360px]">

@@ -127,6 +127,28 @@ export interface AgentRun {
   }>;
 }
 
+export type AgentTestFinalAction =
+  | 'REPLIED'
+  | 'DELEGATED'
+  | 'TRANSFERRED_TO_HUMAN'
+  | 'HANDED_BACK'
+  | 'IGNORED';
+
+export interface AgentTestInput {
+  /** Prompt a testar — manda o do editor (mesmo não salvo). Omitido = usa o salvo. */
+  systemPrompt?: string;
+  modelId?: string;
+  temperature?: number;
+  messages: { role: 'user' | 'assistant'; content: string }[];
+}
+
+export interface AgentTestResult {
+  reply: string;
+  toolCalls: { name: string; args: unknown }[];
+  finalAction: AgentTestFinalAction;
+  costUsd: number;
+}
+
 export const aiAgentsService = {
   async list(): Promise<AiAgent[]> {
     const { data } = await api.get('/ai-agents');
@@ -221,6 +243,12 @@ export const aiAgentsService = {
     const { data } = await api.get(`/ai-agents/${id}/stats`, {
       params: { period },
     });
+    return data.data ?? data;
+  },
+
+  /** Testa um turno do agente sem efeitos colaterais (test tab do editor). */
+  async test(id: string, input: AgentTestInput): Promise<AgentTestResult> {
+    const { data } = await api.post(`/ai-agents/${id}/test`, input);
     return data.data ?? data;
   },
 
