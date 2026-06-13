@@ -295,9 +295,47 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     queryFn: () => tagsService.list(),
   });
 
+  // Escopo das contagens = MESMOS filtros da lista, MENOS status/archived/
+  // groups (essas três são a partição das próprias abas; o backend define
+  // por bucket). Assim os badges batem exatamente com o que cada aba mostra —
+  // e numa view/área vazia (ex.: BPC/LOAS) zeram, em vez de mostrar o total
+  // global.
+  const countsParams = useMemo(() => {
+    const params: Record<string, string> = {};
+    if (unreadOnly) params.unread = 'true';
+    if (debouncedSearch) params.search = debouncedSearch;
+    if (selectedChannelId) params.channelId = selectedChannelId;
+    if (selectedTagIds.length > 0) params.tagIds = selectedTagIds.join(',');
+    if (selectedStatusIds.length > 0)
+      params.contactStatusIds = selectedStatusIds.join(',');
+    if (selectedAssigneeIds.length > 0) {
+      params.assignedToIds = selectedAssigneeIds.join(',');
+    } else if (scope === 'MINE' && currentUserId) {
+      params.assignedToId = currentUserId;
+    }
+    return params;
+  }, [
+    unreadOnly,
+    debouncedSearch,
+    selectedChannelId,
+    selectedTagIds,
+    selectedStatusIds,
+    selectedAssigneeIds,
+    scope,
+    currentUserId,
+  ]);
+
   const { data: statusCounts } = useQuery({
-    queryKey: ['conversation-counts', orgId],
-    queryFn: () => inboxService.getStatusCounts(),
+    queryKey: [
+      'conversation-counts',
+      orgId,
+      viewId ?? null,
+      countsParams,
+    ],
+    queryFn: () =>
+      viewId
+        ? inboxViewsService.getCounts(viewId, countsParams)
+        : inboxService.getStatusCounts(countsParams),
     refetchInterval: 30_000,
     staleTime: 15_000,
   });

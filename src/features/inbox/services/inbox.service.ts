@@ -364,8 +364,14 @@ export const inboxService = {
     return data.data ?? data;
   },
 
-  async getStatusCounts(): Promise<Record<string, number>> {
-    const { data } = await api.get('/conversations/counts');
+  // Tab badges. `params` carrega os MESMOS filtros de escopo da lista (canal,
+  // tags, status do contato, responsável, busca, não-lidas) — sem status/
+  // archived/groups, que são a partição das próprias abas. Assim o badge conta
+  // exatamente o que cada aba mostra.
+  async getStatusCounts(
+    params?: Record<string, string>,
+  ): Promise<Record<string, number>> {
+    const { data } = await api.get('/conversations/counts', { params });
     return data.data;
   },
 

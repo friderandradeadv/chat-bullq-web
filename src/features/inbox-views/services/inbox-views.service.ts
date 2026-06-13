@@ -71,4 +71,13 @@ export const inboxViewsService = {
     });
     return data.data ?? data;
   },
+  // Tab badges escopados pela view + overrides da toolbar (zera numa área
+  // vazia, em vez de mostrar os totais globais).
+  async getCounts(
+    id: string,
+    params?: Record<string, string>,
+  ): Promise<Record<string, number>> {
+    const { data } = await api.get(`/inbox-views/${id}/counts`, { params });
+    return data.data ?? data;
+  },
 };
