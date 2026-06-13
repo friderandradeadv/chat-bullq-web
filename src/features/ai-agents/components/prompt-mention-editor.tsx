@@ -1,20 +1,14 @@
 'use client';
 
 /**
- * Editor de prompt estilo LíderHub: contenteditable com "INSTRUÇÕES GERAIS",
- * onde digitar `@` abre um menu buscável de ferramentas/status/etiquetas/
- * departamentos/responsáveis/mensagens rápidas/variáveis. As menções viram
- * chips coloridos inline (mention-tag). Serializa de volta pra texto puro
- * (`@Label`) — é isso que o systemPrompt do agente armazena.
+ * Editor de prompt estilo LíderHub: contenteditable com fonte legível,
+ * onde digitar `@` abre um menu HIERÁRQUICO (categorias com contagem →
+ * itens), buscável. As menções viram chips coloridos inline. Serializa de
+ * volta pra texto puro (`@Label`) — é isso que o systemPrompt armazena.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, ChevronLeft, Search } from 'lucide-react';
 
 export type MentionType =
   | 'tool'
@@ -37,55 +31,21 @@ export interface MentionGroup {
   items: MentionItem[];
 }
 
-const TYPE_META: Record<
-  MentionType,
-  { emoji: string; chip: string }
-> = {
-  tool: {
-    emoji: '🛠️',
-    chip:
-      'bg-blue-100 text-blue-700 ring-blue-300/60 dark:bg-blue-900/40 dark:text-blue-300',
-  },
-  status: {
-    emoji: '🟢',
-    chip:
-      'bg-emerald-100 text-emerald-700 ring-emerald-300/60 dark:bg-emerald-900/40 dark:text-emerald-300',
-  },
-  etiqueta: {
-    emoji: '🏷️',
-    chip:
-      'bg-amber-100 text-amber-700 ring-amber-300/60 dark:bg-amber-900/40 dark:text-amber-300',
-  },
-  departamento: {
-    emoji: '🏢',
-    chip:
-      'bg-violet-100 text-violet-700 ring-violet-300/60 dark:bg-violet-900/40 dark:text-violet-300',
-  },
-  responsavel: {
-    emoji: '👤',
-    chip:
-      'bg-pink-100 text-pink-700 ring-pink-300/60 dark:bg-pink-900/40 dark:text-pink-300',
-  },
-  mensagem: {
-    emoji: '💬',
-    chip:
-      'bg-cyan-100 text-cyan-700 ring-cyan-300/60 dark:bg-cyan-900/40 dark:text-cyan-300',
-  },
-  variavel: {
-    emoji: '🔖',
-    chip:
-      'bg-zinc-200 text-zinc-700 ring-zinc-300/60 dark:bg-zinc-700 dark:text-zinc-200',
-  },
+const TYPE_META: Record<MentionType, { emoji: string; chip: string }> = {
+  tool: { emoji: '🛠️', chip: 'bg-blue-100 text-blue-700 ring-blue-300/60 dark:bg-blue-900/40 dark:text-blue-300' },
+  status: { emoji: '🟢', chip: 'bg-emerald-100 text-emerald-700 ring-emerald-300/60 dark:bg-emerald-900/40 dark:text-emerald-300' },
+  etiqueta: { emoji: '🏷️', chip: 'bg-amber-100 text-amber-700 ring-amber-300/60 dark:bg-amber-900/40 dark:text-amber-300' },
+  departamento: { emoji: '🏢', chip: 'bg-violet-100 text-violet-700 ring-violet-300/60 dark:bg-violet-900/40 dark:text-violet-300' },
+  responsavel: { emoji: '👤', chip: 'bg-pink-100 text-pink-700 ring-pink-300/60 dark:bg-pink-900/40 dark:text-pink-300' },
+  mensagem: { emoji: '💬', chip: 'bg-cyan-100 text-cyan-700 ring-cyan-300/60 dark:bg-cyan-900/40 dark:text-cyan-300' },
+  variavel: { emoji: '🔖', chip: 'bg-zinc-200 text-zinc-700 ring-zinc-300/60 dark:bg-zinc-700 dark:text-zinc-200' },
 };
 
 const CHIP_BASE =
   'mention-tag inline-block rounded-md px-1.5 py-0.5 text-[13px] font-medium ring-1 align-baseline whitespace-nowrap';
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function chipHtml(type: MentionType, label: string): string {
@@ -95,13 +55,11 @@ function chipHtml(type: MentionType, label: string): string {
   )}">@${escapeHtml(label)}</span>`;
 }
 
-/** texto puro (com tokens @Label) -> HTML com chips, casando labels conhecidos. */
 function textToHtml(text: string, lookup: Map<string, MentionType>): string {
   if (!text) return '';
-  // labels mais longos primeiro pra casar o nome completo (ex: "Maria Jullia Pepato")
   const labels = [...lookup.keys()].sort((a, b) => b.length - a.length);
-  const lines = text.split('\n');
-  return lines
+  return text
+    .split('\n')
     .map((line) => {
       let html = '';
       let i = 0;
@@ -123,7 +81,6 @@ function textToHtml(text: string, lookup: Map<string, MentionType>): string {
     .join('<br>');
 }
 
-/** contenteditable DOM -> texto puro (chips viram @Label, <br>/<div> viram \n). */
 function htmlToText(root: HTMLElement): string {
   let out = '';
   const walk = (node: Node) => {
@@ -156,19 +113,11 @@ interface Props {
   placeholder?: string;
 }
 
-export function PromptMentionEditor({
-  value,
-  onChange,
-  groups,
-  placeholder,
-}: Props) {
+export function PromptMentionEditor({ value, onChange, groups, placeholder }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastTextRef = useRef<string>('');
-  const [menu, setMenu] = useState<{
-    top: number;
-    left: number;
-    query: string;
-  } | null>(null);
+  const [menu, setMenu] = useState<{ top: number; left: number; query: string } | null>(null);
+  const [openCat, setOpenCat] = useState<MentionType | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
 
   const lookup = useMemo(() => {
@@ -177,7 +126,6 @@ export function PromptMentionEditor({
     return m;
   }, [groups]);
 
-  // (Re)render quando o valor muda por fora (carga inicial / reset).
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -187,17 +135,29 @@ export function PromptMentionEditor({
     }
   }, [value, lookup]);
 
-  const flatItems = useMemo(() => {
+  // Lista visível no dropdown: categorias (nível 1) OU itens (busca / categoria aberta).
+  type Row =
+    | { kind: 'cat'; group: MentionGroup }
+    | { kind: 'item'; item: MentionItem };
+
+  const rows: Row[] = useMemo(() => {
     if (!menu) return [];
     const q = menu.query.toLowerCase();
-    const res: MentionItem[] = [];
-    for (const g of groups) {
-      for (const it of g.items) {
-        if (!q || it.label.toLowerCase().includes(q)) res.push(it);
-      }
+    if (q) {
+      const res: Row[] = [];
+      for (const g of groups)
+        for (const it of g.items)
+          if (it.label.toLowerCase().includes(q)) res.push({ kind: 'item', item: it });
+      return res.slice(0, 50);
     }
-    return res.slice(0, 40);
-  }, [menu, groups]);
+    if (openCat) {
+      const g = groups.find((g) => g.type === openCat);
+      return (g?.items ?? []).map((it) => ({ kind: 'item' as const, item: it }));
+    }
+    return groups.filter((g) => g.items.length > 0).map((g) => ({ kind: 'cat' as const, group: g }));
+  }, [menu, groups, openCat]);
+
+  useEffect(() => setActiveIdx(0), [openCat, menu?.query]);
 
   const emit = useCallback(() => {
     const el = editorRef.current;
@@ -216,18 +176,16 @@ export function PromptMentionEditor({
     if (node.nodeType !== Node.TEXT_NODE) return setMenu(null);
     const textBefore = (node.textContent ?? '').slice(0, range.startOffset);
     const m = textBefore.match(/@([\p{L}\p{N}\s/]{0,30})$/u);
-    if (!m) return setMenu(null);
-    // não dispara se o @ está logo após uma palavra colada (email etc.)
+    if (!m) {
+      setMenu(null);
+      return;
+    }
     const before = textBefore.slice(0, textBefore.length - m[0].length);
     if (before && /[\p{L}\p{N}]$/u.test(before)) return setMenu(null);
     const rect = range.getBoundingClientRect();
     const host = editorRef.current!.getBoundingClientRect();
-    setMenu({
-      top: rect.bottom - host.top + 4,
-      left: rect.left - host.left,
-      query: m[1].trim(),
-    });
-    setActiveIdx(0);
+    setMenu({ top: rect.bottom - host.top + 4, left: rect.left - host.left, query: m[1].trim() });
+    if (!m[1].trim()) setOpenCat(null);
   }, []);
 
   const insertMention = useCallback(
@@ -242,51 +200,58 @@ export function PromptMentionEditor({
       const textBefore = (node.textContent ?? '').slice(0, offset);
       const m = textBefore.match(/@([\p{L}\p{N}\s/]{0,30})$/u);
       if (!m) return;
-      // apaga o "@query" digitado
       const delRange = document.createRange();
       delRange.setStart(node, offset - m[0].length);
       delRange.setEnd(node, offset);
       delRange.deleteContents();
-
-      // monta o chip + espaço
       const tmp = document.createElement('div');
       tmp.innerHTML = chipHtml(item.type, item.label);
       const chip = tmp.firstChild as HTMLElement;
-      const space = document.createTextNode(' ');
+      const space = document.createTextNode(' ');
       delRange.insertNode(space);
       delRange.insertNode(chip);
-
-      // cursor depois do espaço
       const after = document.createRange();
       after.setStartAfter(space);
       after.collapse(true);
       sel.removeAllRanges();
       sel.addRange(after);
-
       setMenu(null);
+      setOpenCat(null);
       emit();
     },
     [emit],
   );
 
+  const activateRow = (row: Row) => {
+    if (row.kind === 'cat') setOpenCat(row.group.type);
+    else insertMention(row.item);
+  };
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!menu) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIdx((i) => Math.min(i + 1, flatItems.length - 1));
+      setActiveIdx((i) => Math.min(i + 1, rows.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setActiveIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter' || e.key === 'Tab') {
-      if (flatItems[activeIdx]) {
+      if (rows[activeIdx]) {
         e.preventDefault();
-        insertMention(flatItems[activeIdx]);
+        activateRow(rows[activeIdx]);
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      setMenu(null);
+      if (openCat) setOpenCat(null);
+      else setMenu(null);
+    } else if (e.key === 'Backspace' && openCat && !menu.query) {
+      // volta pras categorias sem apagar texto
+      e.preventDefault();
+      setOpenCat(null);
     }
   };
+
+  const catTitle = openCat ? groups.find((g) => g.type === openCat)?.title : null;
 
   return (
     <div className="relative">
@@ -301,44 +266,85 @@ export function PromptMentionEditor({
         }}
         onKeyDown={onKeyDown}
         onKeyUp={(e) => {
-          if (!['Enter', 'Tab', 'ArrowDown', 'ArrowUp', 'Escape'].includes(e.key))
+          if (!['Enter', 'Tab', 'ArrowDown', 'ArrowUp', 'Escape', 'Backspace'].includes(e.key))
             detectMention();
         }}
         onMouseUp={detectMention}
         onBlur={() => setTimeout(() => setMenu(null), 150)}
         data-placeholder={placeholder ?? 'Escreva as instruções do agente… digite @ para inserir ferramentas, status, etiquetas…'}
-        className="prompt-editor min-h-[55vh] w-full whitespace-pre-wrap break-words rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm leading-relaxed text-zinc-800 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+        className="prompt-editor min-h-[55vh] w-full whitespace-pre-wrap break-words rounded-xl border border-zinc-300 bg-white px-5 py-4 text-[15px] leading-7 text-zinc-800 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
       />
 
-      {menu && flatItems.length > 0 && (
+      {menu && rows.length > 0 && (
         <div
-          className="absolute z-50 max-h-72 w-80 overflow-y-auto rounded-xl border border-zinc-200 bg-white py-1 shadow-2xl dark:border-zinc-700 dark:bg-zinc-800"
-          style={{ top: menu.top, left: Math.min(menu.left, 360) }}
+          className="absolute z-50 w-80 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-800"
+          style={{ top: menu.top, left: Math.min(menu.left, 420) }}
         >
-          {flatItems.map((it, idx) => (
+          {(openCat && !menu.query) && (
             <button
-              key={it.type + it.label}
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
-                insertMention(it);
+                setOpenCat(null);
               }}
-              onMouseEnter={() => setActiveIdx(idx)}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
-                idx === activeIdx
-                  ? 'bg-zinc-100 dark:bg-zinc-700'
-                  : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
-              }`}
+              className="flex w-full items-center gap-1.5 border-b border-zinc-100 px-3 py-2 text-left text-xs font-medium text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-700/50"
             >
-              <span className="text-xs">{TYPE_META[it.type].emoji}</span>
-              <span className="font-medium text-zinc-800 dark:text-zinc-100">
-                {it.label}
-              </span>
-              <span className="ml-auto text-[10px] uppercase tracking-wide text-zinc-400">
-                {it.type}
-              </span>
+              <ChevronLeft className="h-3.5 w-3.5" /> {catTitle}
             </button>
-          ))}
+          )}
+          {menu.query && (
+            <div className="flex items-center gap-2 border-b border-zinc-100 px-3 py-2 text-xs text-zinc-400 dark:border-zinc-700">
+              <Search className="h-3.5 w-3.5" /> Buscando “{menu.query}”
+            </div>
+          )}
+          <div className="max-h-80 overflow-y-auto py-1">
+            {rows.map((row, idx) => {
+              const active = idx === activeIdx;
+              if (row.kind === 'cat') {
+                const g = row.group;
+                return (
+                  <button
+                    key={'cat-' + g.type}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setOpenCat(g.type);
+                    }}
+                    onMouseEnter={() => setActiveIdx(idx)}
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm ${
+                      active ? 'bg-zinc-100 dark:bg-zinc-700' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
+                    }`}
+                  >
+                    <span>{TYPE_META[g.type].emoji}</span>
+                    <span className="font-medium text-zinc-800 dark:text-zinc-100">{g.title}</span>
+                    <span className="ml-1 text-xs text-zinc-400">({g.items.length})</span>
+                    <ChevronRight className="ml-auto h-4 w-4 text-zinc-400" />
+                  </button>
+                );
+              }
+              const it = row.item;
+              return (
+                <button
+                  key={'item-' + it.type + it.label}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    insertMention(it);
+                  }}
+                  onMouseEnter={() => setActiveIdx(idx)}
+                  className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm ${
+                    active ? 'bg-zinc-100 dark:bg-zinc-700' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
+                  }`}
+                >
+                  <span className="text-xs">{TYPE_META[it.type].emoji}</span>
+                  <span className="truncate font-medium text-zinc-800 dark:text-zinc-100">{it.label}</span>
+                  {menu.query && (
+                    <span className="ml-auto text-[10px] uppercase tracking-wide text-zinc-400">{it.type}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -347,6 +353,9 @@ export function PromptMentionEditor({
           content: attr(data-placeholder);
           color: rgb(161 161 170);
           pointer-events: none;
+        }
+        .prompt-editor .inline-quote {
+          color: rgb(13 148 136);
         }
       `}</style>
     </div>

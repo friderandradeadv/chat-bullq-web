@@ -236,6 +236,7 @@ export default function AgentEditorPage() {
             onChange={setSystemPrompt}
             groups={mentionGroups}
           />
+          <CapacityMeter chars={systemPrompt.length} />
         </section>
 
         {/* Config lateral */}
@@ -370,5 +371,36 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
       {children}
     </label>
+  );
+}
+
+const CAPACITY_LIMIT = 50000;
+
+/** Nível de capacidade do agente (igual LíderHub): chars usados / limite,
+ *  com cor e alerta de sobrecarga (sinal pra dividir em subagentes). */
+function CapacityMeter({ chars }: { chars: number }) {
+  const pct = Math.min(chars / CAPACITY_LIMIT, 1);
+  const level =
+    pct < 0.6 ? 'ok' : pct < 0.85 ? 'medio' : 'alto';
+  const barColor =
+    level === 'ok' ? 'bg-emerald-500' : level === 'medio' ? 'bg-amber-500' : 'bg-red-500';
+  const textColor =
+    level === 'ok' ? 'text-zinc-500' : level === 'medio' ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="flex items-center justify-between text-[11px]">
+        <span className={textColor}>
+          {level === 'ok' && 'Capacidade saudável'}
+          {level === 'medio' && '⚠️ Prompt ficando extenso'}
+          {level === 'alto' && '🚨 Prompt sobrecarregado — divida em subagentes pra evitar alucinação'}
+        </span>
+        <span className={`font-mono ${textColor}`}>
+          {chars.toLocaleString('pt-BR')} / {CAPACITY_LIMIT.toLocaleString('pt-BR')}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct * 100}%` }} />
+      </div>
+    </div>
   );
 }
