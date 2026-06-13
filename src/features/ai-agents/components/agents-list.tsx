@@ -25,7 +25,7 @@ import { useOrgId } from '@/hooks/use-org-query-key';
 import { CreateAgentDialog } from './create-agent-dialog';
 import { EditAgentDialog } from './edit-agent-dialog';
 import { AgentNode, type AgentNodeData } from './agent-node';
-import { AgentCard } from './agent-card';
+import { AgentsFolderView } from './agents-folder-view';
 
 const NODE_WIDTH = 320;
 const NODE_HEIGHT = 160;
@@ -267,34 +267,11 @@ export function AgentsList() {
           </div>
         ) : hasAgents ? (
           view === 'list' ? (
-            <div className="space-y-6 p-6">
-              {(['ORCHESTRATOR', 'WORKER'] as const).map((kind) => {
-                const group = filtered.filter((a) => a.kind === kind);
-                if (group.length === 0) return null;
-                return (
-                  <section key={kind}>
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                      {kind === 'ORCHESTRATOR'
-                        ? `Orquestrador${group.length > 1 ? 'es' : ''}`
-                        : 'Workers'}
-                      <span className="ml-1.5 font-normal text-zinc-300 dark:text-zinc-600">
-                        {group.length}
-                      </span>
-                    </h3>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {group.map((a) => (
-                        <AgentCard
-                          key={a.id}
-                          agent={a}
-                          onClick={setEditing}
-                          onToggleActive={handleToggleActive}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
-            </div>
+            <AgentsFolderView
+              agents={filtered}
+              onEdit={setEditing}
+              onToggleActive={handleToggleActive}
+            />
           ) : (
           <ReactFlowProvider>
             <ReactFlow
