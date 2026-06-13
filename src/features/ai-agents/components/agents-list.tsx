@@ -14,7 +14,7 @@ import {
 } from '@xyflow/react';
 import dagre from '@dagrejs/dagre';
 import '@xyflow/react/dist/style.css';
-import { Bot, Plus } from 'lucide-react';
+import { Bot, Plus, LayoutGrid, Network } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   aiAgentsService,
@@ -25,6 +25,7 @@ import { useOrgId } from '@/hooks/use-org-query-key';
 import { CreateAgentDialog } from './create-agent-dialog';
 import { EditAgentDialog } from './edit-agent-dialog';
 import { AgentNode, type AgentNodeData } from './agent-node';
+import { AgentCard } from './agent-card';
 
 const NODE_WIDTH = 320;
 const NODE_HEIGHT = 160;
@@ -117,6 +118,8 @@ export function AgentsList() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<AiAgent | null>(null);
   const [deptFilter, setDeptFilter] = useState<string | null>(null);
+  // 'list' (grade de cards, acessível, padrão) | 'org' (organograma React Flow).
+  const [view, setView] = useState<'list' | 'org'>('list');
 
   const { data: agents, isLoading } = useQuery({
     queryKey: ['ai-agents', orgId],
@@ -175,22 +178,53 @@ export function AgentsList() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-        <div>
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Organograma de agentes
+            Agentes
           </h2>
           <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-            Hierarquia matricial — quem reporta a quem, agrupado por departamento
+            {view === 'list'
+              ? 'Crie, organize e ative seus agentes de IA'
+              : 'Organograma — quem reporta a quem, agrupado por departamento'}
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Novo agente
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {/* Seletor de visão: Lista (cards) × Organograma. */}
+          <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-800">
+            <button
+              onClick={() => setView('list')}
+              title="Lista"
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                view === 'list'
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Lista
+            </button>
+            <button
+              onClick={() => setView('org')}
+              title="Organograma"
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                view === 'org'
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <Network className="h-4 w-4" />
+              Organograma
+            </button>
+          </div>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Novo agente
+          </button>
+        </div>
       </div>
 
       {departments.length > 0 && (
@@ -232,6 +266,36 @@ export function AgentsList() {
             <div className="h-10 w-10 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
           </div>
         ) : hasAgents ? (
+          view === 'list' ? (
+            <div className="space-y-6 p-6">
+              {(['ORCHESTRATOR', 'WORKER'] as const).map((kind) => {
+                const group = filtered.filter((a) => a.kind === kind);
+                if (group.length === 0) return null;
+                return (
+                  <section key={kind}>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                      {kind === 'ORCHESTRATOR'
+                        ? `Orquestrador${group.length > 1 ? 'es' : ''}`
+                        : 'Workers'}
+                      <span className="ml-1.5 font-normal text-zinc-300 dark:text-zinc-600">
+                        {group.length}
+                      </span>
+                    </h3>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {group.map((a) => (
+                        <AgentCard
+                          key={a.id}
+                          agent={a}
+                          onClick={setEditing}
+                          onToggleActive={handleToggleActive}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
           <ReactFlowProvider>
             <ReactFlow
               nodes={nodes}
@@ -264,6 +328,7 @@ export function AgentsList() {
               />
             </ReactFlow>
           </ReactFlowProvider>
+          )
         ) : (
           <div className="flex h-full flex-col items-center justify-center p-10">
             <div className="rounded-xl border-2 border-dashed border-zinc-200 p-16 dark:border-zinc-800">
