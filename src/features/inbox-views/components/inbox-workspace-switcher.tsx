@@ -189,12 +189,18 @@ export function InboxWorkspaceSwitcher() {
 
   return (
     <Popover className="relative">
-      <PopoverButton className="-ml-1.5 flex max-w-[200px] items-center gap-1.5 rounded-lg px-2 py-1 text-left outline-none transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
-        <ActiveIcon className={`size-[18px] shrink-0 ${activeColor}`} />
-        <span className="truncate text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">
-          {active ? active.name : 'Conversas'}
+      <PopoverButton className="-ml-1 flex max-w-[220px] items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-left outline-none transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800">
+        <ActiveIcon className={`size-[18px] shrink-0 ${active ? activeColor : 'text-primary'}`} />
+        <span className="truncate text-[14px] font-semibold text-zinc-900 dark:text-zinc-100">
+          {active ? active.name : 'Workspaces'}
         </span>
-        {active && <CountBadge id={active.id} />}
+        {active ? (
+          <CountBadge id={active.id} />
+        ) : (
+          <span className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            todas
+          </span>
+        )}
         <ChevronDown className="size-4 shrink-0 text-zinc-400" />
       </PopoverButton>
       <PopoverPanel anchor="bottom start" transition className={panelClass}>
