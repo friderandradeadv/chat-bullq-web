@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ReactFlow,
@@ -23,7 +24,6 @@ import {
 } from '../services/ai-agents.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { CreateAgentDialog } from './create-agent-dialog';
-import { EditAgentDialog } from './edit-agent-dialog';
 import { AgentNode, type AgentNodeData } from './agent-node';
 import { AgentsFolderView } from './agents-folder-view';
 
@@ -114,9 +114,10 @@ function layoutOrganogram(agents: AiAgent[]): {
 
 export function AgentsList() {
   const orgId = useOrgId();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
-  const [editing, setEditing] = useState<AiAgent | null>(null);
+  const openEditor = (agent: AiAgent) => router.push(`/ai-agents/${agent.id}`);
   const [deptFilter, setDeptFilter] = useState<string | null>(null);
   // 'list' (grade de cards, acessível, padrão) | 'org' (organograma React Flow).
   const [view, setView] = useState<'list' | 'org'>('list');
@@ -165,7 +166,7 @@ export function AgentsList() {
         ...n,
         data: {
           ...n.data,
-          onClick: setEditing,
+          onClick: openEditor,
           onToggleActive: handleToggleActive,
         },
       })),
@@ -269,7 +270,7 @@ export function AgentsList() {
           view === 'list' ? (
             <AgentsFolderView
               agents={filtered}
-              onEdit={setEditing}
+              onEdit={openEditor}
               onToggleActive={handleToggleActive}
             />
           ) : (
@@ -333,11 +334,6 @@ export function AgentsList() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreated={refresh}
-      />
-      <EditAgentDialog
-        agent={editing}
-        onClose={() => setEditing(null)}
-        onSaved={refresh}
       />
     </div>
   );
