@@ -37,6 +37,7 @@ import {
   inboxViewsService,
   type InboxView,
 } from '@/features/inbox-views/services/inbox-views.service';
+import { InboxWorkspaceSwitcher } from '@/features/inbox-views/components/inbox-workspace-switcher';
 import { channelsService } from '@/features/channels/services/channels.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
@@ -731,7 +732,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       {/* Cabeçalho "Conversas" — título + ⋮ menu + nova conversa (estilo LíderHub:
           tira essas ações da linha das abas pra elas ficarem limpas e largas). */}
       <div className="flex items-center justify-between border-b border-zinc-200/80 px-3.5 py-3 dark:border-zinc-800">
-        <h2 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">Conversas</h2>
+        <InboxWorkspaceSwitcher />
         <div className="flex items-center gap-0.5">
           {/* Menu (3 pontos) — Selecionar conversas */}
           <div className="relative">
