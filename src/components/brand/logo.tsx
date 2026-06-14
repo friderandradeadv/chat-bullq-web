@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
  * manter a marca exata (com o vermelho) legível — sem inverter cor.
  */
 const RATIO = 917 / 272;
-const HEIGHTS: Record<'sm' | 'md' | 'lg', number> = { sm: 44, md: 56, lg: 76 };
+const HEIGHTS: Record<'sm' | 'md' | 'lg', number> = { sm: 60, md: 72, lg: 92 };
 
 export function Logo({
   className,

@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Trash2, Plus, X, Loader2, FlaskConical } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Trash2, Plus, X, Loader2, FlaskConical, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   aiAgentsService,
   CURATED_MODELS,
   DEPARTMENTS,
   type AgentMode,
+  type AiAgent,
 } from '@/features/ai-agents/services/ai-agents.service';
 import { agentFoldersService } from '@/features/ai-agents/services/agent-folders.service';
 import { channelsService } from '@/features/channels/services/channels.service';
@@ -118,6 +119,7 @@ export default function AgentEditorPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const orgId = useOrgId();
+  const qc = useQueryClient();
 
   const { data: agent, isLoading, refetch } = useQuery({
     queryKey: ['ai-agent', id],
@@ -140,6 +142,7 @@ export default function AgentEditorPage() {
   const [newChannelId, setNewChannelId] = useState('');
   const [newChannelMode, setNewChannelMode] = useState<AgentMode>('AUTONOMOUS');
   const [showTest, setShowTest] = useState(false);
+  const [creatingSub, setCreatingSub] = useState(false);
 
   useEffect(() => {
     if (!agent) return;
@@ -233,6 +236,37 @@ export default function AgentEditorPage() {
       toast.error(err?.response?.data?.message || 'Erro ao salvar');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // "Adicionar agente" no grupo (estilo LíderHub): cria um MEMBRO (subagente
+  // WORKER) sob o agente inicial do grupo, INATIVO e sem canal (o backend não
+  // auto-vincula subagentes), e abre o editor dele.
+  const handleAddSubagent = async () => {
+    if (!agent) return;
+    const root =
+      agent.parentAgentId
+        ? (allAgents ?? []).find((a) => a.id === agent.parentAgentId) ?? agent
+        : agent;
+    setCreatingSub(true);
+    try {
+      const created = await aiAgentsService.create({
+        name: 'Novo subagente',
+        kind: 'WORKER',
+        systemPrompt:
+          'Você é um especialista. Descreva aqui o papel deste subagente e quando o agente inicial deve delegar pra ele.',
+        parentAgentId: root.id,
+        folderId: root.folderId ?? null,
+        isActive: false,
+        modelId: agent.modelId,
+      });
+      toast.success('Subagente criado');
+      qc.invalidateQueries({ queryKey: ['ai-agents'] });
+      router.push(`/ai-agents/${created.id}`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao criar subagente');
+    } finally {
+      setCreatingSub(false);
     }
   };
 
@@ -353,8 +387,17 @@ export default function AgentEditorPage() {
         />
       )}
 
-      {/* Corpo: prompt (esquerda) + config (direita) */}
-      <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto p-5 lg:grid-cols-[1fr_360px]">
+      {/* Corpo: grupo de agentes (esq) + prompt (centro) + config (dir) */}
+      <div className="grid flex-1 grid-cols-1 gap-5 overflow-y-auto p-5 lg:grid-cols-[250px_1fr_340px]">
+        {/* Grupo: AGENTE INICIAL + MEMBROS (subagentes) — estilo LíderHub */}
+        <AgentGroupPanel
+          agent={agent}
+          allAgents={allAgents ?? []}
+          creating={creatingSub}
+          onAdd={handleAddSubagent}
+          onOpen={(aid) => router.push(`/ai-agents/${aid}`)}
+        />
+
         {/* Prompt */}
         <section className="min-w-0">
           <div className="mb-2 flex items-center justify-between">
@@ -506,6 +549,93 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** Painel do GRUPO (estilo LíderHub): AGENTE INICIAL (orquestrador raiz) +
+ *  MEMBROS (subagentes), navegável, com "Adicionar agente" pra criar membro. */
+function AgentGroupPanel({
+  agent,
+  allAgents,
+  creating,
+  onAdd,
+  onOpen,
+}: {
+  agent: AiAgent;
+  allAgents: AiAgent[];
+  creating: boolean;
+  onAdd: () => void;
+  onOpen: (id: string) => void;
+}) {
+  // Raiz do grupo = o pai (se este for membro) ou o próprio (se for o inicial).
+  const root = agent.parentAgentId
+    ? allAgents.find((a) => a.id === agent.parentAgentId) ?? agent
+    : agent;
+  const members = allAgents
+    .filter((a) => a.parentAgentId === root.id)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  const Row = ({ a }: { a: AiAgent }) => {
+    const current = a.id === agent.id;
+    const initials =
+      a.name.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || 'AG';
+    return (
+      <button
+        type="button"
+        onClick={() => !current && onOpen(a.id)}
+        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left ${
+          current
+            ? 'bg-primary/10 ring-1 ring-primary/30'
+            : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+        }`}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/70 to-primary text-[11px] font-semibold text-white">
+          {initials}
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{a.name}</span>
+          <span className="flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full ${a.isActive ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+            <span className="text-[11px] text-zinc-400">{a.kind === 'ORCHESTRATOR' ? 'Agente inicial' : 'Membro'}</span>
+          </span>
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <aside className="space-y-3 lg:sticky lg:top-0 lg:self-start">
+      <div>
+        <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Agente inicial</p>
+        <Row a={root} />
+      </div>
+      <div>
+        <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Membros ({members.length})</p>
+        {members.length === 0 ? (
+          <p className="px-2.5 py-1 text-xs italic text-zinc-400">Sem membros ainda.</p>
+        ) : (
+          <div className="space-y-0.5">
+            {members.map((m) => (
+              <Row key={m.id} a={m} />
+            ))}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={creating}
+        className="flex w-full items-center gap-2.5 rounded-lg border border-dashed border-zinc-300 px-2.5 py-2.5 text-left text-sm text-zinc-600 hover:border-primary/50 hover:bg-primary/5 hover:text-primary disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+          {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+        </span>
+        <span className="flex flex-col">
+          <span className="font-medium">Adicionar agente</span>
+          <span className="text-[11px] text-zinc-400">Criar novo neste grupo</span>
+        </span>
+      </button>
+    </aside>
   );
 }
 
