@@ -2,16 +2,15 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 /**
- * Logomarca OFICIAL "Frider Andrade — Advogados" (arquivo em
- * public/frider-andrade-logo.png, fundo transparente, 917×272). Horizontal:
- * "FriderAndrade" + quadrado vermelho + "ADVOGADOS" espaçado embaixo.
- *
- * O wordmark é escuro, então no modo claro fica perfeito sobre a sidebar
- * branca. No modo escuro aplicamos uma área de respiro branca (safe-area) pra
- * manter a marca exata (com o vermelho) legível — sem inverter cor.
+ * Logomarca OFICIAL "Frider Andrade — Advogados" (horizontal, fundo
+ * transparente). Duas variantes:
+ *  - modo CLARO: wordmark escuro (public/frider-andrade-logo.png)
+ *  - modo ESCURO: wordmark claro/cinza (public/frider-andrade-logo-dark.png)
+ * Troca por CSS (`dark:`), sem hack de fundo branco.
  */
-const RATIO = 917 / 272;
 const HEIGHTS: Record<'sm' | 'md' | 'lg', number> = { sm: 60, md: 72, lg: 92 };
+const RATIO_LIGHT = 917 / 272;
+const RATIO_DARK = 907 / 275;
 
 export function Logo({
   className,
@@ -21,18 +20,26 @@ export function Logo({
   size?: 'sm' | 'md' | 'lg';
 }) {
   const h = HEIGHTS[size];
-  const w = Math.round(h * RATIO);
   return (
-    <Image
-      src="/frider-andrade-logo.png"
-      alt="Frider Andrade Advogados"
-      width={w}
-      height={h}
-      priority
-      className={cn(
-        'select-none object-contain dark:rounded-md dark:bg-white dark:px-2 dark:py-1',
-        className,
-      )}
-    />
+    <>
+      {/* Modo claro: wordmark escuro */}
+      <Image
+        src="/frider-andrade-logo.png"
+        alt="Frider Andrade Advogados"
+        width={Math.round(h * RATIO_LIGHT)}
+        height={h}
+        priority
+        className={cn('select-none object-contain dark:hidden', className)}
+      />
+      {/* Modo escuro: wordmark claro/cinza */}
+      <Image
+        src="/frider-andrade-logo-dark.png"
+        alt="Frider Andrade Advogados"
+        width={Math.round(h * RATIO_DARK)}
+        height={h}
+        priority
+        className={cn('hidden select-none object-contain dark:block', className)}
+      />
+    </>
   );
 }
