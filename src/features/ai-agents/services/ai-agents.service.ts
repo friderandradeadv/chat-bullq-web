@@ -165,6 +165,17 @@ export const aiAgentsService = {
     return data.data ?? data;
   },
 
+  /** Cria um agente a partir de uma descrição em linguagem natural (a IA gera
+   *  o prompt completo + uso das ferramentas). Nasce INATIVO e sem canal. */
+  async generate(input: {
+    description: string;
+    kind?: AgentKind;
+    folderId?: string | null;
+  }): Promise<AiAgent> {
+    const { data } = await api.post('/ai-agents/generate', input);
+    return data.data ?? data;
+  },
+
   async update(id: string, input: Partial<CreateAgentInput>): Promise<AiAgent> {
     const { data } = await api.patch(`/ai-agents/${id}`, input);
     return data.data ?? data;

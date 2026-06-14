@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import dagre from '@dagrejs/dagre';
 import '@xyflow/react/dist/style.css';
-import { Bot, Plus, LayoutGrid, Network } from 'lucide-react';
+import { Bot, Plus, LayoutGrid, Network, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   aiAgentsService,
@@ -24,6 +24,7 @@ import {
 } from '../services/ai-agents.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { CreateAgentDialog } from './create-agent-dialog';
+import { GenerateAgentDialog } from './generate-agent-dialog';
 import { AgentNode, type AgentNodeData } from './agent-node';
 import { AgentsFolderView } from './agents-folder-view';
 
@@ -117,6 +118,7 @@ export function AgentsList() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
   const openEditor = (agent: AiAgent) => router.push(`/ai-agents/${agent.id}`);
   const [deptFilter, setDeptFilter] = useState<string | null>(null);
   // 'list' (grade de cards, acessível, padrão) | 'org' (organograma React Flow).
@@ -218,6 +220,13 @@ export function AgentsList() {
               Organograma
             </button>
           </div>
+          <button
+            onClick={() => setShowGenerate(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/15"
+          >
+            <Sparkles className="h-4 w-4" />
+            Criar com IA
+          </button>
           <button
             onClick={() => setShowCreate(true)}
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
@@ -334,6 +343,16 @@ export function AgentsList() {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreated={refresh}
+      />
+
+      <GenerateAgentDialog
+        open={showGenerate}
+        onClose={() => setShowGenerate(false)}
+        onCreated={(agent) => {
+          setShowGenerate(false);
+          refresh();
+          openEditor(agent);
+        }}
       />
     </div>
   );
