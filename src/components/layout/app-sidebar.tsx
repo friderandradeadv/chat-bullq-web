@@ -123,9 +123,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      {/* Marca do escritório — canto superior esquerdo */}
-      <SidebarHeader>
-        <Link href="/dashboard" className="block px-1 py-1.5">
+      {/* Marca do escritório — canto superior esquerdo (caixa justa na logo) */}
+      <SidebarHeader className="py-2.5">
+        <Link href="/dashboard" className="block">
           <Logo size="sm" />
         </Link>
       </SidebarHeader>
