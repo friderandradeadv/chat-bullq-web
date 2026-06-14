@@ -38,4 +38,10 @@ export const agentFoldersService = {
   async remove(id: string): Promise<void> {
     await api.delete(`/agent-folders/${id}`);
   },
+
+  /** Clona a pasta como modelo (nova pasta + cópias dos agentes, inativos). */
+  async clone(id: string, name?: string): Promise<{ folder: AgentFolder; agents: number }> {
+    const { data } = await api.post(`/agent-folders/${id}/clone`, name ? { name } : {});
+    return data.data ?? data;
+  },
 };

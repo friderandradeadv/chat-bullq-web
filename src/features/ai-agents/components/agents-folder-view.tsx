@@ -13,6 +13,7 @@ import {
   Pencil,
   Trash2,
   FolderInput,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
@@ -134,6 +135,25 @@ export function AgentsFolderView({
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Erro ao excluir');
+    }
+  };
+
+  // "Usar como modelo": clona a pasta + todos os agentes (inativos), pra
+  // partir de um pipeline pronto. Base da biblioteca de templates.
+  const [cloningId, setCloningId] = useState<string | null>(null);
+  const cloneFolder = async (f: AgentFolder) => {
+    setCloningId(f.id);
+    try {
+      const res = await agentFoldersService.clone(f.id);
+      toast.success(`Modelo instalado: "${res.folder.name}" (${res.agents} agentes)`);
+      refresh();
+    } catch (e) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        (e instanceof Error ? e.message : 'Erro ao usar o modelo');
+      toast.error(msg);
+    } finally {
+      setCloningId(null);
     }
   };
 
@@ -307,6 +327,15 @@ export function AgentsFolderView({
                             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
                           >
                             <Pencil className="h-3.5 w-3.5" /> Renomear
+                          </button>
+                        </MenuItem>
+                        <MenuItem>
+                          <button
+                            onClick={() => cloneFolder(folder)}
+                            disabled={cloningId === folder.id}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          >
+                            <Copy className="h-3.5 w-3.5" /> Usar como modelo
                           </button>
                         </MenuItem>
                         <MenuItem>
