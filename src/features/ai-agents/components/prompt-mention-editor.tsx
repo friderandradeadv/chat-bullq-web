@@ -293,6 +293,7 @@ interface Props {
 export function PromptMentionEditor({ value, onChange, groups, placeholder }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastTextRef = useRef<string>('');
+  const lastLookupRef = useRef<Map<string, MentionType> | null>(null);
   const [menu, setMenu] = useState<{ top: number; left: number; query: string } | null>(null);
   const [openCat, setOpenCat] = useState<MentionType | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -342,10 +343,17 @@ export function PromptMentionEditor({ value, onChange, groups, placeholder }: Pr
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
-    if (value !== lastTextRef.current) {
+    const valueChanged = value !== lastTextRef.current;
+    // Quando os labels de @ chegam async (ex: as tools do backend), `lookup`
+    // muda mas `value` não — sem isso os `@tool` ficavam texto puro em vez de
+    // virar chip. Re-renderiza nesse caso, mas só se o editor não estiver em
+    // foco, pra não atropelar o cursor de quem está digitando.
+    const lookupChanged = lastLookupRef.current !== lookup;
+    if (valueChanged || (lookupChanged && document.activeElement !== el)) {
       el.innerHTML = textToHtml(value, lookup) || '';
       lastTextRef.current = value;
     }
+    lastLookupRef.current = lookup;
   }, [value, lookup]);
 
   // Lista visível no dropdown: categorias (nível 1) OU itens (busca / categoria aberta).

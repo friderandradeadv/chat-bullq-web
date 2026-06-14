@@ -5,8 +5,6 @@ import {
   LayoutDashboard,
   Settings,
   LogOut,
-  ChevronsUpDown,
-  Building2,
   ChevronUp,
   Sun,
   Moon,
@@ -117,48 +115,19 @@ function NavItem({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AppSidebar() {
-  const { user, organizations, activeOrgId, setActiveOrg, logout } = useAuthStore();
-  const activeOrg = organizations.find((o) => o.id === activeOrgId);
+  const { user, logout } = useAuthStore();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const isDark = mounted && resolvedTheme === 'dark';
 
-  const handleOrgSwitch = (orgId: string) => {
-    setActiveOrg(orgId);
-    window.location.reload();
-  };
-
   return (
     <Sidebar>
       {/* Marca do escritório — canto superior esquerdo */}
       <SidebarHeader>
-        <div className="px-1 pb-1 pt-0.5">
+        <Link href="/dashboard" className="block px-1 py-1.5">
           <Logo size="sm" />
-        </div>
-
-        {/* Org selector */}
-        <Dropdown>
-          <DropdownButton className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm/6 font-semibold text-zinc-900 hover:bg-zinc-950/5 dark:text-white dark:hover:bg-white/5">
-            <Avatar
-              initials={activeOrg?.name?.slice(0, 2).toUpperCase()}
-              className="size-6 bg-primary text-[10px] text-primary-foreground"
-              square
-            />
-            <span className="min-w-0 flex-1 truncate">{activeOrg?.name ?? 'Organização'}</span>
-            <ChevronsUpDown className="ml-auto size-4 shrink-0 text-zinc-500" />
-          </DropdownButton>
-          {organizations.length > 1 && (
-            <DropdownMenu anchor="bottom start" className="min-w-56">
-              {organizations.map((org) => (
-                <DropdownItem key={org.id} onClick={() => handleOrgSwitch(org.id)}>
-                  <Building2 />
-                  <DropdownLabel>{org.name}</DropdownLabel>
-                </DropdownItem>
-              ))}
-            </DropdownMenu>
-          )}
-        </Dropdown>
+        </Link>
       </SidebarHeader>
 
       <SidebarBody>
