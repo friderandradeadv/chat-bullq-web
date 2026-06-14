@@ -123,8 +123,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      {/* Marca do escritório — canto superior esquerdo (caixa justa na logo) */}
-      <SidebarHeader className="py-2.5">
+      {/* Marca do escritório — centralizada, caixa justa na logo */}
+      <SidebarHeader className="items-center py-2.5">
         <Link href="/dashboard" className="block">
           <Logo size="sm" />
         </Link>
