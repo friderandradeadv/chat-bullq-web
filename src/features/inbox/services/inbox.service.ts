@@ -403,6 +403,10 @@ export const inboxService = {
     await Promise.allSettled(ids.map((id) => api.post(`/conversations/${id}/archive`)));
   },
 
+  async bulkUnarchive(ids: string[]): Promise<void> {
+    await Promise.allSettled(ids.map((id) => api.post(`/conversations/${id}/unarchive`)));
+  },
+
   async updateConversation(
     conversationId: string,
     patch: { subject?: string | null; departmentId?: string | null; status?: string },

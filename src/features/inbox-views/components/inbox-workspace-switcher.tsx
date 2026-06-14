@@ -8,7 +8,7 @@
  * Trocar seta `?view=<id>` (a ConversationList já busca por isso).
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
@@ -149,6 +149,9 @@ function ViewRow({
   );
 }
 
+const REMEMBER_KEY = 'inbox-last-view';
+const ALL_SENTINEL = '__all__';
+
 export function InboxWorkspaceSwitcher() {
   const searchParams = useSearchParams();
   const qc = useQueryClient();
@@ -173,8 +176,36 @@ export function InboxWorkspaceSwitcher() {
   // "trava" (Matheus: "não consigo voltar pro escritório"). Recarregar já na
   // área certa é 100% confiável e combina com a ideia de "entrar no workspace".
   const go = (id: string | null) => {
+    // Lembra a última workspace escolhida (inclui "Todas" = sentinela).
+    try {
+      localStorage.setItem(REMEMBER_KEY, id ?? ALL_SENTINEL);
+    } catch {
+      /* noop */
+    }
     window.location.href = id ? `/inbox?view=${id}` : '/inbox';
   };
+
+  // Default ao abrir /inbox sem ?view: vai pra ÚLTIMA workspace que o usuário
+  // deixou; se nunca escolheu, vai pra "Escritório". Se ele escolheu "Todas" de
+  // propósito, respeita (não redireciona).
+  useEffect(() => {
+    if (activeViewId || views.length === 0) return;
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(REMEMBER_KEY);
+    } catch {
+      /* noop */
+    }
+    if (saved === ALL_SENTINEL) return;
+    if (saved && views.some((v) => v.id === saved)) {
+      window.location.href = `/inbox?view=${saved}`;
+      return;
+    }
+    if (!saved) {
+      const esc = views.find((v) => /escrit[óo]rio/i.test(v.name));
+      if (esc) window.location.href = `/inbox?view=${esc.id}`;
+    }
+  }, [activeViewId, views]);
 
   const handleDelete = async (view: InboxView) => {
     if (!confirm(`Excluir a área "${view.name}"? As conversas não são apagadas — só esta visualização.`)) return;

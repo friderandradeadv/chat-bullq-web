@@ -43,7 +43,8 @@ interface InboxFilterStore {
 export const useInboxFilterStore = create<InboxFilterStore>((set) => ({
   search: '',
   scope: 'ALL',
-  statusTab: 'ALL',
+  // Abre nas conversas ATIVAS (não nas pendentes/todas) por padrão.
+  statusTab: 'OPEN',
   selectedChannelId: null,
   unreadOnly: false,
   archivedOnly: false,

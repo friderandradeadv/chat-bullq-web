@@ -13,6 +13,7 @@ import {
   Loader2,
   KanbanSquare,
   Archive,
+  ArchiveRestore,
   Inbox as InboxIcon,
   Filter,
   Mail,
@@ -30,6 +31,7 @@ import { toast } from 'sonner';
 import { tagsService, type Tag } from '@/features/settings/services/tags.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
+import { useInboxFilterStore } from '../stores/inbox-filter-store';
 import { pipelinesService } from '@/features/pipelines/services/pipelines.service';
 import { inboxViewsService, type InboxView } from '@/features/inbox-views/services/inbox-views.service';
 import { inboxService, type Conversation } from '../services/inbox.service';
@@ -65,6 +67,7 @@ export function BulkActionsMenu({
 }: BulkActionsMenuProps) {
   const qc = useQueryClient();
   const orgId = useOrgId();
+  const archivedOnly = useInboxFilterStore((s) => s.archivedOnly);
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>('root');
@@ -227,6 +230,8 @@ export function BulkActionsMenu({
 
   const archiveAll = () =>
     run('archive', () => inboxService.bulkArchive(conversationIds), `${count} arquivada${plural(count)}`);
+  const unarchiveAll = () =>
+    run('unarchive', () => inboxService.bulkUnarchive(conversationIds), `${count} desarquivada${plural(count)}`);
   const assumeAll = () =>
     run('assume', () => inboxService.bulkAssignToMe(conversationIds), `${count} assumida${plural(count)}`);
   const closeAll = () =>
@@ -355,10 +360,17 @@ export function BulkActionsMenu({
                 </button>
 
                 {divider}
-                <button onClick={archiveAll} disabled={busy === 'archive'} className={itemClass}>
-                  {busy === 'archive' ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" /> : <Archive className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />}
-                  <span className="flex-1">Arquivar</span>
-                </button>
+                {archivedOnly ? (
+                  <button onClick={unarchiveAll} disabled={busy === 'unarchive'} className={itemClass}>
+                    {busy === 'unarchive' ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" /> : <ArchiveRestore className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />}
+                    <span className="flex-1">Desarquivar</span>
+                  </button>
+                ) : (
+                  <button onClick={archiveAll} disabled={busy === 'archive'} className={itemClass}>
+                    {busy === 'archive' ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" /> : <Archive className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />}
+                    <span className="flex-1">Arquivar</span>
+                  </button>
+                )}
               </div>
             )}
 
