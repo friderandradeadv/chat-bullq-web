@@ -116,10 +116,24 @@ export interface UpsertSkillInput {
 
 // ─── Service ──────────────────────────────────────────────────────
 
+/** Ferramenta built-in (sempre disponível por kind) — alimenta o menu @ do prompt. */
+export interface BuiltinTool {
+  /** Nome real (o que o LLM enxerga e o que vira o chip @). */
+  name: string;
+  description: string;
+  /** Kinds de agente que podem usá-la (ORCHESTRATOR/WORKER). */
+  kinds: ('ORCHESTRATOR' | 'WORKER')[];
+}
+
 export const aiCatalogService = {
   // Tools
   async listTools(): Promise<AiTool[]> {
     const { data } = await api.get('/ai-catalog/tools');
+    return data.data ?? data;
+  },
+  /** Built-in tools para o menu @ (filtra pelo kind do agente no front). */
+  async listBuiltinTools(): Promise<BuiltinTool[]> {
+    const { data } = await api.get('/ai-catalog/builtin-tools');
     return data.data ?? data;
   },
   async findTool(id: string): Promise<AiTool> {

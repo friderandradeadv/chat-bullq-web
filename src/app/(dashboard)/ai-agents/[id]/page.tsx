@@ -24,15 +24,29 @@ import { tagsService } from '@/features/settings/services/tags.service';
 import { departmentsService } from '@/features/settings/services/departments.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { quickRepliesService } from '@/features/settings/services/quick-replies.service';
+import { aiCatalogService } from '@/features/ai-agents/services/ai-catalog.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
-// Ferramentas builtin que não têm um grupo próprio (status/etiqueta/etc.).
-const TOOL_MENTIONS = [
-  'Salvar nome',
-  'Transferir para humano',
-  'Delegar para especialista',
-  'Notificar responsável',
-];
+// Rótulo curto em PT-BR por tool (o chip continua sendo o NOME REAL — é o que
+// o LLM enxerga). Tool fora do mapa cai no fallback (descrição do backend).
+const TOOL_HINTS: Record<string, string> = {
+  replyToConversation: 'Responder o cliente',
+  transferToHuman: 'Transferir pra atendente humano (fila)',
+  tagConversation: 'Aplicar etiqueta na conversa',
+  listAvailableAgents: 'Listar agentes disponíveis',
+  delegateToAgent: 'Delegar pra um especialista',
+  handBackToOrchestrator: 'Devolver pro orquestrador',
+  lookupOffering: 'Buscar preço/condições oficiais',
+  checkBonusEligibility: 'Conferir elegibilidade de bônus',
+  checkMembersAccess: 'Conferir acesso na área de membros',
+  setContactStatus: 'Mudar status do contato no funil',
+  setDepartment: 'Definir departamento da conversa',
+  assignResponsible: 'Atribuir responsável',
+  saveContactName: 'Salvar o nome do contato',
+  sendQuickReply: 'Enviar mensagem rápida',
+  notifyMember: 'Notificar um membro da equipe',
+  disableAi: 'Desativar a IA na conversa',
+};
 
 export default function AgentEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -84,17 +98,31 @@ export default function AgentEditorPage() {
   const { data: channels } = useQuery({ queryKey: ['channels'], queryFn: () => channelsService.list() });
   const { data: folders } = useQuery({ queryKey: ['agent-folders'], queryFn: () => agentFoldersService.list() });
   const { data: allAgents } = useQuery({ queryKey: ['ai-agents', orgId], queryFn: () => aiAgentsService.list() });
+  const { data: builtinTools } = useQuery({ queryKey: ['builtin-tools'], queryFn: () => aiCatalogService.listBuiltinTools() });
+
+  // Tools disponíveis pro kind do agente (ORCHESTRATOR/WORKER). Chip = nome
+  // real da tool (o LLM mapeia pelo nome); hint = rótulo curto PT-BR.
+  const toolItems = useMemo(() => {
+    const kind = agent?.kind;
+    return (builtinTools ?? [])
+      .filter((t) => !kind || t.kinds.includes(kind as 'ORCHESTRATOR' | 'WORKER'))
+      .map((t) => ({
+        type: 'tool' as const,
+        label: t.name,
+        hint: TOOL_HINTS[t.name] ?? t.description.slice(0, 60),
+      }));
+  }, [builtinTools, agent?.kind]);
 
   const mentionGroups: MentionGroup[] = useMemo(
     () => [
-      { type: 'tool', title: 'Ferramentas', items: TOOL_MENTIONS.map((l) => ({ type: 'tool' as const, label: l })) },
+      { type: 'tool', title: 'Ferramentas', items: toolItems },
       { type: 'status', title: 'Status do funil', items: (statuses ?? []).map((s) => ({ type: 'status' as const, label: s.name })) },
       { type: 'etiqueta', title: 'Etiquetas', items: (tags ?? []).map((t) => ({ type: 'etiqueta' as const, label: t.name })) },
       { type: 'departamento', title: 'Departamentos', items: (departments ?? []).map((d) => ({ type: 'departamento' as const, label: d.name })) },
       { type: 'responsavel', title: 'Responsáveis', items: (members ?? []).map((m) => ({ type: 'responsavel' as const, label: m.user.name })) },
       { type: 'mensagem', title: 'Mensagens rápidas', items: (quickReplies ?? []).map((q) => ({ type: 'mensagem' as const, label: q.shortcut })) },
     ],
-    [statuses, tags, departments, members, quickReplies],
+    [toolItems, statuses, tags, departments, members, quickReplies],
   );
 
   const handleSave = async () => {

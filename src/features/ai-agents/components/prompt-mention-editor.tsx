@@ -709,9 +709,14 @@ export function PromptMentionEditor({ value, onChange, groups, placeholder }: Pr
                   }`}
                 >
                   <span className="text-xs">{TYPE_META[it.type].emoji}</span>
-                  <span className="truncate font-medium text-zinc-800 dark:text-zinc-100">{it.label}</span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium text-zinc-800 dark:text-zinc-100">{it.label}</span>
+                    {it.hint && (
+                      <span className="truncate text-[11px] text-zinc-400">{it.hint}</span>
+                    )}
+                  </span>
                   {menu.query && (
-                    <span className="ml-auto text-[10px] uppercase tracking-wide text-zinc-400">{it.type}</span>
+                    <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-zinc-400">{it.type}</span>
                   )}
                 </button>
               );

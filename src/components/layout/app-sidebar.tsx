@@ -29,6 +29,7 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/stores/auth-store';
 import { Avatar } from '@/components/ui/avatar';
+import { Logo } from '@/components/brand/logo';
 import {
   Sidebar,
   SidebarHeader,
@@ -130,8 +131,13 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      {/* Org selector */}
+      {/* Marca do escritório — canto superior esquerdo */}
       <SidebarHeader>
+        <div className="px-1 pb-1 pt-0.5">
+          <Logo size="sm" />
+        </div>
+
+        {/* Org selector */}
         <Dropdown>
           <DropdownButton className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm/6 font-semibold text-zinc-900 hover:bg-zinc-950/5 dark:text-white dark:hover:bg-white/5">
             <Avatar
