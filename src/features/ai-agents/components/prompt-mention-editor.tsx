@@ -30,6 +30,8 @@ import {
 
 export type MentionType =
   | 'tool'
+  | 'customtool'
+  | 'zapsign'
   | 'status'
   | 'etiqueta'
   | 'departamento'
@@ -53,6 +55,8 @@ export interface MentionGroup {
 // (azul, igual ao LíderHub) — ver CHIP_STYLE.
 const TYPE_META: Record<MentionType, { emoji: string }> = {
   tool: { emoji: '🛠️' },
+  customtool: { emoji: '🔌' },
+  zapsign: { emoji: '📄' },
   status: { emoji: '🟢' },
   etiqueta: { emoji: '🏷️' },
   departamento: { emoji: '🏢' },

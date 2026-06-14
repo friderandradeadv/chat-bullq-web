@@ -27,6 +27,7 @@ import { departmentsService } from '@/features/settings/services/departments.ser
 import { membersService } from '@/features/settings/services/members.service';
 import { quickRepliesService } from '@/features/settings/services/quick-replies.service';
 import { aiCatalogService } from '@/features/ai-agents/services/ai-catalog.service';
+import { zapSignService } from '@/features/settings/services/zapsign.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
 // Rótulo curto em PT-BR por tool (o chip continua sendo o NOME REAL — é o que
@@ -48,6 +49,7 @@ const TOOL_HINTS: Record<string, string> = {
   sendQuickReply: 'Enviar mensagem rápida',
   notifyMember: 'Notificar um membro da equipe',
   disableAi: 'Desativar a IA na conversa',
+  generateZapSignDocument: 'Gera contrato/documento via ZapSign',
 };
 
 // Variáveis da empresa (injetadas em runtime). Aparecem no menu @ em "Dados
@@ -163,6 +165,10 @@ export default function AgentEditorPage() {
   const { data: folders } = useQuery({ queryKey: ['agent-folders'], queryFn: () => agentFoldersService.list() });
   const { data: allAgents } = useQuery({ queryKey: ['ai-agents', orgId], queryFn: () => aiAgentsService.list() });
   const { data: builtinTools } = useQuery({ queryKey: ['builtin-tools'], queryFn: () => aiCatalogService.listBuiltinTools() });
+  const { data: customTools } = useQuery({ queryKey: ['custom-tools'], queryFn: () => aiCatalogService.listTools() });
+  // Templates ZapSign → categoria "Zapsign" do menu @ (igual ao LíderHub).
+  // retry:false porque getTemplates lança se a integração não estiver ativa.
+  const { data: zapTemplates } = useQuery({ queryKey: ['zapsign-templates'], queryFn: () => zapSignService.getTemplates(), retry: false });
 
   // Tools disponíveis pro kind do agente (ORCHESTRATOR/WORKER). Chip = nome
   // real da tool (o LLM mapeia pelo nome); hint = rótulo curto PT-BR.
@@ -177,17 +183,22 @@ export default function AgentEditorPage() {
       }));
   }, [builtinTools, agent?.kind]);
 
+  // Ordem/nomes espelham o menu @ do LíderHub. Categorias sem dados (ex: Zapsign
+  // se a integração não estiver ativa, Custom Tools se a org não tiver) somem
+  // sozinhas (o editor filtra grupos vazios).
   const mentionGroups: MentionGroup[] = useMemo(
     () => [
-      { type: 'tool', title: 'Ferramentas', items: toolItems },
-      { type: 'status', title: 'Status do funil', items: (statuses ?? []).map((s) => ({ type: 'status' as const, label: s.name })) },
+      { type: 'departamento', title: 'Departamento', items: (departments ?? []).map((d) => ({ type: 'departamento' as const, label: d.name })) },
+      { type: 'status', title: 'Status', items: (statuses ?? []).map((s) => ({ type: 'status' as const, label: s.name })) },
       { type: 'etiqueta', title: 'Etiquetas', items: (tags ?? []).map((t) => ({ type: 'etiqueta' as const, label: t.name })) },
-      { type: 'departamento', title: 'Departamentos', items: (departments ?? []).map((d) => ({ type: 'departamento' as const, label: d.name })) },
       { type: 'responsavel', title: 'Responsáveis', items: (members ?? []).map((m) => ({ type: 'responsavel' as const, label: m.user.name })) },
-      { type: 'mensagem', title: 'Mensagens rápidas', items: (quickReplies ?? []).map((q) => ({ type: 'mensagem' as const, label: q.shortcut })) },
       { type: 'variavel', title: 'Dados gerais', items: ORG_VARIABLE_LABELS.map((label) => ({ type: 'variavel' as const, label })) },
+      { type: 'tool', title: 'Ferramentas', items: toolItems },
+      { type: 'customtool', title: 'Custom Tools', items: (customTools ?? []).map((t) => ({ type: 'customtool' as const, label: t.name, hint: t.description?.slice(0, 60) })) },
+      { type: 'mensagem', title: 'Mensagens', items: (quickReplies ?? []).map((q) => ({ type: 'mensagem' as const, label: q.shortcut })) },
+      { type: 'zapsign', title: 'Zapsign', items: (zapTemplates ?? []).map((t) => ({ type: 'zapsign' as const, label: t.name, hint: 'Gera contrato usando ZapSign' })) },
     ],
-    [toolItems, statuses, tags, departments, members, quickReplies],
+    [toolItems, statuses, tags, departments, members, quickReplies, customTools, zapTemplates],
   );
 
   // Labels só pra reconhecimento (viram chip, fora do menu): os herdados do
