@@ -1,15 +1,18 @@
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 /**
- * Wordmark "Frider Andrade — Advogados": serifada elegante (Playfair Display,
- * via --font-brand-serif) empilhada (Frider / Andrade), quadrado vermelho de
- * acento e "ADVOGADOS" espaçado embaixo. Theme-aware (no dark o texto clareia,
- * o vermelho fica). Tudo escala a partir do fontSize base (unidades em).
+ * Logomarca OFICIAL "Frider Andrade — Advogados" (arquivo em
+ * public/frider-andrade-logo.png, fundo transparente, 917×272). Horizontal:
+ * "FriderAndrade" + quadrado vermelho + "ADVOGADOS" espaçado embaixo.
  *
- * Recriação fiel pra não depender de asset binário. Pra fidelidade pixel-perfect
- * com a fonte oficial, dropar o arquivo em public/logo-frider.svg|png e trocar
- * por <img>.
+ * O wordmark é escuro, então no modo claro fica perfeito sobre a sidebar
+ * branca. No modo escuro aplicamos uma área de respiro branca (safe-area) pra
+ * manter a marca exata (com o vermelho) legível — sem inverter cor.
  */
+const RATIO = 917 / 272;
+const HEIGHTS: Record<'sm' | 'md' | 'lg', number> = { sm: 30, md: 40, lg: 56 };
+
 export function Logo({
   className,
   size = 'md',
@@ -17,50 +20,19 @@ export function Logo({
   className?: string;
   size?: 'sm' | 'md' | 'lg';
 }) {
-  const base = size === 'sm' ? 23 : size === 'lg' ? 46 : 32;
+  const h = HEIGHTS[size];
+  const w = Math.round(h * RATIO);
   return (
-    <div
-      className={cn('select-none', className)}
-      style={{
-        fontFamily: 'var(--font-brand-serif), Georgia, "Times New Roman", serif',
-        fontSize: base,
-        lineHeight: 1.0,
-      }}
-      aria-label="Frider Andrade Advogados"
-    >
-      <div
-        className="text-zinc-700 dark:text-zinc-300"
-        style={{ fontWeight: 600, letterSpacing: '-0.01em' }}
-      >
-        Frider
-      </div>
-      <div className="flex items-baseline" style={{ gap: '0.12em' }}>
-        <span
-          className="text-zinc-900 dark:text-white"
-          style={{ fontWeight: 600, letterSpacing: '-0.01em' }}
-        >
-          Andrade
-        </span>
-        <span
-          aria-hidden
-          className="inline-block bg-[#C8402E]"
-          style={{ width: '0.17em', height: '0.17em' }}
-        />
-      </div>
-      <div
-        className="text-zinc-400 dark:text-zinc-500"
-        style={{
-          fontFamily:
-            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-          fontSize: '0.265em',
-          fontWeight: 500,
-          letterSpacing: '0.5em',
-          marginTop: '0.55em',
-          marginLeft: '0.1em',
-        }}
-      >
-        ADVOGADOS
-      </div>
-    </div>
+    <Image
+      src="/frider-andrade-logo.png"
+      alt="Frider Andrade Advogados"
+      width={w}
+      height={h}
+      priority
+      className={cn(
+        'select-none object-contain dark:rounded-md dark:bg-white dark:px-2 dark:py-1',
+        className,
+      )}
+    />
   );
 }
