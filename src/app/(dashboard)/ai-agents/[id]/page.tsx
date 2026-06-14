@@ -16,6 +16,8 @@ import { channelsService } from '@/features/channels/services/channels.service';
 import {
   PromptMentionEditor,
   type MentionGroup,
+  type MentionItem,
+  type MentionType,
 } from '@/features/ai-agents/components/prompt-mention-editor';
 import { AgentSkillsAndTools } from '@/features/ai-agents/components/agent-skills-tools';
 import { AgentTestPanel } from '@/features/ai-agents/components/agent-test-panel';
@@ -47,6 +49,68 @@ const TOOL_HINTS: Record<string, string> = {
   notifyMember: 'Notificar um membro da equipe',
   disableAi: 'Desativar a IA na conversa',
 };
+
+// Variáveis da empresa (injetadas em runtime). Aparecem no menu @ em "Dados
+// gerais" e viram chip. (Os valores reais vivem no backend; aqui é só o rótulo.)
+const ORG_VARIABLE_LABELS = [
+  'Nome do escritório',
+  'Endereço do escritório',
+  'OAB',
+  'CNPJ',
+  'Instagram',
+  'Site',
+  'email',
+  'Data e hora atual',
+  'Nome do contato',
+];
+
+// @menções herdadas do LíderHub que o BullQ ainda não tem como ENTIDADE.
+// Reconhecidas só pra virar chip (NÃO entram no menu @) — sem isso, multi-
+// palavra como `@Nome do escritório`/`@Desativar IA`/`@Selecione DOCUMENTOS…`
+// ficariam texto cru. Casamento é "maior label primeiro", então não conflita.
+const LIDERHUB_EXTRA_LABELS: MentionItem[] = (
+  [
+    // Tools que só existem no LíderHub (visual; mapeamento funcional é no prompt)
+    ['Salvar Nome', 'tool'],
+    ['Desativar IA', 'tool'],
+    ['Ativar áudio', 'tool'],
+    ['Base de conhecimento', 'tool'],
+    ['Gerar resumo com IA', 'tool'],
+    ['Preparar Kit', 'tool'],
+    ['Calculadora', 'tool'],
+    // Departamentos (caso o backend ainda não tenha)
+    ['Comercial', 'departamento'],
+    ['Pós-venda', 'departamento'],
+    ['Jurídico', 'departamento'],
+    // Status do funil herdados
+    ['Recepção', 'status'],
+    ['Proposta Aceita', 'status'],
+    ['Fechamento Pendente', 'status'],
+    // Responsáveis / membros conhecidos
+    ['Maria Jullia Pepato Portela Kantarutt', 'responsavel'],
+    ['Responsável legal', 'responsavel'],
+    // Etiquetas herdadas
+    ['INSS', 'etiqueta'],
+    ['Servidor', 'etiqueta'],
+    ['Honorários Iniciais', 'etiqueta'],
+    ['Honorários no Êxito', 'etiqueta'],
+    ['ZapSign', 'etiqueta'],
+    // Mensagens rápidas (atalhos) usadas nos prompts do trabalhista/RMC
+    ['boasvindas', 'mensagem'],
+    ['boas-vindas', 'mensagem'],
+    ['propostatrabalhista', 'mensagem'],
+    ['serio', 'mensagem'],
+    ['assinatura', 'mensagem'],
+    ['contrib', 'mensagem'],
+    ['hiscon', 'mensagem'],
+    ['follow6-qualificado', 'mensagem'],
+    // Templates ZapSign (documentos) — multi-palavra
+    ['Selecione DOCUMENTOS - RMC | RCC', 'tool'],
+    ['DOCUMENTOS - DIREITO SUPRIMIDO', 'tool'],
+    ['RESCISÃO INDIRETA', 'tool'],
+    ['RECONHECIMENTO VÍNCULO', 'tool'],
+  ] as [string, MentionType][]
+).map(([label, type]) => ({ label, type }));
 
 export default function AgentEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -121,8 +185,19 @@ export default function AgentEditorPage() {
       { type: 'departamento', title: 'Departamentos', items: (departments ?? []).map((d) => ({ type: 'departamento' as const, label: d.name })) },
       { type: 'responsavel', title: 'Responsáveis', items: (members ?? []).map((m) => ({ type: 'responsavel' as const, label: m.user.name })) },
       { type: 'mensagem', title: 'Mensagens rápidas', items: (quickReplies ?? []).map((q) => ({ type: 'mensagem' as const, label: q.shortcut })) },
+      { type: 'variavel', title: 'Dados gerais', items: ORG_VARIABLE_LABELS.map((label) => ({ type: 'variavel' as const, label })) },
     ],
     [toolItems, statuses, tags, departments, members, quickReplies],
+  );
+
+  // Labels só pra reconhecimento (viram chip, fora do menu): os herdados do
+  // LíderHub + nomes dos agentes (refs de delegação como `@AG. 1 - Triagem`).
+  const extraLabels: MentionItem[] = useMemo(
+    () => [
+      ...LIDERHUB_EXTRA_LABELS,
+      ...(allAgents ?? []).map((a) => ({ type: 'responsavel' as const, label: a.name })),
+    ],
+    [allAgents],
   );
 
   const handleSave = async () => {
@@ -283,6 +358,7 @@ export default function AgentEditorPage() {
             value={systemPrompt}
             onChange={setSystemPrompt}
             groups={mentionGroups}
+            extraLabels={extraLabels}
           />
           <CapacityMeter chars={systemPrompt.length} />
         </section>

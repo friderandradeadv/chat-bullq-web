@@ -49,29 +49,43 @@ export interface MentionGroup {
   items: MentionItem[];
 }
 
-const TYPE_META: Record<MentionType, { emoji: string; chip: string }> = {
-  tool: { emoji: '🛠️', chip: 'bg-blue-100 text-blue-700 ring-blue-300/60 dark:bg-blue-900/40 dark:text-blue-300' },
-  status: { emoji: '🟢', chip: 'bg-emerald-100 text-emerald-700 ring-emerald-300/60 dark:bg-emerald-900/40 dark:text-emerald-300' },
-  etiqueta: { emoji: '🏷️', chip: 'bg-amber-100 text-amber-700 ring-amber-300/60 dark:bg-amber-900/40 dark:text-amber-300' },
-  departamento: { emoji: '🏢', chip: 'bg-violet-100 text-violet-700 ring-violet-300/60 dark:bg-violet-900/40 dark:text-violet-300' },
-  responsavel: { emoji: '👤', chip: 'bg-pink-100 text-pink-700 ring-pink-300/60 dark:bg-pink-900/40 dark:text-pink-300' },
-  mensagem: { emoji: '💬', chip: 'bg-cyan-100 text-cyan-700 ring-cyan-300/60 dark:bg-cyan-900/40 dark:text-cyan-300' },
-  variavel: { emoji: '🔖', chip: 'bg-zinc-200 text-zinc-700 ring-zinc-300/60 dark:bg-zinc-700 dark:text-zinc-200' },
+// Só o EMOJI por categoria é usado (no menu @). A COR do chip é uniforme
+// (azul, igual ao LíderHub) — ver CHIP_STYLE.
+const TYPE_META: Record<MentionType, { emoji: string }> = {
+  tool: { emoji: '🛠️' },
+  status: { emoji: '🟢' },
+  etiqueta: { emoji: '🏷️' },
+  departamento: { emoji: '🏢' },
+  responsavel: { emoji: '👤' },
+  mensagem: { emoji: '💬' },
+  variavel: { emoji: '🔖' },
 };
 
 const CHIP_BASE =
   'mention-tag inline-block rounded-md px-1.5 py-0.5 text-[13px] font-medium ring-1 align-baseline whitespace-nowrap';
+// Cor única pra TODOS os chips (tool, status, etiqueta, variável, desconhecido…),
+// idêntico ao LíderHub: azul claro uniforme. (Antes era cor por categoria.)
+const CHIP_STYLE =
+  'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:ring-blue-800';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function chipHtml(type: MentionType, label: string): string {
-  const meta = TYPE_META[type] ?? TYPE_META.tool;
-  return `<span class="${CHIP_BASE} ${meta.chip}" contenteditable="false" data-mention="1" data-type="${type}" data-label="${escapeHtml(
+// `type` é só metadado (serialização/menu); a cor do chip é sempre CHIP_STYLE.
+// 'desconhecido' = fallback pra @menção cujo label o BullQ ainda não conhece.
+function chipHtml(type: string, label: string): string {
+  return `<span class="${CHIP_BASE} ${CHIP_STYLE}" contenteditable="false" data-mention="1" data-type="${type}" data-label="${escapeHtml(
     label,
   )}">@${escapeHtml(label)}</span>`;
 }
+
+// Fallback de @menção quando o label não está no lookup: pega um único "token"
+// (sem espaços; aceita / . _ - e acentos) — ex.: `@RMC`, `@Pós-venda`,
+// `@follow6-qualificado`. Garante que NENHUMA @menção fique como texto cru
+// (igual ao LíderHub, onde toda @menção vira chip). Labels multi-palavra
+// (`@Nome do escritório`) precisam estar no lookup pra casar inteiros.
+const FALLBACK_MENTION = /^[\p{L}\p{N}][\p{L}\p{N}_./-]*/u;
 
 // ── Markdown inline → HTML (negrito/itálico/código + chips de @menção) ──────
 function inlineToHtml(line: string, labels: string[], lookup: Map<string, MentionType>): string {
@@ -80,12 +94,24 @@ function inlineToHtml(line: string, labels: string[], lookup: Map<string, Mentio
   while (i < line.length) {
     const ch = line[i];
     if (ch === '@') {
-      const rest = line.slice(i + 1);
-      const match = labels.find((l) => rest.startsWith(l));
-      if (match) {
-        out += chipHtml(lookup.get(match)!, match);
-        i += 1 + match.length;
-        continue;
+      // `@` colado a uma letra/número anterior NÃO é menção (e-mail, handle):
+      // ex. friderandrade.adv@gmail.com — não vira chip.
+      const prev = i > 0 ? line[i - 1] : '';
+      const glued = prev !== '' && /[\p{L}\p{N}]/u.test(prev);
+      if (!glued) {
+        const rest = line.slice(i + 1);
+        const match = labels.find((l) => rest.startsWith(l));
+        if (match) {
+          out += chipHtml(lookup.get(match)!, match);
+          i += 1 + match.length;
+          continue;
+        }
+        const fb = rest.match(FALLBACK_MENTION);
+        if (fb) {
+          out += chipHtml('desconhecido', fb[0]);
+          i += 1 + fb[0].length;
+          continue;
+        }
       }
     }
     if (line.startsWith('**', i)) {
@@ -287,10 +313,18 @@ interface Props {
   value: string;
   onChange: (v: string) => void;
   groups: MentionGroup[];
+  /**
+   * Labels reconhecidos APENAS para virar chip (não aparecem no menu @).
+   * Usado pra @menções herdadas do LíderHub que o BullQ ainda não tem como
+   * entidade (variáveis, tools só do LíderHub, templates ZapSign, refs de
+   * agente…) — sem isso, multi-palavra como `@Nome do escritório` ficaria
+   * texto cru. Casamento é "maior label primeiro", então não conflita.
+   */
+  extraLabels?: MentionItem[];
   placeholder?: string;
 }
 
-export function PromptMentionEditor({ value, onChange, groups, placeholder }: Props) {
+export function PromptMentionEditor({ value, onChange, groups, extraLabels, placeholder }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastTextRef = useRef<string>('');
   const lastLookupRef = useRef<Map<string, MentionType> | null>(null);
@@ -337,8 +371,10 @@ export function PromptMentionEditor({ value, onChange, groups, placeholder }: Pr
   const lookup = useMemo(() => {
     const m = new Map<string, MentionType>();
     for (const g of groups) for (const it of g.items) m.set(it.label, it.type);
+    // extraLabels só preenchem buracos — não sobrescrevem um label já no menu.
+    for (const it of extraLabels ?? []) if (!m.has(it.label)) m.set(it.label, it.type);
     return m;
-  }, [groups]);
+  }, [groups, extraLabels]);
 
   useEffect(() => {
     const el = editorRef.current;
