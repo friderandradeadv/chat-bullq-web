@@ -12,6 +12,7 @@ import {
   Workflow,
   Plug,
   Zap,
+  MessageCircleHeart,
   ChevronDown,
   ChevronRight,
   MessageSquare,
@@ -149,6 +150,7 @@ export function AppSidebar() {
           <div className="mt-3">
             <NavSection label="Automações">
               <NavItem href="/ai-agents" icon={Bot} label="Agentes" />
+              <NavItem href="/follow-ups" icon={MessageCircleHeart} label="Follow-ups" />
               <NavItem href="/base-conhecimento" icon={BookOpen} label="Base de Conhecimento" />
               <NavItem href="/vozes" icon={AudioLines} label="Vozes" />
               <NavItem href="/chatbot" icon={Workflow} label="Chatbot" />
@@ -170,10 +172,11 @@ export function AppSidebar() {
       <SidebarFooter>
         <button
           onClick={() => setTheme(isDark ? 'light' : 'dark')}
-          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-zinc-500 hover:bg-zinc-950/5 hover:text-zinc-900 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
+          title={isDark ? 'Modo claro' : 'Modo escuro'}
+          aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-950/5 hover:text-zinc-900 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
         >
           {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          <span>{isDark ? 'Modo claro' : 'Modo escuro'}</span>
         </button>
         <Dropdown>
           <DropdownButton className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-950/5 dark:hover:bg-white/5">
