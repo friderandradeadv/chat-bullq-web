@@ -6,6 +6,7 @@ import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, 
 import { toast } from 'sonner';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import { scheduledMessagesService } from '../services/scheduled-messages.service';
+import { ScheduledMessagesBar } from './scheduled-messages-bar';
 import { ChatInput, type ChatInputHandle } from './chat-input';
 import { ConversationSummaryModal } from './conversation-summary-modal';
 import { ForwardMessageModal } from './forward-message-modal';
@@ -942,6 +943,8 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         channelType={conversation.channel.type}
         messages={messages}
       />
+
+      <ScheduledMessagesBar conversationId={conversation.id} />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#ece5dd] px-6 py-5 dark:bg-zinc-900">
         {isLoading ? (

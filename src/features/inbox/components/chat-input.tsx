@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Zap, Film, Image as ImageIcon } from 'lucide-react';
+import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon } from 'lucide-react';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '../hooks/use-audio-recorder';
@@ -10,6 +10,7 @@ import type {
   QuickReply,
   QuickReplyAttachment,
 } from '@/features/settings/services/quick-replies.service';
+import { parseNaturalDate, formatScheduledPreview } from '../lib/parse-natural-date';
 
 const QR_ATT_ICON: Record<QuickReplyAttachment['type'], typeof FileText> = {
   DOCUMENT: FileText,
@@ -68,8 +69,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [scheduleWhen, setScheduleWhen] = useState('');
+  const [scheduleNL, setScheduleNL] = useState(''); // "amanhã às 7h"
+  const [scheduleExact, setScheduleExact] = useState(''); // datetime-local (ajuste fino)
+  const [useExact, setUseExact] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [nowTick, setNowTick] = useState(() => new Date());
   // Mensagens rápidas "/" — anexos remotos pendentes + navegação do popup
   const [pendingAtts, setPendingAtts] = useState<QuickReplyAttachment[]>([]);
   const [qrIndex, setQrIndex] = useState(0);
@@ -78,30 +82,68 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recorder = useAudioRecorder();
 
+  const toLocalInput = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   const openSchedule = useCallback(() => {
     const d = new Date(Date.now() + 60 * 60 * 1000); // default: +1h
     d.setSeconds(0, 0);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    setScheduleWhen(
-      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
-    );
+    setScheduleNL('');
+    setScheduleExact(toLocalInput(d));
+    setUseExact(false);
     setScheduleOpen(true);
   }, []);
 
-  const handleSchedule = useCallback(async () => {
-    const trimmed = text.trim();
-    if (!trimmed || !scheduleWhen || !onSchedule || isScheduling) return;
-    setIsScheduling(true);
-    try {
-      await onSchedule(trimmed, new Date(scheduleWhen).toISOString());
-      setText('');
-      setScheduleOpen(false);
-    } catch {
-      /* erro tratado (toast) no caller */
-    } finally {
-      setIsScheduling(false);
+  // Data resolvida pelo modo ativo (linguagem natural × ajuste fino).
+  const parsedSchedule = useMemo<Date | null>(() => {
+    if (useExact) {
+      if (!scheduleExact) return null;
+      const d = new Date(scheduleExact);
+      return Number.isNaN(d.getTime()) ? null : d;
     }
-  }, [text, scheduleWhen, onSchedule, isScheduling]);
+    return scheduleNL.trim() ? parseNaturalDate(scheduleNL, nowTick) : null;
+  }, [useExact, scheduleExact, scheduleNL, nowTick]);
+
+  // Mantém o relógio do popover e o preview "agora são HH:MM" atualizados.
+  useEffect(() => {
+    if (!scheduleOpen) return;
+    setNowTick(new Date());
+    const t = setInterval(() => setNowTick(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, [scheduleOpen]);
+
+  const doSchedule = useCallback(
+    async (when: Date | null) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        toast.error('Digite a mensagem antes de agendar.');
+        return;
+      }
+      if (!when || Number.isNaN(when.getTime())) {
+        toast.error('Não entendi a data. Ex.: "amanhã às 7h".');
+        return;
+      }
+      if (when.getTime() <= Date.now()) {
+        toast.error('Escolha um horário no futuro.');
+        return;
+      }
+      if (!onSchedule || isScheduling) return;
+      setIsScheduling(true);
+      try {
+        await onSchedule(trimmed, when.toISOString());
+        setText('');
+        setScheduleOpen(false);
+        setScheduleNL('');
+      } catch {
+        /* erro tratado (toast) no caller */
+      } finally {
+        setIsScheduling(false);
+      }
+    },
+    [text, onSchedule, isScheduling],
+  );
 
   // ── Mensagens rápidas "/" ──────────────────────────────────────────────
   const slashQuery =
@@ -550,47 +592,121 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           <EmojiPicker onPick={insertEmoji} onClose={() => setEmojiOpen(false)} />
         )}
         {scheduleOpen && (
-          <div className="absolute bottom-full left-0 z-[60] mb-2 w-72 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-            <div className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
-              <CalendarClock className="h-4 w-4 text-primary" /> Agendar envio
+          <>
+            {/* click-away */}
+            <div className="fixed inset-0 z-[55]" onClick={() => setScheduleOpen(false)} />
+            <div className="absolute bottom-full right-0 z-[60] mb-2 w-80 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
+                  <CalendarClock className="h-4 w-4 text-primary" /> Agendar mensagem
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScheduleOpen(false)}
+                  className="rounded-md p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {!text.trim() && (
+                <p className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                  Digite a mensagem antes de agendar.
+                </p>
+              )}
+
+              {/* Opções rápidas */}
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  disabled={isScheduling}
+                  onClick={() => doSchedule(new Date(Date.now() + 60 * 60 * 1000))}
+                  className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <Clock className="h-4 w-4 text-zinc-500" /> Hoje daqui 1 hora
+                </button>
+                <button
+                  type="button"
+                  disabled={isScheduling}
+                  onClick={() => doSchedule(new Date(Date.now() + 24 * 60 * 60 * 1000))}
+                  className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <Clock className="h-4 w-4 text-zinc-500" /> Daqui 24 horas
+                </button>
+              </div>
+
+              <div className="my-2 border-t border-zinc-100 dark:border-zinc-800" />
+
+              {/* Agendar em — linguagem natural × ajuste fino */}
+              <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                Agendar em:
+              </label>
+              {!useExact ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    autoFocus
+                    value={scheduleNL}
+                    onChange={(e) => setScheduleNL(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        doSchedule(parsedSchedule);
+                      }
+                    }}
+                    placeholder="amanhã às 15h"
+                    className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => doSchedule(parsedSchedule)}
+                    disabled={!text.trim() || !parsedSchedule || isScheduling}
+                    title="Agendar"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {isScheduling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="datetime-local"
+                    value={scheduleExact}
+                    onChange={(e) => setScheduleExact(e.target.value)}
+                    className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:[color-scheme:dark]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => doSchedule(parsedSchedule)}
+                    disabled={!text.trim() || !parsedSchedule || isScheduling}
+                    title="Agendar"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {isScheduling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarClock className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              )}
+
+              {/* Preview da data lida */}
+              {!useExact && scheduleNL.trim() && (
+                <p className={`mt-1.5 text-[11px] ${parsedSchedule ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                  {parsedSchedule ? `→ ${formatScheduledPreview(parsedSchedule)}` : 'Não entendi a data — tente "amanhã às 7h"'}
+                </p>
+              )}
+
+              <div className="mt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setUseExact((v) => !v)}
+                  className="text-[11px] text-primary hover:underline"
+                >
+                  {useExact ? 'Escrever em palavras' : 'Escolher data exata'}
+                </button>
+                <span className="text-[11px] text-zinc-400">
+                  Agora são {nowTick.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
             </div>
-            {!text.trim() && (
-              <p className="mb-2 text-[11px] text-amber-600 dark:text-amber-400">
-                Digite a mensagem antes de agendar.
-              </p>
-            )}
-            <input
-              type="datetime-local"
-              value={scheduleWhen}
-              onChange={(e) => setScheduleWhen(e.target.value)}
-              className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:[color-scheme:dark]"
-            />
-            {text.trim() && (
-              <p className="mt-1.5 line-clamp-2 text-[11px] text-zinc-400">“{text.trim()}”</p>
-            )}
-            <div className="mt-2.5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setScheduleOpen(false)}
-                className="rounded-md px-2.5 py-1 text-[12px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSchedule}
-                disabled={!text.trim() || !scheduleWhen || isScheduling}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 text-[12px] font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
-              >
-                {isScheduling ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <CalendarClock className="h-3.5 w-3.5" />
-                )}
-                Agendar
-              </button>
-            </div>
-          </div>
+          </>
         )}
         {/* Menu "+" — emoji, arquivo, gerar resumo, assinatura (estilo LíderHub) */}
         <Popover className="relative mb-1">
@@ -635,16 +751,6 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                     Gerar resumo
                   </button>
                 )}
-                {onSchedule && (
-                  <button
-                    type="button"
-                    onClick={() => { close(); openSchedule(); }}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    <CalendarClock className="h-4 w-4 text-zinc-500" />
-                    Agendar envio
-                  </button>
-                )}
                 {signatureName && (
                   <button
                     type="button"
@@ -678,6 +784,22 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
               : 'border-zinc-200 bg-zinc-50 focus:border-primary focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900'
           }`}
         />
+        {/* Relógio — agendar a mensagem digitada (estilo LíderHub) */}
+        {onSchedule && !internalMode && !!text.trim() && (
+          <button
+            type="button"
+            onClick={() => (scheduleOpen ? setScheduleOpen(false) : openSchedule())}
+            aria-label="Agendar mensagem"
+            title="Agendar mensagem"
+            className={`mb-1 rounded-lg p-2.5 transition-colors ${
+              scheduleOpen
+                ? 'bg-primary/10 text-primary'
+                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+            }`}
+          >
+            <Clock className="h-5 w-5" />
+          </button>
+        )}
         {showMic ? (
           <button
             onClick={recorder.start}
