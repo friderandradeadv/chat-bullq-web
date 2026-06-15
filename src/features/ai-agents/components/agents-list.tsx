@@ -27,6 +27,7 @@ import { CreateAgentDialog } from './create-agent-dialog';
 import { GenerateAgentDialog } from './generate-agent-dialog';
 import { AgentNode, type AgentNodeData } from './agent-node';
 import { AgentsFolderView } from './agents-folder-view';
+import { TemplatesGallery } from './templates/templates-gallery';
 
 const NODE_WIDTH = 320;
 const NODE_HEIGHT = 160;
@@ -277,11 +278,14 @@ export function AgentsList() {
           </div>
         ) : hasAgents ? (
           view === 'list' ? (
-            <AgentsFolderView
-              agents={filtered}
-              onEdit={openEditor}
-              onToggleActive={handleToggleActive}
-            />
+            <>
+              <TemplatesGallery />
+              <AgentsFolderView
+                agents={filtered}
+                onEdit={openEditor}
+                onToggleActive={handleToggleActive}
+              />
+            </>
           ) : (
           <ReactFlowProvider>
             <ReactFlow

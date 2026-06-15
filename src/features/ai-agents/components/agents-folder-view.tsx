@@ -14,6 +14,7 @@ import {
   Trash2,
   FolderInput,
   Copy,
+  PackagePlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
@@ -166,9 +167,25 @@ export function AgentsFolderView({
     }
   };
 
-  // Ordena: pastas reais (por sortOrder) + "Sem pasta" sempre por último.
+  // "Publicar como template": a pasta vira modelo instalável (vai pra vitrine
+  // "Templates de Agentes" e sai do PASTAS). Reversível no marketplace.
+  const publishAsTemplate = async (f: AgentFolder) => {
+    try {
+      await agentFoldersService.update(f.id, { isTemplate: true });
+      toast.success(`"${f.name}" publicada como template`);
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Erro ao publicar template');
+    }
+  };
+
+  // PASTAS = só pastas de trabalho (templates aparecem na vitrine, não aqui).
+  // Ordena por sortOrder; "Sem pasta" entra à parte mais abaixo.
   const orderedFolders = useMemo(
-    () => [...(folders ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
+    () =>
+      [...(folders ?? [])]
+        .filter((f) => !f.isTemplate)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
     [folders],
   );
   const noneAgents = byFolder.get('__none__') ?? [];
@@ -336,6 +353,14 @@ export function AgentsFolderView({
                             className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
                           >
                             <Copy className="h-3.5 w-3.5" /> Usar como modelo
+                          </button>
+                        </MenuItem>
+                        <MenuItem>
+                          <button
+                            onClick={() => publishAsTemplate(folder)}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          >
+                            <PackagePlus className="h-3.5 w-3.5" /> Publicar como template
                           </button>
                         </MenuItem>
                         <MenuItem>

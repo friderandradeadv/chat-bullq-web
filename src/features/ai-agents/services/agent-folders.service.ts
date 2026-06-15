@@ -6,6 +6,11 @@ export interface AgentFolder {
   name: string;
   color: string | null;
   sortOrder: number;
+  /** Biblioteca de templates: pasta-modelo instalável (vitrine/marketplace). */
+  isTemplate: boolean;
+  description: string | null;
+  category: string | null;
+  useCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -14,6 +19,9 @@ export interface CreateFolderInput {
   name: string;
   color?: string | null;
   sortOrder?: number;
+  isTemplate?: boolean;
+  description?: string | null;
+  category?: string | null;
 }
 
 export const agentFoldersService = {
