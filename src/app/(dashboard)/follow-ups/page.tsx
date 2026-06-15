@@ -123,9 +123,9 @@ export default function FollowUpsPage() {
             disabled={savingCfg}
             role="switch"
             aria-checked={cfg.enabled}
-            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${cfg.enabled ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full p-0 transition-colors disabled:opacity-50 ${cfg.enabled ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}
           >
-            <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${cfg.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${cfg.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
           </button>
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
@@ -9,6 +9,7 @@ import { InboxToolbar } from '@/features/inbox/components/inbox-toolbar';
 import { ChatPanel } from '@/features/inbox/components/chat-panel';
 import { ContactDetailsPanel } from '@/features/inbox/components/contact-details-panel';
 import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
+import { useInboxFilterStore } from '@/features/inbox/stores/inbox-filter-store';
 
 export default function InboxPage() {
   const searchParams = useSearchParams();
@@ -17,6 +18,10 @@ export default function InboxPage() {
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const queryClient = useQueryClient();
+  const archivedOnly = useInboxFilterStore((s) => s.archivedOnly);
+  // Última leitura sincronizada (id + estado de arquivo) — usada para detectar a
+  // transição "arquivou a conversa aberta" e fechar a página, igual ao LíderHub.
+  const lastSyncedRef = useRef<{ id: string; archived: boolean } | null>(null);
 
   // Switching inbox view should clear the open conversation.
   useEffect(() => {
@@ -49,10 +54,25 @@ export default function InboxPage() {
   });
 
   useEffect(() => {
-    if (freshActive && freshActive.id === activeConversation?.id) {
-      setActiveConversation(freshActive);
+    if (!freshActive || freshActive.id !== activeConversation?.id) return;
+    const nowArchived = !!freshActive.isArchived;
+    const last = lastSyncedRef.current;
+    lastSyncedRef.current = { id: freshActive.id, archived: nowArchived };
+
+    // Arquivar (ou desarquivar) a conversa aberta a tira da visão atual —
+    // fecha a página, igual ao LíderHub. Só dispara numa transição real da
+    // MESMA conversa (não no carregamento inicial nem em deep-link já arquivado).
+    if (
+      last &&
+      last.id === freshActive.id &&
+      last.archived !== nowArchived &&
+      nowArchived !== archivedOnly
+    ) {
+      setActiveConversation(null);
+      return;
     }
-  }, [freshActive, activeConversation?.id]);
+    setActiveConversation(freshActive);
+  }, [freshActive, activeConversation?.id, archivedOnly]);
 
   const handleConversationUpdate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });

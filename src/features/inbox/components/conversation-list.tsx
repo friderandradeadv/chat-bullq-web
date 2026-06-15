@@ -1087,8 +1087,11 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                         </div>
 
                         {/* Row 3 — chips à esquerda (truncam/clipam) + badge e
-                            Aceitar SEMPRE alinhados à direita, sem quebrar */}
-                        <div className="mt-2 flex items-center gap-1 min-w-0">
+                            Aceitar SEMPRE alinhados à direita, sem quebrar.
+                            min-h fixo reserva a altura da faixa de chips mesmo
+                            quando vazia → todas as linhas têm a MESMA altura
+                            (linha horizontal uniforme, igual ao LíderHub). */}
+                        <div className="mt-2 flex min-h-[20px] items-center gap-1 min-w-0">
                           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
                           {/* Brazilian state from DDD */}
                           {(() => {
