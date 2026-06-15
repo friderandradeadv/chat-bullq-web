@@ -519,7 +519,7 @@ export default function AgentEditorPage() {
             </div>
           </div>
 
-          <AgentSkillsAndTools agentId={agent.id} />
+          <AgentSkillsAndTools agentId={agent.id} agentKind={agent.kind} />
         </aside>
       </div>
 
