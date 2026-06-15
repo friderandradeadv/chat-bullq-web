@@ -49,11 +49,11 @@ export function templateSubtitle(vm: TemplateVM): string {
 
 export const TEMPLATE_CATEGORIES = [
   'Todas',
-  'Financeiro',
-  'Trabalhista',
+  'Bancário',
   'Previdenciário',
   'Auxílio Acidente',
   'Consumidor',
+  'Utilitários',
 ] as const;
 
 export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
