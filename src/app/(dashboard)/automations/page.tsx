@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Activity, Pause, Play, Zap } from 'lucide-react';
+import { Plus, Pencil, Trash2, Activity, Pause, Play, Zap, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Automation,
@@ -12,13 +12,21 @@ import {
   ACTION_LABELS,
   TRIGGER_LABELS,
 } from '@/features/automations/utils/labels';
-import { AutomationBuilder } from '@/features/automations/components/automation-builder';
+import {
+  AutomationBuilder,
+  type AutomationTemplateSeed,
+} from '@/features/automations/components/automation-builder';
 import { AutomationRunsPanel } from '@/features/automations/components/automation-runs-panel';
+import {
+  AUTOMATION_TEMPLATES,
+  type AutomationTemplate,
+} from '@/features/automations/lib/templates';
 
 export default function AutomationsPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Automation | null>(null);
   const [creating, setCreating] = useState(false);
+  const [templateSeed, setTemplateSeed] = useState<AutomationTemplateSeed | null>(null);
   const [viewingRuns, setViewingRuns] = useState<Automation | null>(null);
 
   const { data: meta } = useQuery({
@@ -50,8 +58,17 @@ export default function AutomationsPage() {
   const handleSaved = () => {
     setEditing(null);
     setCreating(false);
+    setTemplateSeed(null);
     qc.invalidateQueries({ queryKey: ['automations'] });
   };
+
+  const closeBuilder = () => {
+    setEditing(null);
+    setCreating(false);
+    setTemplateSeed(null);
+  };
+
+  const builderOpen = creating || !!editing || !!templateSeed;
 
   return (
     <div className="flex h-full flex-col">
@@ -77,8 +94,10 @@ export default function AutomationsPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
+        <TemplatesStrip onPick={(t) => setTemplateSeed(t.seed)} />
+
         {isLoading && (
-          <div className="text-sm text-zinc-500">Carregando…</div>
+          <div className="mt-4 text-sm text-zinc-500">Carregando…</div>
         )}
         {!isLoading && automations.length === 0 && (
           <EmptyState onCreate={() => setCreating(true)} />
@@ -105,14 +124,12 @@ export default function AutomationsPage() {
         )}
       </div>
 
-      {(creating || editing) && meta && (
+      {builderOpen && meta && (
         <AutomationBuilder
           meta={meta}
           initial={editing ?? undefined}
-          onClose={() => {
-            setEditing(null);
-            setCreating(false);
-          }}
+          template={templateSeed ?? undefined}
+          onClose={closeBuilder}
           onSaved={handleSaved}
         />
       )}
@@ -233,22 +250,66 @@ function IconButton({
   );
 }
 
+function TemplatesStrip({
+  onPick,
+}: {
+  onPick: (t: AutomationTemplate) => void;
+}) {
+  return (
+    <div className="mb-5">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-amber-500" />
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+          Modelos prontos
+        </h2>
+        <span className="text-[11px] text-zinc-400">
+          comece com um clique — você ajusta os detalhes antes de salvar
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {AUTOMATION_TEMPLATES.map((t) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onPick(t)}
+              className="group flex flex-col items-start gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-blue-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-blue-800"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+                <Icon className="h-4 w-4" />
+              </span>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                {t.title}
+              </span>
+              <span className="text-[11px] leading-snug text-zinc-500 line-clamp-3">
+                {t.blurb}
+              </span>
+              <span className="mt-auto pt-1 text-[11px] font-medium text-blue-600 opacity-0 transition group-hover:opacity-100">
+                Usar modelo →
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="rounded-2xl border-2 border-dashed border-zinc-200 px-8 py-16 text-center dark:border-zinc-800">
-      <Zap className="mx-auto h-10 w-10 text-zinc-400" />
-      <h3 className="mt-4 text-lg font-semibold">
-        Nenhuma automação ainda
-      </h3>
+    <div className="rounded-2xl border-2 border-dashed border-zinc-200 px-8 py-12 text-center dark:border-zinc-800">
+      <Zap className="mx-auto h-9 w-9 text-zinc-400" />
+      <h3 className="mt-3 text-base font-semibold">Nenhuma automação ainda</h3>
       <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">
-        Crie regras pra reagir automaticamente a eventos. Ex: <em>quando
-        tag VIP for adicionada → atribuir ao João + responder boas-vindas</em>.
+        Use um <strong>modelo pronto</strong> acima ou crie do zero. Automações
+        reagem a eventos — ex: <em>quando a tag VIP for adicionada → atribuir ao
+        João + responder boas-vindas</em>.
       </p>
       <button
         onClick={onCreate}
-        className="mx-auto mt-6 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        className="mx-auto mt-5 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
       >
-        <Plus className="h-4 w-4" /> Criar primeira automação
+        <Plus className="h-4 w-4" /> Criar do zero
       </button>
     </div>
   );

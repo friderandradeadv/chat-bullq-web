@@ -28,9 +28,16 @@ import {
   useAutomationLookups,
 } from '../hooks/use-lookups';
 
+/** Semente de um template de automação — pré-preenche o builder em modo criação. */
+export type AutomationTemplateSeed = Partial<
+  Pick<Automation, 'name' | 'description' | 'trigger' | 'actions' | 'conditions'>
+>;
+
 interface BuilderProps {
   meta: AutomationMeta;
   initial?: Automation;
+  /** Pré-preenche os campos sem virar edição (continua criando uma nova). */
+  template?: AutomationTemplateSeed;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -57,25 +64,30 @@ const MESSAGE_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
 export function AutomationBuilder({
   meta,
   initial,
+  template,
   onClose,
   onSaved,
 }: BuilderProps) {
   const lookups = useAutomationLookups();
 
-  const [name, setName] = useState(initial?.name ?? '');
-  const [description, setDescription] = useState(initial?.description ?? '');
+  const [name, setName] = useState(initial?.name ?? template?.name ?? '');
+  const [description, setDescription] = useState(
+    initial?.description ?? template?.description ?? '',
+  );
   const [trigger, setTrigger] = useState<AutomationTrigger>(
-    initial?.trigger ?? 'MESSAGE_RECEIVED',
+    initial?.trigger ?? template?.trigger ?? 'MESSAGE_RECEIVED',
   );
   const [conditions, setConditions] = useState<ConditionRoot>(() => {
-    const c = initial?.conditions as ConditionRoot | undefined;
+    const c = (initial?.conditions ?? template?.conditions) as
+      | ConditionRoot
+      | undefined;
     if (!c || !('groups' in c)) {
       return { match: 'OR', groups: [] };
     }
     return c;
   });
   const [actions, setActions] = useState<ActionDefinition[]>(
-    initial?.actions ?? [],
+    initial?.actions ?? template?.actions ?? [],
   );
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
   const [rateLimitPerMinute, setRateLimitPerMinute] = useState(
