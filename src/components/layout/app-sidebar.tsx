@@ -9,7 +9,6 @@ import {
   Sun,
   Moon,
   BookUser,
-  Workflow,
   Plug,
   Zap,
   MessageCircleHeart,
@@ -153,7 +152,6 @@ export function AppSidebar() {
               <NavItem href="/follow-ups" icon={MessageCircleHeart} label="Follow-ups" />
               <NavItem href="/base-conhecimento" icon={BookOpen} label="Base de Conhecimento" />
               <NavItem href="/vozes" icon={AudioLines} label="Vozes" />
-              <NavItem href="/chatbot" icon={Workflow} label="Chatbot" />
               <NavItem href="/automations" icon={Zap} label="Automações" />
               <NavItem href="/settings/integrations" icon={Plug} label="Integrações" />
             </NavSection>
