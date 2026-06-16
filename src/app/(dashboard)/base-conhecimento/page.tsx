@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -42,11 +42,15 @@ function relativeTime(iso: string): string {
   return `há ${Math.floor(months / 12)} ano(s)`;
 }
 
+const PAGE_SIZES = [10, 25, 50, 100];
+
 export default function BaseConhecimentoPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [attachDoc, setAttachDoc] = useState<KnowledgeDocSummary | null>(null);
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
 
   const { data: docs, isLoading } = useQuery({
     queryKey: ['knowledge-documents'],
@@ -59,60 +63,110 @@ export default function BaseConhecimentoPage() {
     return (docs ?? []).filter((d) => d.title.toLowerCase().includes(q));
   }, [docs, search]);
 
+  // volta pra primeira página quando muda a busca ou o tamanho
+  useEffect(() => { setPage(1); }, [search, pageSize]);
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const pageItems = filtered.slice(start, start + pageSize);
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ['knowledge-documents'] });
 
   return (
-    <div className="mx-auto w-full max-w-5xl p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Base de Conhecimento</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Centralize documentos e FAQs e vincule aos agentes — a IA responde com base neles.
-          </p>
+    <div className="flex h-full flex-col">
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col p-6">
+        <div className="flex shrink-0 items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Base de Conhecimento</h1>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Centralize documentos e FAQs e vincule aos agentes — a IA responde com base neles.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            <Plus className="h-4 w-4" /> Adicionar Documento
+          </button>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-        >
-          <Plus className="h-4 w-4" /> Adicionar Documento
-        </button>
-      </div>
 
-      <div className="relative mt-5">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Pesquisar por nome…"
-          className="w-full rounded-lg border border-zinc-200 bg-transparent py-2 pl-9 pr-3 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800"
-        />
-      </div>
+        <div className="relative mt-5 shrink-0">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Pesquisar por nome…"
+            className="w-full rounded-lg border border-zinc-200 bg-transparent py-2 pl-9 pr-3 text-sm outline-none focus:border-zinc-400 dark:border-zinc-800"
+          />
+        </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900/60">
-            <tr>
-              <th className="px-4 py-2.5 text-left font-medium">Nome</th>
-              <th className="px-4 py-2.5 text-left font-medium">Tipo</th>
-              <th className="px-4 py-2.5 text-left font-medium">Agentes</th>
-              <th className="px-4 py-2.5 text-left font-medium">Atualização</th>
-              <th className="px-4 py-2.5 text-right font-medium">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {isLoading ? (
-              <tr><td colSpan={5} className="py-12 text-center text-zinc-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={5} className="py-12 text-center text-sm text-zinc-400">
-                {search ? 'Nenhum documento encontrado.' : 'Nenhum documento ainda. Clique em “Adicionar Documento”.'}
-              </td></tr>
-            ) : (
-              filtered.map((doc) => (
-                <DocRow key={doc.id} doc={doc} onChange={invalidate} onAttach={() => setAttachDoc(doc)} />
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="mt-4 flex shrink-0 items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-center gap-2">
+            <span>Exibir</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-xs outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900"
+            >
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span>por página</span>
+          </div>
+          <span>{total === 0 ? '0 documentos' : `${start + 1}–${Math.min(start + pageSize, total)} de ${total}`}</span>
+        </div>
+
+        <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
+                <tr>
+                  <th className="px-4 py-2.5 text-left font-medium">Nome</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Tipo</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Agentes</th>
+                  <th className="px-4 py-2.5 text-left font-medium">Atualização</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {isLoading ? (
+                  <tr><td colSpan={5} className="py-12 text-center text-zinc-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>
+                ) : pageItems.length === 0 ? (
+                  <tr><td colSpan={5} className="py-12 text-center text-sm text-zinc-400">
+                    {search ? 'Nenhum documento encontrado.' : 'Nenhum documento ainda. Clique em “Adicionar Documento”.'}
+                  </td></tr>
+                ) : (
+                  pageItems.map((doc) => (
+                    <DocRow key={doc.id} doc={doc} onChange={invalidate} onAttach={() => setAttachDoc(doc)} />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {totalPages > 1 && (
+          <div className="mt-3 flex shrink-0 items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:hover:bg-zinc-900"
+            >
+              ‹ Anterior
+            </button>
+            <span>Página {safePage} de {totalPages}</span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:hover:bg-zinc-900"
+            >
+              Próxima ›
+            </button>
+          </div>
+        )}
       </div>
 
       {showAdd && <AddDocModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); invalidate(); }} />}
