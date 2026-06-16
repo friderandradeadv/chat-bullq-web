@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
@@ -90,6 +90,8 @@ export default function SettingsQuickRepliesPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState('');
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
   const [importing, setImporting] = useState(false);
 
   // Drawer (criar/editar)
@@ -119,6 +121,15 @@ export default function SettingsQuickRepliesPage() {
         r.content.toLowerCase().includes(q),
     );
   }, [replies, search]);
+
+  // Paginação: volta pra 1ª página quando muda a busca ou o tamanho.
+  useEffect(() => { setPage(1); }, [search, pageSize]);
+  const PAGE_SIZES = [10, 25, 50, 100];
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  const pageItems = filtered.slice(pageStart, pageStart + pageSize);
 
   const openCreate = () => {
     setEditing(null);
@@ -271,8 +282,26 @@ export default function SettingsQuickRepliesPage() {
         />
       </div>
 
+      {/* Itens por página */}
+      <div className="mt-4 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex items-center gap-2">
+          <span>Exibir</span>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+            className="rounded-md border border-zinc-200 bg-transparent px-2 py-1 text-xs outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            {PAGE_SIZES.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <span>por página</span>
+        </div>
+        <span>{total === 0 ? '0 mensagens' : `${pageStart + 1}–${Math.min(pageStart + pageSize, total)} de ${total}`}</span>
+      </div>
+
       {/* Tabela — estilo LíderHub */}
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <div className="mt-2 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 bg-zinc-50/80 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60">
@@ -303,7 +332,7 @@ export default function SettingsQuickRepliesPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((reply) => {
+              pageItems.map((reply) => {
                 const att = reply.attachments?.[0];
                 const meta = att ? ATT_META[att.type] : null;
                 return (
@@ -380,6 +409,26 @@ export default function SettingsQuickRepliesPage() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-3 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="rounded-lg border border-zinc-200 px-3 py-1.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:hover:bg-zinc-900"
+          >
+            ‹ Anterior
+          </button>
+          <span>Página {safePage} de {totalPages}</span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="rounded-lg border border-zinc-200 px-3 py-1.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:hover:bg-zinc-900"
+          >
+            Próxima ›
+          </button>
+        </div>
+      )}
 
       {/* Drawer lateral — Nova/Editar Mensagem rápida */}
       <Dialog
