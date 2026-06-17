@@ -15,11 +15,12 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { toast } from 'sonner';
-import { KanbanSquare, MessageSquare, Users, Phone } from 'lucide-react';
+import { KanbanSquare, MessageSquare, Users, Phone, GripVertical } from 'lucide-react';
 import {
   contactsService,
   type FunnelBoard,
   type FunnelCard as TCard,
+  type FunnelColumn,
 } from '@/features/contacts/services/contacts.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { departmentsService } from '@/features/settings/services/departments.service';
@@ -34,6 +35,7 @@ export default function KanbanPage() {
   const orgId = useOrgId();
   const [dept, setDept] = useState(''); // '' = Todos
   const [activeCard, setActiveCard] = useState<TCard | null>(null);
+  const [activeColumn, setActiveColumn] = useState<FunnelColumn | null>(null);
   const [viewConvId, setViewConvId] = useState<string | null>(null);
 
   const { data: departments = [] } = useQuery({
@@ -66,12 +68,53 @@ export default function KanbanPage() {
   const handleDragStart = (e: DragStartEvent) => {
     const data = e.active.data.current as any;
     if (data?.type === 'card') setActiveCard(data.card as TCard);
+    else if (data?.type === 'column') {
+      setActiveColumn(board?.columns.find((c) => c.id === data.columnId) ?? null);
+    }
+  };
+
+  // Reordena as COLUNAS (status do funil) e persiste o sortOrder de cada uma.
+  const handleColumnReorder = async (draggedId: string, overId: string) => {
+    if (!board || draggedId === overId) return;
+    const ids = board.columns.map((c) => c.id);
+    const from = ids.indexOf(draggedId);
+    const to = ids.indexOf(overId);
+    if (from === -1 || to === -1) return;
+    const reordered = [...board.columns];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+
+    qc.setQueryData<FunnelBoard>(boardKey, (prev) =>
+      prev ? { ...prev, columns: reordered } : prev,
+    );
+    try {
+      await Promise.all(
+        reordered.map((c, i) => contactStatusesService.update(c.id, { sortOrder: i } as any)),
+      );
+      toast.success('Ordem do funil salva');
+      qc.invalidateQueries({ queryKey: ['funnel-board', orgId] });
+      qc.invalidateQueries({ queryKey: ['contact-statuses', orgId] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao salvar a ordem');
+      qc.invalidateQueries({ queryKey: boardKey });
+    }
   };
 
   const handleDragEnd = async (e: DragEndEvent) => {
+    const wasColumn = (e.active.data.current as any)?.type === 'column';
+    const draggedColumnId = (e.active.data.current as any)?.columnId as string | undefined;
     setActiveCard(null);
+    setActiveColumn(null);
     const { active, over } = e;
     if (!over || !board) return;
+
+    // Reordenação de COLUNA
+    if (wasColumn && draggedColumnId) {
+      await handleColumnReorder(draggedColumnId, over.id as string);
+      return;
+    }
+
+    // Mover CARD entre status
     const contactId = active.id as string;
     const toStatus = over.id as string;
     const fromStatus = cardStatus.get(contactId);
@@ -171,7 +214,16 @@ export default function KanbanPage() {
               />
             ))}
           </div>
-          <DragOverlay>{activeCard ? <Card card={activeCard} dragging /> : null}</DragOverlay>
+          <DragOverlay>
+            {activeCard ? (
+              <Card card={activeCard} dragging />
+            ) : activeColumn ? (
+              <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 shadow-lg ring-1 ring-primary/30 dark:bg-zinc-800">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: activeColumn.color }} />
+                <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{activeColumn.name}</span>
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
 
@@ -194,9 +246,22 @@ function Column({
   onCardClick: (c: TCard) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+    id: `col-${column.id}`,
+    data: { type: 'column', columnId: column.id },
+  });
   return (
-    <div className="flex w-72 shrink-0 flex-col rounded-xl bg-zinc-100/70 dark:bg-zinc-900/60">
-      <div className="flex items-center gap-2 px-3 py-2.5">
+    <div className={cn('flex w-72 shrink-0 flex-col rounded-xl bg-zinc-100/70 dark:bg-zinc-900/60', isDragging && 'opacity-40')}>
+      <div className="flex items-center gap-1.5 px-2 py-2.5">
+        <button
+          ref={setDragRef}
+          {...listeners}
+          {...attributes}
+          title="Arraste para reordenar o funil"
+          className="cursor-grab touch-none rounded p-0.5 text-zinc-300 hover:bg-zinc-200 hover:text-zinc-500 active:cursor-grabbing dark:text-zinc-600 dark:hover:bg-zinc-800"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: column.color }} />
         <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{column.name}</span>
         <span className="ml-auto rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
