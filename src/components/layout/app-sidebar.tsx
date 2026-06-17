@@ -98,7 +98,7 @@ function NavItem({
       className={cn(
         'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
         isActive
-          ? 'bg-[#1488d6]/10 font-medium text-[#1488d6]'
+          ? 'bg-zinc-100 font-medium text-zinc-900'
           : 'text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-900',
       )}
     >
@@ -121,7 +121,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       {/* Marca do escritório — centralizada, caixa justa na logo */}
-      <SidebarHeader className="items-center py-2.5">
+      <SidebarHeader className="items-center py-4">
         <Link href="/dashboard" className="block">
           <Logo size="sm" />
         </Link>

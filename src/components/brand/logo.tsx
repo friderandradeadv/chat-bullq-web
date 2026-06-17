@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
  *  - modo ESCURO: wordmark claro/cinza (public/frider-andrade-logo-dark.png)
  * Troca por CSS (`dark:`), sem hack de fundo branco.
  */
-const HEIGHTS: Record<'sm' | 'md' | 'lg', number> = { sm: 60, md: 72, lg: 92 };
+const HEIGHTS: Record<'sm' | 'md' | 'lg', number> = { sm: 44, md: 72, lg: 92 };
 const RATIO_LIGHT = 864 / 244; // logo HD (modo claro)
 const RATIO_DARK = 907 / 275;
 
