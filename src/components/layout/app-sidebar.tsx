@@ -103,8 +103,8 @@ function NavItem({
       className={cn(
         'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
         isActive
-          ? 'bg-zinc-100 font-medium text-zinc-900'
-          : 'text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-900',
+          ? 'bg-zinc-100 font-medium text-zinc-900 dark:bg-white/10 dark:text-white'
+          : 'text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white',
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
