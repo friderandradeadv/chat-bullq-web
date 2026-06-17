@@ -68,6 +68,9 @@ export interface KpiSparklines {
 export interface VolumeByDay { date: string; count: number; }
 export interface VolumeByChannel { channelId: string; channelName: string; channelType: string; count: number; }
 export interface VolumeByStatus { status: string; count: number; }
+export interface SankeyNode { name: string; kind: 'channel' | 'status'; color: string; }
+export interface SankeyLink { source: number; target: number; value: number; }
+export interface FunnelSankey { nodes: SankeyNode[]; links: SankeyLink[]; }
 export interface VolumeFlow { date: string; created: number; closed: number; }
 export interface MessagesFlow { date: string; inbound: number; outbound: number; }
 export interface PeakHours { matrix: number[][]; max: number; }
@@ -114,6 +117,13 @@ export const dashboardService = {
   },
   async getVolumeByStatus(): Promise<VolumeByStatus[]> {
     const { data } = await api.get('/dashboard/volume-by-status');
+    return data.data;
+  },
+  async getFunnelSankey(from?: string, to?: string): Promise<FunnelSankey> {
+    const params: Record<string, string> = {};
+    if (from) params.from = from;
+    if (to) params.to = to;
+    const { data } = await api.get('/dashboard/funnel-sankey', { params });
     return data.data;
   },
   async getKpiSparklines(from?: string, to?: string): Promise<KpiSparklines> {

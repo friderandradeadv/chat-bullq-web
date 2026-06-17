@@ -15,6 +15,7 @@ import { dashboardService, type SparklinePoint } from '@/features/dashboard/serv
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { Heatmap } from '@/features/dashboard/components/Heatmap';
 import { AgentList } from '@/features/dashboard/components/AgentList';
+import { FunnelSankey } from '@/features/dashboard/components/FunnelSankey';
 
 const CHANNEL_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -338,6 +339,18 @@ export default function DashboardPage() {
           ) : (
             <div className="h-48 animate-pulse rounded bg-zinc-50 dark:bg-zinc-800" />
           )}
+        </ChartCard>
+      </div>
+
+      {/* Funil de leads — Sankey (origem → status do funil) */}
+      <div className="mt-6">
+        <ChartCard
+          title="Funil de leads"
+          icon={Activity}
+          subtitle="Fluxo Conexão → Status do funil (leads por origem, últimos 30 dias)"
+          height="h-[440px]"
+        >
+          <FunnelSankey />
         </ChartCard>
       </div>
 
