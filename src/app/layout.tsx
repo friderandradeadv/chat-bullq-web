@@ -14,6 +14,13 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: 'Chat | Frider Andrade',
   description: 'Omnichannel customer service platform',
+  // Favicon do navegador acompanha o tema do SO (claro/escuro).
+  icons: {
+    icon: [
+      { url: '/frider-andrade-logo.png', media: '(prefers-color-scheme: light)' },
+      { url: '/frider-andrade-logo-dark.png', media: '(prefers-color-scheme: dark)' },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
