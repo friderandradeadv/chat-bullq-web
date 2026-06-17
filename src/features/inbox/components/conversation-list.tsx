@@ -831,7 +831,9 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                   setArchivedOnly(false);
                   updatePrefs({ archivedOnly: false });
                 }
-                setStatusTab(isActive ? 'ALL' : tab.value);
+                // Selecionar a aba e PERMANECER nela — clicar de novo NÃO alterna
+                // pra "ALL" (era o que fazia parecer que "Ativos virava Pendentes").
+                setStatusTab(tab.value);
               }}
               className={`flex flex-1 flex-col items-center justify-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-normal transition-colors ${
                 isActive
