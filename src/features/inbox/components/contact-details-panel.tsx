@@ -403,7 +403,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
               <PopoverButton
                 disabled={savingContactStatus}
                 className={cn(
-                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
                   !contact.status &&
                     'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
                 )}
@@ -417,16 +417,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                     : undefined
                 }
               >
-                {savingContactStatus ? (
-                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                ) : (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{
-                      backgroundColor: contact.status ? chipTextColor(contact.status.color) : '#a1a1aa',
-                    }}
-                  />
-                )}
+                {savingContactStatus && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
                 {contact.status?.name ?? 'Sem status'}
                 <ChevronDown className="h-3 w-3 opacity-60" />
               </PopoverButton>
@@ -492,7 +483,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   <PopoverButton
                     disabled={savingDept}
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                      'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
                       !conversation.department &&
                         'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
                     )}
@@ -506,14 +497,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                         : undefined
                     }
                   >
-                    {savingDept ? (
-                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                    ) : (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: deptColor ? chipTextColor(deptColor) : '#a1a1aa' }}
-                      />
-                    )}
+                    {savingDept && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
                     {conversation.department ? conversation.department.name : 'Sem departamento'}
                     <ChevronDown className="h-3 w-3 opacity-60" />
                   </PopoverButton>
@@ -582,7 +566,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                     borderColor: onContact ? 'transparent' : `${tag.color}55`,
                   }}
                   className={cn(
-                    'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                    'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold',
                     onContact ? 'border-transparent' : 'border-dashed',
                   )}
                 >
@@ -591,7 +575,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                     onClick={() => handleToggleTag(tag.id)}
                     disabled={pendingTagId === tag.id}
                     title="Remover tag"
-                    className="ml-1 rounded-full p-0.5 opacity-60 hover:opacity-100"
+                    className="-mr-0.5 ml-1 rounded-full p-0.5 opacity-50 transition-opacity hover:opacity-100"
                   >
                     {pendingTagId === tag.id ? (
                       <Loader2 className="h-2.5 w-2.5 animate-spin" />
@@ -603,8 +587,8 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
               ))}
               {/* Add tag popover */}
               <Popover className="relative">
-                <PopoverButton className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-600 dark:hover:border-zinc-500">
-                  <Plus className="h-2.5 w-2.5" />
+                <PopoverButton className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 py-1 text-[11px] font-medium text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-600 dark:hover:border-zinc-500">
+                  <Plus className="h-3 w-3" />
                   Tag
                 </PopoverButton>
                 <PopoverPanel

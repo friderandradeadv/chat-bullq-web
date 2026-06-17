@@ -25,6 +25,8 @@ import {
   Mail,
   Sun,
   Moon,
+  CircleDot,
+  Tags,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -147,6 +149,8 @@ export function AppSidebar() {
               <NavItem href="/contacts" icon={BookUser} label="Contatos" />
               <NavItem href="/kanban" icon={KanbanSquare} label="Kanban" />
               <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
+              <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
+              <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
             </NavSection>
           </div>
 
