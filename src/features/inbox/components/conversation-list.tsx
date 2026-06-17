@@ -385,10 +385,13 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['conversations', orgId, viewId ?? null, filterKey, debouncedSearch, selectedChannelId, scope, statusTab, currentUserId],
+    queryKey: ['conversations', orgId, viewId ?? null, filterKey, debouncedSearch, selectedChannelId, scope, statusTab, archivedOnly, currentUserId],
     queryFn: ({ pageParam = 1 }) => {
       const params: Record<string, string> = { limit: '30', page: String(pageParam) };
-      if (statusTab !== 'ALL' && statusTab !== 'GROUPS') params.status = statusTab;
+      // Arquivados é seu próprio balde: mostra TODOS os arquivados, sem aplicar
+      // o filtro de status da aba ativa (senão "Arquivados" com a aba OPEN
+      // selecionada escondia os arquivados CLOSED — só apareciam uns poucos).
+      if (!archivedOnly && statusTab !== 'ALL' && statusTab !== 'GROUPS') params.status = statusTab;
       if (unreadOnly) params.unread = 'true';
       // archived: dentro de view, só passa quando user explicitamente
       // ativou (override). Fora de view, passa sempre o estado atual.
