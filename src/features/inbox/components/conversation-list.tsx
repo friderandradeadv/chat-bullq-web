@@ -1152,8 +1152,9 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                               {unread > 9 ? '9+' : unread}
                             </span>
                           )}
-                          {/* Accept pending */}
-                          {conv.status === 'PENDING' && (
+                          {/* Accept pending — nunca em conversa arquivada (arquivada
+                              não é "aceitável", mesmo que o status seja PENDING) */}
+                          {!archivedOnly && conv.status === 'PENDING' && (
                             <div
                               role="button"
                               tabIndex={0}
