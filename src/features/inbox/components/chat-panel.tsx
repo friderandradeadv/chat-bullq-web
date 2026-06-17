@@ -1299,10 +1299,17 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                           }`}
                         >
                           {msg.type === 'TEXT' ? (
-                            <MessageText
-                              text={msg.content?.text || ''}
-                              isOutbound={isOutbound}
-                            />
+                            /^\[Undecryptable\]|^\[Unsupported message type\]|n[ãa]o foi poss[ií]vel descriptografar/i.test(msg.content?.text || '') ? (
+                              <p className="flex items-center gap-1.5 text-sm italic text-zinc-500 dark:text-zinc-400">
+                                <Ban className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                                Mensagem criptografada não pôde ser carregada — abra o WhatsApp no celular para vê-la.
+                              </p>
+                            ) : (
+                              <MessageText
+                                text={msg.content?.text || ''}
+                                isOutbound={isOutbound}
+                              />
+                            )
                           ) : msg.type === 'IMAGE' ? (
                             <MediaImage message={msg} isOutbound={isOutbound} />
                           ) : msg.type === 'VIDEO' ? (

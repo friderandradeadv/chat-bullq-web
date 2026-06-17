@@ -148,6 +148,8 @@ export default function ContactsPage() {
     );
   const bulkAddTag = (tag: string) =>
     runBulk('Etiqueta aplicada', (id) => tagsService.addToContact(id, tag));
+  const bulkRemoveTag = (tag: string) =>
+    runBulk('Etiqueta removida', (id) => tagsService.removeFromContact(id, tag));
 
   const selectCls =
     'rounded-lg border border-zinc-200 bg-white py-2.5 px-3 text-sm text-zinc-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
@@ -278,6 +280,19 @@ export default function ContactsPage() {
                     className={cn(selectCls, 'py-1.5 pl-8 text-[13px]')}
                   >
                     <option value="">Adicionar etiqueta…</option>
+                    {tags.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                  </select>
+                </div>
+                {/* Remover etiqueta */}
+                <div className="relative">
+                  <TagIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                  <select
+                    value=""
+                    disabled={bulkBusy}
+                    onChange={(e) => e.target.value && bulkRemoveTag(e.target.value)}
+                    className={cn(selectCls, 'py-1.5 pl-8 text-[13px]')}
+                  >
+                    <option value="">Remover etiqueta…</option>
                     {tags.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}
                   </select>
                 </div>
