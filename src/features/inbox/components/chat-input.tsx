@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon } from 'lucide-react';
+import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon, Maximize2, Minimize2 } from 'lucide-react';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '../hooks/use-audio-recorder';
@@ -65,6 +65,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [internalMode, setInternalMode] = useState(false);
   const [signatureOn, setSignatureOn] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [pending, setPending] = useState<PendingFile[]>([]);
@@ -345,9 +346,17 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const handleInput = () => {
     const el = textareaRef.current;
     if (!el) return;
+    // Expandido = área de redação maior (até ~55% da tela); normal = até 160px.
+    const max = expanded ? Math.round(window.innerHeight * 0.55) : 160;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+    el.style.height = Math.min(el.scrollHeight, max) + 'px';
   };
+
+  // Reajusta a altura sempre que alterna expandir/recolher ou o texto muda.
+  useEffect(() => {
+    handleInput();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, text]);
 
   const handleSendAudio = useCallback(async () => {
     if (!recorder.blob || !onSendAudio) return;
@@ -778,12 +787,38 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           onInput={handleInput}
           placeholder={pending.length > 0 ? 'Adicione uma legenda (opcional)…' : internalMode ? 'Escreva uma nota interna (só a equipe vê)...' : 'Digite uma mensagem...'}
           rows={1}
-          className={`max-h-40 min-h-[40px] flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm placeholder:text-zinc-400 focus:outline-none focus:ring-1 dark:text-zinc-100 ${
+          className={`flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm placeholder:text-zinc-400 focus:outline-none focus:ring-1 dark:text-zinc-100 ${
+            expanded ? 'max-h-[55vh] min-h-[160px]' : 'max-h-40 min-h-[40px]'
+          } ${
             internalMode
               ? 'border-amber-300 bg-amber-50 focus:border-amber-400 focus:ring-amber-400 dark:border-amber-800 dark:bg-amber-900/20'
               : 'border-zinc-200 bg-zinc-50 focus:border-primary focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900'
           }`}
         />
+        {/* Expandir / recolher a área de redação */}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? 'Recolher campo' : 'Expandir campo'}
+          title={expanded ? 'Recolher campo' : 'Expandir campo'}
+          className="mb-1 rounded-lg p-2.5 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        >
+          {expanded ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+        </button>
+        {/* Emoji — atalho dedicado ao lado de gravar áudio (estilo WhatsApp) */}
+        <button
+          type="button"
+          onClick={() => setEmojiOpen((v) => !v)}
+          aria-label="Emoji"
+          title="Emoji"
+          className={`mb-1 rounded-lg p-2.5 transition-colors ${
+            emojiOpen
+              ? 'bg-primary/10 text-primary'
+              : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <Smile className="h-5 w-5" />
+        </button>
         {/* Relógio — agendar a mensagem digitada (estilo LíderHub) */}
         {onSchedule && !internalMode && !!text.trim() && (
           <button

@@ -15,10 +15,22 @@ export default function InboxPage() {
   const searchParams = useSearchParams();
   const viewId = searchParams.get('view');
   const deepLinkConvId = searchParams.get('conversationId');
+  const deepLinkSearch = searchParams.get('search');
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const queryClient = useQueryClient();
   const archivedOnly = useInboxFilterStore((s) => s.archivedOnly);
+  const setSearch = useInboxFilterStore((s) => s.setSearch);
+  const setStatusTab = useInboxFilterStore((s) => s.setStatusTab);
+
+  // Deep-link da aba Contatos ("abrir conversa"): pré-preenche a busca e mostra
+  // TODAS as conversas (não só as ativas) pra o contato aparecer na lista.
+  useEffect(() => {
+    if (!deepLinkSearch) return;
+    setSearch(deepLinkSearch);
+    setStatusTab('ALL');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkSearch]);
   // Última leitura sincronizada (id + estado de arquivo) — usada para detectar a
   // transição "arquivou a conversa aberta" e fechar a página, igual ao LíderHub.
   const lastSyncedRef = useRef<{ id: string; archived: boolean } | null>(null);

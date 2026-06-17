@@ -10,9 +10,11 @@ export interface Contact {
   metadata: Record<string, any>;
   channels: { id: string; channelId: string; externalId: string; channel: { id: string; type: string; name: string } }[];
   tags: { tag: { id: string; name: string; color: string } }[];
+  status?: { id: string; name: string; color: string } | null;
   conversations?: any[];
   _count?: { conversations: number };
   createdAt: string;
+  updatedAt?: string;
 }
 
 export const contactsService = {
