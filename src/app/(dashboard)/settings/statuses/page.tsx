@@ -26,6 +26,7 @@ import {
 } from '@/features/settings/services/contact-statuses.service';
 import { departmentsService } from '@/features/settings/services/departments.service';
 import { ColorPicker } from '@/features/settings/components/color-picker';
+import { chipTextColor } from '@/lib/avatar';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
 const DEFAULT_COLOR = '#3B82F6';
@@ -34,8 +35,8 @@ const DEFAULT_COLOR = '#3B82F6';
 function StatusPill({ name, color }: { name: string; color: string }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-semibold text-white"
-      style={{ backgroundColor: color }}
+      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-semibold"
+      style={{ backgroundColor: color, color: chipTextColor(color) }}
     >
       {name}
     </span>

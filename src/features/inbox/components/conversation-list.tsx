@@ -47,7 +47,7 @@ import { ConversationContextMenu } from './conversation-context-menu';
 import { BulkActionsMenu } from './bulk-actions-menu';
 import { getBrazilState, formatPhone } from '@/lib/brazil-states';
 import { WhatsAppNewChatIcon } from '@/components/ui/icons';
-import { avatarColor, avatarInitials } from '@/lib/avatar';
+import { avatarColor, avatarInitials, chipTextColor } from '@/lib/avatar';
 import { StateFlag } from '@/components/ui/state-flag';
 import { NewConversationModal } from './new-conversation-modal';
 import { useInboxFilterStore } from '../stores/inbox-filter-store';
@@ -1118,8 +1118,8 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                             <span
                               key={t.tag.id}
                               title={t.tag.name}
-                              className="flex shrink-0 items-center rounded px-1 py-px text-[9px] font-semibold text-white"
-                              style={{ backgroundColor: t.tag.color }}
+                              className="flex shrink-0 items-center rounded px-1 py-px text-[9px] font-semibold"
+                              style={{ backgroundColor: t.tag.color, color: chipTextColor(t.tag.color) }}
                             >
                               <span className="max-w-[60px] truncate">{t.tag.name}</span>
                             </span>

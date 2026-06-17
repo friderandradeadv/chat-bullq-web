@@ -27,6 +27,23 @@ export function avatarColor(name: string | null | undefined): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+/**
+ * Cor de texto legível para um chip preenchido com `bgHex`: branco em fundos
+ * escuros, cinza-escuro em fundos claros (amarelo, cinza claro, etc.). Usa
+ * luminância perceptual (sRGB) com limiar calibrado pros chips do app.
+ */
+export function chipTextColor(bgHex: string | null | undefined): string {
+  if (!bgHex) return '#ffffff';
+  const h = bgHex.replace('#', '').trim();
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if ([r, g, b].some((n) => Number.isNaN(n))) return '#ffffff';
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.62 ? '#27272a' : '#ffffff'; // claro → zinc-800; escuro → branco
+}
+
 export function avatarInitials(name: string | null | undefined): string {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/).filter(Boolean);

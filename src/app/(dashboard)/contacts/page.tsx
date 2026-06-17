@@ -23,7 +23,7 @@ import { useOrgId } from '@/hooks/use-org-query-key';
 import { WhatsAppIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 import { PageSizeSelect } from '@/components/ui/page-size-select';
 import { StateFlag } from '@/components/ui/state-flag';
-import { avatarColor, avatarInitials } from '@/lib/avatar';
+import { avatarColor, avatarInitials, chipTextColor } from '@/lib/avatar';
 import { formatPhone, getBrazilState } from '@/lib/brazil-states';
 import { relativeTime, cn } from '@/lib/utils';
 
@@ -444,8 +444,8 @@ function ContactRow({
           {state && <StateFlag uf={state.uf} title={state.name} />}
           {contact.status && (
             <span
-              className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-              style={{ backgroundColor: contact.status.color }}
+              className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{ backgroundColor: contact.status.color, color: chipTextColor(contact.status.color) }}
             >
               {contact.status.name}
             </span>
@@ -472,8 +472,8 @@ function ContactRow({
         {contact.tags.slice(0, 3).map((t) => (
           <span
             key={t.tag.id}
-            className="truncate rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-            style={{ backgroundColor: t.tag.color }}
+            className="truncate rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{ backgroundColor: t.tag.color, color: chipTextColor(t.tag.color) }}
           >
             {t.tag.name}
           </span>

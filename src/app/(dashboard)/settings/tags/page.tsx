@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner';
 import { tagsService, type Tag } from '@/features/settings/services/tags.service';
 import { ColorPicker } from '@/features/settings/components/color-picker';
+import { chipTextColor } from '@/lib/avatar';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
 const DEFAULT_COLOR = '#3B82F6';
@@ -31,8 +32,8 @@ const DEFAULT_COLOR = '#3B82F6';
 function TagPill({ name, color }: { name: string; color: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold text-white"
-      style={{ backgroundColor: color }}
+      className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold"
+      style={{ backgroundColor: color, color: chipTextColor(color) }}
     >
       <TagIcon className="h-3 w-3 opacity-80" />
       {name}

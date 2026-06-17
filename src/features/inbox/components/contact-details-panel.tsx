@@ -63,7 +63,7 @@ import { useOrgId } from '@/hooks/use-org-query-key';
 import { useSocket } from '../hooks/use-socket';
 import { cn } from '@/lib/utils';
 import { getBrazilState, formatPhone } from '@/lib/brazil-states';
-import { avatarColor, avatarInitials } from '@/lib/avatar';
+import { avatarColor, avatarInitials, chipTextColor } from '@/lib/avatar';
 import { StateFlag } from '@/components/ui/state-flag';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -411,7 +411,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   contact.status
                     ? {
                         backgroundColor: contact.status.color,
-                        color: '#fff',
+                        color: chipTextColor(contact.status.color),
                         borderColor: contact.status.color,
                       }
                     : undefined
@@ -423,7 +423,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   <span
                     className="h-1.5 w-1.5 rounded-full"
                     style={{
-                      backgroundColor: contact.status ? 'rgba(255,255,255,0.9)' : '#a1a1aa',
+                      backgroundColor: contact.status ? chipTextColor(contact.status.color) : '#a1a1aa',
                     }}
                   />
                 )}
@@ -500,7 +500,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                       deptColor
                         ? {
                             backgroundColor: deptColor,
-                            color: '#fff',
+                            color: chipTextColor(deptColor),
                             borderColor: deptColor,
                           }
                         : undefined
@@ -511,7 +511,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                     ) : (
                       <span
                         className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: deptColor ? 'rgba(255,255,255,0.9)' : '#a1a1aa' }}
+                        style={{ backgroundColor: deptColor ? chipTextColor(deptColor) : '#a1a1aa' }}
                       />
                     )}
                     {conversation.department ? conversation.department.name : 'Sem departamento'}
@@ -578,7 +578,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   title={onContact ? 'Tag do contato' : 'Tag desta conversa'}
                   style={{
                     backgroundColor: onContact ? tag.color : `${tag.color}18`,
-                    color: onContact ? '#fff' : tag.color,
+                    color: onContact ? chipTextColor(tag.color) : tag.color,
                     borderColor: onContact ? 'transparent' : `${tag.color}55`,
                   }}
                   className={cn(
