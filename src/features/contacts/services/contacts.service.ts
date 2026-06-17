@@ -17,7 +17,35 @@ export interface Contact {
   updatedAt?: string;
 }
 
+export interface FunnelCard {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  avatarUrl: string | null;
+  statusId: string;
+  updatedAt: string;
+  tags: { id: string; name: string; color: string }[];
+  conversationId: string | null;
+}
+export interface FunnelColumn {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+}
+export interface FunnelBoard {
+  columns: FunnelColumn[];
+  cards: Record<string, FunnelCard[]>;
+}
+
 export const contactsService = {
+  async funnelBoard(departmentId?: string): Promise<FunnelBoard> {
+    const { data } = await api.get('/contacts/funnel-board', {
+      params: departmentId ? { departmentId } : {},
+    });
+    return data.data;
+  },
+
   async list(params?: Record<string, string>): Promise<{
     contacts: Contact[];
     pagination: { page: number; limit: number; total: number; totalPages: number };

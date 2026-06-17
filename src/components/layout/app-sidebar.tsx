@@ -145,7 +145,7 @@ export function AppSidebar() {
             <NavSection label="Atendimento">
               <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
               <NavItem href="/contacts" icon={BookUser} label="Contatos" />
-              <NavItem href="/pipelines" icon={KanbanSquare} label="Kanban" />
+              <NavItem href="/kanban" icon={KanbanSquare} label="Kanban" />
               <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
             </NavSection>
           </div>
