@@ -1,11 +1,54 @@
 import { api } from '@/lib/api';
 
+export type FollowUpTone =
+  | 'padrao'
+  | 'imediatista'
+  | 'consultivo'
+  | 'amigavel'
+  | 'formal';
+
+export const FOLLOW_UP_TONES: FollowUpTone[] = [
+  'padrao',
+  'imediatista',
+  'consultivo',
+  'amigavel',
+  'formal',
+];
+
+export const FOLLOW_UP_TONE_LABELS: Record<FollowUpTone, string> = {
+  padrao: 'Padrão',
+  imediatista: 'Imediatista',
+  consultivo: 'Consultivo',
+  amigavel: 'Amigável',
+  formal: 'Formal',
+};
+
+export const FOLLOW_UP_TONE_HINTS: Record<FollowUpTone, string> = {
+  padrao: 'Mensagem natural e direta (comportamento padrão).',
+  imediatista: 'Cria urgência leve e honesta, convida à ação agora.',
+  consultivo: 'Postura de especialista — esclarece e mostra o próximo passo.',
+  amigavel: 'Descontraído e próximo, como quem quer ajudar.',
+  formal: 'Profissional e sóbrio, sem gírias.',
+};
+
+/** Override de follow-up por status do funil (quantos toques + tom). */
+export interface FollowUpStatusConfig {
+  statusId: string;
+  enabled?: boolean;
+  count?: number;
+  tone?: FollowUpTone;
+}
+
 export interface FollowUpConfig {
   enabled: boolean;
   /** Horas de silêncio até cada tentativa: [4, 24, 72, 168, 336]. */
   cadenceHours: number[];
   quietStartHour: number;
   quietEndHour: number;
+  /** Tom global padrão. */
+  defaultTone: FollowUpTone;
+  /** Overrides por status do funil. */
+  perStatus: FollowUpStatusConfig[];
 }
 
 export interface FollowUpItem {
