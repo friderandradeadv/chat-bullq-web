@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip } from 'lucide-react';
+import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import { scheduledMessagesService } from '../services/scheduled-messages.service';
@@ -414,6 +414,19 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     queryFn: () => inboxService.getAuditLogs(conversation.id),
     staleTime: 15_000,
   });
+
+  // Minimizar os registros de sistema no chat (atribuição/status/IA/arquivamento)
+  // pra a conversa não ficar lotada. Preferência persistida por usuário.
+  const [hideLogs, setHideLogs] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem('chat-hide-logs') === '1',
+  );
+  const toggleHideLogs = () => {
+    setHideLogs((v) => {
+      const next = !v;
+      try { localStorage.setItem('chat-hide-logs', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   // Mensagens rápidas da org — popup "/" no compositor (estilo LíderHub).
   const orgId = useOrgId();
@@ -957,6 +970,19 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
           </div>
         ) : (
           <div className="mx-auto max-w-3xl space-y-2.5">
+            {auditData.length > 0 && (
+              <div className="flex justify-center pt-1">
+                <button
+                  type="button"
+                  onClick={toggleHideLogs}
+                  title={hideLogs ? 'Mostrar registros do sistema' : 'Ocultar registros do sistema'}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-[10.5px] font-medium text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                >
+                  {hideLogs ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                  {hideLogs ? `Mostrar registros (${auditData.length})` : 'Ocultar registros'}
+                </button>
+              </div>
+            )}
             {(() => {
               const reactionMap = new Map<string, string[]>();
               for (const msg of messages) {
@@ -997,12 +1023,12 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
               const visibleMessages = ([
                 ...messages.filter((m) => m.type !== 'REACTION'),
                 ...noteMessages,
-                ...auditMessages,
+                ...(hideLogs ? [] : auditMessages),
               ] as any[]).sort(
                 (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
               );
               let lastDateKey = '';
-              return visibleMessages.map((msg) => {
+              return visibleMessages.map((msg, _msgIdx) => {
                 const isOutbound = msg.direction === 'OUTBOUND';
                 const isSearchMatch = matchIds.includes(msg.id);
                 const isCurrentMatch = currentMatchId === msg.id;
@@ -1015,6 +1041,19 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                 lastDateKey = dateKey;
                 const isInternal = !!(msg.metadata as Record<string, any>)?.isInternal;
                 const isSystem = !!(msg.metadata as Record<string, any>)?.isSystem;
+                // Mostrar o nome do remetente só na 1ª msg de uma sequência do
+                // mesmo autor/direção (evita repetir o nome quando manda várias
+                // seguidas). Reinicia após separador de data ou troca de autor.
+                const _prevMsg = _msgIdx > 0 ? visibleMessages[_msgIdx - 1] : undefined;
+                const _senderKey = (m: any) =>
+                  m?.sender?.id ?? m?.senderId ?? (m?.direction === 'OUTBOUND' ? 'me' : 'them');
+                const sameSenderAsPrev =
+                  !showDateSeparator &&
+                  !!_prevMsg &&
+                  _prevMsg.direction === msg.direction &&
+                  !(_prevMsg.metadata as Record<string, any>)?.isInternal &&
+                  !(_prevMsg.metadata as Record<string, any>)?.isSystem &&
+                  _senderKey(_prevMsg) === _senderKey(msg);
                 const dateSeparator = showDateSeparator ? (
                   <div className="flex justify-center pb-1 pt-3 first:pt-0">
                     <span className="rounded-full bg-zinc-200/80 px-3 py-1 text-[11px] font-medium text-zinc-600 shadow-sm dark:bg-zinc-800 dark:text-zinc-300">
@@ -1126,7 +1165,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                           {msg.senderName}
                         </p>
                       )}
-                      {isOutbound && (msg.sender?.name || (msg.senderId && msg.senderId === user?.id && user?.name)) && (
+                      {isOutbound && !sameSenderAsPrev && (msg.sender?.name || (msg.senderId && msg.senderId === user?.id && user?.name)) && (
                         <p className="mb-0.5 mr-1 text-right text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
                           {msg.sender?.name || user?.name}
                         </p>

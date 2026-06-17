@@ -338,6 +338,34 @@ export function ConversationContextMenu({
     >
       {view === 'root' && (
         <>
+          {alreadyUnread ? (
+            <button
+              onClick={markRead}
+              disabled={markingRead}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            >
+              {markingRead ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+              )}
+              <span className="flex-1">Marcar como lida</span>
+            </button>
+          ) : (
+            <button
+              onClick={markUnread}
+              disabled={markingUnread}
+              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            >
+              {markingUnread ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+              )}
+              <span className="flex-1">Marcar como não-lida</span>
+            </button>
+          )}
+          <div className="mx-2 my-1 border-t border-zinc-100 dark:border-zinc-800" />
           <div className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             Atribuir tag
           </div>
@@ -426,33 +454,6 @@ export function ConversationContextMenu({
             <Pencil className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
             <span className="flex-1">Renomear</span>
           </button>
-          {alreadyUnread ? (
-            <button
-              onClick={markRead}
-              disabled={markingRead}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-            >
-              {markingRead ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
-              ) : (
-                <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
-              )}
-              <span className="flex-1">Marcar como lida</span>
-            </button>
-          ) : (
-            <button
-              onClick={markUnread}
-              disabled={markingUnread}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-            >
-              {markingUnread ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
-              ) : (
-                <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
-              )}
-              <span className="flex-1">Marcar como não-lida</span>
-            </button>
-          )}
           <button
             onClick={toggleArchive}
             disabled={archiving}

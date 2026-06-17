@@ -42,7 +42,7 @@ function relativeTime(iso: string): string {
   return `há ${Math.floor(months / 12)} ano(s)`;
 }
 
-const PAGE_SIZES = [10, 25, 50, 100];
+const PAGE_SIZES = [10, 25, 50, 100, 200, 500];
 
 export default function BaseConhecimentoPage() {
   const qc = useQueryClient();

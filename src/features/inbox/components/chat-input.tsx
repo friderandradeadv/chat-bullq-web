@@ -287,7 +287,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       } else {
         const sig =
           signatureOn && signatureName && !internalMode
-            ? `${trimmed}\n\n_${signatureName}_`
+            ? `*${signatureName}:*\n${trimmed}`
             : trimmed;
         await onSend(sig);
       }
@@ -471,7 +471,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         )}
         {signatureOn && signatureName && (
           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
-            <PenLine className="h-3 w-3" /> Assinando
+            <PenLine className="h-3 w-3" /> Assinando como <span className="font-semibold">{signatureName}:</span>
           </span>
         )}
         <div className="flex-1" />

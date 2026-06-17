@@ -93,13 +93,20 @@ function ImageTranscription({ message, isOutbound }: MediaProps) {
   );
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  // Imagem NÃO exibe a transcrição automaticamente (nem a cacheada/importada do
+  // LíderHub) — só depois que o atendente clica. (Áudio continua auto-exibindo,
+  // lá é desejado.) Pedido do Matheus: "transcrever somente quando clicar".
+  const [revealed, setRevealed] = useState(false);
 
-  // Sync with socket-pushed metadata updates.
+  // Sync with socket-pushed metadata updates (só reflete depois de revelado).
   useEffect(() => {
-    if (message.metadata?.transcription) setTranscript(message.metadata.transcription);
-  }, [message.metadata?.transcription]);
+    if (revealed && message.metadata?.transcription) setTranscript(message.metadata.transcription);
+  }, [message.metadata?.transcription, revealed]);
 
   const handleTranscribe = async () => {
+    setRevealed(true);
+    // Já há texto em cache (importado ou transcrito antes) → só revela, sem refazer.
+    if (transcript?.text) return;
     setTranscribing(true);
     setError(null);
     try {
@@ -122,7 +129,7 @@ function ImageTranscription({ message, isOutbound }: MediaProps) {
         isOutbound ? 'border-black/10 dark:border-white/20' : 'border-zinc-200 dark:border-zinc-700'
       }`}
     >
-      {text ? (
+      {revealed && text ? (
         <>
           <div className={`mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide ${muted}`}>
             <FileText className="h-3 w-3" /> Transcrição
@@ -160,7 +167,7 @@ function ImageTranscription({ message, isOutbound }: MediaProps) {
               : 'text-primary hover:bg-primary/10 dark:text-primary'
           }`}
         >
-          <FileText className="h-3.5 w-3.5" /> Transcrever imagem
+          <FileText className="h-3.5 w-3.5" /> {text ? 'Ver transcrição' : 'Transcrever imagem'}
         </button>
       )}
       {error && <span className="mt-1 block text-[11px] text-red-500">{error}</span>}

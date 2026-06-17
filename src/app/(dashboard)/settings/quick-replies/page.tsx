@@ -124,7 +124,7 @@ export default function SettingsQuickRepliesPage() {
 
   // Paginação: volta pra 1ª página quando muda a busca ou o tamanho.
   useEffect(() => { setPage(1); }, [search, pageSize]);
-  const PAGE_SIZES = [10, 25, 50, 100];
+  const PAGE_SIZES = [10, 25, 50, 100, 200, 500];
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
