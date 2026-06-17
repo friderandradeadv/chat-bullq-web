@@ -10,7 +10,6 @@ import {
   Building2,
   KeyRound,
   Sparkles,
-  BookUser,
   Plug,
   Network,
   CircleDot,
@@ -45,7 +44,6 @@ const groups = [
       { href: '/settings/statuses', label: 'Status', icon: CircleDot },
       { href: '/settings/tags', label: 'Etiquetas', icon: Tags },
       { href: '/settings/departments', label: 'Departamento', icon: Network },
-      { href: '/settings/contacts', label: 'Contatos', icon: BookUser },
     ],
   },
   {
