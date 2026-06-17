@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip, Eye, EyeOff } from 'lucide-react';
+import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip, Eye, EyeOff, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import { scheduledMessagesService } from '../services/scheduled-messages.service';
@@ -640,6 +640,39 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     },
     [conversation.id, queryClient],
   );
+
+  // Edição de mensagem enviada (janela ~15 min do WhatsApp).
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const startEditMessage = useCallback((msg: Message) => {
+    setEditing({ id: msg.id, text: (msg.content as any)?.text ?? '' });
+  }, []);
+  const handleSaveEdit = useCallback(async () => {
+    if (!editing) return;
+    const text = editing.text.trim();
+    if (!text) { toast.error('A mensagem não pode ficar vazia.'); return; }
+    setSavingEdit(true);
+    try {
+      const result = await inboxService.editMessage(editing.id, text);
+      queryClient.setQueryData<{ messages: Message[] } | undefined>(
+        ['messages', conversation.id],
+        (prev) => prev ? {
+          ...prev,
+          messages: prev.messages.map((m) =>
+            m.id === editing.id
+              ? { ...m, content: { ...(m.content as any), text: result.text }, metadata: { ...(m.metadata as any), edited: true } }
+              : m,
+          ),
+        } : prev,
+      );
+      setEditing(null);
+      toast.success('Mensagem editada');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Erro ao editar mensagem');
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [editing, conversation.id, queryClient]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1299,7 +1332,27 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                           }`}
                         >
                           {msg.type === 'TEXT' ? (
-                            /^\[Undecryptable\]|^\[Unsupported message type\]|n[ãa]o foi poss[ií]vel descriptografar/i.test(msg.content?.text || '') ? (
+                            editing && editing.id === msg.id ? (
+                              <div className="flex flex-col gap-1.5">
+                                <textarea
+                                  value={editing.text}
+                                  onChange={(e) => setEditing({ id: msg.id, text: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(); }
+                                    if (e.key === 'Escape') setEditing(null);
+                                  }}
+                                  autoFocus
+                                  rows={2}
+                                  className="w-full min-w-[220px] resize-none rounded-lg border border-black/10 bg-white/80 px-2 py-1.5 text-sm text-zinc-800 outline-none focus:border-primary dark:border-white/15 dark:bg-black/20 dark:text-zinc-100"
+                                />
+                                <div className="flex items-center justify-end gap-2 text-[11px]">
+                                  <button onClick={() => setEditing(null)} className="rounded px-2 py-0.5 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10">Cancelar</button>
+                                  <button onClick={handleSaveEdit} disabled={savingEdit} className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-0.5 font-medium text-white hover:bg-primary/90 disabled:opacity-50">
+                                    {savingEdit && <Loader2 className="h-3 w-3 animate-spin" />} Salvar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : /^\[Undecryptable\]|^\[Unsupported message type\]|n[ãa]o foi poss[ií]vel descriptografar/i.test(msg.content?.text || '') ? (
                               <p className="flex items-center gap-1.5 text-sm italic text-zinc-500 dark:text-zinc-400">
                                 <Ban className="h-3.5 w-3.5 shrink-0 opacity-60" />
                                 Mensagem criptografada não pôde ser carregada — abra o WhatsApp no celular para vê-la.
@@ -1330,6 +1383,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                               isOutbound ? 'justify-end opacity-70' : 'text-zinc-400'
                             }`}
                           >
+                            {msg.metadata?.edited && <span className="italic opacity-70">editado</span>}
                             <span>{formatTime(msg.createdAt)}</span>
                             {isOutbound && (
                               <span title={statusTooltip(msg.status, msg.failedReason)}>
@@ -1486,6 +1540,17 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
             {msgMenu.msg.direction === 'OUTBOUND' && !msgMenu.msg.metadata?.isInternal && (
               <>
                 <div className="my-1 border-t border-zinc-100 dark:border-zinc-700" />
+                {msgMenu.msg.type === 'TEXT' &&
+                  !msgMenu.msg.revokedAt &&
+                  Date.now() - new Date(msgMenu.msg.createdAt).getTime() < 15 * 60 * 1000 && (
+                    <button
+                      onClick={() => { startEditMessage(msgMenu.msg); setMsgMenu(null); }}
+                      className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700/60"
+                    >
+                      <Pencil className="h-4 w-4 shrink-0 text-zinc-400" />
+                      Editar
+                    </button>
+                  )}
                 <button
                   onClick={() => { handleRevoke(msgMenu.msg); setMsgMenu(null); }}
                   className="flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"

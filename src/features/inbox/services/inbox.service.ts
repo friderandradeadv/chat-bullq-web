@@ -281,6 +281,15 @@ export const inboxService = {
     return data.data ?? data;
   },
 
+  async editMessage(messageId: string, text: string): Promise<{
+    messageId: string;
+    text: string;
+    editedAt: string;
+  }> {
+    const { data } = await api.patch(`/messages/${messageId}`, { text });
+    return data.data ?? data;
+  },
+
   async assignToMe(conversationId: string): Promise<Conversation> {
     const { data } = await api.post(`/conversations/${conversationId}/assign-me`);
     return data.data;
