@@ -1113,16 +1113,15 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                               </span>
                             );
                           })()}
-                          {/* Tag chips */}
+                          {/* Tag chips — preenchidas (cor sólida + texto branco), igual aos Contatos */}
                           {allTags.slice(0, 2).map((t) => (
                             <span
                               key={t.tag.id}
                               title={t.tag.name}
-                              className="flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[10px] font-medium"
-                              style={{ backgroundColor: `${t.tag.color}22`, color: t.tag.color }}
+                              className="flex shrink-0 items-center rounded px-1.5 py-px text-[10px] font-semibold text-white"
+                              style={{ backgroundColor: t.tag.color }}
                             >
-                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: t.tag.color }} />
-                              <span className="max-w-[48px] truncate">{t.tag.name}</span>
+                              <span className="max-w-[60px] truncate">{t.tag.name}</span>
                             </span>
                           ))}
                           {allTags.length > 2 && (

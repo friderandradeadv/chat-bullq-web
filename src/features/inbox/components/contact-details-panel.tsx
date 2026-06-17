@@ -496,9 +496,9 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                 style={
                   contact.status
                     ? {
-                        backgroundColor: `${contact.status.color}1a`,
-                        color: contact.status.color,
-                        borderColor: `${contact.status.color}40`,
+                        backgroundColor: contact.status.color,
+                        color: '#fff',
+                        borderColor: contact.status.color,
                       }
                     : undefined
                 }
@@ -509,7 +509,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   <span
                     className="h-1.5 w-1.5 rounded-full"
                     style={{
-                      backgroundColor: contact.status?.color ?? '#a1a1aa',
+                      backgroundColor: contact.status ? 'rgba(255,255,255,0.9)' : '#a1a1aa',
                     }}
                   />
                 )}
@@ -663,8 +663,8 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   key={tag.id}
                   title={onContact ? 'Tag do contato' : 'Tag desta conversa'}
                   style={{
-                    backgroundColor: `${tag.color}18`,
-                    color: tag.color,
+                    backgroundColor: onContact ? tag.color : `${tag.color}18`,
+                    color: onContact ? '#fff' : tag.color,
                     borderColor: onContact ? 'transparent' : `${tag.color}55`,
                   }}
                   className={cn(
