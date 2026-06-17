@@ -745,24 +745,6 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   };
 
-  // Cor da área selecionada — pra barrinha sob as abas (igual LíderHub: indica
-  // visualmente qual área está ativa). Reaproveita o cache de inbox-views do switcher.
-  const { data: _allViews = [] } = useQuery({
-    queryKey: ['inbox-views'],
-    queryFn: () => inboxViewsService.list(),
-    staleTime: 60_000,
-    enabled: !!viewId,
-  });
-  const AREA_BAR: Record<string, string> = {
-    green: 'bg-green-500', pink: 'bg-pink-500', violet: 'bg-violet-500',
-    amber: 'bg-amber-500', red: 'bg-red-500', blue: 'bg-sky-500', sky: 'bg-sky-500',
-    orange: 'bg-orange-500', teal: 'bg-teal-500',
-  };
-  const _curView = viewId ? _allViews.find((v) => v.id === viewId) : null;
-  const areaBarColor = _curView?.color
-    ? (AREA_BAR[_curView.color] ?? 'bg-zinc-300 dark:bg-zinc-600')
-    : null;
-
   // LíderHub-style tabs: the ACTIVE tab adopts its own semantic colour
   // (icon + label + underline), not a single brand colour. `badge` = pill bg,
   // `activeText` = colour when selected, `activeBorder` = underline colour.
@@ -851,10 +833,10 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                 }
                 setStatusTab(isActive ? 'ALL' : tab.value);
               }}
-              className={`flex flex-1 flex-col items-center justify-center gap-1.5 px-3 py-2.5 text-[13px] font-normal transition-colors ${
+              className={`flex flex-1 flex-col items-center justify-center gap-1.5 border-b-2 px-3 py-2.5 text-[13px] font-normal transition-colors ${
                 isActive
-                  ? 'text-zinc-900 dark:text-zinc-100 bg-zinc-100/30 dark:bg-zinc-900/40'
-                  : 'text-zinc-500 hover:text-zinc-700 hover:bg-muted/30 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  ? `bg-zinc-100/30 text-zinc-900 dark:bg-zinc-900/40 dark:text-zinc-100 ${tab.activeBorder}`
+                  : 'border-transparent text-zinc-500 hover:bg-muted/30 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
               }`}
             >
               {/* ícone + badge de contagem */}
@@ -869,11 +851,6 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
           );
         })}
       </div>
-      {/* Barrinha com a cor da área selecionada (igual LíderHub) — indica qual
-          área está ativa sob as abas. Some quando os Arquivados estão abertos. */}
-      {areaBarColor && !archivedOnly && (
-        <div className={`h-[3px] w-full ${areaBarColor} transition-colors`} />
-      )}
 
       {/* Arquivados — abre/fecha a lista de arquivadas inline (igual LíderHub):
           mostra a contagem, gira o chevron e destaca a linha quando aberto. */}
