@@ -3,7 +3,16 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Plus, Search, X, Scale } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  X,
+  Star,
+  Rss,
+  Printer,
+  FileDown,
+  RefreshCw,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService,
@@ -12,6 +21,10 @@ import {
   type CreateCaseInput,
 } from '@/features/legal-cases/services/legal-cases.service';
 
+// ─── Estilo "cara do Astrea" (tema claro, azul Astrea) ───────────────
+// Componentes próprios; replica o look (não os ativos da Aurum).
+export const ASTREA_BLUE = '#1488d6';
+
 const STATUS_LABEL: Record<CaseStatus, string> = {
   ACTIVE: 'Ativo',
   ARCHIVED: 'Arquivado',
@@ -19,12 +32,21 @@ const STATUS_LABEL: Record<CaseStatus, string> = {
   CLOSED: 'Encerrado',
 };
 
-const STATUS_STYLE: Record<CaseStatus, string> = {
-  ACTIVE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  ARCHIVED: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
-  SUSPENDED: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  CLOSED: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
-};
+// Tags coloridas estilo Astrea (pílulas com cor por categoria).
+const TAG_COLORS = [
+  'bg-sky-100 text-sky-700',
+  'bg-violet-100 text-violet-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-rose-100 text-rose-700',
+  'bg-amber-100 text-amber-700',
+];
+function tagColor(label: string): string {
+  let h = 0;
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
+  return TAG_COLORS[h % TAG_COLORS.length];
+}
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 
 export default function ProcessosPage() {
   const qc = useQueryClient();
@@ -42,43 +64,48 @@ export default function ProcessosPage() {
   });
 
   return (
-    <div className="flex h-full flex-col p-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            <FolderOpen className="h-5 w-5 text-primary" />
-            Processos
-          </h1>
-          <p className="mt-0.5 text-sm text-zinc-500">
-            Casos, partes, andamentos e prazos — ligados às conversas do cliente
-          </p>
+    <div className="flex h-full flex-col bg-[#f5f6f8] text-zinc-800">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-6">
+        <h1 className="text-2xl font-normal text-zinc-700">Processos e casos</h1>
+        <div className="flex items-center gap-2">
+          <IconBtn title="Imprimir">
+            <Printer className="h-4 w-4" />
+          </IconBtn>
+          <IconBtn title="Exportar">
+            <FileDown className="h-4 w-4" />
+          </IconBtn>
+          <IconBtn title="Atualizar" onClick={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}>
+            <RefreshCw className="h-4 w-4" />
+          </IconBtn>
+          <button
+            onClick={() => setCreating(true)}
+            title="Novo processo"
+            className="flex h-9 w-9 items-center justify-center rounded-md text-white shadow-sm"
+            style={{ backgroundColor: ASTREA_BLUE }}
+          >
+            <Plus className="h-5 w-5" />
+          </button>
         </div>
-        <button
-          onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Novo processo
-        </button>
       </div>
 
       {/* Filtros */}
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+      <div className="flex items-center gap-3 px-6 pt-5">
+        <div className="relative max-w-2xl flex-1">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por título, CNJ ou código interno…"
-            className="h-9 w-full rounded-md border border-zinc-300 bg-white pl-9 pr-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            placeholder="Digite algo para pesquisar"
+            className="h-10 w-full rounded-md border border-zinc-300 bg-white pl-4 pr-10 text-sm outline-none focus:border-[#1488d6]"
           />
+          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as CaseStatus | '')}
-          className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium uppercase tracking-wide text-zinc-600 outline-none"
         >
-          <option value="">Todos os status</option>
+          <option value="">Ativos</option>
           {(Object.keys(STATUS_LABEL) as CaseStatus[]).map((s) => (
             <option key={s} value={s}>
               {STATUS_LABEL[s]}
@@ -87,23 +114,42 @@ export default function ProcessosPage() {
         </select>
       </div>
 
-      {/* Lista */}
-      <div className="mt-6 flex-1 overflow-y-auto">
-        {isLoading && <p className="text-sm text-zinc-400">Carregando…</p>}
+      <p className="px-6 pt-3 text-sm text-zinc-500">
+        {cases.length} processo(s) e caso(s)
+      </p>
 
-        {!isLoading && cases.length === 0 && (
-          <div className="rounded-xl border-2 border-dashed border-zinc-200 p-10 text-center dark:border-zinc-800">
-            <Scale className="mx-auto h-10 w-10 text-zinc-300 dark:text-zinc-600" />
-            <p className="mt-3 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-              Nenhum processo encontrado
-            </p>
-          </div>
-        )}
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {cases.map((c) => (
-            <CaseCard key={c.id} c={c} />
-          ))}
+      {/* Tabela */}
+      <div className="mt-2 flex-1 overflow-y-auto px-6 pb-6">
+        <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-zinc-200 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                <th className="px-4 py-3">Título</th>
+                <th className="px-4 py-3">Cliente / Pasta</th>
+                <th className="px-4 py-3">Ação / Foro</th>
+                <th className="px-4 py-3 whitespace-nowrap">Últ. mov.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-zinc-400">
+                    Carregando…
+                  </td>
+                </tr>
+              )}
+              {!isLoading && cases.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-zinc-400">
+                    Nenhum processo encontrado
+                  </td>
+                </tr>
+              )}
+              {cases.map((c) => (
+                <CaseRow key={c.id} c={c} />
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -120,35 +166,75 @@ export default function ProcessosPage() {
   );
 }
 
-function CaseCard({ c }: { c: CaseListItem }) {
+function CaseRow({ c }: { c: CaseListItem }) {
   const client = c.parties[0];
+  const tags = [c.area, STATUS_LABEL[c.status]].filter(Boolean) as string[];
   return (
-    <Link
-      href={`/processos/${c.id}`}
-      className="block rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:border-primary/40 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/50"
+    <tr className="group border-b border-zinc-100 last:border-0 hover:bg-[#f0f7fd]">
+      <td className="px-4 py-3 align-top">
+        <div className="flex items-start gap-2">
+          <Star className="mt-0.5 h-4 w-4 shrink-0 text-zinc-300 group-hover:text-amber-400" />
+          <Rss className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          <div className="min-w-0">
+            <Link
+              href={`/processos/${c.id}`}
+              className="text-sm font-medium text-zinc-800 hover:text-[#1488d6] hover:underline"
+            >
+              {c.title}
+            </Link>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              Processo {STATUS_LABEL[c.status].toLowerCase()}
+              {c.cnjNumber ? (
+                <>
+                  {' · '}
+                  <span className="font-mono text-[#1488d6]">{c.cnjNumber}</span>
+                </>
+              ) : null}
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${tagColor(t)}`}
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3 align-top text-sm text-zinc-600">
+        {client?.name ?? '—'}
+      </td>
+      <td className="px-4 py-3 align-top">
+        <p className="text-sm text-zinc-700">{c.area ?? '—'}</p>
+        {c.court && <p className="text-xs text-zinc-400">{c.court}</p>}
+      </td>
+      <td className="px-4 py-3 align-top whitespace-nowrap text-sm text-zinc-500">
+        {fmtDate(c.updatedAt)}
+      </td>
+    </tr>
+  );
+}
+
+function IconBtn({
+  children,
+  title,
+  onClick,
+}: {
+  children: React.ReactNode;
+  title: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700"
     >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="line-clamp-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          {c.title}
-        </h3>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLE[c.status]}`}>
-          {STATUS_LABEL[c.status]}
-        </span>
-      </div>
-      {c.cnjNumber && (
-        <p className="mt-1 font-mono text-xs text-zinc-500">{c.cnjNumber}</p>
-      )}
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
-        {client && <span>👤 {client.name}</span>}
-        {c.area && <span>{c.area}</span>}
-        <span>{c._count.movements} andamentos</span>
-        {c._count.deadlines > 0 && (
-          <span className="font-semibold text-amber-600 dark:text-amber-400">
-            {c._count.deadlines} prazo(s)
-          </span>
-        )}
-      </div>
-    </Link>
+      {children}
+    </button>
   );
 }
 
@@ -187,12 +273,10 @@ function CreateCaseDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-50 w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-50 w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 text-zinc-800 shadow-2xl">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Novo processo
-          </h2>
+          <h2 className="text-lg font-medium text-zinc-700">Novo processo</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700">
             <X className="h-5 w-5" />
           </button>
@@ -204,7 +288,7 @@ function CreateCaseDialog({
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               className={inputCls}
-              placeholder="Ex.: Ação de cobrança — Cliente x Banco"
+              placeholder="Ex.: Cliente x Banco — Cumprimento de sentença"
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -225,7 +309,7 @@ function CreateCaseDialog({
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Área">
+            <Field label="Ação / Área">
               <input
                 value={form.area ?? ''}
                 onChange={(e) => setForm({ ...form, area: e.target.value })}
@@ -233,7 +317,7 @@ function CreateCaseDialog({
                 placeholder="cível, trabalhista, RMC…"
               />
             </Field>
-            <Field label="Vara / Tribunal">
+            <Field label="Vara / Foro">
               <input
                 value={form.court ?? ''}
                 onChange={(e) => setForm({ ...form, court: e.target.value })}
@@ -251,13 +335,14 @@ function CreateCaseDialog({
           </Field>
         </div>
         <div className="mt-6 flex items-center justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-zinc-500">
             Cancelar
           </button>
           <button
             onClick={submit}
             disabled={saving}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            style={{ backgroundColor: ASTREA_BLUE }}
           >
             {saving ? 'Salvando…' : 'Criar'}
           </button>
@@ -267,8 +352,9 @@ function CreateCaseDialog({
   );
 }
 
+// Reaproveitados pelas outras telas jurídicas (estilo claro Astrea).
 export const inputCls =
-  'h-9 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900';
+  'h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-[#1488d6]';
 
 export function Field({
   label,
@@ -279,9 +365,7 @@ export function Field({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-        {label}
-      </label>
+      <label className="mb-1 block text-xs font-medium text-zinc-500">{label}</label>
       {children}
     </div>
   );
