@@ -1096,7 +1096,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                             min-h fixo reserva a altura da faixa de chips mesmo
                             quando vazia → todas as linhas têm a MESMA altura
                             (linha horizontal uniforme, igual ao LíderHub). */}
-                        <div className="mt-2 flex min-h-[20px] items-center gap-1 min-w-0">
+                        <div className="mt-2 flex min-h-[18px] items-center gap-1 min-w-0">
                           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
                           {/* Brazilian state from DDD */}
                           {(() => {
@@ -1106,9 +1106,9 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                             return (
                               <span
                                 title={st.name}
-                                className="flex shrink-0 items-center gap-1 rounded bg-emerald-50 px-1 py-px text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                className="flex shrink-0 items-center gap-0.5 rounded bg-emerald-50 px-1 py-px text-[9px] font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
                               >
-                                <StateFlag uf={st.uf} className="h-2.5 w-4 shrink-0 rounded-[1px] object-cover ring-1 ring-black/10" />
+                                <StateFlag uf={st.uf} className="h-2 w-3.5 shrink-0 rounded-[1px] object-cover ring-1 ring-black/10" />
                                 {st.uf}
                               </span>
                             );
@@ -1118,29 +1118,29 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                             <span
                               key={t.tag.id}
                               title={t.tag.name}
-                              className="flex shrink-0 items-center rounded px-1.5 py-px text-[10px] font-semibold text-white"
+                              className="flex shrink-0 items-center rounded px-1 py-px text-[9px] font-semibold text-white"
                               style={{ backgroundColor: t.tag.color }}
                             >
                               <span className="max-w-[60px] truncate">{t.tag.name}</span>
                             </span>
                           ))}
                           {allTags.length > 2 && (
-                            <span className="shrink-0 text-[10px] text-zinc-400">+{allTags.length - 2}</span>
+                            <span className="shrink-0 text-[9px] text-zinc-400">+{allTags.length - 2}</span>
                           )}
                           {/* Conexão — nome da conexão (ex.: "RMC") que recebeu */}
                           {conv.channel.name ? (
                             <span
                               title={`Conexão: ${conv.channel.name}${conv.channel.phoneNumber ? ` · ${formatPhone(conv.channel.phoneNumber)}` : ''}`}
-                              className="flex shrink-0 items-center gap-0.5 rounded bg-zinc-50 px-1 py-px text-[10px] font-medium text-zinc-400 dark:bg-zinc-800/60 dark:text-zinc-500"
+                              className="flex shrink-0 items-center gap-0.5 rounded bg-zinc-50 px-1 py-px text-[9px] font-medium text-zinc-400 dark:bg-zinc-800/60 dark:text-zinc-500"
                             >
-                              <Phone className="h-2.5 w-2.5 shrink-0" />
+                              <Phone className="h-2 w-2 shrink-0" />
                               <span className="max-w-[70px] truncate">{conv.channel.name}</span>
                             </span>
                           ) : null}
                           {/* Assignee pill — gradient (LíderHub style) */}
                           {conv.assignedTo ? (
-                            <span className="flex min-w-0 items-center gap-0.5 overflow-hidden rounded-md bg-gradient-to-r from-sky-100 to-indigo-100 px-1.5 py-px text-[10px] font-medium text-sky-700 ring-1 ring-sky-500/15 dark:from-sky-900/30 dark:to-indigo-900/30 dark:text-sky-300 dark:ring-sky-400/15">
-                              <User className="h-2.5 w-2.5 shrink-0" />
+                            <span className="flex min-w-0 items-center gap-0.5 overflow-hidden rounded-md bg-gradient-to-r from-sky-100 to-indigo-100 px-1 py-px text-[9px] font-medium text-sky-700 ring-1 ring-sky-500/15 dark:from-sky-900/30 dark:to-indigo-900/30 dark:text-sky-300 dark:ring-sky-400/15">
+                              <User className="h-2 w-2 shrink-0" />
                               <span className="truncate max-w-[90px]">{conv.assignedTo.name}</span>
                             </span>
                           ) : null}
