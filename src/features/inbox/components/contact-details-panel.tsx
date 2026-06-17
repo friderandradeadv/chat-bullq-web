@@ -15,7 +15,6 @@ import {
   FileSignature,
   Activity,
   Heart,
-  Info,
   Tag as TagIcon,
   Film,
   File,
@@ -83,14 +82,6 @@ const STATUS_DOT: Record<string, string> = {
   WAITING: 'bg-violet-500',
 };
 
-const STATUS_PILL: Record<string, string> = {
-  OPEN: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800',
-  PENDING: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800',
-  BOT: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800',
-  CLOSED: 'bg-zinc-50 text-zinc-500 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700',
-  WAITING: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-400 dark:border-violet-800',
-};
-
 // ─── Avatar ──────────────────────────────────────────────────────────────────
 
 function PanelAvatar({
@@ -135,7 +126,6 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
   const orgId = useOrgId();
   const queryClient = useQueryClient();
   const [savingDept, setSavingDept] = useState(false);
-  const [savingStatus, setSavingStatus] = useState(false);
   const [savingContactStatus, setSavingContactStatus] = useState(false);
   const [syncingAvatar, setSyncingAvatar] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -196,26 +186,6 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
       // silent — header will show error if needed
     } finally {
       setSavingDept(false);
-    }
-  };
-
-  const handleSetStatus = async (status: string, close: () => void) => {
-    if (status === conversation.status) {
-      close();
-      return;
-    }
-    setSavingStatus(true);
-    try {
-      await inboxService.updateConversation(conversation.id, { status });
-      queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      queryClient.invalidateQueries({ queryKey: ['conversation-counts', orgId] });
-      toast.success(`Status alterado para "${STATUS_LABELS[status] ?? status}"`);
-      close();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erro ao alterar status');
-    } finally {
-      setSavingStatus(false);
     }
   };
 
@@ -426,62 +396,6 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
         <p className="mb-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Propriedades</p>
 
         <div className="flex flex-col gap-2.5">
-          {/* Status — editable (ordem: status, tag, departamento) */}
-          <div className="order-1 flex items-center gap-2.5">
-            <Info className="h-4 w-4 shrink-0 text-zinc-400" />
-            <Popover className="relative">
-              <PopoverButton
-                disabled={savingStatus}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
-                  STATUS_PILL[conversation.status] ?? STATUS_PILL.CLOSED,
-                )}
-              >
-                {savingStatus ? (
-                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                ) : (
-                  <span
-                    className={cn(
-                      'h-1.5 w-1.5 rounded-full',
-                      STATUS_DOT[conversation.status] ?? 'bg-zinc-400',
-                    )}
-                  />
-                )}
-                {STATUS_LABELS[conversation.status] ?? conversation.status}
-                <ChevronDown className="h-3 w-3 opacity-60" />
-              </PopoverButton>
-              <PopoverPanel
-                anchor="bottom start"
-                transition
-                className="z-50 mt-1 w-48 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-              >
-                {({ close }) => (
-                  <>
-                    {(['OPEN', 'PENDING', 'BOT', 'WAITING', 'CLOSED'] as const).map((s) => {
-                      const isActive = s === conversation.status;
-                      return (
-                        <button
-                          key={s}
-                          onClick={() => handleSetStatus(s, close)}
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors',
-                            isActive
-                              ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
-                              : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60',
-                          )}
-                        >
-                          <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[s])} />
-                          <span className="flex-1">{STATUS_LABELS[s]}</span>
-                          {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
-                        </button>
-                      );
-                    })}
-                  </>
-                )}
-              </PopoverPanel>
-            </Popover>
-          </div>
-
           {/* Status do contato (funil) — editable */}
           <div className="order-2 flex items-center gap-2.5">
             <CircleDot className="h-4 w-4 shrink-0 text-zinc-400" />
@@ -585,9 +499,9 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                     style={
                       deptColor
                         ? {
-                            backgroundColor: `${deptColor}1a`,
-                            color: deptColor,
-                            borderColor: `${deptColor}40`,
+                            backgroundColor: deptColor,
+                            color: '#fff',
+                            borderColor: deptColor,
                           }
                         : undefined
                     }
@@ -597,7 +511,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                     ) : (
                       <span
                         className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: deptColor ?? '#a1a1aa' }}
+                        style={{ backgroundColor: deptColor ? 'rgba(255,255,255,0.9)' : '#a1a1aa' }}
                       />
                     )}
                     {conversation.department ? conversation.department.name : 'Sem departamento'}
