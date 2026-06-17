@@ -27,18 +27,14 @@ import { useOrgId } from '@/hooks/use-org-query-key';
 
 const DEFAULT_COLOR = '#3B82F6';
 
-/** Pill colorida com ícone de tag — visual LíderHub */
+/** Pill colorida preenchida (cor sólida + texto branco) — igual aos Contatos. */
 function TagPill({ name, color }: { name: string; color: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] font-medium"
-      style={{
-        backgroundColor: `${color}26`,
-        color,
-        borderColor: `${color}59`,
-      }}
+      className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold text-white"
+      style={{ backgroundColor: color }}
     >
-      <TagIcon className="h-3 w-3" />
+      <TagIcon className="h-3 w-3 opacity-80" />
       {name}
     </span>
   );

@@ -21,6 +21,10 @@ import {
   ClipboardList,
   Cable,
   KanbanSquare,
+  FolderOpen,
+  Clock,
+  CalendarDays,
+  Mail,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -142,6 +146,17 @@ export function AppSidebar() {
               <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
               <NavItem href="/contacts" icon={BookUser} label="Contatos" />
               <NavItem href="/pipelines" icon={KanbanSquare} label="Kanban" />
+              <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
+            </NavSection>
+          </div>
+
+          {/* JURÍDICO */}
+          <div className="mt-3">
+            <NavSection label="Jurídico">
+              <NavItem href="/processos" icon={FolderOpen} label="Processos" />
+              <NavItem href="/prazos" icon={Clock} label="Prazos" />
+              <NavItem href="/agenda" icon={CalendarDays} label="Agenda" />
+              <NavItem href="/caixa-djen" icon={Mail} label="Caixa DJEN" />
             </NavSection>
           </div>
 

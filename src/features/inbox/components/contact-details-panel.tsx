@@ -362,7 +362,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
               className="h-3.5 w-5 shrink-0 rounded-[2px] object-cover ring-1 ring-black/10"
             />
           )}
-          <span className="tabular-nums">{formatPhone(contact.phone)}</span>
+          <span className="tracking-tight">{formatPhone(contact.phone)}</span>
           <span
             title={STATUS_LABELS[conversation.status] ?? conversation.status}
             className={`h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_DOT[conversation.status] ?? 'bg-zinc-400'}`}
@@ -403,7 +403,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
               <PopoverButton
                 disabled={savingContactStatus}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
                   !contact.status &&
                     'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
                 )}
@@ -492,7 +492,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   <PopoverButton
                     disabled={savingDept}
                     className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                      'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
                       !conversation.department &&
                         'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
                     )}

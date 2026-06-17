@@ -32,6 +32,7 @@ import {
   type QuickReplyAttachment,
   type QuickReplyPayload,
 } from '@/features/settings/services/quick-replies.service';
+import { inboxService } from '@/features/inbox/services/inbox.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
 const ATT_META: Record<
@@ -102,6 +103,8 @@ export default function SettingsQuickRepliesPage() {
   const [attachments, setAttachments] = useState<QuickReplyAttachment[]>([]);
   const [attUrl, setAttUrl] = useState('');
   const [attType, setAttType] = useState<QuickReplyAttachment['type']>('DOCUMENT');
+  const [uploadingAtt, setUploadingAtt] = useState(false);
+  const attFileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
 
   const { data: replies, isLoading } = useQuery({
@@ -158,6 +161,35 @@ export default function SettingsQuickRepliesPage() {
     }
     const fileName = url.split('/').pop()?.split('?')[0] || undefined;
     setAttachments((prev) => [...prev, { type: attType, url, fileName }]);
+    setAttUrl('');
+  };
+
+  /** Detecta o tipo do anexo pelo mime do arquivo escolhido. */
+  const detectAttType = (mime: string): QuickReplyAttachment['type'] => {
+    if (mime.startsWith('image/')) return 'IMAGE';
+    if (mime.startsWith('video/')) return 'VIDEO';
+    if (mime.startsWith('audio/')) return 'AUDIO';
+    return 'DOCUMENT';
+  };
+
+  /** Upload de arquivo do computador → vira anexo (hospeda no nosso domínio). */
+  const handleAttFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingAtt(true);
+    try {
+      const { url, mimeType, filename } = await inboxService.uploadMedia(file);
+      setAttachments((prev) => [
+        ...prev,
+        { type: detectAttType(mimeType || file.type), url, fileName: filename || file.name },
+      ]);
+      toast.success('Arquivo anexado');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Falha ao enviar o arquivo.');
+    } finally {
+      setUploadingAtt(false);
+    }
     setAttUrl('');
   };
 
@@ -482,7 +514,7 @@ export default function SettingsQuickRepliesPage() {
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Anexos (por URL)
+                  Anexos
                 </label>
                 {attachments.length > 0 && (
                   <div className="mb-2 flex flex-col gap-1.5">
@@ -511,6 +543,25 @@ export default function SettingsQuickRepliesPage() {
                     })}
                   </div>
                 )}
+                {/* Procurar arquivo no computador (upload) */}
+                <input
+                  ref={attFileRef}
+                  type="file"
+                  accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                  className="hidden"
+                  onChange={handleAttFile}
+                />
+                <button
+                  type="button"
+                  onClick={() => attFileRef.current?.click()}
+                  disabled={uploadingAtt}
+                  className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-400 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  {uploadingAtt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploadingAtt ? 'Enviando…' : 'Procurar arquivo no computador'}
+                </button>
+
+                <p className="mb-1.5 text-[11px] text-zinc-400">ou cole uma URL pública:</p>
                 <div className="flex items-center gap-2">
                   <select
                     value={attType}

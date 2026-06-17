@@ -30,18 +30,13 @@ import { useOrgId } from '@/hooks/use-org-query-key';
 
 const DEFAULT_COLOR = '#3B82F6';
 
-/** Pill colorida com dot — visual LíderHub */
+/** Pill colorida preenchida (cor sólida + texto branco) — igual aos Contatos. */
 function StatusPill({ name, color }: { name: string; color: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] font-medium"
-      style={{
-        backgroundColor: `${color}26`,
-        color,
-        borderColor: `${color}59`,
-      }}
+      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-semibold text-white"
+      style={{ backgroundColor: color }}
     >
-      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
       {name}
     </span>
   );
