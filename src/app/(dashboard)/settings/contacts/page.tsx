@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Search, Users, MessageSquare, ExternalLink } from 'lucide-react';
 import { contactsService, type Contact } from '@/features/contacts/services/contacts.service';
+import { tagsService } from '@/features/settings/services/tags.service';
+import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 
@@ -16,12 +18,23 @@ const channelIcons: Record<string, React.ElementType> = {
 
 export default function ContactsPage() {
   const [search, setSearch] = useState('');
+  const [tagId, setTagId] = useState('');
+  const [statusId, setStatusId] = useState('');
   const [page, setPage] = useState(1);
   const orgId = useOrgId();
 
+  const { data: tags = [] } = useQuery({ queryKey: ['tags', orgId], queryFn: () => tagsService.list() });
+  const { data: statuses = [] } = useQuery({ queryKey: ['contact-statuses', orgId], queryFn: () => contactStatusesService.list() });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['contacts', orgId, search, page],
-    queryFn: () => contactsService.list({ search, page: String(page), limit: '20' }),
+    queryKey: ['contacts', orgId, search, tagId, statusId, page],
+    queryFn: () => contactsService.list({
+      search,
+      page: String(page),
+      limit: '20',
+      ...(tagId ? { tagIds: tagId } : {}),
+      ...(statusId ? { statusId } : {}),
+    }),
   });
 
   const contacts = data?.contacts || [];
@@ -39,15 +52,46 @@ export default function ContactsPage() {
           </div>
         </div>
 
-        <div className="mt-6 relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-          <input
-            type="text"
-            placeholder="Buscar por nome, telefone ou email..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full rounded-lg border border-zinc-200 bg-white py-2.5 pl-10 pr-4 text-sm placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-          />
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nome, telefone ou email..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="w-full rounded-lg border border-zinc-200 bg-white py-2.5 pl-10 pr-4 text-sm placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+          </div>
+          <select
+            value={statusId}
+            onChange={(e) => { setStatusId(e.target.value); setPage(1); }}
+            className="rounded-lg border border-zinc-200 bg-white py-2.5 px-3 text-sm text-zinc-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 sm:w-44"
+          >
+            <option value="">Todos os status</option>
+            <option value="none">Sem status</option>
+            {statuses.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          <select
+            value={tagId}
+            onChange={(e) => { setTagId(e.target.value); setPage(1); }}
+            className="rounded-lg border border-zinc-200 bg-white py-2.5 px-3 text-sm text-zinc-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 sm:w-44"
+          >
+            <option value="">Todas as tags</option>
+            {tags.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {(search || tagId || statusId) && (
+            <button
+              onClick={() => { setSearch(''); setTagId(''); setStatusId(''); setPage(1); }}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            >
+              Limpar
+            </button>
+          )}
         </div>
       </div>
 

@@ -16,10 +16,17 @@ import {
   CircleDot,
   Zap,
   Coins,
+  UserCircle,
 } from 'lucide-react';
 
-// Menu lateral agrupado — estilo LíderHub (Configurações > EMPRESA / CLASSES / DESENVOLVEDOR)
+// Menu lateral agrupado — estilo LíderHub (Configurações > CONTA / EMPRESA / CLASSES / DESENVOLVEDOR)
 const groups = [
+  {
+    label: 'Conta',
+    items: [
+      { href: '/settings/perfil', label: 'Meu perfil', icon: UserCircle },
+    ],
+  },
   {
     label: 'Empresa',
     items: [
