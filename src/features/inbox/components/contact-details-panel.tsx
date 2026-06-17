@@ -403,7 +403,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
               <PopoverButton
                 disabled={savingContactStatus}
                 className={cn(
-                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-5 outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-4 outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
                   !contact.status &&
                     'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
                 )}
@@ -483,7 +483,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   <PopoverButton
                     disabled={savingDept}
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-5 outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                      'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-4 outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
                       !conversation.department &&
                         'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
                     )}
@@ -553,8 +553,8 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           </div>
 
           {/* Tags — editable */}
-          <div className="order-3 flex items-start gap-2.5">
-            <TagIcon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+          <div className="order-3 flex items-center gap-2.5">
+            <TagIcon className="h-4 w-4 shrink-0 text-zinc-400" />
             <div className="flex flex-wrap gap-1.5">
               {allTags.map(({ tag, onContact }) => (
                 <span
@@ -566,7 +566,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                     borderColor: onContact ? 'transparent' : `${tag.color}55`,
                   }}
                   className={cn(
-                    'inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-5',
+                    'inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-4',
                     onContact ? 'border-transparent' : 'border-dashed',
                   )}
                 >
@@ -587,7 +587,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
               ))}
               {/* Add tag popover */}
               <Popover className="relative">
-                <PopoverButton className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5 text-[11px] font-medium leading-5 text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-600 dark:hover:border-zinc-500">
+                <PopoverButton className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 py-0.5 text-[11px] font-medium leading-4 text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-600 dark:hover:border-zinc-500">
                   <Plus className="h-3 w-3" />
                   Tag
                 </PopoverButton>
