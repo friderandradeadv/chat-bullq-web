@@ -1,13 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   LayoutDashboard,
   Settings,
   LogOut,
   ChevronUp,
-  Sun,
-  Moon,
   BookUser,
   Plug,
   Zap,
@@ -28,7 +26,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/stores/auth-store';
 import { Avatar } from '@/components/ui/avatar';
 import { Logo } from '@/components/brand/logo';
@@ -101,8 +98,8 @@ function NavItem({
       className={cn(
         'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
         isActive
-          ? 'bg-zinc-950/5 text-zinc-950 dark:bg-white/10 dark:text-white'
-          : 'text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white',
+          ? 'bg-[#1488d6]/10 font-medium text-[#1488d6]'
+          : 'text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-900',
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -120,10 +117,6 @@ function NavItem({
 
 export function AppSidebar() {
   const { user, logout } = useAuthStore();
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const isDark = mounted && resolvedTheme === 'dark';
 
   return (
     <Sidebar>
@@ -183,14 +176,6 @@ export function AppSidebar() {
       </SidebarBody>
 
       <SidebarFooter>
-        <button
-          onClick={() => setTheme(isDark ? 'light' : 'dark')}
-          title={isDark ? 'Modo claro' : 'Modo escuro'}
-          aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-950/5 hover:text-zinc-900 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
-        >
-          {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-        </button>
         <Dropdown>
           <DropdownButton className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-950/5 dark:hover:bg-white/5">
             <Avatar
