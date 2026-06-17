@@ -2,7 +2,8 @@
 
 import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Sparkles, Power, PowerOff } from 'lucide-react';
+import { Power, PowerOff } from 'lucide-react';
+import { AgentAvatar } from './agent-avatar';
 import {
   type AiAgent,
   DEPARTMENT_COLORS,
@@ -44,17 +45,11 @@ function AgentNodeBase({ data }: { data: AgentNodeData }) {
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3 min-w-0">
-            <div
-              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${
-                isOrchestrator
-                  ? 'bg-primary/15 text-primary'
-                  : dept
-                    ? `${dept.bg} ${dept.text}`
-                    : 'bg-primary/10 text-primary'
-              }`}
-            >
-              <Sparkles className="h-4 w-4" />
-            </div>
+            <AgentAvatar
+              agent={agent}
+              size="md"
+              className={isOrchestrator ? 'ring-2 ring-primary/40' : dept ? `ring-1 ${dept.ring}` : ''}
+            />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5">
                 <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
