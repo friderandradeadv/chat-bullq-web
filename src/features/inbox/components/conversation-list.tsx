@@ -1047,9 +1047,12 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
 
                   {/* ── Content ── */}
                   {(() => {
-                    const unread = conv.unreadCount ?? 0;
-                    const hasUnread = unread > 0;
                     const lastMsg = conv.messages[0];
+                    const unread = conv.unreadCount ?? 0;
+                    // Se a ÚLTIMA mensagem é nossa (atendente ou IA respondeu), a
+                    // conversa está RESPONDIDA — não marca como "não lida" mesmo
+                    // que ainda houvesse inbounds sem ler antes da resposta.
+                    const hasUnread = unread > 0 && lastMsg?.direction !== 'OUTBOUND';
                     // Dedupe: a mesma tag pode estar na conversa E no contato —
                     // mostrar um chip só.
                     const allTags = [

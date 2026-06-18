@@ -30,6 +30,7 @@ import {
   quickRepliesService,
   type QuickReplyAttachment,
 } from '@/features/settings/services/quick-replies.service';
+import { aiAgentsService } from '@/features/ai-agents/services/ai-agents.service';
 
 interface ChatPanelProps {
   conversation: Conversation;
@@ -435,6 +436,15 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     queryFn: () => quickRepliesService.list(),
     staleTime: 60_000,
   });
+
+  // Mapa agentId→agente pra estampar a FOTO do agente de IA nas bolhas que ele
+  // enviou (a mensagem da IA carrega metadata.aiAgentId, mas não a foto).
+  const { data: agents = [] } = useQuery({
+    queryKey: ['ai-agents', orgId],
+    queryFn: () => aiAgentsService.list(),
+    staleTime: 300_000,
+  });
+  const agentMap = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
 
   // ─── Busca dentro da conversa ───────────────────────────────────────────
   const [convSearchOpen, setConvSearchOpen] = useState(false);
@@ -1079,7 +1089,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                 // seguidas). Reinicia após separador de data ou troca de autor.
                 const _prevMsg = _msgIdx > 0 ? visibleMessages[_msgIdx - 1] : undefined;
                 const _senderKey = (m: any) =>
-                  m?.sender?.id ?? m?.senderId ?? (m?.direction === 'OUTBOUND' ? 'me' : 'them');
+                  m?.sender?.id ?? m?.metadata?.aiAgentId ?? m?.senderId ?? (m?.direction === 'OUTBOUND' ? 'me' : 'them');
                 const sameSenderAsPrev =
                   !showDateSeparator &&
                   !!_prevMsg &&
@@ -1198,11 +1208,31 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                           {msg.senderName}
                         </p>
                       )}
-                      {isOutbound && !sameSenderAsPrev && (msg.sender?.name || (msg.senderId && msg.senderId === user?.id && user?.name)) && (
-                        <p className="mb-0.5 mr-1 text-right text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
-                          {msg.sender?.name || user?.name}
-                        </p>
-                      )}
+                      {isOutbound && !sameSenderAsPrev && (() => {
+                        const aiId = msg.metadata?.aiAgentId as string | undefined;
+                        const agent = aiId ? agentMap.get(aiId) : null;
+                        if (agent) {
+                          return (
+                            <div className="mb-0.5 mr-1 flex items-center justify-end gap-1.5">
+                              <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{agent.name}</span>
+                              {agent.avatarUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={agent.avatarUrl} alt="" className="h-4 w-4 rounded-full bg-white object-cover" />
+                              ) : (
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-zinc-300 text-[8px] font-semibold text-zinc-700 dark:bg-zinc-600 dark:text-zinc-200">
+                                  {agent.name.slice(0, 2).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        const humanName = msg.sender?.name || (msg.senderId && msg.senderId === user?.id ? user?.name : null);
+                        return humanName ? (
+                          <p className="mb-0.5 mr-1 text-right text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+                            {humanName}
+                          </p>
+                        ) : null;
+                      })()}
                       {msg.metadata?.replyTo?.story && (
                         <StoryReplyCard
                           story={msg.metadata.replyTo.story}

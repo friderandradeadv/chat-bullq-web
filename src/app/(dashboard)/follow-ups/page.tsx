@@ -161,14 +161,27 @@ export default function FollowUpsPage() {
         </div>
       </div>
 
+      {/* Como funciona — esclarece cadência × status do funil */}
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">Como funciona, em 2 partes:</p>
+        <ul className="mt-1.5 space-y-1 text-[13px] text-zinc-600 dark:text-zinc-300">
+          <li>⏱️ <b>Régua de cadência</b> — define <b>quantos</b> follow-ups e <b>de quanto em quanto tempo</b>. Vale para todos os leads por padrão.</li>
+          <li>🎯 <b>Por status do funil</b> — ajuste fino <i>opcional</i>: muda o número de toques e o tom só para leads numa etapa específica (ex.: "Proposta" recebe mais toques que "Recepção").</li>
+        </ul>
+      </div>
+
       {/* Régua de cadência */}
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900/40">
         <div className="mb-1 flex items-center gap-2">
           <Clock className="h-4 w-4 text-zinc-500" />
           <h2 className="font-medium text-zinc-900 dark:text-zinc-100">Régua de cadência</h2>
+          <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            {cfg.cadenceHours.length} {cfg.cadenceHours.length === 1 ? 'follow-up' : 'follow-ups'}
+          </span>
         </div>
         <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-          Tempo de silêncio até cada toque. Cada etapa reinicia se o cliente responder.
+          Cada etiqueta abaixo é <b>um follow-up</b> — o tempo de silêncio até dispará-lo.{' '}
+          <b>Quantas etiquetas, tantos follow-ups</b>: adicione ou remova para escolher o número. Cada etapa reinicia se o cliente responder.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {cfg.cadenceHours.map((h, i) => (
@@ -243,7 +256,8 @@ export default function FollowUpsPage() {
           <h2 className="font-medium text-zinc-900 dark:text-zinc-100">Por status do funil</h2>
         </div>
         <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-          Ajuste quantos toques e o tom para cada etapa do atendimento. Sem ajuste, o status segue o padrão acima.
+          Opcional. Por padrão todo lead recebe a régua acima — aqui você <b>sobrescreve</b> o número de
+          toques e o tom só para uma etapa do funil. Desligue para parar de reengajar leads num status.
         </p>
         {statuses.length === 0 ? (
           <p className="rounded-lg bg-zinc-50 px-3 py-4 text-center text-sm text-zinc-400 dark:bg-zinc-900/60">
