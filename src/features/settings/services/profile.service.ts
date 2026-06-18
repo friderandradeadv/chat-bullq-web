@@ -9,7 +9,9 @@ export interface ProfileUser {
 }
 
 export const profileService = {
-  async updateProfile(patch: { name?: string; avatarUrl?: string; phone?: string }): Promise<ProfileUser> {
+  async updateProfile(
+    patch: { name?: string; avatarUrl?: string; phone?: string; email?: string },
+  ): Promise<ProfileUser> {
     const { data } = await api.patch('/users/me', patch);
     return data;
   },
