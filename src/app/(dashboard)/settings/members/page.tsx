@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { MemberChannelsDrawer } from '@/features/settings/components/member-channels-drawer';
+import { Avatar } from '@/components/ui/avatar';
 
 // Módulos que dá pra liberar/bloquear por usuário (espelha APP_MODULES da API).
 const APP_MODULES: { key: string; label: string }[] = [
@@ -193,9 +194,11 @@ export default function SettingsMembersPage() {
                   <tr key={m.id} className="border-b border-zinc-50 dark:border-zinc-800">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-xs font-medium dark:bg-zinc-800">
-                          {m.user.name.slice(0, 2).toUpperCase()}
-                        </div>
+                        <Avatar
+                          src={m.user.avatarUrl}
+                          initials={m.user.name.slice(0, 2).toUpperCase()}
+                          className="size-8"
+                        />
                         <div>
                           <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{m.user.name}</p>
                           <p className="text-[11px] text-zinc-400">{m.user.email}</p>

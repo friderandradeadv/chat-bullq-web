@@ -19,7 +19,7 @@ import {
   ClipboardList,
   Cable,
   KanbanSquare,
-  FolderOpen,
+  Newspaper,
   Folder,
   CalendarCheck,
   LayoutList,
@@ -64,11 +64,32 @@ function NavSection({
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
+  const storageKey = `nav-section:${label}`;
   const [open, setOpen] = useState(defaultOpen);
+  // Restaura o que o usuário deixou aberto/fechado (persistido por seção).
+  // Lê no efeito (não no init) pra não dar mismatch de hidratação SSR.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved !== null) setOpen(saved === '1');
+    } catch {
+      /* localStorage indisponível — mantém o default */
+    }
+  }, [storageKey]);
+  const toggle = () =>
+    setOpen((p) => {
+      const next = !p;
+      try {
+        localStorage.setItem(storageKey, next ? '1' : '0');
+      } catch {
+        /* ignora */
+      }
+      return next;
+    });
   return (
     <div className="flex flex-col gap-0.5">
       <button
-        onClick={() => setOpen((p) => !p)}
+        onClick={toggle}
         className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
       >
         {label}
@@ -139,8 +160,8 @@ export function AppSidebar() {
 
       <SidebarBody>
         <SidebarSection>
-          {/* ATENDIMENTO — BullQ / WhatsApp (Dashboard + Conexões aqui dentro) */}
-          <NavSection label="Atendimento">
+          {/* COMERCIAL — BullQ / WhatsApp (com Automações como subaba dentro) */}
+          <NavSection label="Comercial">
             <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
             <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
             <NavItem href="/contacts" icon={BookUser} label="Contatos" />
@@ -149,19 +170,19 @@ export function AppSidebar() {
             <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
             <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
             <NavItem href="/conexoes" icon={Cable} label="Conexões" />
-          </NavSection>
 
-          {/* AUTOMAÇÕES — logo abaixo de Atendimento */}
-          <div className="mt-3">
-            <NavSection label="Automações">
-              <NavItem href="/ai-agents" icon={Bot} label="Agentes" />
-              <NavItem href="/follow-ups" icon={MessageCircleHeart} label="Follow-ups" />
-              <NavItem href="/base-conhecimento" icon={BookOpen} label="Base de Conhecimento" />
-              <NavItem href="/vozes" icon={AudioLines} label="Vozes" />
-              <NavItem href="/automations" icon={Zap} label="Automações" />
-              <NavItem href="/settings/integrations" icon={Plug} label="Integrações" />
-            </NavSection>
-          </div>
+            {/* Automações — subaba dentro de Comercial */}
+            <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
+              <NavSection label="Automações" defaultOpen={false}>
+                <NavItem href="/ai-agents" icon={Bot} label="Agentes" />
+                <NavItem href="/follow-ups" icon={MessageCircleHeart} label="Follow-ups" />
+                <NavItem href="/base-conhecimento" icon={BookOpen} label="Base de Conhecimento" />
+                <NavItem href="/vozes" icon={AudioLines} label="Vozes" />
+                <NavItem href="/automations" icon={Zap} label="Automações" />
+                <NavItem href="/settings/integrations" icon={Plug} label="Integrações" />
+              </NavSection>
+            </div>
+          </NavSection>
 
           {/* JURÍDICO — Prazos removido (= Agenda/Tarefas); Caixa DJEN → Publicações */}
           <div className="mt-3">
@@ -170,7 +191,7 @@ export function AppSidebar() {
               <NavItem href="/juridico/kanban" icon={Columns3} label="Kanban de processos" />
               <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
               <NavItem href="/processos" icon={Folder} label="Processos" />
-              <NavItem href="/caixa-djen" icon={FolderOpen} label="Publicações" />
+              <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
             </NavSection>
           </div>
 
@@ -201,7 +222,6 @@ export function AppSidebar() {
               src={user?.avatarUrl}
               initials={user?.name?.slice(0, 2).toUpperCase()}
               className="size-8"
-              square
             />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm/5 font-medium text-zinc-900 dark:text-white">
