@@ -399,7 +399,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           {/* Status do contato (funil) — editable */}
           <div className="order-2 flex min-h-6 items-center gap-2.5">
             <CircleDot className="h-4 w-4 shrink-0 text-zinc-400" />
-            <Popover className="relative">
+            <Popover className="relative flex items-center">
               <PopoverButton
                 disabled={savingContactStatus}
                 className={cn(
@@ -473,7 +473,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           {/* Department — editable (pill colorida, mesmo estilo de status/tags) */}
           <div className="order-4 flex min-h-6 items-center gap-2.5">
             <Building2 className="h-4 w-4 shrink-0 text-zinc-400" />
-            <Popover className="relative">
+            <Popover className="relative flex items-center">
               {(() => {
                 const deptColor = conversation.department
                   ? departments.find((d) => d.id === conversation.department?.id)
@@ -586,7 +586,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                 </span>
               ))}
               {/* Add tag popover */}
-              <Popover className="relative">
+              <Popover className="relative flex items-center">
                 <PopoverButton className="inline-flex h-5 items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 text-[11px] font-medium leading-none text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-600 dark:hover:border-zinc-500">
                   <Plus className="h-2.5 w-2.5" />
                   Tag
