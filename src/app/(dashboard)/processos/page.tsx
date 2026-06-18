@@ -23,7 +23,7 @@ import {
 
 // ─── Estilo "cara do Astrea" (tema claro, azul Astrea) ───────────────
 // Componentes próprios; replica o look (não os ativos da Aurum).
-export const ASTREA_BLUE = '#1488d6';
+export const ASTREA_BLUE = '#228BE6';
 
 const STATUS_LABEL: Record<CaseStatus, string> = {
   ACTIVE: 'Ativo',
@@ -64,7 +64,7 @@ export default function ProcessosPage() {
   });
 
   return (
-    <div className="flex h-full flex-col bg-[#f5f6f8] text-zinc-800">
+    <div className="flex h-full flex-col bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-6">
         <h1 className="text-2xl font-normal text-zinc-700">Processos e casos</h1>
@@ -96,7 +96,7 @@ export default function ProcessosPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Digite algo para pesquisar"
-            className="h-10 w-full rounded-md border border-zinc-300 bg-white pl-4 pr-10 text-sm outline-none focus:border-[#1488d6]"
+            className="h-10 w-full rounded-md border border-zinc-300 bg-white pl-4 pr-10 text-sm outline-none focus:border-[#228BE6]"
           />
           <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
         </div>
@@ -120,14 +120,14 @@ export default function ProcessosPage() {
 
       {/* Tabela */}
       <div className="mt-2 flex-1 overflow-y-auto px-6 pb-6">
-        <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <div className="overflow-hidden rounded-lg border border-[#DEE2E6] bg-white">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-zinc-200 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                <th className="px-4 py-3">Título</th>
-                <th className="px-4 py-3">Cliente / Pasta</th>
-                <th className="px-4 py-3">Ação / Foro</th>
-                <th className="px-4 py-3 whitespace-nowrap">Últ. mov.</th>
+              <tr className="border-b border-[#DEE2E6] text-xs font-bold uppercase tracking-wide text-[#6C757D]">
+                <th className="px-3 py-4">Título</th>
+                <th className="px-3 py-4">Cliente / Pasta</th>
+                <th className="px-3 py-4">Ação / Foro</th>
+                <th className="px-3 py-4 whitespace-nowrap">Últ. mov.</th>
               </tr>
             </thead>
             <tbody>
@@ -170,15 +170,15 @@ function CaseRow({ c }: { c: CaseListItem }) {
   const client = c.parties[0];
   const tags = [c.area, STATUS_LABEL[c.status]].filter(Boolean) as string[];
   return (
-    <tr className="group border-b border-zinc-100 last:border-0 hover:bg-[#f0f7fd]">
-      <td className="px-4 py-3 align-top">
+    <tr className="group border-b border-[#DEE2E6] last:border-0 hover:bg-[#f0f7fd]">
+      <td className="px-3 py-4 align-top">
         <div className="flex items-start gap-2">
           <Star className="mt-0.5 h-4 w-4 shrink-0 text-zinc-300 group-hover:text-amber-400" />
           <Rss className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
           <div className="min-w-0">
             <Link
               href={`/processos/${c.id}`}
-              className="text-sm font-medium text-zinc-800 hover:text-[#1488d6] hover:underline"
+              className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline"
             >
               {c.title}
             </Link>
@@ -187,7 +187,7 @@ function CaseRow({ c }: { c: CaseListItem }) {
               {c.cnjNumber ? (
                 <>
                   {' · '}
-                  <span className="font-mono text-[#1488d6]">{c.cnjNumber}</span>
+                  <span className="font-mono text-[#228BE6]">{c.cnjNumber}</span>
                 </>
               ) : null}
             </p>
@@ -204,14 +204,14 @@ function CaseRow({ c }: { c: CaseListItem }) {
           </div>
         </div>
       </td>
-      <td className="px-4 py-3 align-top text-sm text-zinc-600">
+      <td className="px-3 py-4 align-top text-sm text-zinc-600">
         {client?.name ?? '—'}
       </td>
-      <td className="px-4 py-3 align-top">
+      <td className="px-3 py-4 align-top">
         <p className="text-sm text-zinc-700">{c.area ?? '—'}</p>
         {c.court && <p className="text-xs text-zinc-400">{c.court}</p>}
       </td>
-      <td className="px-4 py-3 align-top whitespace-nowrap text-sm text-zinc-500">
+      <td className="px-3 py-4 align-top whitespace-nowrap text-sm text-zinc-500">
         {fmtDate(c.updatedAt)}
       </td>
     </tr>
@@ -354,7 +354,7 @@ function CreateCaseDialog({
 
 // Reaproveitados pelas outras telas jurídicas (estilo claro Astrea).
 export const inputCls =
-  'h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-[#1488d6]';
+  'h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-[#228BE6]';
 
 export function Field({
   label,

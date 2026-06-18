@@ -61,19 +61,19 @@ export default function ProcessoDetailPage() {
 
   if (!id) return null;
   if (isLoading)
-    return <div className="bg-[#f5f6f8] p-6 text-sm text-zinc-400">Carregando…</div>;
+    return <div className="bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-sm text-zinc-400">Carregando…</div>;
   if (!c)
-    return <div className="bg-[#f5f6f8] p-6 text-sm text-zinc-400">Processo não encontrado.</div>;
+    return <div className="bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-sm text-zinc-400">Processo não encontrado.</div>;
 
   const tags = [c.area, STATUS_LABEL[c.status]].filter(Boolean) as string[];
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-[#f5f6f8] text-zinc-800">
+    <div className="flex h-full flex-col overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       {/* Cabeçalho */}
       <div className="px-6 pt-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-normal text-zinc-700">{c.title}</h1>
+            <h1 className="text-2xl font-medium text-[#202124]">{c.title}</h1>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {tags.map((t) => (
                 <span key={t} className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
@@ -98,7 +98,7 @@ export default function ProcessoDetailPage() {
         {/* Metadados */}
         <dl className="mt-4 space-y-1 text-sm">
           <MetaRow label="Processo">
-            {c.cnjNumber ? <span className="font-mono text-[#1488d6]">{c.cnjNumber}</span> : '—'}
+            {c.cnjNumber ? <span className="font-mono text-[#228BE6]">{c.cnjNumber}</span> : '—'}
           </MetaRow>
           <MetaRow label="Cliente">
             {c.parties.find((p) => p.role === 'CLIENT')?.name ?? '—'}
@@ -112,7 +112,7 @@ export default function ProcessoDetailPage() {
         </dl>
 
         {/* Abas */}
-        <div className="mt-5 flex gap-6 border-b border-zinc-200">
+        <div className="mt-5 flex border-b border-[#DEE2E6]">
           {([
             ['resumo', 'Resumo'],
             ['andamentos', 'Andamentos'],
@@ -121,10 +121,10 @@ export default function ProcessoDetailPage() {
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`-mb-px border-b-2 pb-2 text-sm font-medium ${
+              className={`-mb-px border-b-4 px-6 py-3 text-base font-medium transition-colors ${
                 tab === key
-                  ? 'border-[#1488d6] text-[#1488d6]'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-700'
+                  ? 'border-[#228BE6] text-[#202124]'
+                  : 'border-transparent text-[#6C757D] hover:text-[#202124]'
               }`}
             >
               {label}
@@ -293,7 +293,7 @@ function MovementsTab({
             onChange={(e) => setDesc(e.target.value)}
             rows={3}
             placeholder="Descrição do andamento…"
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#1488d6]"
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#228BE6]"
           />
           <div className="flex justify-end gap-2">
             <button onClick={() => setAdding(false)} className="text-xs text-zinc-500">Cancelar</button>
@@ -459,15 +459,15 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white">
-      <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
+    <div className="rounded-lg border border-[#DEE2E6] bg-white">
+      <div className="flex items-center justify-between border-b border-[#DEE2E6] px-5 py-3.5">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-[#202124]">
           <Icon className="h-4 w-4" style={{ color: ASTREA_BLUE }} />
           {title}
         </h3>
         {action}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
@@ -475,8 +475,8 @@ function Card({
 function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-2">
-      <dt className="w-28 shrink-0 text-zinc-400">{label}:</dt>
-      <dd className="text-zinc-700">{children}</dd>
+      <dt className="w-28 shrink-0 text-[#6C757D]">{label}:</dt>
+      <dd className="text-[#202124]">{children}</dd>
     </div>
   );
 }
@@ -484,8 +484,8 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
 function DefRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex gap-3 py-2.5">
-      <dt className="w-36 shrink-0 text-sm text-zinc-400">{label}</dt>
-      <dd className={`text-sm text-zinc-700 ${mono ? 'font-mono' : ''}`}>{value}</dd>
+      <dt className="w-36 shrink-0 text-sm font-medium text-[#6C757D]">{label}</dt>
+      <dd className={`text-sm text-[#202124] ${mono ? 'font-mono' : ''}`}>{value}</dd>
     </div>
   );
 }
@@ -507,7 +507,7 @@ function IconBtn({
     <button
       title={title}
       onClick={onClick}
-      className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700"
+      className="flex h-9 w-9 items-center justify-center rounded-md border border-[#DEE2E6] bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700"
     >
       {children}
     </button>
