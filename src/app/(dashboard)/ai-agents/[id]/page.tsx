@@ -148,6 +148,8 @@ export default function AgentEditorPage() {
   const [operationalContext, setOperationalContext] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [responseDelaySeconds, setResponseDelaySeconds] = useState(0);
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [kwInput, setKwInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [newChannelId, setNewChannelId] = useState('');
@@ -169,6 +171,7 @@ export default function AgentEditorPage() {
     setOperationalContext(agent.operationalContext ?? '');
     setAvatarUrl(agent.avatarUrl ?? null);
     setResponseDelaySeconds(agent.responseDelaySeconds ?? 0);
+    setKeywords(agent.keywords ?? []);
   }, [agent]);
 
   // ── dados que alimentam o menu @ ──────────────────────────────
@@ -244,6 +247,7 @@ export default function AgentEditorPage() {
         operationalContext: operationalContext.trim() || null,
         avatarUrl,
         responseDelaySeconds,
+        keywords,
       } as any);
       toast.success('Agente salvo');
       refetch();
@@ -547,6 +551,52 @@ export default function AgentEditorPage() {
                 <input value={squad} onChange={(e) => setSquad(e.target.value)} placeholder="Ex: Inbound B2C" className="input" />
               </Field>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+              Ativação por palavra-chave
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-400">
+              Se a mensagem do cliente contém uma destas, vai direto pra este agente (pula a
+              triagem). Enter ou vírgula pra adicionar.
+            </p>
+            {keywords.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {keywords.map((k) => (
+                  <span
+                    key={k}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
+                  >
+                    {k}
+                    <button
+                      type="button"
+                      onClick={() => setKeywords(keywords.filter((x) => x !== k))}
+                      className="text-primary/60 hover:text-primary"
+                      title="Remover"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              value={kwInput}
+              onChange={(e) => setKwInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault();
+                  const v = kwInput.trim().replace(/,+$/, '').toLowerCase();
+                  if (v && !keywords.includes(v)) setKeywords([...keywords, v]);
+                  setKwInput('');
+                } else if (e.key === 'Backspace' && !kwInput && keywords.length) {
+                  setKeywords(keywords.slice(0, -1));
+                }
+              }}
+              placeholder="ex: rmc, segunda via, boleto"
+              className="input mt-2"
+            />
           </div>
 
           <Field label="Contexto operacional do dia">

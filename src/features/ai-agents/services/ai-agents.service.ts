@@ -55,6 +55,8 @@ export interface AiAgent {
   kind: AgentKind;
   category: string | null;
   capabilities: string[];
+  /** Palavras-chave de ativação direta (pula a triagem quando batem). */
+  keywords: string[];
   modelId: string;
   modelParams: Record<string, unknown> | null;
   systemPrompt: string;
@@ -97,6 +99,7 @@ export interface CreateAgentInput {
   kind?: AgentKind;
   category?: string;
   capabilities?: string[];
+  keywords?: string[];
   modelId: string;
   systemPrompt: string;
   temperature?: number;
