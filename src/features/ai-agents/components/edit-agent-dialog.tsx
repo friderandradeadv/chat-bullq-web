@@ -32,6 +32,8 @@ export function EditAgentDialog({
   const [modelId, setModelId] = useState('anthropic/claude-sonnet-4-6');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [temperature, setTemperature] = useState(0.7);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [responseDelaySeconds, setResponseDelaySeconds] = useState(0);
   const [parentAgentId, setParentAgentId] = useState<string>('');
   const [department, setDepartment] = useState<string>('');
   const [squad, setSquad] = useState('');
@@ -64,6 +66,8 @@ export function EditAgentDialog({
     setModelId(agent.modelId);
     setSystemPrompt(agent.systemPrompt);
     setTemperature(agent.temperature);
+    setAvatarUrl(agent.avatarUrl ?? null);
+    setResponseDelaySeconds(agent.responseDelaySeconds ?? 0);
     setParentAgentId(agent.parentAgentId ?? '');
     setDepartment(agent.department ?? '');
     setSquad(agent.squad ?? '');
@@ -79,6 +83,8 @@ export function EditAgentDialog({
       await aiAgentsService.update(agent.id, {
         name,
         description,
+        avatarUrl,
+        responseDelaySeconds,
         modelId,
         systemPrompt,
         temperature,
@@ -155,6 +161,47 @@ export function EditAgentDialog({
         </div>
 
         <div className="space-y-4 px-6 py-5">
+          {/* Avatar do agente — escolha uma "pessoinha" (estilo LíderHub) */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Avatar
+            </label>
+            <div className="mt-1.5 flex items-center gap-3">
+              <img
+                src={avatarUrl || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(agent.id || agent.name)}`}
+                alt=""
+                className="h-12 w-12 shrink-0 rounded-lg bg-zinc-100 object-cover ring-1 ring-black/5 dark:bg-zinc-800"
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {['Aiden', 'Sophia', 'Liam', 'Olivia', 'Mateus', 'Valentina', 'Noah', 'Helena', 'Lucas', 'Alice', 'Pedro', 'Laura'].map((seed) => {
+                  const url = `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+                  const active = avatarUrl === url;
+                  return (
+                    <button
+                      key={seed}
+                      type="button"
+                      onClick={() => setAvatarUrl(url)}
+                      className={`h-8 w-8 rounded-lg ring-1 transition ${active ? 'ring-2 ring-primary' : 'ring-black/5 hover:ring-primary/40'}`}
+                      title={seed}
+                    >
+                      <img src={url} alt={seed} className="h-full w-full rounded-lg bg-zinc-100 object-cover dark:bg-zinc-800" />
+                    </button>
+                  );
+                })}
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl(null)}
+                    className="rounded-lg px-2 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    title="Voltar ao avatar padrão"
+                  >
+                    Padrão
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
               Nome
@@ -257,6 +304,26 @@ export function EditAgentDialog({
               onChange={(e) => setTemperature(parseFloat(e.target.value))}
               className="mt-2 w-full"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Tempo de resposta
+            </label>
+            <p className="mt-0.5 text-[11px] text-zinc-400">
+              Atraso antes de responder, pra parecer mais humano. 0 = instantâneo.
+            </p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={60}
+                value={responseDelaySeconds}
+                onChange={(e) => setResponseDelaySeconds(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+                className="w-20 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">segundos</span>
+            </div>
           </div>
 
           {/* Organograma matricial ágil */}

@@ -12,6 +12,7 @@ export default function PerfilPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(user?.name ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
   const [savingName, setSavingName] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -43,13 +44,14 @@ export default function PerfilPage() {
   const handleSaveName = async () => {
     const trimmed = name.trim();
     if (!trimmed) { toast.error('O nome não pode ficar vazio.'); return; }
+    const trimmedPhone = phone.trim();
     setSavingName(true);
     try {
-      await profileService.updateProfile({ name: trimmed });
-      setUser({ name: trimmed });
-      toast.success('Nome atualizado!');
+      await profileService.updateProfile({ name: trimmed, phone: trimmedPhone });
+      setUser({ name: trimmed, phone: trimmedPhone });
+      toast.success('Perfil atualizado!');
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erro ao salvar o nome.');
+      toast.error(err?.response?.data?.message || 'Erro ao salvar o perfil.');
     } finally {
       setSavingName(false);
     }
@@ -115,11 +117,19 @@ export default function PerfilPage() {
             <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
           </div>
           <div className="mt-3 space-y-1.5">
+            <label className="text-xs font-medium text-zinc-500">Telefone</label>
+            <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+55 (44) 99999-9999" maxLength={30} />
+          </div>
+          <div className="mt-3 space-y-1.5">
             <label className="text-xs font-medium text-zinc-500">E-mail</label>
             <input className={`${inputCls} opacity-60`} value={user?.email ?? ''} disabled />
           </div>
           <div className="mt-4 flex justify-end">
-            <button className={btnCls} onClick={handleSaveName} disabled={savingName || name.trim() === (user?.name ?? '')}>
+            <button
+              className={btnCls}
+              onClick={handleSaveName}
+              disabled={savingName || (name.trim() === (user?.name ?? '') && phone.trim() === (user?.phone ?? ''))}
+            >
               {savingName && <Loader2 className="h-4 w-4 animate-spin" />} Salvar
             </button>
           </div>

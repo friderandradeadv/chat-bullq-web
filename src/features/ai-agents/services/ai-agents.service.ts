@@ -60,6 +60,7 @@ export interface AiAgent {
   systemPrompt: string;
   temperature: number;
   maxTokens: number;
+  responseDelaySeconds: number;
   canRespondDirectly: boolean;
   isActive: boolean;
   parentAgentId: string | null;
@@ -78,6 +79,7 @@ export interface AiAgent {
 export interface CreateAgentInput {
   name: string;
   description?: string;
+  avatarUrl?: string | null;
   kind?: AgentKind;
   category?: string;
   capabilities?: string[];
@@ -85,6 +87,7 @@ export interface CreateAgentInput {
   systemPrompt: string;
   temperature?: number;
   maxTokens?: number;
+  responseDelaySeconds?: number;
   canRespondDirectly?: boolean;
   isActive?: boolean;
   parentAgentId?: string | null;

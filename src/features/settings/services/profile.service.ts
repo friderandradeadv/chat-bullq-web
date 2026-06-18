@@ -5,10 +5,11 @@ export interface ProfileUser {
   name: string;
   email: string;
   avatarUrl: string | null;
+  phone: string | null;
 }
 
 export const profileService = {
-  async updateProfile(patch: { name?: string; avatarUrl?: string }): Promise<ProfileUser> {
+  async updateProfile(patch: { name?: string; avatarUrl?: string; phone?: string }): Promise<ProfileUser> {
     const { data } = await api.patch('/users/me', patch);
     return data;
   },

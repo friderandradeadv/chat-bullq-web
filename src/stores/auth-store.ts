@@ -5,6 +5,7 @@ interface AuthUser {
   name: string;
   email: string;
   avatarUrl: string | null;
+  phone?: string | null;
 }
 
 interface OrgInfo {
