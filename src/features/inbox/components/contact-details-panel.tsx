@@ -397,7 +397,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
 
         <div className="flex flex-col gap-2">
           {/* Status do contato (funil) — editable */}
-          <div className="order-2 flex items-center gap-2.5">
+          <div className="order-2 flex min-h-6 items-center gap-2.5">
             <CircleDot className="h-4 w-4 shrink-0 text-zinc-400" />
             <Popover className="relative">
               <PopoverButton
@@ -471,7 +471,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           </div>
 
           {/* Department — editable (pill colorida, mesmo estilo de status/tags) */}
-          <div className="order-4 flex items-center gap-2.5">
+          <div className="order-4 flex min-h-6 items-center gap-2.5">
             <Building2 className="h-4 w-4 shrink-0 text-zinc-400" />
             <Popover className="relative">
               {(() => {
@@ -553,9 +553,9 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           </div>
 
           {/* Tags — editable */}
-          <div className="order-3 flex items-center gap-2.5">
+          <div className="order-3 flex min-h-6 items-center gap-2.5">
             <TagIcon className="h-4 w-4 shrink-0 text-zinc-400" />
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {allTags.map(({ tag, onContact }) => (
                 <span
                   key={tag.id}
