@@ -15,10 +15,14 @@ import {
   Tag as TagIcon,
   CircleDot,
   Loader2,
+  UserPlus,
+  Check,
 } from 'lucide-react';
+import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { contactsService, type Contact } from '@/features/contacts/services/contacts.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
+import { membersService, type Member } from '@/features/settings/services/members.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { WhatsAppIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 import { PageSizeSelect } from '@/components/ui/page-size-select';
@@ -68,6 +72,17 @@ export default function ContactsPage() {
 
   const { data: tags = [] } = useQuery({ queryKey: ['tags', orgId], queryFn: () => tagsService.list() });
   const { data: statuses = [] } = useQuery({ queryKey: ['contact-statuses', orgId], queryFn: () => contactStatusesService.list() });
+  const { data: members = [] } = useQuery({ queryKey: ['members', orgId], queryFn: () => membersService.list() });
+
+  const handleAssign = async (contactId: string, userId: string | null) => {
+    try {
+      await contactsService.assignResponsible(contactId, userId);
+      qc.invalidateQueries({ queryKey: ['contacts'] });
+      toast.success(userId ? 'Responsável definido' : 'Responsável removido');
+    } catch {
+      toast.error('Erro ao definir o responsável');
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['contacts', orgId, search, sort, tagId, statusId, channelType, page, limit],
@@ -352,6 +367,8 @@ export default function ContactsPage() {
                         contact={contact}
                         selected={selected.has(contact.id)}
                         onToggle={() => toggleOne(contact.id)}
+                        members={members}
+                        onAssign={handleAssign}
                       />
                     ))}
                   </div>
@@ -394,10 +411,14 @@ function ContactRow({
   contact,
   selected,
   onToggle,
+  members,
+  onAssign,
 }: {
   contact: Contact;
   selected: boolean;
   onToggle: () => void;
+  members: Member[];
+  onAssign: (contactId: string, userId: string | null) => void;
 }) {
   const state = getBrazilState(contact.phone);
   const color = avatarColor(contact.name);
@@ -492,6 +513,9 @@ function ContactRow({
         ))}
       </div>
 
+      {/* Responsável */}
+      <ResponsibleCell contact={contact} members={members} onAssign={onAssign} />
+
       {/* Conversas + última atividade */}
       <div className="hidden w-24 shrink-0 flex-col items-end gap-0.5 text-right lg:flex">
         <span className="inline-flex items-center gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
@@ -514,5 +538,86 @@ function ContactRow({
         </Link>
       )}
     </div>
+  );
+}
+
+/** Avatar circular do responsável (foto ou iniciais coloridas). */
+function RespAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (avatarUrl && !failed) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={avatarUrl} alt="" onError={() => setFailed(true)} className="h-6 w-6 shrink-0 rounded-full object-cover" />;
+  }
+  return (
+    <span
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white"
+      style={{ backgroundColor: avatarColor(name) }}
+    >
+      {avatarInitials(name)}
+    </span>
+  );
+}
+
+/** Pílula do responsável + menu pra atribuir/trocar/remover. */
+function ResponsibleCell({
+  contact,
+  members,
+  onAssign,
+}: {
+  contact: Contact;
+  members: Member[];
+  onAssign: (contactId: string, userId: string | null) => void;
+}) {
+  const a = contact.assignedTo;
+  return (
+    <Menu as="div" className="relative hidden shrink-0 sm:block">
+      <MenuButton
+        onClick={(e) => e.stopPropagation()}
+        title={a ? `Responsável: ${a.name}` : 'Atribuir responsável'}
+        className="flex items-center gap-1.5 rounded-full border border-zinc-200 py-0.5 pl-0.5 pr-1.5 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      >
+        {a ? (
+          <>
+            <RespAvatar name={a.name} avatarUrl={a.avatarUrl} />
+            <span className="hidden max-w-[80px] truncate lg:inline">{a.name.split(' ')[0]}</span>
+          </>
+        ) : (
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-400 dark:bg-zinc-800">
+            <UserPlus className="h-3.5 w-3.5" />
+          </span>
+        )}
+      </MenuButton>
+      <MenuItems
+        anchor="bottom end"
+        className="z-50 mt-1 max-h-72 w-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        <MenuItem>
+          <button
+            onClick={() => onAssign(contact.id, null)}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <X className="h-3 w-3" />
+            </span>
+            Sem responsável
+          </button>
+        </MenuItem>
+        {members.map((m) => {
+          const active = a?.id === m.userId;
+          return (
+            <MenuItem key={m.id}>
+              <button
+                onClick={() => onAssign(contact.id, m.userId)}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                <RespAvatar name={m.user.name} avatarUrl={m.user.avatarUrl} />
+                <span className="flex-1 truncate text-left">{m.user.name}</span>
+                {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
+              </button>
+            </MenuItem>
+          );
+        })}
+      </MenuItems>
+    </Menu>
   );
 }

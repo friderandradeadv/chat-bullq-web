@@ -11,6 +11,8 @@ export interface Contact {
   channels: { id: string; channelId: string; externalId: string; channel: { id: string; type: string; name: string } }[];
   tags: { tag: { id: string; name: string; color: string } }[];
   status?: { id: string; name: string; color: string } | null;
+  /** Responsável (atendente) pelo contato. */
+  assignedTo?: { id: string; name: string; avatarUrl: string | null } | null;
   conversations?: any[];
   _count?: { conversations: number };
   createdAt: string;
@@ -61,6 +63,12 @@ export const contactsService = {
 
   async update(id: string, payload: Partial<Contact>): Promise<Contact> {
     const { data } = await api.patch(`/contacts/${id}`, payload);
+    return data.data;
+  },
+
+  /** Define/troca/remove (null) o responsável pelo contato. */
+  async assignResponsible(id: string, assignedToId: string | null): Promise<Contact> {
+    const { data } = await api.patch(`/contacts/${id}`, { assignedToId });
     return data.data;
   },
 
