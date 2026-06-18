@@ -22,6 +22,7 @@ import {
 } from '@/features/ai-agents/components/prompt-mention-editor';
 import { AgentSkillsAndTools } from '@/features/ai-agents/components/agent-skills-tools';
 import { AgentTestPanel } from '@/features/ai-agents/components/agent-test-panel';
+import { PromptVersionsSection } from '@/features/ai-agents/components/prompt-versions-section';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { departmentsService } from '@/features/settings/services/departments.service';
@@ -115,6 +116,14 @@ const LIDERHUB_EXTRA_LABELS: MentionItem[] = (
   ] as [string, MentionType][]
 ).map(([label, type]) => ({ label, type }));
 
+/** Avatares prontos (DiceBear avataaars) pro agente — visual amigável. */
+const AGENT_AVATAR_SEEDS = [
+  'Aneka', 'Felix', 'Mia', 'Leo', 'Sasha', 'Nina',
+  'Bruno', 'Lara', 'Theo', 'Cleo', 'Ravi', 'Yuki',
+];
+const avatarUrlForSeed = (seed: string) =>
+  `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+
 export default function AgentEditorPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -137,6 +146,8 @@ export default function AgentEditorPage() {
   const [squad, setSquad] = useState('');
   const [folderId, setFolderId] = useState('');
   const [operationalContext, setOperationalContext] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [responseDelaySeconds, setResponseDelaySeconds] = useState(0);
   const [saving, setSaving] = useState(false);
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [newChannelId, setNewChannelId] = useState('');
@@ -156,6 +167,8 @@ export default function AgentEditorPage() {
     setSquad(agent.squad ?? '');
     setFolderId(agent.folderId ?? '');
     setOperationalContext(agent.operationalContext ?? '');
+    setAvatarUrl(agent.avatarUrl ?? null);
+    setResponseDelaySeconds(agent.responseDelaySeconds ?? 0);
   }, [agent]);
 
   // ── dados que alimentam o menu @ ──────────────────────────────
@@ -229,6 +242,8 @@ export default function AgentEditorPage() {
         squad: squad.trim() || null,
         folderId: folderId || null,
         operationalContext: operationalContext.trim() || null,
+        avatarUrl,
+        responseDelaySeconds,
       } as any);
       toast.success('Agente salvo');
       refetch();
@@ -415,10 +430,47 @@ export default function AgentEditorPage() {
             extraLabels={extraLabels}
           />
           <CapacityMeter chars={systemPrompt.length} />
+          <PromptVersionsSection
+            agentId={agent.id}
+            currentSystemPrompt={systemPrompt}
+            currentOperationalContext={operationalContext}
+            onRestore={(p, oc) => {
+              setSystemPrompt(p);
+              setOperationalContext(oc);
+            }}
+          />
         </section>
 
         {/* Config lateral */}
         <aside className="space-y-4">
+          <Field label="Avatar">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setAvatarUrl(null)}
+                className={`flex h-9 w-9 items-center justify-center rounded-full border text-[9px] font-medium text-zinc-500 ${!avatarUrl ? 'border-primary ring-2 ring-primary/30' : 'border-zinc-300 dark:border-zinc-600'}`}
+                title="Sem avatar (iniciais)"
+              >
+                Padrão
+              </button>
+              {AGENT_AVATAR_SEEDS.map((seed) => {
+                const url = avatarUrlForSeed(seed);
+                const active = avatarUrl === url;
+                return (
+                  <button
+                    key={seed}
+                    type="button"
+                    onClick={() => setAvatarUrl(url)}
+                    className={`h-9 w-9 overflow-hidden rounded-full border bg-white ${active ? 'border-primary ring-2 ring-primary/30' : 'border-zinc-200 dark:border-zinc-700'}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="" className="h-full w-full" />
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
           <Field label="Descrição">
             <input
               value={description}
@@ -441,6 +493,26 @@ export default function AgentEditorPage() {
           <Field label={`Criatividade (${temperature.toFixed(2)})`}>
             <input type="range" min="0" max="1.5" step="0.05" value={temperature}
               onChange={(e) => setTemperature(parseFloat(e.target.value))} className="w-full" />
+          </Field>
+
+          <Field label="Tempo de resposta (segundos)">
+            <>
+              <input
+                type="number"
+                min={0}
+                max={60}
+                value={responseDelaySeconds}
+                onChange={(e) =>
+                  setResponseDelaySeconds(
+                    Math.min(60, Math.max(0, Number(e.target.value) || 0)),
+                  )
+                }
+                className="input"
+              />
+              <p className="mt-1 text-[11px] text-zinc-400">
+                Atraso antes de responder — deixa o atendimento mais humano. 0 = instantâneo.
+              </p>
+            </>
           </Field>
 
           <Field label="Pasta">
