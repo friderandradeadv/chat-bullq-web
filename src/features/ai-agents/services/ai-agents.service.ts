@@ -71,9 +71,23 @@ export interface AiAgent {
   operationalContext: string | null;
   /** Quando foi a última vez que `operationalContext` mudou. */
   operationalContextUpdatedAt: string | null;
+  /** Versão ativa do system prompt (histórico em prompt-versions). */
+  promptVersion: number;
   createdAt: string;
   updatedAt: string;
   channels?: AgentChannelLink[];
+}
+
+export interface PromptVersion {
+  id: string;
+  agentId: string;
+  version: number;
+  systemPrompt: string;
+  operationalContext: string | null;
+  label: string | null;
+  changeNote: string | null;
+  createdById: string | null;
+  createdAt: string;
 }
 
 export interface CreateAgentInput {
@@ -263,6 +277,31 @@ export const aiAgentsService = {
   /** Testa um turno do agente sem efeitos colaterais (test tab do editor). */
   async test(id: string, input: AgentTestInput): Promise<AgentTestResult> {
     const { data } = await api.post(`/ai-agents/${id}/test`, input);
+    return data.data ?? data;
+  },
+
+  // ─── Versões do system prompt ──────────────────────────────────────────────
+  async listPromptVersions(
+    id: string,
+  ): Promise<{ activeVersion: number; versions: PromptVersion[] }> {
+    const { data } = await api.get(`/ai-agents/${id}/prompt-versions`);
+    return data.data ?? data;
+  },
+
+  /** Salva o prompt ATUAL do agente como uma nova versão. */
+  async savePromptVersion(
+    id: string,
+    payload: { label?: string; changeNote?: string } = {},
+  ): Promise<PromptVersion> {
+    const { data } = await api.post(`/ai-agents/${id}/prompt-versions`, payload);
+    return data.data ?? data;
+  },
+
+  /** Restaura uma versão como a ativa (copia o prompt dela pro campo vivo). */
+  async restorePromptVersion(id: string, version: number): Promise<AiAgent> {
+    const { data } = await api.post(
+      `/ai-agents/${id}/prompt-versions/${version}/restore`,
+    );
     return data.data ?? data;
   },
 
