@@ -419,7 +419,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
               >
                 {savingContactStatus && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
                 {contact.status?.name ?? 'Sem status'}
-                <ChevronDown className="h-3 w-3 opacity-50" />
+                <ChevronDown className="h-2.5 w-2.5 opacity-50" />
               </PopoverButton>
               <PopoverPanel
                 anchor="bottom start"
@@ -499,7 +499,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                   >
                     {savingDept && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
                     {conversation.department ? conversation.department.name : 'Sem departamento'}
-                    <ChevronDown className="h-3 w-3 opacity-50" />
+                    <ChevronDown className="h-2.5 w-2.5 opacity-50" />
                   </PopoverButton>
                 );
               })()}
@@ -575,7 +575,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                     onClick={() => handleToggleTag(tag.id)}
                     disabled={pendingTagId === tag.id}
                     title="Remover tag"
-                    className="-mr-0.5 ml-1 rounded-full p-0.5 opacity-50 transition-opacity hover:opacity-100"
+                    className="-mr-0.5 ml-1 rounded-full opacity-50 transition-opacity hover:opacity-100"
                   >
                     {pendingTagId === tag.id ? (
                       <Loader2 className="h-2.5 w-2.5 animate-spin" />
@@ -588,7 +588,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
               {/* Add tag popover */}
               <Popover className="relative">
                 <PopoverButton className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2.5 py-[3px] text-[11px] font-medium leading-none text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-600 dark:hover:border-zinc-500">
-                  <Plus className="h-3 w-3" />
+                  <Plus className="h-2.5 w-2.5" />
                   Tag
                 </PopoverButton>
                 <PopoverPanel
