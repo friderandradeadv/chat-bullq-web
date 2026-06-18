@@ -413,14 +413,17 @@ function SidePanel({ activities, mode, onOpen }: { activities: Activity[]; mode:
   );
 }
 
-function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+function Modal({ title, children, onClose, wide, headerRight }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean; headerRight?: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div className={`relative z-50 w-full ${wide ? 'max-w-xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900`}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700"><X className="h-5 w-5" /></button>
+          <div className="flex items-center gap-1">
+            {headerRight}
+            <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700"><X className="h-5 w-5" /></button>
+          </div>
         </div>
         {children}
       </div>
@@ -665,33 +668,121 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (<div className="flex gap-2"><dt className="shrink-0 font-medium text-[#6C757D]">{label}{label ? ':' : ''}</dt><dd className="font-normal text-[#202124] dark:text-zinc-200">{children}</dd></div>);
 }
 
+// Seletor de etiquetas jurídicas (multi) — ícone de etiqueta no canto superior direito da modal (estilo Astrea).
+function TagSelector({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
+  const availQ = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+  const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState('#E03131');
+  const tags = availQ.data ?? [];
+  const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  const createNew = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    try { const t = await activitiesService.createTag(name, newColor); setNewName(''); availQ.refetch(); onChange([...selected, t.id]); }
+    catch (e: any) { toast.error(e?.message || 'Erro'); }
+  };
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((v) => !v)} title="Etiquetas" className="relative rounded p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800">
+        <Tag className="h-5 w-5" />
+        {selected.length > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#228BE6] px-1 text-[9px] font-bold text-white">{selected.length}</span>}
+      </button>
+      {open && (<><div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+        <div className="absolute right-0 top-9 z-20 w-64 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Etiquetas</p>
+          <div className="max-h-40 overflow-y-auto">
+            {tags.map((t) => { const on = selected.includes(t.id); return (
+              <button key={t.id} type="button" onClick={() => toggle(t.id)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                {on && <Check className="h-4 w-4 shrink-0 text-[#228BE6]" />}
+              </button>
+            ); })}
+            {tags.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta jurídica.</p>}
+          </div>
+          <div className="mt-1 border-t border-[#DEE2E6] px-3 py-2 dark:border-zinc-700">
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Nova etiqueta</p>
+            <div className="mb-2 flex gap-1.5">{['#E03131', '#F76707', '#F59F00', '#2F9E44', '#228BE6', '#7048E8', '#868E96'].map((c) => (<button key={c} type="button" onClick={() => setNewColor(c)} className={`h-4 w-4 rounded-full ${newColor === c ? 'ring-2 ring-zinc-400 ring-offset-1 dark:ring-offset-zinc-900' : ''}`} style={{ backgroundColor: c }} />))}</div>
+            <div className="flex items-center gap-1.5"><input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createNew(); } }} placeholder="Nome da etiqueta" className="min-w-0 flex-1 rounded border border-[#DEE2E6] px-2 py-1 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" /><button type="button" disabled={!newName.trim()} onClick={createNew} className="shrink-0 rounded px-2 py-1 text-xs font-bold uppercase text-white disabled:opacity-40" style={{ backgroundColor: ASTREA_BLUE }}>Criar</button></div>
+          </div>
+        </div></>)}
+    </div>
+  );
+}
+
+// Busca de processo (combobox): digita número CNJ ou nome e escolhe — substitui o <select> gigante.
+function CaseSearch({ value, onChange, cases }: { value: string; onChange: (id: string) => void; cases: { id: string; title: string; cnjNumber: string | null }[] }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const selected = cases.find((c) => c.id === value);
+  const q = query.trim().toLowerCase();
+  const digits = q.replace(/\D/g, '');
+  const results = (q
+    ? cases.filter((c) => c.title.toLowerCase().includes(q) || (digits.length >= 2 && (c.cnjNumber ?? '').replace(/\D/g, '').includes(digits)))
+    : cases
+  ).slice(0, 8);
+  if (selected) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+        <span className="min-w-0 flex-1 truncate text-zinc-800 dark:text-zinc-200">{selected.title}{selected.cnjNumber && <span className="ml-2 font-mono text-xs text-zinc-400">{selected.cnjNumber}</span>}</span>
+        <button type="button" onClick={() => { onChange(''); setQuery(''); }} title="Trocar processo" className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"><X className="h-4 w-4" /></button>
+      </div>
+    );
+  }
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+      <input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Encontre pelo número ou nome…" className={`${inputCls} pl-9`} />
+      {open && (<><div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+        <div className="absolute left-0 right-0 top-11 z-20 max-h-60 overflow-y-auto rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          {results.map((c) => (
+            <button key={c.id} type="button" onClick={() => { onChange(c.id); setOpen(false); setQuery(''); }} className="block w-full px-3 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800">
+              <span className="block truncate text-sm text-zinc-800 dark:text-zinc-200">{c.title}</span>
+              {c.cnjNumber && <span className="block font-mono text-xs text-zinc-400">{c.cnjNumber}</span>}
+            </button>
+          ))}
+          {results.length === 0 && <p className="px-3 py-2 text-sm text-zinc-400">Nenhum processo encontrado.</p>}
+        </div></>)}
+    </div>
+  );
+}
+
 function CreateEventDialog({ date, onClose, onSaved }: { date?: Date; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<EventKind>('audiencia');
   const [startsAt, setStartsAt] = useState(date ? toDatetimeLocal(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0)) : '');
   const [location, setLocation] = useState('');
   const [caseId, setCaseId] = useState('');
+  const [assignedToId, setAssignedToId] = useState('');
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
   const submit = async () => {
     if (!title.trim()) return toast.error('Informe o título');
     if (!startsAt) return toast.error('Informe a data/hora');
     setSaving(true);
-    try { await calendarService.create({ title: title.trim(), kind, startsAt: new Date(startsAt).toISOString(), location: location || undefined, caseId: caseId || undefined }); toast.success('Evento criado'); onSaved(); }
-    catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setSaving(false); }
+    try {
+      const ev = await calendarService.create({ title: title.trim(), kind, startsAt: new Date(startsAt).toISOString(), location: location || undefined, caseId: caseId || undefined, assignedToId: assignedToId || undefined });
+      if (tagIds.length) await Promise.all(tagIds.map((id) => activitiesService.attachTag(ENTITY_TYPE.evento, ev.id, id).catch(() => {})));
+      toast.success('Evento criado'); onSaved();
+    } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setSaving(false); }
   };
   return (
-    <Modal title="Novo evento" onClose={onClose} wide>
+    <Modal title="Adicionar evento" onClose={onClose} wide headerRight={<TagSelector selected={tagIds} onChange={setTagIds} />}>
       <div className="space-y-4">
-        <Field label="Título *"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} autoFocus /></Field>
+        <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} autoFocus /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Tipo"><select value={kind} onChange={(e) => setKind(e.target.value as EventKind)} className={inputCls}>{(Object.keys(KIND_LABEL) as EventKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></Field>
-          <Field label="Data e hora *"><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={inputCls} /></Field>
+          <Field label={<>Data e hora <span className="text-rose-500">*</span></>}><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={inputCls} /></Field>
         </div>
-        <Field label="Local"><div className="relative"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><input value={location} onChange={(e) => setLocation(e.target.value)} className={`${inputCls} pl-9`} placeholder="Fórum, sala, link…" /></div></Field>
-        <Field label="Processo (opcional)"><select value={caseId} onChange={(e) => setCaseId(e.target.value)} className={inputCls}><option value="">Nenhum</option>{cases.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}</select></Field>
-      </div>
-      <div className="mt-6 flex items-center justify-end gap-3"><button onClick={onClose} className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">Cancelar</button><button onClick={submit} disabled={saving} className="rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: ASTREA_BLUE }}>{saving ? 'Salvando…' : 'Criar'}</button></div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Processo"><CaseSearch value={caseId} onChange={setCaseId} cases={cases} /></Field>
+          <Field label="Responsável"><select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} className={inputCls}><option value="">Ninguém</option>{members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}</option>)}</select></Field>
+        </div>
+        <Field label="Local"><div className="relative"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><input value={location} onChange={(e) => setLocation(e.target.value)} className={`${inputCls} pl-9`} placeholder="Fórum, sala, link…" /></div></Field>      </div>
+      <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button></div>
     </Modal>
   );
 }
@@ -701,24 +792,35 @@ function CreateTaskDialog({ date, onClose, onSaved }: { date?: Date; onClose: ()
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [dueAt, setDueAt] = useState(date ? toDateInput(date) : toDateInput(new Date()));
   const [description, setDescription] = useState('');
+  const [caseId, setCaseId] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
   const submit = async () => {
     if (!title.trim()) return toast.error('Informe o título');
     setSaving(true);
-    try { await tasksService.create({ title: title.trim(), priority, dueAt: dueAt ? new Date(dueAt + 'T09:00:00').toISOString() : null, description: description || undefined }); toast.success('Tarefa criada'); onSaved(); }
-    catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setSaving(false); }
+    try {
+      const task = await tasksService.create({ title: title.trim(), priority, dueAt: dueAt ? new Date(dueAt + 'T09:00:00').toISOString() : null, description: description || undefined, caseId: caseId || undefined, assigneeId: assigneeId || undefined });
+      if (tagIds.length) await Promise.all(tagIds.map((id) => activitiesService.attachTag(ENTITY_TYPE.tarefa, task.id, id).catch(() => {})));
+      toast.success('Tarefa criada'); onSaved();
+    } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setSaving(false); }
   };
   return (
-    <Modal title="Nova tarefa" onClose={onClose} wide>
+    <Modal title="Adicionar tarefa" onClose={onClose} wide headerRight={<TagSelector selected={tagIds} onChange={setTagIds} />}>
       <div className="space-y-4">
-        <Field label="Título *"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} autoFocus /></Field>
+        <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} autoFocus /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Processo"><CaseSearch value={caseId} onChange={setCaseId} cases={cases} /></Field>
+          <Field label="Responsável"><select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={inputCls}><option value="">Ninguém</option>{members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}</option>)}</select></Field>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Prioridade"><select value={priority} onChange={(e) => setPriority(e.target.value as any)} className={inputCls}><option value="LOW">Baixa</option><option value="MEDIUM">Média</option><option value="HIGH">Alta</option></select></Field>
           <Field label="Data"><input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className={inputCls} /></Field>
-        </div>
-        <Field label="Descrição"><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+        </div>        <Field label="Descrição"><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900" /></Field>
       </div>
-      <div className="mt-6 flex items-center justify-end gap-3"><button onClick={onClose} className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">Cancelar</button><button onClick={submit} disabled={saving} className="rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: ASTREA_BLUE }}>{saving ? 'Salvando…' : 'Criar'}</button></div>
+      <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button></div>
     </Modal>
   );
 }

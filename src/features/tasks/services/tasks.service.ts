@@ -30,6 +30,7 @@ export interface CreateTaskInput {
   assigneeId?: string | null;
   contactId?: string;
   conversationId?: string;
+  caseId?: string;
 }
 
 export type UpdateTaskInput = Partial<
