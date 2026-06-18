@@ -15,6 +15,8 @@ interface OrgInfo {
   role: string;
   // 'ALL' for OWNER/ADMIN. Array of channel IDs for AGENT (deny-by-default).
   accessibleChannelIds: 'ALL' | string[];
+  // Módulos que ESTE usuário não pode acessar (denylist). Vazio/ausente = tudo.
+  restrictedModules?: string[];
 }
 
 interface AuthState {

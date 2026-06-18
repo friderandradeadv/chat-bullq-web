@@ -7,6 +7,8 @@ export interface Member {
   role: 'OWNER' | 'ADMIN' | 'AGENT';
   agentStatus: string;
   joinedAt: string;
+  /** Módulos que este membro NÃO pode acessar (denylist). */
+  restrictedModules?: string[];
   user: {
     id: string;
     name: string;
@@ -27,6 +29,10 @@ export const membersService = {
   },
   async updateRole(memberId: string, role: string): Promise<any> {
     const { data } = await api.patch(`/organizations/members/${memberId}/role`, { role });
+    return data.data;
+  },
+  async updateModules(memberId: string, restrictedModules: string[]): Promise<any> {
+    const { data } = await api.patch(`/organizations/members/${memberId}/modules`, { restrictedModules });
     return data.data;
   },
   async remove(memberId: string): Promise<void> {

@@ -1,12 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X, Hash } from 'lucide-react';
+import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X, Hash, LayoutGrid, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { MemberChannelsDrawer } from '@/features/settings/components/member-channels-drawer';
+
+// Módulos que dá pra liberar/bloquear por usuário (espelha APP_MODULES da API).
+const APP_MODULES: { key: string; label: string }[] = [
+  { key: 'atendimento', label: 'Atendimento' },
+  { key: 'automacoes', label: 'Automações' },
+  { key: 'juridico', label: 'Jurídico' },
+  { key: 'financeiro', label: 'Financeiro' },
+  { key: 'tarefas', label: 'Tarefas' },
+  { key: 'configuracoes', label: 'Configurações' },
+];
 
 const roleLabels: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   OWNER: { label: 'Proprietário', icon: ShieldCheck, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 dark:text-amber-400' },
@@ -30,6 +40,7 @@ export default function SettingsMembersPage() {
 
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [drawerMember, setDrawerMember] = useState<Member | null>(null);
+  const [modulesMember, setModulesMember] = useState<Member | null>(null);
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
@@ -150,6 +161,7 @@ export default function SettingsMembersPage() {
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Membro</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Role</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Canais</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Módulos</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Entrou em</th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-zinc-500">Ações</th>
             </tr>
@@ -161,13 +173,14 @@ export default function SettingsMembersPage() {
                   <td className="px-4 py-3"><div className="h-4 w-36 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" /></td>
                   <td className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
                   <td className="px-4 py-3"><div className="h-4 w-16 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
+                  <td className="px-4 py-3"><div className="h-4 w-16 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
                   <td className="px-4 py-3"><div className="h-4 w-24 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" /></td>
                   <td className="px-4 py-3" />
                 </tr>
               ))
             ) : !members?.length ? (
               <tr>
-                <td colSpan={5} className="px-4 py-12 text-center">
+                <td colSpan={6} className="px-4 py-12 text-center">
                   <Users className="mx-auto h-10 w-10 text-zinc-200 dark:text-zinc-700" />
                   <p className="mt-3 text-sm text-zinc-500">Nenhum membro encontrado</p>
                 </td>
@@ -225,6 +238,25 @@ export default function SettingsMembersPage() {
                         </button>
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      {/* OWNER/ADMIN têm acesso total a todos os módulos; só
+                          AGENTE pode ter módulos bloqueados. */}
+                      {m.role === 'OWNER' || m.role === 'ADMIN' ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                          Acesso total
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setModulesMember(m)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        >
+                          <LayoutGrid className="h-3 w-3" />
+                          {(m.restrictedModules?.length ?? 0) > 0
+                            ? `${APP_MODULES.length - (m.restrictedModules?.length ?? 0)}/${APP_MODULES.length} liberados`
+                            : 'Acesso total'}
+                        </button>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">
                       {new Date(m.joinedAt).toLocaleDateString('pt-BR')}
                     </td>
@@ -262,6 +294,116 @@ export default function SettingsMembersPage() {
         onClose={() => setDrawerMember(null)}
         onSaved={refresh}
       />
+
+      <ModulesModal
+        member={modulesMember}
+        onClose={() => setModulesMember(null)}
+        onSaved={refresh}
+      />
+    </div>
+  );
+}
+
+/**
+ * Modal de permissão por MÓDULO: liga/desliga cada área pra um atendente.
+ * Switch ligado = acesso liberado; desligado = bloqueado (entra na denylist).
+ */
+function ModulesModal({
+  member,
+  onClose,
+  onSaved,
+}: {
+  member: Member | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [restricted, setRestricted] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+
+  // Inicializa o set de bloqueados sempre que o modal abre pra outro membro.
+  const memberId = member?.id ?? null;
+  useEffect(() => {
+    setRestricted(new Set(member?.restrictedModules ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberId]);
+
+  if (!member) return null;
+
+  const toggle = (key: string) => {
+    setRestricted((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await membersService.updateModules(member.userId, [...restricted]);
+      toast.success('Acesso aos módulos atualizado');
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar acesso');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+              Acesso aos módulos
+            </h3>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              {member.user.name} — ligue só as áreas que este atendente pode acessar.
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
+          {APP_MODULES.map((mod) => {
+            const allowed = !restricted.has(mod.key);
+            return (
+              <div key={mod.key} className="flex items-center justify-between py-2.5">
+                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{mod.label}</span>
+                <button
+                  onClick={() => toggle(mod.key)}
+                  role="switch"
+                  aria-checked={allowed}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${allowed ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${allowed ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200">
+            Cancelar
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />} Salvar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
