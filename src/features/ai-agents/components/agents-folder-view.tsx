@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Folder,
   FolderPlus,
-  Sparkles,
   Power,
   PowerOff,
   MoreVertical,
@@ -21,12 +20,12 @@ import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import {
   aiAgentsService,
   type AiAgent,
-  DEPARTMENT_COLORS,
 } from '../services/ai-agents.service';
 import {
   agentFoldersService,
   type AgentFolder,
 } from '../services/agent-folders.service';
+import { AgentAvatar } from './agent-avatar';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
 function fmtDate(iso: string | null | undefined): string {
@@ -420,24 +419,13 @@ function AgentRow({
   onMove: (a: AiAgent, folderId: string | null) => void;
 }) {
   const isOrchestrator = agent.kind === 'ORCHESTRATOR';
-  const dept = agent.department ? DEPARTMENT_COLORS[agent.department] : undefined;
   return (
     <div className="group/row flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
       <button
         onClick={() => onEdit(agent)}
         className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
       >
-        <span
-          className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${
-            isOrchestrator
-              ? 'bg-primary/15 text-primary'
-              : dept
-                ? `${dept.bg} ${dept.text}`
-                : 'bg-primary/10 text-primary'
-          }`}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-        </span>
+        <AgentAvatar agent={agent} size="sm" rounded="rounded-md" />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
