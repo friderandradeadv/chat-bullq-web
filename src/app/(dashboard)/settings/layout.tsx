@@ -16,6 +16,7 @@ import {
   Zap,
   Coins,
   UserCircle,
+  Scale,
 } from 'lucide-react';
 
 // Menu lateral agrupado — estilo LíderHub (Configurações > CONTA / EMPRESA / CLASSES / DESENVOLVEDOR)
@@ -44,6 +45,12 @@ const groups = [
       { href: '/settings/statuses', label: 'Status', icon: CircleDot },
       { href: '/settings/tags', label: 'Etiquetas', icon: Tags },
       { href: '/settings/departments', label: 'Departamento', icon: Network },
+    ],
+  },
+  {
+    label: 'Jurídico',
+    items: [
+      { href: '/settings/juridico', label: 'Visão geral', icon: Scale },
     ],
   },
   {
