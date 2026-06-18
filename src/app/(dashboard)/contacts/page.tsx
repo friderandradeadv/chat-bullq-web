@@ -18,6 +18,7 @@ import {
   UserPlus,
   Check,
   Plus,
+  ChevronDown,
 } from 'lucide-react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { contactsService, type Contact } from '@/features/contacts/services/contacts.service';
@@ -65,6 +66,7 @@ export default function ContactsPage() {
   const [tagId, setTagId] = useState('');
   const [statusId, setStatusId] = useState('');
   const [channelType, setChannelType] = useState('');
+  const [respId, setRespId] = useState('');
   const [limit, setLimit] = useState(50);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -113,7 +115,7 @@ export default function ContactsPage() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['contacts', orgId, search, sort, tagId, statusId, channelType, page, limit],
+    queryKey: ['contacts', orgId, search, sort, tagId, statusId, channelType, respId, page, limit],
     queryFn: () => contactsService.list({
       search,
       sort,
@@ -122,12 +124,13 @@ export default function ContactsPage() {
       ...(tagId ? { tagIds: tagId } : {}),
       ...(statusId ? { statusId } : {}),
       ...(channelType ? { channelType } : {}),
+      ...(respId ? { assignedToId: respId } : {}),
     }),
   });
 
   const contacts = data?.contacts || [];
   const pagination = data?.pagination;
-  const hasFilters = !!(search || tagId || statusId || channelType);
+  const hasFilters = !!(search || tagId || statusId || channelType || respId);
   const alphabetical = sort === 'name_asc' || sort === 'name_desc';
 
   // Agrupa por letra inicial quando ordenado por nome (divisores A, B, C…).
@@ -143,7 +146,7 @@ export default function ContactsPage() {
   }, [contacts, alphabetical]);
 
   const clearFilters = () => {
-    setSearch(''); setTagId(''); setStatusId(''); setChannelType(''); setPage(1);
+    setSearch(''); setTagId(''); setStatusId(''); setChannelType(''); setRespId(''); setPage(1);
   };
 
   // ─── Seleção em massa ────────────────────────────────────────────
@@ -248,20 +251,41 @@ export default function ContactsPage() {
 
         {/* Filtros */}
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <select value={statusId} onChange={(e) => { setStatusId(e.target.value); setPage(1); }} className={cn(selectCls, 'sm:w-44')}>
-            <option value="">Todos os status</option>
-            <option value="none">Sem status</option>
-            {statuses.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-          </select>
-          <select value={tagId} onChange={(e) => { setTagId(e.target.value); setPage(1); }} className={cn(selectCls, 'sm:w-44')}>
-            <option value="">Todas as tags</option>
-            {tags.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}
-          </select>
-          <select value={channelType} onChange={(e) => { setChannelType(e.target.value); setPage(1); }} className={cn(selectCls, 'sm:w-44')}>
-            <option value="">Todos os canais</option>
-            <option value="WHATSAPP_ZAPPFY">WhatsApp</option>
-            <option value="INSTAGRAM">Instagram</option>
-          </select>
+          <FilterDropdown
+            value={statusId}
+            onChange={(v) => { setStatusId(v); setPage(1); }}
+            options={[
+              { value: '', label: 'Todos os status' },
+              { value: 'none', label: 'Sem status' },
+              ...statuses.map((s) => ({ value: s.id, label: s.name, dot: s.color })),
+            ]}
+          />
+          <FilterDropdown
+            value={tagId}
+            onChange={(v) => { setTagId(v); setPage(1); }}
+            options={[
+              { value: '', label: 'Todas as tags' },
+              ...tags.map((t) => ({ value: t.id, label: t.name, dot: t.color })),
+            ]}
+          />
+          <FilterDropdown
+            value={respId}
+            onChange={(v) => { setRespId(v); setPage(1); }}
+            options={[
+              { value: '', label: 'Todos responsáveis' },
+              { value: 'none', label: 'Sem responsável' },
+              ...members.map((m) => ({ value: m.userId, label: m.user.name, avatarUrl: m.user.avatarUrl })),
+            ]}
+          />
+          <FilterDropdown
+            value={channelType}
+            onChange={(v) => { setChannelType(v); setPage(1); }}
+            options={[
+              { value: '', label: 'Todos os canais' },
+              { value: 'WHATSAPP_ZAPPFY', label: 'WhatsApp', icon: <WhatsAppIcon className="h-3.5 w-3.5 text-[#25D366]" /> },
+              { value: 'INSTAGRAM', label: 'Instagram', icon: <InstagramIcon className="h-3.5 w-3.5" /> },
+            ]}
+          />
           {hasFilters && (
             <button
               onClick={clearFilters}
@@ -578,6 +602,71 @@ function RespAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | nul
     >
       {avatarInitials(name)}
     </span>
+  );
+}
+
+// ─── Filtro interativo (substitui os <select> nativos) ──────────────────────
+type FilterOption = { value: string; label: string; dot?: string; avatarUrl?: string | null; icon?: React.ReactNode };
+
+function OptionGlyph({ o }: { o: FilterOption }) {
+  if ('avatarUrl' in o) {
+    return o.avatarUrl ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={o.avatarUrl} alt="" className="h-4 w-4 shrink-0 rounded-full object-cover" />
+    ) : (
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-400 dark:bg-zinc-800">
+        <Users className="h-2.5 w-2.5" />
+      </span>
+    );
+  }
+  if (o.icon) return <span className="flex h-4 w-4 shrink-0 items-center justify-center">{o.icon}</span>;
+  if (o.dot) return <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: o.dot }} />;
+  return null;
+}
+
+function FilterDropdown({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: FilterOption[];
+  onChange: (v: string) => void;
+}) {
+  const current = options.find((o) => o.value === value) ?? options[0];
+  const active = value !== '';
+  return (
+    <Menu as="div" className="relative">
+      <MenuButton
+        className={cn(
+          'inline-flex w-full items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors sm:w-44',
+          active
+            ? 'border-primary/40 bg-primary/5 text-zinc-800 dark:bg-primary/10 dark:text-zinc-100'
+            : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800',
+        )}
+      >
+        <OptionGlyph o={current} />
+        <span className="flex-1 truncate text-left">{current.label}</span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+      </MenuButton>
+      <MenuItems
+        anchor="bottom start"
+        className="z-50 mt-1 max-h-80 w-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        {options.map((o) => (
+          <MenuItem key={o.value || 'all'}>
+            <button
+              onClick={() => onChange(o.value)}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              <OptionGlyph o={o} />
+              <span className="flex-1 truncate text-left">{o.label}</span>
+              {value === o.value && <Check className="h-4 w-4 shrink-0 text-primary" />}
+            </button>
+          </MenuItem>
+        ))}
+      </MenuItems>
+    </Menu>
   );
 }
 
