@@ -22,6 +22,7 @@ import {
   FolderOpen,
   CalendarDays,
   Mail,
+  BarChart3,
   Sun,
   Moon,
   CircleDot,
@@ -164,6 +165,7 @@ export function AppSidebar() {
           {/* JURÍDICO — Prazos removido (= Agenda/Tarefas); Caixa DJEN → Publicações */}
           <div className="mt-3">
             <NavSection label="Jurídico">
+              <NavItem href="/juridico" icon={BarChart3} label="Dashboard" />
               <NavItem href="/processos" icon={FolderOpen} label="Processos" />
               <NavItem href="/agenda" icon={CalendarDays} label="Agenda" />
               <NavItem href="/caixa-djen" icon={Mail} label="Publicações" />
