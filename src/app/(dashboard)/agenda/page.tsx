@@ -9,7 +9,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import ptBrLocale from '@fullcalendar/core/locales/pt-br';
-import type { EventInput, DatesSetArg, EventClickArg } from '@fullcalendar/core';
+import type { EventInput, DatesSetArg, EventClickArg, EventDropArg } from '@fullcalendar/core';
 import type { DateClickArg } from '@fullcalendar/interaction';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Plus, X, MapPin, RefreshCw,
@@ -146,6 +146,7 @@ export default function AgendaPage() {
       id: a.id, title: `${initials(a.responsibleName)} · ${a.title}`, start: a.date, allDay: !a.hasTime,
       backgroundColor: c.bg, borderColor: c.bg, textColor: c.text,
       classNames: [`ag-${a.source}`, (a.done || a.cancelled) ? 'ag-done' : ''].filter(Boolean),
+      startEditable: a.source !== 'prazo' && !a.cancelled, // tarefas/eventos arrastáveis; prazos não (data fatal)
     };
   }), [filtered]);
 
@@ -153,6 +154,19 @@ export default function AgendaPage() {
   const openCreate = (type: 'evento' | 'tarefa', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
   const onEventClick = (arg: EventClickArg) => { const a = byId.get(arg.event.id); if (a) setDetail(a); };
+  // Arrastar tarefa/evento para outra data (ou horário, na semana/dia) → reagenda.
+  const onEventDrop = async (arg: EventDropArg) => {
+    const a = byId.get(arg.event.id);
+    const start = arg.event.start;
+    if (!a || a.source === 'prazo' || !start) { arg.revert(); return; }
+    try {
+      const iso = start.toISOString();
+      if (a.source === 'tarefa') await tasksService.update(a.rawId, { dueAt: iso });
+      else await calendarService.update(a.rawId, { startsAt: iso });
+      toast.success(a.source === 'tarefa' ? 'Tarefa movida' : 'Evento movido');
+      refetchAll();
+    } catch (e: any) { toast.error(e?.message || 'Erro ao mover'); arg.revert(); }
+  };
 
   const personLabel = personId === 'all' ? 'Minhas atribuições' : (userMap.get(personId)?.split(' ')[0] ?? 'Pessoa');
   const showSidePanel = mode === 'list' || mode === 'timeGridDay';
@@ -272,9 +286,10 @@ export default function AgendaPage() {
                 height={isMonth ? 'auto' : '100%'} nowIndicator dayMaxEvents={isMonth ? 4 : true}
                 slotMinTime="06:00:00" slotMaxTime="22:00:00" scrollTime="08:00:00"
                 allDaySlot allDayText="Dia todo" eventDisplay="block" displayEventTime={false} expandRows={!isMonth}
+                editable eventStartEditable eventDurationEditable={false} eventOverlap
                 events={fcEvents}
                 datesSet={(arg: DatesSetArg) => setTitle(arg.view.title)}
-                dateClick={onDateClick} eventClick={onEventClick}
+                dateClick={onDateClick} eventClick={onEventClick} eventDrop={onEventDrop}
               />
             )}
           </div>
@@ -437,6 +452,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [editTitle, setEditTitle] = useState(activity.title);
   const [commentBody, setCommentBody] = useState('');
   const [tagPicker, setTagPicker] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#E03131');
   const commentsQ = useQuery({ queryKey: ['activity-comments', activity.id], queryFn: () => activitiesService.listComments(entityType, activity.rawId) });
   const etagsQ = useQuery({ queryKey: ['activity-tags', activity.id], queryFn: () => activitiesService.listTags(entityType, activity.rawId) });
   const availTagsQ = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
@@ -450,6 +467,16 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   };
   const removeComment = async (id: string) => { try { await activitiesService.deleteComment(id); commentsQ.refetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
   const attachTag = async (tagId: string) => { try { await activitiesService.attachTag(entityType, activity.rawId, tagId); setTagPicker(false); etagsQ.refetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
+  const createAndAttach = async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    setBusy(true);
+    try {
+      const tag = await activitiesService.createTag(name, newTagColor);
+      await activitiesService.attachTag(entityType, activity.rawId, tag.id);
+      setNewTagName(''); setTagPicker(false); availTagsQ.refetch(); etagsQ.refetch();
+    } catch (e: any) { toast.error(e?.message || 'Erro ao criar etiqueta'); } finally { setBusy(false); }
+  };
   const detachTag = async (etId: string) => { try { await activitiesService.detachTag(etId); etagsQ.refetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
   const saveEdit = async () => {
     if (!editTitle.trim()) return;
@@ -532,11 +559,25 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           <div className="relative">
             <button onClick={() => setTagPicker((v) => !v)} className="inline-flex items-center gap-1 rounded border border-dashed border-[#DEE2E6] px-2 py-0.5 text-[10px] font-bold uppercase text-[#6C757D] hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400"><Tag className="h-3 w-3" />Etiqueta</button>
             {tagPicker && (<><div className="fixed inset-0 z-10" onClick={() => setTagPicker(false)} />
-              <div className="absolute left-0 top-7 z-20 max-h-56 w-52 overflow-y-auto rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                {(availTagsQ.data ?? []).filter((t) => !attachedIds.has(t.id)).map((t) => (
-                  <button key={t.id} onClick={() => attachTag(t.id)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />{t.name}</button>
-                ))}
-                {(availTagsQ.data ?? []).filter((t) => !attachedIds.has(t.id)).length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Sem etiquetas disponíveis. Crie em “Etiquetas”.</p>}
+              <div className="absolute left-0 top-7 z-20 w-64 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                <div className="max-h-44 overflow-y-auto">
+                  {(availTagsQ.data ?? []).filter((t) => !attachedIds.has(t.id)).map((t) => (
+                    <button key={t.id} onClick={() => attachTag(t.id)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"><span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />{t.name}</button>
+                  ))}
+                  {(availTagsQ.data ?? []).filter((t) => !attachedIds.has(t.id)).length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta jurídica ainda.</p>}
+                </div>
+                <div className="mt-1 border-t border-[#DEE2E6] px-3 py-2 dark:border-zinc-700">
+                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Nova etiqueta</p>
+                  <div className="mb-2 flex gap-1.5">
+                    {['#E03131', '#F76707', '#F59F00', '#2F9E44', '#228BE6', '#7048E8', '#868E96'].map((c) => (
+                      <button key={c} type="button" onClick={() => setNewTagColor(c)} className={`h-4 w-4 rounded-full transition ${newTagColor === c ? 'ring-2 ring-zinc-400 ring-offset-1 dark:ring-offset-zinc-900' : ''}`} style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') createAndAttach(); }} placeholder="Nome da etiqueta" className="min-w-0 flex-1 rounded border border-[#DEE2E6] px-2 py-1 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                    <button disabled={busy || !newTagName.trim()} onClick={createAndAttach} className="shrink-0 rounded px-2 py-1 text-xs font-bold uppercase text-white disabled:opacity-40" style={{ backgroundColor: ASTREA_BLUE }}>Criar</button>
+                  </div>
+                </div>
               </div></>)}
           </div>
         </div>

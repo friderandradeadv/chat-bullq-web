@@ -20,9 +20,10 @@ import {
   Cable,
   KanbanSquare,
   FolderOpen,
-  CalendarDays,
-  Mail,
-  BarChart3,
+  Folder,
+  CalendarCheck,
+  LayoutList,
+  Columns3,
   Sun,
   Moon,
   CircleDot,
@@ -165,11 +166,11 @@ export function AppSidebar() {
           {/* JURÍDICO — Prazos removido (= Agenda/Tarefas); Caixa DJEN → Publicações */}
           <div className="mt-3">
             <NavSection label="Jurídico">
-              <NavItem href="/juridico" icon={BarChart3} label="Dashboard" />
-              <NavItem href="/juridico/kanban" icon={KanbanSquare} label="Kanban de Prazos" />
-              <NavItem href="/processos" icon={FolderOpen} label="Processos" />
-              <NavItem href="/agenda" icon={CalendarDays} label="Agenda" />
-              <NavItem href="/caixa-djen" icon={Mail} label="Publicações" />
+              <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
+              <NavItem href="/juridico/kanban" icon={Columns3} label="Kanban de processos" />
+              <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
+              <NavItem href="/processos" icon={Folder} label="Processos" />
+              <NavItem href="/caixa-djen" icon={FolderOpen} label="Publicações" />
             </NavSection>
           </div>
 

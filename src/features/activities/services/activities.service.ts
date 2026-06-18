@@ -56,8 +56,13 @@ export const activitiesService = {
     await api.delete(`/activities/tags/${entityTagId}`);
   },
 
+  // Etiquetas do jurídico ficam isoladas das tags do atendimento (scope=legal).
   async listAvailableTags(): Promise<TagOption[]> {
-    const { data } = await api.get('/tags');
+    const { data } = await api.get('/tags', { params: { scope: 'legal' } });
+    return data.data ?? data;
+  },
+  async createTag(name: string, color: string): Promise<TagOption> {
+    const { data } = await api.post('/tags', { name, color, scope: 'legal' });
     return data.data ?? data;
   },
 };
