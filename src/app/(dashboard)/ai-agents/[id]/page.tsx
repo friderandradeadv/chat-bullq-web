@@ -247,6 +247,8 @@ export default function AgentEditorPage() {
       } as any);
       toast.success('Agente salvo');
       refetch();
+      // Invalida a LISTA também, senão os cards/nós seguem com o avatar antigo.
+      qc.invalidateQueries({ queryKey: ['ai-agents'] });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao salvar');
     } finally {

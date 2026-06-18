@@ -12,7 +12,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'Chat | Frider Andrade',
+  title: 'Hub | Frider Andrade',
   description: 'Omnichannel customer service platform',
   // Favicon do navegador (monograma "FA.") acompanha o tema do SO.
   icons: {

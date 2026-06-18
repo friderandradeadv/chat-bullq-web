@@ -119,7 +119,7 @@ export default function FollowUpsPage() {
   const items = data?.items ?? [];
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-6">
+    <div className="mx-auto h-full max-w-4xl space-y-5 overflow-y-auto p-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">

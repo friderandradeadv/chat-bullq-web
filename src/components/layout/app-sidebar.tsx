@@ -20,7 +20,6 @@ import {
   Cable,
   KanbanSquare,
   FolderOpen,
-  Clock,
   CalendarDays,
   Mail,
   Sun,
@@ -138,33 +137,19 @@ export function AppSidebar() {
 
       <SidebarBody>
         <SidebarSection>
-          {/* Top-level — flat, LíderHub style */}
-          <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-          <NavItem href="/conexoes" icon={Cable} label="Conexões" />
+          {/* ATENDIMENTO — BullQ / WhatsApp (Dashboard + Conexões aqui dentro) */}
+          <NavSection label="Atendimento">
+            <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+            <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
+            <NavItem href="/contacts" icon={BookUser} label="Contatos" />
+            <NavItem href="/kanban" icon={KanbanSquare} label="Kanban" />
+            <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
+            <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
+            <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
+            <NavItem href="/conexoes" icon={Cable} label="Conexões" />
+          </NavSection>
 
-          {/* ATENDIMENTO */}
-          <div className="mt-3">
-            <NavSection label="Atendimento">
-              <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
-              <NavItem href="/contacts" icon={BookUser} label="Contatos" />
-              <NavItem href="/kanban" icon={KanbanSquare} label="Kanban" />
-              <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
-              <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
-              <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
-            </NavSection>
-          </div>
-
-          {/* JURÍDICO */}
-          <div className="mt-3">
-            <NavSection label="Jurídico">
-              <NavItem href="/processos" icon={FolderOpen} label="Processos" />
-              <NavItem href="/prazos" icon={Clock} label="Prazos" />
-              <NavItem href="/agenda" icon={CalendarDays} label="Agenda" />
-              <NavItem href="/caixa-djen" icon={Mail} label="Caixa DJEN" />
-            </NavSection>
-          </div>
-
-          {/* AUTOMAÇÕES */}
+          {/* AUTOMAÇÕES — logo abaixo de Atendimento */}
           <div className="mt-3">
             <NavSection label="Automações">
               <NavItem href="/ai-agents" icon={Bot} label="Agentes" />
@@ -173,6 +158,15 @@ export function AppSidebar() {
               <NavItem href="/vozes" icon={AudioLines} label="Vozes" />
               <NavItem href="/automations" icon={Zap} label="Automações" />
               <NavItem href="/settings/integrations" icon={Plug} label="Integrações" />
+            </NavSection>
+          </div>
+
+          {/* JURÍDICO — Prazos removido (= Agenda/Tarefas); Caixa DJEN → Publicações */}
+          <div className="mt-3">
+            <NavSection label="Jurídico">
+              <NavItem href="/processos" icon={FolderOpen} label="Processos" />
+              <NavItem href="/agenda" icon={CalendarDays} label="Agenda" />
+              <NavItem href="/caixa-djen" icon={Mail} label="Publicações" />
             </NavSection>
           </div>
 

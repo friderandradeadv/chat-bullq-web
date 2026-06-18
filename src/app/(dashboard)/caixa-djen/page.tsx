@@ -10,6 +10,7 @@ import {
   type PublicationStatus,
 } from '@/features/djen/services/djen.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { CnjNumber } from '../processos/page';
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 
@@ -49,7 +50,7 @@ export default function CaixaDjenPage() {
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
             <Mail className="h-5 w-5 text-primary" />
-            Caixa DJEN
+            Publicações
           </h1>
           <p className="mt-0.5 text-sm text-zinc-500">
             Publicações capturadas do Diário · classificação + vínculo ao processo
@@ -109,13 +110,17 @@ function PublicationCard({ p, onChange }: { p: Publication; onChange: () => void
   };
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-lg border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-sm font-medium text-zinc-900 dark:text-zinc-100">
-              {p.case?.cnjNumber ?? cls?.tribunal ?? p.oab}
-            </span>
+            {p.case?.cnjNumber ? (
+              <CnjNumber value={p.case.cnjNumber} className="text-sm font-medium" />
+            ) : (
+              <span className="font-mono text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                {cls?.tribunal ?? p.oab}
+              </span>
+            )}
             {cls?.tipoComunicacao && (
               <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                 {cls.tipoComunicacao}
