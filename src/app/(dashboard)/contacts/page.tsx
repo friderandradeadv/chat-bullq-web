@@ -17,6 +17,7 @@ import {
   Loader2,
   UserPlus,
   Check,
+  Plus,
 } from 'lucide-react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { contactsService, type Contact } from '@/features/contacts/services/contacts.service';
@@ -81,6 +82,33 @@ export default function ContactsPage() {
       toast.success(userId ? 'Responsável definido' : 'Responsável removido');
     } catch {
       toast.error('Erro ao definir o responsável');
+    }
+  };
+
+  const handleSetStatus = async (contactId: string, statusId: string | null) => {
+    try {
+      await contactStatusesService.setContactStatus(contactId, statusId);
+      qc.invalidateQueries({ queryKey: ['contacts'] });
+    } catch {
+      toast.error('Erro ao mudar o status');
+    }
+  };
+
+  const handleAddTag = async (contactId: string, tagId: string) => {
+    try {
+      await tagsService.addToContact(contactId, tagId);
+      qc.invalidateQueries({ queryKey: ['contacts'] });
+    } catch {
+      toast.error('Erro ao adicionar a etiqueta');
+    }
+  };
+
+  const handleRemoveTag = async (contactId: string, tagId: string) => {
+    try {
+      await tagsService.removeFromContact(contactId, tagId);
+      qc.invalidateQueries({ queryKey: ['contacts'] });
+    } catch {
+      toast.error('Erro ao remover a etiqueta');
     }
   };
 
@@ -369,6 +397,11 @@ export default function ContactsPage() {
                         onToggle={() => toggleOne(contact.id)}
                         members={members}
                         onAssign={handleAssign}
+                        allTags={tags}
+                        allStatuses={statuses}
+                        onAddTag={handleAddTag}
+                        onRemoveTag={handleRemoveTag}
+                        onSetStatus={handleSetStatus}
                       />
                     ))}
                   </div>
@@ -407,18 +440,30 @@ export default function ContactsPage() {
   );
 }
 
+type Labeled = { id: string; name: string; color: string };
+
 function ContactRow({
   contact,
   selected,
   onToggle,
   members,
   onAssign,
+  allTags,
+  allStatuses,
+  onAddTag,
+  onRemoveTag,
+  onSetStatus,
 }: {
   contact: Contact;
   selected: boolean;
   onToggle: () => void;
   members: Member[];
   onAssign: (contactId: string, userId: string | null) => void;
+  allTags: Labeled[];
+  allStatuses: Labeled[];
+  onAddTag: (contactId: string, tagId: string) => void;
+  onRemoveTag: (contactId: string, tagId: string) => void;
+  onSetStatus: (contactId: string, statusId: string | null) => void;
 }) {
   const state = getBrazilState(contact.phone);
   const color = avatarColor(contact.name);
@@ -463,14 +508,7 @@ function ContactRow({
             {contact.name || 'Sem nome'}
           </p>
           {state && <StateFlag uf={state.uf} title={state.name} />}
-          {contact.status && (
-            <span
-              className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              style={{ backgroundColor: contact.status.color, color: chipTextColor(contact.status.color) }}
-            >
-              {contact.status.name}
-            </span>
-          )}
+          <StatusCell contact={contact} allStatuses={allStatuses} onSet={onSetStatus} />
         </div>
         <div className="mt-0.5 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
           {contact.phone && (
@@ -488,23 +526,8 @@ function ContactRow({
         </div>
       </div>
 
-      {/* Tags */}
-      <div className="hidden max-w-[200px] flex-wrap justify-end gap-1 md:flex">
-        {contact.tags.slice(0, 3).map((t) => (
-          <span
-            key={t.tag.id}
-            className="truncate rounded-full px-2 py-0.5 text-[10px] font-semibold"
-            style={{ backgroundColor: t.tag.color, color: chipTextColor(t.tag.color) }}
-          >
-            {t.tag.name}
-          </span>
-        ))}
-        {contact.tags.length > 3 && (
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800">
-            +{contact.tags.length - 3}
-          </span>
-        )}
-      </div>
+      {/* Tags (interativas: × remove, ícone + adiciona) */}
+      <TagsCell contact={contact} allTags={allTags} onAdd={onAddTag} onRemove={onRemoveTag} />
 
       {/* Canais */}
       <div className="hidden items-center gap-1.5 sm:flex">
@@ -558,6 +581,128 @@ function RespAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | nul
   );
 }
 
+/** Status do contato com menu pra trocar/remover (interativo, igual ao resto). */
+function StatusCell({
+  contact,
+  allStatuses,
+  onSet,
+}: {
+  contact: Contact;
+  allStatuses: Labeled[];
+  onSet: (contactId: string, statusId: string | null) => void;
+}) {
+  const s = contact.status;
+  return (
+    <Menu as="div" className="relative inline-block shrink-0">
+      <MenuButton
+        onClick={(e) => e.stopPropagation()}
+        title={s ? `Status: ${s.name} — clique pra trocar` : 'Definir status'}
+      >
+        {s ? (
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{ backgroundColor: s.color, color: chipTextColor(s.color) }}
+          >
+            {s.name}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-600">
+            <CircleDot className="h-3 w-3" /> status
+          </span>
+        )}
+      </MenuButton>
+      <MenuItems
+        anchor="bottom start"
+        className="z-50 mt-1 max-h-72 w-48 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        {s && (
+          <MenuItem>
+            <button onClick={() => onSet(contact.id, null)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+              <X className="h-3.5 w-3.5" /> Sem status
+            </button>
+          </MenuItem>
+        )}
+        {allStatuses.map((st) => (
+          <MenuItem key={st.id}>
+            <button onClick={() => onSet(contact.id, st.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: st.color }} />
+              <span className="flex-1 truncate text-left">{st.name}</span>
+              {s?.id === st.id && <Check className="h-4 w-4 shrink-0 text-primary" />}
+            </button>
+          </MenuItem>
+        ))}
+      </MenuItems>
+    </Menu>
+  );
+}
+
+/** Etiquetas do contato: × remove cada uma, botão + adiciona (menu). */
+function TagsCell({
+  contact,
+  allTags,
+  onAdd,
+  onRemove,
+}: {
+  contact: Contact;
+  allTags: Labeled[];
+  onAdd: (contactId: string, tagId: string) => void;
+  onRemove: (contactId: string, tagId: string) => void;
+}) {
+  const tagIds = new Set(contact.tags.map((t) => t.tag.id));
+  const available = allTags.filter((t) => !tagIds.has(t.id));
+  return (
+    <div className="hidden max-w-[240px] flex-wrap items-center justify-end gap-1 md:flex">
+      {contact.tags.slice(0, 3).map((t) => (
+        <span
+          key={t.tag.id}
+          className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+          style={{ backgroundColor: t.tag.color, color: chipTextColor(t.tag.color) }}
+        >
+          <span className="max-w-[80px] truncate">{t.tag.name}</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(contact.id, t.tag.id); }}
+            title="Remover etiqueta"
+            className="ml-0.5 rounded-full opacity-70 transition-opacity hover:opacity-100"
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </span>
+      ))}
+      {contact.tags.length > 3 && (
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800">
+          +{contact.tags.length - 3}
+        </span>
+      )}
+      <Menu as="div" className="relative">
+        <MenuButton
+          onClick={(e) => e.stopPropagation()}
+          title="Adicionar etiqueta"
+          className="flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-zinc-300 text-zinc-400 transition-colors hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-600 dark:hover:border-zinc-500"
+        >
+          <Plus className="h-3 w-3" />
+        </MenuButton>
+        <MenuItems
+          anchor="bottom end"
+          className="z-50 mt-1 max-h-72 w-48 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {available.length === 0 ? (
+            <div className="px-2 py-2 text-center text-xs text-zinc-400">Todas as etiquetas já estão no contato.</div>
+          ) : (
+            available.map((t) => (
+              <MenuItem key={t.id}>
+                <button onClick={() => onAdd(contact.id, t.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: t.color }} />
+                  <span className="flex-1 truncate text-left">{t.name}</span>
+                </button>
+              </MenuItem>
+            ))
+          )}
+        </MenuItems>
+      </Menu>
+    </div>
+  );
+}
+
 /** Pílula do responsável + menu pra atribuir/trocar/remover. */
 function ResponsibleCell({
   contact,
@@ -568,12 +713,16 @@ function ResponsibleCell({
   members: Member[];
   onAssign: (contactId: string, userId: string | null) => void;
 }) {
-  const a = contact.assignedTo;
+  // Responsável REAL: explícito do contato OU, na falta, o atendente da
+  // conversa mais recente (cruzamento de dados com as conversas).
+  const fromConv = (contact.conversations as { assignedTo?: { id: string; name: string; avatarUrl: string | null } | null }[] | undefined)?.[0]?.assignedTo ?? null;
+  const a = contact.assignedTo ?? fromConv;
+  const derived = !contact.assignedTo && !!fromConv;
   return (
     <Menu as="div" className="relative hidden shrink-0 sm:block">
       <MenuButton
         onClick={(e) => e.stopPropagation()}
-        title={a ? `Responsável: ${a.name}` : 'Atribuir responsável'}
+        title={a ? `Responsável: ${a.name}${derived ? ' (da conversa)' : ''}` : 'Atribuir responsável'}
         className="flex items-center gap-1.5 rounded-full border border-zinc-200 py-0.5 pl-0.5 pr-1.5 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
       >
         {a ? (
