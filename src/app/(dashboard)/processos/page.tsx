@@ -12,6 +12,8 @@ import {
   Printer,
   FileDown,
   RefreshCw,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -32,18 +34,100 @@ const STATUS_LABEL: Record<CaseStatus, string> = {
   CLOSED: 'Encerrado',
 };
 
-// Tags coloridas estilo Astrea (pílulas com cor por categoria).
-const TAG_COLORS = [
-  'bg-sky-100 text-sky-700',
-  'bg-violet-100 text-violet-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-rose-100 text-rose-700',
-  'bg-amber-100 text-amber-700',
-];
-function tagColor(label: string): string {
+// Etiquetas no estilo Astrea: chip de fundo SÓLIDO na cor da categoria.
+// Cores conhecidas (capturadas do Astrea); demais caem num fallback determinístico.
+const ASTREA_TAG_COLORS: Record<string, string> = {
+  bancario: '#999999',
+  cs: '#000000',
+  'frider andrade | advogados': '#FF0000',
+  'frider andrade': '#FF0000',
+  'rmc/rcc': '#9B0000',
+  'seguros-rmc/rcc': '#9B0000',
+  'fa&f - parceria': '#316666',
+  criminal: '#FCC530',
+  consumidor: '#228BE6',
+  contribuicoes: '#02883C',
+  civel: '#7048E8',
+  familia: '#E64980',
+  previdenciario: '#1098AD',
+  trabalhista: '#F76707',
+  'tarifas/seguros': '#5C940D',
+  'dativo - janine': '#868E96',
+  rodrigo: '#4263EB',
+  matheus: '#0CA678',
+};
+const TAG_FALLBACK = ['#495057', '#1971C2', '#2F9E44', '#E8590C', '#6741D9', '#C2255C', '#0C8599', '#A61E4D'];
+
+const normTag = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+export function tagBg(label: string): string {
+  const hit = ASTREA_TAG_COLORS[normTag(label)];
+  if (hit) return hit;
   let h = 0;
   for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
-  return TAG_COLORS[h % TAG_COLORS.length];
+  return TAG_FALLBACK[h % TAG_FALLBACK.length];
+}
+
+// Texto claro/escuro conforme luminância do fundo (contraste legível).
+export function tagText(bg: string): string {
+  const c = bg.replace('#', '');
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.6 ? '#202124' : '#FFFFFF';
+}
+
+// Chip de etiqueta reutilizável (lista + ficha).
+export function TagChip({ label }: { label: string }) {
+  const bg = tagBg(label);
+  return (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight"
+      style={{ backgroundColor: bg, color: tagText(bg) }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// Número CNJ copiável: clique copia pro clipboard. Reusado na lista e na ficha.
+export function CnjNumber({
+  value,
+  className = '',
+}: {
+  value: string;
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      toast.success('Número copiado');
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error('Não foi possível copiar');
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copiar número do processo"
+      className={`group/cnj inline-flex items-center gap-1 font-light text-[#495057] underline decoration-zinc-400 underline-offset-2 dark:text-zinc-300 ${className}`.trim()}
+    >
+      {value}
+      {copied ? (
+        <Check className="h-3 w-3 shrink-0 text-emerald-500" />
+      ) : (
+        <Copy className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover/cnj:opacity-100" />
+      )}
+    </button>
+  );
 }
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
@@ -168,7 +252,7 @@ export default function ProcessosPage() {
 
 function CaseRow({ c }: { c: CaseListItem }) {
   const client = c.parties[0];
-  const tags = [c.area, STATUS_LABEL[c.status]].filter(Boolean) as string[];
+  const tags = c.metadata?.astrea?.tags ?? [];
   return (
     <tr className="group border-b border-[#DEE2E6] last:border-0 hover:bg-[#f0f7fd]">
       <td className="px-3 py-4 align-top">
@@ -187,18 +271,13 @@ function CaseRow({ c }: { c: CaseListItem }) {
               {c.cnjNumber ? (
                 <>
                   {' · '}
-                  <span className="font-mono text-[#228BE6]">{c.cnjNumber}</span>
+                  <CnjNumber value={c.cnjNumber} />
                 </>
               ) : null}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1">
               {tags.map((t) => (
-                <span
-                  key={t}
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${tagColor(t)}`}
-                >
-                  {t}
-                </span>
+                <TagChip key={t} label={t} />
               ))}
             </div>
           </div>

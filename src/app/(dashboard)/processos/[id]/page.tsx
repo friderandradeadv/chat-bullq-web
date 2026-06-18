@@ -22,7 +22,7 @@ import {
   legalCasesService,
   type PartyRole,
 } from '@/features/legal-cases/services/legal-cases.service';
-import { inputCls, Field, ASTREA_BLUE } from '../page';
+import { inputCls, Field, ASTREA_BLUE, TagChip, CnjNumber } from '../page';
 
 const ROLE_LABEL: Record<PartyRole, string> = {
   CLIENT: 'Cliente',
@@ -65,7 +65,8 @@ export default function ProcessoDetailPage() {
   if (!c)
     return <div className="bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-sm text-zinc-400">Processo não encontrado.</div>;
 
-  const tags = [c.area, STATUS_LABEL[c.status]].filter(Boolean) as string[];
+  const tags =
+    (c.metadata as { astrea?: { tags?: string[] } } | undefined)?.astrea?.tags ?? [];
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
@@ -76,9 +77,7 @@ export default function ProcessoDetailPage() {
             <h1 className="text-2xl font-medium text-[#202124]">{c.title}</h1>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {tags.map((t) => (
-                <span key={t} className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
-                  {t}
-                </span>
+                <TagChip key={t} label={t} />
               ))}
             </div>
           </div>
@@ -98,7 +97,7 @@ export default function ProcessoDetailPage() {
         {/* Metadados */}
         <dl className="mt-4 space-y-1 text-sm">
           <MetaRow label="Processo">
-            {c.cnjNumber ? <span className="font-mono text-[#228BE6]">{c.cnjNumber}</span> : '—'}
+            {c.cnjNumber ? <CnjNumber value={c.cnjNumber} /> : '—'}
           </MetaRow>
           <MetaRow label="Cliente">
             {c.parties.find((p) => p.role === 'CLIENT')?.name ?? '—'}
@@ -156,7 +155,7 @@ function ResumoTab({ c }: { c: any }) {
         <Card title="Dados do Processo" icon={FileText}>
           <dl className="divide-y divide-zinc-100">
             <DefRow label="Ação" value={c.area ?? '—'} />
-            <DefRow label="Número" value={c.cnjNumber ?? '—'} mono />
+            <DefRow label="Número" value={c.cnjNumber ? <CnjNumber value={c.cnjNumber} /> : '—'} />
             <DefRow label="Juízo" value={c.court ?? '—'} />
             <DefRow label="Comarca / Foro" value={c.jurisdiction ?? '—'} />
             <DefRow label="Valor da causa" value={fmtMoney(c.value)} />
@@ -481,7 +480,7 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function DefRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function DefRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="flex gap-3 py-2.5">
       <dt className="w-36 shrink-0 text-sm font-medium text-[#6C757D]">{label}</dt>

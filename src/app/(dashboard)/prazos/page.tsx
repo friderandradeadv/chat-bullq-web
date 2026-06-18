@@ -117,7 +117,7 @@ export default function PrazosPage() {
           return (
             <div
               key={d.id}
-              className={`flex items-center justify-between rounded-lg border border-l-4 border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 ${urgencyStyle(d.safeDate)}`}
+              className={`flex items-center justify-between rounded-lg border border-l-4 border-[#DEE2E6] bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 ${urgencyStyle(d.safeDate)}`}
             >
               <div className="min-w-0">
                 <p className="flex items-center gap-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">

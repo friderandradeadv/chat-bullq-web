@@ -34,6 +34,7 @@ export interface CreateDeadlineInput {
   corridos?: boolean;
   bufferDiasUteis?: number;
   triggerDate?: string;
+  status?: DeadlineStatus; // permite reabrir (OPEN) / reordenar status via update
 }
 
 export interface PreviewPrazoInput {

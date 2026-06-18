@@ -9,7 +9,7 @@
   --color-card-foreground: oklch(0.145 0 0);
   --color-popover: oklch(1 0 0);
   --color-popover-foreground: oklch(0.145 0 0);
-  --color-primary: oklch(0.62 0.14 248); /* azul Astrea ~#1488d6 */
+  --color-primary: #228BE6; /* azul Astrea (exato, capturado) */
   --color-primary-foreground: oklch(0.985 0 0);
   --color-secondary: oklch(0.97 0 0);
   --color-secondary-foreground: oklch(0.205 0 0);
@@ -142,4 +142,89 @@
 }
 .animate-tab-swipe {
   animation: tab-swipe 0.24s ease-out;
+}
+
+/* ── FullCalendar — tema Astrea (tela /agenda) ── */
+.fc {
+  --fc-border-color: #dee2e6;
+  --fc-today-bg-color: transparent;
+  --fc-now-indicator-color: #228be6;
+  --fc-page-bg-color: #ffffff;
+  --fc-neutral-bg-color: #f8f9fa;
+  --fc-event-border-color: transparent;
+  font-size: 13px;
+}
+.fc .fc-col-header-cell-cushion {
+  padding: 8px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #6c757d;
+  text-decoration: none;
+}
+.fc .fc-daygrid-day-number,
+.fc .fc-timegrid-slot-label-cushion,
+.fc .fc-timegrid-axis-cushion {
+  color: #6c757d;
+  text-decoration: none;
+  font-size: 12px;
+}
+.fc .fc-daygrid-day-number {
+  padding: 6px 8px;
+}
+.fc .fc-day-today .fc-daygrid-day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  margin: 4px;
+  border-radius: 100px;
+  background: #228be6;
+  color: #ffffff;
+  font-weight: 700;
+}
+.fc-event {
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.fc .ag-done .fc-event-title,
+.fc .ag-done .fc-event-time {
+  text-decoration: line-through;
+}
+/* Barra fina colorida no TOPO de cada atividade (cor da etiqueta/tipo), estilo Astrea. */
+.fc .ag-prazo {
+  border-top: 3px solid #ce0000 !important;
+}
+.fc .ag-tarefa {
+  border-top: 3px solid #23cbff !important;
+}
+.fc .ag-evento {
+  border-top: 3px solid #02883c !important;
+}
+.fc .ag-done {
+  border-top: 3px solid #adb5bd !important;
+}
+.fc .fc-timegrid-now-indicator-line {
+  border-color: #228be6;
+  border-width: 2px;
+}
+.fc .fc-timegrid-now-indicator-arrow {
+  border-color: #228be6;
+  background: #228be6;
+}
+.fc-theme-standard .fc-scrollgrid {
+  border: none;
+}
+/* Agenda "Por mês": células quadradinhas + rolagem (não força caber na tela). */
+.agenda-month .fc-daygrid-day-frame {
+  min-height: 104px;
+}
+.fc .fc-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

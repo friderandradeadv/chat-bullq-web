@@ -56,6 +56,7 @@ export interface CaseListItem {
   parties: { id: string; name: string; contactId: string | null }[];
   _count: { movements: number; deadlines: number };
   updatedAt: string;
+  metadata?: { astrea?: { tags?: string[] } } | null;
 }
 
 export interface MovementItem {
