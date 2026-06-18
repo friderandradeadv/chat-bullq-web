@@ -166,6 +166,7 @@ export function AppSidebar() {
           <div className="mt-3">
             <NavSection label="Jurídico">
               <NavItem href="/juridico" icon={BarChart3} label="Dashboard" />
+              <NavItem href="/juridico/kanban" icon={KanbanSquare} label="Kanban de Prazos" />
               <NavItem href="/processos" icon={FolderOpen} label="Processos" />
               <NavItem href="/agenda" icon={CalendarDays} label="Agenda" />
               <NavItem href="/caixa-djen" icon={Mail} label="Publicações" />
