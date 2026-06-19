@@ -196,7 +196,7 @@ export default function ProcessoDetailPage() {
         {tab === 'resumo' && <ResumoTab c={c} />}
         {tab === 'atividades' && <AtividadesTab caseId={id} events={c.events} onChange={refetch} />}
         {tab === 'historico' && (
-          <HistoricoTab caseId={id} movements={c.movements} onChange={refetch} onAdd={() => setAddingHistory(true)} />
+          <HistoricoTab caseId={id} movements={c.movements} events={c.events} onAdd={() => setAddingHistory(true)} />
         )}
       </div>
 
@@ -864,17 +864,67 @@ function AddDeadlineInline({
 
 // ─── Aba: Histórico ──────────────────────────────────────────────────
 
+type HistFilter = 'all' | 'movement' | 'deadline' | 'event';
+type HistEntry = {
+  id: string;
+  kind: 'movement' | 'deadline' | 'event';
+  date: string;
+  title: string;
+  source?: string | null;
+  deadlineType?: 'FATAL' | 'ORDINARY' | 'INTERNAL';
+  meta?: string | null;
+};
+
+// Feed cronológico único: andamentos + prazos concluídos + eventos (estilo Astrea).
 function HistoricoTab({
   caseId,
   movements,
-  onChange,
+  events,
   onAdd,
 }: {
   caseId: string;
   movements: CaseDetail['movements'];
-  onChange: () => void;
+  events: CaseDetail['events'];
   onAdd: () => void;
 }) {
+  const [filter, setFilter] = useState<HistFilter>('all');
+
+  // Prazos: só os concluídos entram no histórico (os abertos vivem na aba Atividades).
+  const { data: deadlines = [] } = useQuery({
+    queryKey: ['case-deadlines', caseId],
+    queryFn: () => deadlinesService.list({ caseId }),
+  });
+
+  const entries: HistEntry[] = [
+    ...movements.map((m) => ({
+      id: `m-${m.id}`,
+      kind: 'movement' as const,
+      date: m.date,
+      title: m.description,
+      source: m.source,
+    })),
+    ...deadlines
+      .filter((d) => d.status !== 'OPEN')
+      .map((d) => ({
+        id: `d-${d.id}`,
+        kind: 'deadline' as const,
+        date: d.dueDate,
+        title: d.title,
+        deadlineType: d.type,
+        meta: d.status === 'DONE' ? 'Prazo cumprido' : d.status === 'EXPIRED' ? 'Prazo expirado' : 'Prazo cancelado',
+      })),
+    ...events.map((e) => ({
+      id: `e-${e.id}`,
+      kind: 'event' as const,
+      date: e.startsAt,
+      title: e.title,
+      meta: [e.kind, e.location].filter(Boolean).join(' · ') || null,
+    })),
+  ].sort((a, b) => +new Date(b.date) - +new Date(a.date));
+
+  const shown = filter === 'all' ? entries : entries.filter((e) => e.kind === filter);
+  const count = (k: HistFilter) => (k === 'all' ? entries.length : entries.filter((e) => e.kind === k).length);
+
   return (
     <Card
       title="Histórico"
@@ -885,34 +935,86 @@ function HistoricoTab({
         </button>
       }
     >
-      {movements.length === 0 ? (
-        <EmptyState>Nenhum andamento registrado.</EmptyState>
+      {/* Filtros por tipo */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+        {([
+          ['all', 'Tudo'],
+          ['movement', 'Andamentos'],
+          ['deadline', 'Prazos'],
+          ['event', 'Eventos'],
+        ] as [HistFilter, string][]).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setFilter(key)}
+            className={`rounded-full px-2.5 py-1 font-medium transition-colors ${
+              filter === key
+                ? 'bg-[#228BE6] text-white'
+                : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+            }`}
+          >
+            {label} <span className="opacity-70">{count(key)}</span>
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 ? (
+        <EmptyState>{filter === 'all' ? 'Nenhum registro no histórico.' : 'Nenhum registro deste tipo.'}</EmptyState>
       ) : (
         <ul className="space-y-3">
-          {movements.map((m) => {
-            const isDjen = (m.source ?? '').toUpperCase() === 'DJEN';
-            return (
-              <li key={m.id} className="border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-zinc-500">{fmtDate(m.date)}</span>
-                  {isDjen && (
-                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
-                      DJEN
-                    </span>
-                  )}
-                  {m.source && !isDjen && m.source !== 'manual' && (
-                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      {m.source}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-0.5 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">{m.description}</p>
-              </li>
-            );
-          })}
+          {shown.map((e) => (
+            <HistRow key={e.id} e={e} />
+          ))}
         </ul>
       )}
     </Card>
+  );
+}
+
+function HistRow({ e }: { e: HistEntry }) {
+  const isDjen = (e.source ?? '').toUpperCase() === 'DJEN';
+  const Icon = e.kind === 'deadline' ? CheckSquare : e.kind === 'event' ? CalendarClock : FileText;
+  const iconColor =
+    e.kind === 'deadline' ? 'text-emerald-500' : e.kind === 'event' ? 'text-violet-500' : 'text-sky-500';
+  return (
+    <li className="flex gap-3">
+      <span className={`mt-0.5 shrink-0 ${iconColor}`}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1 border-l-2 border-zinc-100 pl-3 dark:border-zinc-800">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-zinc-500">{fmtDate(e.date)}</span>
+          {isDjen && (
+            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+              DJEN
+            </span>
+          )}
+          {e.kind === 'deadline' && (
+            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+              {e.meta}
+            </span>
+          )}
+          {e.kind === 'event' && (
+            <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+              Evento
+            </span>
+          )}
+          {e.kind === 'movement' && e.source && !isDjen && e.source !== 'manual' && (
+            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+              {e.source}
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">
+          {e.title}
+          {e.kind === 'deadline' && e.deadlineType === 'FATAL' && (
+            <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+              FATAL
+            </span>
+          )}
+        </p>
+        {e.kind === 'event' && e.meta && <p className="mt-0.5 text-xs text-zinc-400">{e.meta}</p>}
+      </div>
+    </li>
   );
 }
 
