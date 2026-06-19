@@ -73,6 +73,19 @@ const fmtDateLong = (iso?: string | null) =>
 const fmtMoney = (v?: string | null) =>
   v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+// Instância (1º/2º grau): preferência ao valor mantido pelo DJEN (instanciaAtual),
+// caindo no que veio do import do Astrea ('Instância Atual' do raw). O Astrea
+// grava só o número ("1"/"2"/"3") → normaliza pra "Nº Grau".
+const labelInstancia = (v?: string | null): string | null => {
+  if (!v) return null;
+  const m = String(v).match(/(\d)/);
+  return m ? `${m[1]}º Grau` : String(v);
+};
+const getInstancia = (c: CaseDetail): string | null => {
+  const a = (c.metadata as { astrea?: { instanciaAtual?: string; raw?: Record<string, string> } } | null)?.astrea;
+  return labelInstancia(a?.instanciaAtual ?? a?.raw?.['Instância Atual']);
+};
+
 type Tab = 'resumo' | 'atividades' | 'historico';
 
 export default function ProcessoDetailPage() {
@@ -173,7 +186,10 @@ export default function ProcessoDetailPage() {
           </MetaRow>
           <MetaRow label="Status">
             <span className="inline-flex items-center gap-2">
-              <span className="text-[#202124] dark:text-zinc-100">{STATUS_LABEL[c.status]}</span>
+              <span className="text-[#202124] dark:text-zinc-100">
+                {STATUS_LABEL[c.status]}
+                {getInstancia(c) ? ` · ${getInstancia(c)}` : ''}
+              </span>
               <DjenBadge monitorado={monitorado} />
             </span>
           </MetaRow>
