@@ -28,6 +28,8 @@ import {
   Moon,
   CircleDot,
   Tags,
+  Wallet,
+  Calculator,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -192,6 +194,14 @@ export function AppSidebar() {
               <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
               <NavItem href="/processos" icon={Folder} label="Processos" />
               <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
+            </NavSection>
+          </div>
+
+          {/* ADMINISTRATIVO — Financeiro, Contabilidade, etc. */}
+          <div className="mt-3">
+            <NavSection label="Administrativo" defaultOpen={false}>
+              <NavItem href="/financeiro" icon={Wallet} label="Financeiro" />
+              <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
             </NavSection>
           </div>
 

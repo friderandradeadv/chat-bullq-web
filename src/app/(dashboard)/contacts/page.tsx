@@ -196,13 +196,17 @@ export default function ContactsPage() {
     runBulk('Etiqueta aplicada', (id) => tagsService.addToContact(id, tag));
   const bulkRemoveTag = (tag: string) =>
     runBulk('Etiqueta removida', (id) => tagsService.removeFromContact(id, tag));
+  const bulkSetResponsible = (value: string) =>
+    runBulk('Responsável atualizado', (id) =>
+      contactsService.assignResponsible(id, value === 'none' ? null : value),
+    );
 
   const selectCls =
     'rounded-lg border border-zinc-200 bg-white py-2.5 px-3 text-sm text-zinc-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 
   return (
     <div className="flex h-full flex-col min-h-0 min-w-0 p-6">
-      <div className="mx-auto w-full max-w-6xl shrink-0">
+      <div className="w-full shrink-0">
         {/* Cabeçalho */}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -298,7 +302,7 @@ export default function ContactsPage() {
       </div>
 
       {/* Lista */}
-      <div className="mx-auto mt-5 flex w-full max-w-6xl min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mt-5 flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         {/* Barra de seleção / ações em massa */}
         {contacts.length > 0 && (
           <div className={cn(
@@ -335,6 +339,20 @@ export default function ContactsPage() {
                     <option value="">Definir status…</option>
                     <option value="none">Sem status</option>
                     {statuses.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                  </select>
+                </div>
+                {/* Definir responsável */}
+                <div className="relative">
+                  <UserPlus className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                  <select
+                    value=""
+                    disabled={bulkBusy}
+                    onChange={(e) => e.target.value && bulkSetResponsible(e.target.value)}
+                    className={cn(selectCls, 'py-1.5 pl-8 text-[13px]')}
+                  >
+                    <option value="">Definir responsável…</option>
+                    <option value="none">Sem responsável</option>
+                    {members.map((m) => (<option key={m.userId} value={m.userId}>{m.user.name}</option>))}
                   </select>
                 </div>
                 {/* Adicionar etiqueta */}

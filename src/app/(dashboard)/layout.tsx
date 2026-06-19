@@ -14,7 +14,7 @@ import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-
 function moduleForPath(p: string): string | null {
   if (/^\/(juridico|processos|agenda|caixa-djen)/.test(p)) return 'juridico';
   if (/^\/(ai-agents|follow-ups|base-conhecimento|vozes|automations)/.test(p)) return 'automacoes';
-  if (/^\/financeiro/.test(p)) return 'financeiro';
+  if (/^\/(financeiro|contabilidade)/.test(p)) return 'financeiro';
   if (/^\/tarefas/.test(p)) return 'tarefas';
   if (/^\/(dashboard|inbox|contacts|kanban|conexoes)/.test(p)) return 'atendimento';
   if (/^\/settings\/perfil/.test(p)) return null; // perfil é sempre acessível
