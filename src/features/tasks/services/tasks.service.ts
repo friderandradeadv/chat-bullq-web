@@ -50,7 +50,7 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
 };
 
 export const tasksService = {
-  async list(params?: { status?: string; assigneeId?: string }): Promise<Task[]> {
+  async list(params?: { status?: string; assigneeId?: string; caseId?: string }): Promise<Task[]> {
     const { data } = await api.get('/tasks', { params });
     return data.data ?? data;
   },

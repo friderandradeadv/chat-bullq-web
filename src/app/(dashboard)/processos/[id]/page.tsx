@@ -39,6 +39,7 @@ import {
   deadlinesService,
   type Deadline,
 } from '@/features/deadlines/services/deadlines.service';
+import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { inputCls, Field, ASTREA_BLUE, LegalTagChip, CnjNumber } from '../page';
 
 const ROLE_LABEL: Record<PartyRole, string> = {
@@ -685,16 +686,18 @@ function AtividadesTab({
 
   return (
     <div className="space-y-5">
+      <TarefasCard caseId={caseId} onChange={onChange} />
+
       <Card
-        title="Atividades"
-        icon={CheckSquare}
+        title="Prazos"
+        icon={Clock}
         action={
           <button
             onClick={() => setAdding((v) => !v)}
             className="inline-flex items-center gap-1 text-xs font-medium"
             style={{ color: ASTREA_BLUE }}
           >
-            <Plus className="h-3.5 w-3.5" /> Adicionar atividade
+            <Plus className="h-3.5 w-3.5" /> Adicionar prazo
           </button>
         }
       >
@@ -785,6 +788,151 @@ function AtividadesTab({
         </Card>
       )}
     </div>
+  );
+}
+
+// ─── Tarefas do processo (DJEN + manuais) ────────────────────────────
+
+function TarefasCard({ caseId, onChange }: { caseId: string; onChange: () => void }) {
+  const qc = useQueryClient();
+  const [showDone, setShowDone] = useState(false);
+  const { data: tasks = [], isLoading } = useQuery({
+    queryKey: ['case-tasks', caseId],
+    queryFn: () => tasksService.list({ caseId }),
+  });
+  const open = tasks.filter((t) => t.status !== 'DONE');
+  const done = tasks.filter((t) => t.status === 'DONE');
+  const shown = showDone ? done : open;
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['case-tasks', caseId] });
+    onChange();
+  };
+
+  return (
+    <Card title="Tarefas" icon={CheckSquare}>
+      <div className="mb-4 flex items-center gap-4 text-sm">
+        <button
+          onClick={() => setShowDone(false)}
+          className={`font-medium ${!showDone ? 'text-[#228BE6]' : 'text-zinc-400 hover:text-zinc-600'}`}
+        >
+          {open.length} aberta{open.length === 1 ? '' : 's'}
+        </button>
+        <button
+          onClick={() => setShowDone(true)}
+          className={`font-medium ${showDone ? 'text-[#228BE6]' : 'text-zinc-400 hover:text-zinc-600'}`}
+        >
+          {done.length} concluída{done.length === 1 ? '' : 's'}
+        </button>
+      </div>
+      {isLoading ? (
+        <EmptyState>Carregando…</EmptyState>
+      ) : shown.length === 0 ? (
+        <EmptyState>{showDone ? 'Nenhuma tarefa concluída.' : 'Nenhuma tarefa pendente.'}</EmptyState>
+      ) : (
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {shown.map((t) => (
+            <TaskRow key={t.id} t={t} onChange={refresh} />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function TaskRow({ t, onChange }: { t: Task; onChange: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(t.title);
+  const [busy, setBusy] = useState(false);
+  const isDone = t.status === 'DONE';
+
+  const complete = async () => {
+    try {
+      await tasksService.update(t.id, { status: 'DONE' });
+      toast.success('Tarefa concluída');
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    }
+  };
+  const rename = async () => {
+    const v = title.trim();
+    if (!v || v === t.title) { setEditing(false); setTitle(t.title); return; }
+    setBusy(true);
+    try {
+      await tasksService.update(t.id, { title: v });
+      toast.success('Tarefa renomeada');
+      setEditing(false);
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="py-2.5">
+      <div className="flex items-start gap-3">
+        <button
+          onClick={() => !isDone && complete()}
+          disabled={isDone}
+          title={isDone ? 'Concluída' : 'Concluir'}
+          className="mt-0.5 shrink-0 text-zinc-400 hover:text-emerald-500 disabled:text-emerald-500"
+        >
+          {isDone ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+        </button>
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') rename();
+                  if (e.key === 'Escape') { setEditing(false); setTitle(t.title); }
+                }}
+                className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+              <button onClick={rename} disabled={busy} className="text-xs font-medium text-[#228BE6]">Salvar</button>
+              <button onClick={() => { setEditing(false); setTitle(t.title); }} className="text-xs text-zinc-400">Cancelar</button>
+            </div>
+          ) : (
+            <div className="group flex items-center gap-2">
+              <p className={`text-sm font-medium ${isDone ? 'text-zinc-400 line-through' : 'text-zinc-800 dark:text-zinc-200'}`}>
+                {t.title}
+              </p>
+              {t.priority === 'HIGH' && (
+                <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                  Alta
+                </span>
+              )}
+              <button
+                onClick={() => { setEditing(true); setTitle(t.title); }}
+                title="Renomear tarefa"
+                className="opacity-0 transition-opacity hover:text-zinc-600 group-hover:opacity-100 text-zinc-300"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          <p className="mt-0.5 text-xs text-zinc-400">
+            {t.dueAt ? <>Agendada para {fmtDate(t.dueAt)}</> : 'Sem data'}
+            {t.description && (
+              <button onClick={() => setExpanded((v) => !v)} className="ml-2 text-[#228BE6] hover:underline">
+                {expanded ? 'ocultar' : 'detalhes'}
+              </button>
+            )}
+          </p>
+          {expanded && t.description && (
+            <pre className="mt-1.5 max-h-60 overflow-y-auto whitespace-pre-wrap rounded bg-zinc-50 p-2 font-sans text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-300">
+              {t.description}
+            </pre>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
 
