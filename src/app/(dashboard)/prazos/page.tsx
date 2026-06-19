@@ -13,7 +13,9 @@ import {
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { inputCls, Field } from '../processos/page';
 
-const fmt = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
+// Prazos são datas só-data (gravadas em UTC meia-noite) → formatar em UTC pra não
+// exibir o dia anterior em BRT. Data legal precisa bater com o banco.
+const fmt = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
 function daysUntil(iso: string): number {
   const today = new Date();

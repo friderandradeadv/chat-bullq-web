@@ -54,10 +54,20 @@ const STATUS_LABEL: Record<string, string> = {
   SUSPENDED: 'Suspenso',
   CLOSED: 'Encerrado',
 };
-const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+// Datas só-data (distribuição, prazos, andamentos) são gravadas em UTC meia-noite
+// → formatar em UTC pra não exibir o dia anterior em fusos negativos (BRT). Datas
+// legais precisam bater com o que está no banco. Eventos (com hora real) usam local.
+const fmtDate = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—';
 const fmtDateLong = (iso?: string | null) =>
   iso
-    ? new Date(iso).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+    ? new Date(iso).toLocaleDateString('pt-BR', {
+        timeZone: 'UTC',
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
     : '—';
 const fmtMoney = (v?: string | null) =>
   v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -975,6 +985,8 @@ function HistRow({ e }: { e: HistEntry }) {
   const Icon = e.kind === 'deadline' ? CheckSquare : e.kind === 'event' ? CalendarClock : FileText;
   const iconColor =
     e.kind === 'deadline' ? 'text-emerald-500' : e.kind === 'event' ? 'text-violet-500' : 'text-sky-500';
+  // Eventos têm hora real → data local; andamentos/prazos são só-data (UTC).
+  const dateLabel = e.kind === 'event' ? new Date(e.date).toLocaleDateString('pt-BR') : fmtDate(e.date);
   return (
     <li className="flex gap-3">
       <span className={`mt-0.5 shrink-0 ${iconColor}`}>
@@ -982,7 +994,7 @@ function HistRow({ e }: { e: HistEntry }) {
       </span>
       <div className="min-w-0 flex-1 border-l-2 border-zinc-100 pl-3 dark:border-zinc-800">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-zinc-500">{fmtDate(e.date)}</span>
+          <span className="text-xs font-medium text-zinc-500">{dateLabel}</span>
           {isDjen && (
             <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
               DJEN
