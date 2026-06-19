@@ -143,7 +143,9 @@ export default function AgendaPage() {
   const fcEvents = useMemo<EventInput[]>(() => filtered.map((a) => {
     const c = a.done || a.cancelled ? EV_DONE : a.source === 'evento' ? EV_TIMED : EV_PENDING;
     return {
-      id: a.id, title: `${initials(a.responsibleName)} · ${a.title}`, start: a.date, allDay: !a.hasTime,
+      // Itens só-data (prazos/tarefas s/ hora) entram como data-only ('YYYY-MM-DD')
+      // pra o FullCalendar não converter o UTC meia-noite e jogar pro dia anterior.
+      id: a.id, title: `${initials(a.responsibleName)} · ${a.title}`, start: a.hasTime ? a.date : a.date.slice(0, 10), allDay: !a.hasTime,
       backgroundColor: c.bg, borderColor: c.bg, textColor: c.text,
       classNames: [`ag-${a.source}`, (a.done || a.cancelled) ? 'ag-done' : ''].filter(Boolean),
       startEditable: a.source !== 'prazo' && !a.cancelled, // tarefas/eventos arrastáveis; prazos não (data fatal)
@@ -364,7 +366,7 @@ function ActivityList({ activities, onOpen }: { activities: Activity[]; onOpen: 
         {list.map((a) => (
           <button key={a.id} onClick={() => onOpen(a)} className="flex w-full items-start gap-3 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
             <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${a.done ? 'border-emerald-500 bg-emerald-500 text-white' : a.fatal ? 'border-red-400' : 'border-zinc-300'}`}>{a.done && <Check className="h-3 w-3" />}</span>
-            <div className="w-24 shrink-0 text-xs text-zinc-500">{new Date(a.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}{a.hasTime && <div className="font-medium text-zinc-700 dark:text-zinc-300">{new Date(a.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>}</div>
+            <div className="w-24 shrink-0 text-xs text-zinc-500">{new Date(a.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', ...(a.hasTime ? {} : { timeZone: 'UTC' as const }) })}{a.hasTime && <div className="font-medium text-zinc-700 dark:text-zinc-300">{new Date(a.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>}</div>
             <div className="min-w-0 flex-1">
               <p className={`text-sm font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{a.title}</p>
               {a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}{a.cnj ? ` · ${a.cnj}` : ''}</p>}
@@ -605,7 +607,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           <div className="flex gap-2">
             <dt className="shrink-0 font-medium text-[#6C757D]">Data:</dt>
             <dd className="relative">
-              <button onClick={() => { setReMenu((v) => !v); setMiniCal(false); }} className="inline-flex items-center gap-1 text-[#228BE6] hover:underline">{d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}{activity.hasTime ? `, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}<ChevronDown className="h-4 w-4" /></button>
+              <button onClick={() => { setReMenu((v) => !v); setMiniCal(false); }} className="inline-flex items-center gap-1 text-[#228BE6] hover:underline">{d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', ...(activity.hasTime ? {} : { timeZone: 'UTC' as const }) })}{activity.hasTime ? `, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}<ChevronDown className="h-4 w-4" /></button>
               {reMenu && (<><div className="fixed inset-0 z-10" onClick={() => { setReMenu(false); setMiniCal(false); }} />
                 <div className="absolute left-0 top-7 z-20 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
                   {miniCal ? (<div className="p-1"><MiniCalendar initial={d} onPick={(x) => reschedule(x)} /></div>) : (
