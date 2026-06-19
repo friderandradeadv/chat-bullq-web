@@ -993,9 +993,17 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
               const isSelected = selectedIds.has(conv.id);
               const inSelectionMode = selectionMode || selectedIds.size > 0;
               return (
-                <button
+                <div
                   key={conv.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => handleConversationClick(conv, index, e)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleConversationClick(conv, index, e as unknown as React.MouseEvent);
+                    }
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setContextMenu({
@@ -1003,7 +1011,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                       position: { x: e.clientX, y: e.clientY },
                     });
                   }}
-                  className={`group flex w-full gap-3 px-3 py-2 text-left transition-colors duration-100 border-l-2 ${
+                  className={`group flex w-full cursor-pointer gap-3 px-3 py-2 text-left transition-colors duration-100 border-l-2 ${
                     isSelected
                       ? 'bg-primary/[0.06] dark:bg-primary/10 border-l-primary'
                       : isActive
@@ -1171,7 +1179,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                       </div>
                     );
                   })()}
-                </button>
+                </div>
               );
             })}
             {/* Sentinel for infinite scroll */}
