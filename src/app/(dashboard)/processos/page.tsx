@@ -14,6 +14,8 @@ import {
   RefreshCw,
   Copy,
   Check,
+  Tag,
+  Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -22,6 +24,7 @@ import {
   type CaseStatus,
   type CreateCaseInput,
 } from '@/features/legal-cases/services/legal-cases.service';
+import { activitiesService } from '@/features/activities/services/activities.service';
 
 // ─── Estilo "cara do Astrea" (tema claro, azul Astrea) ───────────────
 // Componentes próprios; replica o look (não os ativos da Aurum).
@@ -92,6 +95,28 @@ export function TagChip({ label }: { label: string }) {
   );
 }
 
+// Etiqueta gerenciável (EntityTag) com ✕ pra remover. Usa a cor real da etiqueta.
+export function LegalTagChip({ label, color, onRemove }: { label: string; color: string; onRemove?: () => void }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight"
+      style={{ backgroundColor: color, color: tagText(color) }}
+    >
+      {label}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(); }}
+          title="Remover etiqueta"
+          className="hover:opacity-70"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
+    </span>
+  );
+}
+
 // Número CNJ copiável: clique copia pro clipboard. Reusado na lista e na ficha.
 export function CnjNumber({
   value,
@@ -137,6 +162,8 @@ export default function ProcessosPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<CaseStatus | ''>('');
   const [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
   const { data: cases = [], isLoading } = useQuery({
     queryKey: ['legal-cases', { search, status: statusFilter }],
@@ -146,6 +173,17 @@ export default function ProcessosPage() {
         status: statusFilter || undefined,
       }),
   });
+  // Filtro por etiqueta (client-side, sobre o resultado já carregado).
+  const filtered = tagFilter ? cases.filter((c) => c.legalTags.some((lt) => lt.tagId === tagFilter)) : cases;
+
+  const toggle = (id: string) =>
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allOnPage = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
+  const toggleAll = () =>
+    setSelected((s) => {
+      if (filtered.every((c) => s.has(c.id))) { const n = new Set(s); filtered.forEach((c) => n.delete(c.id)); return n; }
+      return new Set([...s, ...filtered.map((c) => c.id)]);
+    });
 
   return (
     <div className="flex h-full flex-col bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
@@ -184,6 +222,7 @@ export default function ProcessosPage() {
           />
           <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
         </div>
+        <TagFilterBtn value={tagFilter} onChange={setTagFilter} />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as CaseStatus | '')}
@@ -198,9 +237,16 @@ export default function ProcessosPage() {
         </select>
       </div>
 
-      <p className="px-6 pt-3 text-sm text-zinc-500">
-        {cases.length} processo(s) e caso(s)
-      </p>
+      <div className="flex items-center gap-3 px-6 pt-3 text-sm">
+        {selected.size > 0 ? (
+          <>
+            <span className="font-medium text-[#228BE6]">{selected.size} selecionado(s)</span>
+            <button onClick={() => setSelected(new Set())} className="text-zinc-500 hover:text-zinc-700">Limpar seleção</button>
+          </>
+        ) : (
+          <span className="text-zinc-500">{filtered.length} processo(s) e caso(s)</span>
+        )}
+      </div>
 
       {/* Tabela */}
       <div className="mt-2 flex-1 overflow-y-auto px-6 pb-6">
@@ -208,29 +254,31 @@ export default function ProcessosPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-[#DEE2E6] text-xs font-bold uppercase tracking-wide text-[#6C757D]">
+                <th className="w-10 px-3 py-4"><input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-4 w-4 accent-[#228BE6]" title="Selecionar todos" /></th>
                 <th className="px-3 py-4">Título</th>
                 <th className="px-3 py-4">Cliente / Pasta</th>
                 <th className="px-3 py-4">Ação / Foro</th>
                 <th className="px-3 py-4 whitespace-nowrap">Últ. mov.</th>
+                <th className="w-20 px-2 py-4"></th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-zinc-400">
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-400">
                     Carregando…
                   </td>
                 </tr>
               )}
-              {!isLoading && cases.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-zinc-400">
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-400">
                     Nenhum processo encontrado
                   </td>
                 </tr>
               )}
-              {cases.map((c) => (
-                <CaseRow key={c.id} c={c} />
+              {filtered.map((c) => (
+                <CaseRow key={c.id} c={c} selected={selected.has(c.id)} onToggle={() => toggle(c.id)} onChange={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
               ))}
             </tbody>
           </table>
@@ -250,15 +298,29 @@ export default function ProcessosPage() {
   );
 }
 
-function CaseRow({ c }: { c: CaseListItem }) {
+function CaseRow({ c, selected, onToggle, onChange }: { c: CaseListItem; selected: boolean; onToggle: () => void; onChange: () => void }) {
   const client = c.parties[0];
-  const tags = c.metadata?.astrea?.tags ?? [];
+  // Barrinha verde = monitorado via DJEN (tem nº CNJ → o monitor por OAB captura as publicações).
+  const monitorado = !!c.cnjNumber;
+  const removeTag = async (etId: string) => {
+    try { await activitiesService.detachTag(etId); onChange(); } catch (e: any) { toast.error(e?.message || 'Erro'); }
+  };
   return (
-    <tr className="group border-b border-[#DEE2E6] last:border-0 hover:bg-[#f0f7fd]">
+    <tr className={`group border-b border-[#DEE2E6] last:border-0 hover:bg-[#f0f7fd] ${selected ? 'bg-[#e7f1fb]' : ''}`}>
+      <td className="w-10 px-3 py-4 align-top">
+        <input type="checkbox" checked={selected} onChange={onToggle} className="mt-0.5 h-4 w-4 accent-[#228BE6]" />
+      </td>
       <td className="px-3 py-4 align-top">
         <div className="flex items-start gap-2">
-          <Star className="mt-0.5 h-4 w-4 shrink-0 text-zinc-300 group-hover:text-amber-400" />
-          <Rss className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+            <Star className="h-4 w-4 text-zinc-300 group-hover:text-amber-400" />
+            <span
+              title={monitorado ? 'Conectado ao tribunal — captando publicações via DJEN' : 'Sem número CNJ — não conectado ao tribunal'}
+              className="cursor-default"
+            >
+              <Rss className={`h-4 w-4 ${monitorado ? 'text-emerald-500' : 'text-zinc-300'}`} />
+            </span>
+          </div>
           <div className="min-w-0">
             <Link
               href={`/processos/${c.id}`}
@@ -276,15 +338,21 @@ function CaseRow({ c }: { c: CaseListItem }) {
               ) : null}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1">
-              {tags.map((t) => (
-                <TagChip key={t} label={t} />
+              {c.legalTags.map((lt) => (
+                <LegalTagChip key={lt.id} label={lt.tag.name} color={lt.tag.color} onRemove={() => removeTag(lt.id)} />
               ))}
             </div>
           </div>
         </div>
       </td>
-      <td className="px-3 py-4 align-top text-sm text-zinc-600">
-        {client?.name ?? '—'}
+      <td className="px-3 py-4 align-top text-sm">
+        {client ? (
+          <Link href={`/clientes/${client.id}`} className="text-zinc-600 hover:text-[#228BE6] hover:underline dark:text-zinc-300">
+            {client.name}
+          </Link>
+        ) : (
+          <span className="text-zinc-600">—</span>
+        )}
       </td>
       <td className="px-3 py-4 align-top">
         <p className="text-sm text-zinc-700">{c.area ?? '—'}</p>
@@ -293,7 +361,93 @@ function CaseRow({ c }: { c: CaseListItem }) {
       <td className="px-3 py-4 align-top whitespace-nowrap text-sm text-zinc-500">
         {fmtDate(c.updatedAt)}
       </td>
+      <td className="w-20 px-2 py-4 align-top">
+        <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <CaseTagButton caseId={c.id} attached={c.legalTags} onChange={onChange} />
+          <Link
+            href={`/processos/${c.id}`}
+            title="Abrir / editar processo"
+            className="rounded p-1.5 text-zinc-400 hover:bg-zinc-200/70 hover:text-zinc-600 dark:hover:bg-zinc-700"
+          >
+            <Pencil className="h-4 w-4" />
+          </Link>
+        </div>
+      </td>
     </tr>
+  );
+}
+
+// Botão de etiquetas no card (hover): adiciona/remove etiquetas do processo direto na lista.
+function CaseTagButton({ caseId, attached, onChange }: { caseId: string; attached: { tagId: string }[]; onChange: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { data: tags = [] } = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+  const attachedIds = new Set(attached.map((a) => a.tagId));
+  const toggle = async (tagId: string) => {
+    setBusy(true);
+    try {
+      if (attachedIds.has(tagId)) {
+        // acha o vínculo dessa tag pra remover
+        const list = await activitiesService.listTags('case', caseId);
+        const et = list.find((x) => x.tagId === tagId);
+        if (et) await activitiesService.detachTag(et.id);
+      } else {
+        await activitiesService.attachTag('case', caseId, tagId);
+      }
+      onChange();
+    } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} title="Etiquetas" className="rounded p-1.5 text-zinc-400 hover:bg-zinc-200/70 hover:text-[#228BE6] dark:hover:bg-zinc-700">
+        <Tag className="h-4 w-4" />
+      </button>
+      {open && (<><div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+        <div className="absolute right-0 top-9 z-20 max-h-72 w-60 overflow-y-auto rounded-lg border border-[#DEE2E6] bg-white py-1 text-left shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Etiquetas</p>
+          {tags.map((t) => {
+            const on = attachedIds.has(t.id);
+            return (
+              <button key={t.id} disabled={busy} onClick={() => toggle(t.id)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800">
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{t.name}</span>
+                {on && <Check className="h-4 w-4 shrink-0 text-[#228BE6]" />}
+              </button>
+            );
+          })}
+          {tags.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta.</p>}
+        </div></>)}
+    </div>
+  );
+}
+
+// Filtro por etiqueta (ícone no topo, igual Astrea) — lista as etiquetas jurídicas.
+function TagFilterBtn({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const { data: tags = [] } = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+  const active = tags.find((t) => t.id === value);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Filtrar por etiqueta"
+        className={`flex h-10 items-center gap-2 rounded-md border bg-white px-3 text-sm hover:bg-zinc-50 dark:bg-zinc-900 ${value ? 'border-[#228BE6] text-[#228BE6]' : 'border-zinc-300 text-zinc-500'}`}
+      >
+        <Tag className="h-4 w-4" />
+        {active && <span className="font-medium">{active.name}</span>}
+      </button>
+      {open && (<><div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+        <div className="absolute left-0 top-11 z-20 max-h-72 w-60 overflow-y-auto rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <button onClick={() => { onChange(null); setOpen(false); }} className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${!value ? 'font-semibold text-[#228BE6]' : 'text-zinc-700 dark:text-zinc-300'}`}>
+            Todas as etiquetas
+          </button>
+          {tags.map((t) => (
+            <button key={t.id} onClick={() => { onChange(t.id); setOpen(false); }} className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${value === t.id ? 'font-semibold text-zinc-900 dark:text-white' : 'text-zinc-700 dark:text-zinc-300'}`}>
+              <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />{t.name}
+            </button>
+          ))}
+        </div></>)}
+    </div>
   );
 }
 

@@ -43,6 +43,12 @@ export interface PartyDetail {
   } | null;
 }
 
+export interface LegalTag {
+  id: string; // id do vínculo (EntityTag) — usado pra remover
+  tagId: string;
+  tag: { id: string; name: string; color: string };
+}
+
 export interface CaseListItem {
   id: string;
   cnjNumber: string | null;
@@ -57,6 +63,7 @@ export interface CaseListItem {
   _count: { movements: number; deadlines: number };
   updatedAt: string;
   metadata?: { astrea?: { tags?: string[] } } | null;
+  legalTags: LegalTag[];
 }
 
 export interface MovementItem {
@@ -90,6 +97,7 @@ export interface EventRef {
 export interface CaseDetail extends Omit<CaseListItem, 'parties' | '_count'> {
   jurisdiction: string | null;
   distributedAt: string | null;
+  createdAt: string;
   metadata: Record<string, unknown>;
   card: { id: string; pipelineId: string; stageId: string; title: string } | null;
   parties: PartyDetail[];

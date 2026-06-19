@@ -11,18 +11,35 @@ import {
   Plus,
   MessageSquare,
   CheckSquare,
+  Square,
   FileText,
   Clock,
   Users,
   Rss,
   Trash2,
+  Tag,
+  Check,
+  X,
+  Pencil,
+  Archive,
+  FilePlus2,
+  Link2Off,
+  Paperclip,
+  CalendarClock,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService,
+  type CaseDetail,
   type PartyRole,
 } from '@/features/legal-cases/services/legal-cases.service';
-import { inputCls, Field, ASTREA_BLUE, TagChip, CnjNumber } from '../page';
+import { activitiesService } from '@/features/activities/services/activities.service';
+import {
+  deadlinesService,
+  type Deadline,
+} from '@/features/deadlines/services/deadlines.service';
+import { inputCls, Field, ASTREA_BLUE, LegalTagChip, CnjNumber } from '../page';
 
 const ROLE_LABEL: Record<PartyRole, string> = {
   CLIENT: 'Cliente',
@@ -38,12 +55,14 @@ const STATUS_LABEL: Record<string, string> = {
   CLOSED: 'Encerrado',
 };
 const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+const fmtDateLong = (iso?: string | null) =>
+  iso
+    ? new Date(iso).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+    : '—';
 const fmtMoney = (v?: string | null) =>
-  v == null
-    ? '—'
-    : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-type Tab = 'resumo' | 'andamentos' | 'prazos';
+type Tab = 'resumo' | 'atividades' | 'historico';
 
 export default function ProcessoDetailPage() {
   const params = useParams<{ id: string }>();
@@ -51,34 +70,56 @@ export default function ProcessoDetailPage() {
   const qc = useQueryClient();
   const id = params?.id;
   const [tab, setTab] = useState<Tab>('resumo');
+  const [editing, setEditing] = useState(false);
+  const [addingHistory, setAddingHistory] = useState(false);
 
   const { data: c, isLoading } = useQuery({
     queryKey: ['legal-case', id],
     queryFn: () => legalCasesService.get(id!),
     enabled: !!id,
   });
-  const refetch = () => qc.invalidateQueries({ queryKey: ['legal-case', id] });
+  const refetch = () => {
+    qc.invalidateQueries({ queryKey: ['legal-case', id] });
+    qc.invalidateQueries({ queryKey: ['legal-cases'] });
+    qc.invalidateQueries({ queryKey: ['case-deadlines', id] });
+  };
 
   if (!id) return null;
   if (isLoading)
-    return <div className="bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-sm text-zinc-400">Carregando…</div>;
+    return <div className="bg-[#f5f6f8] p-6 text-sm text-zinc-400 dark:bg-zinc-950">Carregando…</div>;
   if (!c)
-    return <div className="bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-sm text-zinc-400">Processo não encontrado.</div>;
+    return <div className="bg-[#f5f6f8] p-6 text-sm text-zinc-400 dark:bg-zinc-950">Processo não encontrado.</div>;
 
-  const tags =
-    (c.metadata as { astrea?: { tags?: string[] } } | undefined)?.astrea?.tags ?? [];
+  const clientParty = c.parties.find((p) => p.role === 'CLIENT');
+  const monitorado = !!c.cnjNumber;
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col overflow-y-auto bg-[#f5f6f8] text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       {/* Cabeçalho */}
       <div className="px-6 pt-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-medium text-[#202124]">{c.title}</h1>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {tags.map((t) => (
-                <TagChip key={t} label={t} />
+            <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{c.title}</h1>
+            {/* Etiquetas com ✕ */}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {c.legalTags.map((lt) => (
+                <LegalTagChip
+                  key={lt.id}
+                  label={lt.tag.name}
+                  color={lt.tag.color}
+                  onRemove={async () => {
+                    try {
+                      await activitiesService.detachTag(lt.id);
+                      refetch();
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Erro');
+                    }
+                  }}
+                />
               ))}
+              {c.legalTags.length === 0 && (
+                <span className="text-xs text-zinc-400">Sem etiquetas</span>
+              )}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -88,9 +129,17 @@ export default function ProcessoDetailPage() {
             <IconBtn title="Favoritar">
               <Star className="h-4 w-4" />
             </IconBtn>
-            <IconBtn title="Mais">
-              <MoreVertical className="h-4 w-4" />
-            </IconBtn>
+            <HeaderTagPicker caseId={id} attached={c.legalTags} onChange={refetch} />
+            <OptionsMenu
+              c={c}
+              onEdit={() => setEditing(true)}
+              onAddHistory={() => setAddingHistory(true)}
+              onChange={refetch}
+            />
+            <AddMenu
+              onAddHistory={() => setAddingHistory(true)}
+              onAddActivity={() => setTab('atividades')}
+            />
           </div>
         </div>
 
@@ -100,30 +149,40 @@ export default function ProcessoDetailPage() {
             {c.cnjNumber ? <CnjNumber value={c.cnjNumber} /> : '—'}
           </MetaRow>
           <MetaRow label="Cliente">
-            {c.parties.find((p) => p.role === 'CLIENT')?.name ?? '—'}
+            {clientParty ? (
+              <Link
+                href={`/clientes/${clientParty.id}`}
+                className="font-medium text-[#202124] hover:text-[#228BE6] hover:underline dark:text-zinc-100"
+              >
+                {clientParty.name}
+              </Link>
+            ) : (
+              '—'
+            )}
           </MetaRow>
           <MetaRow label="Status">
-            <span className="inline-flex items-center gap-1">
-              {STATUS_LABEL[c.status]} <Rss className="h-3 w-3 text-emerald-400" />
+            <span className="inline-flex items-center gap-2">
+              <span className="text-[#202124] dark:text-zinc-100">{STATUS_LABEL[c.status]}</span>
+              <DjenBadge monitorado={monitorado} />
             </span>
           </MetaRow>
           <MetaRow label="Responsável">{c.responsible?.name ?? '—'}</MetaRow>
         </dl>
 
         {/* Abas */}
-        <div className="mt-5 flex border-b border-[#DEE2E6]">
+        <div className="mt-5 flex border-b border-[#DEE2E6] dark:border-zinc-800">
           {([
             ['resumo', 'Resumo'],
-            ['andamentos', 'Andamentos'],
-            ['prazos', 'Prazos'],
+            ['atividades', 'Atividades'],
+            ['historico', 'Histórico'],
           ] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={`-mb-px border-b-4 px-6 py-3 text-base font-medium transition-colors ${
                 tab === key
-                  ? 'border-[#228BE6] text-[#202124]'
-                  : 'border-transparent text-[#6C757D] hover:text-[#202124]'
+                  ? 'border-[#228BE6] text-[#202124] dark:text-zinc-100'
+                  : 'border-transparent text-[#6C757D] hover:text-[#202124] dark:hover:text-zinc-200'
               }`}
             >
               {label}
@@ -135,25 +194,351 @@ export default function ProcessoDetailPage() {
       {/* Conteúdo das abas */}
       <div className="flex-1 px-6 py-5">
         {tab === 'resumo' && <ResumoTab c={c} />}
-        {tab === 'andamentos' && (
-          <MovementsTab caseId={id} movements={c.movements} onChange={refetch} />
+        {tab === 'atividades' && <AtividadesTab caseId={id} events={c.events} onChange={refetch} />}
+        {tab === 'historico' && (
+          <HistoricoTab caseId={id} movements={c.movements} onChange={refetch} onAdd={() => setAddingHistory(true)} />
         )}
-        {tab === 'prazos' && <DeadlinesTab deadlines={c.deadlines} />}
       </div>
+
+      {editing && <EditCaseDialog c={c} onClose={() => setEditing(false)} onSaved={refetch} />}
+      {addingHistory && (
+        <ManualHistoryModal caseId={id} onClose={() => setAddingHistory(false)} onSaved={refetch} />
+      )}
     </div>
   );
 }
 
-function ResumoTab({ c }: { c: any }) {
-  const clientParty = c.parties.find((p: any) => p.role === 'CLIENT' && p.contact);
+// ─── Indicador de conexão DJEN (barrinha verde) ──────────────────────
+
+function DjenBadge({ monitorado }: { monitorado: boolean }) {
+  return (
+    <span
+      title={
+        monitorado
+          ? 'Conectado ao tribunal — captando publicações via DJEN'
+          : 'Sem número CNJ — não conectado ao tribunal'
+      }
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+        monitorado
+          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+          : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+      }`}
+    >
+      <Rss className="h-3 w-3" />
+      {monitorado ? 'Conectado' : 'Sem conexão'}
+    </span>
+  );
+}
+
+// ─── Picker de etiquetas (🏷️ do header) ──────────────────────────────
+
+function HeaderTagPicker({
+  caseId,
+  attached,
+  onChange,
+}: {
+  caseId: string;
+  attached: { tagId: string }[];
+  onChange: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { data: tags = [] } = useQuery({
+    queryKey: ['tags-available'],
+    queryFn: () => activitiesService.listAvailableTags(),
+  });
+  const attachedIds = new Set(attached.map((a) => a.tagId));
+
+  const toggle = async (tagId: string) => {
+    setBusy(true);
+    try {
+      if (attachedIds.has(tagId)) {
+        const list = await activitiesService.listTags('case', caseId);
+        const et = list.find((x) => x.tagId === tagId);
+        if (et) await activitiesService.detachTag(et.id);
+      } else {
+        await activitiesService.attachTag('case', caseId, tagId);
+      }
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <IconBtn title="Etiquetas" onClick={() => setOpen((v) => !v)} active={open}>
+        <Tag className="h-4 w-4" />
+      </IconBtn>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-11 z-20 max-h-80 w-64 overflow-y-auto rounded-lg border border-[#DEE2E6] bg-white py-1 text-left shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">
+              Etiquetas
+            </p>
+            {tags.map((t) => {
+              const on = attachedIds.has(t.id);
+              return (
+                <button
+                  key={t.id}
+                  disabled={busy}
+                  onClick={() => toggle(t.id)}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800"
+                >
+                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{t.name}</span>
+                  {on && <Check className="h-4 w-4 shrink-0 text-[#228BE6]" />}
+                </button>
+              );
+            })}
+            {tags.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Menu de opções ⋮ ────────────────────────────────────────────────
+
+function OptionsMenu({
+  c,
+  onEdit,
+  onAddHistory,
+  onChange,
+}: {
+  c: CaseDetail;
+  onEdit: () => void;
+  onAddHistory: () => void;
+  onChange: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState<null | 'encerrar' | 'desvincular'>(null);
+
+  const close = () => setOpen(false);
+  const fase2 = (label: string) => {
+    close();
+    toast(`${label} — disponível na Fase 2 (relação entre processos).`);
+  };
+
+  const doEncerrar = async () => {
+    try {
+      await legalCasesService.update(c.id, { status: 'CLOSED' });
+      toast.success('Processo encerrado');
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    } finally {
+      setConfirm(null);
+    }
+  };
+  const doDesvincular = async () => {
+    try {
+      await legalCasesService.update(c.id, { cnjNumber: '' });
+      toast.success('Processo desvinculado do tribunal');
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    } finally {
+      setConfirm(null);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <IconBtn title="Mais opções" onClick={() => setOpen((v) => !v)} active={open}>
+        <MoreVertical className="h-4 w-4" />
+      </IconBtn>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={close} />
+          <div className="absolute right-0 top-11 z-20 w-64 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 text-left shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <MenuItem icon={Paperclip} onClick={() => fase2('Apensar outro processo a este')} muted>
+              Apensar outro processo a este
+              <Fase2Tag />
+            </MenuItem>
+            <MenuItem icon={Paperclip} onClick={() => fase2('Apensar este processo a outro')} muted>
+              Apensar este processo a outro
+              <Fase2Tag />
+            </MenuItem>
+            <MenuItem
+              icon={Link2Off}
+              onClick={() => {
+                close();
+                setConfirm('desvincular');
+              }}
+              disabled={!c.cnjNumber}
+            >
+              Desvincular do tribunal
+            </MenuItem>
+            <Divider />
+            <MenuItem
+              icon={Pencil}
+              onClick={() => {
+                close();
+                onEdit();
+              }}
+            >
+              Editar
+            </MenuItem>
+            <MenuItem
+              icon={FilePlus2}
+              onClick={() => {
+                close();
+                onAddHistory();
+              }}
+            >
+              Adicionar histórico manual
+            </MenuItem>
+            <MenuItem
+              icon={Archive}
+              danger
+              onClick={() => {
+                close();
+                setConfirm('encerrar');
+              }}
+              disabled={c.status === 'CLOSED'}
+            >
+              Encerrar
+            </MenuItem>
+          </div>
+        </>
+      )}
+
+      {confirm === 'encerrar' && (
+        <ConfirmDialog
+          title="Encerrar processo?"
+          message="O processo passará para o status Encerrado. Você pode reabri-lo depois pela edição."
+          confirmLabel="Encerrar"
+          danger
+          onConfirm={doEncerrar}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'desvincular' && (
+        <ConfirmDialog
+          title="Desvincular do tribunal?"
+          message="O número CNJ será removido e o processo deixará de ser monitorado no DJEN. O histórico é preservado."
+          confirmLabel="Desvincular"
+          danger
+          onConfirm={doDesvincular}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function Fase2Tag() {
+  return (
+    <span className="ml-auto rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
+      Fase 2
+    </span>
+  );
+}
+
+// ─── Menu + (adicionar, azul) ────────────────────────────────────────
+
+function AddMenu({
+  onAddHistory,
+  onAddActivity,
+}: {
+  onAddHistory: () => void;
+  onAddActivity: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Adicionar"
+        className="flex h-9 w-9 items-center justify-center rounded-md text-white shadow-sm"
+        style={{ backgroundColor: ASTREA_BLUE }}
+      >
+        <Plus className="h-5 w-5" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={close} />
+          <div className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 text-left shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <MenuItem
+              icon={CalendarClock}
+              onClick={() => {
+                close();
+                onAddActivity();
+              }}
+            >
+              Atividade / prazo
+            </MenuItem>
+            <MenuItem
+              icon={FilePlus2}
+              onClick={() => {
+                close();
+                onAddHistory();
+              }}
+            >
+              Histórico manual
+            </MenuItem>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({
+  icon: Icon,
+  children,
+  onClick,
+  danger,
+  muted,
+  disabled,
+}: {
+  icon: React.ElementType;
+  children: React.ReactNode;
+  onClick?: () => void;
+  danger?: boolean;
+  muted?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        danger
+          ? 'text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10'
+          : muted
+            ? 'text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+            : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800'
+      }`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="flex flex-1 items-center gap-2">{children}</span>
+    </button>
+  );
+}
+
+function Divider() {
+  return <div className="my-1 border-t border-[#DEE2E6] dark:border-zinc-800" />;
+}
+
+// ─── Aba: Resumo ─────────────────────────────────────────────────────
+
+function ResumoTab({ c }: { c: CaseDetail }) {
+  const clientParty = c.parties.find((p) => p.role === 'CLIENT');
   const clientConv = clientParty?.contact?.conversations?.[0];
 
   return (
     <div className="grid gap-5 lg:grid-cols-3">
-      {/* Esquerda: Dados do Processo + Partes */}
+      {/* Esquerda */}
       <div className="space-y-5 lg:col-span-2">
         <Card title="Dados do Processo" icon={FileText}>
-          <dl className="divide-y divide-zinc-100">
+          <dl className="divide-y divide-zinc-100 dark:divide-zinc-800">
             <DefRow label="Ação" value={c.area ?? '—'} />
             <DefRow label="Número" value={c.cnjNumber ? <CnjNumber value={c.cnjNumber} /> : '—'} />
             <DefRow label="Juízo" value={c.court ?? '—'} />
@@ -164,24 +549,20 @@ function ResumoTab({ c }: { c: any }) {
           </dl>
         </Card>
 
-        <PartiesCard
-          caseId={c.id}
-          parties={c.parties.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            role: p.role,
-          }))}
-        />
+        <PartiesCard caseId={c.id} parties={c.parties} />
       </div>
 
-      {/* Direita: widgets */}
+      {/* Direita */}
       <div className="space-y-5">
         <Card title="Cliente / Conversa" icon={MessageSquare}>
           {clientParty?.contact ? (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-zinc-800">
+              <Link
+                href={`/clientes/${clientParty.id}`}
+                className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-100"
+              >
                 {clientParty.contact.name ?? clientParty.name}
-              </p>
+              </Link>
               {clientParty.contact.phone && (
                 <p className="text-xs text-zinc-500">{clientParty.contact.phone}</p>
               )}
@@ -197,8 +578,15 @@ function ResumoTab({ c }: { c: any }) {
                 <p className="text-xs text-zinc-400">Sem conversa vinculada.</p>
               )}
             </div>
+          ) : clientParty ? (
+            <Link
+              href={`/clientes/${clientParty.id}`}
+              className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-100"
+            >
+              {clientParty.name}
+            </Link>
           ) : (
-            <EmptyState>Nenhum cliente vinculado a um contato.</EmptyState>
+            <EmptyState>Nenhum cliente vinculado.</EmptyState>
           )}
         </Card>
 
@@ -207,11 +595,12 @@ function ResumoTab({ c }: { c: any }) {
             <EmptyState>Este processo não possui atividades pendentes.</EmptyState>
           ) : (
             <ul className="space-y-2">
-              {c.events.map((e: any) => (
+              {c.events.map((e) => (
                 <li key={e.id} className="text-sm">
-                  <span className="font-medium text-zinc-700">{e.title}</span>
+                  <span className="font-medium text-zinc-700 dark:text-zinc-200">{e.title}</span>
                   <span className="block text-xs text-zinc-400">
-                    {e.kind} · {new Date(e.startsAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                    {e.kind} ·{' '}
+                    {new Date(e.startsAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                   </span>
                 </li>
               ))}
@@ -224,10 +613,14 @@ function ResumoTab({ c }: { c: any }) {
             <EmptyState>Nenhum prazo aberto.</EmptyState>
           ) : (
             <ul className="space-y-2">
-              {c.deadlines.slice(0, 4).map((d: any) => (
+              {c.deadlines.slice(0, 4).map((d) => (
                 <li key={d.id} className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-700">{d.title}</span>
-                  <span className={`text-xs font-medium ${d.type === 'FATAL' ? 'text-rose-600' : 'text-zinc-500'}`}>
+                  <span className="text-zinc-700 dark:text-zinc-200">{d.title}</span>
+                  <span
+                    className={`text-xs font-medium ${
+                      d.type === 'FATAL' ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-500'
+                    }`}
+                  >
                     {fmtDate(d.dueDate)}
                   </span>
                 </li>
@@ -240,133 +633,461 @@ function ResumoTab({ c }: { c: any }) {
   );
 }
 
-function MovementsTab({
+// ─── Aba: Atividades ─────────────────────────────────────────────────
+
+function AtividadesTab({
   caseId,
-  movements,
+  events,
   onChange,
 }: {
   caseId: string;
-  movements: { id: string; date: string; description: string; source: string | null }[];
+  events: CaseDetail['events'];
   onChange: () => void;
 }) {
+  const qc = useQueryClient();
+  const [showDone, setShowDone] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [desc, setDesc] = useState('');
+
+  const { data: deadlines = [], isLoading } = useQuery({
+    queryKey: ['case-deadlines', caseId],
+    queryFn: () => deadlinesService.list({ caseId }),
+  });
+
+  const open = deadlines.filter((d) => d.status === 'OPEN');
+  const done = deadlines.filter((d) => d.status !== 'OPEN');
+  const shown = showDone ? done : open;
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['case-deadlines', caseId] });
+    onChange();
+  };
+
+  const complete = async (d: Deadline) => {
+    if (d.type === 'FATAL' && !window.confirm(`Concluir o prazo FATAL "${d.title}"?`)) return;
+    try {
+      await deadlinesService.complete(d.id, d.type === 'FATAL');
+      toast.success('Prazo concluído');
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <Card
+        title="Atividades"
+        icon={CheckSquare}
+        action={
+          <button
+            onClick={() => setAdding((v) => !v)}
+            className="inline-flex items-center gap-1 text-xs font-medium"
+            style={{ color: ASTREA_BLUE }}
+          >
+            <Plus className="h-3.5 w-3.5" /> Adicionar atividade
+          </button>
+        }
+      >
+        {/* Filtro aberta / concluída */}
+        <div className="mb-4 flex items-center gap-4 text-sm">
+          <button
+            onClick={() => setShowDone(false)}
+            className={`font-medium ${!showDone ? 'text-[#228BE6]' : 'text-zinc-400 hover:text-zinc-600'}`}
+          >
+            {open.length} aberta{open.length === 1 ? '' : 's'}
+          </button>
+          <button
+            onClick={() => setShowDone(true)}
+            className={`font-medium ${showDone ? 'text-[#228BE6]' : 'text-zinc-400 hover:text-zinc-600'}`}
+          >
+            {done.length} concluída{done.length === 1 ? '' : 's'}
+          </button>
+        </div>
+
+        {adding && (
+          <AddDeadlineInline caseId={caseId} onClose={() => setAdding(false)} onCreated={refresh} />
+        )}
+
+        {isLoading ? (
+          <EmptyState>Carregando…</EmptyState>
+        ) : shown.length === 0 ? (
+          <EmptyState>
+            {showDone ? 'Nenhuma atividade concluída.' : 'Não há atividades em aberto neste processo.'}
+          </EmptyState>
+        ) : (
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {shown.map((d) => {
+              const isDone = d.status !== 'OPEN';
+              return (
+                <li key={d.id} className="flex items-center gap-3 py-2.5">
+                  <button
+                    onClick={() => !isDone && complete(d)}
+                    disabled={isDone}
+                    title={isDone ? 'Concluída' : 'Concluir'}
+                    className="shrink-0 text-zinc-400 hover:text-emerald-500 disabled:text-emerald-500"
+                  >
+                    {isDone ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                  </button>
+                  <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                    Prazo
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm ${isDone ? 'text-zinc-400 line-through' : 'text-zinc-800 dark:text-zinc-200'}`}>
+                      {d.title}
+                      {d.type === 'FATAL' && (
+                        <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                          FATAL
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      Fatal {fmtDateLong(d.dueDate)} · segurança {fmtDate(d.safeDate)}
+                    </p>
+                  </div>
+                  {d.assignedTo && (
+                    <span className="hidden shrink-0 text-xs text-zinc-400 sm:block">{d.assignedTo.name}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+
+      {events.length > 0 && (
+        <Card title="Eventos e audiências" icon={CalendarClock}>
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {events.map((e) => (
+              <li key={e.id} className="flex items-center justify-between py-2.5 text-sm">
+                <div>
+                  <p className="text-zinc-800 dark:text-zinc-200">{e.title}</p>
+                  <p className="text-xs text-zinc-400">
+                    {e.kind}
+                    {e.location ? ` · ${e.location}` : ''}
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs text-zinc-500">
+                  {new Date(e.startsAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// Criação rápida de prazo (modo calculado, igual ao /prazos).
+function AddDeadlineInline({
+  caseId,
+  onClose,
+  onCreated,
+}: {
+  caseId: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState<'ORDINARY' | 'FATAL' | 'INTERNAL'>('ORDINARY');
+  const [dias, setDias] = useState(15);
+  const [disponibilizacao, setDisp] = useState(new Date().toISOString().slice(0, 10));
+  const [dobro, setDobro] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
-    if (!desc.trim()) return;
+    if (!title.trim()) return toast.error('Informe o título');
     setSaving(true);
     try {
-      await legalCasesService.addMovement(caseId, { date, description: desc.trim() });
-      toast.success('Andamento adicionado');
-      setDesc('');
-      setAdding(false);
-      onChange();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erro');
+      await deadlinesService.create({ caseId, title: title.trim(), type, dias, disponibilizacao, dobro });
+      toast.success('Prazo criado');
+      setTitle('');
+      onClose();
+      onCreated();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao criar');
     } finally {
       setSaving(false);
     }
   };
 
   return (
+    <div className="mb-4 space-y-3 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/40">
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Ex.: Contestação"
+        className={inputCls}
+      />
+      <div className="grid grid-cols-3 gap-3">
+        <select value={type} onChange={(e) => setType(e.target.value as any)} className={inputCls}>
+          <option value="ORDINARY">Comum</option>
+          <option value="FATAL">Fatal</option>
+          <option value="INTERNAL">Interno</option>
+        </select>
+        <input
+          type="number"
+          min={1}
+          value={dias}
+          onChange={(e) => setDias(Number(e.target.value))}
+          className={inputCls}
+          title="Dias úteis"
+        />
+        <input
+          type="date"
+          value={disponibilizacao}
+          onChange={(e) => setDisp(e.target.value)}
+          className={inputCls}
+          title="Disponibilização"
+        />
+      </div>
+      <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+        <input type="checkbox" checked={dobro} onChange={(e) => setDobro(e.target.checked)} />
+        Prazo em dobro (CPC 183/186/229)
+      </label>
+      <div className="flex justify-end gap-2">
+        <button onClick={onClose} className="text-xs text-zinc-500">
+          Cancelar
+        </button>
+        <button
+          onClick={submit}
+          disabled={saving}
+          className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
+          style={{ backgroundColor: ASTREA_BLUE }}
+        >
+          {saving ? 'Salvando…' : 'Adicionar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Aba: Histórico ──────────────────────────────────────────────────
+
+function HistoricoTab({
+  caseId,
+  movements,
+  onChange,
+  onAdd,
+}: {
+  caseId: string;
+  movements: CaseDetail['movements'];
+  onChange: () => void;
+  onAdd: () => void;
+}) {
+  return (
     <Card
-      title="Andamentos"
+      title="Histórico"
       icon={FileText}
       action={
-        <button
-          onClick={() => setAdding((v) => !v)}
-          className="inline-flex items-center gap-1 text-xs font-medium"
-          style={{ color: ASTREA_BLUE }}
-        >
-          <Plus className="h-3.5 w-3.5" /> Novo
+        <button onClick={onAdd} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: ASTREA_BLUE }}>
+          <Plus className="h-3.5 w-3.5" /> Histórico manual
         </button>
       }
     >
-      {adding && (
-        <div className="mb-4 space-y-2 rounded-md bg-zinc-50 p-3">
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
-          <textarea
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            rows={3}
-            placeholder="Descrição do andamento…"
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#228BE6]"
-          />
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setAdding(false)} className="text-xs text-zinc-500">Cancelar</button>
-            <button
-              onClick={submit}
-              disabled={saving}
-              className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
-              style={{ backgroundColor: ASTREA_BLUE }}
-            >
-              {saving ? 'Salvando…' : 'Adicionar'}
-            </button>
-          </div>
-        </div>
-      )}
       {movements.length === 0 ? (
-        <EmptyState>Nenhum andamento.</EmptyState>
+        <EmptyState>Nenhum andamento registrado.</EmptyState>
       ) : (
         <ul className="space-y-3">
-          {movements.map((m) => (
-            <li key={m.id} className="border-l-2 border-zinc-200 pl-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-zinc-500">{fmtDate(m.date)}</span>
-                {m.source === 'DJEN' && (
-                  <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">DJEN</span>
-                )}
-              </div>
-              <p className="mt-0.5 text-sm text-zinc-700">{m.description}</p>
-            </li>
-          ))}
+          {movements.map((m) => {
+            const isDjen = (m.source ?? '').toUpperCase() === 'DJEN';
+            return (
+              <li key={m.id} className="border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-zinc-500">{fmtDate(m.date)}</span>
+                  {isDjen && (
+                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+                      DJEN
+                    </span>
+                  )}
+                  {m.source && !isDjen && m.source !== 'manual' && (
+                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      {m.source}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">{m.description}</p>
+              </li>
+            );
+          })}
         </ul>
       )}
     </Card>
   );
 }
 
-function DeadlinesTab({ deadlines }: { deadlines: any[] }) {
+// Modal de histórico manual (texto + data) — usa POST /legal-cases/:id/movements.
+function ManualHistoryModal({
+  caseId,
+  onClose,
+  onSaved,
+}: {
+  caseId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [desc, setDesc] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!desc.trim()) return toast.error('Digite o texto do histórico');
+    setSaving(true);
+    try {
+      await legalCasesService.addMovement(caseId, { date, description: desc.trim() });
+      toast.success('Histórico adicionado');
+      onClose();
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <Card title="Prazos do processo" icon={Clock}>
-      {deadlines.length === 0 ? (
-        <EmptyState>Nenhum prazo aberto.</EmptyState>
-      ) : (
-        <ul className="divide-y divide-zinc-100">
-          {deadlines.map((d) => (
-            <li key={d.id} className="flex items-center justify-between py-2.5">
-              <div>
-                <p className="text-sm text-zinc-800">
-                  {d.title}
-                  {d.type === 'FATAL' && (
-                    <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">FATAL</span>
-                  )}
-                </p>
-                <p className="text-xs text-zinc-400">
-                  Fatal {fmtDate(d.dueDate)} · segurança {fmtDate(d.safeDate)}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
+    <Modal title="Adicionar histórico manual" onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Data">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Texto *">
+          <textarea
+            autoFocus
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            rows={5}
+            placeholder="Digite seu texto aqui…"
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+        </Field>
+      </div>
+      <ModalActions
+        saving={saving}
+        onClose={onClose}
+        onSave={submit}
+      />
+    </Modal>
   );
 }
+
+// ─── Editar processo ─────────────────────────────────────────────────
+
+function EditCaseDialog({
+  c,
+  onClose,
+  onSaved,
+}: {
+  c: CaseDetail;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    title: c.title,
+    cnjNumber: c.cnjNumber ?? '',
+    internalCode: c.internalCode ?? '',
+    area: c.area ?? '',
+    court: c.court ?? '',
+    jurisdiction: c.jurisdiction ?? '',
+    distributedAt: c.distributedAt ? c.distributedAt.slice(0, 10) : '',
+    value: c.value ?? '',
+    status: c.status,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!form.title.trim()) return toast.error('Informe o título');
+    setSaving(true);
+    try {
+      await legalCasesService.update(c.id, {
+        title: form.title.trim(),
+        cnjNumber: form.cnjNumber,
+        internalCode: form.internalCode,
+        area: form.area,
+        court: form.court,
+        jurisdiction: form.jurisdiction,
+        distributedAt: form.distributedAt || undefined,
+        value: form.value === '' ? undefined : Number(form.value),
+        status: form.status,
+      });
+      toast.success('Processo atualizado');
+      onClose();
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm({ ...form, [k]: e.target.value });
+
+  return (
+    <Modal title="Editar processo" onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Título *">
+          <input autoFocus value={form.title} onChange={set('title')} className={inputCls} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Nº CNJ">
+            <input value={form.cnjNumber} onChange={set('cnjNumber')} className={inputCls} placeholder="0000000-00.0000.0.00.0000" />
+          </Field>
+          <Field label="Código interno">
+            <input value={form.internalCode} onChange={set('internalCode')} className={inputCls} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Ação / Área">
+            <input value={form.area} onChange={set('area')} className={inputCls} />
+          </Field>
+          <Field label="Vara / Juízo">
+            <input value={form.court} onChange={set('court')} className={inputCls} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Comarca / Foro">
+            <input value={form.jurisdiction} onChange={set('jurisdiction')} className={inputCls} />
+          </Field>
+          <Field label="Valor da causa">
+            <input type="number" step="0.01" value={form.value} onChange={set('value')} className={inputCls} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Distribuído em">
+            <input type="date" value={form.distributedAt} onChange={set('distributedAt')} className={inputCls} />
+          </Field>
+          <Field label="Status">
+            <select value={form.status} onChange={set('status')} className={inputCls}>
+              {(Object.keys(STATUS_LABEL) as (keyof typeof STATUS_LABEL)[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </div>
+      <ModalActions saving={saving} onClose={onClose} onSave={submit} saveLabel="Salvar" />
+    </Modal>
+  );
+}
+
+// ─── Partes (card do Resumo) ─────────────────────────────────────────
 
 function PartiesCard({
   caseId,
   parties,
 }: {
   caseId: string;
-  parties: { id: string; name: string; role: PartyRole }[];
+  parties: CaseDetail['parties'];
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [role, setRole] = useState<PartyRole>('OPPONENT');
   const qc = useQueryClient();
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['legal-case', caseId] });
 
   const add = async () => {
     if (!name.trim()) return;
@@ -375,7 +1096,7 @@ function PartiesCard({
       toast.success('Parte adicionada');
       setName('');
       setAdding(false);
-      qc.invalidateQueries({ queryKey: ['legal-case', caseId] });
+      refresh();
     } catch (err: any) {
       toast.error(err?.message || 'Erro');
     }
@@ -384,7 +1105,7 @@ function PartiesCard({
   const remove = async (partyId: string) => {
     try {
       await legalCasesService.removeParty(partyId);
-      qc.invalidateQueries({ queryKey: ['legal-case', caseId] });
+      refresh();
     } catch (err: any) {
       toast.error(err?.message || 'Erro');
     }
@@ -405,16 +1126,24 @@ function PartiesCard({
       }
     >
       {adding && (
-        <div className="mb-3 space-y-2 rounded-md bg-zinc-50 p-3">
+        <div className="mb-3 space-y-2 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/40">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da parte" className={inputCls} />
           <select value={role} onChange={(e) => setRole(e.target.value as PartyRole)} className={inputCls}>
             {(Object.keys(ROLE_LABEL) as PartyRole[]).map((r) => (
-              <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+              <option key={r} value={r}>
+                {ROLE_LABEL[r]}
+              </option>
             ))}
           </select>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setAdding(false)} className="text-xs text-zinc-500">Cancelar</button>
-            <button onClick={add} className="rounded-md px-3 py-1.5 text-xs font-medium text-white" style={{ backgroundColor: ASTREA_BLUE }}>
+            <button onClick={() => setAdding(false)} className="text-xs text-zinc-500">
+              Cancelar
+            </button>
+            <button
+              onClick={add}
+              className="rounded-md px-3 py-1.5 text-xs font-medium text-white"
+              style={{ backgroundColor: ASTREA_BLUE }}
+            >
               Adicionar
             </button>
           </div>
@@ -423,11 +1152,20 @@ function PartiesCard({
       {parties.length === 0 ? (
         <EmptyState>Sem partes.</EmptyState>
       ) : (
-        <ul className="divide-y divide-zinc-100">
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {parties.map((p) => (
             <li key={p.id} className="group flex items-center justify-between py-2 text-sm">
-              <span className="text-zinc-700">
-                {p.name} <span className="ml-1 text-xs text-zinc-400">{ROLE_LABEL[p.role]}</span>
+              <span className="text-zinc-700 dark:text-zinc-200">
+                {p.role === 'CLIENT' ? (
+                  <Link href={`/clientes/${p.id}`} className="hover:text-[#228BE6] hover:underline">
+                    {p.name}
+                  </Link>
+                ) : (
+                  p.name
+                )}
+                <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  {ROLE_LABEL[p.role]}
+                </span>
               </span>
               <button
                 onClick={() => remove(p.id)}
@@ -458,9 +1196,9 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[#DEE2E6] bg-white">
-      <div className="flex items-center justify-between border-b border-[#DEE2E6] px-5 py-3.5">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-[#202124]">
+    <div className="rounded-lg border border-[#DEE2E6] bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-center justify-between border-b border-[#DEE2E6] px-5 py-3.5 dark:border-zinc-800">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-[#202124] dark:text-zinc-100">
           <Icon className="h-4 w-4" style={{ color: ASTREA_BLUE }} />
           {title}
         </h3>
@@ -475,16 +1213,16 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
   return (
     <div className="flex gap-2">
       <dt className="w-28 shrink-0 text-[#6C757D]">{label}:</dt>
-      <dd className="text-[#202124]">{children}</dd>
+      <dd className="text-[#202124] dark:text-zinc-200">{children}</dd>
     </div>
   );
 }
 
-function DefRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+function DefRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-3 py-2.5">
       <dt className="w-36 shrink-0 text-sm font-medium text-[#6C757D]">{label}</dt>
-      <dd className={`text-sm text-[#202124] ${mono ? 'font-mono' : ''}`}>{value}</dd>
+      <dd className="text-sm text-[#202124] dark:text-zinc-200">{value}</dd>
     </div>
   );
 }
@@ -497,18 +1235,131 @@ function IconBtn({
   children,
   title,
   onClick,
+  active,
 }: {
   children: React.ReactNode;
   title: string;
   onClick?: () => void;
+  active?: boolean;
 }) {
   return (
     <button
       title={title}
       onClick={onClick}
-      className="flex h-9 w-9 items-center justify-center rounded-md border border-[#DEE2E6] bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700"
+      className={`flex h-9 w-9 items-center justify-center rounded-md border text-zinc-500 transition-colors dark:text-zinc-400 ${
+        active
+          ? 'border-[#228BE6] bg-[#228BE6]/5 text-[#228BE6] dark:bg-[#228BE6]/10'
+          : 'border-[#DEE2E6] bg-white hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-200'
+      }`}
     >
       {children}
     </button>
+  );
+}
+
+// Modal genérico (estilo claro Astrea, com dark).
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-50 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 text-zinc-800 shadow-2xl dark:bg-zinc-900 dark:text-zinc-200">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-medium text-zinc-700 dark:text-zinc-100">{title}</h2>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ModalActions({
+  saving,
+  onClose,
+  onSave,
+  saveLabel = 'Salvar',
+}: {
+  saving: boolean;
+  onClose: () => void;
+  onSave: () => void;
+  saveLabel?: string;
+}) {
+  return (
+    <div className="mt-6 flex items-center justify-end gap-3">
+      <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-zinc-500">
+        Cancelar
+      </button>
+      <button
+        onClick={onSave}
+        disabled={saving}
+        className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        style={{ backgroundColor: ASTREA_BLUE }}
+      >
+        {saving ? 'Salvando…' : saveLabel}
+      </button>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  danger,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-[60] w-full max-w-sm rounded-lg bg-white p-6 shadow-2xl dark:bg-zinc-900">
+        <div className="flex items-start gap-3">
+          {danger && (
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400">
+              <AlertTriangle className="h-5 w-5" />
+            </span>
+          )}
+          <div>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{message}</p>
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-zinc-500">
+            Cancelar
+          </button>
+          <button
+            onClick={async () => {
+              setBusy(true);
+              await onConfirm();
+            }}
+            disabled={busy}
+            className={`rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60 ${
+              danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-[#228BE6] hover:bg-[#1c7ed6]'
+            }`}
+          >
+            {busy ? 'Aguarde…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
