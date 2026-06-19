@@ -32,7 +32,7 @@ import {
   notificationsSettingsService,
   type Notification,
 } from '@/features/settings/services/notifications.service';
-import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
+import { ZappfyIcon, MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useAuthStore } from '@/stores/auth-store';
@@ -41,6 +41,7 @@ import { useInboxFilterStore, UNASSIGNED } from '../stores/inbox-filter-store';
 
 const channelIcons: Record<string, React.ElementType> = {
   WHATSAPP_ZAPPFY: ZappfyIcon,
+  WHATSAPP_EVOLUTION: WhatsAppIcon,
   WHATSAPP_OFFICIAL: MetaIcon,
   INSTAGRAM: InstagramIcon,
 };

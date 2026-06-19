@@ -192,6 +192,13 @@ function fieldsFor(type: Channel['type']): FieldDef[] {
       { key: 'token', label: 'Token', placeholder: 'Token da instância Zappfy' },
     ];
   }
+  if (type === 'WHATSAPP_EVOLUTION') {
+    return [
+      { key: 'baseUrl', label: 'URL do servidor Evolution', placeholder: 'http://127.0.0.1:8083' },
+      { key: 'instance', label: 'Nome da instância', placeholder: 'Ex: COMERCIAL' },
+      { key: 'apikey', label: 'API Key da instância', placeholder: 'A apikey da instância' },
+    ];
+  }
   if (type === 'INSTAGRAM') {
     return [
       { key: 'accessToken', label: 'Access Token', placeholder: 'Instagram User Access Token (IGAAN...)' },

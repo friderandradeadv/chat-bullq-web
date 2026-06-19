@@ -15,17 +15,19 @@ import {
   Check,
 } from 'lucide-react';
 import { channelsService, type Channel } from '@/features/channels/services/channels.service';
-import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
+import { ZappfyIcon, MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
 const channelIcons: Record<string, React.ElementType> = {
   WHATSAPP_ZAPPFY: ZappfyIcon,
+  WHATSAPP_EVOLUTION: WhatsAppIcon,
   WHATSAPP_OFFICIAL: MetaIcon,
   INSTAGRAM: InstagramIcon,
 };
 
 const channelLabels: Record<string, string> = {
   WHATSAPP_ZAPPFY: 'WhatsApp',
+  WHATSAPP_EVOLUTION: 'WhatsApp (Evolution)',
   WHATSAPP_OFFICIAL: 'WhatsApp Oficial',
   INSTAGRAM: 'Instagram',
 };

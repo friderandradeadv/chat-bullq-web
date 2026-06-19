@@ -21,11 +21,12 @@ import { toast } from 'sonner';
 import type { Channel } from '../services/channels.service';
 import { channelsService } from '../services/channels.service';
 import { useChannelSync } from '../hooks/use-channel-sync';
-import { ZappfyIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
+import { ZappfyIcon, MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
 import { EditChannelDialog } from './edit-channel-dialog';
 
 const channelTypeMap: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   WHATSAPP_ZAPPFY: { label: 'WhatsApp (Zappfy)', icon: ZappfyIcon, color: 'bg-zinc-50 dark:bg-zinc-800' },
+  WHATSAPP_EVOLUTION: { label: 'WhatsApp (Evolution)', icon: WhatsAppIcon, color: 'bg-zinc-50 dark:bg-zinc-800' },
   WHATSAPP_OFFICIAL: { label: 'WhatsApp Official', icon: MetaIcon, color: 'bg-zinc-50 dark:bg-zinc-800' },
   INSTAGRAM: { label: 'Instagram', icon: InstagramIcon, color: 'bg-zinc-50 dark:bg-zinc-800' },
 };

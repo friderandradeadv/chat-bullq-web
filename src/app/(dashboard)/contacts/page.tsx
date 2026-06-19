@@ -36,7 +36,7 @@ import { relativeTime, cn } from '@/lib/utils';
 /** Ícone do canal — WhatsApp (Zappfy/Oficial) usa o glifo verde do WhatsApp,
  *  não o "Z" da Zappfy (o cliente vê WhatsApp, não o provedor). */
 function ChannelIcon({ type, className }: { type: string; className?: string }) {
-  if (type === 'WHATSAPP_ZAPPFY' || type === 'WHATSAPP_OFFICIAL') {
+  if (type === 'WHATSAPP_ZAPPFY' || type === 'WHATSAPP_OFFICIAL' || type === 'WHATSAPP_EVOLUTION') {
     return <WhatsAppIcon className={cn('text-[#25D366]', className)} />;
   }
   if (type === 'INSTAGRAM') return <InstagramIcon className={className} />;
