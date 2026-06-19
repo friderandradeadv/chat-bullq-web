@@ -67,7 +67,7 @@ export default function JuridicoKanbanPage() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 p-6 text-zinc-800 dark:text-zinc-200">
       <div className="flex items-center gap-2">
         <KanbanSquare className="h-5 w-5 text-[#228BE6]" />
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Kanban de Prazos</h1>

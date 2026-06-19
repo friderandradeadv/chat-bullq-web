@@ -97,15 +97,15 @@ export default function ProcessoDetailPage() {
 
   if (!id) return null;
   if (isLoading)
-    return <div className="bg-[#f5f6f8] p-6 text-sm text-zinc-400 dark:bg-zinc-950">Carregando…</div>;
+    return <div className="bg-white p-6 text-sm text-zinc-400 dark:bg-zinc-950">Carregando…</div>;
   if (!c)
-    return <div className="bg-[#f5f6f8] p-6 text-sm text-zinc-400 dark:bg-zinc-950">Processo não encontrado.</div>;
+    return <div className="bg-white p-6 text-sm text-zinc-400 dark:bg-zinc-950">Processo não encontrado.</div>;
 
   const clientParty = c.parties.find((p) => p.role === 'CLIENT');
   const monitorado = !!c.cnjNumber;
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-[#f5f6f8] text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="flex h-full flex-col overflow-y-auto bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       {/* Cabeçalho */}
       <div className="px-6 pt-6">
         <div className="flex items-start justify-between gap-4">
@@ -1458,7 +1458,7 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[#DEE2E6] bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-lg border border-[#DEE2E6] bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-center justify-between border-b border-[#DEE2E6] px-5 py-3.5 dark:border-zinc-800">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-[#202124] dark:text-zinc-100">
           <Icon className="h-4 w-4" style={{ color: ASTREA_BLUE }} />

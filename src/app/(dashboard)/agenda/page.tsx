@@ -175,7 +175,7 @@ export default function AgendaPage() {
   const isMonth = mode === 'dayGridMonth';
 
   return (
-    <div className="flex h-full flex-col bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 p-6 text-zinc-800 dark:text-zinc-200">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">Agenda</h1>
         <div className="flex items-center gap-2">

@@ -46,16 +46,16 @@ export default function ClienteDetailPage() {
 
   if (!id) return null;
   if (isLoading)
-    return <div className="bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-sm text-zinc-400">Carregando…</div>;
+    return <div className="bg-white dark:bg-zinc-950 p-6 text-sm text-zinc-400">Carregando…</div>;
   if (!clientName)
-    return <div className="bg-[#f5f6f8] dark:bg-zinc-950 p-6 text-sm text-zinc-400">Cliente não encontrado.</div>;
+    return <div className="bg-white dark:bg-zinc-950 p-6 text-sm text-zinc-400">Cliente não encontrado.</div>;
 
   const meusCasos = cases.filter((c) => c.parties.some((p) => p.name === clientName));
   const displayName = contact?.name ?? clientName;
   const conv = contact?.channels?.[0];
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       <div className="px-6 pt-6">
         <button onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-[#228BE6]">
           <ArrowLeft className="h-4 w-4" /> Voltar
@@ -146,7 +146,7 @@ export default function ClienteDetailPage() {
 
 function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-lg border border-[#DEE2E6] bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-[#6C757D]">
         <Icon className="h-4 w-4" style={{ color: ASTREA_BLUE }} /> {title}
       </h2>

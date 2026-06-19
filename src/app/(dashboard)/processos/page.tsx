@@ -186,7 +186,7 @@ export default function ProcessosPage() {
     });
 
   return (
-    <div className="flex h-full flex-col bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-6">
         <h1 className="text-2xl font-normal text-zinc-700">Processos e casos</h1>
@@ -250,7 +250,7 @@ export default function ProcessosPage() {
 
       {/* Tabela */}
       <div className="mt-2 flex-1 overflow-y-auto px-6 pb-6">
-        <div className="overflow-hidden rounded-lg border border-[#DEE2E6] bg-white">
+        <div className="overflow-hidden rounded-lg border border-[#DEE2E6] bg-white shadow-sm">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-[#DEE2E6] text-xs font-bold uppercase tracking-wide text-[#6C757D]">
