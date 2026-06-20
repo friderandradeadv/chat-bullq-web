@@ -13,6 +13,7 @@ import {
   Check,
   MoreHorizontal,
   Search,
+  Eraser,
 } from 'lucide-react';
 import { formatPhone } from '@/lib/brazil-states';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -103,6 +104,21 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleReset = () => {
+    setMoreOpen(false);
+    const name = conversation.contact.name || 'esta conversa';
+    if (
+      !window.confirm(
+        `Zerar ${name}?\n\nA conversa some de todas as abas e a memória da IA é limpa. A próxima mensagem deste número começa uma conversa NOVA e limpa — ideal pra testar do zero. (É reversível, mas some da vista.)`,
+      )
+    )
+      return;
+    handleAction(
+      () => inboxService.resetConversation(conversation.id),
+      'Conversa zerada — manda uma mensagem nova pra começar do zero',
+    );
   };
 
   const handleArchiveConfirm = async (reason: string, nextResponsibleId: string | null) => {
@@ -282,6 +298,16 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
                     Reabrir conversa
                   </button>
                 )}
+                <div className="my-0.5 border-t border-zinc-100 dark:border-zinc-800" />
+                <button
+                  onClick={handleReset}
+                  disabled={isLoading}
+                  title="Zera a conversa: some das abas + limpa a memória da IA. A próxima mensagem começa do zero. Ideal pra testar."
+                  className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  <Eraser className="h-3.5 w-3.5" />
+                  Zerar conversa (teste)
+                </button>
               </div>
             </>
           )}
