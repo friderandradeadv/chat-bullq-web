@@ -328,6 +328,16 @@ export const inboxService = {
     return data.data;
   },
 
+  /**
+   * "Zerar conversa" (teste): soft-delete + limpa memória de IA do contato.
+   * A conversa some de todas as abas; a próxima mensagem do número cria uma
+   * conversa nova e limpa. Não mexe no /restart dos clientes.
+   */
+  async resetConversation(conversationId: string): Promise<{ ok: boolean }> {
+    const { data } = await api.post(`/conversations/${conversationId}/reset`);
+    return data.data ?? data;
+  },
+
   async closeConversation(conversationId: string): Promise<Conversation> {
     const { data } = await api.post(`/conversations/${conversationId}/close`);
     return data.data;
