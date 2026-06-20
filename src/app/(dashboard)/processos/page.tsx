@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -173,6 +173,8 @@ export default function ProcessosPage() {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [pageSize, setPageSize] = useState<number>(50); // 0 = todos
+  const [page, setPage] = useState(1);
 
   const { data: cases = [], isLoading } = useQuery({
     queryKey: ['legal-cases', { search, status: statusFilter }],
@@ -187,13 +189,20 @@ export default function ProcessosPage() {
     .filter((c) => (tagFilter ? c.legalTags.some((lt) => lt.tagId === tagFilter) : true))
     .filter((c) => (grauFilter ? grauOf(c) === grauFilter : true));
 
+  // Paginação client-side (pageSize=0 → todos).
+  const pageCount = pageSize > 0 ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
+  const curPage = Math.min(page, pageCount);
+  const paginated = pageSize > 0 ? filtered.slice((curPage - 1) * pageSize, curPage * pageSize) : filtered;
+  // Reseta a página quando os filtros mudam o tamanho da lista.
+  useEffect(() => { setPage(1); }, [search, statusFilter, grauFilter, tagFilter, pageSize]);
+
   const toggle = (id: string) =>
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const allOnPage = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
+  const allOnPage = paginated.length > 0 && paginated.every((c) => selected.has(c.id));
   const toggleAll = () =>
     setSelected((s) => {
-      if (filtered.every((c) => s.has(c.id))) { const n = new Set(s); filtered.forEach((c) => n.delete(c.id)); return n; }
-      return new Set([...s, ...filtered.map((c) => c.id)]);
+      if (paginated.every((c) => s.has(c.id))) { const n = new Set(s); paginated.forEach((c) => n.delete(c.id)); return n; }
+      return new Set([...s, ...paginated.map((c) => c.id)]);
     });
 
   return (
@@ -265,7 +274,21 @@ export default function ProcessosPage() {
             <button onClick={() => setSelected(new Set())} className="text-zinc-500 hover:text-zinc-700">Limpar seleção</button>
           </>
         ) : (
-          <span className="text-zinc-500">{filtered.length} processo(s) e caso(s)</span>
+          <div className="flex w-full items-center justify-between">
+            <span className="text-zinc-500">{filtered.length} processo(s) e caso(s)</span>
+            <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+              Exibir
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="h-7 rounded-md border border-zinc-200 bg-white px-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                {[25, 50, 100, 200].map((n) => <option key={n} value={n}>{n}</option>)}
+                <option value={0}>Todos</option>
+              </select>
+              por página
+            </label>
+          </div>
         )}
       </div>
 
@@ -298,11 +321,31 @@ export default function ProcessosPage() {
                   </td>
                 </tr>
               )}
-              {filtered.map((c) => (
+              {paginated.map((c) => (
                 <CaseRow key={c.id} c={c} selected={selected.has(c.id)} onToggle={() => toggle(c.id)} onChange={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
               ))}
             </tbody>
           </table>
+          {pageSize > 0 && pageCount > 1 && (
+            <div className="flex items-center justify-between border-t border-[#DEE2E6] px-4 py-3 text-sm dark:border-zinc-800">
+              <span className="text-zinc-500">
+                {(curPage - 1) * pageSize + 1}–{Math.min(curPage * pageSize, filtered.length)} de {filtered.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={curPage <= 1}
+                  className="rounded-md border border-zinc-200 px-3 py-1 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >Anterior</button>
+                <span className="px-2 text-zinc-500">Página {curPage} de {pageCount}</span>
+                <button
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  disabled={curPage >= pageCount}
+                  className="rounded-md border border-zinc-200 px-3 py-1 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >Próxima</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
