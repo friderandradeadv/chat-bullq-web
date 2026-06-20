@@ -102,13 +102,24 @@ export function AssignmentPopover({
       .filter((a) => (q ? a.name.toLowerCase().includes(q) : true));
   }, [agents, ctxTagIds, search]);
 
-  const currentRobot = useMemo(
-    () =>
-      conversation.assignedAgentId
-        ? agents.find((a) => a.id === conversation.assignedAgentId) ?? null
-        : null,
-    [agents, conversation.assignedAgentId],
-  );
+  const currentRobot = useMemo(() => {
+    // Robô responsável FIXO (assignedAgentId) tem prioridade. Se não há robô
+    // nem humano atribuído, mostra o robô que está ATENDENDO agora
+    // (activeAgentId) — assim o "Atendimento" reflete quem está trabalhando na
+    // conversa, em vez de "Não atribuído" enquanto a IA responde.
+    if (conversation.assignedAgentId) {
+      return agents.find((a) => a.id === conversation.assignedAgentId) ?? null;
+    }
+    if (!conversation.assignedToId && conversation.activeAgentId) {
+      return agents.find((a) => a.id === conversation.activeAgentId) ?? null;
+    }
+    return null;
+  }, [
+    agents,
+    conversation.assignedAgentId,
+    conversation.assignedToId,
+    conversation.activeAgentId,
+  ]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
