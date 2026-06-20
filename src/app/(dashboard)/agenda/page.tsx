@@ -53,6 +53,7 @@ interface Activity {
   caseId: string | null; caseTitle: string | null; cnj: string | null;
   responsibleId: string | null; responsibleName: string | null; createdName: string | null;
   priorityLabel: string | null; completedAt: string | null; description: string | null;
+  prazoFatal: string | null; recorte: string | null; tipoPublicacao: string | null;
 }
 
 export default function AgendaPage() {
@@ -99,14 +100,16 @@ export default function AgendaPage() {
     const out: Activity[] = [];
     for (const t of tkQ.data ?? []) {
       if (!t.dueAt) continue;
+      const dj = t.metadata?.djen;
       out.push({
         id: 't_' + t.id, source: 'tarefa', rawId: t.id, title: t.title, date: t.dueAt,
         hasTime: t.dueAt.includes('T') && !/T0[09]:00:00/.test(t.dueAt) ? true : false,
         done: t.status === 'DONE', cancelled: false, fatal: t.priority === 'HIGH',
-        caseId: null, caseTitle: null, cnj: null,
+        caseId: t.case?.id ?? null, caseTitle: t.case?.title ?? null, cnj: t.case?.cnjNumber ?? null,
         responsibleId: t.assigneeId, responsibleName: t.assigneeId ? userMap.get(t.assigneeId) ?? null : null,
         createdName: t.createdById ? userMap.get(t.createdById) ?? null : null,
         priorityLabel: PRIORITY_LABEL[t.priority] ?? null, completedAt: t.completedAt, description: t.description,
+        prazoFatal: dj?.prazoFatal ?? null, recorte: dj?.recorte ?? null, tipoPublicacao: dj?.tipoPublicacao ?? null,
       });
     }
     for (const d of dlQ.data ?? []) {
@@ -116,6 +119,7 @@ export default function AgendaPage() {
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
         createdName: null, priorityLabel: null, completedAt: null, description: null,
+        prazoFatal: null, recorte: null, tipoPublicacao: null,
       });
     }
     for (const e of evQ.data ?? []) {
@@ -125,6 +129,7 @@ export default function AgendaPage() {
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
         createdName: null, priorityLabel: null, completedAt: null, description: e.location,
+        prazoFatal: null, recorte: null, tipoPublicacao: null,
       });
     }
     return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
@@ -441,7 +446,21 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [reMenu, setReMenu] = useState(false);
   const [miniCal, setMiniCal] = useState(false);
   const [optMenu, setOptMenu] = useState(false);
+  const [respMenu, setRespMenu] = useState(false);
+  const [respId, setRespId] = useState(activity.responsibleId);
+  const [respName, setRespName] = useState(activity.responsibleName);
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
   const d = new Date(dateISO);
+
+  const assignResp = async (userId: string | null) => {
+    setRespMenu(false);
+    if (activity.source !== 'tarefa') return;
+    const prev = { id: respId, name: respName };
+    setRespId(userId);
+    setRespName(userId ? members.find((m) => m.user.id === userId)?.user.name ?? null : null);
+    try { await tasksService.update(activity.rawId, { assigneeId: userId }); toast.success('Responsável atualizado'); onRefetch(); }
+    catch (e: any) { setRespId(prev.id); setRespName(prev.name); toast.error(e?.message || 'Erro ao atribuir'); }
+  };
 
   // Puxa a ficha do processo p/ montar "Cliente x Parte | 1º Grau - Área" (igual Astrea).
   const caseQ = useQuery({ queryKey: ['legal-case', 'agenda', activity.caseId], queryFn: () => legalCasesService.get(activity.caseId!), enabled: !!activity.caseId });
@@ -624,12 +643,37 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           </div>
           {activity.caseTitle && <Row label="Processo"><button onClick={() => onOpenCase(activity.caseId!)} className="text-left font-light text-[#228BE6] hover:underline">{activity.caseTitle}{procSuffix ? `  |  ${procSuffix}` : ''}</button></Row>}
           {activity.cnj && <Row label="Número do processo"><CnjNumber value={activity.cnj} /></Row>}
-          {activity.responsibleName && <Row label="Responsável">{activity.responsibleName}</Row>}
+          {(activity.source === 'tarefa' || activity.responsibleName) && (
+            <Row label="Responsável">
+              {activity.source === 'tarefa' ? (
+                <span className="relative inline-block">
+                  <button onClick={() => setRespMenu((v) => !v)} className="inline-flex items-center gap-1 font-light text-[#228BE6] hover:underline">
+                    {respName ?? 'Atribuir responsável'} <span className="text-[10px]">▾</span>
+                  </button>
+                  {respMenu && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setRespMenu(false)} />
+                      <div className="absolute left-0 z-20 mt-1 max-h-60 w-60 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                        <button onClick={() => assignResp(null)} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">Ninguém {!respId && <span className="text-[#228BE6]">✓</span>}</button>
+                        {members.map((m) => (
+                          <button key={m.user.id} onClick={() => assignResp(m.user.id)} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                            {m.user.name} {respId === m.user.id && <span className="text-[#228BE6]">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </span>
+              ) : respName}
+            </Row>
+          )}
           {activity.createdName && <Row label="Criado por"><span className="text-zinc-500">{activity.createdName}</span></Row>}
           {done && activity.completedAt && <Row label=""><span className="text-zinc-500">{activity.source === 'tarefa' ? 'Tarefa concluída' : 'Prazo concluído'} em {new Date(activity.completedAt).toLocaleDateString('pt-BR')}{activity.responsibleName ? ` por ${activity.responsibleName}` : ''}</span></Row>}
           {activity.priorityLabel && <Row label="Prioridade">{activity.priorityLabel}</Row>}
           {activity.description && activity.source === 'evento' && <Row label="Local">{activity.description}</Row>}
-          {activity.description && activity.source === 'tarefa' && <Row label="Descrição"><span className="whitespace-pre-wrap break-words">{activity.description}</span></Row>}
+          {activity.source === 'tarefa' && activity.description && <Row label="Descrição da tarefa"><span className="whitespace-pre-wrap break-words">{activity.description}</span></Row>}
+          {activity.source === 'tarefa' && activity.prazoFatal && <Row label="Prazo fatal"><span className="font-medium text-rose-600 dark:text-rose-400">{new Date(activity.prazoFatal).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></Row>}
+          {activity.source === 'tarefa' && activity.recorte && <Row label="Recorte da publicação"><span className="whitespace-pre-wrap break-words text-zinc-600 dark:text-zinc-300">{activity.recorte}</span></Row>}
         </dl>
 
         {/* Comentários */}

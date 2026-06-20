@@ -63,12 +63,15 @@ export interface ScanSummary {
   erros: number;
 }
 
+export type PublicationPeriod = 'hoje' | '7d' | '30d' | 'all';
+
 export interface ListPublicationsQuery {
   status?: PublicationStatus;
   unlinked?: boolean;
   group?: PublicationGroup;
   q?: string;
   uf?: string;
+  periodo?: PublicationPeriod;
 }
 
 function qs(params: object): string {
@@ -97,8 +100,8 @@ export const djenService = {
     const { data } = await api.post(`/djen/publications/${publicationId}/dismiss`, {});
     return data.data ?? data;
   },
-  async addPrazo(publicationId: string): Promise<{ ok: boolean; prazoFatal: string; prazoSeguranca: string }> {
-    const { data } = await api.post(`/djen/publications/${publicationId}/prazo`, {});
+  async addPrazo(publicationId: string, caseId?: string): Promise<{ ok: boolean; prazoFatal: string; prazoSeguranca: string }> {
+    const { data } = await api.post(`/djen/publications/${publicationId}/prazo`, caseId ? { caseId } : {});
     return data.data ?? data;
   },
   async bulk(ids: string[], action: 'dismiss' | 'gravar_historico'): Promise<{ ok: boolean; afetadas?: number; gravadas?: number; semProcesso?: number }> {

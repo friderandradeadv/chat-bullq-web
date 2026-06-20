@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  djenService, type Publication, type PublicationGroup, type PublicationsStats,
+  djenService, type Publication, type PublicationGroup, type PublicationsStats, type PublicationPeriod,
 } from '@/features/djen/services/djen.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { CnjNumber, ASTREA_BLUE } from '../processos/page';
@@ -18,6 +18,10 @@ const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MT','MS','P
 
 const GROUP_LABEL: Record<PublicationGroup, string> = {
   nao_tratada: 'Não tratada', tratada: 'Tratada', descartada: 'Descartada', all: 'Todas',
+};
+
+const PERIODO_LABEL: Record<PublicationPeriod, string> = {
+  hoje: 'Hoje', '7d': 'Últimos 7 dias', '30d': 'Últimos 30 dias', all: 'Todo o período',
 };
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
@@ -34,14 +38,15 @@ export default function CaixaDjenPage() {
   const [group, setGroup] = useState<PublicationGroup>('nao_tratada');
   const [q, setQ] = useState('');
   const [uf, setUf] = useState('');
+  const [periodo, setPeriodo] = useState<PublicationPeriod>('all');
   const [running, setRunning] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandAll, setExpandAll] = useState(false);
 
   const { data: stats } = useQuery({ queryKey: ['djen-stats'], queryFn: () => djenService.stats() });
   const { data: pubs = [], isLoading } = useQuery({
-    queryKey: ['djen', { group, q, uf }],
-    queryFn: () => djenService.list({ group, q: q || undefined, uf: uf || undefined }),
+    queryKey: ['djen', { group, q, uf, periodo }],
+    queryFn: () => djenService.list({ group, q: q || undefined, uf: uf || undefined, periodo }),
   });
 
   const refresh = () => {
@@ -140,6 +145,16 @@ export default function CaixaDjenPage() {
             <>
               {(['nao_tratada', 'tratada', 'descartada', 'all'] as PublicationGroup[]).map((g) => (
                 <MenuItem key={g} onClick={() => { setGroup(g); close(); }} active={group === g}>{GROUP_LABEL[g]}</MenuItem>
+              ))}
+            </>
+          )}
+        </Dropdown>
+
+        <Dropdown label={periodo === 'all' ? 'Período' : PERIODO_LABEL[periodo]} active={periodo !== 'all'}>
+          {(close) => (
+            <>
+              {(['hoje', '7d', '30d', 'all'] as PublicationPeriod[]).map((pp) => (
+                <MenuItem key={pp} onClick={() => { setPeriodo(pp); close(); }} active={periodo === pp}>{PERIODO_LABEL[pp]}</MenuItem>
               ))}
             </>
           )}
@@ -257,6 +272,7 @@ function PubRow({ p, selected, onToggle, forceOpen, onChange }: { p: Publication
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [prazoOpen, setPrazoOpen] = useState(false);
   const isOpen = open || forceOpen;
   const cls = p.classification;
   const badge = statusBadge(p);
@@ -314,7 +330,7 @@ function PubRow({ p, selected, onToggle, forceOpen, onChange }: { p: Publication
                   <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
                   <div className="absolute right-0 z-20 mt-1 w-56 rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
                     {!p.caseId && <button onClick={() => { setMenu(false); setLinking(true); setOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"><Link2 className="h-4 w-4 text-zinc-400" /> Vincular a processo</button>}
-                    {dias ? <button onClick={() => { setMenu(false); act(() => djenService.addPrazo(p.id), 'Prazo adicionado'); }} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"><CalendarPlus className="h-4 w-4 text-zinc-400" /> Adicionar prazo de {dias} dias</button> : null}
+                    {dias ? <button onClick={() => { setMenu(false); setPrazoOpen(true); setOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"><CalendarPlus className="h-4 w-4 text-zinc-400" /> Adicionar prazo de {dias} dias</button> : null}
                     {p.status !== 'DISMISSED' && <button onClick={() => { setMenu(false); act(() => djenService.dismiss(p.id), 'Descartada'); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"><Trash2 className="h-4 w-4" /> Descartar</button>}
                   </div>
                 </>
@@ -330,7 +346,7 @@ function PubRow({ p, selected, onToggle, forceOpen, onChange }: { p: Publication
             {dias ? (
               <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
                 <span className="font-semibold text-zinc-500">Tratamentos sugeridos:</span>
-                <button onClick={() => act(() => djenService.addPrazo(p.id), 'Prazo adicionado')}
+                <button onClick={() => setPrazoOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-md border border-[#228BE6] px-3 py-1.5 font-semibold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10">
                   <CalendarPlus className="h-3.5 w-3.5" /> Adicionar prazo{dias ? ` de ${dias} dias` : ''}
                 </button>
@@ -347,6 +363,7 @@ function PubRow({ p, selected, onToggle, forceOpen, onChange }: { p: Publication
           </td>
         </tr>
       )}
+      {prazoOpen && <PrazoDialog p={p} onClose={() => setPrazoOpen(false)} onDone={() => { setPrazoOpen(false); onChange(); }} />}
     </>
   );
 }
@@ -367,6 +384,66 @@ function LinkToCase({ publicationId, onDone }: { publicationId: string; onDone: 
       </select>
       <button onClick={link} disabled={!caseId} className="rounded-md bg-[#228BE6] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">Vincular</button>
     </div>
+  );
+}
+
+/** Dialog "Adicionar prazo": pré-preenche da publicação, usuário escolhe o
+ *  processo e lança a tarefa+prazo (sem erro quando não há processo casado). */
+function PrazoDialog({ p, onClose, onDone }: { p: Publication; onClose: () => void; onDone: () => void }) {
+  const cls = p.classification;
+  const norm = (s?: string | null) => (s ?? '').replace(/\D/g, '');
+  const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
+  // Pré-seleciona o processo já vinculado ou o que casa pelo nº do feed.
+  const matchByCnj = p.processoCnj ? cases.find((c) => c.cnjNumber && norm(c.cnjNumber) === norm(p.processoCnj))?.id : undefined;
+  const [caseId, setCaseId] = useState(p.caseId ?? '');
+  const [busy, setBusy] = useState(false);
+  // pré-seleciona pelo nº do feed quando a lista de processos carrega
+  useEffect(() => { if (!caseId && matchByCnj) setCaseId(matchByCnj); }, [matchByCnj]);
+
+  const lancar = async () => {
+    if (!caseId) { toast.error('Selecione o processo.'); return; }
+    setBusy(true);
+    try { await djenService.addPrazo(p.id, caseId); toast.success('Tarefa e prazo lançados'); onDone(); }
+    catch (err: any) { toast.error(err?.message || 'Erro ao lançar'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <tr>
+      <td colSpan={8} className="p-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+          <div className="relative z-10 w-full max-w-lg rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-900">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-100">Lançar tarefa e prazo</h3>
+              <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-zinc-500">Processo *</span>
+                <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 dark:border-zinc-700 dark:bg-zinc-900">
+                  <option value="">Selecione o processo…</option>
+                  {cases.map((c) => <option key={c.id} value={c.id}>{c.title}{c.cnjNumber ? ` (${c.cnjNumber})` : ''}</option>)}
+                </select>
+                {p.processoCnj && !caseId && <span className="mt-1 block text-[11px] text-amber-600">Processo {p.processoCnj} não está cadastrado — escolha o correspondente ou cadastre antes.</span>}
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div><span className="block text-xs font-medium text-zinc-500">Prazo fatal</span><span className="font-medium text-rose-600">{cls?.prazoFatal ? new Date(cls.prazoFatal).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'}</span></div>
+                <div><span className="block text-xs font-medium text-zinc-500">Agendar (segurança)</span><span>{cls?.prazoSeguranca ? new Date(cls.prazoSeguranca).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '—'}</span></div>
+              </div>
+              <div>
+                <span className="block text-xs font-medium text-zinc-500">Recorte da publicação</span>
+                <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-zinc-50 p-2 text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-300">{p.rawContent}</p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={onClose} className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800">Cancelar</button>
+              <button onClick={lancar} disabled={busy || !caseId} className="rounded-md bg-[#228BE6] px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">{busy ? 'Lançando…' : 'Lançar tarefa'}</button>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
   );
 }
 

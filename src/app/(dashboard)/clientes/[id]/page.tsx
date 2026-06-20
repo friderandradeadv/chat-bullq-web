@@ -21,6 +21,7 @@ import {
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
+import { formatPhone } from '@/lib/brazil-states';
 import { CnjNumber, ASTREA_BLUE } from '../../processos/page';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -92,7 +93,7 @@ export default function ClienteDetailPage() {
             {contact ? (
               <>
                 <dl className="space-y-3 text-sm">
-                  <Row icon={Phone} label="Telefone" value={contact.phone} />
+                  <Row icon={Phone} label="Telefone" value={formatPhone(contact.phone)} />
                   <Row icon={Mail} label="E-mail" value={contact.email} />
                   {contact.notes && <Row icon={FileText} label="Observações" value={contact.notes} />}
                   {contact.status && (

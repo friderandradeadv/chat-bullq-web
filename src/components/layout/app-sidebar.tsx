@@ -194,8 +194,8 @@ export function AppSidebar() {
               <NavItem href="/juridico/kanban" icon={Columns3} label="Kanban de processos" />
               <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
               <NavItem href="/processos" icon={Folder} label="Processos" />
-              <NavItem href="/clientes" icon={Users} label="Clientes" />
               <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
+              <NavItem href="/clientes" icon={Users} label="Clientes" />
             </NavSection>
           </div>
 

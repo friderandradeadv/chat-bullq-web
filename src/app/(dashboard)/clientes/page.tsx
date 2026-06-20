@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Users, Search, MessageSquare, Scale, Phone, Tag as TagIcon, Check } from 'lucide-react';
 import { clientsService, type ClientRow } from '@/features/legal-cases/services/clients.service';
+import { formatPhone } from '@/lib/brazil-states';
 
 // Lista SELETA de clientes reais (partes role=CLIENT, deduplicadas por nome),
 // cruzada no backend com a ficha de contatos do Comercial: etiquetas, status,
@@ -191,7 +192,7 @@ export default function ClientesPage() {
                       <div className="flex flex-col gap-1">
                         {c.contact.phone && (
                           <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
-                            <Phone className="h-3 w-3" /> {c.contact.phone}
+                            <Phone className="h-3 w-3" /> {formatPhone(c.contact.phone)}
                           </span>
                         )}
                         {c.contact.conversationId ? (

@@ -19,6 +19,10 @@ export interface Task {
   order: number;
   createdAt: string;
   updatedAt: string;
+  metadata?: {
+    djen?: { tipoPublicacao?: string; prazoFatal?: string; prazoSeguranca?: string; recorte?: string };
+  } & Record<string, any>;
+  case?: { id: string; title: string; cnjNumber: string | null } | null;
 }
 
 export interface CreateTaskInput {
