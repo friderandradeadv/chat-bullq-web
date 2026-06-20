@@ -5,16 +5,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   RefreshCw, Search, ChevronDown, X, Check, MoreVertical, FileText,
-  Link2, CalendarPlus, Trash2, Newspaper, Printer, FileDown,
+  Link2, CalendarPlus, Trash2, Newspaper, Printer, FileDown, ThumbsDown, ArrowDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  djenService, type Publication, type PublicationGroup,
+  djenService, type Publication, type PublicationGroup, type PublicationsStats,
 } from '@/features/djen/services/djen.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { CnjNumber, ASTREA_BLUE } from '../processos/page';
 
-const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MT','MS','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO','SUPERIORES'];
 
 const GROUP_LABEL: Record<PublicationGroup, string> = {
   nao_tratada: 'Não tratada', tratada: 'Tratada', descartada: 'Descartada', all: 'Todas',
@@ -22,11 +22,11 @@ const GROUP_LABEL: Record<PublicationGroup, string> = {
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
-/** Status visual a partir do status do modelo. */
+/** Status visual a partir do status do modelo (cores do Astrea). */
 function statusBadge(p: Publication) {
-  if (p.status === 'DISMISSED') return { label: 'DESCARTADA', cls: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' };
-  if (p.status === 'LINKED') return { label: 'TRATADA', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' };
-  return { label: 'NÃO TRATADA', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' };
+  if (p.status === 'DISMISSED') return { label: 'DESCARTADA', cls: 'bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300' };
+  if (p.status === 'LINKED') return { label: 'TRATADA', cls: 'bg-[#37b24d] text-white' };
+  return { label: 'NÃO TRATADA', cls: 'bg-[#fcc530] text-black' };
 }
 
 export default function CaixaDjenPage() {
@@ -99,23 +99,14 @@ export default function CaixaDjenPage() {
       {/* Cartões-resumo + mini-gráfico */}
       <div className="px-8 pt-4">
         <div className="flex flex-wrap items-stretch gap-3 rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <StatCard n={stats?.naoTratadosHoje ?? 0} label="Não tratados de hoje" color="text-zinc-700 dark:text-zinc-200" />
+          <StatCard n={stats?.naoTratadosHoje ?? 0} label="Não tratadas de hoje" color="text-zinc-900 dark:text-zinc-100" />
           <Sep />
-          <StatCard n={stats?.tratadosHoje ?? 0} label="Tratados de hoje" color="text-[#228BE6]" />
+          <StatCard n={stats?.tratadosHoje ?? 0} label="Tratadas hoje" color="text-[#228BE6]" />
           <Sep />
-          <StatCard n={stats?.descartadasHoje ?? 0} label="Descartadas hoje" color="text-rose-500" />
+          <StatCard n={stats?.descartadasHoje ?? 0} label="Descartadas hoje" color="text-[#e70202]" />
           <Sep />
-          <StatCard n={stats?.naoTratadosTotal ?? 0} label="Não tratados" color="text-amber-500" />
-          <div className="ml-auto hidden items-end gap-1 sm:flex" title="Publicações nos últimos 10 dias">
-            {(stats?.serie ?? []).map((d) => {
-              const max = Math.max(1, ...(stats?.serie ?? []).map((x) => x.count));
-              return (
-                <div key={d.date} className="flex w-3 flex-col items-center justify-end" style={{ height: 48 }} title={`${fmt(d.date)}: ${d.count}`}>
-                  <div className="w-full rounded-sm" style={{ height: `${Math.max(4, (d.count / max) * 48)}px`, backgroundColor: d.count ? ASTREA_BLUE : '#E9ECEF' }} />
-                </div>
-              );
-            })}
-          </div>
+          <StatCard n={stats?.naoTratadosTotal ?? 0} label="Não tratadas" color="text-[#fcc530]" />
+          <StackedChart serie={stats?.serie ?? []} />
         </div>
       </div>
 
@@ -155,9 +146,9 @@ export default function CaixaDjenPage() {
         </Dropdown>
 
         {group !== 'all' && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#228BE6]/10 px-3 py-1 text-xs font-medium text-[#228BE6]">
+          <span className="inline-flex items-center gap-1.5 rounded bg-[#6c757d] px-2.5 py-1 text-xs font-medium text-white">
             STATUS: {GROUP_LABEL[group].toUpperCase()}
-            <button onClick={() => setGroup('all')} className="hover:text-[#1971c2]"><X className="h-3 w-3" /></button>
+            <button onClick={() => setGroup('all')} className="opacity-80 hover:opacity-100"><X className="h-3 w-3" /></button>
           </span>
         )}
 
@@ -181,6 +172,13 @@ export default function CaixaDjenPage() {
         <button onClick={() => setExpandAll((v) => !v)} className="text-[#228BE6] hover:underline">{expandAll ? 'Recolher todos' : 'Expandir todos'}</button>
       </div>
 
+      {/* banner de seleção total (estilo Astrea) */}
+      {allOnPage && pubs.length > 0 && (
+        <div className="mx-8 mt-2 rounded-md bg-[#228BE6]/10 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300">
+          {`Todas as ${pubs.length} publicações desta página estão selecionadas.`}
+        </div>
+      )}
+
       {/* Tabela */}
       <div className="mt-2 flex-1 overflow-auto px-8 pb-6">
         <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -188,7 +186,7 @@ export default function CaixaDjenPage() {
             <thead>
               <tr className="border-b border-zinc-100 text-xs font-bold uppercase tracking-wide text-[#6C757D] dark:border-zinc-800">
                 <th className="w-10 px-3 py-3.5"><input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-4 w-4 accent-[#228BE6]" /></th>
-                <th className="px-3 py-3.5 whitespace-nowrap">Divulgado em</th>
+                <th className="px-3 py-3.5 whitespace-nowrap"><span className="inline-flex items-center gap-1">Divulgado em <ArrowDown className="h-3 w-3" /></span></th>
                 <th className="px-3 py-3.5">Tipo</th>
                 <th className="px-3 py-3.5">Processo</th>
                 <th className="px-3 py-3.5">Diário</th>
@@ -221,6 +219,40 @@ function StatCard({ n, label, color }: { n: number; label: string; color: string
 }
 const Sep = () => <div className="hidden w-px self-stretch bg-zinc-100 dark:bg-zinc-800 sm:block" />;
 
+/** Mini-gráfico de barras empilhadas por status (8 dias) com tooltip — estilo Astrea. */
+function StackedChart({ serie }: { serie: PublicationsStats['serie'] }) {
+  const H = 48;
+  const max = Math.max(1, ...serie.map((d) => d.tratadas + d.naoTratadas + d.descartadas));
+  return (
+    <div className="ml-auto hidden items-end gap-1.5 self-center sm:flex">
+      {serie.map((d) => {
+        const total = d.tratadas + d.naoTratadas + d.descartadas;
+        const dow = new Date(d.date + 'T12:00:00Z').toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' });
+        return (
+          <div key={d.date} className="group/bar relative flex w-3.5 flex-col items-center justify-end">
+            {total === 0 ? (
+              <div className="h-1 w-full rounded-sm bg-zinc-200 dark:bg-zinc-700" />
+            ) : (
+              <div className="flex w-full flex-col overflow-hidden rounded-sm" style={{ height: `${Math.max(5, (total / max) * H)}px` }}>
+                {d.tratadas > 0 && <div style={{ flex: d.tratadas, backgroundColor: '#228BE6' }} />}
+                {d.naoTratadas > 0 && <div style={{ flex: d.naoTratadas, backgroundColor: '#fcc530' }} />}
+                {d.descartadas > 0 && <div style={{ flex: d.descartadas, backgroundColor: '#e70202' }} />}
+              </div>
+            )}
+            <span className="mt-1 text-[9px] uppercase text-zinc-400">{dow.charAt(0)}</span>
+            <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] shadow-lg group-hover/bar:block dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="font-semibold capitalize text-zinc-700 dark:text-zinc-200">{dow}</div>
+              <div className="text-[#e70202]">Descartadas: {d.descartadas}</div>
+              <div className="text-[#228BE6]">Tratadas: {d.tratadas}</div>
+              <div className="text-[#b8860b]">Não tratadas: {d.naoTratadas}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PubRow({ p, selected, onToggle, forceOpen, onChange }: { p: Publication; selected: boolean; onToggle: () => void; forceOpen: boolean; onChange: () => void }) {
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -241,25 +273,27 @@ function PubRow({ p, selected, onToggle, forceOpen, onChange }: { p: Publication
         <td className="px-3 py-3.5"><input type="checkbox" checked={selected} onChange={onToggle} className="mt-0.5 h-4 w-4 accent-[#228BE6]" /></td>
         <td className="px-3 py-3.5 whitespace-nowrap text-sm text-zinc-700 dark:text-zinc-300">
           {fmt(p.publishedAt)}
-          <span className="mt-0.5 block text-[11px] text-zinc-400">capturado {fmt(p.createdAt)}</span>
+          {p.publicadoEm && <span className="mt-0.5 block text-[11px] text-zinc-400">Publicado em: {fmt(p.publicadoEm)}</span>}
         </td>
-        <td className="px-3 py-3.5"><span title={cls?.tipoComunicacao ?? 'Publicação'} className="inline-flex"><FileText className="h-4 w-4 text-zinc-400" /></span></td>
+        <td className="px-3 py-3.5"><span title={cls?.tipoComunicacao ?? 'Publicação'} className="inline-flex"><FileText className="h-4 w-4" style={{ color: '#5159a2' }} /></span></td>
         <td className="px-3 py-3.5">
-          {cnj ? (
-            p.case ? (
-              <Link href={`/processos/${p.case.id}`} className="text-sm font-medium text-[#228BE6] hover:underline">{p.case.title}</Link>
-            ) : (
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Processo não vinculado</span>
-            )
+          {cnj && <span className="block whitespace-nowrap"><CnjNumber value={cnj} /></span>}
+          {p.case ? (
+            <Link href={`/processos/${p.case.id}`} className="mt-0.5 block text-sm font-medium text-[#228BE6] hover:underline">{p.case.title}</Link>
+          ) : cnj ? (
+            <span className="mt-0.5 block text-sm text-zinc-500">Processo não vinculado</span>
           ) : <span className="text-sm text-zinc-400">—</span>}
-          {cnj && <span className="mt-0.5 block"><CnjNumber value={cnj} /></span>}
-          {p.case?.responsible?.name && <span className="mt-0.5 block text-[11px] text-zinc-400">Responsável: {p.case.responsible.name}</span>}
+          {p.responsavel && <span className="mt-0.5 block text-[11px] text-zinc-400">Responsável: {p.responsavel}</span>}
         </td>
-        <td className="px-3 py-3.5 text-xs text-zinc-500">
-          {p.tribunal ?? '—'}
-          {p.orgaoJulgador && <span className="mt-0.5 block text-zinc-400">{p.orgaoJulgador}</span>}
+        <td className="px-3 py-3.5 text-xs">
+          <span className="font-semibold text-zinc-700 dark:text-zinc-200">{p.tribunal ?? '—'}</span>
+          {p.orgaoJulgador && <span className="text-zinc-400"> | {p.orgaoJulgador}</span>}
         </td>
-        <td className="px-3 py-3.5 text-xs text-zinc-600 dark:text-zinc-300">{p.oab}</td>
+        <td className="px-3 py-3.5 text-xs">
+          {p.nomePesquisado
+            ? <span className="rounded-sm bg-[#fff881] px-1 py-0.5 font-medium text-zinc-800 dark:text-zinc-900">{p.nomePesquisado}</span>
+            : <span className="text-zinc-400">{p.oab}</span>}
+        </td>
         <td className="px-3 py-3.5">
           <span className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}>{badge.label}</span>
           {cls?.fatal && <span className="mt-1 block rounded bg-rose-100 px-1.5 py-0.5 text-center text-[9px] font-bold text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">PRAZO FATAL</span>}
@@ -294,13 +328,19 @@ function PubRow({ p, selected, onToggle, forceOpen, onChange }: { p: Publication
           <td colSpan={8} className="bg-zinc-50/60 px-12 py-4 dark:bg-zinc-800/30">
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{p.rawContent}</p>
             {dias ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
                 <span className="font-semibold text-zinc-500">Tratamentos sugeridos:</span>
                 <button onClick={() => act(() => djenService.addPrazo(p.id), 'Prazo adicionado')}
-                  className="inline-flex items-center gap-1 rounded-md bg-[#228BE6] px-3 py-1.5 font-medium text-white hover:bg-[#1971c2]">
-                  <CalendarPlus className="h-3.5 w-3.5" /> Adicionar prazo de {dias} dias
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[#228BE6] px-3 py-1.5 font-semibold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10">
+                  <CalendarPlus className="h-3.5 w-3.5" /> Adicionar prazo{dias ? ` de ${dias} dias` : ''}
                 </button>
-                {cls?.label && <span className="text-zinc-400">· {cls.label}</span>}
+                <button title="Classificar sugestão como incorreta" onClick={() => act(() => djenService.dismiss(p.id), 'Sugestão descartada')}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 ring-1 ring-inset ring-zinc-200 hover:bg-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-800">
+                  <ThumbsDown className="h-3.5 w-3.5" />
+                </button>
+                {typeof p.probabilidadePrazo === 'number' && (
+                  <span className="text-zinc-500">{p.probabilidadePrazo}% de probabilidade de conter prazo</span>
+                )}
               </div>
             ) : null}
             {linking && <LinkToCase publicationId={p.id} onDone={() => { setLinking(false); onChange(); }} />}

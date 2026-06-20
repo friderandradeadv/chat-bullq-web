@@ -38,6 +38,10 @@ export interface Publication {
   tribunal?: string | null;
   uf?: string | null;
   orgaoJulgador?: string | null;
+  nomePesquisado?: string | null;
+  publicadoEm?: string | null;
+  probabilidadePrazo?: number;
+  responsavel?: string | null;
 }
 
 export type PublicationGroup = 'nao_tratada' | 'tratada' | 'descartada' | 'all';
@@ -47,7 +51,7 @@ export interface PublicationsStats {
   tratadosHoje: number;
   descartadasHoje: number;
   naoTratadosTotal: number;
-  serie: { date: string; count: number }[];
+  serie: { date: string; tratadas: number; naoTratadas: number; descartadas: number }[];
 }
 
 export interface ScanSummary {
