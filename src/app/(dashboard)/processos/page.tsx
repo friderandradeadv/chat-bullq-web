@@ -157,10 +157,19 @@ export function CnjNumber({
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 
+/** Grau do processo (1º/2º) a partir da instância detectada (DJEN) ou do Astrea. */
+function grauOf(c: CaseListItem): '1' | '2' | null {
+  const a = c.metadata?.astrea;
+  const v = a?.instanciaAtual ?? a?.raw?.['Instância Atual'] ?? '';
+  const d = String(v).match(/\d/)?.[0];
+  return d === '1' ? '1' : d === '2' ? '2' : null;
+}
+
 export default function ProcessosPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<CaseStatus | ''>('');
+  const [grauFilter, setGrauFilter] = useState<'' | '1' | '2'>('');
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -173,8 +182,10 @@ export default function ProcessosPage() {
         status: statusFilter || undefined,
       }),
   });
-  // Filtro por etiqueta (client-side, sobre o resultado já carregado).
-  const filtered = tagFilter ? cases.filter((c) => c.legalTags.some((lt) => lt.tagId === tagFilter)) : cases;
+  // Filtros client-side (etiqueta + grau) sobre o resultado já carregado.
+  const filtered = cases
+    .filter((c) => (tagFilter ? c.legalTags.some((lt) => lt.tagId === tagFilter) : true))
+    .filter((c) => (grauFilter ? grauOf(c) === grauFilter : true));
 
   const toggle = (id: string) =>
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -188,8 +199,8 @@ export default function ProcessosPage() {
   return (
     <div className="flex h-full flex-col bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-6">
-        <h1 className="text-2xl font-normal text-zinc-700">Processos e casos</h1>
+      <div className="flex items-center justify-between px-8 pb-1 pt-9">
+        <h1 className="text-2xl font-normal text-zinc-700 dark:text-zinc-100">Processos e casos</h1>
         <div className="flex items-center gap-2">
           <IconBtn title="Imprimir">
             <Printer className="h-4 w-4" />
@@ -212,21 +223,31 @@ export default function ProcessosPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex items-center gap-3 px-6 pt-5">
+      <div className="flex items-center gap-3 px-8 pt-5">
         <div className="relative max-w-2xl flex-1">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Digite algo para pesquisar"
-            className="h-10 w-full rounded-md border border-zinc-300 bg-white pl-4 pr-10 text-sm outline-none focus:border-[#228BE6]"
+            className="h-10 w-full rounded-md border border-zinc-200 bg-white pl-4 pr-10 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900"
           />
           <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
         </div>
         <TagFilterBtn value={tagFilter} onChange={setTagFilter} />
         <select
+          value={grauFilter}
+          onChange={(e) => setGrauFilter(e.target.value as '' | '1' | '2')}
+          className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium uppercase tracking-wide text-zinc-600 outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+          title="Filtrar por grau"
+        >
+          <option value="">Todos os graus</option>
+          <option value="1">1º grau</option>
+          <option value="2">2º grau</option>
+        </select>
+        <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as CaseStatus | '')}
-          className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium uppercase tracking-wide text-zinc-600 outline-none"
+          className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium uppercase tracking-wide text-zinc-600 outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
         >
           <option value="">Ativos</option>
           {(Object.keys(STATUS_LABEL) as CaseStatus[]).map((s) => (
@@ -237,7 +258,7 @@ export default function ProcessosPage() {
         </select>
       </div>
 
-      <div className="flex items-center gap-3 px-6 pt-3 text-sm">
+      <div className="flex items-center gap-3 px-8 pt-3 text-sm">
         {selected.size > 0 ? (
           <>
             <span className="font-medium text-[#228BE6]">{selected.size} selecionado(s)</span>
@@ -249,11 +270,11 @@ export default function ProcessosPage() {
       </div>
 
       {/* Tabela */}
-      <div className="mt-2 flex-1 overflow-y-auto px-6 pb-6">
-        <div className="overflow-hidden rounded-lg border border-[#DEE2E6] bg-white shadow-sm">
+      <div className="mt-2 flex-1 overflow-y-auto px-8 pb-6">
+        <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-[#DEE2E6] text-xs font-bold uppercase tracking-wide text-[#6C757D]">
+              <tr className="border-b border-zinc-100 text-xs font-bold uppercase tracking-wide text-[#6C757D] dark:border-zinc-800">
                 <th className="w-10 px-3 py-4"><input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-4 w-4 accent-[#228BE6]" title="Selecionar todos" /></th>
                 <th className="px-3 py-4">Título</th>
                 <th className="px-3 py-4">Cliente / Pasta</th>
@@ -306,7 +327,7 @@ function CaseRow({ c, selected, onToggle, onChange }: { c: CaseListItem; selecte
     try { await activitiesService.detachTag(etId); onChange(); } catch (e: any) { toast.error(e?.message || 'Erro'); }
   };
   return (
-    <tr className={`group border-b border-[#DEE2E6] last:border-0 hover:bg-[#f0f7fd] ${selected ? 'bg-[#e7f1fb]' : ''}`}>
+    <tr className={`group border-b border-zinc-100 last:border-0 hover:bg-[#f0f7fd] dark:border-zinc-800/70 dark:hover:bg-zinc-800/40 ${selected ? 'bg-[#e7f1fb] dark:bg-zinc-800/60' : ''}`}>
       <td className="w-10 px-3 py-4 align-top">
         <input type="checkbox" checked={selected} onChange={onToggle} className="mt-0.5 h-4 w-4 accent-[#228BE6]" />
       </td>

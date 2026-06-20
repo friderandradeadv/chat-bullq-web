@@ -629,7 +629,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {done && activity.completedAt && <Row label=""><span className="text-zinc-500">{activity.source === 'tarefa' ? 'Tarefa concluída' : 'Prazo concluído'} em {new Date(activity.completedAt).toLocaleDateString('pt-BR')}{activity.responsibleName ? ` por ${activity.responsibleName}` : ''}</span></Row>}
           {activity.priorityLabel && <Row label="Prioridade">{activity.priorityLabel}</Row>}
           {activity.description && activity.source === 'evento' && <Row label="Local">{activity.description}</Row>}
-          {activity.description && activity.source === 'tarefa' && <Row label="Descrição">{activity.description}</Row>}
+          {activity.description && activity.source === 'tarefa' && <Row label="Descrição"><span className="whitespace-pre-wrap break-words">{activity.description}</span></Row>}
         </dl>
 
         {/* Comentários */}

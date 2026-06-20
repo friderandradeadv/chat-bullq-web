@@ -62,7 +62,7 @@ export interface CaseListItem {
   parties: { id: string; name: string; contactId: string | null }[];
   _count: { movements: number; deadlines: number };
   updatedAt: string;
-  metadata?: { astrea?: { tags?: string[] } } | null;
+  metadata?: { astrea?: { tags?: string[]; instanciaAtual?: string; raw?: Record<string, string> } } | null;
   legalTags: LegalTag[];
 }
 

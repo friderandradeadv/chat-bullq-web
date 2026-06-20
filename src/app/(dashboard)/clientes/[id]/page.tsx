@@ -1,7 +1,8 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -11,9 +12,15 @@ import {
   Scale,
   MessageCircle,
   Rss,
+  Plus,
+  X,
+  Check,
+  Tag as TagIcon,
+  FileText,
 } from 'lucide-react';
-import { contactsService } from '@/features/contacts/services/contacts.service';
+import { clientsService } from '@/features/legal-cases/services/clients.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { tagsService } from '@/features/settings/services/tags.service';
 import { CnjNumber, ASTREA_BLUE } from '../../processos/page';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -23,86 +30,108 @@ const STATUS_LABEL: Record<string, string> = {
   CLOSED: 'Encerrado',
 };
 
+const norm = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
 export default function ClienteDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const qc = useQueryClient();
   const id = params?.id;
 
-  // Carrega os casos e resolve o cliente pela party (o id da URL é party.id ou contactId).
-  // Os clientes importados do Astrea ainda não têm contato vinculado — então agrupamos por nome.
-  const { data: cases = [], isLoading } = useQuery({
+  const { data: clientes = [], isLoading } = useQuery({
+    queryKey: ['legal-clients'],
+    queryFn: () => clientsService.list(),
+  });
+  const { data: cases = [] } = useQuery({
     queryKey: ['legal-cases', 'all'],
     queryFn: () => legalCasesService.list({}),
   });
-  const refParty = cases.flatMap((c) => c.parties).find((p) => p.id === id || p.contactId === id);
-  const clientName = refParty?.name ?? null;
-  const contactId = refParty?.contactId ?? null;
 
-  const { data: contact } = useQuery({
-    queryKey: ['contact', contactId],
-    queryFn: () => contactsService.getById(contactId!),
-    enabled: !!contactId,
-  });
+  // O id da URL é a party representativa; aceita também o id do contato (links antigos).
+  const cliente =
+    clientes.find((c) => c.partyId === id) ?? clientes.find((c) => c.contact?.id === id) ?? null;
+  const contact = cliente?.contact ?? null;
+
+  const meusCasos = useMemo(() => {
+    if (!cliente) return [];
+    const key = norm(cliente.name);
+    return cases.filter((c) => c.parties.some((p) => norm(p.name) === key));
+  }, [cases, cliente]);
 
   if (!id) return null;
   if (isLoading)
-    return <div className="bg-white dark:bg-zinc-950 p-6 text-sm text-zinc-400">Carregando…</div>;
-  if (!clientName)
-    return <div className="bg-white dark:bg-zinc-950 p-6 text-sm text-zinc-400">Cliente não encontrado.</div>;
-
-  const meusCasos = cases.filter((c) => c.parties.some((p) => p.name === clientName));
-  const displayName = contact?.name ?? clientName;
-  const conv = contact?.channels?.[0];
+    return <div className="bg-white p-6 text-sm text-zinc-400 dark:bg-zinc-950">Carregando…</div>;
+  if (!cliente)
+    return <div className="bg-white p-6 text-sm text-zinc-400 dark:bg-zinc-950">Cliente não encontrado.</div>;
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col overflow-y-auto bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       <div className="px-6 pt-6">
         <button onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-[#228BE6]">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#228BE6]/10 text-lg font-semibold text-[#228BE6]">
-            {displayName.trim().slice(0, 2).toUpperCase()}
+            {cliente.name.trim().slice(0, 2).toUpperCase()}
           </span>
           <div>
-            <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{displayName}</h1>
-            <p className="text-sm text-zinc-500">Cliente · {meusCasos.length} processo(s) conosco</p>
+            <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{cliente.name}</h1>
+            <p className="text-sm text-zinc-500">
+              Cliente · {meusCasos.length} processo(s) conosco
+              {cliente.document ? ` · ${cliente.document}` : ''}
+            </p>
           </div>
         </div>
       </div>
 
       <div className="grid flex-1 gap-5 px-6 py-5 lg:grid-cols-3">
-        {/* Ficha cadastral */}
-        <Card title="Ficha cadastral" icon={User}>
-          {contact ? (
-            <>
-              <dl className="space-y-3 text-sm">
-                <Row icon={Phone} label="Telefone" value={contact.phone} />
-                <Row icon={Mail} label="E-mail" value={contact.email} />
-                {contact.notes && <Row label="Observações" value={contact.notes} />}
-                {contact.status && (
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
-                    <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
-                  </div>
+        {/* Ficha cadastral + etiquetas */}
+        <div className="space-y-5">
+          <Card title="Ficha cadastral" icon={User}>
+            {contact ? (
+              <>
+                <dl className="space-y-3 text-sm">
+                  <Row icon={Phone} label="Telefone" value={contact.phone} />
+                  <Row icon={Mail} label="E-mail" value={contact.email} />
+                  {contact.notes && <Row icon={FileText} label="Observações" value={contact.notes} />}
+                  {contact.status && (
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
+                      <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
+                    </div>
+                  )}
+                </dl>
+                {contact.conversationId && (
+                  <Link
+                    href={`/inbox?conversationId=${contact.conversationId}`}
+                    className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
+                  </Link>
                 )}
-              </dl>
-              {conv && (
-                <Link
-                  href={`/inbox?conversationId=${conv.id}`}
-                  className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-                >
-                  <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
-                </Link>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-zinc-400">
-              Cliente ainda não vinculado a um contato. A ficha cadastral completa virá ao vincular o cadastro
-              (e cruzar com o Pipefy).
-            </p>
-          )}
-        </Card>
+              </>
+            ) : (
+              <p className="text-sm text-zinc-400">
+                Cliente ainda sem ficha no Comercial. Quando houver um contato com o mesmo nome (ou ao
+                vincular), a ficha cadastral e as etiquetas aparecem aqui.
+              </p>
+            )}
+          </Card>
+
+          {/* Etiquetas interativas (iguais ao Comercial) */}
+          <Card title="Etiquetas" icon={TagIcon}>
+            {contact ? (
+              <TagsEditor
+                contactId={contact.id}
+                tags={contact.tags}
+                onChanged={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
+              />
+            ) : (
+              <p className="text-sm text-zinc-400">Disponível após vincular o cliente a um contato do Comercial.</p>
+            )}
+          </Card>
+        </div>
 
         {/* Processos do cliente conosco */}
         <div className="lg:col-span-2">
@@ -136,10 +165,94 @@ export default function ClienteDetailPage() {
 
           {/* Pipefy: Fase 3 */}
           <div className="mt-5 rounded-lg border border-dashed border-[#DEE2E6] bg-white p-4 text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
-            Cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong> (cards, status do funil) — em breve.
+            Cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong> (cards, status do funil, valor da causa) — em breve.
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Editor de etiquetas do contato — mesmo mecanismo do Comercial (tagsService). */
+function TagsEditor({
+  contactId,
+  tags,
+  onChanged,
+}: {
+  contactId: string;
+  tags: { id: string; name: string; color: string }[];
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { data: allTags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => tagsService.list(),
+    enabled: open,
+  });
+
+  const add = useMutation({
+    mutationFn: (tagId: string) => tagsService.addToContact(contactId, tagId),
+    onSuccess: onChanged,
+  });
+  const remove = useMutation({
+    mutationFn: (tagId: string) => tagsService.removeFromContact(contactId, tagId),
+    onSuccess: onChanged,
+  });
+
+  const has = (id: string) => tags.some((t) => t.id === id);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {tags.map((t) => (
+          <span
+            key={t.id}
+            className="group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{ backgroundColor: `${t.color}22`, color: t.color }}
+          >
+            {t.name}
+            <button
+              onClick={() => remove.mutate(t.id)}
+              className="opacity-60 hover:opacity-100"
+              title="Remover etiqueta"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <div className="relative">
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-xs text-zinc-500 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-600"
+          >
+            <Plus className="h-3 w-3" /> Etiqueta
+          </button>
+          {open && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+              <div className="absolute left-0 z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                {allTags.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta cadastrada.</div>
+                )}
+                {allTags.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => (has(t.id) ? remove.mutate(t.id) : add.mutate(t.id))}
+                    className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: t.color }} />
+                      {t.name}
+                    </span>
+                    {has(t.id) && <Check className="h-3.5 w-3.5 text-[#228BE6]" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      {tags.length === 0 && <p className="mt-2 text-xs text-zinc-400">Nenhuma etiqueta. Clique em “Etiqueta” para adicionar.</p>}
     </div>
   );
 }
