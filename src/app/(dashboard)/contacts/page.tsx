@@ -873,6 +873,7 @@ function ResponsibleCell({
   const robots = agents.filter(
     (ag) =>
       ag.isActive &&
+      !ag.parentAgentId && // só agentes de ENTRADA (não sub-etapas de um fluxo)
       ((ag.tagIds?.length ?? 0) === 0 ||
         ag.tagIds.some((t) => contactTagIds.includes(t))),
   );
