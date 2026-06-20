@@ -3,13 +3,17 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
-import { ChevronDown, Search, UserPlus, X, Check, User, Loader2 } from 'lucide-react';
+import { ChevronDown, Search, UserPlus, X, Check, User, Loader2, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService, type Conversation } from '../services/inbox.service';
 import {
   membersService,
   type Member,
 } from '@/features/settings/services/members.service';
+import {
+  aiAgentsService,
+  type AiAgent,
+} from '@/features/ai-agents/services/ai-agents.service';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface Props {
@@ -71,6 +75,41 @@ export function AssignmentPopover({
     staleTime: 60_000,
   });
 
+  const { data: agents = [] } = useQuery({
+    queryKey: ['ai-agents'],
+    queryFn: () => aiAgentsService.list(),
+    staleTime: 60_000,
+  });
+
+  // Etiquetas do contato + da conversa — o robô só aparece se atende a área do
+  // contato (ou se não tem etiqueta nenhuma = atende todo mundo).
+  const ctxTagIds = useMemo(() => {
+    const fromContact = conversation.contact?.tags?.map((t) => t.tag.id) ?? [];
+    const fromConv = conversation.tags?.map((t) => t.tag.id) ?? [];
+    return new Set([...fromContact, ...fromConv]);
+  }, [conversation.contact?.tags, conversation.tags]);
+
+  // Robôs candidatos: ativos, top-level (não subagentes), que atendem a área.
+  const robots = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return agents
+      .filter((a) => a.isActive && !a.parentAgentId)
+      .filter(
+        (a) =>
+          (a.tagIds?.length ?? 0) === 0 ||
+          a.tagIds.some((t) => ctxTagIds.has(t)),
+      )
+      .filter((a) => (q ? a.name.toLowerCase().includes(q) : true));
+  }, [agents, ctxTagIds, search]);
+
+  const currentRobot = useMemo(
+    () =>
+      conversation.assignedAgentId
+        ? agents.find((a) => a.id === conversation.assignedAgentId) ?? null
+        : null,
+    [agents, conversation.assignedAgentId],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return members
@@ -110,12 +149,44 @@ export function AssignmentPopover({
     }
   };
 
+  // Define um ROBÔ como responsável (ou null pra remover). O backend força a IA
+  // ON nessa conversa → ele passa a responder. Exclusivo com responsável humano.
+  const handleAssignAgent = async (
+    agentId: string | null,
+    label: string,
+    closeFn: () => void,
+  ) => {
+    setBusy(true);
+    try {
+      await inboxService.assignAgent(conversation.id, agentId);
+      toast.success(label);
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: ['conversation', conversation.id] });
+      onChanged?.();
+      closeFn();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao definir o robô');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Fallback: o popover de membros nem sempre encontra o assignee na lista
   // (ex.: membro desativado), mas a conversa já traz assignedTo embutido.
+  // Quando o responsável é um ROBÔ, ele tem prioridade na exibição.
   const assigneeName =
-    currentAssignee?.user.name ?? conversation.assignedTo?.name ?? null;
+    currentRobot?.name ??
+    conversation.assignedAgent?.name ??
+    currentAssignee?.user.name ??
+    conversation.assignedTo?.name ??
+    null;
   const assigneeAvatar =
-    currentAssignee?.user.avatarUrl ?? conversation.assignedTo?.avatarUrl ?? null;
+    currentRobot?.avatarUrl ??
+    conversation.assignedAgent?.avatarUrl ??
+    currentAssignee?.user.avatarUrl ??
+    conversation.assignedTo?.avatarUrl ??
+    null;
+  const assigneeIsRobot = !!(currentRobot ?? conversation.assignedAgent);
 
   return (
     <Popover className="relative">
@@ -127,9 +198,18 @@ export function AssignmentPopover({
         >
           {assigneeName ? (
             <>
-              <MemberAvatar name={assigneeName} avatarUrl={assigneeAvatar} size={28} />
+              {assigneeIsRobot ? (
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300">
+                  <Bot className="h-4 w-4" />
+                </div>
+              ) : (
+                <MemberAvatar name={assigneeName} avatarUrl={assigneeAvatar} size={28} />
+              )}
               <span className="flex-1 truncate text-sm text-zinc-700 dark:text-zinc-300">
                 {assigneeName}
+                {assigneeIsRobot && (
+                  <span className="ml-1 text-[10px] font-normal text-purple-500">robô</span>
+                )}
               </span>
             </>
           ) : (
@@ -153,7 +233,13 @@ export function AssignmentPopover({
         >
           {assigneeName ? (
             <>
-              <MemberAvatar name={assigneeName} avatarUrl={assigneeAvatar} size={18} />
+              {assigneeIsRobot ? (
+                <div className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300">
+                  <Bot className="h-3 w-3" />
+                </div>
+              ) : (
+                <MemberAvatar name={assigneeName} avatarUrl={assigneeAvatar} size={18} />
+              )}
               <span className="max-w-[120px] truncate">{assigneeName}</span>
             </>
           ) : (
@@ -180,7 +266,7 @@ export function AssignmentPopover({
                   autoFocus
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar membro…"
+                  placeholder="Buscar membro ou robô…"
                   className="w-full rounded-md border border-zinc-200 bg-white py-1 pl-7 pr-2 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                 />
               </div>
@@ -267,6 +353,65 @@ export function AssignmentPopover({
                   </button>
                 );
               })}
+
+              {(robots.length > 0 || conversation.assignedAgentId) && (
+                <>
+                  <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                  <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-purple-400">
+                    Robôs (IA)
+                  </p>
+
+                  {conversation.assignedAgentId && (
+                    <button
+                      onClick={() =>
+                        handleAssignAgent(null, 'Robô removido', close)
+                      }
+                      disabled={busy}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      <span>Remover robô</span>
+                    </button>
+                  )}
+
+                  {robots.map((a: AiAgent) => {
+                    const isCurrent = a.id === conversation.assignedAgentId;
+                    return (
+                      <button
+                        key={a.id}
+                        onClick={() =>
+                          handleAssignAgent(
+                            a.id,
+                            `${a.name} assumiu a conversa`,
+                            close,
+                          )
+                        }
+                        disabled={busy || isCurrent}
+                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors disabled:opacity-50 ${
+                          isCurrent
+                            ? 'bg-purple-50 dark:bg-purple-900/20'
+                            : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
+                        }`}
+                      >
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300">
+                          <Bot className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+                            {a.name}
+                          </p>
+                          <p className="truncate text-[10px] text-purple-500">
+                            responde automaticamente
+                          </p>
+                        </div>
+                        {isCurrent && (
+                          <Check className="h-3.5 w-3.5 shrink-0 text-purple-500" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </div>
           </>
         )}

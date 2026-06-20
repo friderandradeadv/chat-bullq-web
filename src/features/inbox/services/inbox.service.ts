@@ -91,6 +91,9 @@ export interface Conversation {
   aiDisabledBy?: string | null;
   aiDisabledAt?: string | null;
   activeAgentId?: string | null;
+  /** Robô (agente de IA) responsável fixo da conversa (exclusivo com humano). */
+  assignedAgentId?: string | null;
+  assignedAgent?: AgentInfo | null;
   contact: Contact;
   channel: ChannelInfo;
   assignedTo: AgentInfo | null;
@@ -305,6 +308,22 @@ export const inboxService = {
   ): Promise<Conversation> {
     const { data } = await api.patch(`/conversations/${conversationId}`, {
       assignedToId,
+    });
+    return data.data;
+  },
+
+  /**
+   * Define (ou remove com null) um ROBÔ (agente de IA) como responsável da
+   * conversa. O backend força a IA ON nessa conversa pra ele responder — útil
+   * pra testar um agente numa conversa específica (ex.: no número do escritório)
+   * sem ligar a IA no canal inteiro. Exclusivo com o responsável humano.
+   */
+  async assignAgent(
+    conversationId: string,
+    assignedAgentId: string | null,
+  ): Promise<Conversation> {
+    const { data } = await api.patch(`/conversations/${conversationId}`, {
+      assignedAgentId,
     });
     return data.data;
   },

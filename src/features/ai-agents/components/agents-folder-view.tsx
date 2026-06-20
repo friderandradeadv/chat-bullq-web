@@ -6,8 +6,6 @@ import {
   ChevronRight,
   Folder,
   FolderPlus,
-  Power,
-  PowerOff,
   MoreVertical,
   Pencil,
   Trash2,
@@ -511,24 +509,37 @@ function AgentRow({
         </span>
       </button>
 
-      <span
+      {/* Liga/desliga — switch óbvio (patcha isActive na hora) */}
+      <button
         onClick={() => onToggleActive(agent)}
-        className={`inline-flex flex-shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+        title={
           agent.isActive
-            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-            : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800'
-        }`}
+            ? 'Ligado — clique para desligar'
+            : 'Desligado — clique para ligar'
+        }
+        className="flex flex-shrink-0 items-center gap-1.5"
       >
-        {agent.isActive ? (
-          <>
-            <Power className="h-3 w-3" /> Ativo
-          </>
-        ) : (
-          <>
-            <PowerOff className="h-3 w-3" /> Pausado
-          </>
-        )}
-      </span>
+        <span
+          className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+            agent.isActive ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-600'
+          }`}
+        >
+          <span
+            className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${
+              agent.isActive ? 'translate-x-3.5' : 'translate-x-0.5'
+            }`}
+          />
+        </span>
+        <span
+          className={`w-[52px] text-left text-[10px] font-medium ${
+            agent.isActive
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-zinc-400'
+          }`}
+        >
+          {agent.isActive ? 'Ligado' : 'Desligado'}
+        </span>
+      </button>
 
       {/* Mover para pasta */}
       <Menu as="div" className="relative flex-shrink-0">

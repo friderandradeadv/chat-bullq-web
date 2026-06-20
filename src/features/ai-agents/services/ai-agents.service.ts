@@ -169,6 +169,22 @@ export interface AgentTestResult {
   toolCalls: { name: string; args: unknown }[];
   finalAction: AgentTestFinalAction;
   costUsd: number;
+  /** Presente quando o teste falhou — erro AMIGÁVEL + dica de correção. */
+  error?: { code: string; message: string; hint: string };
+}
+
+export type AgentDiagnoseCheck = {
+  id: string;
+  label: string;
+  status: 'ok' | 'warn' | 'fail';
+  detail: string;
+  fix?: string;
+};
+
+export interface AgentDiagnoseResult {
+  ok: boolean;
+  agentName: string;
+  checks: AgentDiagnoseCheck[];
 }
 
 export const aiAgentsService = {
@@ -282,6 +298,12 @@ export const aiAgentsService = {
   /** Testa um turno do agente sem efeitos colaterais (test tab do editor). */
   async test(id: string, input: AgentTestInput): Promise<AgentTestResult> {
     const { data } = await api.post(`/ai-agents/${id}/test`, input);
+    return data.data ?? data;
+  },
+
+  /** Diagnóstico self-service: checklist de saúde do agente + como arrumar. */
+  async diagnose(id: string): Promise<AgentDiagnoseResult> {
+    const { data } = await api.get(`/ai-agents/${id}/diagnose`);
     return data.data ?? data;
   },
 
