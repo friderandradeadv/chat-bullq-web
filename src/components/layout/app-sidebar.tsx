@@ -169,10 +169,16 @@ export function AppSidebar() {
             <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
             <NavItem href="/contacts" icon={BookUser} label="Contatos" />
             <NavItem href="/kanban" icon={KanbanSquare} label="Kanban" />
-            <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
-            <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
-            <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
-            <NavItem href="/conexoes" icon={Cable} label="Conexões" />
+
+            {/* Ajustes — subaba dentro de Comercial (config do atendimento) */}
+            <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
+              <NavSection label="Ajustes" defaultOpen={false}>
+                <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
+                <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
+                <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
+                <NavItem href="/conexoes" icon={Cable} label="Conexões" />
+              </NavSection>
+            </div>
 
             {/* Automações — subaba dentro de Comercial */}
             <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
