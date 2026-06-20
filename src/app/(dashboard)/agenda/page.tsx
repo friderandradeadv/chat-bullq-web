@@ -627,7 +627,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           <div className="flex gap-2">
             <dt className="shrink-0 font-medium text-[#6C757D]">Data:</dt>
             <dd className="relative">
-              <button onClick={() => { setReMenu((v) => !v); setMiniCal(false); }} className="inline-flex items-center gap-1 text-[#228BE6] hover:underline">{d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', ...(activity.hasTime ? {} : { timeZone: 'UTC' as const }) })}{activity.hasTime ? `, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}<ChevronDown className="h-4 w-4" /></button>
+              <button onClick={() => { setReMenu((v) => !v); setMiniCal(false); }} className="inline-flex items-center gap-1 text-[#202124] hover:underline dark:text-zinc-200">{d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', ...(activity.hasTime ? {} : { timeZone: 'UTC' as const }) })}{activity.hasTime ? `, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}<ChevronDown className="h-4 w-4 text-zinc-400" /></button>
               {reMenu && (<><div className="fixed inset-0 z-10" onClick={() => { setReMenu(false); setMiniCal(false); }} />
                 <div className="absolute left-0 top-7 z-20 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
                   {miniCal ? (<div className="p-1"><MiniCalendar initial={d} onPick={(x) => reschedule(x)} /></div>) : (
@@ -677,7 +677,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.recorte && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Recorte da publicação:</dt>
-              <dd className="whitespace-pre-wrap break-words font-normal text-[#202124] dark:text-zinc-200">{activity.recorte}</dd>
+              <dd className="whitespace-pre-wrap break-words text-justify font-normal leading-relaxed text-zinc-400 dark:text-zinc-500">{activity.recorte}</dd>
             </div>
           )}
         </dl>
