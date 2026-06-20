@@ -19,12 +19,14 @@ import {
   Check,
   Plus,
   ChevronDown,
+  Bot,
 } from 'lucide-react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { contactsService, type Contact } from '@/features/contacts/services/contacts.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
+import { aiAgentsService, type AiAgent } from '@/features/ai-agents/services/ai-agents.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { WhatsAppIcon, MetaIcon, InstagramIcon } from '@/components/ui/icons';
 import { PageSizeSelect } from '@/components/ui/page-size-select';
@@ -76,6 +78,7 @@ export default function ContactsPage() {
   const { data: tags = [] } = useQuery({ queryKey: ['tags', orgId], queryFn: () => tagsService.list() });
   const { data: statuses = [] } = useQuery({ queryKey: ['contact-statuses', orgId], queryFn: () => contactStatusesService.list() });
   const { data: members = [] } = useQuery({ queryKey: ['members', orgId], queryFn: () => membersService.list() });
+  const { data: agents = [] } = useQuery({ queryKey: ['ai-agents', orgId], queryFn: () => aiAgentsService.list() });
 
   const handleAssign = async (contactId: string, userId: string | null) => {
     try {
@@ -84,6 +87,26 @@ export default function ContactsPage() {
       toast.success(userId ? 'Responsável definido' : 'Responsável removido');
     } catch {
       toast.error('Erro ao definir o responsável');
+    }
+  };
+
+  const handleAssignAgent = async (contactId: string, agentId: string | null) => {
+    try {
+      await contactsService.assignAgent(contactId, agentId);
+      qc.invalidateQueries({ queryKey: ['contacts'] });
+      toast.success(agentId ? 'Robô definido como responsável' : 'Responsável removido');
+    } catch {
+      toast.error('Erro ao definir o robô');
+    }
+  };
+
+  const handleClearResp = async (contactId: string) => {
+    try {
+      await contactsService.clearResponsible(contactId);
+      qc.invalidateQueries({ queryKey: ['contacts'] });
+      toast.success('Responsável removido');
+    } catch {
+      toast.error('Erro ao remover o responsável');
     }
   };
 
@@ -438,7 +461,10 @@ export default function ContactsPage() {
                         selected={selected.has(contact.id)}
                         onToggle={() => toggleOne(contact.id)}
                         members={members}
+                        agents={agents}
                         onAssign={handleAssign}
+                        onAssignAgent={handleAssignAgent}
+                        onClearResp={handleClearResp}
                         allTags={tags}
                         allStatuses={statuses}
                         onAddTag={handleAddTag}
@@ -489,7 +515,10 @@ function ContactRow({
   selected,
   onToggle,
   members,
+  agents,
   onAssign,
+  onAssignAgent,
+  onClearResp,
   allTags,
   allStatuses,
   onAddTag,
@@ -500,7 +529,10 @@ function ContactRow({
   selected: boolean;
   onToggle: () => void;
   members: Member[];
+  agents: AiAgent[];
   onAssign: (contactId: string, userId: string | null) => void;
+  onAssignAgent: (contactId: string, agentId: string | null) => void;
+  onClearResp: (contactId: string) => void;
   allTags: Labeled[];
   allStatuses: Labeled[];
   onAddTag: (contactId: string, tagId: string) => void;
@@ -579,7 +611,7 @@ function ContactRow({
       </div>
 
       {/* Responsável */}
-      <ResponsibleCell contact={contact} members={members} onAssign={onAssign} />
+      <ResponsibleCell contact={contact} members={members} agents={agents} onAssign={onAssign} onAssignAgent={onAssignAgent} onClearResp={onClearResp} />
 
       {/* Conversas + última atividade */}
       <div className="hidden w-24 shrink-0 flex-col items-end gap-0.5 text-right lg:flex">
@@ -814,27 +846,53 @@ function TagsCell({
 function ResponsibleCell({
   contact,
   members,
+  agents,
   onAssign,
+  onAssignAgent,
+  onClearResp,
 }: {
   contact: Contact;
   members: Member[];
+  agents: AiAgent[];
   onAssign: (contactId: string, userId: string | null) => void;
+  onAssignAgent: (contactId: string, agentId: string | null) => void;
+  onClearResp: (contactId: string) => void;
 }) {
-  // Responsável REAL: explícito do contato OU, na falta, o atendente da
-  // conversa mais recente (cruzamento de dados com as conversas).
+  // Responsável REAL: robô explícito > humano explícito > atendente da conversa
+  // mais recente (cruzamento de dados com as conversas).
   const fromConv = (contact.conversations as { assignedTo?: { id: string; name: string; avatarUrl: string | null } | null }[] | undefined)?.[0]?.assignedTo ?? null;
-  const a = contact.assignedTo ?? fromConv;
-  const derived = !contact.assignedTo && !!fromConv;
+  const agentResp = contact.assignedAgent ?? null;
+  const a = agentResp ?? contact.assignedTo ?? fromConv;
+  const isAgent = !!agentResp;
+  const derived = !agentResp && !contact.assignedTo && !!fromConv;
+
+  // Robôs disponíveis: ativos, filtrados pela etiqueta do contato. Robô sem
+  // etiqueta (tagIds vazio) aparece pra qualquer contato; com etiqueta, só
+  // quando bate com alguma tag do contato (ex: contato "RMC" → só robôs de RMC).
+  const contactTagIds = contact.tags.map((t) => t.tag.id);
+  const robots = agents.filter(
+    (ag) =>
+      ag.isActive &&
+      ((ag.tagIds?.length ?? 0) === 0 ||
+        ag.tagIds.some((t) => contactTagIds.includes(t))),
+  );
+
   return (
     <Menu as="div" className="relative hidden shrink-0 sm:block">
       <MenuButton
         onClick={(e) => e.stopPropagation()}
-        title={a ? `Responsável: ${a.name}${derived ? ' (da conversa)' : ''}` : 'Atribuir responsável'}
+        title={a ? `Responsável: ${a.name}${isAgent ? ' (robô)' : derived ? ' (da conversa)' : ''}` : 'Atribuir responsável'}
         className="flex items-center gap-1.5 rounded-full border border-zinc-200 py-0.5 pl-0.5 pr-1.5 text-xs text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
       >
         {a ? (
           <>
-            <RespAvatar name={a.name} avatarUrl={a.avatarUrl} />
+            {isAgent ? (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300">
+                <Bot className="h-3.5 w-3.5" />
+              </span>
+            ) : (
+              <RespAvatar name={a.name} avatarUrl={a.avatarUrl} />
+            )}
             <span className="hidden max-w-[80px] truncate lg:inline">{a.name.split(' ')[0]}</span>
           </>
         ) : (
@@ -849,7 +907,7 @@ function ResponsibleCell({
       >
         <MenuItem>
           <button
-            onClick={() => onAssign(contact.id, null)}
+            onClick={() => onClearResp(contact.id)}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -858,8 +916,12 @@ function ResponsibleCell({
             Sem responsável
           </button>
         </MenuItem>
+
+        {members.length > 0 && (
+          <div className="px-2 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Pessoas</div>
+        )}
         {members.map((m) => {
-          const active = a?.id === m.userId;
+          const active = !isAgent && a?.id === m.userId;
           return (
             <MenuItem key={m.id}>
               <button
@@ -873,6 +935,31 @@ function ResponsibleCell({
             </MenuItem>
           );
         })}
+
+        {robots.length > 0 && (
+          <>
+            <div className="mt-1 flex items-center gap-1 border-t border-zinc-100 px-2 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-500 dark:border-zinc-800">
+              <Bot className="h-3 w-3" /> Robôs
+            </div>
+            {robots.map((ag) => {
+              const active = isAgent && agentResp?.id === ag.id;
+              return (
+                <MenuItem key={ag.id}>
+                  <button
+                    onClick={() => onAssignAgent(contact.id, ag.id)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300">
+                      <Bot className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="flex-1 truncate text-left">{ag.name}</span>
+                    {active && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                  </button>
+                </MenuItem>
+              );
+            })}
+          </>
+        )}
       </MenuItems>
     </Menu>
   );

@@ -11,8 +11,10 @@ export interface Contact {
   channels: { id: string; channelId: string; externalId: string; channel: { id: string; type: string; name: string } }[];
   tags: { tag: { id: string; name: string; color: string } }[];
   status?: { id: string; name: string; color: string } | null;
-  /** Responsável (atendente) pelo contato. */
+  /** Responsável humano (atendente) pelo contato. */
   assignedTo?: { id: string; name: string; avatarUrl: string | null } | null;
+  /** Responsável ROBÔ (agente de IA) pelo contato — alternativa ao humano. */
+  assignedAgent?: { id: string; name: string; avatarUrl: string | null } | null;
   conversations?: any[];
   _count?: { conversations: number };
   createdAt: string;
@@ -66,9 +68,21 @@ export const contactsService = {
     return data.data;
   },
 
-  /** Define/troca/remove (null) o responsável pelo contato. */
+  /** Define/troca o responsável HUMANO. Setar um humano limpa o robô (backend). */
   async assignResponsible(id: string, assignedToId: string | null): Promise<Contact> {
     const { data } = await api.patch(`/contacts/${id}`, { assignedToId });
+    return data.data;
+  },
+
+  /** Define/troca o responsável ROBÔ (agente de IA). Setar um robô limpa o humano (backend). */
+  async assignAgent(id: string, assignedAgentId: string | null): Promise<Contact> {
+    const { data } = await api.patch(`/contacts/${id}`, { assignedAgentId });
+    return data.data;
+  },
+
+  /** Remove o responsável — limpa humano E robô. */
+  async clearResponsible(id: string): Promise<Contact> {
+    const { data } = await api.patch(`/contacts/${id}`, { assignedToId: null, assignedAgentId: null });
     return data.data;
   },
 

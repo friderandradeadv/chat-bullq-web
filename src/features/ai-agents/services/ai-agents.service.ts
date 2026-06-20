@@ -57,6 +57,8 @@ export interface AiAgent {
   capabilities: string[];
   /** Palavras-chave de ativação direta (pula a triagem quando batem). */
   keywords: string[];
+  /** Etiquetas (tags) de contato que este robô atende — filtra onde aparece como responsável. */
+  tagIds: string[];
   modelId: string;
   modelParams: Record<string, unknown> | null;
   systemPrompt: string;
