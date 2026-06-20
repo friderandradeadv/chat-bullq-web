@@ -113,13 +113,14 @@ export default function AgendaPage() {
       });
     }
     for (const d of dlQ.data ?? []) {
+      const ddj = d.metadata?.djen;
       out.push({
         id: 'd_' + d.id, source: 'prazo', rawId: d.id, title: d.title, date: d.dueDate,
         hasTime: false, done: d.status === 'DONE', cancelled: d.status === 'CANCELLED', fatal: d.type === 'FATAL',
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
-        createdName: null, priorityLabel: null, completedAt: null, description: null,
-        prazoFatal: null, recorte: null, tipoPublicacao: null,
+        createdName: null, priorityLabel: null, completedAt: null, description: ddj?.descricao ?? null,
+        prazoFatal: null, recorte: ddj?.recorte ?? null, tipoPublicacao: ddj?.tipoPublicacao ?? null,
       });
     }
     for (const e of evQ.data ?? []) {
@@ -671,9 +672,14 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {done && activity.completedAt && <Row label=""><span className="text-zinc-500">{activity.source === 'tarefa' ? 'Tarefa concluída' : 'Prazo concluído'} em {new Date(activity.completedAt).toLocaleDateString('pt-BR')}{activity.responsibleName ? ` por ${activity.responsibleName}` : ''}</span></Row>}
           {activity.priorityLabel && <Row label="Prioridade">{activity.priorityLabel}</Row>}
           {activity.description && activity.source === 'evento' && <Row label="Local">{activity.description}</Row>}
-          {activity.source === 'tarefa' && activity.description && <Row label="Descrição da tarefa"><span className="whitespace-pre-wrap break-words">{activity.description}</span></Row>}
+          {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.description && <Row label="Descrição da tarefa"><span className="whitespace-pre-wrap break-words">{activity.description}</span></Row>}
           {activity.source === 'tarefa' && activity.prazoFatal && <Row label="Prazo fatal"><span className="font-medium text-rose-600 dark:text-rose-400">{new Date(activity.prazoFatal).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></Row>}
-          {activity.source === 'tarefa' && activity.recorte && <Row label="Recorte da publicação"><span className="whitespace-pre-wrap break-words text-zinc-600 dark:text-zinc-300">{activity.recorte}</span></Row>}
+          {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.recorte && (
+            <div className="flex flex-col gap-1">
+              <dt className="font-medium text-[#6C757D]">Recorte da publicação:</dt>
+              <dd className="whitespace-pre-wrap break-words font-normal text-[#202124] dark:text-zinc-200">{activity.recorte}</dd>
+            </div>
+          )}
         </dl>
 
         {/* Comentários */}

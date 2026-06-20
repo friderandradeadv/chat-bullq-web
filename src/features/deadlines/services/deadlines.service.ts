@@ -15,6 +15,9 @@ export interface Deadline {
   assignedTo: { id: string; name: string; avatarUrl: string | null } | null;
   case: { id: string; title: string; cnjNumber: string | null } | null;
   createdAt: string;
+  metadata?: {
+    djen?: { descricao?: string; tipoPublicacao?: string; prazoFatal?: string; prazoSeguranca?: string; recorte?: string };
+  } & Record<string, any>;
 }
 
 export interface CreateDeadlineInput {
