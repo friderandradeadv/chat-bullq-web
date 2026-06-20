@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X, Hash, LayoutGrid, Loader2 } from 'lucide-react';
+import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X, Hash, LayoutGrid, Loader2, MoreHorizontal, Pencil, Power, PowerOff } from 'lucide-react';
+import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { toast } from 'sonner';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
@@ -92,6 +93,39 @@ export default function SettingsMembersPage() {
     }
   };
 
+  const handleRename = async (memberId: string, current: string) => {
+    const name = window.prompt('Novo nome do membro:', current);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || trimmed === current) return;
+    try {
+      await membersService.updateName(memberId, trimmed);
+      toast.success('Nome atualizado');
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao renomear');
+    }
+  };
+
+  const handleToggleActive = async (
+    memberId: string,
+    active: boolean,
+    name: string,
+  ) => {
+    if (
+      !active &&
+      !confirm(`Desativar ${name}? Ele perde o acesso ao sistema até ser reativado.`)
+    )
+      return;
+    try {
+      await membersService.setActive(memberId, active);
+      toast.success(active ? 'Membro reativado' : 'Membro desativado');
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar');
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -155,8 +189,8 @@ export default function SettingsMembersPage() {
         </div>
       )}
 
-      <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full">
+      <div className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <table className="w-full min-w-[760px]">
           <thead>
             <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Membro</th>
@@ -191,7 +225,12 @@ export default function SettingsMembersPage() {
                 const roleMeta = roleLabels[m.role] || roleLabels.AGENT;
                 const RoleIcon = roleMeta.icon;
                 return (
-                  <tr key={m.id} className="border-b border-zinc-50 dark:border-zinc-800">
+                  <tr
+                    key={m.id}
+                    className={`border-b border-zinc-50 dark:border-zinc-800 ${
+                      !m.user.isActive ? 'opacity-50' : ''
+                    }`}
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar
@@ -200,7 +239,14 @@ export default function SettingsMembersPage() {
                           className="size-8"
                         />
                         <div>
-                          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{m.user.name}</p>
+                          <p className="flex items-center gap-1.5 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            {m.user.name}
+                            {!m.user.isActive && (
+                              <span className="rounded-full bg-zinc-200 px-1.5 py-0.5 text-[9px] font-medium uppercase text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300">
+                                inativo
+                              </span>
+                            )}
+                          </p>
                           <p className="text-[11px] text-zinc-400">{m.user.email}</p>
                         </div>
                       </div>
@@ -265,12 +311,48 @@ export default function SettingsMembersPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       {m.role !== 'OWNER' && (
-                        <button
-                          onClick={() => handleRemove(m.id, m.user.name)}
-                          className="rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <Menu as="div" className="relative inline-block text-left">
+                          <MenuButton className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-300">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </MenuButton>
+                          <MenuItems className="absolute right-0 z-20 mt-1 w-44 origin-top-right rounded-lg border border-zinc-200 bg-white py-1 shadow-lg focus:outline-none dark:border-zinc-700 dark:bg-zinc-900">
+                            <MenuItem>
+                              <button
+                                onClick={() => handleRename(m.id, m.user.name)}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                              >
+                                <Pencil className="h-3.5 w-3.5 text-zinc-400" /> Renomear
+                              </button>
+                            </MenuItem>
+                            <MenuItem>
+                              <button
+                                onClick={() =>
+                                  handleToggleActive(m.id, !m.user.isActive, m.user.name)
+                                }
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                              >
+                                {m.user.isActive ? (
+                                  <>
+                                    <PowerOff className="h-3.5 w-3.5 text-zinc-400" /> Desativar
+                                  </>
+                                ) : (
+                                  <>
+                                    <Power className="h-3.5 w-3.5 text-emerald-500" /> Reativar
+                                  </>
+                                )}
+                              </button>
+                            </MenuItem>
+                            <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                            <MenuItem>
+                              <button
+                                onClick={() => handleRemove(m.id, m.user.name)}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Excluir
+                              </button>
+                            </MenuItem>
+                          </MenuItems>
+                        </Menu>
                       )}
                     </td>
                   </tr>

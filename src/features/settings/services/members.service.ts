@@ -38,4 +38,10 @@ export const membersService = {
   async remove(memberId: string): Promise<void> {
     await api.delete(`/organizations/members/${memberId}`);
   },
+  async updateName(memberId: string, name: string): Promise<void> {
+    await api.patch(`/organizations/members/${memberId}/name`, { name });
+  },
+  async setActive(memberId: string, active: boolean): Promise<void> {
+    await api.patch(`/organizations/members/${memberId}/active`, { active });
+  },
 };
