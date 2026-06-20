@@ -66,6 +66,33 @@ export function AgentsFolderView({
   const [newName, setNewName] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const bulkDelete = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    if (!confirm(`Excluir ${ids.length} agente(s)? Essa ação é irreversível.`)) return;
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        await aiAgentsService.remove(id);
+        ok++;
+      } catch {
+        /* segue mesmo se um falhar */
+      }
+    }
+    setSelected(new Set());
+    queryClient.invalidateQueries({ queryKey: ['ai-agents'] });
+    toast.success(`${ok} de ${ids.length} agente(s) excluído(s)`);
+  };
 
   const { data: folders } = useQuery({
     queryKey: ['agent-folders', orgId],
@@ -203,6 +230,29 @@ export function AgentsFolderView({
 
   return (
     <div className="px-6 py-4">
+      {/* Barra de ações em massa — só aparece quando há agentes selecionados */}
+      {selected.size > 0 && (
+        <div className="mb-3 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+          <span className="text-sm font-medium text-primary">
+            {selected.size} selecionado{selected.size > 1 ? 's' : ''}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelected(new Set())}
+              className="rounded-md px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Limpar
+            </button>
+            <button
+              onClick={bulkDelete}
+              className="flex items-center gap-1.5 rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Apagar selecionados
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Barra de ações da seção PASTAS */}
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -389,6 +439,8 @@ export function AgentsFolderView({
                         key={a.id}
                         agent={a}
                         folders={orderedFolders}
+                        selected={selected.has(a.id)}
+                        onToggleSelect={toggleSelect}
                         onEdit={onEdit}
                         onToggleActive={onToggleActive}
                         onMove={moveAgent}
@@ -408,19 +460,31 @@ export function AgentsFolderView({
 function AgentRow({
   agent,
   folders,
+  selected,
+  onToggleSelect,
   onEdit,
   onToggleActive,
   onMove,
 }: {
   agent: AiAgent;
   folders: AgentFolder[];
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
   onEdit: (a: AiAgent) => void;
   onToggleActive: (a: AiAgent) => void;
   onMove: (a: AiAgent, folderId: string | null) => void;
 }) {
   const isOrchestrator = agent.kind === 'ORCHESTRATOR';
   return (
-    <div className="group/row flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+    <div className={`group/row flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 ${selected ? 'bg-primary/5' : ''}`}>
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onToggleSelect(agent.id)}
+        onClick={(e) => e.stopPropagation()}
+        title="Selecionar"
+        className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded border-zinc-300 dark:border-zinc-600"
+      />
       <button
         onClick={() => onEdit(agent)}
         className="flex min-w-0 flex-1 items-center gap-2.5 text-left"

@@ -296,6 +296,8 @@ export default function AgentEditorPage() {
     if (!confirm(`Excluir "${agent.name}"? Essa ação é irreversível.`)) return;
     try {
       await aiAgentsService.remove(agent.id);
+      // Invalida a lista pra o agente sumir na hora (sem precisar recarregar).
+      qc.invalidateQueries({ queryKey: ['ai-agents'] });
       toast.success('Agente excluído');
       router.push('/ai-agents?tab=agents');
     } catch (err: any) {
