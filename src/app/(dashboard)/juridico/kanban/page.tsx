@@ -6,7 +6,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock } from 'lucide-react';
+import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -290,14 +290,23 @@ function Card({
         )}
       </div>
 
-      {/* Cliente (título) × parte adversa */}
-      <p className="mt-2 break-words pr-5 text-sm font-semibold leading-5 text-[#101820] dark:text-zinc-100">{c.client ?? c.title}</p>
+      {/* Cliente (título, CAPS, clicável) × parte adversa */}
+      <p className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] hover:underline dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
       {c.opponent && <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
 
-      {/* Nº processo */}
+      {/* Nº processo (copiável) */}
       {c.cnj && (
-        <p className="mt-2 flex items-center gap-1 truncate text-[11px] text-[#48626f] dark:text-zinc-500">
-          <Scale className="h-3 w-3 shrink-0" /> {c.cnj}
+        <p className="mt-2 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500">
+          <Scale className="h-3 w-3 shrink-0" />
+          <span className="truncate">{c.cnj}</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(c.cnj!); toast.success('Nº do processo copiado'); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="Copiar nº do processo"
+            className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"
+          >
+            <Copy className="h-3 w-3" />
+          </button>
         </p>
       )}
 

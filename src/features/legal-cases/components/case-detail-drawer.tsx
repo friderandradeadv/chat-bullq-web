@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef,
 } from '@/features/legal-cases/services/legal-cases.service';
+import { membersService } from '@/features/settings/services/members.service';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
@@ -64,6 +65,16 @@ export function CaseDetailDrawer({
     queryKey: ['legal-cases', 'detail', caseId],
     queryFn: () => legalCasesService.get(caseId),
   });
+  const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
+
+  const onChangeResp = async (userId: string) => {
+    if (!c) return;
+    try {
+      await legalCasesService.update(c.id, { responsibleId: userId || undefined });
+      toast.success('Responsável atualizado');
+      qc.invalidateQueries({ queryKey: ['legal-cases'] });
+    } catch { toast.error('Erro ao atualizar responsável'); }
+  };
 
   useEffect(() => {
     const cl = (c?.metadata as any)?.checklist;
@@ -110,7 +121,7 @@ export function CaseDetailDrawer({
         {/* ── PAINEL ESQUERDO ── */}
         <div className="flex min-w-0 flex-1 flex-col border-r border-[#cfe0ed] dark:border-zinc-800">
           <div className="px-8 pt-6">
-            <h2 className="truncate pr-12 text-[20px] font-bold leading-6 text-black dark:text-zinc-100">{cliente?.name ?? c?.title ?? '…'}</h2>
+            <h2 className="truncate pr-12 text-[20px] font-bold uppercase leading-6 text-black dark:text-zinc-100">{(cliente?.name ?? c?.title ?? '…').toUpperCase()}</h2>
             <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-[#cfe0ed] pb-3 dark:border-zinc-800">
               {c?.responsible && (c.responsible.avatarUrl
                 ? // eslint-disable-next-line @next/next/no-img-element
@@ -231,15 +242,21 @@ export function CaseDetailDrawer({
             <div className="mt-5">
               <p className="text-sm font-medium text-[#101820] dark:text-zinc-200">Responsável</p>
               <div className="mt-1.5 flex items-center gap-2">
-                {c?.responsible ? (
-                  <>
-                    {c.responsible.avatarUrl
-                      ? // eslint-disable-next-line @next/next/no-img-element
-                        <img src={c.responsible.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
-                      : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{(c.responsible.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>}
-                    <span className="text-sm text-[#101820] dark:text-zinc-200">{c.responsible.name}</span>
-                  </>
-                ) : <span className="text-sm text-zinc-400">—</span>}
+                {c?.responsible && (c.responsible.avatarUrl
+                  ? // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.responsible.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                  : <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{(c.responsible.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>)}
+                <select
+                  value={c?.responsible?.id ?? ''}
+                  onChange={(e) => onChangeResp(e.target.value)}
+                  disabled={!c}
+                  className="h-8 flex-1 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                >
+                  <option value="">Sem responsável</option>
+                  {members.filter((m) => m.user.isActive).map((m) => (
+                    <option key={m.user.id} value={m.user.id}>{m.user.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
