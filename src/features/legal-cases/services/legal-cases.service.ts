@@ -167,6 +167,7 @@ export interface KanbanPhase {
   order: number;
   slaDias: number;
   fluxo: boolean;
+  lane: 'pre' | 'judicial';
   count: number;
 }
 export interface KanbanCard {
@@ -228,6 +229,13 @@ export const legalCasesService = {
   },
   async updateChecklist(id: string, items: Record<string, boolean>): Promise<{ ok: boolean; checklist: Record<string, boolean> }> {
     const { data } = await api.patch(`/legal-cases/${id}/checklist`, { items });
+    return data.data ?? data;
+  },
+  async protocolar(
+    id: string,
+    input: { cnj?: string; value?: number; dataProtocolo?: string; court?: string; jurisdiction?: string },
+  ): Promise<{ ok: boolean; phase: string }> {
+    const { data } = await api.patch(`/legal-cases/${id}/protocolar`, input);
     return data.data ?? data;
   },
   async get(id: string): Promise<CaseDetail> {

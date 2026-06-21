@@ -25,6 +25,7 @@ import {
   LayoutList,
   Columns3,
   Gavel,
+  Workflow,
   Sun,
   Moon,
   CircleDot,
@@ -198,6 +199,7 @@ export function AppSidebar() {
           <div className="mt-3">
             <NavSection label="Jurídico">
               <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
+              <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
               <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
               <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
               <NavItem href="/clientes" icon={Users} label="Clientes" />

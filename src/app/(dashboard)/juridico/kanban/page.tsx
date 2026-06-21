@@ -109,7 +109,7 @@ export default function FaseJudicialKanbanPage() {
 
   const FORA = new Set(['arquivado', 'abandonado', 'perdidos_valeska']);
   const visiblePhases = useMemo(
-    () => phases.filter((p) => showFora || !FORA.has(p.key)),
+    () => phases.filter((p) => p.lane !== 'pre' && (showFora || !FORA.has(p.key))),
     [phases, showFora],
   );
 

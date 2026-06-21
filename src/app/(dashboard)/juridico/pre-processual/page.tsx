@@ -1,0 +1,220 @@
+'use client';
+
+import { useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
+  useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
+} from '@dnd-kit/core';
+import { Workflow, Search, RefreshCw, User, FileCheck2, X } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
+} from '@/features/legal-cases/services/legal-cases.service';
+import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
+
+const KEY = ['legal-cases', 'kanban'];
+const INPUT = 'h-[38px] w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
+
+function produtoColor(p: string | null): { bg: string; fg: string } {
+  const s = (p ?? '').toUpperCase();
+  if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
+  if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
+  if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
+  if (/TRABALH|RESCIS|FERIAS/.test(s)) return { bg: 'rgb(255,161,0)', fg: '#101820' };
+  if (/PORTABIL|REVISIONAL|CONSIGNAD|CONSUMID/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
+  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
+  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
+  if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
+  if (/SEGURO|TARIFA/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
+  return { bg: 'rgb(209,209,209)', fg: '#101820' };
+}
+
+export default function PreProcessualPage() {
+  const qc = useQueryClient();
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [openCaseId, setOpenCaseId] = useState<string | null>(null);
+  const [protocolarId, setProtocolarId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [resp, setResp] = useState('');
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({}), refetchInterval: 30_000 });
+  const phases = (data?.phases ?? []).filter((p) => p.lane === 'pre');
+  const cards = data?.cards ?? [];
+
+  const resps = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of cards) if (c.responsible) m.set(c.responsible.id, c.responsible.name);
+    return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [cards]);
+
+  const preKeys = new Set(phases.map((p) => p.key));
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return cards.filter((c) => {
+      if (!preKeys.has(c.phase)) return false;
+      if (resp && c.responsible?.id !== resp) return false;
+      if (q && !`${c.title} ${c.client ?? ''}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [cards, search, resp, phases]);
+
+  const byPhase = useMemo(() => {
+    const map: Record<string, KanbanCard[]> = {};
+    for (const c of filtered) (map[c.phase] ??= []).push(c);
+    return map;
+  }, [filtered]);
+
+  const active = cards.find((c) => c.id === activeId) ?? null;
+
+  const move = async (card: KanbanCard, to: string) => {
+    if (card.phase === to) return;
+    qc.setQueryData<KanbanData>(KEY, (old) => old ? { ...old, cards: old.cards.map((x) => x.id === card.id ? { ...x, phase: to } : x) } : old);
+    try { await legalCasesService.movePhase(card.id, to); qc.invalidateQueries({ queryKey: KEY }); }
+    catch { qc.invalidateQueries({ queryKey: KEY }); toast.error('Erro ao mover'); }
+  };
+
+  const onDragEnd = (e: DragEndEvent) => {
+    setActiveId(null);
+    const to = e.over?.id as string | undefined;
+    const card = cards.find((x) => x.id === e.active.id);
+    if (to && card && preKeys.has(to)) move(card, to);
+  };
+
+  return (
+    <div className="flex h-full flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200">
+      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-6 pt-6 pb-4">
+        <div className="flex items-center gap-2">
+          <Workflow className="h-5 w-5 text-[#e11970]" />
+          <h1 className="text-xl font-bold text-[#101820] dark:text-zinc-100">Pré-Processual</h1>
+          <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{filtered.length}</span>
+          {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
+        </div>
+        <p className="mt-0.5 text-sm text-zinc-500">Do fechamento do contrato até o protocolo. Ao protocolar, o processo migra para a Fase Judicial.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
+              className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
+          </div>
+          <select value={resp} onChange={(e) => setResp(e.target.value)} className="h-9 max-w-[200px] rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            <option value="">Todos os responsáveis</option>
+            {resps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+        <div className="flex flex-1 gap-3 overflow-x-auto py-4 pl-6 pr-4">
+          {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
+          {!isLoading && phases.map((phase) => (
+            <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} />
+          ))}
+        </div>
+        <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
+      </DndContext>
+
+      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={data?.phases ?? []} onClose={() => setOpenCaseId(null)} />}
+      {protocolarId && <ProtocolarDialog caseId={protocolarId} onClose={() => setProtocolarId(null)} onDone={() => { setProtocolarId(null); qc.invalidateQueries({ queryKey: KEY }); }} />}
+    </div>
+  );
+}
+
+function Column({ phase, items, onOpen, onProtocolar }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onProtocolar: (id: string) => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: phase.key });
+  const isProtocolo = phase.key === 'protocolo';
+  return (
+    <div className="flex w-[280px] shrink-0 flex-col">
+      <div className="flex h-10 items-center gap-2 px-1">
+        <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">{phase.label}</h2>
+        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+      </div>
+      <div ref={setNodeRef} className={`flex flex-1 flex-col gap-2 rounded border px-1.5 pb-2 pt-3 transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
+        {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
+        {items.map((c) => <Card key={c.id} c={c} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} />)}
+      </div>
+    </div>
+  );
+}
+
+function Card({ c, onOpen, onProtocolar }: { c: KanbanCard; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
+  const down = useRef<{ x: number; y: number } | null>(null);
+  const prod = produtoColor(c.produto);
+  const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {};
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes}
+      onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
+      onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id); }}
+      className={`cursor-pointer touch-none rounded border border-[#cfe0ed] bg-white p-2.5 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${isDragging ? 'opacity-40' : ''}`}>
+      <div className="mb-1.5 flex flex-wrap items-center gap-1">
+        {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{c.produto}</span>}
+        {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
+      </div>
+      <p className="text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {onProtocolar ? (
+          <button onClick={(e) => { e.stopPropagation(); onProtocolar(c.id); }} onPointerDown={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 rounded-full bg-[#005efc] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90">
+            <FileCheck2 className="h-3 w-3" /> Protocolar
+          </button>
+        ) : <span />}
+        {c.responsible && (c.responsible.avatarUrl
+          ? // eslint-disable-next-line @next/next/no-img-element
+            <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
+          : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function ProtocolarDialog({ caseId, onClose, onDone }: { caseId: string; onClose: () => void; onDone: () => void }) {
+  const [cnj, setCnj] = useState('');
+  const [valor, setValor] = useState('');
+  const [data, setData] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await legalCasesService.protocolar(caseId, {
+        cnj: cnj.trim() || undefined,
+        value: valor ? Number(valor.replace(/\./g, '').replace(',', '.')) : undefined,
+        dataProtocolo: data || undefined,
+      });
+      toast.success('Protocolado — movido para Admissão da inicial');
+      onDone();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao protocolar'); setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative w-[420px] max-w-[94vw] rounded-xl bg-white p-5 shadow-2xl dark:bg-zinc-950">
+        <button onClick={onClose} className="absolute right-3 top-3 rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
+        <h3 className="text-base font-bold text-[#101820] dark:text-zinc-100">Protocolar processo</h3>
+        <p className="mt-0.5 text-xs text-zinc-500">Preencha os dados do protocolo. O processo migra para a Fase Judicial (Admissão da inicial).</p>
+        <div className="mt-4 space-y-3">
+          <Field label="Número do processo (CNJ)"><input value={cnj} onChange={(e) => setCnj(e.target.value)} placeholder="0000000-00.0000.0.00.0000" className={INPUT} /></Field>
+          <Field label="Valor da causa (R$)"><input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="10.000,00" className={INPUT} /></Field>
+          <Field label="Data do protocolo"><input type="date" value={data} onChange={(e) => setData(e.target.value)} className={INPUT} /></Field>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-[#cfe0ed] px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button>
+          <button onClick={submit} disabled={saving} className="rounded-lg bg-[#005efc] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{saving ? 'Protocolando…' : 'Protocolar'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-[#48626f] dark:text-zinc-400">{label}</span>
+      {children}
+    </label>
+  );
+}
