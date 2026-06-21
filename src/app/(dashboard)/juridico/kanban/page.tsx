@@ -13,19 +13,31 @@ import {
 } from '@/features/legal-cases/services/legal-cases.service';
 
 const KEY = ['legal-cases', 'kanban'];
+const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif";
 
-const STATUS_ACCENT: Record<string, string> = {
-  ACTIVE: '#228BE6', SUSPENDED: '#f59e0b', CLOSED: '#16a34a', ARCHIVED: '#71717a',
+// Cor da borda esquerda (4px) + dot da área, por área jurídica.
+const AREA_DOT: Record<string, string> = {
+  'Bancário': '#228BE6', 'Previdenciário': '#7048e8', 'Trabalhista': '#f08c00',
+  'Consumidor': '#e64980', 'Cível': '#868e96',
 };
+const areaDot = (a: string | null) => AREA_DOT[a ?? 'Cível'] ?? '#868e96';
 
-const AREA_COLORS: Record<string, { dot: string; chip: string }> = {
-  'Bancário': { dot: '#228BE6', chip: 'bg-[#228BE6]/10 text-[#1971c2] dark:text-[#74c0fc]' },
-  'Previdenciário': { dot: '#7048e8', chip: 'bg-[#7048e8]/12 text-[#6741d9] dark:text-[#b197fc]' },
-  'Trabalhista': { dot: '#f08c00', chip: 'bg-[#f08c00]/12 text-[#e8590c] dark:text-[#ffd43b]' },
-  'Consumidor': { dot: '#e64980', chip: 'bg-[#e64980]/12 text-[#c2255c] dark:text-[#faa2c1]' },
-  'Cível': { dot: '#868e96', chip: 'bg-zinc-200/70 text-zinc-600 dark:bg-zinc-700/50 dark:text-zinc-300' },
-};
-const areaColor = (a: string | null) => AREA_COLORS[a ?? 'Cível'] ?? AREA_COLORS['Cível'];
+// Etiqueta de PRODUTO — hex exatos do Pipefy (com fallbacks coerentes).
+function produtoColor(p: string | null): { bg: string; fg: string } {
+  const s = (p ?? '').toUpperCase();
+  if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
+  if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
+  if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
+  if (/TRABALH|RESCIS|FERIAS|RECLAMA|VERBAS/.test(s)) return { bg: 'rgb(255,161,0)', fg: '#101820' };
+  if (/PORTABIL/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
+  if (/REVISIONAL|CONSIGNAD/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
+  if (/CONSUMID|DANO|INDENIZ|VOO|FRAUDE|NULID|OBRIGACAO|MONITORIA|ANULA/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
+  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
+  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
+  if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
+  if (/SEGURO|TARIFA/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
+  return { bg: 'rgb(209,209,209)', fg: '#101820' };
+}
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -125,12 +137,12 @@ export default function FaseJudicialKanbanPage() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
-      <div className="shrink-0 border-b border-[#DEE2E6] dark:border-zinc-800 px-6 pt-6 pb-4">
+    <div className="flex h-full flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200" style={{ fontFamily: INTER }}>
+      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-6 pt-6 pb-4">
         <div className="flex items-center gap-2">
-          <Columns3 className="h-5 w-5 text-[#228BE6]" />
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Fase Judicial</h1>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">
+          <Columns3 className="h-5 w-5 text-[#e11970]" />
+          <h1 className="text-xl font-bold text-[#101820] dark:text-zinc-100">Fase Judicial</h1>
+          <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
             {filtered.length} processos
           </span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
@@ -146,21 +158,21 @@ export default function FaseJudicialKanbanPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar cliente, réu, CNJ…"
-              className="h-9 w-60 rounded-lg border border-[#DEE2E6] bg-white pl-8 pr-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#228BE6] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
             />
           </div>
           <Select value={area} onChange={setArea} placeholder="Todas as áreas" options={areas} />
           <Select value={produto} onChange={setProduto} placeholder="Todos os produtos" options={produtos} />
-          <Select value={resp} onChange={setResp} placeholder="Todos os responsáveis" options={resps.map((r) => r.name)} valueMap={resps} />
+          <Select value={resp} onChange={setResp} placeholder="Todos os responsáveis" valueMap={resps} />
           <label className="ml-1 flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
-            <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#228BE6]" />
+            <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#e11970]" />
             Mostrar arquivados/abandonados
           </label>
         </div>
       </div>
 
       <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-        <div className="flex flex-1 gap-3 overflow-x-auto p-4">
+        <div className="flex flex-1 gap-3 overflow-x-auto py-4 pl-6 pr-4">
           {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
           {!isLoading && visiblePhases.map((phase) => (
             <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} />
@@ -175,17 +187,17 @@ export default function FaseJudicialKanbanPage() {
 function Select({
   value, onChange, placeholder, options, valueMap,
 }: {
-  value: string; onChange: (v: string) => void; placeholder: string; options: string[];
+  value: string; onChange: (v: string) => void; placeholder: string; options?: string[];
   valueMap?: { id: string; name: string }[];
 }) {
   return (
     <select
-      value={valueMap ? value : value}
+      value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-9 max-w-[180px] rounded-lg border border-[#DEE2E6] bg-white px-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+      className="h-9 max-w-[180px] rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
     >
       <option value="">{placeholder}</option>
-      {(valueMap ?? options.map((o) => ({ id: o, name: o }))).map((o: any) => (
+      {(valueMap ?? (options ?? []).map((o) => ({ id: o, name: o }))).map((o) => (
         <option key={o.id} value={o.id}>{o.name}</option>
       ))}
     </select>
@@ -199,24 +211,23 @@ function Column({
   onMove: (c: KanbanCard, to: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
-  const accent = STATUS_ACCENT[phase.status] ?? '#228BE6';
   return (
-    <div className="flex w-[286px] shrink-0 flex-col">
-      <div className="mb-2 flex items-center gap-2 px-1">
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: accent }} />
-        <h2 className="truncate text-[13px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">{phase.label}</h2>
-        <span className="ml-auto rounded-full bg-zinc-100 px-2 text-xs font-medium text-zinc-500 dark:bg-zinc-800">
+    <div className="flex w-[280px] shrink-0 flex-col">
+      {/* Header da fase (40px) — nome magenta + badge de contagem */}
+      <div className="flex h-10 items-center gap-2 px-1">
+        <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">{phase.label}</h2>
+        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
           {items.length}
         </span>
       </div>
       <div
         ref={setNodeRef}
-        className={`flex flex-1 flex-col gap-2 rounded-xl border p-2 transition-colors ${
-          isOver ? 'border-[#228BE6] bg-[#228BE6]/5' : 'border-[#DEE2E6] bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-900/30'
+        className={`flex flex-1 flex-col gap-2 rounded border px-1.5 pb-2 pt-3 transition-colors ${
+          isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'
         }`}
       >
         {items.length === 0 && (
-          <p className="rounded-lg border border-dashed border-zinc-200 py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">
+          <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">
             Vazio
           </p>
         )}
@@ -232,11 +243,15 @@ function Card({
   c: KanbanCard; phases: KanbanPhase[]; onMove: (c: KanbanCard, to: string) => void; overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
-  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
-  const overdue = c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
+  const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   const slaEstourado = c.slaDias > 0 && c.diasNaFase != null && c.diasNaFase > c.slaDias;
-  const ac = areaColor(c.areaJuridica);
+  const prod = produtoColor(c.produto);
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const style: React.CSSProperties = {
+    borderLeftWidth: 4,
+    borderLeftColor: areaDot(c.areaJuridica),
+    ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
+  };
 
   return (
     <div
@@ -244,85 +259,91 @@ function Card({
       style={style}
       {...listeners}
       {...attributes}
-      className={`cursor-grab touch-none rounded-lg border border-[#DEE2E6] bg-white p-2.5 shadow-sm active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${
+      className={`cursor-grab touch-none rounded border border-[#cfe0ed] bg-white py-3 pl-2 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${
         isDragging && !overlay ? 'opacity-40' : ''
       } ${overlay ? 'rotate-2 shadow-lg' : ''}`}
     >
-      {/* Etiquetas: produto + área */}
-      <div className="mb-1.5 flex flex-wrap items-center gap-1">
+      {/* Etiquetas: produto (cor) + área (cinza) */}
+      <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && (
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${ac.chip}`}>{c.produto}</span>
+          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>
+            {c.produto}
+          </span>
         )}
         {c.areaJuridica && (
-          <span className="inline-flex items-center gap-1 rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: ac.dot }} />
+          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>
             {c.areaJuridica}
           </span>
         )}
       </div>
 
       {/* Cliente (título) × parte adversa */}
-      <p className="text-sm font-semibold uppercase leading-tight text-zinc-900 dark:text-zinc-100">{c.client ?? c.title}</p>
-      {c.opponent && <p className="mt-0.5 truncate text-[11px] text-zinc-500">× {c.opponent}</p>}
+      <p className="mt-2 break-words pr-5 text-sm font-semibold leading-5 text-[#101820] dark:text-zinc-100">{c.client ?? c.title}</p>
+      {c.opponent && <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
 
-      {/* Nº processo · valor · protocolo */}
+      {/* Nº processo */}
       {c.cnj && (
-        <p className="mt-1.5 flex items-center gap-1 truncate text-[11px] text-zinc-400">
+        <p className="mt-2 flex items-center gap-1 truncate text-[11px] text-[#48626f] dark:text-zinc-500">
           <Scale className="h-3 w-3 shrink-0" /> {c.cnj}
         </p>
       )}
-      <div className="mt-1 flex items-center justify-between gap-2">
+
+      {/* Valor · data protocolo */}
+      <div className="mt-1.5 flex items-center justify-between gap-2">
         {c.value != null && c.value > 0 ? (
           <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</span>
         ) : <span />}
         {c.dataProtocolo && (
-          <span className="text-[10px] text-zinc-400">prot. {fmtDate(c.dataProtocolo)}</span>
+          <span className="text-[10px] text-[#48626f] dark:text-zinc-500">prot. {fmtDate(c.dataProtocolo)}</span>
         )}
       </div>
 
-      {/* Vencimento do próximo prazo */}
+      {/* Vencimento */}
       {c.proximoPrazo && (
-        <p className={`mt-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
-          overdue ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-zinc-50 text-zinc-500 dark:bg-zinc-800/60'
-        }`}>
-          <CalendarClock className="h-3 w-3" />
-          {overdue ? 'Venceu' : 'Vence'} {fmtDate(c.proximoPrazo.dueDate)}
-          {c.proximoPrazo.type === 'FATAL' && <span className="font-bold">· fatal</span>}
-        </p>
+        overdue ? (
+          <span className="mt-2 inline-flex h-5 items-center gap-1 rounded bg-[#c22e00] px-1.5 text-xs font-normal text-white" style={{ textShadow: 'rgba(0,0,0,0.25) 0px 1px 0px' }}>
+            <CalendarClock className="h-3.5 w-3.5" /> Venc {fmtDate(c.proximoPrazo.dueDate)}
+            {c.proximoPrazo.type === 'FATAL' && <span className="font-semibold">· fatal</span>}
+          </span>
+        ) : (
+          <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-400">
+            <CalendarClock className="h-3.5 w-3.5" /> Vence {fmtDate(c.proximoPrazo.dueDate)}
+            {c.proximoPrazo.type === 'FATAL' && <span className="font-semibold text-[#c22e00]">· fatal</span>}
+          </p>
+        )
       )}
 
-      {/* Rodapé: 3 relógios + avatar */}
-      <div className="mt-2 flex items-center justify-between border-t border-zinc-100 pt-1.5 dark:border-zinc-800">
-        <div className="flex items-center gap-2 text-[10px] text-zinc-400">
-          <span className="inline-flex items-center gap-0.5" title="Tempo no processo">
-            <Clock className="h-3 w-3" /> {fmtDias(c.diasNoProcesso)}
+      {/* Rodapé: 3 relógios + mover + avatar */}
+      <div className="mt-1.5 flex items-center justify-between border-t border-[#eef2f8] pt-1.5 dark:border-zinc-800">
+        <div className="flex items-center text-[10px] font-semibold text-[#4b5863] dark:text-zinc-400">
+          <span className="mr-1.5 inline-flex items-center gap-0.5" title="Tempo no processo">
+            <Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNoProcesso)}
           </span>
-          <span className={`inline-flex items-center gap-0.5 ${slaEstourado ? 'font-semibold text-red-500' : ''}`} title="Tempo na fase atual">
-            <Clock className="h-3 w-3" /> {fmtDias(c.diasNaFase)}
+          <span className={`mr-1.5 inline-flex items-center gap-0.5 ${slaEstourado ? 'text-[#c22e00]' : ''}`} title="Tempo na fase atual">
+            <Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNaFase)}
           </span>
           {c.slaDias > 0 && (
-            <span className={`inline-flex items-center gap-0.5 ${slaEstourado ? 'font-semibold text-red-500' : 'text-zinc-300 dark:text-zinc-600'}`} title="Prazo configurado da fase (SLA)">
-              <Clock className="h-3 w-3" /> {c.slaDias}d
+            <span className={`inline-flex items-center gap-0.5 ${slaEstourado ? 'text-[#c22e00]' : 'opacity-60'}`} title="Prazo configurado da fase (SLA)">
+              <Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {c.slaDias}d
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          {/* Mover para fase */}
           <select
             value={c.phase}
             onPointerDown={(e) => e.stopPropagation()}
             onChange={(e) => onMove(c, e.target.value)}
             title="Mover para fase"
-            className="h-5 max-w-[18px] cursor-pointer appearance-none rounded border-0 bg-transparent text-[10px] text-zinc-400 hover:text-[#228BE6] focus:outline-none"
+            className="h-5 max-w-[16px] cursor-pointer appearance-none rounded border-0 bg-transparent text-[10px] text-[#48626f] hover:text-[#e11970] focus:outline-none"
           >
             {phases.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select>
           {c.responsible && (
             c.responsible.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.responsible.avatarUrl} alt={c.responsible.name} className="h-5 w-5 rounded-full object-cover" />
+              <img src={c.responsible.avatarUrl} alt={c.responsible.name} className="h-4 w-4 rounded-full object-cover ring-2 ring-white dark:ring-zinc-900" />
             ) : (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#228BE6]/15 text-[9px] font-bold text-[#1971c2] dark:text-[#74c0fc]">{iniciais}</span>
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#4a90e2] text-[8px] font-bold text-white ring-2 ring-white dark:ring-zinc-900">{iniciais}</span>
             )
           )}
         </div>
