@@ -94,8 +94,28 @@ export interface EventRef {
   assignedTo: UserRef | null;
 }
 
+export interface PublicationRef {
+  id: string;
+  publishedAt: string;
+  rawContent: string;
+  status: string;
+  oab: string;
+  classification: Record<string, unknown> | null;
+}
+
+export interface DocumentRef {
+  id: string;
+  name: string;
+  category: string | null;
+  mime: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 export interface CaseDetail extends Omit<CaseListItem, 'parties' | '_count'> {
   jurisdiction: string | null;
+  legalPhase: string | null;
+  legalPhaseAt: string | null;
   distributedAt: string | null;
   createdAt: string;
   metadata: Record<string, unknown>;
@@ -104,6 +124,8 @@ export interface CaseDetail extends Omit<CaseListItem, 'parties' | '_count'> {
   movements: MovementItem[];
   deadlines: DeadlineRef[];
   events: EventRef[];
+  publications: PublicationRef[];
+  documents: DocumentRef[];
 }
 
 export interface CreateCaseInput {

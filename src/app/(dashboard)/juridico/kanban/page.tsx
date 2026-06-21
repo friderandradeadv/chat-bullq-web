@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
 } from '@/features/legal-cases/services/legal-cases.service';
+import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 
 const KEY = ['legal-cases', 'kanban'];
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif";
@@ -48,6 +49,7 @@ const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.fl
 export default function FaseJudicialKanbanPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [area, setArea] = useState('');
   const [produto, setProduto] = useState('');
@@ -175,11 +177,15 @@ export default function FaseJudicialKanbanPage() {
         <div className="flex flex-1 gap-3 overflow-x-auto py-4 pl-6 pr-4">
           {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
           {!isLoading && visiblePhases.map((phase) => (
-            <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} />
+            <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} />
           ))}
         </div>
         <DragOverlay>{active ? <Card c={active} phases={phases} onMove={move} overlay /> : null}</DragOverlay>
       </DndContext>
+
+      {openCaseId && (
+        <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />
+      )}
     </div>
   );
 }
@@ -205,10 +211,10 @@ function Select({
 }
 
 function Column({
-  phase, items, phases, onMove,
+  phase, items, phases, onMove, onOpen,
 }: {
   phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[];
-  onMove: (c: KanbanCard, to: string) => void;
+  onMove: (c: KanbanCard, to: string) => void; onOpen: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   return (
@@ -231,18 +237,19 @@ function Column({
             Vazio
           </p>
         )}
-        {items.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} />)}
+        {items.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} onOpen={onOpen} />)}
       </div>
     </div>
   );
 }
 
 function Card({
-  c, phases, onMove, overlay,
+  c, phases, onMove, onOpen, overlay,
 }: {
-  c: KanbanCard; phases: KanbanPhase[]; onMove: (c: KanbanCard, to: string) => void; overlay?: boolean;
+  c: KanbanCard; phases: KanbanPhase[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
+  const down = useRef<{ x: number; y: number } | null>(null);
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   const slaEstourado = c.slaDias > 0 && c.diasNaFase != null && c.diasNaFase > c.slaDias;
   const prod = produtoColor(c.produto);
@@ -259,7 +266,13 @@ function Card({
       style={style}
       {...listeners}
       {...attributes}
-      className={`cursor-grab touch-none rounded border border-[#cfe0ed] bg-white py-3 pl-2 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${
+      onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
+      onClick={(e) => {
+        if (overlay || !onOpen) return;
+        const d = down.current;
+        if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
+      }}
+      className={`cursor-pointer touch-none rounded border border-[#cfe0ed] bg-white py-3 pl-2 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${
         isDragging && !overlay ? 'opacity-40' : ''
       } ${overlay ? 'rotate-2 shadow-lg' : ''}`}
     >
@@ -328,7 +341,7 @@ function Card({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           <select
             value={c.phase}
             onPointerDown={(e) => e.stopPropagation()}
