@@ -690,7 +690,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.recorte && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Recorte da publicação:</dt>
-              <dd className="whitespace-pre-wrap break-words text-justify font-normal leading-relaxed text-zinc-400 dark:text-zinc-500">{activity.recorte}</dd>
+              <dd className="m-0 whitespace-pre-wrap break-words font-normal leading-relaxed text-zinc-400 dark:text-zinc-500">{activity.recorte}</dd>
             </div>
           )}
         </dl>
