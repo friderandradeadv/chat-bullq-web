@@ -115,12 +115,13 @@ export default function AgendaPage() {
     for (const d of dlQ.data ?? []) {
       const ddj = d.metadata?.djen;
       out.push({
-        id: 'd_' + d.id, source: 'prazo', rawId: d.id, title: d.title, date: d.dueDate,
+        // Mostra no PRAZO DE SEGURANÇA (safeDate); o fatal vai no campo "Prazo fatal".
+        id: 'd_' + d.id, source: 'prazo', rawId: d.id, title: d.title, date: d.safeDate ?? d.dueDate,
         hasTime: false, done: d.status === 'DONE', cancelled: d.status === 'CANCELLED', fatal: d.type === 'FATAL',
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
         createdName: null, priorityLabel: null, completedAt: null, description: ddj?.descricao ?? null,
-        prazoFatal: null, recorte: ddj?.recorte ?? null, tipoPublicacao: ddj?.tipoPublicacao ?? null,
+        prazoFatal: d.dueDate, recorte: ddj?.recorte ?? null, tipoPublicacao: ddj?.tipoPublicacao ?? null,
       });
     }
     for (const e of evQ.data ?? []) {
@@ -455,12 +456,15 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
 
   const assignResp = async (userId: string | null) => {
     setRespMenu(false);
-    if (activity.source !== 'tarefa') return;
+    if (activity.source !== 'tarefa' && activity.source !== 'prazo') return;
     const prev = { id: respId, name: respName };
     setRespId(userId);
     setRespName(userId ? members.find((m) => m.user.id === userId)?.user.name ?? null : null);
-    try { await tasksService.update(activity.rawId, { assigneeId: userId }); toast.success('Responsável atualizado'); onRefetch(); }
-    catch (e: any) { setRespId(prev.id); setRespName(prev.name); toast.error(e?.message || 'Erro ao atribuir'); }
+    try {
+      if (activity.source === 'tarefa') await tasksService.update(activity.rawId, { assigneeId: userId });
+      else await deadlinesService.update(activity.rawId, { assignedToId: userId ?? undefined });
+      toast.success('Responsável atualizado'); onRefetch();
+    } catch (e: any) { setRespId(prev.id); setRespName(prev.name); toast.error(e?.message || 'Erro ao atribuir'); }
   };
 
   // Puxa a ficha do processo p/ montar "Cliente x Parte | 1º Grau - Área" (igual Astrea).
@@ -644,9 +648,9 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           </div>
           {activity.caseTitle && <Row label="Processo"><button onClick={() => onOpenCase(activity.caseId!)} className="text-left font-light text-[#228BE6] hover:underline">{activity.caseTitle}{procSuffix ? `  |  ${procSuffix}` : ''}</button></Row>}
           {activity.cnj && <Row label="Número do processo"><CnjNumber value={activity.cnj} /></Row>}
-          {(activity.source === 'tarefa' || activity.responsibleName) && (
+          {(activity.source === 'tarefa' || activity.source === 'prazo' || activity.responsibleName) && (
             <Row label="Responsável">
-              {activity.source === 'tarefa' ? (
+              {(activity.source === 'tarefa' || activity.source === 'prazo') ? (
                 <span className="relative inline-block">
                   <button onClick={() => setRespMenu((v) => !v)} className="inline-flex items-center gap-1 font-light text-[#228BE6] hover:underline">
                     {respName ?? 'Atribuir responsável'} <span className="text-[10px]">▾</span>
@@ -673,7 +677,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {activity.priorityLabel && <Row label="Prioridade">{activity.priorityLabel}</Row>}
           {activity.description && activity.source === 'evento' && <Row label="Local">{activity.description}</Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.description && <Row label="Descrição da tarefa"><span className="whitespace-pre-wrap break-words">{activity.description}</span></Row>}
-          {activity.source === 'tarefa' && activity.prazoFatal && <Row label="Prazo fatal"><span className="font-medium text-rose-600 dark:text-rose-400">{new Date(activity.prazoFatal).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></Row>}
+          {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.prazoFatal && <Row label="Prazo fatal"><span className="font-medium text-rose-600 dark:text-rose-400">{new Date(activity.prazoFatal).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.recorte && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Recorte da publicação:</dt>

@@ -177,9 +177,14 @@ function ClienteRow({ c, statuses, allTags, onChanged }: {
       {/* Cliente */}
       <td className="px-4 py-3">
         <Link href={`/clientes/${c.partyId}`} className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#228BE6]/10 text-xs font-semibold text-[#228BE6]">
-            {c.name.trim().slice(0, 2).toUpperCase()}
-          </span>
+          {c.contact?.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={c.contact.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#228BE6]/10 text-xs font-semibold text-[#228BE6]">
+              {c.name.trim().slice(0, 2).toUpperCase()}
+            </span>
+          )}
           <span className="min-w-0">
             <span className="block max-w-[240px] truncate text-sm font-medium text-zinc-800 group-hover:text-[#228BE6] group-hover:underline dark:text-zinc-200">{c.name}</span>
             {c.document && <span className="block text-[11px] text-zinc-400">{c.document}</span>}

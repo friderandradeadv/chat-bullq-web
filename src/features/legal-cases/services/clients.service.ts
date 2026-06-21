@@ -6,6 +6,7 @@ export interface ClientContact {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  avatarUrl?: string | null;
   status: { id: string; name: string; color: string } | null;
   tags: { id: string; name: string; color: string }[];
   conversationId: string | null;
