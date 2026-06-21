@@ -3,25 +3,18 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, Check,
+  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
+import { FaseFields } from './fase-fields';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
 const BLUE = '#005efc';
-
-const DOC_ITEMS = [
-  { key: 'procuracao', label: 'Procuração' },
-  { key: 'hipossuficiencia', label: 'Declaração de hipossuficiência' },
-  { key: 'comprovante_residencia', label: 'Comprovante de residência' },
-  { key: 'documentos_pessoais', label: 'Documentos pessoais' },
-  { key: 'outros', label: 'Outros' },
-];
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
@@ -59,7 +52,7 @@ export function CaseDetailDrawer({
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabKey>('dados');
   const [picker, setPicker] = useState(false);
-  const [checks, setChecks] = useState<Record<string, boolean>>({});
+  const [cadastroOpen, setCadastroOpen] = useState(false);
 
   const { data: c, isLoading } = useQuery({
     queryKey: ['legal-cases', 'detail', caseId],
@@ -77,11 +70,6 @@ export function CaseDetailDrawer({
   };
 
   useEffect(() => {
-    const cl = (c?.metadata as any)?.checklist;
-    if (cl) setChecks(cl);
-  }, [c]);
-
-  useEffect(() => {
     const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onEsc);
     return () => window.removeEventListener('keydown', onEsc);
@@ -90,7 +78,10 @@ export function CaseDetailDrawer({
   const pf = (c?.metadata as any)?.pipefy ?? {};
   const cliente = c?.parties?.find((p) => p.role === 'CLIENT') ?? null;
   const adversa = c?.parties?.find((p) => p.role === 'OPPONENT') ?? null;
-  const fase = phases.find((p) => p.key === (c as any)?.legalPhase);
+  const phaseKey = (c as any)?.legalPhase as string | undefined;
+  const fase = phases.find((p) => p.key === phaseKey);
+  const faseData = (c?.metadata as any)?.faseData?.[phaseKey ?? ''] ?? {};
+  const showJuizo = pf.juizo && String(pf.juizo).trim().toLowerCase() !== String(c?.court ?? '').trim().toLowerCase();
 
   const onMove = async (phase: string) => {
     if (!c) return;
@@ -100,14 +91,6 @@ export function CaseDetailDrawer({
       toast.success('Fase atualizada');
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
     } catch { toast.error('Erro ao mover'); }
-  };
-
-  const toggleCheck = async (key: string) => {
-    if (!c) return;
-    const next = { ...checks, [key]: !checks[key] };
-    setChecks(next);
-    try { await legalCasesService.updateChecklist(c.id, { [key]: next[key] }); }
-    catch { setChecks(checks); toast.error('Erro ao salvar'); }
   };
 
   return (
@@ -159,26 +142,28 @@ export function CaseDetailDrawer({
                   <Field label="Comarca" value={c.jurisdiction} />
                   <Field label="Data do protocolo" value={fmtDate(c.distributedAt)} />
                   {pf.polo && <Field label="Polo do cliente" value={pf.polo} />}
-                  {pf.juizo && <Field label="Juízo" value={pf.juizo} />}
+                  {showJuizo && <Field label="Juízo" value={pf.juizo} />}
                   {pf.sistema && <Field label="Sistema" value={pf.sistema} />}
                   {pf.exito && <Field label="Êxito" value={pf.exito} />}
                   {pf.honorarios && <Field label="Honorários" value={pf.honorarios} />}
                 </div>
 
-                {/* Cadastro do CLIENTE (card conexão) */}
-                {cliente && (
-                  <div className="mt-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cadastro do cliente</p>
-                    <article className="mt-1.5 rounded border border-[#cfe0ed] p-3 shadow-[rgba(38,50,56,0.05)_0px_4px_8px_0px] dark:border-zinc-800">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-[#228BE6]" />
-                        <span className="text-sm font-medium text-black dark:text-zinc-100">{cliente.name}</span>
-                      </div>
-                      {(() => {
-                        const cad = cliente.contact?.metadata?.cadastro ?? {};
-                        const cpf = cad.cpf || cliente.document;
-                        return (
-                          <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-3">
+                {/* Cadastro do CLIENTE (card conexão, expansível) */}
+                {cliente && (() => {
+                  const cad: any = cliente.contact?.metadata?.cadastro ?? {};
+                  const cpf = cad.cpf || cliente.document;
+                  return (
+                    <div className="mt-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cadastro do cliente</p>
+                      <article className="mt-1.5 rounded border border-[#cfe0ed] shadow-[rgba(38,50,56,0.05)_0px_4px_8px_0px] dark:border-zinc-800">
+                        <button onClick={() => setCadastroOpen((o) => !o)} className="flex w-full items-center gap-2 p-3 text-left">
+                          <User className="h-4 w-4 shrink-0 text-[#228BE6]" />
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-black dark:text-zinc-100">{cliente.name}</span>
+                          {cpf && !cadastroOpen && <span className="shrink-0 text-[11px] text-[#48626f] dark:text-zinc-400">{cad.cnpj ? 'CNPJ' : 'CPF'} {cad.cnpj || cpf}</span>}
+                          <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${cadastroOpen ? '' : '-rotate-90'}`} />
+                        </button>
+                        {cadastroOpen && (
+                          <ul className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-[#eef2f8] p-3 dark:border-zinc-800">
                             {cpf && <DbField label={cad.cnpj ? 'CNPJ' : 'CPF'} value={cad.cnpj || cpf!} />}
                             {cad.rg && <DbField label="RG" value={cad.rg} />}
                             {cad.estadoCivil && <DbField label="Estado civil" value={cad.estadoCivil} />}
@@ -192,21 +177,25 @@ export function CaseDetailDrawer({
                               </li>
                             )}
                             {cliente.contact?.email && <DbField label="E-mail" value={cliente.contact.email} />}
+                            {cad.socio && <DbField label="Sócio administrador" value={cad.socio} />}
+                            {cad.senha && <DbField label="Senha" value={cad.senha} />}
+                            {cad.representadoNome && <DbField label="Representado" value={cad.representadoNome} />}
+                            {cad.representadoCpf && <DbField label="CPF do representado" value={cad.representadoCpf} />}
                             {cad.endereco && <li className="col-span-2 flex flex-col"><span className="text-[10px] font-semibold uppercase text-[#48626f]">Endereço</span><span className="text-xs text-black dark:text-zinc-200">{cad.endereco}</span></li>}
                             {cliente.contact?.conversations?.[0] && (
-                              <li className="flex flex-col">
+                              <li className="col-span-2 flex flex-col">
                                 <span className="text-[10px] font-semibold uppercase text-[#48626f]">Conversa</span>
                                 <a href={`/inbox?conversation=${cliente.contact.conversations[0].id}`} className="inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
-                                  Abrir <ArrowRight className="h-3 w-3" />
+                                  Abrir conversa <ArrowRight className="h-3 w-3" />
                                 </a>
                               </li>
                             )}
                           </ul>
-                        );
-                      })()}
-                    </article>
-                  </div>
-                )}
+                        )}
+                      </article>
+                    </div>
+                  );
+                })()}
 
                 {/* Parte adversa */}
                 <div className="mt-4">
@@ -271,21 +260,11 @@ export function CaseDetailDrawer({
               </div>
             </div>
 
-            <div className="mt-5">
-              <p className="text-sm font-medium text-[#101820] dark:text-zinc-200">Verifique os documentos necessários:</p>
-              <ul className="mt-2 space-y-2">
-                {DOC_ITEMS.map((it) => (
-                  <li key={it.key}>
-                    <button onClick={() => toggleCheck(it.key)} className="flex items-center gap-2 text-left">
-                      <span className={`flex h-4 w-4 items-center justify-center rounded-sm border ${checks[it.key] ? 'border-[#228BE6] bg-[#228BE6]' : 'border-zinc-300 dark:border-zinc-600'}`}>
-                        {checks[it.key] && <Check className="h-3 w-3 text-white" />}
-                      </span>
-                      <span className={`text-[13px] ${checks[it.key] ? 'text-zinc-400 line-through' : 'text-[#4b5863] dark:text-zinc-300'}`}>{it.label}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {c && phaseKey && (
+              <div className="mt-5">
+                <FaseFields caseId={c.id} phase={phaseKey} data={faseData} />
+              </div>
+            )}
 
             {c && c.deadlines.length > 0 && (
               <div className="mt-5">

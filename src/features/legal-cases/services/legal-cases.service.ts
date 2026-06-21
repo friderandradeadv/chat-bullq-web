@@ -231,6 +231,10 @@ export const legalCasesService = {
     const { data } = await api.patch(`/legal-cases/${id}/checklist`, { items });
     return data.data ?? data;
   },
+  async saveFaseField(id: string, phase: string, key: string, value: unknown): Promise<{ ok: boolean }> {
+    const { data } = await api.patch(`/legal-cases/${id}/fase-field`, { phase, key, value });
+    return data.data ?? data;
+  },
   async protocolar(
     id: string,
     input: { cnj?: string; value?: number; dataProtocolo?: string; court?: string; jurisdiction?: string },
