@@ -224,6 +224,10 @@ export const legalCasesService = {
     const { data } = await api.patch(`/legal-cases/${id}/phase`, { phase });
     return data.data ?? data;
   },
+  async updateChecklist(id: string, items: Record<string, boolean>): Promise<{ ok: boolean; checklist: Record<string, boolean> }> {
+    const { data } = await api.patch(`/legal-cases/${id}/checklist`, { items });
+    return data.data ?? data;
+  },
   async get(id: string): Promise<CaseDetail> {
     const { data } = await api.get(`/legal-cases/${id}`);
     return data.data ?? data;
