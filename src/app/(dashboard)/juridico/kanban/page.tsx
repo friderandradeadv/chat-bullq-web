@@ -23,6 +23,13 @@ const AREA_DOT: Record<string, string> = {
 };
 const areaDot = (a: string | null) => AREA_DOT[a ?? 'Cível'] ?? '#868e96';
 
+function cleanProduto(s: string | null): string | null {
+  if (!s) return s;
+  const t = s.trim();
+  if (t.startsWith('[')) { try { const a = JSON.parse(t); if (Array.isArray(a)) return a.join(' · '); } catch { /* */ } }
+  return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim();
+}
+
 // Etiqueta de PRODUTO — hex exatos do Pipefy (com fallbacks coerentes).
 function produtoColor(p: string | null): { bg: string; fg: string } {
   const s = (p ?? '').toUpperCase();
@@ -280,7 +287,7 @@ function Card({
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && (
           <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>
-            {c.produto}
+            {cleanProduto(c.produto)}
           </span>
         )}
         {c.areaJuridica && (

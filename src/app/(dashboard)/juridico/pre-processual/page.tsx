@@ -16,6 +16,12 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 const KEY = ['legal-cases', 'kanban'];
 const INPUT = 'h-[38px] w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
 
+function cleanProduto(s: string | null): string | null {
+  if (!s) return s;
+  const t = s.trim();
+  if (t.startsWith('[')) { try { const a = JSON.parse(t); if (Array.isArray(a)) return a.join(' · '); } catch { /* */ } }
+  return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim();
+}
 function produtoColor(p: string | null): { bg: string; fg: string } {
   const s = (p ?? '').toUpperCase();
   if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
@@ -150,7 +156,7 @@ function Card({ c, onOpen, onProtocolar }: { c: KanbanCard; onOpen?: (id: string
       onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id); }}
       className={`cursor-pointer touch-none rounded border border-[#cfe0ed] bg-white p-2.5 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${isDragging ? 'opacity-40' : ''}`}>
       <div className="mb-1.5 flex flex-wrap items-center gap-1">
-        {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{c.produto}</span>}
+        {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
       </div>
       <p className="text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
