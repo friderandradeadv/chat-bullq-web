@@ -155,7 +155,7 @@ export default function AgendaPage() {
       id: a.id, title: `${initials(a.responsibleName)} · ${a.title}`, start: a.hasTime ? a.date : a.date.slice(0, 10), allDay: !a.hasTime,
       backgroundColor: c.bg, borderColor: c.bg, textColor: c.text,
       classNames: [`ag-${a.source}`, (a.done || a.cancelled) ? 'ag-done' : ''].filter(Boolean),
-      startEditable: a.source !== 'prazo' && !a.cancelled, // tarefas/eventos arrastáveis; prazos não (data fatal)
+      startEditable: !a.cancelled, // tarefas/eventos/prazos arrastáveis (no prazo move a data de execução; a fatal é legal e fica na ficha)
     };
   }), [filtered]);
 
@@ -163,16 +163,25 @@ export default function AgendaPage() {
   const openCreate = (type: 'evento' | 'tarefa', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
   const onEventClick = (arg: EventClickArg) => { const a = byId.get(arg.event.id); if (a) setDetail(a); };
-  // Arrastar tarefa/evento para outra data (ou horário, na semana/dia) → reagenda.
+  // Arrastar tarefa/evento/prazo para outra data (ou horário, na semana/dia) →
+  // reagenda. No PRAZO movemos a data de EXECUÇÃO (safeDate); a data FATAL é
+  // legal e permanece intacta (só editável na ficha do prazo).
   const onEventDrop = async (arg: EventDropArg) => {
     const a = byId.get(arg.event.id);
     const start = arg.event.start;
-    if (!a || a.source === 'prazo' || !start) { arg.revert(); return; }
+    if (!a || !start) { arg.revert(); return; }
     try {
       const iso = start.toISOString();
       if (a.source === 'tarefa') await tasksService.update(a.rawId, { dueAt: iso });
+      else if (a.source === 'prazo') await deadlinesService.update(a.rawId, { safeDate: iso });
       else await calendarService.update(a.rawId, { startsAt: iso });
-      toast.success(a.source === 'tarefa' ? 'Tarefa movida' : 'Evento movido');
+      toast.success(
+        a.source === 'tarefa'
+          ? 'Tarefa movida'
+          : a.source === 'prazo'
+            ? 'Prazo movido (data de execução; a fatal permanece)'
+            : 'Evento movido',
+      );
       refetchAll();
     } catch (e: any) { toast.error(e?.message || 'Erro ao mover'); arg.revert(); }
   };
