@@ -136,9 +136,49 @@ function qs(params: object): string {
   return s ? `?${s}` : '';
 }
 
+export interface KanbanPhase {
+  key: string;
+  label: string;
+  status: CaseStatus;
+  order: number;
+  fluxo: boolean;
+  count: number;
+}
+export interface KanbanCard {
+  id: string;
+  title: string;
+  cnj: string | null;
+  area: string | null;
+  court: string | null;
+  value: number | null;
+  status: CaseStatus;
+  phase: string;
+  legalPhaseAt: string | null;
+  responsible: UserRef | null;
+  client: string | null;
+  opponent: string | null;
+  proximoPrazo: { id: string; title: string; dueDate: string; type: string } | null;
+  ultimoAndamento: { date: string; description: string } | null;
+  updatedAt: string;
+}
+export interface KanbanData {
+  phases: KanbanPhase[];
+  cards: KanbanCard[];
+}
+
 export const legalCasesService = {
   async list(query: ListCasesQuery = {}): Promise<CaseListItem[]> {
     const { data } = await api.get(`/legal-cases${qs(query)}`);
+    return data.data ?? data;
+  },
+  async kanban(
+    query: { responsibleId?: string; area?: string; search?: string } = {},
+  ): Promise<KanbanData> {
+    const { data } = await api.get(`/legal-cases/kanban${qs(query)}`);
+    return data.data ?? data;
+  },
+  async movePhase(id: string, phase: string): Promise<{ ok: boolean; phase: string }> {
+    const { data } = await api.patch(`/legal-cases/${id}/phase`, { phase });
     return data.data ?? data;
   },
   async get(id: string): Promise<CaseDetail> {

@@ -197,7 +197,7 @@ export function AppSidebar() {
           <div className="mt-3">
             <NavSection label="Jurídico">
               <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
-              <NavItem href="/juridico/kanban" icon={Columns3} label="Kanban de processos" />
+              <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
               <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
               <NavItem href="/clientes" icon={Users} label="Clientes" />
               <NavItem href="/processos" icon={Folder} label="Processos" />
