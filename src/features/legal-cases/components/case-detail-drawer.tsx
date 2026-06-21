@@ -174,25 +174,36 @@ export function CaseDetailDrawer({
                         <User className="h-4 w-4 text-[#228BE6]" />
                         <span className="text-sm font-medium text-black dark:text-zinc-100">{cliente.name}</span>
                       </div>
-                      <ul className="mt-2 grid grid-cols-2 gap-x-1 gap-y-3">
-                        {cliente.document && <DbField label="CPF/CNPJ" value={cliente.document} />}
-                        {cliente.contact?.phone && (
-                          <li className="flex flex-col">
-                            <span className="text-[10px] font-semibold uppercase text-[#48626f]">Telefone</span>
-                            <a href={`https://wa.me/${cliente.contact.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline dark:text-emerald-400">
-                              <Phone className="h-3 w-3" /> {fmtPhone(cliente.contact.phone)}
-                            </a>
-                          </li>
-                        )}
-                        {cliente.contact?.conversations?.[0] && (
-                          <li className="flex flex-col">
-                            <span className="text-[10px] font-semibold uppercase text-[#48626f]">Conversa</span>
-                            <a href={`/inbox?conversation=${cliente.contact.conversations[0].id}`} className="inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
-                              Abrir <ArrowRight className="h-3 w-3" />
-                            </a>
-                          </li>
-                        )}
-                      </ul>
+                      {(() => {
+                        const cad = cliente.contact?.metadata?.cadastro ?? {};
+                        const cpf = cad.cpf || cliente.document;
+                        return (
+                          <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-3">
+                            {cpf && <DbField label={cad.cnpj ? 'CNPJ' : 'CPF'} value={cad.cnpj || cpf!} />}
+                            {cad.rg && <DbField label="RG" value={cad.rg} />}
+                            {cad.estadoCivil && <DbField label="Estado civil" value={cad.estadoCivil} />}
+                            {cad.profissao && <DbField label="Profissão" value={cad.profissao} />}
+                            {cliente.contact?.phone && (
+                              <li className="flex flex-col">
+                                <span className="text-[10px] font-semibold uppercase text-[#48626f]">Telefone</span>
+                                <a href={`https://wa.me/${cliente.contact.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline dark:text-emerald-400">
+                                  <Phone className="h-3 w-3" /> {fmtPhone(cliente.contact.phone)}
+                                </a>
+                              </li>
+                            )}
+                            {cliente.contact?.email && <DbField label="E-mail" value={cliente.contact.email} />}
+                            {cad.endereco && <li className="col-span-2 flex flex-col"><span className="text-[10px] font-semibold uppercase text-[#48626f]">Endereço</span><span className="text-xs text-black dark:text-zinc-200">{cad.endereco}</span></li>}
+                            {cliente.contact?.conversations?.[0] && (
+                              <li className="flex flex-col">
+                                <span className="text-[10px] font-semibold uppercase text-[#48626f]">Conversa</span>
+                                <a href={`/inbox?conversation=${cliente.contact.conversations[0].id}`} className="inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
+                                  Abrir <ArrowRight className="h-3 w-3" />
+                                </a>
+                              </li>
+                            )}
+                          </ul>
+                        );
+                      })()}
                     </article>
                   </div>
                 )}

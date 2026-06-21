@@ -38,7 +38,9 @@ export interface PartyDetail {
     id: string;
     name: string | null;
     phone: string | null;
+    email: string | null;
     avatarUrl: string | null;
+    metadata?: { cadastro?: { cpf?: string | null; cnpj?: string | null; rg?: string | null; estadoCivil?: string | null; profissao?: string | null; endereco?: string | null } } | null;
     conversations: ConversationRef[];
   } | null;
 }
