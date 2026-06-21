@@ -24,6 +24,7 @@ import {
   CalendarCheck,
   LayoutList,
   Columns3,
+  Gavel,
   Sun,
   Moon,
   CircleDot,
@@ -200,6 +201,7 @@ export function AppSidebar() {
               <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
               <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
               <NavItem href="/clientes" icon={Users} label="Clientes" />
+              <NavItem href="/juridico/partes-adversas" icon={Gavel} label="Partes Adversas" />
               <NavItem href="/processos" icon={Folder} label="Processos" />
               <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
             </NavSection>

@@ -194,6 +194,17 @@ export interface KanbanData {
   cards: KanbanCard[];
 }
 
+export interface OpponentRow {
+  name: string;
+  document: string | null;
+  casesCount: number;
+  totalValue: number;
+  areas: string[];
+  contactId: string | null;
+  avatarUrl: string | null;
+  processos: { id: string; cnj: string | null; area: string | null; value: number; cliente: string | null }[];
+}
+
 export const legalCasesService = {
   async list(query: ListCasesQuery = {}): Promise<CaseListItem[]> {
     const { data } = await api.get(`/legal-cases${qs(query)}`);
@@ -203,6 +214,10 @@ export const legalCasesService = {
     query: { responsibleId?: string; area?: string; search?: string } = {},
   ): Promise<KanbanData> {
     const { data } = await api.get(`/legal-cases/kanban${qs(query)}`);
+    return data.data ?? data;
+  },
+  async opponents(): Promise<OpponentRow[]> {
+    const { data } = await api.get('/legal-cases/opponents');
     return data.data ?? data;
   },
   async movePhase(id: string, phase: string): Promise<{ ok: boolean; phase: string }> {
