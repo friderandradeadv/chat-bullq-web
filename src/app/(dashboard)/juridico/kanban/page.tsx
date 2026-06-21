@@ -6,7 +6,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Columns3, AlarmClock, Scale, User, Search, RefreshCw } from 'lucide-react';
+import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -18,32 +18,46 @@ const STATUS_ACCENT: Record<string, string> = {
   ACTIVE: '#228BE6', SUSPENDED: '#f59e0b', CLOSED: '#16a34a', ARCHIVED: '#71717a',
 };
 
+const AREA_COLORS: Record<string, { dot: string; chip: string }> = {
+  'Bancário': { dot: '#228BE6', chip: 'bg-[#228BE6]/10 text-[#1971c2] dark:text-[#74c0fc]' },
+  'Previdenciário': { dot: '#7048e8', chip: 'bg-[#7048e8]/12 text-[#6741d9] dark:text-[#b197fc]' },
+  'Trabalhista': { dot: '#f08c00', chip: 'bg-[#f08c00]/12 text-[#e8590c] dark:text-[#ffd43b]' },
+  'Consumidor': { dot: '#e64980', chip: 'bg-[#e64980]/12 text-[#c2255c] dark:text-[#faa2c1]' },
+  'Cível': { dot: '#868e96', chip: 'bg-zinc-200/70 text-zinc-600 dark:bg-zinc-700/50 dark:text-zinc-300' },
+};
+const areaColor = (a: string | null) => AREA_COLORS[a ?? 'Cível'] ?? AREA_COLORS['Cível'];
+
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.floor(d / 365)}a` : d >= 30 ? `${Math.floor(d / 30)}m` : `${d}d`);
 
 export default function FaseJudicialKanbanPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [area, setArea] = useState('');
+  const [produto, setProduto] = useState('');
   const [resp, setResp] = useState('');
-  const [showArquivados, setShowArquivados] = useState(false);
+  const [showFora, setShowFora] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: KEY,
     queryFn: () => legalCasesService.kanban({}),
-    refetchInterval: 30_000, // vivo: reflete os movimentos automáticos do DJEN
+    refetchInterval: 30_000,
   });
 
   const phases = data?.phases ?? [];
   const cards = data?.cards ?? [];
 
-  // opções de filtro derivadas dos cards
   const areas = useMemo(
-    () => Array.from(new Set(cards.map((c) => c.area).filter(Boolean))).sort() as string[],
+    () => Array.from(new Set(cards.map((c) => c.areaJuridica).filter(Boolean))).sort() as string[],
+    [cards],
+  );
+  const produtos = useMemo(
+    () => Array.from(new Set(cards.map((c) => c.produto).filter(Boolean))).sort() as string[],
     [cards],
   );
   const resps = useMemo(() => {
@@ -55,7 +69,8 @@ export default function FaseJudicialKanbanPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return cards.filter((c) => {
-      if (area && c.area !== area) return false;
+      if (area && c.areaJuridica !== area) return false;
+      if (produto && c.produto !== produto) return false;
       if (resp && c.responsible?.id !== resp) return false;
       if (q) {
         const hay = `${c.title} ${c.cnj ?? ''} ${c.client ?? ''} ${c.opponent ?? ''}`.toLowerCase();
@@ -63,7 +78,7 @@ export default function FaseJudicialKanbanPage() {
       }
       return true;
     });
-  }, [cards, search, area, resp]);
+  }, [cards, search, area, produto, resp]);
 
   const byPhase = useMemo(() => {
     const map: Record<string, KanbanCard[]> = {};
@@ -78,9 +93,10 @@ export default function FaseJudicialKanbanPage() {
     return map;
   }, [filtered]);
 
+  const FORA = new Set(['arquivado', 'abandonado', 'perdidos_valeska']);
   const visiblePhases = useMemo(
-    () => phases.filter((p) => showArquivados || (p.key !== 'arquivado' && p.key !== 'abandonado')),
-    [phases, showArquivados],
+    () => phases.filter((p) => showFora || !FORA.has(p.key)),
+    [phases, showFora],
   );
 
   const active = cards.find((c) => c.id === activeId) ?? null;
@@ -93,10 +109,10 @@ export default function FaseJudicialKanbanPage() {
     try {
       await legalCasesService.movePhase(card.id, toPhase);
       const label = phases.find((p) => p.key === toPhase)?.label ?? toPhase;
-      toast.success(`Processo movido para "${label}"`);
+      toast.success(`Movido para "${label}"`);
       qc.invalidateQueries({ queryKey: KEY });
     } catch (err: any) {
-      qc.invalidateQueries({ queryKey: KEY }); // rollback
+      qc.invalidateQueries({ queryKey: KEY });
       toast.error(err?.response?.data?.message || 'Erro ao mover o processo');
     }
   };
@@ -108,17 +124,14 @@ export default function FaseJudicialKanbanPage() {
     if (to && card && phases.some((p) => p.key === to)) move(card, to);
   };
 
-  const total = filtered.length;
-
   return (
     <div className="flex h-full flex-col bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
-      {/* Cabeçalho */}
       <div className="shrink-0 border-b border-[#DEE2E6] dark:border-zinc-800 px-6 pt-6 pb-4">
         <div className="flex items-center gap-2">
           <Columns3 className="h-5 w-5 text-[#228BE6]" />
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Fase Judicial</h1>
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">
-            {total} processos
+            {filtered.length} processos
           </span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
         </div>
@@ -126,7 +139,6 @@ export default function FaseJudicialKanbanPage() {
           Arraste os processos entre as fases. O quadro se move sozinho conforme as publicações do DJEN.
         </p>
 
-        {/* Filtros */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
@@ -134,54 +146,65 @@ export default function FaseJudicialKanbanPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar cliente, réu, CNJ…"
-              className="h-9 w-64 rounded-lg border border-[#DEE2E6] bg-white pl-8 pr-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#228BE6] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              className="h-9 w-60 rounded-lg border border-[#DEE2E6] bg-white pl-8 pr-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-[#228BE6] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
             />
           </div>
-          <select
-            value={area}
-            onChange={(e) => setArea(e.target.value)}
-            className="h-9 rounded-lg border border-[#DEE2E6] bg-white px-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-          >
-            <option value="">Todas as áreas</option>
-            {areas.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select
-            value={resp}
-            onChange={(e) => setResp(e.target.value)}
-            className="h-9 rounded-lg border border-[#DEE2E6] bg-white px-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-          >
-            <option value="">Todos os responsáveis</option>
-            {resps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
+          <Select value={area} onChange={setArea} placeholder="Todas as áreas" options={areas} />
+          <Select value={produto} onChange={setProduto} placeholder="Todos os produtos" options={produtos} />
+          <Select value={resp} onChange={setResp} placeholder="Todos os responsáveis" options={resps.map((r) => r.name)} valueMap={resps} />
           <label className="ml-1 flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
-            <input type="checkbox" checked={showArquivados} onChange={(e) => setShowArquivados(e.target.checked)} className="accent-[#228BE6]" />
+            <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#228BE6]" />
             Mostrar arquivados/abandonados
           </label>
         </div>
       </div>
 
-      {/* Board horizontal */}
       <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
         <div className="flex flex-1 gap-3 overflow-x-auto p-4">
           {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
           {!isLoading && visiblePhases.map((phase) => (
-            <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} />
+            <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} />
           ))}
         </div>
-        <DragOverlay>{active ? <Card c={active} overlay /> : null}</DragOverlay>
+        <DragOverlay>{active ? <Card c={active} phases={phases} onMove={move} overlay /> : null}</DragOverlay>
       </DndContext>
     </div>
   );
 }
 
-function Column({ phase, items }: { phase: KanbanPhase; items: KanbanCard[] }) {
+function Select({
+  value, onChange, placeholder, options, valueMap,
+}: {
+  value: string; onChange: (v: string) => void; placeholder: string; options: string[];
+  valueMap?: { id: string; name: string }[];
+}) {
+  return (
+    <select
+      value={valueMap ? value : value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-9 max-w-[180px] rounded-lg border border-[#DEE2E6] bg-white px-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+    >
+      <option value="">{placeholder}</option>
+      {(valueMap ?? options.map((o) => ({ id: o, name: o }))).map((o: any) => (
+        <option key={o.id} value={o.id}>{o.name}</option>
+      ))}
+    </select>
+  );
+}
+
+function Column({
+  phase, items, phases, onMove,
+}: {
+  phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[];
+  onMove: (c: KanbanCard, to: string) => void;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const accent = STATUS_ACCENT[phase.status] ?? '#228BE6';
   return (
-    <div className="flex w-[280px] shrink-0 flex-col">
+    <div className="flex w-[286px] shrink-0 flex-col">
       <div className="mb-2 flex items-center gap-2 px-1">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: accent }} />
-        <h2 className="truncate text-sm font-semibold text-zinc-700 dark:text-zinc-200">{phase.label}</h2>
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: accent }} />
+        <h2 className="truncate text-[13px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">{phase.label}</h2>
         <span className="ml-auto rounded-full bg-zinc-100 px-2 text-xs font-medium text-zinc-500 dark:bg-zinc-800">
           {items.length}
         </span>
@@ -197,17 +220,24 @@ function Column({ phase, items }: { phase: KanbanPhase; items: KanbanCard[] }) {
             Vazio
           </p>
         )}
-        {items.map((c) => <Card key={c.id} c={c} />)}
+        {items.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, overlay }: { c: KanbanCard; overlay?: boolean }) {
+function Card({
+  c, phases, onMove, overlay,
+}: {
+  c: KanbanCard; phases: KanbanPhase[]; onMove: (c: KanbanCard, to: string) => void; overlay?: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
   const overdue = c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
-  const titulo = c.client && c.opponent ? `${c.client} × ${c.opponent}` : c.title;
+  const slaEstourado = c.slaDias > 0 && c.diasNaFase != null && c.diasNaFase > c.slaDias;
+  const ac = areaColor(c.areaJuridica);
+  const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+
   return (
     <div
       ref={setNodeRef}
@@ -218,35 +248,84 @@ function Card({ c, overlay }: { c: KanbanCard; overlay?: boolean }) {
         isDragging && !overlay ? 'opacity-40' : ''
       } ${overlay ? 'rotate-2 shadow-lg' : ''}`}
     >
-      <p className="line-clamp-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">{titulo}</p>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        {c.area && (
-          <span className="rounded bg-[#228BE6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#1971c2] dark:text-[#74c0fc]">
-            {c.area}
+      {/* Etiquetas: produto + área */}
+      <div className="mb-1.5 flex flex-wrap items-center gap-1">
+        {c.produto && (
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${ac.chip}`}>{c.produto}</span>
+        )}
+        {c.areaJuridica && (
+          <span className="inline-flex items-center gap-1 rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: ac.dot }} />
+            {c.areaJuridica}
           </span>
         )}
-        {c.value != null && c.value > 0 && (
-          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</span>
-        )}
       </div>
+
+      {/* Cliente (título) × parte adversa */}
+      <p className="text-sm font-semibold uppercase leading-tight text-zinc-900 dark:text-zinc-100">{c.client ?? c.title}</p>
+      {c.opponent && <p className="mt-0.5 truncate text-[11px] text-zinc-500">× {c.opponent}</p>}
+
+      {/* Nº processo · valor · protocolo */}
       {c.cnj && (
-        <p className="mt-1 flex items-center gap-1 truncate text-[11px] text-zinc-400">
+        <p className="mt-1.5 flex items-center gap-1 truncate text-[11px] text-zinc-400">
           <Scale className="h-3 w-3 shrink-0" /> {c.cnj}
         </p>
       )}
-      <div className="mt-2 flex items-center justify-between gap-2">
-        {c.proximoPrazo ? (
-          <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${overdue ? 'text-red-600' : 'text-zinc-500'}`}>
-            <AlarmClock className="h-3 w-3" /> {fmtDate(c.proximoPrazo.dueDate)}
-            {c.proximoPrazo.type === 'FATAL' && <span className="font-bold text-red-600">!</span>}
-          </span>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        {c.value != null && c.value > 0 ? (
+          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</span>
         ) : <span />}
-        {c.responsible && (
-          <span className="inline-flex items-center gap-1 truncate text-[11px] text-zinc-400">
-            <User className="h-3 w-3 shrink-0" />
-            {c.responsible.name.split(' ')[0]}
-          </span>
+        {c.dataProtocolo && (
+          <span className="text-[10px] text-zinc-400">prot. {fmtDate(c.dataProtocolo)}</span>
         )}
+      </div>
+
+      {/* Vencimento do próximo prazo */}
+      {c.proximoPrazo && (
+        <p className={`mt-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
+          overdue ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-zinc-50 text-zinc-500 dark:bg-zinc-800/60'
+        }`}>
+          <CalendarClock className="h-3 w-3" />
+          {overdue ? 'Venceu' : 'Vence'} {fmtDate(c.proximoPrazo.dueDate)}
+          {c.proximoPrazo.type === 'FATAL' && <span className="font-bold">· fatal</span>}
+        </p>
+      )}
+
+      {/* Rodapé: 3 relógios + avatar */}
+      <div className="mt-2 flex items-center justify-between border-t border-zinc-100 pt-1.5 dark:border-zinc-800">
+        <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+          <span className="inline-flex items-center gap-0.5" title="Tempo no processo">
+            <Clock className="h-3 w-3" /> {fmtDias(c.diasNoProcesso)}
+          </span>
+          <span className={`inline-flex items-center gap-0.5 ${slaEstourado ? 'font-semibold text-red-500' : ''}`} title="Tempo na fase atual">
+            <Clock className="h-3 w-3" /> {fmtDias(c.diasNaFase)}
+          </span>
+          {c.slaDias > 0 && (
+            <span className={`inline-flex items-center gap-0.5 ${slaEstourado ? 'font-semibold text-red-500' : 'text-zinc-300 dark:text-zinc-600'}`} title="Prazo configurado da fase (SLA)">
+              <Clock className="h-3 w-3" /> {c.slaDias}d
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          {/* Mover para fase */}
+          <select
+            value={c.phase}
+            onPointerDown={(e) => e.stopPropagation()}
+            onChange={(e) => onMove(c, e.target.value)}
+            title="Mover para fase"
+            className="h-5 max-w-[18px] cursor-pointer appearance-none rounded border-0 bg-transparent text-[10px] text-zinc-400 hover:text-[#228BE6] focus:outline-none"
+          >
+            {phases.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
+          {c.responsible && (
+            c.responsible.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={c.responsible.avatarUrl} alt={c.responsible.name} className="h-5 w-5 rounded-full object-cover" />
+            ) : (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#228BE6]/15 text-[9px] font-bold text-[#1971c2] dark:text-[#74c0fc]">{iniciais}</span>
+            )
+          )}
+        </div>
       </div>
     </div>
   );

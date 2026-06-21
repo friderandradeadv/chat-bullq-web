@@ -141,6 +141,7 @@ export interface KanbanPhase {
   label: string;
   status: CaseStatus;
   order: number;
+  slaDias: number;
   fluxo: boolean;
   count: number;
 }
@@ -148,11 +149,16 @@ export interface KanbanCard {
   id: string;
   title: string;
   cnj: string | null;
-  area: string | null;
+  produto: string | null; // 1ª etiqueta (RMC/BPC-LOAS…)
+  areaJuridica: string | null; // 2ª etiqueta (Bancário/Previdenciário…)
   court: string | null;
   value: number | null;
   status: CaseStatus;
   phase: string;
+  slaDias: number;
+  dataProtocolo: string | null;
+  diasNoProcesso: number | null; // 1º relógio
+  diasNaFase: number | null; // 2º relógio
   legalPhaseAt: string | null;
   responsible: UserRef | null;
   client: string | null;
