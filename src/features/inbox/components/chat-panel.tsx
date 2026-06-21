@@ -419,7 +419,11 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
   // Minimizar os registros de sistema no chat (atribuição/status/IA/arquivamento)
   // pra a conversa não ficar lotada. Preferência persistida por usuário.
   const [hideLogs, setHideLogs] = useState(
-    () => typeof window !== 'undefined' && localStorage.getItem('chat-hide-logs') === '1',
+    // Default: logs do sistema MINIMIZADOS (chat limpo, "não fica lotado").
+    // Só mostra se o usuário pediu explicitamente (preferência '0').
+    () =>
+      typeof window === 'undefined' ||
+      localStorage.getItem('chat-hide-logs') !== '0',
   );
   const toggleHideLogs = () => {
     setHideLogs((v) => {
