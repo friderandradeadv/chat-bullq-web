@@ -31,6 +31,13 @@ const fmtPhone = (p: string | null) => {
   if (d.length < 12) return p ?? '';
   return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
 };
+// "[\"BPC/LOAS\"]" / "[\"RMC\",\"RCC\"]" → "BPC/LOAS" / "RMC · RCC"
+const cleanArea = (s: string | null): string | null => {
+  if (!s) return s;
+  const t = s.trim();
+  if (t.startsWith('[')) { try { const a = JSON.parse(t); if (Array.isArray(a)) return a.join(' · '); } catch { /* */ } }
+  return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim();
+};
 const fmtSize = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 const LEFT_TABS = [
@@ -185,7 +192,8 @@ export function CaseDetailDrawer({
                             )}
                             {cliente.contact?.email && <DbField label="E-mail" value={cliente.contact.email} />}
                             {cad.socio && <DbField label="Sócio administrador" value={cad.socio} />}
-                            {cad.senha && <DbField label="Senha" value={cad.senha} />}
+                            {cad.login && <DbField label="Login Meu INSS / gov.br" value={cad.login} />}
+                            {cad.senha && <DbField label="Senha Meu INSS / gov.br" value={cad.senha} />}
                             {cad.representadoNome && <DbField label="Representado" value={cad.representadoNome} />}
                             {cad.representadoCpf && <DbField label="CPF do representado" value={cad.representadoCpf} />}
                             {cad.endereco && <li className="col-span-2 flex flex-col"><span className="text-[10px] font-semibold uppercase text-[#48626f]">Endereço</span><span className="text-xs text-black dark:text-zinc-200">{cad.endereco}</span></li>}
@@ -491,19 +499,24 @@ function DadosForm({ c, pf, showJuizo, onSaved }: { c: CaseDetail; pf: any; show
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-          <Field label="Número do processo" value={c.cnjNumber} mono />
-          <Field label="Valor da causa" value={fmtMoney(c.value)} strong />
-          <Field label="Tribunal" value={c.court} />
-          <Field label="Comarca" value={c.jurisdiction} />
-          <Field label="Área" value={c.area} />
-          <Field label="Data do protocolo" value={fmtDate(c.distributedAt)} />
-          {pf.polo && <Field label="Polo do cliente" value={pf.polo} />}
-          {showJuizo && <Field label="Juízo" value={pf.juizo} />}
-          {pf.sistema && <Field label="Sistema" value={pf.sistema} />}
-          {pf.exito && <Field label="Êxito" value={pf.exito} />}
-          {pf.honorarios && <Field label="Honorários" value={pf.honorarios} />}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {c.area && <Field label="Área / produto" value={cleanArea(c.area)} />}
+            {c.cnjNumber && <Field label="Número do processo" value={c.cnjNumber} mono />}
+            {c.value != null && Number(c.value) > 0 && <Field label="Valor da causa" value={fmtMoney(c.value)} strong />}
+            {c.court && <Field label="Tribunal" value={c.court} />}
+            {c.jurisdiction && <Field label="Comarca" value={c.jurisdiction} />}
+            {c.distributedAt && <Field label="Data do protocolo" value={fmtDate(c.distributedAt)} />}
+            {pf.polo && <Field label="Polo do cliente" value={pf.polo} />}
+            {showJuizo && <Field label="Juízo" value={pf.juizo} />}
+            {pf.sistema && <Field label="Sistema" value={pf.sistema} />}
+            {pf.exito && <Field label="Êxito" value={pf.exito} />}
+            {pf.honorarios && <Field label="Honorários" value={pf.honorarios} />}
+          </div>
+          {!c.cnjNumber && !c.court && !c.jurisdiction && !(c.value != null && Number(c.value) > 0) && !c.distributedAt && (
+            <p className="mt-2 text-xs italic text-zinc-400">Os dados processuais (CNJ, tribunal, comarca, valor…) aparecem após o protocolo — ou clique em “Editar” para preencher antes.</p>
+          )}
+        </>
       )}
     </>
   );
