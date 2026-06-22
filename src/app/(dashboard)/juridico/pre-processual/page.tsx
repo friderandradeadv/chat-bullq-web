@@ -6,7 +6,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List } from 'lucide-react';
+import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -36,6 +36,10 @@ function produtoColor(p: string | null): { bg: string; fg: string } {
   if (/SEGURO|TARIFA/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
   return { bg: 'rgb(209,209,209)', fg: '#101820' };
 }
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.floor(d / 365)}a` : d >= 30 ? `${Math.floor(d / 30)}m` : `${d}d`);
 
 export default function PreProcessualPage() {
   const qc = useQueryClient();
@@ -159,28 +163,48 @@ function Card({ c, onOpen, onProtocolar }: { c: KanbanCard; onOpen?: (id: string
   const down = useRef<{ x: number; y: number } | null>(null);
   const prod = produtoColor(c.produto);
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {};
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id); }}
-      className={`cursor-pointer touch-none rounded border border-[#cfe0ed] bg-white p-2.5 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${isDragging ? 'opacity-40' : ''}`}>
-      <div className="mb-1.5 flex flex-wrap items-center gap-1">
+      className={`cursor-pointer touch-none rounded border border-[#cfe0ed] bg-white py-2.5 pl-2 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${isDragging ? 'opacity-40' : ''}`}>
+      {/* Etiquetas: produto (cor) + área (cinza) */}
+      <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
       </div>
-      <p className="text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        {onProtocolar ? (
-          <button onClick={(e) => { e.stopPropagation(); onProtocolar(c.id); }} onPointerDown={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded-full bg-[#005efc] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90">
-            <FileCheck2 className="h-3 w-3" /> Protocolar
-          </button>
-        ) : <span />}
-        {c.responsible && (c.responsible.avatarUrl
-          ? // eslint-disable-next-line @next/next/no-img-element
-            <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
-          : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>)}
+      {/* Partes: cliente × parte adversa (banco) */}
+      <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] hover:underline dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      {c.opponent && <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
+      {/* Nº processo (copiável) */}
+      {c.cnj && (
+        <p className="mt-2 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500">
+          <Scale className="h-3 w-3 shrink-0" /><span className="truncate">{c.cnj}</span>
+          <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(c.cnj!); toast.success('Nº do processo copiado'); }} onPointerDown={(e) => e.stopPropagation()} title="Copiar nº" className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"><Copy className="h-3 w-3" /></button>
+        </p>
+      )}
+      {/* Valor da causa */}
+      {c.value != null && c.value > 0 && <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</p>}
+      {/* Próximo prazo */}
+      {c.proximoPrazo && (
+        <span className={`mt-2 inline-flex items-center gap-1 rounded px-1.5 text-[11px] ${overdue ? 'h-5 bg-[#c22e00] text-white' : 'text-[#48626f] dark:text-zinc-400'}`}>
+          <CalendarClock className="h-3.5 w-3.5" /> {overdue ? 'Venc' : 'Vence'} {fmtDate(c.proximoPrazo.dueDate)}{c.proximoPrazo.type === 'FATAL' && <span className="font-semibold">· fatal</span>}
+        </span>
+      )}
+      {/* Rodapé: relógios + Protocolar + avatar */}
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#eef2f8] pt-1.5 dark:border-zinc-800">
+        <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4b5863] dark:text-zinc-400" title="Tempo na fase atual"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNaFase)}</span>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {onProtocolar && (
+            <button onClick={(e) => { e.stopPropagation(); onProtocolar(c.id); }} onPointerDown={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 rounded-full bg-[#005efc] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90"><FileCheck2 className="h-3 w-3" /> Protocolar</button>
+          )}
+          {c.responsible && (c.responsible.avatarUrl
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
+            : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>)}
+        </div>
       </div>
     </div>
   );
