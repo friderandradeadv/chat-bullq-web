@@ -10,12 +10,13 @@ import { membersService } from '@/features/settings/services/members.service';
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 const PRODUTOS = ['RMC', 'RCC', 'RMC + RCC', 'BPC-LOAS', 'Aposentadoria', 'Auxílio-doença', 'Revisional', 'Consumidor', 'Trabalhista'];
 
-/** Dialog de criação de processo/card. targetPhase = fase de destino (ex.: 'novos_clientes'). */
-export function NovoCasoDialog({ targetPhase, onClose, onCreated }: { targetPhase?: string; onClose: () => void; onCreated: () => void }) {
+/** Dialog de criação de processo/card. targetPhase = fase inicial; phases = opções de fase. */
+export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }: { targetPhase?: string; phases?: { key: string; label: string }[]; onClose: () => void; onCreated: () => void }) {
   const [cliente, setCliente] = useState('');
   const [produto, setProduto] = useState('');
   const [adversa, setAdversa] = useState('');
   const [respId, setRespId] = useState('');
+  const [phase, setPhase] = useState(targetPhase ?? phases[0]?.key ?? '');
   const [busy, setBusy] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
@@ -31,7 +32,7 @@ export function NovoCasoDialog({ targetPhase, onClose, onCreated }: { targetPhas
         responsibleId: respId || undefined,
         parties,
       });
-      if (targetPhase) await legalCasesService.movePhase(novo.id, targetPhase);
+      if (phase) await legalCasesService.movePhase(novo.id, phase);
       toast.success('Processo criado');
       onCreated();
     } catch (e: any) {
@@ -67,6 +68,13 @@ export function NovoCasoDialog({ targetPhase, onClose, onCreated }: { targetPhas
           <Field label="Parte adversa (opcional)">
             <input value={adversa} onChange={(e) => setAdversa(e.target.value)} placeholder="Banco / réu (ex.: BANCO BMG S/A)" className={INPUT} />
           </Field>
+          {phases.length > 0 && (
+            <Field label="Criar na fase">
+              <select value={phase} onChange={(e) => setPhase(e.target.value)} className={INPUT}>
+                {phases.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+            </Field>
+          )}
         </div>
 
         <div className="mt-5 flex justify-end gap-2">

@@ -208,7 +208,7 @@ export default function FaseJudicialKanbanPage() {
       {openCaseId && (
         <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />
       )}
-      {novo && <NovoCasoDialog targetPhase="admissao" onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
+      {novo && <NovoCasoDialog targetPhase="admissao" phases={visiblePhases} onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
     </div>
   );
 }
