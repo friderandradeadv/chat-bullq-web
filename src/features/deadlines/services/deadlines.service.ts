@@ -16,7 +16,7 @@ export interface Deadline {
   case: { id: string; title: string; cnjNumber: string | null } | null;
   createdAt: string;
   metadata?: {
-    djen?: { descricao?: string; tipoPublicacao?: string; prazoFatal?: string; prazoSeguranca?: string; recorte?: string };
+    djen?: { descricao?: string; tipoPublicacao?: string; prazoFatal?: string; prazoSeguranca?: string; recorte?: string; faseMovida?: { de: string; para: string }; dispositivo?: string };
   } & Record<string, any>;
 }
 

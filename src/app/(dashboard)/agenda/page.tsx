@@ -54,6 +54,7 @@ interface Activity {
   responsibleId: string | null; responsibleName: string | null; createdName: string | null;
   priorityLabel: string | null; completedAt: string | null; description: string | null;
   prazoFatal: string | null; recorte: string | null; tipoPublicacao: string | null;
+  faseMovida: { de: string; para: string } | null; dispositivo: string | null;
 }
 
 export default function AgendaPage() {
@@ -110,6 +111,7 @@ export default function AgendaPage() {
         createdName: t.createdById ? userMap.get(t.createdById) ?? null : null,
         priorityLabel: PRIORITY_LABEL[t.priority] ?? null, completedAt: t.completedAt, description: t.description,
         prazoFatal: dj?.prazoFatal ?? null, recorte: dj?.recorte ?? null, tipoPublicacao: dj?.tipoPublicacao ?? null,
+        faseMovida: dj?.faseMovida ?? null, dispositivo: dj?.dispositivo ?? null,
       });
     }
     for (const d of dlQ.data ?? []) {
@@ -122,6 +124,7 @@ export default function AgendaPage() {
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
         createdName: null, priorityLabel: null, completedAt: null, description: ddj?.descricao ?? null,
         prazoFatal: d.dueDate, recorte: ddj?.recorte ?? null, tipoPublicacao: ddj?.tipoPublicacao ?? null,
+        faseMovida: ddj?.faseMovida ?? null, dispositivo: ddj?.dispositivo ?? null,
       });
     }
     for (const e of evQ.data ?? []) {
@@ -132,6 +135,7 @@ export default function AgendaPage() {
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
         createdName: null, priorityLabel: null, completedAt: null, description: e.location,
         prazoFatal: null, recorte: null, tipoPublicacao: null,
+        faseMovida: null, dispositivo: null,
       });
     }
     return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
@@ -687,6 +691,20 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {activity.description && activity.source === 'evento' && <Row label="Local">{activity.description}</Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.description && <Row label="Descrição da tarefa"><span className="whitespace-pre-wrap break-words">{activity.description}</span></Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.prazoFatal && <Row label="Prazo fatal"><span className="font-medium text-rose-600 dark:text-rose-400">{new Date(activity.prazoFatal).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></Row>}
+          {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.faseMovida && (
+            <Row label="Movimentação de fase">
+              <span className="text-zinc-600 dark:text-zinc-300">
+                Card movido de <span className="font-medium">{activity.faseMovida.de}</span> para{' '}
+                <span className="font-medium text-emerald-600 dark:text-emerald-400">{activity.faseMovida.para}</span> — fase judicial
+              </span>
+            </Row>
+          )}
+          {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.dispositivo && (
+            <div className="flex flex-col gap-1">
+              <dt className="font-medium text-[#6C757D]">Dispositivo da sentença:</dt>
+              <dd className="m-0 whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-2 font-normal leading-relaxed text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">{activity.dispositivo}</dd>
+            </div>
+          )}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.recorte && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Recorte da publicação:</dt>

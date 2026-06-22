@@ -27,6 +27,7 @@ import {
   Paperclip,
   CalendarClock,
   AlertTriangle,
+  Gavel,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -40,6 +41,13 @@ import {
   type Deadline,
 } from '@/features/deadlines/services/deadlines.service';
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
+import {
+  recursosService,
+  type Recurso,
+  type JulgamentoRecurso,
+  JULGAMENTO_LABEL,
+  PARTE_RECORRENTE_LABEL,
+} from '@/features/recursos/services/recursos.service';
 import { inputCls, Field, ASTREA_BLUE, LegalTagChip, CnjNumber } from '../page';
 
 const ROLE_LABEL: Record<PartyRole, string> = {
@@ -86,7 +94,7 @@ const getInstancia = (c: CaseDetail): string | null => {
   return labelInstancia(a?.instanciaAtual ?? a?.raw?.['Instância Atual']);
 };
 
-type Tab = 'resumo' | 'atividades' | 'historico';
+type Tab = 'resumo' | 'atividades' | 'recursos' | 'historico';
 
 export default function ProcessoDetailPage() {
   const params = useParams<{ id: string }>();
@@ -201,6 +209,7 @@ export default function ProcessoDetailPage() {
           {([
             ['resumo', 'Resumo'],
             ['atividades', 'Atividades'],
+            ['recursos', 'Recursos'],
             ['historico', 'Histórico'],
           ] as [Tab, string][]).map(([key, label]) => (
             <button
@@ -222,6 +231,7 @@ export default function ProcessoDetailPage() {
       <div className="flex-1 px-6 py-5">
         {tab === 'resumo' && <ResumoTab c={c} />}
         {tab === 'atividades' && <AtividadesTab caseId={id} events={c.events} onChange={refetch} />}
+        {tab === 'recursos' && <RecursosTab caseId={id} />}
         {tab === 'historico' && (
           <HistoricoTab caseId={id} movements={c.movements} events={c.events} onAdd={() => setAddingHistory(true)} />
         )}
@@ -1461,6 +1471,238 @@ function PartiesCard({
 }
 
 // ─── Primitivos visuais estilo Astrea ────────────────────────────────
+
+// ─── Recursos (espelha o subcard + database "05. RECURSOS" do Pipefy) ────────
+
+const JULG_BADGE: Record<JulgamentoRecurso, string> = {
+  AGUARDANDO: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
+  PROVIDO: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400',
+  NAO_PROVIDO: 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400',
+  PARCIAL: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400',
+};
+const ESPECIES = ['Apelação', 'Agravo Interno', 'Agravo de Instrumento', 'Agravo em REsp', 'REsp', 'RE', 'Embargos de Declaração', 'Recurso Inominado', 'Recurso Ordinário'];
+
+function RecursosTab({ caseId }: { caseId: string }) {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const { data: recursos = [], isLoading } = useQuery({
+    queryKey: ['case-recursos', caseId],
+    queryFn: () => recursosService.list({ caseId }),
+  });
+  const refresh = () => qc.invalidateQueries({ queryKey: ['case-recursos', caseId] });
+
+  return (
+    <Card
+      title="Recursos"
+      icon={Gavel}
+      action={
+        <button
+          onClick={() => setAdding((v) => !v)}
+          className="flex items-center gap-1 text-sm font-medium text-[#228BE6] hover:underline"
+        >
+          <Plus className="h-4 w-4" /> Adicionar
+        </button>
+      }
+    >
+      {adding && (
+        <RecursoForm
+          caseId={caseId}
+          onDone={() => { setAdding(false); refresh(); }}
+          onCancel={() => setAdding(false)}
+        />
+      )}
+      {isLoading ? (
+        <EmptyState>Carregando…</EmptyState>
+      ) : recursos.length === 0 ? (
+        <EmptyState>Nenhum recurso neste processo. O DJEN cria automaticamente ao detectar interposição/julgamento.</EmptyState>
+      ) : (
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {recursos.map((r) => (
+            <RecursoRow key={r.id} r={r} onChange={refresh} />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function RecursoRow({ r, onChange }: { r: Recurso; onChange: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const remove = async () => {
+    if (!confirm('Excluir este recurso?')) return;
+    try {
+      await recursosService.remove(r.id);
+      toast.success('Recurso excluído');
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    }
+  };
+
+  if (editing) {
+    return (
+      <li className="py-3">
+        <RecursoForm
+          caseId={r.caseId}
+          initial={r}
+          onDone={() => { setEditing(false); onChange(); }}
+          onCancel={() => setEditing(false)}
+        />
+      </li>
+    );
+  }
+
+  return (
+    <li className="py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-[#202124] dark:text-zinc-100">
+              {r.especie || 'Recurso'}
+            </span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${JULG_BADGE[r.julgamento]}`}>
+              {JULGAMENTO_LABEL[r.julgamento]}
+            </span>
+            {r.parteRecorrente && (
+              <span className="text-xs text-[#6C757D]">
+                · recorrente: {PARTE_RECORRENTE_LABEL[r.parteRecorrente]}
+              </span>
+            )}
+            {r.grau && <span className="text-xs text-[#6C757D]">· grau {r.grau}</span>}
+          </div>
+          <div className="mt-0.5 text-xs text-[#6C757D]">
+            {r.parteAdversa ? `Parte adversa: ${r.parteAdversa}` : ''}
+            {r.numeroRecurso ? `${r.parteAdversa ? ' · ' : ''}nº ${r.numeroRecurso}` : ''}
+          </div>
+          {r.ementa && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-1 text-xs font-medium text-[#228BE6] hover:underline"
+            >
+              {expanded ? 'Ocultar ementa' : 'Ver ementa / tese de julgamento'}
+            </button>
+          )}
+          {expanded && r.ementa && (
+            <p className="mt-1 whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-2 text-xs leading-relaxed text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">
+              {r.ementa}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <button onClick={() => setEditing(true)} title="Editar" className="text-zinc-400 hover:text-[#228BE6]">
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button onClick={remove} title="Excluir" className="text-zinc-400 hover:text-rose-500">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function RecursoForm({
+  caseId,
+  initial,
+  onDone,
+  onCancel,
+}: {
+  caseId: string;
+  initial?: Recurso;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [especie, setEspecie] = useState(initial?.especie ?? '');
+  const [parte, setParte] = useState(initial?.parteRecorrente ?? '');
+  const [julgamento, setJulgamento] = useState<JulgamentoRecurso>(initial?.julgamento ?? 'AGUARDANDO');
+  const [numero, setNumero] = useState(initial?.numeroRecurso ?? '');
+  const [grau, setGrau] = useState(initial?.grau ?? '');
+  const [parteAdversa, setParteAdversa] = useState(initial?.parteAdversa ?? '');
+  const [ementa, setEmenta] = useState(initial?.ementa ?? '');
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const payload = {
+        especie: especie || undefined,
+        parteRecorrente: (parte || undefined) as 'CLIENTE' | 'ADVERSA' | undefined,
+        julgamento,
+        numeroRecurso: numero,
+        grau,
+        parteAdversa,
+        ementa,
+      };
+      if (initial) await recursosService.update(initial.id, payload);
+      else await recursosService.create({ caseId, ...payload });
+      toast.success(initial ? 'Recurso atualizado' : 'Recurso adicionado');
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao salvar');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-4 rounded-lg border border-[#DEE2E6] bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Espécie">
+          <input
+            list="especies-recurso"
+            value={especie}
+            onChange={(e) => setEspecie(e.target.value)}
+            placeholder="Apelação, Agravo Interno…"
+            className={inputCls}
+          />
+          <datalist id="especies-recurso">
+            {ESPECIES.map((e) => <option key={e} value={e} />)}
+          </datalist>
+        </Field>
+        <Field label="Parte recorrente">
+          <select value={parte} onChange={(e) => setParte(e.target.value as any)} className={inputCls}>
+            <option value="">—</option>
+            <option value="CLIENTE">Cliente (nós)</option>
+            <option value="ADVERSA">Parte adversa</option>
+          </select>
+        </Field>
+        <Field label="Julgamento">
+          <select value={julgamento} onChange={(e) => setJulgamento(e.target.value as JulgamentoRecurso)} className={inputCls}>
+            <option value="AGUARDANDO">Aguardando decisão</option>
+            <option value="PROVIDO">Provido</option>
+            <option value="NAO_PROVIDO">Não provido</option>
+            <option value="PARCIAL">Parcialmente provido</option>
+          </select>
+        </Field>
+        <Field label="Nº do recurso">
+          <input value={numero} onChange={(e) => setNumero(e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Parte adversa">
+          <input value={parteAdversa} onChange={(e) => setParteAdversa(e.target.value)} placeholder="Banco / réu" className={inputCls} />
+        </Field>
+        <Field label="Grau / unidade">
+          <input value={grau} onChange={(e) => setGrau(e.target.value)} className={inputCls} />
+        </Field>
+      </div>
+      <Field label="Ementa / tese de julgamento">
+        <textarea value={ementa} onChange={(e) => setEmenta(e.target.value)} rows={3} className={`${inputCls} !h-auto py-2`} />
+      </Field>
+      <div className="mt-2 flex justify-end gap-2">
+        <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-[#6C757D] hover:bg-zinc-100 dark:hover:bg-zinc-800">
+          Cancelar
+        </button>
+        <button
+          onClick={save}
+          disabled={busy}
+          className="rounded-md bg-[#228BE6] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1c7ed6] disabled:opacity-50"
+        >
+          {busy ? 'Salvando…' : initial ? 'Salvar' : 'Adicionar'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function Card({
   title,

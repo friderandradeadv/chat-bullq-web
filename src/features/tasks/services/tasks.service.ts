@@ -20,7 +20,7 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   metadata?: {
-    djen?: { tipoPublicacao?: string; prazoFatal?: string; prazoSeguranca?: string; recorte?: string };
+    djen?: { tipoPublicacao?: string; prazoFatal?: string; prazoSeguranca?: string; recorte?: string; faseMovida?: { de: string; para: string }; dispositivo?: string };
   } & Record<string, any>;
   case?: { id: string; title: string; cnjNumber: string | null } | null;
 }
