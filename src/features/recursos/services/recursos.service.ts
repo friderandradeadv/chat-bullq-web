@@ -13,12 +13,47 @@ export interface Recurso {
   parteRecorrente: ParteRecorrente | null;
   especie: string | null;
   julgamento: JulgamentoRecurso;
+  motivo: string | null;
   ementa: string | null;
   grau: string | null;
   publicationId: string | null;
   createdAt: string;
   updatedAt: string;
   case?: { id: string; title: string; cnjNumber: string | null } | null;
+}
+
+export interface EspecieStat {
+  nome: string;
+  total: number;
+  aguardando: number;
+  decididos: number;
+  favoraveis: number;
+  taxa: number | null;
+}
+
+export interface RecursoStats {
+  total: number;
+  aguardando: number;
+  decididos: number;
+  favoraveis: number;
+  desfavoraveis: number;
+  taxaExito: number;
+  porJulgamento: Record<JulgamentoRecurso, number>;
+  porEspecie: EspecieStat[];
+  porBanco: EspecieStat[];
+  melhoresTeses: {
+    especie: string | null;
+    cliente: string | null;
+    parteRecorrente: ParteRecorrente | null;
+    julgamento: JulgamentoRecurso;
+    cnj: string | null;
+    ementa: string | null;
+  }[];
+  gargalos: {
+    especiesBaixoExito: { nome: string; taxa: number | null; decididos: number }[];
+    bancosBaixoExito: { nome: string; taxa: number | null; decididos: number }[];
+    maisAguardando: { nome: string; aguardando: number }[];
+  };
 }
 
 export interface CreateRecursoInput {
@@ -65,6 +100,10 @@ function qs(params: object): string {
 export const recursosService = {
   async list(query: ListRecursosQuery = {}): Promise<Recurso[]> {
     const { data } = await api.get(`/recursos${qs(query)}`);
+    return data.data ?? data;
+  },
+  async stats(): Promise<RecursoStats> {
+    const { data } = await api.get('/recursos/stats');
     return data.data ?? data;
   },
   async create(input: CreateRecursoInput): Promise<Recurso> {
