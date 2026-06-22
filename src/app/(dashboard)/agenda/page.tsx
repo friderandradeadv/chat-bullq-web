@@ -160,9 +160,10 @@ export default function AgendaPage() {
       backgroundColor: c.bg, borderColor: c.bg, textColor: c.text,
       classNames: [`ag-${a.source}`, (a.done || a.cancelled) ? 'ag-done' : ''].filter(Boolean),
       startEditable: !a.cancelled, // tarefas/eventos/prazos arrastáveis (no prazo move a data de execução; a fatal é legal e fica na ficha)
-      // doneSort: itens em ABERTO (0) têm prioridade de aparecer no card do dia;
-      // cumpridos/cancelados (1) vão pro fim e caem no "+N" (ver eventOrder).
-      extendedProps: { doneSort: (a.done || a.cancelled) ? 1 : 0 },
+      // ordSort define a ordem no card do dia/popover (ver eventOrder):
+      //   0 = COMPROMISSO em aberto (audiência/evento c/ hora) → sempre primeiro, por horário;
+      //   1 = tarefa/prazo em aberto (dia todo); 2 = cumprido/cancelado → por último.
+      extendedProps: { ordSort: (a.done || a.cancelled) ? 2 : (a.hasTime ? 0 : 1) },
     };
   }), [filtered]);
 
@@ -315,9 +316,9 @@ export default function AgendaPage() {
                 // ao Astrea; tarefas/prazos são "dia todo" e não exibem hora.
                 displayEventTime displayEventEnd={false}
                 eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
-                // Itens em aberto antes dos cumpridos → no card do dia os abertos
-                // ganham os slots visíveis e os cumpridos caem no "+N".
-                eventOrder={['doneSort', 'start', 'title']}
+                // Ordem no card do dia/popover: COMPROMISSOS (audiências, por horário)
+                // primeiro, depois tarefas/prazos em aberto, e os cumpridos por último.
+                eventOrder={['ordSort', 'start', 'title']}
                 editable eventStartEditable eventDurationEditable={false} eventOverlap
                 events={fcEvents}
                 datesSet={(arg: DatesSetArg) => setTitle(arg.view.title)}
@@ -699,15 +700,21 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {done && activity.completedAt && <Row label=""><span className="text-zinc-500">{activity.source === 'tarefa' ? 'Tarefa concluída' : 'Prazo concluído'} em {new Date(activity.completedAt).toLocaleDateString('pt-BR')}{activity.responsibleName ? ` por ${activity.responsibleName}` : ''}</span></Row>}
           {activity.priorityLabel && <Row label="Prioridade">{activity.priorityLabel}</Row>}
           {activity.description && activity.source === 'evento' && <Row label="Local">{activity.description}</Row>}
-          {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.description && <Row label="Descrição da tarefa"><span className="whitespace-pre-wrap break-words">{activity.description}</span></Row>}
+          {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.description && (
+            <div className="flex flex-col gap-1">
+              <dt className="font-medium text-[#6C757D]">Descrição da tarefa:</dt>
+              <dd className="m-0 whitespace-pre-wrap break-words font-normal leading-relaxed text-[#202124] dark:text-zinc-200">{activity.description}</dd>
+            </div>
+          )}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.prazoFatal && <Row label="Prazo fatal"><span className="font-medium text-rose-600 dark:text-rose-400">{new Date(activity.prazoFatal).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.faseMovida && (
-            <Row label="Movimentação de fase">
-              <span className="text-zinc-600 dark:text-zinc-300">
+            <div className="flex flex-col gap-1">
+              <dt className="font-medium text-[#6C757D]">Movimentação de fase:</dt>
+              <dd className="m-0 font-normal leading-relaxed text-zinc-600 dark:text-zinc-300">
                 Card movido de <span className="font-medium">{activity.faseMovida.de}</span> para{' '}
                 <span className="font-medium text-emerald-600 dark:text-emerald-400">{activity.faseMovida.para}</span> — fase judicial
-              </span>
-            </Row>
+              </dd>
+            </div>
           )}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.dispositivo && (
             <div className="flex flex-col gap-1">
@@ -718,7 +725,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.recorte && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Recorte da publicação:</dt>
-              <dd className="m-0 whitespace-pre-wrap break-words font-normal leading-relaxed text-zinc-400 dark:text-zinc-500">{activity.recorte}</dd>
+              <dd className="m-0 whitespace-pre-wrap break-words text-justify font-normal leading-relaxed text-zinc-400 dark:text-zinc-500">{activity.recorte}</dd>
             </div>
           )}
         </dl>
