@@ -95,6 +95,16 @@ export function CaseDetailDrawer({
     } catch { toast.error('Erro ao mover'); }
   };
 
+  const onRemove = async () => {
+    if (!c || !confirm('Excluir este processo? Ele é arquivado (o histórico é preservado).')) return;
+    try {
+      await legalCasesService.remove(c.id);
+      toast.success('Processo excluído');
+      qc.invalidateQueries({ queryKey: ['legal-cases'] });
+      onClose();
+    } catch { toast.error('Erro ao excluir'); }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ fontFamily: INTER }}>
       <div className="absolute inset-0 bg-black/10" onClick={onClose} />
@@ -202,6 +212,11 @@ export function CaseDetailDrawer({
                     Ver no Pipefy <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
+                <div className="mt-6 border-t border-[#eef2f8] pt-3 dark:border-zinc-800">
+                  <button onClick={onRemove} className="inline-flex items-center gap-1 text-xs font-medium text-rose-500 hover:text-rose-600 hover:underline">
+                    <Trash2 className="h-3.5 w-3.5" /> Excluir processo
+                  </button>
+                </div>
               </>
             )}
             {c && tab === 'atividades' && <Atividades movements={c.movements} />}
