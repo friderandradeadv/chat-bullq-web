@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Gavel, Search, Scale } from 'lucide-react';
 import { legalCasesService, type RecursoRow } from '@/features/legal-cases/services/legal-cases.service';
+import { RecursosInsightsPanel } from '@/features/recursos/components/recursos-insights-panel';
 
 const JULG_COLOR: Record<string, string> = {
   'Provido': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -40,6 +41,10 @@ export default function RecursosPage() {
         <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">{filtered.length}</span>
       </div>
       <p className="mt-0.5 text-sm text-zinc-500">Recursos importados do Pipefy, vinculados aos processos.</p>
+
+      <div className="mt-4 shrink-0">
+        <RecursosInsightsPanel />
+      </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <div className="relative">
