@@ -310,6 +310,10 @@ export const legalCasesService = {
   async remove(id: string): Promise<void> {
     await api.delete(`/legal-cases/${id}`);
   },
+  async resumoAtendimento(id: string): Promise<{ resumo: string; geradoEm: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/resumo-atendimento`);
+    return data.data ?? data;
+  },
   async addParty(caseId: string, input: PartyInput): Promise<PartyDetail> {
     const { data } = await api.post(`/legal-cases/${caseId}/parties`, input);
     return data.data ?? data;

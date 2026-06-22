@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus,
+  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -137,6 +137,13 @@ export function CaseDetailDrawer({
             {c && tab === 'dados' && (
               <>
                 <DadosForm c={c} pf={pf} showJuizo={showJuizo} onSaved={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+
+                <ResumoAtendimento
+                  caseId={c.id}
+                  resumo={(c.metadata as any)?.atendimentoResumo?.texto ?? null}
+                  geradoEm={(c.metadata as any)?.atendimentoResumo?.geradoEm ?? null}
+                  onDone={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
+                />
 
                 {/* Cadastro do CLIENTE (card conexão, expansível) */}
                 {cliente && (() => {
@@ -386,6 +393,34 @@ function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa
         <button onClick={() => setEditing(true)} className="mt-1.5 inline-flex items-center gap-1 rounded border border-dashed border-[#cfe0ed] px-3 py-2 text-xs font-medium text-[#005efc] hover:bg-[#005efc]/5 dark:border-zinc-700">
           <Plus className="h-3.5 w-3.5" /> Cadastrar parte adversa
         </button>
+      )}
+    </div>
+  );
+}
+
+// Resumo do atendimento: a IA lê a conversa do cliente (WhatsApp) e cola na ficha.
+function ResumoAtendimento({ caseId, resumo, geradoEm, onDone }: { caseId: string; resumo: string | null; geradoEm: string | null; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const gerar = async () => {
+    setBusy(true);
+    try { await legalCasesService.resumoAtendimento(caseId); toast.success('Resumo do atendimento gerado'); onDone(); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao gerar resumo'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Resumo do atendimento (IA)</p>
+        <button onClick={gerar} disabled={busy} className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
+          <Sparkles className="h-3.5 w-3.5" /> {busy ? 'Lendo a conversa…' : resumo ? 'Atualizar' : 'Gerar resumo'}
+        </button>
+      </div>
+      {resumo ? (
+        <article className="mt-1.5 rounded border border-[#cfe0ed] bg-[#f8fbff] p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[#101820] dark:text-zinc-200">{resumo}</p>
+          {geradoEm && <p className="mt-2 text-[10px] text-zinc-400">Gerado em {new Date(geradoEm).toLocaleString('pt-BR')}</p>}
+        </article>
+      ) : (
+        <p className="mt-1.5 text-xs italic text-zinc-400">Sem resumo. Clique em “Gerar resumo” — a IA lê a conversa do cliente no WhatsApp e destaca bancos, benefício, valores e pendências.</p>
       )}
     </div>
   );
