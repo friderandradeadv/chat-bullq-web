@@ -340,7 +340,7 @@ export default function AgendaPage() {
       )}
       {dialog?.type === 'evento' && <CreateEventDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {dialog?.type === 'tarefa' && <CreateTaskDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
-      {detail && <ActivityDetailModal activity={detail} onClose={() => setDetail(null)} onRefetch={refetchAll} onOpenCase={(id) => router.push(`/processos/${id}`)} onOpenConversation={(id) => router.push(`/inbox?conversationId=${id}`)} />}
+      {detail && <ActivityDetailModal activity={detail} onClose={() => setDetail(null)} onRefetch={refetchAll} onOpenCase={(id) => window.open(`/processos/${id}`, '_blank', 'noopener')} onOpenConversation={(id) => router.push(`/inbox?conversationId=${id}`)} />}
     </div>
   );
 
