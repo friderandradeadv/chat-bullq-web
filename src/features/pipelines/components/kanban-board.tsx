@@ -20,6 +20,7 @@ import { KanbanCard } from './kanban-card';
 import { CardDialog } from './card-dialog';
 import { AddConversationDialog } from './add-conversation-dialog';
 import { ConversationDialog } from '@/features/inbox/components/conversation-dialog';
+import { useDragScroll } from '@/lib/use-drag-scroll';
 
 interface Props {
   pipelineId: string;
@@ -27,6 +28,7 @@ interface Props {
 
 export function KanbanBoard({ pipelineId }: Props) {
   const qc = useQueryClient();
+  const dragScroll = useDragScroll();
   const [activeCard, setActiveCard] = useState<CardSummary | null>(null);
   // Edit dialog (existing card)
   const [editingCard, setEditingCard] = useState<CardSummary | null>(null);
@@ -141,7 +143,7 @@ export function KanbanBoard({ pipelineId }: Props) {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className={`flex min-h-0 flex-1 gap-3 px-4 pb-4 pt-2 ${view === 'lista' ? 'flex-col overflow-y-auto' : 'overflow-x-auto'}`}>
+          <div ref={dragScroll.ref} {...(view === 'lista' ? {} : dragScroll.handlers)} className={`flex min-h-0 flex-1 gap-3 px-4 pb-4 pt-2 ${view === 'lista' ? 'flex-col overflow-y-auto' : 'overflow-x-auto cursor-grab'}`}>
             {board.stages.map((stage) => (
               <KanbanColumn
                 key={stage.id}

@@ -16,7 +16,6 @@ import {
   Bot,
   BookOpen,
   AudioLines,
-  ClipboardList,
   Cable,
   KanbanSquare,
   Newspaper,
@@ -221,9 +220,8 @@ export function AppSidebar() {
             </NavSection>
           </div>
 
-          {/* Tarefas + Configurações */}
+          {/* Configurações (aba "Tarefas" removida — agenda concentra prazos/tarefas) */}
           <div className="mt-3 flex flex-col gap-0.5">
-            <NavItem href="/tarefas" icon={ClipboardList} label="Tarefas" />
             <NavItem href="/settings" icon={Settings} label="Configurações" />
           </div>
         </SidebarSection>

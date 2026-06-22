@@ -14,6 +14,7 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
+import { useDragScroll } from '@/lib/use-drag-scroll';
 
 const KEY = ['legal-cases', 'kanban'];
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif";
@@ -66,6 +67,7 @@ export default function FaseJudicialKanbanPage() {
   const [showFora, setShowFora] = useState(false);
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
+  const dragScroll = useDragScroll();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data, isLoading, isFetching } = useQuery({
@@ -195,7 +197,7 @@ export default function FaseJudicialKanbanPage() {
         <CasesListView byPhase={byPhase} phases={visiblePhases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto py-4 pl-6 pr-4">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} />

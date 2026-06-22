@@ -433,7 +433,7 @@ function PrazoDialog({ p, onClose, onDone }: { p: Publication; onClose: () => vo
               </div>
               <div>
                 <span className="block text-xs font-medium text-zinc-500">Recorte da publicação</span>
-                <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-zinc-50 p-2 text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-300">{p.rawContent}</p>
+                <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-justify rounded-md bg-zinc-50 p-2 text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-300">{p.rawContent}</p>
               </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">

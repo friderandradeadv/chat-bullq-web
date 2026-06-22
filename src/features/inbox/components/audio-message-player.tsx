@@ -32,21 +32,24 @@ export function AudioMessagePlayer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Inbound WhatsApp audios arrive with no playable URL — the webhook only
-  // carries an encrypted .enc CDN link. We hit the backend to resolve (and
-  // cache) a decrypted URL on first play. Outbound audios already have
-  // content.mediaUrl pointing to our own upload.
-  const initialMediaUrl = message.content?.mediaUrl as string | undefined;
+  // Inbound WhatsApp audios arrive as an ENCRYPTED mmg.whatsapp.net/.enc URL the
+  // browser can't play. We must hit the backend to get (and cache) a decrypted,
+  // playable URL on first play. Outbound audios already have content.mediaUrl
+  // pointing to our own upload, which we use directly.
+  const rawMediaUrl = message.content?.mediaUrl as string | undefined;
+  const initialMediaUrl = isEncryptedWhatsappMedia(rawMediaUrl) ? undefined : rawMediaUrl;
   const [resolvedUrl, setResolvedUrl] = useState<string | undefined>(initialMediaUrl);
   const [resolving, setResolving] = useState(false);
+  const reResolvedRef = useRef(false);
   const mediaUrl = resolvedUrl;
 
   useEffect(() => {
-    setResolvedUrl(message.content?.mediaUrl);
+    const u = message.content?.mediaUrl as string | undefined;
+    setResolvedUrl(isEncryptedWhatsappMedia(u) ? undefined : u);
   }, [message.content?.mediaUrl]);
 
-  const ensureResolved = async (): Promise<string | null> => {
-    if (resolvedUrl) return resolvedUrl;
+  const ensureResolved = async (force = false): Promise<string | null> => {
+    if (resolvedUrl && !force) return resolvedUrl;
     setResolving(true);
     try {
       const { url } = await inboxService.resolveMediaUrl(message.id);
@@ -181,7 +184,16 @@ export function AudioMessagePlayer({
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => { setPlaying(false); setCurrentTime(0); }}
-        onError={() => setError('Falha ao carregar áudio')}
+        onError={async () => {
+          // A URL decifrada da Uazapi pode ter expirado — tenta re-resolver
+          // uma vez antes de desistir.
+          if (resolvedUrl && !reResolvedRef.current) {
+            reResolvedRef.current = true;
+            const url = await ensureResolved(true);
+            if (url) { setError(null); return; }
+          }
+          setError('Falha ao carregar áudio');
+        }}
       />
       <div className="flex items-center gap-3">
         <button
@@ -315,6 +327,16 @@ export function AudioMessagePlayer({
       </div>
     </div>
   );
+}
+
+/**
+ * URL crua/cifrada de mídia do WhatsApp (mmg.whatsapp.net/.enc): o navegador não
+ * toca. Precisa ser resolvida pelo backend (/message/download decifra). Espelha
+ * o helper do backend (media-url.util.ts).
+ */
+function isEncryptedWhatsappMedia(url?: string | null): boolean {
+  if (!url) return false;
+  return /\.whatsapp\.net\//i.test(url) || /\.enc(\?|#|$)/i.test(url);
 }
 
 function formatTime(seconds: number): string {
