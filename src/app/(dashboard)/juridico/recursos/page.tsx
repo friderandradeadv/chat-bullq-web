@@ -59,7 +59,7 @@ export default function RecursosPage() {
   }, [filtered]);
 
   return (
-    <div className="flex h-full flex-col bg-white p-6 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="h-full overflow-y-auto bg-white p-6 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       <div className="flex items-center gap-2">
         <Gavel className="h-5 w-5 text-[#228BE6]" />
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Recursos</h1>
@@ -94,9 +94,9 @@ export default function RecursosPage() {
       {isLoading ? (
         <p className="mt-6 text-sm text-zinc-400">Carregando…</p>
       ) : view === 'kanban' ? (
-        <div className="mt-4 grid flex-1 grid-cols-1 gap-3 overflow-hidden md:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3 md:items-start">
           {COLS.map((c) => (
-            <div key={c.key} className="flex min-h-0 flex-col rounded-xl border border-[#DEE2E6] bg-zinc-50/40 dark:border-zinc-800 dark:bg-zinc-900/30">
+            <div key={c.key} className="flex max-h-[78vh] flex-col rounded-xl border border-[#DEE2E6] bg-zinc-50/40 dark:border-zinc-800 dark:bg-zinc-900/30">
               <div className="flex items-center gap-2 border-b border-[#DEE2E6] px-3 py-2.5 dark:border-zinc-800">
                 <span className={`h-2 w-2 rounded-full ${c.bar}`} />
                 <c.icon className={`h-4 w-4 ${c.head}`} />
@@ -111,7 +111,7 @@ export default function RecursosPage() {
           ))}
         </div>
       ) : (
-        <div className="mt-4 flex-1 overflow-y-auto rounded-xl border border-[#DEE2E6] dark:border-zinc-800">
+        <div className="mt-4 rounded-xl border border-[#DEE2E6] dark:border-zinc-800">
           {filtered.length === 0 && <p className="p-6 text-sm text-zinc-400">Nenhum recurso.</p>}
           <ul className="divide-y divide-[#eef2f8] dark:divide-zinc-800">
             {filtered.map((r) => <RecursoListItem key={r.id} r={r} />)}
