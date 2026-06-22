@@ -6,12 +6,13 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Workflow, Search, RefreshCw, User, FileCheck2, X } from 'lucide-react';
+import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
+import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 
 const KEY = ['legal-cases', 'kanban'];
 const INPUT = 'h-[38px] w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
@@ -43,6 +44,7 @@ export default function PreProcessualPage() {
   const [protocolarId, setProtocolarId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
+  const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({}), refetchInterval: 30_000 });
@@ -108,18 +110,26 @@ export default function PreProcessualPage() {
             <option value="">Todos os responsáveis</option>
             {resps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
+          <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
+            <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
+            <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
+          </div>
         </div>
       </div>
 
-      <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-        <div className="flex flex-1 gap-3 overflow-x-auto py-4 pl-6 pr-4">
-          {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
-          {!isLoading && phases.map((phase) => (
-            <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} />
-          ))}
-        </div>
-        <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
-      </DndContext>
+      {view === 'lista' ? (
+        <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent="#e11970" />
+      ) : (
+        <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+          <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto py-4 pl-6 pr-4">
+            {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
+            {!isLoading && phases.map((phase) => (
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} />
+            ))}
+          </div>
+          <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
+        </DndContext>
+      )}
 
       {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={data?.phases ?? []} onClose={() => setOpenCaseId(null)} />}
       {protocolarId && <ProtocolarDialog caseId={protocolarId} onClose={() => setProtocolarId(null)} onDone={() => { setProtocolarId(null); qc.invalidateQueries({ queryKey: KEY }); }} />}
@@ -131,12 +141,12 @@ function Column({ phase, items, onOpen, onProtocolar }: { phase: KanbanPhase; it
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
   return (
-    <div className="flex w-[280px] shrink-0 flex-col">
+    <div className="flex min-h-0 w-[280px] shrink-0 flex-col">
       <div className="flex h-10 items-center gap-2 px-1">
         <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">{phase.label}</h2>
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
-      <div ref={setNodeRef} className={`flex flex-1 flex-col gap-2 rounded border px-1.5 pb-2 pt-3 transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
+      <div ref={setNodeRef} className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border px-1.5 pb-2 pt-3 transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((c) => <Card key={c.id} c={c} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} />)}
       </div>

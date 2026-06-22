@@ -6,12 +6,13 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy } from 'lucide-react';
+import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
+import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 
 const KEY = ['legal-cases', 'kanban'];
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif";
@@ -62,6 +63,7 @@ export default function FaseJudicialKanbanPage() {
   const [produto, setProduto] = useState('');
   const [resp, setResp] = useState('');
   const [showFora, setShowFora] = useState(false);
+  const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data, isLoading, isFetching } = useQuery({
@@ -177,18 +179,26 @@ export default function FaseJudicialKanbanPage() {
             <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#e11970]" />
             Mostrar arquivados/abandonados
           </label>
+          <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
+            <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
+            <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
+          </div>
         </div>
       </div>
 
-      <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-        <div className="flex flex-1 gap-3 overflow-x-auto py-4 pl-6 pr-4">
-          {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
-          {!isLoading && visiblePhases.map((phase) => (
-            <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} />
-          ))}
-        </div>
-        <DragOverlay>{active ? <Card c={active} phases={phases} onMove={move} overlay /> : null}</DragOverlay>
-      </DndContext>
+      {view === 'lista' ? (
+        <CasesListView byPhase={byPhase} phases={visiblePhases} onOpen={setOpenCaseId} accent="#e11970" />
+      ) : (
+        <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+          <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto py-4 pl-6 pr-4">
+            {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
+            {!isLoading && visiblePhases.map((phase) => (
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} />
+            ))}
+          </div>
+          <DragOverlay>{active ? <Card c={active} phases={phases} onMove={move} overlay /> : null}</DragOverlay>
+        </DndContext>
+      )}
 
       {openCaseId && (
         <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />
@@ -225,7 +235,7 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   return (
-    <div className="flex w-[280px] shrink-0 flex-col">
+    <div className="flex min-h-0 w-[280px] shrink-0 flex-col">
       {/* Header da fase (40px) — nome magenta + badge de contagem */}
       <div className="flex h-10 items-center gap-2 px-1">
         <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">{phase.label}</h2>
@@ -235,7 +245,7 @@ function Column({
       </div>
       <div
         ref={setNodeRef}
-        className={`flex flex-1 flex-col gap-2 rounded border px-1.5 pb-2 pt-3 transition-colors ${
+        className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border px-1.5 pb-2 pt-3 transition-colors ${
           isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'
         }`}
       >
