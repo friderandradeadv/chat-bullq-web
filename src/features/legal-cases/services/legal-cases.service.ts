@@ -252,6 +252,23 @@ export interface JurimetriaData {
   rows: JuriRow[];
 }
 
+/** Processo do cliente — usado no painel lateral do chat. */
+export interface ClientCaseRow {
+  id: string;
+  cnjNumber: string | null;
+  title: string;
+  area: string | null;
+  produto: string | null;
+  legalPhase: string | null;
+  faseLabel: string | null;
+  lane: 'pre' | 'judicial';
+  status: string;
+  value: number | null;
+  court: string | null;
+  responsavel: string | null;
+  legalPhaseAt: string | null;
+}
+
 export const legalCasesService = {
   async list(query: ListCasesQuery = {}): Promise<CaseListItem[]> {
     const { data } = await api.get(`/legal-cases${qs(query)}`);
@@ -273,6 +290,10 @@ export const legalCasesService = {
   },
   async contratos(): Promise<ContratoRow[]> {
     const { data } = await api.get('/legal-cases/contratos');
+    return data.data ?? data;
+  },
+  async casesByContact(contactId: string): Promise<{ cases: ClientCaseRow[] }> {
+    const { data } = await api.get(`/legal-cases/by-contact/${contactId}`);
     return data.data ?? data;
   },
   async jurimetria(): Promise<JurimetriaData> {

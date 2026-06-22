@@ -42,8 +42,14 @@ import {
   RefreshCw,
   Pencil,
   Trash2,
+  Scale,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import {
+  legalCasesService,
+  type ClientCaseRow,
+} from '@/features/legal-cases/services/legal-cases.service';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import {
   scheduledMessagesService,
@@ -118,6 +124,70 @@ function PanelAvatar({
 }
 
 // ─── Profile tab ─────────────────────────────────────────────────────────────
+
+// ─── Processos do cliente (vínculo chat ↔ jurídico) ──────────────────────────
+const CASE_STATUS_DOT: Record<string, string> = {
+  ACTIVE: 'bg-emerald-500',
+  SUSPENDED: 'bg-amber-500',
+  CLOSED: 'bg-zinc-400',
+  ARCHIVED: 'bg-zinc-400',
+};
+
+function ClientCasesSection({ contactId }: { contactId: string }) {
+  const router = useRouter();
+  const { data, isLoading } = useQuery({
+    queryKey: ['cases-by-contact', contactId],
+    queryFn: () => legalCasesService.casesByContact(contactId),
+    enabled: !!contactId,
+    staleTime: 60_000,
+  });
+  const cases = data?.cases ?? [];
+  // Painel limpo p/ leads: só aparece quando há processo vinculado.
+  if (isLoading || cases.length === 0) return null;
+
+  return (
+    <div className="mt-4 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
+      <div className="mb-2 flex items-center gap-2">
+        <Scale className="h-3.5 w-3.5 text-zinc-400" />
+        <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+          Processos do cliente
+        </p>
+        <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          {cases.length}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {cases.map((c: ClientCaseRow) => (
+          <button
+            key={c.id}
+            onClick={() => router.push(`/processos/${c.id}`)}
+            title="Abrir processo"
+            className="group block w-full rounded-lg border border-zinc-200/70 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/60"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 truncate text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                <span className={cn('h-2 w-2 shrink-0 rounded-full', CASE_STATUS_DOT[c.status] ?? 'bg-zinc-400')} />
+                {c.produto || c.area || 'Processo'}
+              </span>
+              {c.faseLabel && (
+                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  {c.faseLabel.replace(/^\d+(\.\d+)?\.?\s*/, '')}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 truncate text-[13px] font-medium text-zinc-800 dark:text-zinc-200">
+              {c.title}
+            </p>
+            <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400">
+              <span className="truncate font-mono">{c.cnjNumber || (c.lane === 'pre' ? 'pré-processual' : 'sem nº')}</span>
+              {c.responsavel && <span className="shrink-0 truncate">{c.responsavel.split(' ')[0]}</span>}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ProfileTab({ conversation }: { conversation: Conversation }) {
   const contact = conversation.contact;
@@ -683,6 +753,9 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           </div>
         )}
       </div>
+
+      {/* Processos do cliente — vínculo chat ↔ jurídico */}
+      <ClientCasesSection contactId={contact.id} />
 
       {/* Notes */}
       {contact.notes && (

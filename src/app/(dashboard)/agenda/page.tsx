@@ -160,6 +160,9 @@ export default function AgendaPage() {
       backgroundColor: c.bg, borderColor: c.bg, textColor: c.text,
       classNames: [`ag-${a.source}`, (a.done || a.cancelled) ? 'ag-done' : ''].filter(Boolean),
       startEditable: !a.cancelled, // tarefas/eventos/prazos arrastáveis (no prazo move a data de execução; a fatal é legal e fica na ficha)
+      // doneSort: itens em ABERTO (0) têm prioridade de aparecer no card do dia;
+      // cumpridos/cancelados (1) vão pro fim e caem no "+N" (ver eventOrder).
+      extendedProps: { doneSort: (a.done || a.cancelled) ? 1 : 0 },
     };
   }), [filtered]);
 
@@ -307,7 +310,14 @@ export default function AgendaPage() {
                 initialView={mode} locale={ptBrLocale} headerToolbar={false}
                 height={isMonth ? 'auto' : '100%'} nowIndicator dayMaxEvents={isMonth ? 4 : true}
                 slotMinTime="06:00:00" slotMaxTime="22:00:00" scrollTime="08:00:00"
-                allDaySlot allDayText="Dia todo" eventDisplay="block" displayEventTime={false} expandRows={!isMonth}
+                allDaySlot allDayText="Dia todo" eventDisplay="block" expandRows={!isMonth}
+                // Mostra o horário só nos eventos COM hora (audiências/perícias) — igual
+                // ao Astrea; tarefas/prazos são "dia todo" e não exibem hora.
+                displayEventTime displayEventEnd={false}
+                eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+                // Itens em aberto antes dos cumpridos → no card do dia os abertos
+                // ganham os slots visíveis e os cumpridos caem no "+N".
+                eventOrder={['doneSort', 'start', 'title']}
                 editable eventStartEditable eventDurationEditable={false} eventOverlap
                 events={fcEvents}
                 datesSet={(arg: DatesSetArg) => setTitle(arg.view.title)}
