@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check,
+  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef,
+  legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef, type PartyDetail, type CaseDetail,
 } from '@/features/legal-cases/services/legal-cases.service';
+
+const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 import { membersService } from '@/features/settings/services/members.service';
 import { FaseFields } from './fase-fields';
 
@@ -134,19 +136,7 @@ export function CaseDetailDrawer({
             {isLoading && <p className="py-6 text-sm text-zinc-400">Carregando…</p>}
             {c && tab === 'dados' && (
               <>
-                <p className="mb-3 text-base font-bold text-black dark:text-zinc-100">Formulário Inicial</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                  <Field label="Número do processo" value={c.cnjNumber} mono />
-                  <Field label="Valor da causa" value={fmtMoney(c.value)} strong />
-                  <Field label="Tribunal" value={c.court} />
-                  <Field label="Comarca" value={c.jurisdiction} />
-                  <Field label="Data do protocolo" value={fmtDate(c.distributedAt)} />
-                  {pf.polo && <Field label="Polo do cliente" value={pf.polo} />}
-                  {showJuizo && <Field label="Juízo" value={pf.juizo} />}
-                  {pf.sistema && <Field label="Sistema" value={pf.sistema} />}
-                  {pf.exito && <Field label="Êxito" value={pf.exito} />}
-                  {pf.honorarios && <Field label="Honorários" value={pf.honorarios} />}
-                </div>
+                <DadosForm c={c} pf={pf} showJuizo={showJuizo} onSaved={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
 
                 {/* Cadastro do CLIENTE (card conexão, expansível) */}
                 {cliente && (() => {
@@ -197,16 +187,8 @@ export function CaseDetailDrawer({
                   );
                 })()}
 
-                {/* Parte adversa */}
-                <div className="mt-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cadastro da parte adversa</p>
-                  {adversa ? (
-                    <article className="mt-1.5 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
-                      <span className="text-sm font-medium text-black dark:text-zinc-100">{adversa.name}</span>
-                      {adversa.document && <p className="mt-1 text-xs text-[#48626f] dark:text-zinc-400">CNPJ: {adversa.document}</p>}
-                    </article>
-                  ) : <p className="mt-1.5 text-xs italic text-zinc-400">Sem parte adversa cadastrada</p>}
-                </div>
+                {/* Parte adversa (editável) */}
+                <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
 
                 {pf.recordUrl && (
                   <a href={pf.recordUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
@@ -341,6 +323,139 @@ function DbField({ label, value }: { label: string; value: string }) {
       <span className="text-[10px] font-semibold uppercase text-[#48626f]">{label}</span>
       <span className="text-xs text-black dark:text-zinc-200">{value}</span>
     </li>
+  );
+}
+
+function EditField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+// Cadastro/edição da parte adversa (cria/edita/remove a party role=OPPONENT).
+function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa: PartyDetail | null; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(adversa?.name ?? '');
+  const [doc, setDoc] = useState(adversa?.document ?? '');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setName(adversa?.name ?? ''); setDoc(adversa?.document ?? ''); }, [adversa?.id]);
+
+  const save = async () => {
+    if (!name.trim()) { toast.error('Informe o nome da parte adversa'); return; }
+    setBusy(true);
+    try {
+      if (adversa) await legalCasesService.updateParty(adversa.id, { name: name.trim(), role: 'OPPONENT', document: doc.trim() || undefined });
+      else await legalCasesService.addParty(caseId, { role: 'OPPONENT', name: name.trim(), document: doc.trim() || undefined });
+      toast.success('Parte adversa salva'); setEditing(false); onChanged();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao salvar'); } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!adversa || !confirm('Remover a parte adversa?')) return;
+    setBusy(true);
+    try { await legalCasesService.removeParty(adversa.id); toast.success('Parte adversa removida'); onChanged(); }
+    catch { toast.error('Erro ao remover'); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="mt-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cadastro da parte adversa</p>
+      {editing ? (
+        <div className="mt-1.5 space-y-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome (ex.: BANCO BMG S/A)" className={INPUT} autoFocus />
+          <input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="CNPJ (opcional)" className={INPUT} />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setEditing(false); setName(adversa?.name ?? ''); setDoc(adversa?.document ?? ''); }} className="rounded px-2.5 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+            <button onClick={save} disabled={busy} className="rounded bg-[#005efc] px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar'}</button>
+          </div>
+        </div>
+      ) : adversa ? (
+        <article className="mt-1.5 flex items-start justify-between gap-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
+          <div className="min-w-0">
+            <span className="text-sm font-medium text-black dark:text-zinc-100">{adversa.name}</span>
+            {adversa.document && <p className="mt-1 text-xs text-[#48626f] dark:text-zinc-400">CNPJ: {adversa.document}</p>}
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <button onClick={() => setEditing(true)} title="Editar" className="rounded p-1 text-zinc-400 hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
+            <button onClick={remove} disabled={busy} title="Remover" className="rounded p-1 text-zinc-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
+          </div>
+        </article>
+      ) : (
+        <button onClick={() => setEditing(true)} className="mt-1.5 inline-flex items-center gap-1 rounded border border-dashed border-[#cfe0ed] px-3 py-2 text-xs font-medium text-[#005efc] hover:bg-[#005efc]/5 dark:border-zinc-700">
+          <Plus className="h-3.5 w-3.5" /> Cadastrar parte adversa
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Aba "Dados" com modo de edição (CNJ, valor, tribunal, comarca, área, protocolo).
+function DadosForm({ c, pf, showJuizo, onSaved }: { c: CaseDetail; pf: any; showJuizo: boolean; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [cnj, setCnj] = useState(c.cnjNumber ?? '');
+  const [valor, setValor] = useState(c.value ?? '');
+  const [court, setCourt] = useState(c.court ?? '');
+  const [comarca, setComarca] = useState(c.jurisdiction ?? '');
+  const [area, setArea] = useState(c.area ?? '');
+  const [dataProt, setDataProt] = useState(c.distributedAt ? c.distributedAt.slice(0, 10) : '');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setCnj(c.cnjNumber ?? ''); setValor(c.value ?? ''); setCourt(c.court ?? '');
+    setComarca(c.jurisdiction ?? ''); setArea(c.area ?? ''); setDataProt(c.distributedAt ? c.distributedAt.slice(0, 10) : '');
+  }, [c.id]);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await legalCasesService.update(c.id, {
+        cnjNumber: cnj.trim() || undefined,
+        value: valor.trim() ? Number(String(valor).replace(/\./g, '').replace(',', '.')) : undefined,
+        court: court.trim() || undefined,
+        jurisdiction: comarca.trim() || undefined,
+        area: area.trim() || undefined,
+        distributedAt: dataProt || undefined,
+      });
+      toast.success('Dados atualizados'); setEditing(false); onSaved();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao salvar'); } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-base font-bold text-black dark:text-zinc-100">Formulário Inicial</p>
+        {!editing && <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>}
+      </div>
+      {editing ? (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <EditField label="Número do processo"><input value={cnj} onChange={(e) => setCnj(e.target.value)} className={INPUT} placeholder="0000000-00.0000.0.00.0000" /></EditField>
+          <EditField label="Valor da causa"><input value={valor} onChange={(e) => setValor(e.target.value)} className={INPUT} placeholder="0,00" inputMode="decimal" /></EditField>
+          <EditField label="Tribunal"><input value={court} onChange={(e) => setCourt(e.target.value)} className={INPUT} placeholder="TJSP…" /></EditField>
+          <EditField label="Comarca"><input value={comarca} onChange={(e) => setComarca(e.target.value)} className={INPUT} /></EditField>
+          <EditField label="Área"><input value={area} onChange={(e) => setArea(e.target.value)} className={INPUT} placeholder="Bancário…" /></EditField>
+          <EditField label="Data do protocolo"><input type="date" value={dataProt} onChange={(e) => setDataProt(e.target.value)} className={INPUT} /></EditField>
+          <div className="col-span-2 flex justify-end gap-2">
+            <button onClick={() => setEditing(false)} className="rounded px-2.5 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+            <button onClick={save} disabled={busy} className="rounded bg-[#005efc] px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar'}</button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <Field label="Número do processo" value={c.cnjNumber} mono />
+          <Field label="Valor da causa" value={fmtMoney(c.value)} strong />
+          <Field label="Tribunal" value={c.court} />
+          <Field label="Comarca" value={c.jurisdiction} />
+          <Field label="Área" value={c.area} />
+          <Field label="Data do protocolo" value={fmtDate(c.distributedAt)} />
+          {pf.polo && <Field label="Polo do cliente" value={pf.polo} />}
+          {showJuizo && <Field label="Juízo" value={pf.juizo} />}
+          {pf.sistema && <Field label="Sistema" value={pf.sistema} />}
+          {pf.exito && <Field label="Êxito" value={pf.exito} />}
+          {pf.honorarios && <Field label="Honorários" value={pf.honorarios} />}
+        </div>
+      )}
+    </>
   );
 }
 

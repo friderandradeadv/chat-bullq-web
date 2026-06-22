@@ -226,6 +226,29 @@ export interface OpponentRow {
   processos: { id: string; cnj: string | null; area: string | null; value: number; cliente: string | null }[];
 }
 
+export interface JuriBucket {
+  key: string;
+  count: number;
+  valor: number;
+  exitoMedio: number | null;
+}
+export interface JurimetriaData {
+  total: number;
+  ativos: number;
+  arquivados: number;
+  suspensos: number;
+  fechados: number;
+  valorTotal: number;
+  exito: { medio: number | null; comEstimativa: number; semEstimativa: number };
+  resultado: { favoraveis: number; perdidos: number; emAndamento: number; taxaReal: number | null };
+  porArea: JuriBucket[];
+  porTribunal: JuriBucket[];
+  porSistema: JuriBucket[];
+  porAssunto: JuriBucket[];
+  porFase: { key: string; count: number; label: string; order: number }[];
+  honorarios: { key: string; count: number }[];
+}
+
 export const legalCasesService = {
   async list(query: ListCasesQuery = {}): Promise<CaseListItem[]> {
     const { data } = await api.get(`/legal-cases${qs(query)}`);
@@ -247,6 +270,10 @@ export const legalCasesService = {
   },
   async contratos(): Promise<ContratoRow[]> {
     const { data } = await api.get('/legal-cases/contratos');
+    return data.data ?? data;
+  },
+  async jurimetria(): Promise<JurimetriaData> {
+    const { data } = await api.get('/legal-cases/jurimetria');
     return data.data ?? data;
   },
   async movePhase(id: string, phase: string): Promise<{ ok: boolean; phase: string }> {
@@ -285,6 +312,10 @@ export const legalCasesService = {
   },
   async addParty(caseId: string, input: PartyInput): Promise<PartyDetail> {
     const { data } = await api.post(`/legal-cases/${caseId}/parties`, input);
+    return data.data ?? data;
+  },
+  async updateParty(partyId: string, input: Partial<PartyInput>): Promise<PartyDetail> {
+    const { data } = await api.patch(`/legal-cases/parties/${partyId}`, input);
     return data.data ?? data;
   },
   async removeParty(partyId: string): Promise<void> {
