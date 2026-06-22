@@ -197,6 +197,24 @@ export interface KanbanData {
   cards: KanbanCard[];
 }
 
+export interface RecursoRow {
+  cliente: string | null;
+  adversa: string | null;
+  processo: string | null;
+  numero: string | null;
+  recorrente: string | null;
+  especie: string | null;
+  julgamento: string | null;
+  tese: string | null;
+  caseId: string | null;
+}
+export interface ContratoRow {
+  cliente: string | null;
+  honorarios: string | null;
+  dataAssinatura: string | null;
+  contratoUrl: string | null;
+}
+
 export interface OpponentRow {
   name: string;
   document: string | null;
@@ -221,6 +239,14 @@ export const legalCasesService = {
   },
   async opponents(): Promise<OpponentRow[]> {
     const { data } = await api.get('/legal-cases/opponents');
+    return data.data ?? data;
+  },
+  async recursos(): Promise<RecursoRow[]> {
+    const { data } = await api.get('/legal-cases/recursos');
+    return data.data ?? data;
+  },
+  async contratos(): Promise<ContratoRow[]> {
+    const { data } = await api.get('/legal-cases/contratos');
     return data.data ?? data;
   },
   async movePhase(id: string, phase: string): Promise<{ ok: boolean; phase: string }> {

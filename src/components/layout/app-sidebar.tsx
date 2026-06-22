@@ -25,6 +25,8 @@ import {
   LayoutList,
   Columns3,
   Gavel,
+  Scale,
+  FileSignature,
   Workflow,
   Sun,
   Moon,
@@ -205,6 +207,8 @@ export function AppSidebar() {
               <NavItem href="/clientes" icon={Users} label="Clientes" />
               <NavItem href="/juridico/partes-adversas" icon={Gavel} label="Partes Adversas" />
               <NavItem href="/processos" icon={Folder} label="Processos" />
+              <NavItem href="/juridico/recursos" icon={Scale} label="Recursos" />
+              <NavItem href="/juridico/contratos" icon={FileSignature} label="Contratos" />
               <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
             </NavSection>
           </div>
