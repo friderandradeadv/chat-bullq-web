@@ -10,6 +10,7 @@ import { clientsService, type ClientRow } from '@/features/legal-cases/services/
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { formatPhone } from '@/lib/brazil-states';
+import { titleCaseName } from '@/lib/names';
 import { PageSizeSelect } from '@/components/ui/page-size-select';
 
 // Aba Clientes (jurídico) — tão rica quanto Contatos do Comercial: busca por
@@ -186,7 +187,7 @@ function ClienteRow({ c, statuses, allTags, onChanged }: {
             </span>
           )}
           <span className="min-w-0">
-            <span className="block max-w-[240px] truncate text-sm font-medium text-zinc-800 group-hover:text-[#228BE6] group-hover:underline dark:text-zinc-200">{c.name}</span>
+            <span className="block max-w-[240px] truncate text-sm font-medium text-zinc-800 group-hover:text-[#228BE6] group-hover:underline dark:text-zinc-200">{titleCaseName(c.name)}</span>
             {c.document && <span className="block text-[11px] text-zinc-400">{c.document}</span>}
           </span>
         </Link>

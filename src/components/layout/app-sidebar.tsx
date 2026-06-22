@@ -35,6 +35,7 @@ import {
   Wallet,
   Calculator,
   Users,
+  BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -210,6 +211,7 @@ export function AppSidebar() {
               <NavItem href="/juridico/recursos" icon={Scale} label="Recursos" />
               <NavItem href="/juridico/contratos" icon={FileSignature} label="Contratos" />
               <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
+              <NavItem href="/juridico/jurimetria" icon={BarChart3} label="Jurimetria" />
             </NavSection>
           </div>
 
