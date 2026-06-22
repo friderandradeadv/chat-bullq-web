@@ -226,27 +226,30 @@ export interface OpponentRow {
   processos: { id: string; cnj: string | null; area: string | null; value: number; cliente: string | null }[];
 }
 
-export interface JuriBucket {
-  key: string;
-  count: number;
-  valor: number;
-  exitoMedio: number | null;
+export interface JuriRow {
+  id: string;
+  cliente: string;
+  temProcesso: boolean; // tem nº CNJ (ação ajuizada). false = lead/pré-processual
+  area: string;
+  assunto: string;
+  tribunal: string | null;
+  sistema: string;
+  fase: string;
+  faseLabel: string;
+  faseOrder: number;
+  lane: 'pre' | 'judicial';
+  status: 'ACTIVE' | 'ARCHIVED' | 'SUSPENDED' | 'CLOSED';
+  value: number;
+  exito: number | null; // % de êxito estimado
+  resultado: 'favoravel' | 'perdido' | 'andamento';
+  honorarios: string | null;
+  responsavel: string | null;
+  mes: string | null; // YYYY-MM
+  ano: number | null;
 }
 export interface JurimetriaData {
-  total: number;
-  ativos: number;
-  arquivados: number;
-  suspensos: number;
-  fechados: number;
-  valorTotal: number;
-  exito: { medio: number | null; comEstimativa: number; semEstimativa: number };
-  resultado: { favoraveis: number; perdidos: number; emAndamento: number; taxaReal: number | null };
-  porArea: JuriBucket[];
-  porTribunal: JuriBucket[];
-  porSistema: JuriBucket[];
-  porAssunto: JuriBucket[];
-  porFase: { key: string; count: number; label: string; order: number }[];
-  honorarios: { key: string; count: number }[];
+  geradoEm: string;
+  rows: JuriRow[];
 }
 
 export const legalCasesService = {
