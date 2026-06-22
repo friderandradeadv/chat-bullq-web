@@ -34,7 +34,7 @@ export function LoginForm() {
       // setAuth already picks the best org (stored or first available)
 
       toast.success(`Bem-vindo, ${result.user.name}!`);
-      router.push('/inbox');
+      router.push('/inicio');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao fazer login');
     } finally {

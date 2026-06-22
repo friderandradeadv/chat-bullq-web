@@ -34,6 +34,7 @@ import {
   Calculator,
   Users,
   BarChart3,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -168,6 +169,7 @@ export function AppSidebar() {
         <SidebarSection>
           {/* COMERCIAL — BullQ / WhatsApp (com Automações como subaba dentro) */}
           <NavSection label="Comercial">
+            <NavItem href="/inicio" icon={Sparkles} label="Início" />
             <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
             <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
             <NavItem href="/contacts" icon={BookUser} label="Contatos" />

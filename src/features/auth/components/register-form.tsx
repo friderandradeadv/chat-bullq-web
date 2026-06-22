@@ -69,7 +69,7 @@ export function RegisterForm() {
           ? `Bem-vindo! Você entrou em ${inviteInfo.organization.name}`
           : 'Conta criada com sucesso!',
       );
-      router.push('/inbox');
+      router.push('/inicio');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao criar conta');
     } finally {

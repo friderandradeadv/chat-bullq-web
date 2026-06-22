@@ -228,3 +228,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Hub / página de boas-vindas (/inicio) — "sempre uma festa" ── */
+@keyframes confetti-fall {
+  0% { transform: translateY(-12vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(108vh) rotate(720deg); opacity: 0.9; }
+}
+@keyframes welcome-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes welcome-pop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes welcome-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+.welcome-gradient {
+  background-size: 220% 220%;
+  animation: welcome-gradient 14s ease infinite;
+}
+.welcome-pop { animation: welcome-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.welcome-float { animation: welcome-float 4.5s ease-in-out infinite; }
