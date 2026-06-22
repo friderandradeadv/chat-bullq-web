@@ -33,9 +33,10 @@ interface Props {
   cards: CardSummary[];
   onAddCard: () => void;
   onCardClick: (card: CardSummary) => void;
+  list?: boolean;
 }
 
-export function KanbanColumn({ stage, cards, onAddCard, onCardClick }: Props) {
+export function KanbanColumn({ stage, cards, onAddCard, onCardClick, list }: Props) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
     data: { type: 'stage', stage },
@@ -58,7 +59,7 @@ export function KanbanColumn({ stage, cards, onAddCard, onCardClick }: Props) {
       : null;
 
   return (
-    <div className="flex h-full w-72 shrink-0 flex-col">
+    <div className={`flex flex-col ${list ? 'w-full' : 'h-full w-72 shrink-0'}`}>
       <div
         className={`flex items-center justify-between gap-2 rounded-t-lg border-b-2 px-3 py-2 ${headerCls}`}
       >
@@ -91,7 +92,7 @@ export function KanbanColumn({ stage, cards, onAddCard, onCardClick }: Props) {
 
       <div
         ref={setNodeRef}
-        className={`flex-1 space-y-2 overflow-y-auto rounded-b-lg p-2 transition-colors ${
+        className={`space-y-2 rounded-b-lg p-2 transition-colors ${list ? 'min-h-[40px]' : 'flex-1 overflow-y-auto'} ${
           isOver
             ? 'bg-primary/10 ring-2 ring-primary/30'
             : 'bg-zinc-50/40 dark:bg-zinc-900/40'

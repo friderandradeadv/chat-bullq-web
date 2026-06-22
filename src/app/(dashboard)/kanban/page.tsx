@@ -15,7 +15,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { toast } from 'sonner';
-import { KanbanSquare, MessageSquare, Users, Phone, GripVertical } from 'lucide-react';
+import { KanbanSquare, MessageSquare, Users, Phone, GripVertical, LayoutGrid, List } from 'lucide-react';
 import {
   contactsService,
   type FunnelBoard,
@@ -37,6 +37,7 @@ export default function KanbanPage() {
   const [activeCard, setActiveCard] = useState<TCard | null>(null);
   const [activeColumn, setActiveColumn] = useState<FunnelColumn | null>(null);
   const [viewConvId, setViewConvId] = useState<string | null>(null);
+  const [view, setView] = useState<'kanban' | 'lista'>('kanban');
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments', orgId],
@@ -181,6 +182,10 @@ export default function KanbanPage() {
               ))}
             </select>
           </div>
+          <div className="inline-flex overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-primary text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
+            <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-primary text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
+          </div>
         </div>
       </div>
 
@@ -204,12 +209,13 @@ export default function KanbanPage() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex flex-1 gap-3 overflow-x-auto p-4 min-h-0">
+          <div className={cn('flex flex-1 gap-3 p-4 min-h-0', view === 'lista' ? 'flex-col overflow-y-auto' : 'overflow-x-auto')}>
             {board.columns.map((col) => (
               <Column
                 key={col.id}
                 column={col}
                 cards={board.cards[col.id] ?? []}
+                list={view === 'lista'}
                 onCardClick={(c) => c.conversationId && setViewConvId(c.conversationId)}
               />
             ))}
@@ -240,10 +246,12 @@ function Column({
   column,
   cards,
   onCardClick,
+  list,
 }: {
   column: FunnelBoard['columns'][number];
   cards: TCard[];
   onCardClick: (c: TCard) => void;
+  list?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
@@ -251,7 +259,7 @@ function Column({
     data: { type: 'column', columnId: column.id },
   });
   return (
-    <div className={cn('flex w-72 shrink-0 flex-col rounded-xl bg-zinc-100/70 dark:bg-zinc-900/60', isDragging && 'opacity-40')}>
+    <div className={cn('flex flex-col rounded-xl bg-zinc-100/70 dark:bg-zinc-900/60', list ? 'w-full' : 'w-72 shrink-0', isDragging && 'opacity-40')}>
       <div className="flex items-center gap-1.5 px-2 py-2.5">
         <button
           ref={setDragRef}
@@ -271,7 +279,8 @@ function Column({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex-1 space-y-2 overflow-y-auto px-2 pb-2 transition-colors min-h-[80px] rounded-lg',
+          'space-y-2 px-2 pb-2 transition-colors rounded-lg',
+          list ? 'min-h-[40px]' : 'flex-1 overflow-y-auto min-h-[80px]',
           isOver && 'bg-primary/[0.06] ring-1 ring-inset ring-primary/30',
         )}
       >

@@ -13,6 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { LayoutGrid, List } from 'lucide-react';
 import { pipelinesService, type CardSummary } from '../services/pipelines.service';
 import { KanbanColumn } from './kanban-column';
 import { KanbanCard } from './kanban-card';
@@ -33,6 +34,7 @@ export function KanbanBoard({ pipelineId }: Props) {
   const [addStageId, setAddStageId] = useState<string | null>(null);
   // Conversation popup (when card has a linked conversation, click opens chat).
   const [viewingConvId, setViewingConvId] = useState<string | null>(null);
+  const [view, setView] = useState<'kanban' | 'lista'>('kanban');
 
   const { data: board, isLoading } = useQuery({
     queryKey: ['pipeline-board', pipelineId],
@@ -126,32 +128,41 @@ export function KanbanBoard({ pipelineId }: Props) {
 
   return (
     <>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex h-full gap-3 overflow-x-auto px-4 pb-4">
-          {board.stages.map((stage) => (
-            <KanbanColumn
-              key={stage.id}
-              stage={stage}
-              cards={board.cards[stage.id] ?? []}
-              onAddCard={() => setAddStageId(stage.id)}
-              onCardClick={(c) => {
-                // Click primário: abre a conversa em popup. Sem conversa
-                // vinculada, cai pra edição do card como fallback.
-                if (c.conversationId) setViewingConvId(c.conversationId);
-                else setEditingCard(c);
-              }}
-            />
-          ))}
+      <div className="flex h-full flex-col">
+        <div className="flex shrink-0 justify-end px-4 pt-3">
+          <div className="inline-flex overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-primary text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
+            <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-primary text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
+          </div>
         </div>
-        <DragOverlay>
-          {activeCard ? <KanbanCard card={activeCard} /> : null}
-        </DragOverlay>
-      </DndContext>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className={`flex min-h-0 flex-1 gap-3 px-4 pb-4 pt-2 ${view === 'lista' ? 'flex-col overflow-y-auto' : 'overflow-x-auto'}`}>
+            {board.stages.map((stage) => (
+              <KanbanColumn
+                key={stage.id}
+                stage={stage}
+                cards={board.cards[stage.id] ?? []}
+                list={view === 'lista'}
+                onAddCard={() => setAddStageId(stage.id)}
+                onCardClick={(c) => {
+                  // Click primário: abre a conversa em popup. Sem conversa
+                  // vinculada, cai pra edição do card como fallback.
+                  if (c.conversationId) setViewingConvId(c.conversationId);
+                  else setEditingCard(c);
+                }}
+              />
+            ))}
+          </div>
+          <DragOverlay>
+            {activeCard ? <KanbanCard card={activeCard} /> : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
 
       <CardDialog
         open={!!editingCard}
