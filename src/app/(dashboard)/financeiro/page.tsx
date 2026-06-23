@@ -20,7 +20,11 @@ const kbrl = (n: number) => { const a = Math.abs(n); const s = n < 0 ? '-' : '';
 const mesCurto = (label: string) => label.replace('/20', '/');
 
 const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-const mesLabel = (mes: string) => { const m = (mes || '').match(/(\d{4})-(\d{2})/); return m ? `${MESES_PT[+m[2] - 1]} de ${m[1]}` : (mes || 'Sem data'); };
+const mesLabel = (mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_PT[+m[2] - 1]} de ${m[1]}` : 'Sem data'; };
+// Mês (YYYY-MM) de um lançamento: usa o campo `mes`; se faltar/for inválido (alguns
+// vêm do Astrea sem ele), deriva da própria data DD/MM/YYYY.
+const mesDaData = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}` : '0000-00'; };
+const mesKey = (t: FinTransacao) => (/^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '') ? t.mes : mesDaData(t.data));
 // Cor da categoria — receita (Honorários) em verde; despesas puxam a cor do donut; fallback cinza.
 const catColor = (data: FinDashboard, cat: string) => {
   if (/honor/i.test(cat)) return '#2F9E44';
@@ -361,7 +365,7 @@ function Lancamentos({ data }: { data: FinDashboard }) {
   const grupos = useMemo<Grupo[]>(() => {
     const map = new Map<string, FinTransacao[]>();
     for (const t of txs) {
-      const key = t.mes || '0000-00';
+      const key = mesKey(t);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     }
