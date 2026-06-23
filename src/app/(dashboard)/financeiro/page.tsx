@@ -326,11 +326,13 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
   const [aberto, setAberto] = useState<string | null>(null);
 
   const tot = useMemo(() => {
-    const recebido = clientes.reduce((s, c) => s + c.recebido, 0);
-    const repassado = clientes.reduce((s, c) => s + c.repassado, 0);
+    // somatórios EXATOS, direto das transações de honorários (inclui estornos a quem nunca pagou)
+    const honor = data.transacoes.filter((t) => /honor/i.test(t.categoria));
+    const recebido = Math.round(honor.filter((t) => t.valor >= 0).reduce((s, t) => s + t.valor, 0));
+    const repassado = Math.round(honor.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0));
     const porStatus = (st: StatusFin) => clientes.filter((c) => c.status === st).length;
     return { recebido, repassado, liquido: recebido - repassado, nClientes: clientes.length, emDia: porStatus('em-dia'), atencao: porStatus('atencao') };
-  }, [clientes]);
+  }, [clientes, data.transacoes]);
 
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase();
