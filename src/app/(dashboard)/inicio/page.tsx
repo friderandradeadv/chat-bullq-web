@@ -30,6 +30,8 @@ import {
   Sparkles,
   Loader2,
   X,
+  CalendarPlus,
+  ListChecks,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { tasksService } from '@/features/tasks/services/tasks.service';
@@ -175,6 +177,19 @@ function relTime(iso: string | null | undefined, now: Date | null): string {
   if (d < 7) return `há ${d} d`;
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
+
+// Vencimento amigável (futuro): Hoje / Amanhã / Ontem / "qua, 25/06".
+function relDay(iso: string | null | undefined, now: Date | null): string {
+  if (!iso || !now) return '';
+  const today = localDay(now);
+  const diff = Math.round((new Date(iso.slice(0, 10) + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86_400_000);
+  if (diff === 0) return 'Hoje';
+  if (diff === 1) return 'Amanhã';
+  if (diff === -1) return 'Ontem';
+  return new Date(iso.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+}
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+const sameLocalDay = (iso: string | null | undefined, now: Date) => !!iso && localDay(new Date(iso)) === localDay(now);
 
 function MsgAvatar({ name, url }: { name: string; url: string | null }) {
   const [failed, setFailed] = useState(false);
@@ -389,6 +404,105 @@ const KIND_META: Record<string, { icon: React.ElementType; color: string }> = {
   audiencia: { icon: Gavel, color: '#02883C' },
 };
 
+function NewTodayAgenda({ now }: { now: Date | null }) {
+  const { user } = useAuthStore();
+  const [showAll, setShowAll] = useState(false);
+
+  // Só os itens dos quais ESTE advogado é responsável (assigneeId / assignedToId).
+  const tasksQ = useQuery({
+    queryKey: ['hub', 'new-tasks', user?.id],
+    queryFn: () => tasksService.list({ assigneeId: user!.id }),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const dlQ = useQuery({
+    queryKey: ['hub', 'new-deadlines', user?.id],
+    queryFn: () => deadlinesService.list({ assignedToId: user!.id }),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  type Novo = { id: string; kind: 'tarefa' | 'prazo' | 'fatal'; title: string; caso?: string | null; due?: string | null; createdAt: string };
+  const items = useMemo<Novo[]>(() => {
+    if (!now) return [];
+    const list: Novo[] = [];
+    (tasksQ.data ?? [])
+      .filter((t) => (t.status === 'TODO' || t.status === 'DOING') && sameLocalDay(t.createdAt, now))
+      .forEach((t) => list.push({ id: 't' + t.id, kind: 'tarefa', title: t.title, caso: t.case?.title, due: t.dueAt, createdAt: t.createdAt }));
+    (dlQ.data ?? [])
+      .filter((d) => d.status === 'OPEN' && sameLocalDay(d.createdAt, now))
+      .forEach((d) => list.push({ id: 'd' + d.id, kind: d.type === 'FATAL' ? 'fatal' : 'prazo', title: d.title, caso: d.case?.title, due: d.safeDate || d.dueDate, createdAt: d.createdAt }));
+    return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [now, tasksQ.data, dlQ.data]);
+
+  const loading = tasksQ.isLoading || dlQ.isLoading;
+  const shown = showAll ? items.slice(0, 12) : items.slice(0, 5);
+
+  return (
+    <div className="welcome-pop mx-auto mt-4 max-w-xl rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.215s' }}>
+      <div className="mb-1.5 flex items-center justify-between px-1">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <CalendarPlus className="h-3.5 w-3.5 text-[#02883C]" />
+          Novos na agenda hoje
+          {items.length > 0 && (
+            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#02883C] px-1.5 text-[10px] font-bold text-white">
+              {items.length}
+            </span>
+          )}
+        </p>
+        <Link href="/agenda" className="text-[11px] font-semibold text-[#228BE6] hover:underline">ver agenda →</Link>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 px-2 py-6 text-sm text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin" /> Conferindo o que entrou hoje…
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center gap-1 px-2 py-6 text-center">
+          <ListChecks className="h-7 w-7 text-zinc-300" />
+          <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Nada novo hoje</p>
+          <p className="text-xs text-zinc-400">Nenhum prazo ou tarefa seu foi adicionado à agenda hoje.</p>
+        </div>
+      ) : (
+        <div className="space-y-0.5">
+          {shown.map((it) => {
+            const m = KIND_META[it.kind];
+            return (
+              <Link key={it.id} href="/agenda" className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${m.color}1A` }}>
+                  <m.icon className="h-4 w-4" style={{ color: m.color }} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-zinc-700 dark:text-zinc-200">{it.title}{it.caso ? <span className="text-zinc-400"> · {it.caso}</span> : null}</span>
+                  <span className="block text-[10px] text-zinc-400">
+                    {it.kind === 'fatal' ? 'Prazo fatal' : it.kind === 'prazo' ? 'Prazo' : 'Tarefa'} · adicionado {hhmm(it.createdAt)}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  {it.due ? (
+                    <span className={`text-xs font-semibold ${it.kind === 'fatal' ? 'text-[#E03131]' : 'text-zinc-500 dark:text-zinc-400'}`}>{relDay(it.due, now)}</span>
+                  ) : (
+                    <span className="text-xs text-zinc-300 dark:text-zinc-600">sem data</span>
+                  )}
+                </span>
+              </Link>
+            );
+          })}
+
+          {items.length > 5 && (
+            <button onClick={() => setShowAll((v) => !v)} className="flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-semibold text-[#228BE6] hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+              <Sparkles className="h-3 w-3" />
+              {showAll ? 'mostrar menos' : `ver mais ${items.length - 5} de hoje`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function InicioPage() {
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
@@ -530,6 +644,9 @@ export default function InicioPage() {
 
         {/* Mensagens pendentes no chat */}
         {mounted && <PendingMessages now={now} onCelebrate={() => setBurst((b) => b + 1)} />}
+
+        {/* Novos prazos/tarefas adicionados hoje (do responsável) */}
+        {mounted && <NewTodayAgenda now={now} />}
 
         {/* Próximos compromissos */}
         {mounted && proximos.length > 0 && (
