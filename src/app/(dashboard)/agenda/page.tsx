@@ -183,7 +183,9 @@ export default function AgendaPage() {
     return {
       // Itens só-data (prazos/tarefas s/ hora) entram como data-only ('YYYY-MM-DD')
       // pra o FullCalendar não converter o UTC meia-noite e jogar pro dia anterior.
-      id: a.id, title: `${initials(a.responsibleName)} · ${a.title}`, start: a.hasTime ? a.date : a.date.slice(0, 10), end, allDay: !a.hasTime,
+      // Iniciais do responsável só quando estou vendo "Todas" — filtrado numa
+      // pessoa, "MF ·" é redundante e rouba espaço do horário/título no mês.
+      id: a.id, title: personId === 'all' ? `${initials(a.responsibleName)} · ${a.title}` : a.title, start: a.hasTime ? a.date : a.date.slice(0, 10), end, allDay: !a.hasTime,
       backgroundColor: c.bg, borderColor: c.bg, textColor: c.text,
       classNames: [`ag-${a.source}`, (a.done || a.cancelled) ? 'ag-done' : ''].filter(Boolean),
       startEditable: !a.cancelled, // tarefas/eventos/prazos arrastáveis (no prazo move a data de execução; a fatal é legal e fica na ficha)
@@ -192,7 +194,7 @@ export default function AgendaPage() {
       //   1 = tarefa/prazo em aberto (dia todo); 2 = cumprido/cancelado → por último.
       extendedProps: { ordSort: (a.done || a.cancelled) ? 2 : (a.hasTime ? 0 : 1) },
     };
-  }), [filtered]);
+  }), [filtered, personId]);
 
   const pickMode = (m: ViewMode) => { setMode(m); setViewMenu(false); try { localStorage.setItem(VIEW_KEY, m); } catch { /* */ } };
   const openCreate = (type: 'evento' | 'tarefa', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };

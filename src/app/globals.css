@@ -228,6 +228,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Mês/Semana (daygrid): o HORÁRIO fica inteiro e NÃO encolhe — só o título usa
+   reticências. Sem isto, em coluna estreita o "14:30" saía cortado ("14:3(")
+   porque encolhia junto com o título. */
+.fc-daygrid-event .fc-event-main-frame {
+  min-width: 0;
+}
+.fc-daygrid-event .fc-event-time {
+  flex: 0 0 auto;
+  overflow: visible;
+  font-weight: 600;
+  padding-right: 3px;
+}
+.fc-daygrid-event .fc-event-title-container {
+  min-width: 0;
+}
+.fc-daygrid-event .fc-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ── Hub / página de boas-vindas (/inicio) — "sempre uma festa" ── */
 @keyframes confetti-fall {
