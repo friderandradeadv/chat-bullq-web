@@ -19,8 +19,6 @@ import {
   Mail,
   Phone,
   Quote,
-  Building2,
-  ShieldCheck,
   CheckCircle2,
   Lightbulb,
   ClipboardList,
@@ -29,7 +27,6 @@ import {
   PartyPopper,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
-import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { tasksService } from '@/features/tasks/services/tasks.service';
 import { deadlinesService } from '@/features/deadlines/services/deadlines.service';
 import { calendarService } from '@/features/calendar/services/calendar.service';
@@ -59,13 +56,6 @@ function honorificOf(first: string): 'Dr.' | 'Dra.' {
   if (f.endsWith('a') && !MALE_ENDS_A.has(f)) return 'Dra.';
   return 'Dr.';
 }
-
-const ROLE_LABEL: Record<string, string> = {
-  OWNER: 'Titular do escritório',
-  ADMIN: 'Administrador(a)',
-  AGENT: 'Advogado(a)',
-  MEMBER: 'Membro da equipe',
-};
 
 const DOW_MSG: Record<number, string> = {
   0: 'Domingo e você firme aqui — que dedicação! 🙌',
@@ -178,7 +168,7 @@ const KIND_META: Record<string, { icon: React.ElementType; color: string }> = {
 };
 
 export default function InicioPage() {
-  const { user, organizations, activeOrgId } = useAuthStore();
+  const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [msgIdx, setMsgIdx] = useState(0);
@@ -206,9 +196,6 @@ export default function InicioPage() {
   const quote = QUOTES[quoteIdx];
   const dica = DICAS[dicaIdx];
   const dowMsg = now ? DOW_MSG[now.getDay()] : '';
-
-  const org = organizations.find((o) => o.id === activeOrgId);
-  const roleLabel = ROLE_LABEL[org?.role ?? ''] ?? 'Membro da equipe';
 
   const tasksQ = useQuery({ queryKey: ['hub', 'tasks'], queryFn: () => tasksService.list({}), enabled: mounted, staleTime: 60_000, retry: 1 });
   const dlQ = useQuery({ queryKey: ['hub', 'deadlines'], queryFn: () => deadlinesService.list({}), enabled: mounted, staleTime: 60_000, retry: 1 });
@@ -278,7 +265,8 @@ export default function InicioPage() {
   const statOn = mounted && !stats.loading;
 
   return (
-    <div className="relative flex min-h-full flex-col items-center justify-center overflow-hidden px-6 py-10">
+    <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-thin">
+    <div className="relative flex min-h-full flex-col items-center justify-center px-6 py-10">
       <div className="welcome-gradient pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-[#228BE6]/10 via-[#7048E8]/10 to-[#15AABF]/10 dark:from-[#228BE6]/15 dark:via-[#7048E8]/15 dark:to-[#15AABF]/10" />
 
       {mounted && (
@@ -321,27 +309,6 @@ export default function InicioPage() {
           <PartyPopper className="h-4 w-4" />
           Me motiva de novo
         </button>
-
-        {/* Card do usuário */}
-        {mounted && user && (
-          <div className="welcome-pop mx-auto mt-9 flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-zinc-200/70 bg-white/70 p-4 backdrop-blur sm:flex-row sm:text-left dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.18s' }}>
-            {user.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatarUrl} alt={user.name} className="h-14 w-14 shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-zinc-800" />
-            ) : (
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white ring-2 ring-white dark:ring-zinc-800" style={{ backgroundColor: avatarColor(user.name || user.email) }}>{avatarInitials(user.name || user.email)}</span>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-bold text-zinc-800 dark:text-zinc-100">{dr} {user.name}</p>
-              <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400 sm:justify-start">
-                <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5 text-[#02883C]" />{roleLabel}</span>
-                {org?.name && <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />{org.name}</span>}
-                {user.email && <span className="inline-flex items-center gap-1 truncate"><Mail className="h-3.5 w-3.5" />{user.email}</span>}
-                {user.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{user.phone}</span>}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Seus números (com count-up) */}
         {mounted && (
@@ -413,6 +380,7 @@ export default function InicioPage() {
           Hoje é um ótimo dia pra mudar a vida de alguém. Vamos? ⚖️✨
         </p>
       </div>
+    </div>
     </div>
   );
 }
