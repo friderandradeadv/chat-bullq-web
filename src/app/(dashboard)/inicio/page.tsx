@@ -190,15 +190,18 @@ function MsgAvatar({ name, url }: { name: string; url: string | null }) {
 
 function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: () => void }) {
   const qc = useQueryClient();
+  const { user } = useAuthStore();
   const [openId, setOpenId] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
 
+  // Só as conversas das quais ESTE advogado é o responsável (assignedToId).
   const q = useQuery({
-    queryKey: ['hub', 'pending-msgs'],
-    queryFn: () => inboxService.getConversations({ limit: '40', unread: 'true', archived: 'exclude', groups: 'exclude' }),
+    queryKey: ['hub', 'pending-msgs', user?.id],
+    queryFn: () => inboxService.getConversations({ limit: '40', unread: 'true', archived: 'exclude', groups: 'exclude', assignedToId: user!.id }),
+    enabled: !!user?.id,
     staleTime: 30_000,
     retry: 1,
     refetchInterval: 60_000,
@@ -262,7 +265,7 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
         <div className="flex flex-col items-center gap-1 px-2 py-6 text-center">
           <Inbox className="h-7 w-7 text-[#02883C]" />
           <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Tudo respondido! 🎉</p>
-          <p className="text-xs text-zinc-400">Nenhum cliente esperando. Caixa de entrada zerada — manda ver no resto do dia!</p>
+          <p className="text-xs text-zinc-400">Nenhum cliente seu esperando resposta. Suas conversas estão em dia — manda ver no resto do dia!</p>
         </div>
       ) : (
         <div className="space-y-0.5">
