@@ -158,18 +158,22 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      {/* Marca do escritório — centralizada, caixa justa na logo */}
+      {/* Marca do escritório — clicar no logo leva ao Início (Hub) */}
       <SidebarHeader className="items-center py-4">
-        <Link href="/dashboard" className="block">
+        <Link href="/inicio" className="block">
           <Logo size="sm" />
         </Link>
       </SidebarHeader>
 
       <SidebarBody>
         <SidebarSection>
+          {/* INÍCIO — item avulso no topo (Hub de boas-vindas), fora das seções */}
+          <div className="mb-1 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
+            <NavItem href="/inicio" icon={Sparkles} label="Início" />
+          </div>
+
           {/* COMERCIAL — BullQ / WhatsApp (com Automações como subaba dentro) */}
           <NavSection label="Comercial">
-            <NavItem href="/inicio" icon={Sparkles} label="Início" />
             <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
             <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
             <NavItem href="/contacts" icon={BookUser} label="Contatos" />
