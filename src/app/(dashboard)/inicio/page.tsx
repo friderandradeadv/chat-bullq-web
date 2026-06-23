@@ -270,7 +270,7 @@ export default function InicioPage() {
       <div className="welcome-gradient pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-[#228BE6]/10 via-[#7048E8]/10 to-[#15AABF]/10 dark:from-[#228BE6]/15 dark:via-[#7048E8]/15 dark:to-[#15AABF]/10" />
 
       {mounted && (
-        <div key={burst} className="pointer-events-none absolute inset-0 -z-0 overflow-hidden">
+        <div key={burst} className="pointer-events-none absolute inset-x-0 top-0 z-0 h-screen overflow-hidden">
           {confetti.map((c, i) => (
             <span key={i} className="absolute top-0" style={{ left: `${c.left}%`, width: c.size, height: c.size * (c.round ? 1 : 1.6), backgroundColor: c.bg, borderRadius: c.round ? '9999px' : '2px', animation: `confetti-fall ${c.dur}s linear ${c.delay}s forwards` }} />
           ))}

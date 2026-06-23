@@ -232,7 +232,8 @@
 /* ── Hub / página de boas-vindas (/inicio) — "sempre uma festa" ── */
 @keyframes confetti-fall {
   0% { transform: translateY(-12vh) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(108vh) rotate(720deg); opacity: 0.9; }
+  80% { opacity: 1; }
+  100% { transform: translateY(108vh) rotate(720deg); opacity: 0; }
 }
 @keyframes welcome-gradient {
   0% { background-position: 0% 50%; }
