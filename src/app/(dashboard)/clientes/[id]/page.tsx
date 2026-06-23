@@ -17,12 +17,17 @@ import {
   Check,
   Tag as TagIcon,
   FileText,
+  CircleDollarSign,
 } from 'lucide-react';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
+import { financeiroService } from '@/features/financeiro/services/financeiro.service';
+import { clienteFinanceiro, STATUS_FIN } from '@/features/financeiro/lib/clientes';
 import { formatPhone } from '@/lib/brazil-states';
 import { CnjNumber, ASTREA_BLUE } from '../../processos/page';
+
+const brlc = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: 'Ativo',
@@ -164,6 +169,11 @@ export default function ClienteDetailPage() {
             )}
           </Card>
 
+          {/* Financeiro do cliente — honorários vinculados aos lançamentos */}
+          <div className="mt-5">
+            <ClienteFinanceiroCard nome={cliente.name} />
+          </div>
+
           {/* Pipefy: Fase 3 */}
           <div className="mt-5 rounded-lg border border-dashed border-[#DEE2E6] bg-white p-4 text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
             Cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong> (cards, status do funil, valor da causa) — em breve.
@@ -171,6 +181,51 @@ export default function ClienteDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Resumo de honorários do cliente (recebidos, pagamentos, status) — casa por nome. */
+function ClienteFinanceiroCard({ nome }: { nome: string }) {
+  const { data: dash, isLoading } = useQuery({
+    queryKey: ['financeiro', 'dashboard'],
+    queryFn: () => financeiroService.dashboard(),
+    staleTime: 60_000,
+  });
+  const fin = useMemo(() => clienteFinanceiro(dash, nome), [dash, nome]);
+
+  return (
+    <Card title="Financeiro do cliente" icon={CircleDollarSign}>
+      {isLoading ? (
+        <p className="text-sm text-zinc-400">Carregando honorários…</p>
+      ) : !fin ? (
+        <p className="text-sm text-zinc-400">
+          Nenhum honorário lançado para este cliente ainda. Quando houver pagamentos vinculados ao nome
+          dele nos lançamentos, o histórico aparece aqui.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Recebido</p><p className="text-lg font-bold tabular-nums text-emerald-600">{brlc(fin.recebido)}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Pagamentos</p><p className="text-lg font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{fin.n}{fin.recorrente ? <span className="ml-1 text-xs font-normal text-violet-500">recorrente</span> : null}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Ticket médio</p><p className="text-lg font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{brlc(fin.medio)}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Situação</p><span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: `${STATUS_FIN[fin.status].cor}1A`, color: STATUS_FIN[fin.status].cor }}>{STATUS_FIN[fin.status].label}</span></div>
+          </div>
+          {fin.repassado > 0 && <p className="mt-2 text-xs text-zinc-500">Repassado/estornado: <span className="font-semibold text-zinc-600 dark:text-zinc-300">{brlc(fin.repassado)}</span></p>}
+          <p className="mt-3 mb-1.5 text-[11px] text-zinc-400">{STATUS_FIN[fin.status].dica}. Histórico:</p>
+          <div className="max-h-48 space-y-0.5 overflow-y-auto scrollbar-thin">
+            {fin.pagamentos.map((p, i) => (
+              <div key={i} className="flex items-center justify-between rounded px-2 py-1 text-sm odd:bg-zinc-50/70 dark:odd:bg-zinc-800/30">
+                <span className="tabular-nums text-zinc-500">{p.data}</span>
+                <span className="font-semibold tabular-nums text-emerald-600">{brlc(p.valor)}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 rounded-lg border border-dashed border-zinc-200 px-3 py-2 text-[11px] text-zinc-400 dark:border-zinc-700">
+            O saldo devedor exato e a régua de cobrança chegam com o módulo de cobrança de parcelas (em construção).
+          </p>
+        </>
+      )}
+    </Card>
   );
 }
 
