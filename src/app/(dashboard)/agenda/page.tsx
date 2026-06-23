@@ -22,6 +22,7 @@ import { deadlinesService, type Deadline } from '@/features/deadlines/services/d
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { useAuthStore } from '@/stores/auth-store';
 import { inputCls, Field, ASTREA_BLUE, CnjNumber } from '../processos/page';
 
 const EV_PENDING = { bg: '#DAF3FF', text: '#1D6BB7' };
@@ -49,6 +50,7 @@ const initials = (name: string | null) => { if (!name) return 'Eu'; const p = na
 
 interface Activity {
   id: string; source: Src; rawId: string; title: string; date: string;
+  endDate: string | null; // fim do evento (só eventos com hora) — dá altura no timeGrid
   hasTime: boolean; done: boolean; cancelled: boolean; fatal: boolean;
   caseId: string | null; caseTitle: string | null; cnj: string | null;
   responsibleId: string | null; responsibleName: string | null; createdName: string | null;
@@ -79,6 +81,18 @@ export default function AgendaPage() {
   const [dStatus, setDStatus] = useState(status);
   const [dPerson, setDPerson] = useState(personId);
 
+  // Por padrão a agenda abre nas atribuições do usuário logado (não "Todas"),
+  // igual ao Astrea. Aplica uma única vez quando o usuário fica disponível;
+  // depois o filtro fica livre (o usuário pode escolher Todas ou outra pessoa).
+  const meId = useAuthStore((s) => s.user?.id) ?? null;
+  const didInitPerson = useRef(false);
+  useEffect(() => {
+    if (didInitPerson.current || !meId) return;
+    didInitPerson.current = true;
+    setPersonId(meId);
+    setDPerson(meId);
+  }, [meId]);
+
   const api = () => calRef.current?.getApi();
 
   useEffect(() => {
@@ -102,9 +116,16 @@ export default function AgendaPage() {
     for (const t of tkQ.data ?? []) {
       if (!t.dueAt) continue;
       const dj = t.metadata?.djen;
+      const td = new Date(t.dueAt);
+      // "Dia todo" quando a hora LOCAL é meia-noite ou 09:00 (a canônica de criação);
+      // qualquer outra hora local é uma tarefa com horário marcado. Usar a hora local
+      // (e não o ISO UTC) evita que prazos de meia-noite BRT (= 03:00Z) virem "timed"
+      // e apareçam às 00:00 / cortados na agenda.
+      const taskAllDay = (td.getHours() === 0 || td.getHours() === 9) && td.getMinutes() === 0;
       out.push({
         id: 't_' + t.id, source: 'tarefa', rawId: t.id, title: t.title, date: t.dueAt,
-        hasTime: t.dueAt.includes('T') && !/T0[09]:00:00/.test(t.dueAt) ? true : false,
+        endDate: null,
+        hasTime: !taskAllDay,
         done: t.status === 'DONE', cancelled: false, fatal: t.priority === 'HIGH',
         caseId: t.case?.id ?? null, caseTitle: t.case?.title ?? null, cnj: t.case?.cnjNumber ?? null,
         responsibleId: t.assigneeId, responsibleName: t.assigneeId ? userMap.get(t.assigneeId) ?? null : null,
@@ -119,6 +140,7 @@ export default function AgendaPage() {
       out.push({
         // Mostra no PRAZO DE SEGURANÇA (safeDate); o fatal vai no campo "Prazo fatal".
         id: 'd_' + d.id, source: 'prazo', rawId: d.id, title: d.title, date: d.safeDate ?? d.dueDate,
+        endDate: null,
         hasTime: false, done: d.status === 'DONE', cancelled: d.status === 'CANCELLED', fatal: d.type === 'FATAL',
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
@@ -130,6 +152,7 @@ export default function AgendaPage() {
     for (const e of evQ.data ?? []) {
       out.push({
         id: 'e_' + e.id, source: 'evento', rawId: e.id, title: e.title, date: e.startsAt,
+        endDate: e.endsAt,
         hasTime: true, done: false, cancelled: false, fatal: false,
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
@@ -153,10 +176,14 @@ export default function AgendaPage() {
   const byId = useMemo(() => new Map(filtered.map((a) => [a.id, a])), [filtered]);
   const fcEvents = useMemo<EventInput[]>(() => filtered.map((a) => {
     const c = a.done || a.cancelled ? EV_DONE : a.source === 'evento' ? EV_TIMED : EV_PENDING;
+    // Eventos com hora precisam de FIM pra ter altura no timeGrid — sem isso o
+    // FullCalendar dá altura mínima e corta o horário + título. Usa o fim real do
+    // evento; quando não há, assume +1h.
+    const end = a.hasTime ? (a.endDate ?? new Date(+new Date(a.date) + 3_600_000).toISOString()) : undefined;
     return {
       // Itens só-data (prazos/tarefas s/ hora) entram como data-only ('YYYY-MM-DD')
       // pra o FullCalendar não converter o UTC meia-noite e jogar pro dia anterior.
-      id: a.id, title: `${initials(a.responsibleName)} · ${a.title}`, start: a.hasTime ? a.date : a.date.slice(0, 10), allDay: !a.hasTime,
+      id: a.id, title: `${initials(a.responsibleName)} · ${a.title}`, start: a.hasTime ? a.date : a.date.slice(0, 10), end, allDay: !a.hasTime,
       backgroundColor: c.bg, borderColor: c.bg, textColor: c.text,
       classNames: [`ag-${a.source}`, (a.done || a.cancelled) ? 'ag-done' : ''].filter(Boolean),
       startEditable: !a.cancelled, // tarefas/eventos/prazos arrastáveis (no prazo move a data de execução; a fatal é legal e fica na ficha)
@@ -194,7 +221,7 @@ export default function AgendaPage() {
     } catch (e: any) { toast.error(e?.message || 'Erro ao mover'); arg.revert(); }
   };
 
-  const personLabel = personId === 'all' ? 'Minhas atribuições' : (userMap.get(personId)?.split(' ')[0] ?? 'Pessoa');
+  const personLabel = personId === 'all' ? 'Todas as atribuições' : personId === meId ? 'Minhas atribuições' : (userMap.get(personId)?.split(' ')[0] ?? 'Pessoa');
   const showSidePanel = mode === 'list' || mode === 'timeGridDay';
   const isMonth = mode === 'dayGridMonth';
 
@@ -556,10 +583,18 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const reschedule = async (target: Date) => {
     setBusy(true);
     try {
-      if (activity.hasTime) { const o = new Date(dateISO); target.setHours(o.getHours(), o.getMinutes(), 0, 0); } else target.setHours(0, 0, 0, 0);
+      // Item "dia todo" (tarefa/prazo sem hora): fixa 09:00 LOCAL — a hora canônica
+      // de criação, robusta a fuso. (Meia-noite local virava 03:00Z e fazia a tarefa
+      // ganhar hora 00:00 / não assentar no dia certo: era o "não reagenda".)
+      // Item com hora (evento/audiência): preserva a hora atual.
+      if (activity.hasTime) { const o = new Date(dateISO); target.setHours(o.getHours(), o.getMinutes(), 0, 0); }
+      else target.setHours(9, 0, 0, 0);
       const iso = target.toISOString();
       if (activity.source === 'tarefa') await tasksService.update(activity.rawId, { dueAt: iso });
-      else if (activity.source === 'prazo') await deadlinesService.update(activity.rawId, { dueDate: iso });
+      // No PRAZO movemos a data de EXECUÇÃO (safeDate) — igual ao arraste. A data
+      // FATAL é legal e permanece INTACTA (só muda na ficha do prazo). Antes isto
+      // gravava em dueDate e mexia na fatal — corrigido.
+      else if (activity.source === 'prazo') await deadlinesService.update(activity.rawId, { safeDate: iso });
       else await calendarService.update(activity.rawId, { startsAt: iso });
       setDateISO(iso); setReMenu(false); setMiniCal(false); toast.success('Reagendado'); onRefetch();
     } catch (e: any) { toast.error(e?.message || 'Erro ao reagendar'); } finally { setBusy(false); }
