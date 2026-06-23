@@ -100,6 +100,41 @@ const HYPE: string[] = [
   'O sucesso ama quem aparece todos os dias. E olha quem apareceu de novo: {dr} {nome}! 👏',
   'Grandes advogados não esperam o dia perfeito — eles fazem o dia ser perfeito. Sua vez, {dr} {nome}. 🌈',
   'A próxima sentença favorável já está a caminho. Vamos buscá-la, {dr} {nome}? 🏃‍♂️💨',
+  'Os bancos têm advogados de terno caro. Os clientes têm algo melhor: {dr} {nome}. 💼⚡',
+  'Café na mão, autos na tela, coragem no peito — {dr} {nome} entrou no modo imparável. ☕🔥',
+  'Existe um silêncio que vale ouro: o do adversário quando lê a petição de {dr} {nome}. 🤫📜',
+  'Toda grande tese um dia foi só uma boa ideia teimosa. Qual é a sua de hoje, {dr} {nome}? 💡',
+  'A balança da justiça pende pra quem estuda mais. Spoiler: hoje pende pra você, {dr} {nome}. ⚖️',
+  'Não é sorte, é repertório — e o seu é gigante, {dr} {nome}. 📚',
+  'O juiz lê centenas de peças por semana. Faça a sua ser a que ele lembra, {dr} {nome}. ✍️',
+  'Cada "intimado" que aparece é um convite pra você brilhar. Aceita, {dr} {nome}? 🔔',
+  'Tem advogado que conta os anos de carreira; você faz os anos contarem, {dr} {nome}. ⏳',
+  'A toga não cai do céu — conquista-se despacho por despacho. Bora pro próximo, {dr} {nome}. 👩‍⚖️',
+  'Hoje alguém vai dormir aliviado porque você assumiu o caso. Isso não tem preço, {dr} {nome}. 🌙',
+  'Prazo apertado é adrenalina disfarçada — e você corre bem sob pressão, {dr} {nome}. 🏎️💨',
+  'O Direito muda todo dia; ainda bem que estudar é o seu esporte favorito, {dr} {nome}. 🥇',
+  'Grandes vitórias começam com um "vou ler esse processo agora". Sua vez, {dr} {nome}. 📂',
+  'Você não é mais um(a) no fórum — é referência. Aja como tal hoje, {dr} {nome}. 🌟',
+  'A melhor defesa de um cliente é ter {dr} {nome} do lado dele. Simples assim. 🛡️',
+  'Transforme o "não tem jurisprudência" em "agora tem". Faça história, {dr} {nome}. 🏛️',
+  'Respira. Foca. Domina. O dia é uma audiência e você é o(a) protagonista, {dr} {nome}. 🎬',
+  'Quem madruga no Direito não pega só a minhoca — pega o melhor argumento. Bom dia, {dr} {nome}! 🐦',
+  'A justiça pode ser lenta, mas a sua determinação é expressa. Acelera, {dr} {nome}! 🚄',
+  'Cada cliente é uma história que você ajuda a ter final feliz. Capricha no enredo, {dr} {nome}. 📖',
+  'Há petições que informam e petições que convencem — as suas convencem, {dr} {nome}. 🎯',
+  'O segredo dos grandes não é só talento: é aparecer e caprichar todo dia, como você, {dr} {nome}. 🔁',
+  'Você carrega um superpoder raro: fazer o complicado virar justiça. Usa hoje, {dr} {nome}. 🦸',
+  'A caneta de {dr} {nome} pesa mais que qualquer martelo. Escreve essa história. 🖋️',
+  'Disciplina é liberdade: quanto mais você organiza hoje, mais leve fica amanhã, {dr} {nome}. 🗂️',
+  'O mundo tem problemas demais e gente disposta de menos — ainda bem que tem você, {dr} {nome}. 💙',
+  'Se fosse fácil, não precisaria de alguém do seu calibre. Que bom que é você, {dr} {nome}. 💪',
+  'Tem gente esperando há anos por justiça. Hoje você encurta essa espera, {dr} {nome}. ⏱️',
+  'O nervosismo antes da audiência é só o seu talento pedindo passagem. Deixa ele brilhar, {dr} {nome}. ✨',
+  'Petição protocolada é semente plantada. Hoje é dia de plantar bastante, {dr} {nome}. 🌱',
+  'Davi também era o azarão — até abrir a boca (ou a petição). Vai com tudo, {dr} {nome}! 🪨',
+  'O melhor argumento ainda não foi escrito porque você ainda não sentou pra escrever. Bora, {dr} {nome}. ⌨️',
+  'Calma de monge, foco de atleta, garra de leão — esse é o combo {dr} {nome}. 🧘🦁',
+  'A toga combina com você de um jeito que intimida o adversário. Veste o dia, {dr} {nome}. 🥋',
 ];
 
 const QUOTES: { t: string; a: string }[] = [
@@ -114,6 +149,18 @@ const QUOTES: { t: string; a: string }[] = [
   { t: 'Justiça é a constante e perpétua vontade de dar a cada um o que é seu.', a: 'Justiniano' },
   { t: 'Não basta saber, é preciso também aplicar; não basta querer, é preciso também agir.', a: 'Goethe' },
   { t: 'A advocacia não é profissão de covardes.', a: 'Sobral Pinto' },
+  { t: 'O direito não socorre a quem dorme.', a: 'Brocardo (Dormientibus non succurrit jus)' },
+  { t: 'A toga é o símbolo da igualdade de todos perante a lei.', a: 'Piero Calamandrei' },
+  { t: 'Onde está a sociedade, está o direito.', a: 'Ubi societas, ibi jus' },
+  { t: 'A cada um o que é seu.', a: 'Suum cuique tribuere' },
+  { t: 'A coragem é a primeira das qualidades humanas, porque garante todas as outras.', a: 'Aristóteles' },
+  { t: 'O sucesso é ir de fracasso em fracasso sem perder o entusiasmo.', a: 'Winston Churchill' },
+  { t: 'A disciplina é a ponte entre metas e realizações.', a: 'Jim Rohn' },
+  { t: 'Ninguém é tão grande que não possa aprender, nem tão pequeno que não possa ensinar.', a: 'Ésquilo' },
+  { t: 'O advogado deve ser o primeiro a acreditar na causa que defende.', a: 'Evaristo de Moraes' },
+  { t: 'A esperança é o sonho do homem acordado.', a: 'Aristóteles' },
+  { t: 'Tudo o que um sonho precisa para ser realizado é alguém que acredite que ele possa ser realizado.', a: 'Roberto Shinyashiki' },
+  { t: 'A justiça é a verdade em ação.', a: 'Joseph Joubert' },
 ];
 
 const DICAS: string[] = [
@@ -127,6 +174,16 @@ const DICAS: string[] = [
   'Comemore as pequenas vitórias: cada prazo cumprido é combustível pro próximo.',
   'Cliente bem informado reclama menos e indica mais. Atualize antes que ele cobre.',
   'Termine o dia anotando as 3 prioridades de amanhã. Você acorda no comando, não no susto.',
+  'Salve modelos das suas melhores peças: o "você do passado" é seu melhor estagiário.',
+  'Antes da audiência, escreva as 3 perguntas que você NÃO quer ouvir — e prepare as respostas.',
+  'Lance o prazo fatal e o de segurança na agenda no mesmo minuto em que recebe a intimação.',
+  'Releia a peça da contraparte caçando o ponto fraco: ele quase sempre mora no pedido.',
+  'Devolva a ligação do cliente no mesmo dia — confiança se mede em horas, não em petições.',
+  'Feche cada processo do dia com a anotação do próximo passo. O "futuro você" agradece.',
+  'Beba água e levante a cada hora: foco também depende do corpo, não só do café.',
+  'Acordo melhor que a melhor sentença provável é vitória. Pragmatismo também é estratégia.',
+  'Separe 15 min no fim da semana pra ler um informativo do STJ. Repertório se constrói pingando.',
+  'Nomeie bem os arquivos do cliente hoje: você economiza horas de garimpo no futuro.',
 ];
 
 const QUICK = [
@@ -140,6 +197,38 @@ const QUICK = [
 
 const CONFETTI_COLORS = ['#228BE6', '#15AABF', '#7048E8', '#F76707', '#F59F00', '#2F9E44', '#E64980', '#FA5252'];
 const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// "Sacola embaralhada" persistida (localStorage): sorteia um índice do pool
+// SEM repetir até esgotar todos — e nunca devolve o mesmo dois sorteios
+// seguidos (nem na virada de ciclo). O estado vive entre cliques E acessos,
+// então cada novo acesso/clique surpreende com algo ainda não visto.
+function nextFromBag(key: string, length: number): number {
+  if (length <= 1) return 0;
+  let seen: number[] = [];
+  let last = -1;
+  try {
+    const raw = localStorage.getItem(`bag:${key}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) seen = parsed;
+    const l = Number(localStorage.getItem(`bag:last:${key}`));
+    if (Number.isInteger(l)) last = l;
+  } catch { /* storage indisponível — segue sem persistência */ }
+  seen = seen.filter((n) => Number.isInteger(n) && n >= 0 && n < length);
+  let pool: number[] = [];
+  for (let i = 0; i < length; i++) if (!seen.includes(i) && i !== last) pool.push(i);
+  if (pool.length === 0) {
+    // ciclo completo — reembaralha, mas evita emendar com o último mostrado
+    seen = [];
+    for (let i = 0; i < length; i++) if (i !== last) pool.push(i);
+  }
+  const chosen = pool[Math.floor(Math.random() * pool.length)];
+  seen.push(chosen);
+  try {
+    localStorage.setItem(`bag:${key}`, JSON.stringify(seen));
+    localStorage.setItem(`bag:last:${key}`, String(chosen));
+  } catch { /* ignore */ }
+  return chosen;
+}
 
 // ── Mensagens pendentes no chat (bloco interativo do Hub) ──
 const MEDIA_PREVIEW: Record<string, string> = {
@@ -515,10 +604,10 @@ export default function InicioPage() {
 
   useEffect(() => {
     setMounted(true);
-    setMsgIdx(Math.floor(Math.random() * HYPE.length));
-    setQuoteIdx(Math.floor(Math.random() * QUOTES.length));
-    setDicaIdx(Math.floor(Math.random() * DICAS.length));
-    setEmojiIdx(Math.floor(Math.random() * GREET_EMOJI.length));
+    setMsgIdx(nextFromBag('hype', HYPE.length));
+    setQuoteIdx(nextFromBag('quote', QUOTES.length));
+    setDicaIdx(nextFromBag('dica', DICAS.length));
+    setEmojiIdx(nextFromBag('emoji', GREET_EMOJI.length));
     setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
@@ -591,10 +680,10 @@ export default function InicioPage() {
   );
 
   const novoIncentivo = () => {
-    setMsgIdx((i) => { let n = i; while (n === i && HYPE.length > 1) n = Math.floor(Math.random() * HYPE.length); return n; });
-    setQuoteIdx((i) => { let n = i; while (n === i && QUOTES.length > 1) n = Math.floor(Math.random() * QUOTES.length); return n; });
-    setDicaIdx((i) => { let n = i; while (n === i && DICAS.length > 1) n = Math.floor(Math.random() * DICAS.length); return n; });
-    setEmojiIdx((i) => (i + 1) % GREET_EMOJI.length);
+    setMsgIdx(nextFromBag('hype', HYPE.length));
+    setQuoteIdx(nextFromBag('quote', QUOTES.length));
+    setDicaIdx(nextFromBag('dica', DICAS.length));
+    setEmojiIdx(nextFromBag('emoji', GREET_EMOJI.length));
     setBurst((b) => b + 1);
   };
 
