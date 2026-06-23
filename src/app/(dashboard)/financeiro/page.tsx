@@ -1,16 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   AreaChart, Area, PieChart, Pie, Cell, ReferenceLine, BarChart,
 } from 'recharts';
 import {
   Wallet, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
-  CheckCircle2, Info, Target, Users, Sparkles, Loader2,
+  CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search,
 } from 'lucide-react';
-import { financeiroService } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard } from '@/features/financeiro/services/financeiro.service';
 
 const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(Math.round(n)).toLocaleString('pt-BR');
 const brl2 = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -42,7 +43,6 @@ function ChartTooltip({ active, payload, label }: any) {
 export default function FinanceiroPage() {
   const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 60_000 });
   const [novosClientes, setNovosClientes] = useState(3);
-  const [showTx, setShowTx] = useState(false);
 
   const meses = data?.meses ?? [];
   const ticket = data?.projecao?.ticketMedio || 250;
@@ -238,34 +238,8 @@ export default function FinanceiroPage() {
           </Card>
         </div>
 
-        {/* Lançamentos */}
-        <Card
-          title="Lançamentos recentes"
-          sub={`${data.transacoes.length} lançamentos do Astrea`}
-          action={<button onClick={() => setShowTx((v) => !v)} className="text-xs font-semibold text-[#228BE6] hover:underline">{showTx ? 'ocultar' : 'mostrar'}</button>}
-        >
-          {showTx ? (
-            <div className="-mx-1 max-h-96 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white text-left text-xs uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
-                  <tr><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 font-medium">Categoria</th><th className="px-2 py-1.5 text-right font-medium">Valor</th></tr>
-                </thead>
-                <tbody>
-                  {data.transacoes.map((t, i) => (
-                    <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
-                      <td className="whitespace-nowrap px-2 py-1.5 text-zinc-500">{t.data}</td>
-                      <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-300">{t.party || '—'}{t.parcela ? <span className="text-zinc-400"> · {t.parcela}</span> : null}</td>
-                      <td className="px-2 py-1.5 text-zinc-500">{t.categoria}</td>
-                      <td className={`whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="py-2 text-center text-sm text-zinc-400">Clique em "mostrar" para ver os {data.transacoes.length} lançamentos.</p>
-          )}
-        </Card>
+        {/* Lançamentos — livro-razão editável */}
+        <Lancamentos data={data} />
 
         <p className="mt-6 flex items-center justify-center gap-1.5 pb-2 text-xs text-zinc-400">
           <Sparkles className="h-3.5 w-3.5" /> Reimporte a planilha do Astrea quando quiser atualizar os números.
@@ -299,6 +273,130 @@ function Card({ title, sub, action, children }: { title: React.ReactNode; sub?: 
         {action}
       </div>
       {children}
+    </div>
+  );
+}
+
+const ABAS = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'receitas', label: 'Receitas' },
+  { key: 'despesas', label: 'Despesas' },
+] as const;
+const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
+const toBR = (iso: string) => { const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };
+const toISOInput = (br: string) => { const m = br.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+
+function Lancamentos({ data }: { data: FinDashboard }) {
+  const qc = useQueryClient();
+  const [aba, setAba] = useState<'todos' | 'receitas' | 'despesas'>('todos');
+  const [busca, setBusca] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [f, setF] = useState({ dataISO: toISOInput(hojeBR()), tipo: 'receita' as 'receita' | 'despesa', categoria: 'Honorários', party: '', valor: '' });
+
+  const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
+
+  const addM = useMutation({
+    mutationFn: () => financeiroService.addTransacao({ data: toBR(f.dataISO), tipo: f.tipo, categoria: f.categoria, valor: Number(f.valor.replace(',', '.')) || 0, party: f.party }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success('Lançamento adicionado'); setShowForm(false); setF((p) => ({ ...p, party: '', valor: '' })); },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao lançar'),
+  });
+  const delM = useMutation({
+    mutationFn: (id: string) => financeiroService.removeTransacao(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success('Lançamento removido'); },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao remover'),
+  });
+
+  const txs = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return data.transacoes.filter((t) => {
+      if (aba === 'receitas' && t.valor < 0) return false;
+      if (aba === 'despesas' && t.valor >= 0) return false;
+      if (q && !`${t.party ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [data.transacoes, aba, busca]);
+
+  const resumo = useMemo(() => ({
+    rec: txs.filter((t) => t.valor >= 0).reduce((s, t) => s + t.valor, 0),
+    desp: txs.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0),
+    saldo: txs.reduce((s, t) => s + t.valor, 0),
+  }), [txs]);
+
+  const podeSalvar = f.dataISO && f.categoria && Number(f.valor.replace(',', '.')) > 0;
+
+  return (
+    <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Lançamentos <span className="font-normal text-zinc-400">· livro-razão</span></h2>
+        <button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90">
+          {showForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}{showForm ? 'Fechar' : 'Novo lançamento'}
+        </button>
+      </div>
+
+      {/* Form de novo lançamento */}
+      {showForm && (
+        <div className="mt-3 grid gap-2 rounded-xl border border-zinc-200/70 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/30 sm:grid-cols-[auto_auto_1fr_auto_auto]">
+          <input type="date" value={f.dataISO} onChange={(e) => setF({ ...f, dataISO: e.target.value })} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+          <div className="inline-flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700">
+            {(['receita', 'despesa'] as const).map((tp) => (
+              <button key={tp} onClick={() => setF({ ...f, tipo: tp, categoria: tp === 'receita' ? 'Honorários' : 'Aluguel' })} className={`px-3 py-1.5 text-xs font-semibold capitalize ${f.tipo === tp ? (tp === 'receita' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{tp}</button>
+            ))}
+          </div>
+          <input value={f.party} onChange={(e) => setF({ ...f, party: e.target.value })} placeholder="Cliente / descrição" className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+          <select value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <div className="flex gap-2">
+            <input value={f.valor} onChange={(e) => setF({ ...f, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-28 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+            <button disabled={!podeSalvar || addM.isPending} onClick={() => addM.mutate()} className="inline-flex items-center gap-1 rounded-md bg-[#228BE6] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">
+              {addM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Lançar'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Abas + busca */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+          {ABAS.map((a) => (
+            <button key={a.key} onClick={() => setAba(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${aba === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>
+          ))}
+        </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="w-44 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+        </div>
+      </div>
+
+      {/* Resumo do filtro */}
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-lg bg-emerald-50 py-1.5 dark:bg-emerald-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Receitas</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(resumo.rec)}</p></div>
+        <div className="rounded-lg bg-rose-50 py-1.5 dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesas</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(resumo.desp)}</p></div>
+        <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
+      </div>
+
+      {/* Tabela */}
+      <div className="mt-3 max-h-[28rem] overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-white text-left text-xs uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
+            <tr><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 font-medium">Categoria</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="w-8"></th></tr>
+          </thead>
+          <tbody>
+            {txs.map((t) => (
+              <tr key={t.id} className="group border-t border-zinc-100 dark:border-zinc-800">
+                <td className="whitespace-nowrap px-2 py-1.5 text-zinc-500">{t.data}</td>
+                <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-300">{t.party || '—'}{t.parcela ? <span className="text-zinc-400"> · {t.parcela}</span> : null}{t.manual ? <span className="ml-1 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}</td>
+                <td className="px-2 py-1.5 text-zinc-500">{t.categoria}</td>
+                <td className={`whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</td>
+                <td className="px-1 py-1.5 text-right">
+                  <button onClick={() => { if (confirm('Remover este lançamento?')) delM.mutate(t.id!); }} disabled={delM.isPending} title="Remover" className="rounded p-1 text-zinc-300 opacity-0 transition hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
+                </td>
+              </tr>
+            ))}
+            {txs.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Nenhum lançamento{busca ? ' para a busca' : aba !== 'todos' ? ` em ${aba}` : ''}.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
