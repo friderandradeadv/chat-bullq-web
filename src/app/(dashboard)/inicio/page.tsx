@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   MessageSquare,
   CalendarCheck,
@@ -23,12 +24,21 @@ import {
   Clock,
   Gavel,
   PartyPopper,
+  Send,
+  Inbox,
+  CornerUpLeft,
+  Sparkles,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { tasksService } from '@/features/tasks/services/tasks.service';
 import { deadlinesService } from '@/features/deadlines/services/deadlines.service';
 import { calendarService } from '@/features/calendar/services/calendar.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
+import { avatarColor, avatarInitials } from '@/lib/avatar';
+import { formatPhone } from '@/lib/brazil-states';
 
 // ── Honorífico (Dr./Dra.) por heurística de nome — sem campo de gênero no banco ──
 const FEMALE_FIRST = new Set([
@@ -128,6 +138,217 @@ const QUICK = [
 
 const CONFETTI_COLORS = ['#228BE6', '#15AABF', '#7048E8', '#F76707', '#F59F00', '#2F9E44', '#E64980', '#FA5252'];
 const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// ── Mensagens pendentes no chat (bloco interativo do Hub) ──
+const MEDIA_PREVIEW: Record<string, string> = {
+  IMAGE: '📷 Foto', AUDIO: '🎤 Áudio', VIDEO: '🎥 Vídeo', DOCUMENT: '📄 Documento',
+  STICKER: 'Figurinha', LOCATION: '📍 Localização', CONTACT: '👤 Contato',
+  TEMPLATE: 'Mensagem', INTERACTIVE: 'Mensagem', REACTION: 'Reação',
+};
+const lastPreview = (c: Conversation) => {
+  const last = c.messages?.[0];
+  if (!last) return 'Sem mensagens';
+  return (last.content?.text as string) || MEDIA_PREVIEW[last.type] || 'Mensagem';
+};
+const contactLabel = (c: Conversation) =>
+  c.contact?.name || (c.contact?.phone ? formatPhone(c.contact.phone) : 'Cliente');
+
+// Respostas rápidas prontas — um toque preenche o campo (bem ágil no corre-corre).
+const QUICK_REPLIES: { emoji: string; text: string }[] = [
+  { emoji: '👀', text: 'Olá! Já estou verificando o seu caso e retorno em instantes. 🙏' },
+  { emoji: '✅', text: 'Recebido! Obrigado pela mensagem, vou analisar e já te respondo.' },
+  { emoji: '📞', text: 'Oi! Podemos falar por aqui ou prefere que eu te ligue?' },
+  { emoji: '⏳', text: 'Estou cuidando do andamento do seu processo. Assim que houver novidade, te aviso por aqui.' },
+  { emoji: '🙂', text: 'Bom dia! Como posso te ajudar hoje?' },
+];
+
+function relTime(iso: string | null | undefined, now: Date | null): string {
+  if (!iso || !now) return '';
+  const diff = Math.max(0, now.getTime() - new Date(iso).getTime());
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return 'ontem';
+  if (d < 7) return `há ${d} d`;
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+function MsgAvatar({ name, url }: { name: string; url: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (url && !failed) {
+    return <img src={url} alt={name} onError={() => setFailed(true)} className="h-10 w-10 shrink-0 rounded-full bg-zinc-100 object-cover dark:bg-zinc-800" />;
+  }
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white" style={{ backgroundColor: avatarColor(name) }}>
+      {avatarInitials(name)}
+    </div>
+  );
+}
+
+function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: () => void }) {
+  const qc = useQueryClient();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [handled, setHandled] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
+
+  const q = useQuery({
+    queryKey: ['hub', 'pending-msgs'],
+    queryFn: () => inboxService.getConversations({ limit: '40', unread: 'true', archived: 'exclude', groups: 'exclude' }),
+    staleTime: 30_000,
+    retry: 1,
+    refetchInterval: 60_000,
+  });
+
+  const pending = useMemo(
+    () =>
+      (q.data?.conversations ?? [])
+        .filter((c) => c.messages?.[0]?.direction === 'INBOUND' && !handled.has(c.id))
+        .sort((a, b) => (b.lastMessageAt || '').localeCompare(a.lastMessageAt || '')),
+    [q.data, handled],
+  );
+
+  const shown = showAll ? pending.slice(0, 12) : pending.slice(0, 5);
+
+  const send = async (conv: Conversation) => {
+    const body = text.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      await inboxService.sendMessage({ conversationId: conv.id, type: 'TEXT', content: { text: body } });
+      await inboxService.markAsRead(conv.id).catch(() => undefined);
+      setHandled((s) => new Set(s).add(conv.id));
+      setOpenId(null);
+      setText('');
+      onCelebrate();
+      toast.success(`Resposta enviada para ${contactLabel(conv)} 🚀`);
+      qc.invalidateQueries({ queryKey: ['hub', 'pending-msgs'] });
+    } catch {
+      toast.error('Não consegui enviar daqui. Abra a conversa e responda por lá.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const toggleReply = (id: string) => {
+    setOpenId((cur) => (cur === id ? null : id));
+    setText('');
+  };
+
+  return (
+    <div className="welcome-pop mx-auto mt-4 max-w-xl rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.21s' }}>
+      <div className="mb-1.5 flex items-center justify-between px-1">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <MessageSquare className="h-3.5 w-3.5 text-[#228BE6]" />
+          Mensagens esperando você
+          {pending.length > 0 && (
+            <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E03131] px-1.5 text-[10px] font-bold text-white">
+              {pending.length}
+            </span>
+          )}
+        </p>
+        <Link href="/inbox" className="text-[11px] font-semibold text-[#228BE6] hover:underline">abrir chat →</Link>
+      </div>
+
+      {q.isLoading ? (
+        <div className="flex items-center gap-2 px-2 py-6 text-sm text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin" /> Procurando mensagens novas…
+        </div>
+      ) : pending.length === 0 ? (
+        <div className="flex flex-col items-center gap-1 px-2 py-6 text-center">
+          <Inbox className="h-7 w-7 text-[#02883C]" />
+          <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Tudo respondido! 🎉</p>
+          <p className="text-xs text-zinc-400">Nenhum cliente esperando. Caixa de entrada zerada — manda ver no resto do dia!</p>
+        </div>
+      ) : (
+        <div className="space-y-0.5">
+          {shown.map((conv) => {
+            const name = contactLabel(conv);
+            const isOpen = openId === conv.id;
+            const unread = conv.unreadCount ?? 0;
+            return (
+              <div key={conv.id} className={`rounded-xl transition ${isOpen ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''}`}>
+                <div className="flex items-center gap-2.5 px-2 py-1.5">
+                  <Link href={`/inbox?conversationId=${conv.id}`} className="group flex min-w-0 flex-1 items-center gap-2.5">
+                    <div className="relative">
+                      <MsgAvatar name={name} url={conv.contact?.avatarUrl ?? null} />
+                      {unread > 0 && (
+                        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E03131] px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-zinc-900">
+                          {unread > 9 ? '9+' : unread}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-semibold text-zinc-800 group-hover:text-[#228BE6] dark:text-zinc-100">{name}</span>
+                        <span className="shrink-0 text-[11px] font-medium text-zinc-400">· {relTime(conv.lastMessageAt, now)}</span>
+                      </div>
+                      <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{lastPreview(conv)}</p>
+                    </div>
+                  </Link>
+                  <button
+                    onClick={() => toggleReply(conv.id)}
+                    className={`flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${isOpen ? 'bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200' : 'bg-[#228BE6]/10 text-[#228BE6] hover:bg-[#228BE6]/20'}`}
+                  >
+                    {isOpen ? <X className="h-3.5 w-3.5" /> : <CornerUpLeft className="h-3.5 w-3.5" />}
+                    {isOpen ? 'Fechar' : 'Responder'}
+                  </button>
+                </div>
+
+                {isOpen && (
+                  <div className="welcome-pop space-y-2 px-2 pb-2.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      {QUICK_REPLIES.map((r) => (
+                        <button
+                          key={r.text}
+                          onClick={() => setText(r.text)}
+                          className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] text-zinc-600 transition hover:border-[#228BE6]/40 hover:text-[#228BE6] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                        >
+                          {r.emoji} {r.text.length > 28 ? r.text.slice(0, 28) + '…' : r.text}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <textarea
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(conv); } }}
+                        rows={2}
+                        autoFocus
+                        placeholder={`Responder ${name}…`}
+                        className="min-h-9 flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                      />
+                      <button
+                        onClick={() => send(conv)}
+                        disabled={!text.trim() || sending}
+                        className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[#228BE6] px-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1c7ed6] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Enviar
+                      </button>
+                    </div>
+                    <p className="px-0.5 text-[10px] text-zinc-400">Enter envia · Shift+Enter quebra linha · vai pelo WhatsApp do cliente</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {pending.length > 5 && (
+            <button onClick={() => setShowAll((v) => !v)} className="flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-semibold text-[#228BE6] hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+              <Sparkles className="h-3 w-3" />
+              {showAll ? 'mostrar menos' : `ver mais ${pending.length - 5} aguardando`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Contador animado (count-up) — anti-tédio nos números.
 function useCountUp(target: number, on: boolean, ms = 750) {
@@ -303,6 +524,9 @@ export default function InicioPage() {
             <StatCard href="/processos" icon={Briefcase} color="#7048E8" value={stats.processos} label="processos seus" on={statOn} />
           </div>
         )}
+
+        {/* Mensagens pendentes no chat */}
+        {mounted && <PendingMessages now={now} onCelebrate={() => setBurst((b) => b + 1)} />}
 
         {/* Próximos compromissos */}
         {mounted && proximos.length > 0 && (
