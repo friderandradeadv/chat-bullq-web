@@ -51,6 +51,7 @@ const initials = (name: string | null) => { if (!name) return 'Eu'; const p = na
 interface Activity {
   id: string; source: Src; rawId: string; title: string; date: string;
   endDate: string | null; // fim do evento (só eventos com hora) — dá altura no timeGrid
+  triggerDate: string | null; // disponibilização (base p/ contar prazo de recurso da sentença)
   hasTime: boolean; done: boolean; cancelled: boolean; fatal: boolean;
   caseId: string | null; caseTitle: string | null; cnj: string | null;
   responsibleId: string | null; responsibleName: string | null; createdName: string | null;
@@ -128,6 +129,7 @@ export default function AgendaPage() {
       out.push({
         id: 't_' + t.id, source: 'tarefa', rawId: t.id, title: t.title, date: t.dueAt,
         endDate: null,
+        triggerDate: null,
         hasTime: !taskAllDay,
         done: t.status === 'DONE', cancelled: false, fatal: t.priority === 'HIGH',
         caseId: t.case?.id ?? null, caseTitle: t.case?.title ?? null, cnj: t.case?.cnjNumber ?? null,
@@ -144,6 +146,7 @@ export default function AgendaPage() {
         // Mostra no PRAZO DE SEGURANÇA (safeDate); o fatal vai no campo "Prazo fatal".
         id: 'd_' + d.id, source: 'prazo', rawId: d.id, title: d.title, date: d.safeDate ?? d.dueDate,
         endDate: null,
+        triggerDate: d.triggerDate ?? null,
         hasTime: false, done: d.status === 'DONE', cancelled: d.status === 'CANCELLED', fatal: d.type === 'FATAL',
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
@@ -156,6 +159,7 @@ export default function AgendaPage() {
       out.push({
         id: 'e_' + e.id, source: 'evento', rawId: e.id, title: e.title, date: e.startsAt,
         endDate: e.endsAt,
+        triggerDate: null,
         hasTime: true, done: false, cancelled: false, fatal: false,
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
@@ -507,8 +511,15 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [respMenu, setRespMenu] = useState(false);
   const [respId, setRespId] = useState(activity.responsibleId);
   const [respName, setRespName] = useState(activity.responsibleName);
+  const [prazoBusy, setPrazoBusy] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
   const d = new Date(dateISO);
+
+  // Atividade de ANÁLISE DE SENTENÇA → oferece criar o prazo do recurso
+  // (apelação 15 dias úteis / embargos 5) já contado da disponibilização.
+  const isSentencaAnalise = !!activity.caseId
+    && (activity.source === 'prazo' || activity.source === 'tarefa')
+    && /senten[çc]a/i.test(activity.title);
 
   const assignResp = async (userId: string | null) => {
     setRespMenu(false);
@@ -608,6 +619,47 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     setBusy(true);
     try { await tasksService.update(activity.rawId, { dueAt: null }); toast.success('Data removida'); onRefetch(); onClose(); }
     catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
+  };
+
+  // Cria o prazo do recurso a partir da sentença. O backend conta os dias úteis
+  // (CPC 219/224/220, feriados + recesso) a partir da disponibilização e leva
+  // TODAS as infos da publicação (recorte, dispositivo, fase) pro prazo.
+  const criarPrazoRecurso = async (tipo: 'apelacao' | 'embargos') => {
+    if (!activity.caseId) { toast.error('Sem processo vinculado'); return; }
+    setPrazoBusy(true);
+    try {
+      const dias = tipo === 'apelacao' ? 15 : 5;
+      const titulo = tipo === 'apelacao' ? 'Apelação' : 'Embargos de declaração';
+      // Base de contagem: disponibilização da sentença (triggerDate). Sem ela
+      // (raro — só prazos não-DJEN), conta a partir da data da própria atividade.
+      const base = activity.triggerDate
+        ? { disponibilizacao: activity.triggerDate }
+        : { inicio: activity.date };
+      const novo = await deadlinesService.create({
+        caseId: activity.caseId,
+        title: titulo,
+        type: 'FATAL',
+        dias,
+        ...base,
+        assignedToId: activity.responsibleId ?? undefined,
+        metadata: {
+          djen: {
+            descricao: `Prazo de ${titulo.toLowerCase()} a partir da sentença`,
+            tipoPublicacao: activity.tipoPublicacao ?? undefined,
+            recorte: activity.recorte ?? undefined,
+            dispositivo: activity.dispositivo ?? undefined,
+            faseMovida: activity.faseMovida ?? undefined,
+          },
+          origem: 'analise-sentenca',
+          sentencaTaskId: activity.rawId,
+        },
+      });
+      const fmt = (s: string) => new Date(s).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+      toast.success(`Prazo de ${titulo.toLowerCase()} criado — fatal ${fmt(novo.dueDate)} (segurança ${fmt(novo.safeDate)})`);
+      onRefetch();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao criar prazo');
+    } finally { setPrazoBusy(false); }
   };
   const toggleDone = async () => {
     if (activity.source === 'evento') return;
@@ -769,6 +821,24 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             </div>
           )}
         </dl>
+
+        {/* Criar prazo de recurso — só quando a atividade é a análise da sentença */}
+        {isSentencaAnalise && (
+          <div className="mt-5 rounded-lg border border-[#DEE2E6] bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Criar prazo de recurso</p>
+            <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+              Contado da {activity.triggerDate ? 'disponibilização' : 'data'} desta sentença — dias úteis, feriados e recesso já calculados (CPC 219/224). Leva a publicação, o dispositivo e o recorte pro prazo.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('apelacao')} className="inline-flex items-center gap-1.5 rounded-md bg-[#CE0000] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+                <CalendarClock className="h-4 w-4" /> {prazoBusy ? 'Criando…' : 'Apelação (15 dias úteis)'}
+              </button>
+              <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('embargos')} className="inline-flex items-center gap-1.5 rounded-md border border-[#CE0000] px-3 py-2 text-sm font-medium text-[#CE0000] hover:bg-[#CE0000]/5 disabled:opacity-50 dark:hover:bg-[#CE0000]/10">
+                <CalendarClock className="h-4 w-4" /> Embargos (5 dias úteis)
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Comentários */}
         <div className="mt-5 border-t border-[#DEE2E6] pt-4 dark:border-zinc-800">

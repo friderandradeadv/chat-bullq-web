@@ -38,6 +38,9 @@ export interface CreateDeadlineInput {
   bufferDiasUteis?: number;
   triggerDate?: string;
   status?: DeadlineStatus; // permite reabrir (OPEN) / reordenar status via update
+  // origem/contexto (prazo de recurso criado a partir da sentença)
+  publicationId?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PreviewPrazoInput {
