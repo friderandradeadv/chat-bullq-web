@@ -53,6 +53,7 @@ interface Activity {
   endDate: string | null; // fim do evento (só eventos com hora) — dá altura no timeGrid
   triggerDate: string | null; // disponibilização (base p/ contar prazo de recurso da sentença)
   tags: { id: string; name: string; color: string }[];
+  coResponsibleIds: string[]; // responsáveis extras (metadata.coResponsibleIds)
   hasTime: boolean; done: boolean; cancelled: boolean; fatal: boolean;
   caseId: string | null; caseTitle: string | null; cnj: string | null;
   responsibleId: string | null; responsibleName: string | null; createdName: string | null;
@@ -143,6 +144,7 @@ export default function AgendaPage() {
         endDate: null,
         triggerDate: null,
         tags: tagMap.get('task:' + t.id) ?? [],
+        coResponsibleIds: (t.metadata as any)?.coResponsibleIds ?? [],
         hasTime: !taskAllDay,
         done: t.status === 'DONE', cancelled: false, fatal: t.priority === 'HIGH',
         caseId: t.case?.id ?? null, caseTitle: t.case?.title ?? null, cnj: t.case?.cnjNumber ?? null,
@@ -161,6 +163,7 @@ export default function AgendaPage() {
         endDate: null,
         triggerDate: d.triggerDate ?? null,
         tags: tagMap.get('deadline:' + d.id) ?? [],
+        coResponsibleIds: (d.metadata as any)?.coResponsibleIds ?? [],
         hasTime: false, done: d.status === 'DONE', cancelled: d.status === 'CANCELLED', fatal: d.type === 'FATAL',
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
@@ -175,6 +178,7 @@ export default function AgendaPage() {
         endDate: e.endsAt,
         triggerDate: null,
         tags: tagMap.get('event:' + e.id) ?? [],
+        coResponsibleIds: (e as any).metadata?.coResponsibleIds ?? [],
         hasTime: true, done: false, cancelled: false, fatal: false,
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
@@ -554,6 +558,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [respId, setRespId] = useState(activity.responsibleId);
   const [respName, setRespName] = useState(activity.responsibleName);
   const [prazoBusy, setPrazoBusy] = useState(false);
+  const [coIds, setCoIds] = useState<string[]>(activity.coResponsibleIds ?? []);
+  const [coMenu, setCoMenu] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
   const d = new Date(dateISO);
 
@@ -575,6 +581,17 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
       toast.success('Responsável atualizado'); onRefetch();
     } catch (e: any) { setRespId(prev.id); setRespName(prev.name); toast.error(e?.message || 'Erro ao atribuir'); }
   };
+
+  // Co-responsáveis (extras) — vale p/ tarefa, prazo E evento.
+  const saveCoResponsibles = async (ids: string[]) => {
+    const prev = coIds;
+    setCoIds(ids);
+    try {
+      await activitiesService.setCoResponsibles(ENTITY_TYPE[activity.source], activity.rawId, ids);
+      onRefetch();
+    } catch (e: any) { setCoIds(prev); toast.error(e?.message || 'Erro ao salvar co-responsáveis'); }
+  };
+  const toggleCo = (uid: string) => saveCoResponsibles(coIds.includes(uid) ? coIds.filter((x) => x !== uid) : [...coIds, uid]);
 
   // Puxa a ficha do processo p/ montar "Cliente x Parte | 1º Grau - Área" (igual Astrea).
   const caseQ = useQuery({ queryKey: ['legal-case', 'agenda', activity.caseId], queryFn: () => legalCasesService.get(activity.caseId!), enabled: !!activity.caseId });
@@ -830,6 +847,37 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
               ) : respName}
             </Row>
           )}
+          <Row label="Co-responsáveis">
+            <span className="relative inline-flex flex-wrap items-center gap-1.5">
+              {coIds.length === 0 && <span className="text-zinc-400">—</span>}
+              {coIds.map((uid) => {
+                const nm = members.find((m) => m.user.id === uid)?.user.name ?? 'Usuário';
+                return (
+                  <span key={uid} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                    {nm}
+                    <button onClick={() => toggleCo(uid)} title="Remover" className="text-zinc-400 hover:text-rose-500"><X className="h-3 w-3" /></button>
+                  </span>
+                );
+              })}
+              <button onClick={() => setCoMenu((v) => !v)} className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[#DEE2E6] px-2 py-0.5 text-xs text-[#6C757D] hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400"><Plus className="h-3 w-3" />Adicionar</button>
+              {coMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setCoMenu(false)} />
+                  <div className="absolute left-0 top-7 z-20 max-h-60 w-60 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                    {members.filter((m) => m.user.id !== respId).map((m) => {
+                      const on = coIds.includes(m.user.id);
+                      return (
+                        <button key={m.user.id} onClick={() => toggleCo(m.user.id)} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                          {m.user.name} {on && <Check className="h-4 w-4 text-[#228BE6]" />}
+                        </button>
+                      );
+                    })}
+                    {members.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Nenhum membro.</p>}
+                  </div>
+                </>
+              )}
+            </span>
+          </Row>
           {activity.createdName && <Row label="Criado por"><span className="text-zinc-500">{activity.createdName}</span></Row>}
           {done && activity.completedAt && <Row label=""><span className="text-zinc-500">{activity.source === 'tarefa' ? 'Tarefa concluída' : 'Prazo concluído'} em {new Date(activity.completedAt).toLocaleDateString('pt-BR')}{activity.responsibleName ? ` por ${activity.responsibleName}` : ''}</span></Row>}
           {activity.priorityLabel && <Row label="Prioridade">{activity.priorityLabel}</Row>}

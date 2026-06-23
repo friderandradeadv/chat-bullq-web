@@ -66,6 +66,11 @@ export const activitiesService = {
   async detachTag(entityTagId: string): Promise<void> {
     await api.delete(`/activities/tags/${entityTagId}`);
   },
+  // Co-responsáveis (extras) — guardados em metadata.coResponsibleIds da atividade.
+  async setCoResponsibles(entityType: string, entityId: string, userIds: string[]): Promise<{ coResponsibleIds: string[] }> {
+    const { data } = await api.put(`/activities/${entityType}/${entityId}/co-responsibles`, { userIds });
+    return data.data ?? data;
+  },
 
   // Etiquetas do jurídico ficam isoladas das tags do atendimento (scope=legal).
   async listAvailableTags(): Promise<TagOption[]> {
