@@ -52,6 +52,7 @@ interface Activity {
   id: string; source: Src; rawId: string; title: string; date: string;
   endDate: string | null; // fim do evento (só eventos com hora) — dá altura no timeGrid
   triggerDate: string | null; // disponibilização (base p/ contar prazo de recurso da sentença)
+  tags: { id: string; name: string; color: string }[];
   hasTime: boolean; done: boolean; cancelled: boolean; fatal: boolean;
   caseId: string | null; caseTitle: string | null; cnj: string | null;
   responsibleId: string | null; responsibleName: string | null; createdName: string | null;
@@ -108,9 +109,20 @@ export default function AgendaPage() {
   const dlQ = useQuery({ queryKey: ['deadlines', 'agenda'], queryFn: () => deadlinesService.list({}) });
   const tkQ = useQuery({ queryKey: ['tasks', 'agenda'], queryFn: () => tasksService.list() });
   const mbQ = useQuery({ queryKey: ['members', 'agenda'], queryFn: () => membersService.list() });
-  const refetchAll = () => { evQ.refetch(); dlQ.refetch(); tkQ.refetch(); };
+  const tagsQ = useQuery({ queryKey: ['activity-tags-index'], queryFn: () => activitiesService.tagsIndex() });
+  const refetchAll = () => { evQ.refetch(); dlQ.refetch(); tkQ.refetch(); tagsQ.refetch(); };
 
   const userMap = useMemo(() => new Map((mbQ.data ?? []).map((m) => [m.user.id, m.user.name])), [mbQ.data]);
+  // entityType:entityId → etiquetas, montado do índice (1 request p/ a agenda toda).
+  const tagMap = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; color: string }[]>();
+    for (const e of tagsQ.data ?? []) {
+      const k = `${e.entityType}:${e.entityId}`;
+      const arr = m.get(k);
+      if (arr) arr.push(e.tag); else m.set(k, [e.tag]);
+    }
+    return m;
+  }, [tagsQ.data]);
 
   const activities = useMemo<Activity[]>(() => {
     const out: Activity[] = [];
@@ -130,6 +142,7 @@ export default function AgendaPage() {
         id: 't_' + t.id, source: 'tarefa', rawId: t.id, title: t.title, date: t.dueAt,
         endDate: null,
         triggerDate: null,
+        tags: tagMap.get('task:' + t.id) ?? [],
         hasTime: !taskAllDay,
         done: t.status === 'DONE', cancelled: false, fatal: t.priority === 'HIGH',
         caseId: t.case?.id ?? null, caseTitle: t.case?.title ?? null, cnj: t.case?.cnjNumber ?? null,
@@ -147,6 +160,7 @@ export default function AgendaPage() {
         id: 'd_' + d.id, source: 'prazo', rawId: d.id, title: d.title, date: d.safeDate ?? d.dueDate,
         endDate: null,
         triggerDate: d.triggerDate ?? null,
+        tags: tagMap.get('deadline:' + d.id) ?? [],
         hasTime: false, done: d.status === 'DONE', cancelled: d.status === 'CANCELLED', fatal: d.type === 'FATAL',
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
@@ -160,6 +174,7 @@ export default function AgendaPage() {
         id: 'e_' + e.id, source: 'evento', rawId: e.id, title: e.title, date: e.startsAt,
         endDate: e.endsAt,
         triggerDate: null,
+        tags: tagMap.get('event:' + e.id) ?? [],
         hasTime: true, done: false, cancelled: false, fatal: false,
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
@@ -169,7 +184,7 @@ export default function AgendaPage() {
       });
     }
     return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
-  }, [tkQ.data, dlQ.data, evQ.data, userMap]);
+  }, [tkQ.data, dlQ.data, evQ.data, userMap, tagMap]);
 
   const filtered = useMemo(() => activities.filter((a) => {
     if (a.source === 'evento' ? !exibir.eventos : !exibir.tarefas) return false;
@@ -359,6 +374,20 @@ export default function AgendaPage() {
                 events={fcEvents}
                 datesSet={(arg: DatesSetArg) => setTitle(arg.view.title)}
                 dateClick={onDateClick} eventClick={onEventClick} eventDrop={onEventDrop}
+                eventDidMount={(arg) => {
+                  // Tirinhas coloridas das etiquetas no topo do evento (estilo Astrea).
+                  const a = byId.get(arg.event.id);
+                  if (!a || !a.tags.length) return;
+                  const strip = document.createElement('div');
+                  strip.className = 'ag-tagstrip';
+                  for (const t of a.tags.slice(0, 5)) {
+                    const s = document.createElement('span');
+                    s.style.backgroundColor = t.color;
+                    s.title = t.name;
+                    strip.appendChild(s);
+                  }
+                  arg.el.prepend(strip);
+                }}
               />
             )}
           </div>
@@ -393,6 +422,19 @@ function FilterBtn({ children, onClick, active }: { children: React.ReactNode; o
 function TypeChip({ source }: { source: Src }) {
   const t = TYPE_TAG[source];
   return <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase text-white" style={{ backgroundColor: t.bg }}>{t.label}</span>;
+}
+
+// Tirinhas coloridas das etiquetas (estilo Astrea) — só a cor; o nome vai no tooltip.
+function TagStrip({ tags, max = 5 }: { tags: { id: string; name: string; color: string }[]; max?: number }) {
+  if (!tags?.length) return null;
+  return (
+    <span className="inline-flex items-center gap-1 align-middle">
+      {tags.slice(0, max).map((t) => (
+        <span key={t.id} title={t.name} className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: t.color }} />
+      ))}
+      {tags.length > max && <span className="text-[10px] text-zinc-400">+{tags.length - max}</span>}
+    </span>
+  );
 }
 
 function MiniCalendar({ initial, onPick }: { initial: Date; onPick: (d: Date) => void }) {
@@ -437,7 +479,7 @@ function ActivityList({ activities, onOpen }: { activities: Activity[]; onOpen: 
             <div className="min-w-0 flex-1">
               <p className={`text-sm font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{a.title}</p>
               {a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}{a.cnj ? ` · ${a.cnj}` : ''}</p>}
-              <div className="mt-1.5"><TypeChip source={a.source} /></div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5"><TypeChip source={a.source} /><TagStrip tags={a.tags} /></div>
             </div>
             <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800">{initials(a.responsibleName)}</span>
           </button>
@@ -562,7 +604,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
   };
   const removeComment = async (id: string) => { try { await activitiesService.deleteComment(id); commentsQ.refetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
-  const attachTag = async (tagId: string) => { try { await activitiesService.attachTag(entityType, activity.rawId, tagId); setTagPicker(false); etagsQ.refetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
+  const attachTag = async (tagId: string) => { try { await activitiesService.attachTag(entityType, activity.rawId, tagId); setTagPicker(false); etagsQ.refetch(); onRefetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
   const createAndAttach = async () => {
     const name = newTagName.trim();
     if (!name) return;
@@ -570,10 +612,10 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     try {
       const tag = await activitiesService.createTag(name, newTagColor);
       await activitiesService.attachTag(entityType, activity.rawId, tag.id);
-      setNewTagName(''); setTagPicker(false); availTagsQ.refetch(); etagsQ.refetch();
+      setNewTagName(''); setTagPicker(false); availTagsQ.refetch(); etagsQ.refetch(); onRefetch();
     } catch (e: any) { toast.error(e?.message || 'Erro ao criar etiqueta'); } finally { setBusy(false); }
   };
-  const detachTag = async (etId: string) => { try { await activitiesService.detachTag(etId); etagsQ.refetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
+  const detachTag = async (etId: string) => { try { await activitiesService.detachTag(etId); etagsQ.refetch(); onRefetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
   const saveEdit = async () => {
     if (!editTitle.trim()) return;
     setBusy(true);

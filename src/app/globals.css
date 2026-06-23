@@ -247,6 +247,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Tirinhas das etiquetas no topo do evento (estilo Astrea). */
+.ag-tagstrip {
+  display: flex;
+  gap: 2px;
+  padding: 1px 4px 0;
+}
+.ag-tagstrip span {
+  height: 3px;
+  flex: 1 1 auto;
+  min-width: 6px;
+  border-radius: 2px;
+}
 
 /* ── Hub / página de boas-vindas (/inicio) — "sempre uma festa" ── */
 @keyframes confetti-fall {

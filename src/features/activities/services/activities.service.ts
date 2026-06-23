@@ -31,6 +31,12 @@ export interface TagOption {
   color: string;
 }
 
+export interface TagIndexEntry {
+  entityType: string;
+  entityId: string;
+  tag: { id: string; name: string; color: string };
+}
+
 export const activitiesService = {
   async listComments(entityType: string, entityId: string): Promise<ActivityComment[]> {
     const { data } = await api.get(`/activities/${entityType}/${entityId}/comments`);
@@ -46,6 +52,11 @@ export const activitiesService = {
 
   async listTags(entityType: string, entityId: string): Promise<EntityTag[]> {
     const { data } = await api.get(`/activities/${entityType}/${entityId}/tags`);
+    return data.data ?? data;
+  },
+  // Índice de todas as etiquetas das atividades da org (1 request p/ a agenda inteira).
+  async tagsIndex(): Promise<TagIndexEntry[]> {
+    const { data } = await api.get('/activities/tags-index');
     return data.data ?? data;
   },
   async attachTag(entityType: string, entityId: string, tagId: string): Promise<EntityTag> {
