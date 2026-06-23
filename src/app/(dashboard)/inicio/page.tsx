@@ -10,9 +10,7 @@ import {
   Newspaper,
   Users,
   BarChart3,
-  Sparkles,
   ArrowRight,
-  Scale,
   CalendarClock,
   AlarmClock,
   Briefcase,
@@ -278,20 +276,6 @@ export default function InicioPage() {
       )}
 
       <div className="relative z-10 w-full max-w-3xl text-center">
-        {/* Pílula data/hora */}
-        <div className="welcome-pop mb-5 inline-flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/70 px-4 py-1.5 text-xs font-medium text-zinc-500 backdrop-blur dark:border-zinc-700/70 dark:bg-zinc-900/60 dark:text-zinc-400">
-          <Scale className="h-3.5 w-3.5 text-[#228BE6]" />
-          Hub Frider Andrade
-          {now && (
-            <>
-              <span className="text-zinc-300 dark:text-zinc-600">·</span>
-              <span className="capitalize">{now.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</span>
-              <span className="text-zinc-300 dark:text-zinc-600">·</span>
-              <span className="tabular-nums font-semibold text-zinc-600 dark:text-zinc-300">{now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-            </>
-          )}
-        </div>
-
         {/* Saudação */}
         <h1 className="welcome-pop text-4xl font-bold tracking-tight text-[#202124] dark:text-zinc-50 sm:text-5xl" style={{ animationDelay: '0.05s' }}>
           {saud},{' '}
