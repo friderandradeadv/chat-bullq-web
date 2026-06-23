@@ -117,11 +117,14 @@ export default function AgendaPage() {
       if (!t.dueAt) continue;
       const dj = t.metadata?.djen;
       const td = new Date(t.dueAt);
-      // "Dia todo" quando a hora LOCAL é meia-noite ou 09:00 (a canônica de criação);
-      // qualquer outra hora local é uma tarefa com horário marcado. Usar a hora local
-      // (e não o ISO UTC) evita que prazos de meia-noite BRT (= 03:00Z) virem "timed"
-      // e apareçam às 00:00 / cortados na agenda.
-      const taskAllDay = (td.getHours() === 0 || td.getHours() === 9) && td.getMinutes() === 0;
+      // "Dia todo" = tarefa SEM horário real. Cobre os formatos de data-pura do banco:
+      //  • meia-noite UTC ("…T00:00:00…Z") — as tarefas de "ciência" do DJEN, que em
+      //    BRT viravam "21:00" no dia ANTERIOR. Tratando como dia-todo, o calendário
+      //    usa o dia UTC (slice 0,10) e elas voltam pro dia certo, sem hora.
+      //  • meia-noite ou 09:00 no horário LOCAL — criação manual / prazos BRT.
+      // Só os EVENTOS (audiências) têm horário real e mantêm a hora.
+      const taskAllDay = /T00:00:00/.test(t.dueAt)
+        || ((td.getHours() === 0 || td.getHours() === 9) && td.getMinutes() === 0);
       out.push({
         id: 't_' + t.id, source: 'tarefa', rawId: t.id, title: t.title, date: t.dueAt,
         endDate: null,
