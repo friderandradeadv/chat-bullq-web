@@ -53,8 +53,8 @@ type View = 'lancamentos' | 'honorarios' | 'cumprimento' | 'retiradas' | 'fluxo'
 const TABS: { key: View; label: string; icon: React.ElementType }[] = [
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt },
   { key: 'honorarios', label: 'Honorários', icon: Users },
-  { key: 'cumprimento', label: 'Cumprimento de Sentença', icon: Gavel },
-  { key: 'retiradas', label: 'Retiradas / Pró-labore', icon: Wallet },
+  { key: 'cumprimento', label: 'Cumprimento', icon: Gavel },
+  { key: 'retiradas', label: 'Retiradas', icon: Wallet },
   { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2 },
   { key: 'crescimento', label: 'Crescimento', icon: TrendingUp },
   { key: 'projecoes', label: 'Projeções', icon: Rocket },
@@ -104,8 +104,8 @@ export default function FinanceiroPage() {
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
-        {/* Abas estilo Astrea */}
-        <div className="mt-5 flex items-center gap-1 overflow-x-auto border-b border-[#DEE2E6] scrollbar-none dark:border-zinc-800">
+        {/* Abas estilo Astrea — quebram linha em telas estreitas (nunca cortam) */}
+        <div className="mt-5 flex flex-wrap items-center gap-x-1 gap-y-0 border-b border-[#DEE2E6] dark:border-zinc-800">
           {TABS.map((t) => (
             <TabBtn key={t.key} active={view === t.key} onClick={() => setView(t.key)} icon={t.icon}
               count={t.key === 'lancamentos' ? data.resumoLancamentos?.total : undefined}>{t.label}</TabBtn>
