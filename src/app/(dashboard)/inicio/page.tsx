@@ -592,6 +592,57 @@ function NewTodayAgenda({ now }: { now: Date | null }) {
   );
 }
 
+// Início: casos que pedem atenção do responsável — pré-processual (cobrar/
+// acompanhar docs) e casos parados há muito tempo na fase (acelerar).
+function AtencaoCard({ titulo, cor, href, itens, vazio }: { titulo: string; cor: string; href: string; itens: { id: string; nome: string; fase: string; dias: number }[]; vazio: string }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200/70 bg-white/70 p-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60">
+      <div className="mb-1.5 flex items-center justify-between px-1">
+        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: cor }}>{titulo}</p>
+        <Link href={href} className="text-[11px] font-semibold text-[#228BE6] hover:underline">ver →</Link>
+      </div>
+      {itens.length === 0 ? (
+        <p className="px-1 py-2 text-xs text-zinc-400">{vazio}</p>
+      ) : (
+        <div className="space-y-0.5">
+          {itens.map((c) => (
+            <Link key={c.id} href={`/processos/${c.id}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+              <span className="min-w-0 flex-1 truncate text-sm text-zinc-700 dark:text-zinc-200">{c.nome}<span className="text-zinc-400"> · {c.fase}</span></span>
+              <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: c.dias >= 45 ? 'rgba(224,49,49,0.12)' : 'rgba(245,159,0,0.14)', color: c.dias >= 45 ? '#E03131' : '#B8860B' }}>{c.dias}d</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CasosParaAtencao() {
+  const { user } = useAuthStore();
+  const q = useQuery({
+    queryKey: ['hub', 'kanban-atencao', user?.id],
+    queryFn: () => legalCasesService.kanban({ responsibleId: user!.id }),
+    enabled: !!user?.id, staleTime: 300_000, retry: 1,
+  });
+  const { pre, parados } = useMemo(() => {
+    const d = q.data;
+    if (!d) return { pre: [] as { id: string; nome: string; fase: string; dias: number }[], parados: [] as { id: string; nome: string; fase: string; dias: number }[] };
+    const preKeys = new Set(d.phases.filter((p) => p.lane === 'pre').map((p) => p.key));
+    const labelOf = (k: string) => (d.phases.find((p) => p.key === k)?.label ?? k).replace(/^\d+(\.\d+)?\.\s*/, '');
+    const mk = (c: typeof d.cards[number]) => ({ id: c.id, nome: c.client || c.title, fase: labelOf(c.phase), dias: c.diasNaFase ?? 0 });
+    const pre = d.cards.filter((c) => preKeys.has(c.phase)).sort((a, b) => (b.diasNaFase ?? 0) - (a.diasNaFase ?? 0)).slice(0, 6).map(mk);
+    const parados = d.cards.filter((c) => !preKeys.has(c.phase) && (c.diasNaFase ?? 0) >= 25).sort((a, b) => (b.diasNaFase ?? 0) - (a.diasNaFase ?? 0)).slice(0, 6).map(mk);
+    return { pre, parados };
+  }, [q.data]);
+  if (!q.data || (pre.length === 0 && parados.length === 0)) return null;
+  return (
+    <div className="welcome-pop mx-auto mt-4 grid max-w-xl gap-3 text-left sm:grid-cols-2" style={{ animationDelay: '0.23s' }}>
+      <AtencaoCard titulo="Pré-processual — acompanhar" cor="#e11970" href="/juridico/pre-processual" itens={pre} vazio="Nada pendente aqui 🎉" />
+      <AtencaoCard titulo="Parados — acelerar" cor="#E03131" href="/juridico/kanban" itens={parados} vazio="Tudo em movimento 🚀" />
+    </div>
+  );
+}
+
 export default function InicioPage() {
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
@@ -736,6 +787,9 @@ export default function InicioPage() {
 
         {/* Novos prazos/tarefas adicionados hoje (do responsável) */}
         {mounted && <NewTodayAgenda now={now} />}
+
+        {/* Casos que pedem atenção: pré-processual (acompanhar) + parados (acelerar) */}
+        {mounted && <CasosParaAtencao />}
 
         {/* Próximos compromissos */}
         {mounted && proximos.length > 0 && (
