@@ -39,6 +39,20 @@ const cleanArea = (s: string | null): string | null => {
   return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim();
 };
 const fmtSize = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+// Cor da etiqueta por produto (igual ao card do kanban).
+const produtoColor = (p: string | null): { bg: string; fg: string } => {
+  const s = (cleanArea(p) ?? '').toUpperCase();
+  if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
+  if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
+  if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
+  if (/TRABALH|RESCIS|FERIAS/.test(s)) return { bg: 'rgb(255,161,0)', fg: '#101820' };
+  if (/PORTABIL|REVISIONAL|CONSIGNAD|CONSUMID/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
+  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
+  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
+  if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
+  if (/SEGURO|TARIFA|MATERN/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
+  return { bg: 'rgb(209,209,209)', fg: '#101820' };
+};
 
 const LEFT_TABS = [
   { key: 'dados', label: 'Dados' },
@@ -61,7 +75,7 @@ export function CaseDetailDrawer({
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabKey>('dados');
   const [picker, setPicker] = useState(false);
-  const [cadastroOpen, setCadastroOpen] = useState(false);
+  const [cadastroOpen, setCadastroOpen] = useState(true);
 
   const { data: c, isLoading } = useQuery({
     queryKey: ['legal-cases', 'detail', caseId],
@@ -129,8 +143,8 @@ export function CaseDetailDrawer({
                 ? // eslint-disable-next-line @next/next/no-img-element
                   <img src={c.responsible.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
                 : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{(c.responsible.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>)}
-              {c?.area && <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.area}</span>}
-              {adversa && <span className="text-xs text-[#48626f] dark:text-zinc-400">× {adversa.name}</span>}
+              {c?.area && (() => { const col = produtoColor(c.area); return <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: col.bg, color: col.fg }}>{cleanArea(c.area)}</span>; })()}
+              {adversa && <span className="inline-flex items-center gap-1 rounded-full bg-[#f1f3f4] px-2 py-1 text-[10px] font-semibold text-[#48626f] dark:bg-zinc-800 dark:text-zinc-300">× {adversa.name}</span>}
             </div>
             {/* abas (pills) */}
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
