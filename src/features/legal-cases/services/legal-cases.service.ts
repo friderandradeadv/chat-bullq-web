@@ -252,6 +252,18 @@ export interface JurimetriaData {
   rows: JuriRow[];
 }
 
+/** Recebíveis de Cumprimento de Sentença (valores preenchidos no card do processo). */
+export interface CsBase { caseId: string; title: string; cliente: string | null; cnj: string | null; area: string | null; responsavel: string | null; valorCausa: number | null; legalPhaseAt: string | null }
+export interface CsCumprimento extends CsBase { fase: 'cumprimento'; protocolado: boolean; valorCalculo: number; numeroCs: string | null }
+export interface CsPrestacao extends CsBase { fase: 'prestacao_contas'; valorAlvara: number; honorariosNossos: number; sucumbencia: number; valorCliente: number; aReceberNosso: number }
+export interface CsFavoravel extends CsBase { fase: 'sentenca' | 'transito'; resultado: string | null; exito: number | null; estimado: number | null }
+export interface CumprimentoFinanceiro {
+  prestacao: CsPrestacao[];
+  cumprimento: CsCumprimento[];
+  favoraveis: CsFavoravel[];
+  totais: { nPrestacao: number; aReceberPrestacao: number; nCumprimento: number; brutoEmCumprimento: number; nFavoraveis: number; estimadoFavoraveis: number };
+}
+
 /** Processo do cliente — usado no painel lateral do chat. */
 export interface ClientCaseRow {
   id: string;
@@ -298,6 +310,10 @@ export const legalCasesService = {
   },
   async jurimetria(): Promise<JurimetriaData> {
     const { data } = await api.get('/legal-cases/jurimetria');
+    return data.data ?? data;
+  },
+  async cumprimentoFinanceiro(): Promise<CumprimentoFinanceiro> {
+    const { data } = await api.get('/legal-cases/cumprimento-financeiro');
     return data.data ?? data;
   },
   async movePhase(id: string, phase: string): Promise<{ ok: boolean; phase: string }> {

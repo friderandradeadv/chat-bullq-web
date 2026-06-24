@@ -11,9 +11,10 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt,
   ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput } from '@/features/financeiro/services/financeiro.service';
+import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import {
   aggregarClientes, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
@@ -47,10 +48,11 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-type View = 'lancamentos' | 'honorarios' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
+type View = 'lancamentos' | 'honorarios' | 'cumprimento' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
 const TABS: { key: View; label: string; icon: React.ElementType }[] = [
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt },
   { key: 'honorarios', label: 'Honorários', icon: Users },
+  { key: 'cumprimento', label: 'Cumprimento de Sentença', icon: Gavel },
   { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2 },
   { key: 'crescimento', label: 'Crescimento', icon: TrendingUp },
   { key: 'projecoes', label: 'Projeções', icon: Rocket },
@@ -110,6 +112,7 @@ export default function FinanceiroPage() {
 
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
+        {view === 'cumprimento' && <CumprimentoTab />}
         {view === 'fluxo' && <FluxoTab data={data} />}
         {view === 'crescimento' && <CrescimentoTab data={data} />}
         {view === 'projecoes' && <ProjecoesTab data={data} />}
@@ -547,6 +550,111 @@ function Chip({ active, onClick, cor, children }: { active: boolean; onClick: ()
   return <button onClick={onClick} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${active ? 'border-transparent bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900' : 'border-zinc-200 text-zinc-500 hover:border-zinc-300 dark:border-zinc-700'}`}>{cor && <span className="h-2 w-2 rounded-full" style={{ background: cor }} />}{children}</button>;
 }
 
+// ═══════════════════════════ ABA · CUMPRIMENTO DE SENTENÇA ════════════════════
+
+function useCumprimentoFin() {
+  return useQuery({ queryKey: ['financeiro', 'cumprimento'], queryFn: () => legalCasesService.cumprimentoFinanceiro(), staleTime: 60_000 });
+}
+const VerProcesso = ({ id, children }: { id: string; children: React.ReactNode }) => (
+  <a href={`/processos/${id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 truncate text-zinc-700 hover:text-[#228BE6] hover:underline dark:text-zinc-200">{children}<ExternalLink className="h-3 w-3 shrink-0 opacity-50" /></a>
+);
+
+function CumprimentoTab() {
+  const { data: cs, isLoading } = useCumprimentoFin();
+  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
+  if (!cs) return <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os processos.</p></Card>;
+
+  const t = cs.totais;
+  const prestacaoCheia = cs.prestacao.filter((x) => x.aReceberNosso > 0);
+  const cumpCheio = cs.cumprimento.filter((x) => x.valorCalculo > 0);
+  const cumpVazio = cs.cumprimento.length - cumpCheio.length;
+  const prestVazio = cs.prestacao.length - prestacaoCheia.length;
+
+  return (
+    <>
+      <div className="mt-4 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 dark:border-emerald-900/40 dark:from-emerald-900/15 dark:to-zinc-900">
+        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Landmark className="h-5 w-5 text-emerald-600" /> Caixa a receber dos processos</h2>
+        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+          Puxado direto dos cards da Fase Judicial. Em <strong>Cumprimento de Sentença</strong> você lança o valor do cálculo; em <strong>Prestação de Contas</strong>, a divisão (nosso / sucumbência / cliente). O que está na prestação já é <strong>caixa nosso, quase certo</strong>; as sentenças favoráveis são <strong>parâmetro</strong> (ainda há risco de reforma no tribunal).
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MiniStat label="A receber (nosso) — prestação" value={brl(t.aReceberPrestacao)} hint={`${t.nPrestacao} processo(s)`} accent="#2F9E44" />
+        <MiniStat label="Em cumprimento (bruto)" value={brl(t.brutoEmCumprimento)} hint={`${t.nCumprimento} protocolado(s)/em curso`} accent="#228BE6" />
+        <MiniStat label="Sentenças favoráveis (estimado)" value={brl(t.estimadoFavoraveis)} hint={`${t.nFavoraveis} caso(s) · maior risco`} accent="#F59F00" />
+        <MiniStat label="Total potencial" value={brl(t.aReceberPrestacao + t.brutoEmCumprimento + t.estimadoFavoraveis)} hint="prestação + cumprimento + favoráveis" accent="#7048E8" />
+      </div>
+
+      {/* Prestação de contas — nosso */}
+      <Card title="Prestação de contas — já é nosso (caixa real)" sub="o que entra pra nós: honorários contratuais + sucumbência.">
+        {prestacaoCheia.length === 0 ? (
+          <p className="py-6 text-center text-sm text-zinc-400">Nenhuma prestação de contas com valores preenchidos.{prestVazio > 0 ? ` ${prestVazio} processo(s) nesta fase aguardando o preenchimento no card.` : ''}</p>
+        ) : (
+          <CsTabela cols={['Cliente', 'Nossos honorários', 'Sucumbência', 'A receber']}>
+            {prestacaoCheia.map((x) => (
+              <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{brl2(x.honorariosNossos)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{x.sucumbencia ? brl2(x.sucumbencia) : '—'}</td>
+                <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-emerald-600">{brl2(x.aReceberNosso)}</td>
+              </tr>
+            ))}
+          </CsTabela>
+        )}
+      </Card>
+
+      {/* Em cumprimento — protocolado */}
+      <Card title="Em cumprimento de sentença — protocolado, aguardando alvará" sub="valor do cálculo (bruto da condenação). A parte do escritório é definida na prestação de contas.">
+        {cumpCheio.length === 0 ? (
+          <p className="py-6 text-center text-sm text-zinc-400">Nenhum processo com valor de cálculo preenchido.{cumpVazio > 0 ? ` ${cumpVazio} em cumprimento aguardando o "Valor do cálculo" no card.` : ''}</p>
+        ) : (
+          <>
+            <CsTabela cols={['Cliente', 'Valor do cálculo', 'Situação', 'Nº dos autos']}>
+              {cumpCheio.map((x) => (
+                <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
+                  <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-[#228BE6]">{brl2(x.valorCalculo)}</td>
+                  <td className="px-2 py-1.5 text-center"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${x.protocolado ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'}`}>{x.protocolado ? 'Protocolado' : 'A protocolar'}</span></td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-xs text-zinc-500">{x.numeroCs || '—'}</td>
+                </tr>
+              ))}
+            </CsTabela>
+            {cumpVazio > 0 && <p className="mt-2 text-[11px] text-zinc-400">+ {cumpVazio} processo(s) em cumprimento sem o valor do cálculo preenchido no card.</p>}
+          </>
+        )}
+      </Card>
+
+      {/* Sentenças favoráveis — parâmetro */}
+      {cs.favoraveis.length > 0 && (
+        <Card title="Sentenças favoráveis — parâmetro (maior risco)" sub="ganhamos em 1º grau mas ainda cabe recurso/reforma. Estimativa = valor da causa × % de êxito.">
+          <CsTabela cols={['Cliente', 'Resultado', 'Êxito', 'Estimado (nosso)']}>
+            {cs.favoraveis.map((x) => (
+              <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
+                <td className="px-2 py-1.5 text-xs text-zinc-500">{x.resultado || '—'}</td>
+                <td className="px-2 py-1.5 text-center tabular-nums text-zinc-500">{x.exito != null ? `${x.exito}%` : '—'}</td>
+                <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-amber-600">{x.estimado != null ? brl2(x.estimado) : '—'}</td>
+              </tr>
+            ))}
+          </CsTabela>
+        </Card>
+      )}
+    </>
+  );
+}
+
+function CsTabela({ cols, children }: { cols: string[]; children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto scrollbar-thin">
+      <table className="w-full text-sm">
+        <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400">{cols.map((c, i) => <th key={c} className={`px-2 py-1.5 font-medium ${i === 0 ? '' : i === cols.length - 1 ? 'text-right' : 'text-right'}`}>{c}</th>)}</tr></thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
 // ═══════════════════════════ ABA · FLUXO DE CAIXA (tabela Astrea) ══════════════
 
 function FluxoTab({ data }: { data: FinDashboard }) {
@@ -701,10 +809,10 @@ function CrescimentoTab({ data }: { data: FinDashboard }) {
 
 // ═══════════════════════════ ABA · PROJEÇÕES ══════════════════════════════════
 
-function simula(meses: FinDashboard['meses'], ticket: number, x: number) {
+function simula(meses: FinDashboard['meses'], ticket: number, x: number, injecao = 0) {
   const realizados = meses.filter((m) => !m.projecao);
   const futuros = meses.filter((m) => m.projecao);
-  let acum = realizados.length ? realizados[realizados.length - 1].acumulado : 0;
+  let acum = (realizados.length ? realizados[realizados.length - 1].acumulado : 0) + injecao;
   let extra = 0; let mesAzul: string | null = null;
   const pts = futuros.map((m) => {
     extra += x * ticket;
@@ -720,19 +828,23 @@ function ProjecoesTab({ data }: { data: FinDashboard }) {
   const p = data.projecao!;
   const ticket = p.ticketMedio || 250;
   const [x, setX] = useState(p.clientesEquilibrio || 3);
+  const { data: cs } = useCumprimentoFin();
+  const csCerto = cs?.totais.aReceberPrestacao ?? 0;
+  const [usarCS, setUsarCS] = useState(true);
+  const inj = usarCS ? csCerto : 0;
 
   const chartData = useMemo(() => {
-    const sim = simula(data.meses, ticket, x);
+    const sim = simula(data.meses, ticket, x, inj);
     const byNome = new Map(sim.pts.map((pt) => [pt.nome, pt.acumuladoCenario]));
     return data.meses.map((m) => ({ nome: mesCurto(m.label), acumulado: m.acumulado, acumuladoCenario: m.projecao ? (byNome.get(mesCurto(m.label)) ?? null) : m.acumulado, projecao: m.projecao }));
-  }, [data.meses, ticket, x]);
+  }, [data.meses, ticket, x, inj]);
   const divisor = (() => { const i = chartData.findIndex((d) => d.projecao); return i > 0 ? chartData[i - 1]?.nome : undefined; })();
 
   const cenarios = [
     { nome: 'Sem novos clientes', x: 0, cor: '#E03131', desc: 'só a carteira atual' },
     { nome: 'Ponto de equilíbrio', x: p.clientesEquilibrio || 3, cor: '#F59F00', desc: 'o mínimo para não afundar' },
     { nome: 'Crescimento', x: (p.clientesEquilibrio || 3) + 3, cor: '#2F9E44', desc: 'aquisição firme' },
-  ].map((c) => ({ ...c, ...simula(data.meses, ticket, c.x) }));
+  ].map((c) => ({ ...c, ...simula(data.meses, ticket, c.x, inj) }));
 
   return (
     <>
@@ -755,6 +867,14 @@ function ProjecoesTab({ data }: { data: FinDashboard }) {
           </div>
         ))}
       </div>
+
+      {csCerto > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={usarCS} onChange={(e) => setUsarCS(e.target.checked)} className="h-4 w-4 accent-emerald-600" /><span className="font-medium text-zinc-700 dark:text-zinc-200">Somar recebíveis certos de Cumprimento de Sentença</span></label>
+          <span className="text-sm font-bold tabular-nums text-emerald-600">{brl(csCerto)}</span>
+          <span className="text-xs text-zinc-400">já é nosso (prestação de contas){cs?.totais.brutoEmCumprimento ? ` · + ${brl(cs.totais.brutoEmCumprimento)} em cumprimento, bruto, não somado` : ''}.</span>
+        </div>
+      )}
 
       <Card
         title={<span className="flex items-center gap-2"><Target className="h-4 w-4 text-[#7048E8]" /> Simulador interativo</span>}
