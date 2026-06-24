@@ -347,7 +347,7 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
   };
 
   return (
-    <div className="welcome-pop mx-auto mt-4 max-w-xl rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.21s' }}>
+    <div className="welcome-pop w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.21s' }}>
       <div className="mb-1.5 flex items-center justify-between px-1">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
           <MessageSquare className="h-3.5 w-3.5 text-[#228BE6]" />
@@ -530,7 +530,7 @@ function NewTodayAgenda({ now }: { now: Date | null }) {
   const shown = showAll ? items.slice(0, 12) : items.slice(0, 5);
 
   return (
-    <div className="welcome-pop mx-auto mt-4 max-w-xl rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.215s' }}>
+    <div className="welcome-pop w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.215s' }}>
       <div className="mb-1.5 flex items-center justify-between px-1">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
           <CalendarPlus className="h-3.5 w-3.5 text-[#02883C]" />
@@ -636,7 +636,7 @@ function CasosParaAtencao() {
   }, [q.data]);
   if (!q.data || (pre.length === 0 && parados.length === 0)) return null;
   return (
-    <div className="welcome-pop mx-auto mt-4 grid max-w-xl gap-3 text-left sm:grid-cols-2" style={{ animationDelay: '0.23s' }}>
+    <div className="welcome-pop mt-9 grid w-full gap-3 text-left sm:grid-cols-2" style={{ animationDelay: '0.23s' }}>
       <AtencaoCard titulo="Pré-processual — acompanhar" cor="#e11970" href="/juridico/pre-processual" itens={pre} vazio="Nada pendente aqui 🎉" />
       <AtencaoCard titulo="Parados — acelerar" cor="#E03131" href="/juridico/kanban" itens={parados} vazio="Tudo em movimento 🚀" />
     </div>
@@ -753,7 +753,7 @@ export default function InicioPage() {
         </div>
       )}
 
-      <div className="relative z-10 w-full max-w-3xl text-center">
+      <div className="relative z-10 w-full max-w-6xl text-center">
         {/* Saudação */}
         <h1 className="welcome-pop text-4xl font-bold tracking-tight text-[#202124] dark:text-zinc-50 sm:text-5xl" style={{ animationDelay: '0.05s' }}>
           {saud},{' '}
@@ -774,7 +774,7 @@ export default function InicioPage() {
 
         {/* Seus números (com count-up) */}
         {mounted && (
-          <div className="welcome-pop mx-auto mt-4 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-4" style={{ animationDelay: '0.2s' }}>
+          <div className="welcome-pop mx-auto mt-6 grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4" style={{ animationDelay: '0.2s' }}>
             <StatCard href="/agenda" icon={CalendarClock} color="#228BE6" value={stats.hoje} label="compromissos hoje" on={statOn} />
             <StatCard href="/agenda" icon={AlarmClock} color="#E03131" value={stats.fatais} label="prazos fatais (7d)" on={statOn} />
             <StatCard href="/agenda" icon={CheckCircle2} color="#02883C" value={stats.concluidas} label="concluídas hoje" on={statOn} />
@@ -782,43 +782,45 @@ export default function InicioPage() {
           </div>
         )}
 
-        {/* Mensagens pendentes no chat */}
-        {mounted && <PendingMessages now={now} onCelebrate={() => setBurst((b) => b + 1)} />}
-
-        {/* Novos prazos/tarefas adicionados hoje (do responsável) */}
-        {mounted && <NewTodayAgenda now={now} />}
-
-        {/* Casos que pedem atenção: pré-processual (acompanhar) + parados (acelerar) */}
-        {mounted && <CasosParaAtencao />}
-
-        {/* Próximos compromissos */}
-        {mounted && proximos.length > 0 && (
-          <div className="welcome-pop mx-auto mt-4 max-w-xl rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.22s' }}>
-            <div className="mb-1.5 flex items-center justify-between px-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Próximos compromissos</p>
-              <Link href="/agenda" className="text-[11px] font-semibold text-[#228BE6] hover:underline">ver agenda →</Link>
-            </div>
-            <div className="space-y-0.5">
-              {proximos.map((p) => {
-                const m = KIND_META[p.kind];
-                return (
-                  <Link key={p.id} href="/agenda" className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
-                    <m.icon className="h-4 w-4 shrink-0" style={{ color: m.color }} />
-                    <span className="min-w-0 flex-1 truncate text-sm text-zinc-700 dark:text-zinc-200">{p.title}{p.caso ? <span className="text-zinc-400"> · {p.caso}</span> : null}</span>
-                    <span className="shrink-0 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                      {relDate(p.date)}{p.hasTime ? ` · ${new Date(p.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}
-                    </span>
-                  </Link>
-                );
-              })}
+        {/* Painel — 2 colunas em telas largas: mensagens | agenda + compromissos */}
+        {mounted && (
+          <div className="welcome-pop mt-6 grid w-full items-start gap-4 text-left lg:grid-cols-2" style={{ animationDelay: '0.21s' }}>
+            <PendingMessages now={now} onCelebrate={() => setBurst((b) => b + 1)} />
+            <div className="flex flex-col gap-4">
+              <NewTodayAgenda now={now} />
+              {proximos.length > 0 && (
+                <div className="welcome-pop w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.22s' }}>
+                  <div className="mb-1.5 flex items-center justify-between px-1">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Próximos compromissos</p>
+                    <Link href="/agenda" className="text-[11px] font-semibold text-[#228BE6] hover:underline">ver agenda →</Link>
+                  </div>
+                  <div className="space-y-0.5">
+                    {proximos.map((p) => {
+                      const m = KIND_META[p.kind];
+                      return (
+                        <Link key={p.id} href="/agenda" className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                          <m.icon className="h-4 w-4 shrink-0" style={{ color: m.color }} />
+                          <span className="min-w-0 flex-1 truncate text-sm text-zinc-700 dark:text-zinc-200">{p.title}{p.caso ? <span className="text-zinc-400"> · {p.caso}</span> : null}</span>
+                          <span className="shrink-0 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                            {relDate(p.date)}{p.hasTime ? ` · ${new Date(p.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
+        {/* Casos que pedem atenção — largura total */}
+        {mounted && <CasosParaAtencao />}
+
         {/* Atalhos */}
         <div className="welcome-pop mt-9" style={{ animationDelay: '0.26s' }}>
           <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">Por onde vamos começar?</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {QUICK.map((q) => (
               <Link key={q.href} href={q.href} className="group flex items-center gap-3 rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 text-left backdrop-blur transition hover:-translate-y-0.5 hover:border-[#228BE6]/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:border-[#228BE6]/40">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${q.color}1A`, color: q.color }}><q.icon className="h-5 w-5" /></span>
