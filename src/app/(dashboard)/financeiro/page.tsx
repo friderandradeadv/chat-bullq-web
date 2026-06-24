@@ -1862,10 +1862,11 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
         {/* O que você está construindo — impacto + sua parte (sem expor o caixa do escritório) */}
         {data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
           <Card title={<span className="flex items-center gap-2"><HeartHandshake className="h-4 w-4 text-[#E64980]" /> O que você está construindo</span>}
-            sub="cada processo seu é uma pessoa esperando uma resposta. Aqui está o tamanho disso — e o que volta pra você.">
-            <div className="grid gap-3 sm:grid-cols-3">
+            sub="da condenação estimada, o escritório recebe os honorários do contrato; a sua parte é o seu % sobre esses honorários.">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl border border-pink-200 bg-pink-50/40 p-3 dark:border-pink-900/40 dark:bg-pink-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Em busca pelos seus clientes</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#E64980]">{brl(data.projecaoCasos.brutoEmProcesso)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.nComValor} {data.projecaoCasos.nComValor === 1 ? 'pessoa conta' : 'pessoas contam'} com você</p></div>
-              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">já com a defasagem da sentença</p></div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900/40 dark:bg-blue-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Honorários do escritório</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#228BE6]">{brl(data.projecaoCasos.escritorioEmProcesso)}</p><p className="text-[11px] text-zinc-400">% do contrato sobre a condenação</p></div>
+              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.pctExito}% dos honorários do escritório</p></div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Já realizado + a entrar</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl(r.recebido + aReceberTotal)}</p><p className="text-[11px] text-zinc-400">o que já se concretizou</p></div>
             </div>
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">💜 Você não move só números — move <strong>vidas</strong>. São <strong>{r.nCasos ?? casos.length} histórias</strong> que passam pelas suas mãos.</p>
@@ -1878,7 +1879,7 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
           <Card title={<>Seus processos <span className="font-normal text-zinc-400">· {casos.length}</span></>} sub="cada linha é uma pessoa que confia no seu trabalho.">
             <div className="max-h-[32rem] overflow-auto scrollbar-thin">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900"><tr><th className="px-2 py-1.5 font-medium">Autor × Réu</th><th className="hidden px-2 py-1.5 font-medium sm:table-cell">Etiquetas</th><th className="px-2 py-1.5 text-right font-medium">Para o cliente</th><th className="px-2 py-1.5 text-right font-medium">Sua parte</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900"><tr><th className="px-2 py-1.5 font-medium">Autor × Réu</th><th className="hidden px-2 py-1.5 font-medium sm:table-cell">Etiquetas</th><th className="px-2 py-1.5 text-right font-medium">Para o cliente</th><th className="hidden px-2 py-1.5 text-right font-medium md:table-cell">Escritório</th><th className="px-2 py-1.5 text-right font-medium">Sua parte</th></tr></thead>
                 <tbody>
                   {casos.map((c) => (
                     <tr key={c.caseId} className="border-t border-zinc-100 dark:border-zinc-800/70">
@@ -1893,6 +1894,7 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{c.valorCausa > 0 ? brl(c.valorCausa) : '—'}</td>
+                      <td className="hidden whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[#228BE6] md:table-cell">{c.escritorioValor > 0 ? <>{brl(c.escritorioValor)} <span className="text-[10px] text-zinc-400">{c.firmPct}%</span></> : '—'}</td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-[#7048E8]">{c.liquido > 0 ? brl(c.liquido) : '—'}</td>
                     </tr>
                   ))}
