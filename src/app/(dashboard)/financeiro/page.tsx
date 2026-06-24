@@ -850,6 +850,35 @@ const VerProcesso = ({ id, children }: { id: string; children: React.ReactNode }
   <a href={`/processos/${id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 truncate text-zinc-700 hover:text-[#228BE6] hover:underline dark:text-zinc-200">{children}<ExternalLink className="h-3 w-3 shrink-0 opacity-50" /></a>
 );
 
+// Editor inline do nº do processo (numero_cs) direto na aba CS — salva no card.
+function EditNumeroCs({ caseId, value }: { caseId: string; value: string | null }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value ?? '');
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try {
+      await legalCasesService.saveFaseField(caseId, 'cumprimento', 'numero_cs', val.trim());
+      await qc.invalidateQueries({ queryKey: ['financeiro', 'cumprimento'] });
+      toast.success('Número do processo salvo.');
+      setEditing(false);
+    } catch { toast.error('Não consegui salvar o número.'); } finally { setSaving(false); }
+  };
+  if (editing) return (
+    <span className="inline-flex items-center gap-1">
+      <input autoFocus value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }} placeholder="0000000-00.0000.0.00.0000" className="w-44 rounded border border-zinc-300 px-1.5 py-0.5 text-right text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+      <button onClick={save} disabled={saving} className="text-emerald-600 disabled:opacity-50">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>
+    </span>
+  );
+  return (
+    <button onClick={() => { setVal(value ?? ''); setEditing(true); }} className="group inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-[#228BE6]" title="Editar nº do processo">
+      {value ? <span className="tabular-nums">{value}</span> : <span className="italic text-zinc-300 dark:text-zinc-600">+ adicionar nº</span>}
+      <Pencil className="h-3 w-3 opacity-0 transition group-hover:opacity-60" />
+    </button>
+  );
+}
+
 function CumprimentoTab() {
   const { data: cs, isLoading } = useCumprimentoFin();
   const [areaF, setAreaF] = useState('');
@@ -870,9 +899,10 @@ function CumprimentoTab() {
   const cumpCheio = cumprimento.filter((x) => x.valorCalculo > 0);
   const cumpVazio = cumprimento.length - cumpCheio.length;
   const prestVazio = prestacao.length - prestacaoCheia.length;
+  const brutoCump = r2(cumpCheio.reduce((s, x) => s + (x.valorCalculo || 0), 0));
   const t = {
     nPrestacao: prestacao.length, aReceberPrestacao: r2(prestacao.reduce((s, x) => s + (x.aReceberNosso || 0), 0)),
-    nCumprimento: cumprimento.length, brutoEmCumprimento: r2(cumpCheio.reduce((s, x) => s + (x.valorCalculo || 0), 0)),
+    nCumprimento: cumprimento.length, brutoEmCumprimento: brutoCump, nossoEmCumprimento: r2(brutoCump * 0.4),
     nFavoraveis: favoraveis.length, estimadoFavoraveis: r2(favoraveis.reduce((s, x) => s + (x.estimado || 0), 0)),
   };
 
@@ -896,9 +926,9 @@ function CumprimentoTab() {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MiniStat label="A receber (nosso) — prestação" value={brl(t.aReceberPrestacao)} hint={`${t.nPrestacao} processo(s)`} accent="#2F9E44" />
-        <MiniStat label="Em cumprimento (bruto)" value={brl(t.brutoEmCumprimento)} hint={`${t.nCumprimento} protocolado(s)/em curso`} accent="#228BE6" />
+        <MiniStat label="Em cumprimento (nosso ~40%)" value={brl(t.nossoEmCumprimento)} hint={`${t.nCumprimento} caso(s) · ${brl(t.brutoEmCumprimento)} bruto`} accent="#228BE6" />
         <MiniStat label="Sentenças favoráveis (estimado)" value={brl(t.estimadoFavoraveis)} hint={`${t.nFavoraveis} caso(s) · maior risco`} accent="#F59F00" />
-        <MiniStat label="Total potencial" value={brl(t.aReceberPrestacao + t.brutoEmCumprimento + t.estimadoFavoraveis)} hint="prestação + cumprimento + favoráveis" accent="#7048E8" />
+        <MiniStat label="Total a receber (nosso)" value={brl(t.aReceberPrestacao + t.nossoEmCumprimento + t.estimadoFavoraveis)} hint="prestação + 40% cumprimento + sentenças" accent="#7048E8" />
       </div>
 
       {/* Prestação de contas — nosso */}
@@ -931,7 +961,7 @@ function CumprimentoTab() {
                   <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
                   <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-[#228BE6]">{brl2(x.valorCalculo)}</td>
                   <td className="px-2 py-1.5 text-center"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${x.protocolado ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'}`}>{x.protocolado ? 'Protocolado' : 'A protocolar'}</span></td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-xs text-zinc-500">{x.numeroCs || '—'}</td>
+                  <td className="px-2 py-1.5 text-right"><EditNumeroCs caseId={x.caseId} value={x.numeroCs} /></td>
                 </tr>
               ))}
             </CsTabela>
@@ -942,13 +972,13 @@ function CumprimentoTab() {
 
       {/* Sentenças favoráveis — parâmetro */}
       {favoraveis.length > 0 && (
-        <Card title="Sentenças favoráveis — parâmetro (maior risco)" sub="ganhamos em 1º grau mas ainda cabe recurso/reforma. Estimativa = valor da causa × % de êxito.">
-          <CsTabela cols={['Cliente', 'Resultado', 'Êxito', 'Estimado (nosso)']}>
+        <Card title="Sentenças favoráveis — parâmetro (maior risco)" sub="ganhamos em 1º grau mas ainda cabe recurso/reforma. ✨ = estimativa de IA (valor da causa + dano moral → nossa parte); senão, valor da causa × % de êxito.">
+          <CsTabela cols={['Cliente', 'Resultado', 'Base', 'Estimado (nosso)']}>
             {favoraveis.map((x) => (
               <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
                 <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
                 <td className="px-2 py-1.5 text-xs text-zinc-500">{x.resultado || '—'}</td>
-                <td className="px-2 py-1.5 text-center tabular-nums text-zinc-500">{x.exito != null ? `${x.exito}%` : '—'}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.exito != null ? `êxito ${x.exito}%` : '—')}</td>
                 <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-amber-600">{x.estimado != null ? brl2(x.estimado) : '—'}</td>
               </tr>
             ))}
@@ -1435,14 +1465,32 @@ function simula(meses: FinDashboard['meses'], ticket: number, x: number, injecao
   return { acumFinal: Math.round(acum), mesAzul, pts };
 }
 
+function CamadaCS({ label, hint, cor, value, on, setOn }: { label: string; hint: string; cor: string; value: number; on: boolean; setOn: (v: boolean) => void }) {
+  return (
+    <label className={`flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 transition ${on ? 'border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900' : 'border-transparent bg-zinc-100/60 opacity-60 dark:bg-zinc-800/40'}`}>
+      <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} className="h-4 w-4 shrink-0" style={{ accentColor: cor }} />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} /><span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{label}</span></span>
+        <span className="block truncate text-[10px] text-zinc-400">{hint}</span>
+      </span>
+      <span className="shrink-0 text-sm font-bold tabular-nums" style={{ color: cor }}>{brl(value)}</span>
+    </label>
+  );
+}
+
 function ProjecoesTab({ data }: { data: FinDashboard }) {
   const p = data.projecao!;
   const ticket = p.ticketMedio || 250;
   const [x, setX] = useState(p.clientesEquilibrio || 3);
   const { data: cs } = useCumprimentoFin();
-  const csCerto = cs?.totais.aReceberPrestacao ?? 0;
-  const [usarCS, setUsarCS] = useState(true);
-  const inj = usarCS ? csCerto : 0;
+  const csCerto = cs?.totais.aReceberPrestacao ?? 0;      // prestação de contas = caixa real
+  const csProvavel = cs?.totais.nossoEmCumprimento ?? 0;  // cumprimento, nossa parte 40% = provável
+  const csEstimado = cs?.totais.estimadoFavoraveis ?? 0;  // sentenças favoráveis = estimado (risco)
+  const [camCerto, setCamCerto] = useState(true);
+  const [camProvavel, setCamProvavel] = useState(true);
+  const [camEstimado, setCamEstimado] = useState(false);  // risco de reforma — desligado por padrão
+  const temCS = csCerto + csProvavel + csEstimado > 0;
+  const inj = (camCerto ? csCerto : 0) + (camProvavel ? csProvavel : 0) + (camEstimado ? csEstimado : 0);
 
   const chartData = useMemo(() => {
     const sim = simula(data.meses, ticket, x, inj);
@@ -1479,11 +1527,15 @@ function ProjecoesTab({ data }: { data: FinDashboard }) {
         ))}
       </div>
 
-      {csCerto > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={usarCS} onChange={(e) => setUsarCS(e.target.checked)} className="h-4 w-4 accent-emerald-600" /><span className="font-medium text-zinc-700 dark:text-zinc-200">Somar recebíveis certos de Cumprimento de Sentença</span></label>
-          <span className="text-sm font-bold tabular-nums text-emerald-600">{brl(csCerto)}</span>
-          <span className="text-xs text-zinc-400">já é nosso (prestação de contas){cs?.totais.brutoEmCumprimento ? ` · + ${brl(cs.totais.brutoEmCumprimento)} em cumprimento, bruto, não somado` : ''}.</span>
+      {temCS && (
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Renda esperada dos processos — some à projeção por nível de certeza</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <CamadaCS label="Certo" hint="prestação de contas (caixa nosso)" cor="#2F9E44" value={csCerto} on={camCerto} setOn={setCamCerto} />
+            <CamadaCS label="Provável" hint="cumprimento · nossa parte 40%" cor="#228BE6" value={csProvavel} on={camProvavel} setOn={setCamProvavel} />
+            <CamadaCS label="Estimado" hint="sentenças (IA) · cabe recurso" cor="#F59F00" value={csEstimado} on={camEstimado} setOn={setCamEstimado} />
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">Somando ao caixa da projeção: <strong className="tabular-nums text-emerald-600">{brl(inj)}</strong> <span className="text-zinc-400">(injeção única). Desligue as camadas mais arriscadas para uma visão conservadora.</span></p>
         </div>
       )}
 
@@ -1535,6 +1587,11 @@ const FRASES = [
 function MotivacaoTab({ data }: { data: FinDashboard }) {
   const k = data.kpis!; const p = data.projecao!;
   const [fraseIdx, setFraseIdx] = useState(0);
+  const { data: cs } = useCumprimentoFin();
+  const csCerto = cs?.totais.aReceberPrestacao ?? 0;
+  const csProvavel = cs?.totais.nossoEmCumprimento ?? 0;
+  const csEstimado = cs?.totais.estimadoFavoraveis ?? 0;
+  const csTotal = csCerto + csProvavel + csEstimado;
   const clientes = useMemo(() => aggregarClientes(data), [data]);
   const atencao = clientes.filter((c) => c.status === 'atencao');
   const reativavel = Math.round(atencao.reduce((s, c) => s + c.medio, 0));
@@ -1586,6 +1643,26 @@ function MotivacaoTab({ data }: { data: FinDashboard }) {
         </div>
       </Card>
 
+      {csTotal > 0 && (
+        <Card title={<span className="flex items-center gap-2"><Landmark className="h-4 w-4 text-emerald-600" /> Tem caixa a caminho dos processos</span>}
+          sub="o que os processos da fase judicial devem trazer — fôlego que não depende de novo cliente.">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Certo', hint: 'prestação de contas', cor: '#2F9E44', v: csCerto },
+              { label: 'Provável', hint: 'cumprimento · nossos 40%', cor: '#228BE6', v: csProvavel },
+              { label: 'Estimado', hint: 'sentenças (IA) · cabe recurso', cor: '#F59F00', v: csEstimado },
+            ].map((c) => (
+              <div key={c.label} className="rounded-xl border border-zinc-200/70 p-3.5 dark:border-zinc-800">
+                <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: c.cor }} /><p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{c.label}</p></div>
+                <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color: c.cor }}>{brl(c.v)}</p>
+                <p className="text-[11px] text-zinc-400">{c.hint}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">No total, <strong className="tabular-nums text-emerald-600">{brl(csTotal)}</strong> em recebíveis dos processos — {csCerto + csProvavel > 0 ? <>sendo <strong className="tabular-nums">{brl(csCerto + csProvavel)}</strong> entre certo e provável.</> : 'em diferentes estágios de certeza.'} Some isso à projeção na aba <strong>Projeções</strong>.</p>
+        </Card>
+      )}
+
       <Card title="Sugestões para a virada" sub="ações concretas, tiradas dos seus próprios números.">
         <div className="grid gap-3 sm:grid-cols-2">
           {sugestoes.map((s, i) => (
@@ -1602,52 +1679,161 @@ function MotivacaoTab({ data }: { data: FinDashboard }) {
 
 // ═══════════════════════════ VISÃO LIMITADA (advogado · só os casos dele) ═════
 
+const FRASES_ADV = [
+  'Cada caso seu é uma história virando — e aqui o seu resultado aparece em números. Orgulhe-se.',
+  'O escritório cresce quando cada advogado cresce. Esse número é seu, conquistado processo a processo.',
+  'Constância vence talento que não aparece. Continue trazendo resultado — isso te leva longe.',
+  'O cliente que você atende bem hoje volta e indica amanhã. Seu trabalho compõe juros.',
+  'Pouco a pouco, audiência após audiência, é assim que uma carreira sólida se constrói.',
+  'Não é sobre um mês — é sobre a trajetória. E a sua está sendo escrita agora.',
+];
+const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido', label: 'Recebidos' }, { key: 'a_receber', label: 'A receber' }] as const;
+
 function FinanceiroLimitado({ data }: { data: FinDashboard }) {
-  const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nLancamentos: 0 };
-  const txs = (data.transacoes ?? []).slice(0, 300);
+  const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nCasos: 0, nLancamentos: 0 };
+  const clientes = data.clientes ?? [];
+  const serie = data.serie ?? [];
+  const casos = data.casos ?? [];
+  const cs = data.cs ?? { prestacao: 0, cumprimento: 0, itens: [] as { caseId: string; cliente: string; tipo: string; valor: number }[] };
+  const melhorMes = data.melhorMes ?? null;
+  const aReceberTotal = r.aReceber + r.minhaParte + cs.prestacao;
   const primeiro = (data.meuNome || '').split(' ')[0] || 'Dr(a).';
-  const aReceberTotal = r.aReceber + r.minhaParte;
+  const iniciais = (data.meuNome || 'AD').slice(0, 2).toUpperCase();
+  const hora = new Date().getHours();
+  const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+
+  const [fraseIdx, setFraseIdx] = useState(0);
+  const [mesSel, setMesSel] = useState('');
+  const [stf, setStf] = useState<'todos' | 'recebido' | 'a_receber'>('todos');
+  const [busca, setBusca] = useState('');
+
+  const mesesDisp = useMemo(() => Array.from(new Set((data.transacoes ?? []).map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
+  const txs = useMemo(() => (data.transacoes ?? []).filter((t) => {
+    if (mesSel && mesKey(t) !== mesSel) return false;
+    const st = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
+    if (stf === 'recebido' && !(st === 'recebido' || st === 'pago')) return false;
+    if (stf === 'a_receber' && (st === 'recebido' || st === 'pago')) return false;
+    if (busca && !`${t.pagador ?? t.party ?? ''} ${t.categoria}`.toLowerCase().includes(busca.toLowerCase())) return false;
+    return true;
+  }), [data.transacoes, mesSel, stf, busca]);
+  const chartData = serie.map((s) => ({ nome: mesCurtoKey(s.mes), valor: s.valor }));
 
   return (
     <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       <div className="mx-auto w-full max-w-5xl p-6">
-        <div className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600"><CircleDollarSign className="h-5 w-5" /></span>
+        {/* Cabeçalho personalizado */}
+        <div className="flex items-center gap-3">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-[#228BE6] text-base font-bold text-white">{iniciais}</span>
           <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Seu financeiro</h1>
-            <p className="text-sm text-zinc-500">Olá, {primeiro}! Aqui está o financeiro <strong>dos seus casos</strong> — o que você já recebeu, o que tem a receber e a sua parte.</p>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{saud}, {primeiro}! 👋</h1>
+            <p className="text-sm text-zinc-500">Seu financeiro — <strong>{r.nCasos ?? casos.length} processo(s)</strong> seus · <strong>{r.nClientes} cliente(s)</strong> que já te renderam honorários.</p>
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MiniStat label="Recebido (seus casos)" value={brl(r.recebido)} hint={`${r.nClientes} cliente(s) seus`} accent="#2F9E44" />
-          <MiniStat label="A receber" value={brl(r.aReceber)} hint="lançamentos pendentes" accent="#F59F00" />
-          <MiniStat label="Sua parte (rateio)" value={brl(r.minhaParte)} hint="honorários divididos com você" accent="#7048E8" />
-          <MiniStat label="Total a entrar" value={brl(aReceberTotal)} hint="a receber + sua parte" accent="#228BE6" />
-        </div>
-
+        {/* Banner motivacional */}
         <div className="mt-4 overflow-hidden rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 dark:border-zinc-800 dark:from-amber-900/15 dark:via-zinc-900 dark:to-emerald-900/15">
           <div className="flex items-start gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-400/20 text-amber-600"><Flame className="h-5 w-5" /></span>
-            <p className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
-              {r.recebido > 0
-                ? `Você já trouxe ${brl(r.recebido)} em honorários${aReceberTotal > 0 ? `, e ainda tem ${brl(aReceberTotal)} a entrar` : ''}. Cada caso bem conduzido vira o próximo. Continue!`
-                : 'Seu histórico financeiro aparece aqui conforme os honorários dos seus casos entram. Bora construir!'}
-            </p>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-400/20 text-amber-600"><Flame className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
+                {r.recebido > 0 ? `Você já trouxe ${brl(r.recebido)} em honorários para o escritório${aReceberTotal > 0 ? `, e ainda tem ${brl(aReceberTotal)} a entrar` : ''}. ` : ''}{FRASES_ADV[fraseIdx]}
+              </p>
+              <button onClick={() => setFraseIdx((i) => (i + 1) % FRASES_ADV.length)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#7048E8] hover:underline"><Sparkles className="h-3.5 w-3.5" /> Me motive de novo</button>
+            </div>
           </div>
         </div>
 
-        <Card title={<>Seus lançamentos <span className="font-normal text-zinc-400">· {r.nLancamentos}</span></>} sub="movimentações dos processos em que você é o responsável.">
-          <div className="max-h-[34rem] overflow-y-auto scrollbar-thin">
+        {/* Stats */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MiniStat label="Recebido (seus casos)" value={brl(r.recebido)} hint={melhorMes ? `melhor mês: ${mesLabel(melhorMes.mes).replace(' de ', '/')}` : `${r.nClientes} cliente(s)`} accent="#2F9E44" />
+          <MiniStat label="A receber" value={brl(r.aReceber)} hint="lançamentos pendentes" accent="#F59F00" />
+          <MiniStat label="Sua parte (rateio)" value={brl(r.minhaParte)} hint="honorários divididos com você" accent="#7048E8" />
+          <MiniStat label="Total a entrar" value={brl(aReceberTotal)} hint="a receber + sua parte + CS" accent="#228BE6" />
+        </div>
+
+        {/* Gráfico: recebido mês a mês */}
+        {serie.length > 1 && (
+          <Card title="Seu recebido mês a mês" sub="a evolução dos honorários que você trouxe.">
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" className="dark:opacity-20" />
+                <XAxis dataKey="nome" tick={{ fontSize: 11, fill: '#868e96' }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 11, fill: '#868e96' }} tickFormatter={kbrl} width={44} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar name="Recebido" dataKey="valor" fill="#2F9E44" radius={[3, 3, 0, 0]} maxBarSize={34} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </Card>
+        )}
+
+        {/* A receber dos seus casos (CS) */}
+        {(cs.prestacao > 0 || cs.cumprimento > 0) && (
+          <Card title={<span className="flex items-center gap-2"><Gavel className="h-4 w-4 text-emerald-600" /> A receber dos seus casos (Cumprimento de Sentença)</span>} sub="valores que você preencheu no card dos processos.">
+            <div className="mb-2 flex flex-wrap gap-4 text-sm">
+              {cs.prestacao > 0 && <span className="text-emerald-600">Prestação (nosso): <strong>{brl(cs.prestacao)}</strong></span>}
+              {cs.cumprimento > 0 && <span className="text-[#228BE6]">Em cumprimento (bruto): <strong>{brl(cs.cumprimento)}</strong></span>}
+            </div>
+            <div className="max-h-56 space-y-0.5 overflow-y-auto scrollbar-thin">
+              {cs.itens.map((x, i) => (
+                <div key={i} className="flex items-center justify-between border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
+                  <VerProcesso id={x.caseId}>{x.cliente}</VerProcesso>
+                  <span className="flex items-center gap-2"><span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">{x.tipo === 'prestacao' ? 'prestação' : 'cumprimento'}</span><span className="w-24 text-right font-semibold tabular-nums text-emerald-600">{brl2(x.valor)}</span></span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Seus clientes */}
+        {clientes.length > 0 && (
+          <Card title={<>Seus clientes <span className="font-normal text-zinc-400">· {clientes.length}</span></>} sub="quem mais te rendeu honorários.">
+            <div className="max-h-72 overflow-y-auto scrollbar-thin">
+              {clientes.map((c, i) => (
+                <div key={i} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
+                  <UserCircle2 className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{c.nome}</span>
+                  <span className="shrink-0 text-xs text-zinc-400">{c.n} pgto{c.n > 1 ? 's' : ''}{c.ultimo ? ` · últ. ${c.ultimo.slice(0, 5)}` : ''}</span>
+                  <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-emerald-600">{brl2(c.recebido)}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Seus processos */}
+        {casos.length > 0 && (
+          <Card title={<>Seus processos <span className="font-normal text-zinc-400">· {casos.length}</span></>} sub="processos em que você é o responsável.">
+            <div className="max-h-72 overflow-y-auto scrollbar-thin">
+              {casos.map((c) => (
+                <div key={c.caseId} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
+                  <span className="min-w-0 flex-1 truncate"><VerProcesso id={c.caseId}>{c.cliente || c.title}</VerProcesso></span>
+                  {c.area && <span className="hidden shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 sm:inline">{c.area}</span>}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Seus lançamentos — filtrável */}
+        <Card title={<>Seus lançamentos <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub="movimentações dos seus casos.">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+              <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+              <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="bg-transparent text-sm font-medium capitalize outline-none"><option value="">Todos os meses</option>{mesesDisp.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}</select>
+            </div>
+            <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">{STATUS_FILTROS_ADV.map((a) => <button key={a.key} onClick={() => setStf(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${stf === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}</div>
+            <div className="relative ml-auto"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="w-40 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
+          </div>
+          <div className="max-h-[30rem] overflow-y-auto scrollbar-thin">
             {txs.length === 0 ? (
-              <p className="py-10 text-center text-sm text-zinc-400">Nenhum lançamento vinculado aos seus casos ainda.</p>
+              <p className="py-10 text-center text-sm text-zinc-400">Nenhum lançamento neste filtro.</p>
             ) : txs.map((t) => {
               const st = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
               return (
                 <div key={t.id} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
                   <span className="w-12 shrink-0 text-xs tabular-nums text-zinc-400">{t.data.slice(0, 5)}</span>
                   {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
-                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{t.pagador || t.recebedor || t.party || t.categoria}</span>
+                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{t.pagador || t.recebedor || t.party || t.categoria}{t.parcelaNum ? <span className="ml-1 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}</span>
                   <span className={`hidden shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:inline ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span>
                   <span className={`w-24 shrink-0 text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
                 </div>

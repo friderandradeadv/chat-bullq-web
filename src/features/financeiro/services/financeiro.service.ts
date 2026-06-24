@@ -76,7 +76,13 @@ export interface FinDashboard {
   limited?: boolean;
   semAcesso?: boolean;
   meuNome?: string;
-  resumo?: { recebido: number; aReceber: number; minhaParte: number; nClientes: number; nLancamentos: number };
+  resumo?: { recebido: number; aReceber: number; minhaParte: number; nClientes: number; nCasos?: number; nLancamentos: number };
+  // visão limitada (advogado) — dados pessoais
+  clientes?: { nome: string; recebido: number; n: number; ultimo: string | null }[];
+  serie?: { mes: string; valor: number }[];
+  melhorMes?: { mes: string; valor: number } | null;
+  casos?: { caseId: string; title: string; cliente: string | null; area: string | null; fase: string | null; cnj: string | null }[];
+  cs?: { prestacao: number; cumprimento: number; itens: { caseId: string; cliente: string; tipo: string; valor: number }[] };
 }
 
 export interface Parcela { num: number; vencimento: string; valor: number; status: 'aberta' | 'paga' | 'cancelada'; dataPagamento?: string | null; txId?: string | null; atrasada?: boolean }
