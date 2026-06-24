@@ -52,6 +52,16 @@ export default function SettingsMembersPage() {
       toast.error(err instanceof Error ? err.message : 'Erro ao atualizar');
     }
   };
+  // % de honorários (êxito/contrato) por advogado — usado nas projeções da visão limitada
+  const { data: honorariosPct = {} } = useQuery({ queryKey: ['financeiro', 'honorarios-pct'], queryFn: () => financeiroService.getHonorariosPct() });
+  const setPct = async (userId: string, pct: number) => {
+    try {
+      await financeiroService.setHonorariosPct(userId, pct);
+      queryClient.invalidateQueries({ queryKey: ['financeiro', 'honorarios-pct'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar %');
+    }
+  };
 
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [drawerMember, setDrawerMember] = useState<Member | null>(null);
@@ -324,16 +334,27 @@ export default function SettingsMembersPage() {
                       {m.role === 'OWNER' || m.role === 'ADMIN' ? (
                         <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Acesso total</span>
                       ) : (
-                        <select
-                          value={(acessoFin[m.userId] as AcessoNivel) ?? 'cases'}
-                          onChange={(e) => setAcessoFin(m.userId, e.target.value as AcessoNivel)}
-                          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                          title="Nível de acesso ao módulo Financeiro (padrão do Agente: só os casos dele)"
-                        >
-                          <option value="full">Completo</option>
-                          <option value="cases">Só os casos dele</option>
-                          <option value="none">Sem acesso</option>
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={(acessoFin[m.userId] as AcessoNivel) ?? 'cases'}
+                            onChange={(e) => setAcessoFin(m.userId, e.target.value as AcessoNivel)}
+                            className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                            title="Nível de acesso ao módulo Financeiro (padrão do Agente: só os casos dele)"
+                          >
+                            <option value="full">Completo</option>
+                            <option value="cases">Só os casos dele</option>
+                            <option value="none">Sem acesso</option>
+                          </select>
+                          {((acessoFin[m.userId] as AcessoNivel) ?? 'cases') === 'cases' && (
+                            <label className="inline-flex items-center gap-1 text-[11px] text-zinc-400" title="% do contrato (êxito) — usado nas projeções dele">
+                              <input
+                                type="number" min={0} max={100} defaultValue={honorariosPct[m.userId] ?? 30}
+                                onBlur={(e) => { const v = Number(e.target.value); if (v !== (honorariosPct[m.userId] ?? 30)) setPct(m.userId, v); }}
+                                className="w-12 rounded-md border border-zinc-200 bg-white px-1.5 py-1 text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                              />% êxito
+                            </label>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">

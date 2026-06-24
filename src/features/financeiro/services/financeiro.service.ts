@@ -81,7 +81,8 @@ export interface FinDashboard {
   clientes?: { nome: string; recebido: number; n: number; ultimo: string | null }[];
   serie?: { mes: string; valor: number }[];
   melhorMes?: { mes: string; valor: number } | null;
-  casos?: { caseId: string; title: string; cliente: string | null; area: string | null; fase: string | null; cnj: string | null }[];
+  casos?: { caseId: string; autor: string | null; reu: string | null; area: string | null; produto: string | null; fase: string | null; cnj: string | null; valorCausa: number; liquido: number; exito: number | null }[];
+  projecaoCasos?: { pctExito: number; brutoEmProcesso: number; liquidoProvavel: number; nComValor: number };
   cs?: { prestacao: number; cumprimento: number; itens: { caseId: string; cliente: string; tipo: string; valor: number }[] };
 }
 
@@ -103,7 +104,7 @@ export interface AddTransacaoInput {
   data: string; tipo: 'receita' | 'despesa'; categoria: string; valor: number;
   party?: string; pagador?: string; recebedor?: string;
   vencimento?: string; dataPagamento?: string;
-  status?: TxStatus; parcelas?: number; split?: SplitItem[];
+  status?: TxStatus; parcelas?: number; intervalo?: 'mensal' | 'anual'; split?: SplitItem[];
   responsavelId?: string; responsavel?: string; conta?: string;
 }
 export interface UpdateTransacaoInput {
@@ -177,6 +178,14 @@ export const financeiroService = {
   },
   async classificarExtrato(itens: { descricao: string; valor: number }[]): Promise<{ i: number; tipo: 'receita' | 'despesa'; categoria: string; party: string }[]> {
     const { data } = await api.post('/financeiro/conciliacao/classificar', { itens });
+    return data.data ?? data;
+  },
+  async getHonorariosPct(): Promise<Record<string, number>> {
+    const { data } = await api.get('/financeiro/honorarios-pct');
+    return data.data ?? data;
+  },
+  async setHonorariosPct(userId: string, pct: number): Promise<{ ok: boolean }> {
+    const { data } = await api.patch(`/financeiro/honorarios-pct/${userId}`, { pct });
     return data.data ?? data;
   },
 };

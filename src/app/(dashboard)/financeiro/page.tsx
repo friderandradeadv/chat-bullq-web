@@ -179,7 +179,7 @@ function TabsMenu({ view, setView, lancCount }: { view: View; setView: (v: View)
             {GRUPOS.map((g) => (
               <div key={g} className="mb-1 last:mb-0">
                 <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{g}</p>
-                <div className="grid grid-cols-2 gap-1">
+                <div className="grid grid-cols-1 gap-0.5">
                   {TABS.filter((t) => t.grupo === g).map((t) => (
                     <button key={t.key} onClick={() => { setView(t.key); setOpen(false); }} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${view === t.key ? 'bg-[#228BE6]/10 font-semibold text-[#228BE6]' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'}`}>
                       <t.icon className="h-4 w-4 shrink-0" />
@@ -250,7 +250,7 @@ interface Editor {
   id: string | null; serieId: string | null; tipo: 'receita' | 'despesa';
   dataISO: string; vencISO: string; pagtoISO: string;
   categoria: string; pagador: string; recebedor: string; valor: string;
-  status: TxStatus; parcelas: string; escopo: 'uma' | 'proximas'; split: SplitRow[];
+  status: TxStatus; parcelas: string; repetir: 'nao' | 'mensal' | 'anual'; escopo: 'uma' | 'proximas'; split: SplitRow[];
   responsavelId: string; conta: string;
 }
 
@@ -330,8 +330,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', escopo: 'uma', split: [], responsavelId: '', conta: contas[0]?.id ?? '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })) });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], responsavelId: '', conta: contas[0]?.id ?? '' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
@@ -345,7 +345,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     const split = buildSplit(editor);
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: Math.max(1, parseInt(editor.parcelas, 10) || 1), split, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined });
+      const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined });
     } else {
       updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
     }
@@ -434,7 +435,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                           {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
                         </span>
                         <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden truncate md:inline">{t.categoria}</span></span>
-                        <span className={`hidden shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:inline ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span>
+                        <span className="hidden w-20 shrink-0 text-center sm:block"><span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span></span>
                         <span className={`w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
                         <span className="flex shrink-0 items-center">
                           {!ehLiquidado(st) && <button onClick={() => quickReceber(t)} title={t.valor >= 0 ? 'Marcar como recebido' : 'Marcar como pago'} className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>}
@@ -534,12 +535,23 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
               )}
 
               {!editor.id && (
-                <Field label="Parcelas (lança N parcelas mensais)">
-                  <div className="flex items-center gap-2">
-                    <Layers className="h-4 w-4 text-zinc-400" />
-                    <input type="number" min={1} max={120} value={editor.parcelas} onChange={(e) => setEditor({ ...editor, parcelas: e.target.value })} className="w-24 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
-                    {+editor.parcelas > 1 && <span className="text-xs text-zinc-400">{editor.parcelas}× de {editor.valor ? brl2(parseValor(editor.valor)) : 'R$ 0,00'} = {brl2(parseValor(editor.valor) * (+editor.parcelas || 1))}</span>}
+                <Field label="Repetir lançamento">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Layers className="h-4 w-4 shrink-0 text-zinc-400" />
+                    <select value={editor.repetir} onChange={(e) => { const r = e.target.value as Editor['repetir']; setEditor({ ...editor, repetir: r, parcelas: r === 'nao' ? '1' : (+editor.parcelas > 1 ? editor.parcelas : '12') }); }} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                      <option value="nao">Não repetir</option>
+                      <option value="mensal">Mensalmente</option>
+                      <option value="anual">Anualmente</option>
+                    </select>
+                    {editor.repetir !== 'nao' && (
+                      <>
+                        <span className="text-xs text-zinc-400">por</span>
+                        <input type="number" min={2} max={120} value={editor.parcelas} onChange={(e) => setEditor({ ...editor, parcelas: e.target.value })} className="w-20 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+                        <span className="text-xs text-zinc-400">{editor.repetir === 'anual' ? 'ano(s)' : 'mês(es)'}</span>
+                      </>
+                    )}
                   </div>
+                  {editor.repetir !== 'nao' && +editor.parcelas > 1 && <p className="mt-1.5 text-xs text-zinc-400">{editor.parcelas}× de {brl2(parseValor(editor.valor))} ({editor.repetir === 'anual' ? '1 por ano' : '1 por mês'}) · total {brl2(parseValor(editor.valor) * (+editor.parcelas || 1))}</p>}
                 </Field>
               )}
 
@@ -899,9 +911,9 @@ function EditNumeroCs({ caseId, value }: { caseId: string; value: string | null 
     </span>
   );
   return (
-    <button onClick={() => { setVal(value ?? ''); setEditing(true); }} className="group inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-[#228BE6]" title="Editar nº do processo">
-      {value ? <span className="tabular-nums">{value}</span> : <span className="italic text-zinc-300 dark:text-zinc-600">+ adicionar nº</span>}
-      <Pencil className="h-3 w-3 opacity-0 transition group-hover:opacity-60" />
+    <button onClick={() => { setVal(value ?? ''); setEditing(true); }} className="group inline-flex max-w-full items-center gap-1 text-xs text-zinc-500 hover:text-[#228BE6]" title="Editar nº do processo">
+      {value ? <span className="truncate whitespace-nowrap tabular-nums">{value}</span> : <span className="italic text-zinc-300 dark:text-zinc-600">+ adicionar nº</span>}
+      <Pencil className="h-3 w-3 shrink-0 opacity-0 transition group-hover:opacity-60" />
     </button>
   );
 }
@@ -988,7 +1000,7 @@ function CumprimentoTab() {
           <p className="py-6 text-center text-sm text-zinc-400">Nenhum processo com valor de cálculo preenchido.{cumpVazio > 0 ? ` ${cumpVazio} em cumprimento aguardando o "Valor do cálculo" no card.` : ''}</p>
         ) : (
           <>
-            <CsTabela cols={['Cliente', 'Valor do cálculo', 'Situação', 'Nº dos autos']}
+            <CsTabela cols={['Cliente', 'Valor do cálculo', 'Situação', 'Nº dos autos']} widths={['30%', '20%', '18%', '32%']}
               foot={<tr className="font-bold text-zinc-700 dark:text-zinc-100">
                 <td className="px-2 py-1.5">Total ({cumpCheio.length})</td>
                 <td className="px-2 py-1.5 text-right tabular-nums text-[#228BE6]">{brl2(t.brutoEmCumprimento)}</td>
@@ -1033,11 +1045,11 @@ function CumprimentoTab() {
   );
 }
 
-function CsTabela({ cols, children, foot, w0 = '44%' }: { cols: string[]; children: React.ReactNode; foot?: React.ReactNode; w0?: string }) {
+function CsTabela({ cols, children, foot, w0 = '44%', widths }: { cols: string[]; children: React.ReactNode; foot?: React.ReactNode; w0?: string; widths?: string[] }) {
   return (
     <div className="overflow-x-auto scrollbar-thin">
       <table className="w-full table-fixed text-sm">
-        <colgroup><col style={{ width: w0 }} />{cols.slice(1).map((c) => <col key={c} />)}</colgroup>
+        <colgroup>{cols.map((c, i) => <col key={c} style={{ width: widths ? widths[i] : (i === 0 ? w0 : undefined) }} />)}</colgroup>
         <thead><tr className="text-[11px] uppercase tracking-wide text-zinc-400">{cols.map((c, i) => <th key={c} className={`px-2 py-1.5 font-medium ${i === 0 ? 'text-left' : 'text-right'}`}>{c}</th>)}</tr></thead>
         <tbody>{children}</tbody>
         {foot && <tfoot className="border-t-2 border-zinc-200 dark:border-zinc-700">{foot}</tfoot>}
@@ -1846,16 +1858,43 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
           </Card>
         )}
 
-        {/* Seus processos */}
+        {/* Projeção: valores em processo (pelo contrato do advogado) */}
+        {data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
+          <Card title={<span className="flex items-center gap-2"><Target className="h-4 w-4 text-[#7048E8]" /> Valores em processo — sua projeção</span>}
+            sub={`indicador pelo seu contrato (${data.projecaoCasos.pctExito}% do êxito). É horizonte, não garantia — depende de ganhar e da fase.`}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-zinc-200/70 p-3 dark:border-zinc-800"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Valor de causa (bruto)</p><p className="mt-0.5 text-2xl font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{brl(data.projecaoCasos.brutoEmProcesso)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.nComValor} processo(s) com valor</p></div>
+              <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900/40 dark:bg-violet-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável (líquido)</p><p className="mt-0.5 text-2xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.pctExito}% sobre o valor de causa</p></div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Já realizado + a entrar</p><p className="mt-0.5 text-2xl font-bold tabular-nums text-emerald-600">{brl(r.recebido + aReceberTotal)}</p><p className="text-[11px] text-zinc-400">o que já se concretizou</p></div>
+            </div>
+          </Card>
+        )}
+
+        {/* Seus processos — autor × réu, etiquetas, valor */}
         {casos.length > 0 && (
-          <Card title={<>Seus processos <span className="font-normal text-zinc-400">· {casos.length}</span></>} sub="processos em que você é o responsável.">
-            <div className="max-h-72 overflow-y-auto scrollbar-thin">
-              {casos.map((c) => (
-                <div key={c.caseId} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
-                  <span className="min-w-0 flex-1 truncate"><VerProcesso id={c.caseId}>{c.cliente || c.title}</VerProcesso></span>
-                  {c.area && <span className="hidden shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 sm:inline">{c.area}</span>}
-                </div>
-              ))}
+          <Card title={<>Seus processos <span className="font-normal text-zinc-400">· {casos.length}</span></>} sub="autor × réu, etiquetas e valor da causa (bruto e a sua parte pelo contrato).">
+            <div className="max-h-[32rem] overflow-auto scrollbar-thin">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900"><tr><th className="px-2 py-1.5 font-medium">Autor × Réu</th><th className="hidden px-2 py-1.5 font-medium sm:table-cell">Etiquetas</th><th className="px-2 py-1.5 text-right font-medium">Valor causa</th><th className="px-2 py-1.5 text-right font-medium">Sua parte</th></tr></thead>
+                <tbody>
+                  {casos.map((c) => (
+                    <tr key={c.caseId} className="border-t border-zinc-100 dark:border-zinc-800/70">
+                      <td className="max-w-0 px-2 py-1.5">
+                        <VerProcesso id={c.caseId}>{c.autor || 'Processo'}</VerProcesso>
+                        {c.reu && <span className="block truncate text-[11px] text-zinc-400">× {c.reu}</span>}
+                      </td>
+                      <td className="hidden px-2 py-1.5 sm:table-cell">
+                        <span className="flex flex-wrap gap-1">
+                          {c.produto && <span className="rounded-full bg-[#228BE6]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#228BE6]">{c.produto}</span>}
+                          {c.area && c.area !== c.produto && <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">{c.area}</span>}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{c.valorCausa > 0 ? brl(c.valorCausa) : '—'}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-[#7048E8]">{c.liquido > 0 ? brl(c.liquido) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </Card>
         )}
