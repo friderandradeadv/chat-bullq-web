@@ -154,12 +154,13 @@
   --fc-event-border-color: transparent;
   font-size: 13px;
 }
-/* Dark mode da agenda (FullCalendar): fundo/bordas escuros + texto claro. */
+/* Dark mode da agenda (FullCalendar): cinza escuro (NÃO preto puro) + eventos
+   com preenchimento escuro de baixo contraste — sem "estourar" em branco. */
 .dark .fc {
-  --fc-page-bg-color: #18181b;            /* zinc-900 */
-  --fc-neutral-bg-color: #27272a;         /* zinc-800 (all-day / desabilitado) */
-  --fc-border-color: #3f3f46;             /* zinc-700 */
-  --fc-today-bg-color: rgba(34, 139, 230, 0.08);
+  --fc-page-bg-color: #1c1c1f;            /* cinza bem escuro (não preto) */
+  --fc-neutral-bg-color: #26262a;         /* all-day / desabilitado */
+  --fc-border-color: #34343a;             /* divisórias discretas */
+  --fc-today-bg-color: rgba(34, 139, 230, 0.10);
   color: #e4e4e7;                          /* zinc-200 */
 }
 .dark .fc .fc-col-header-cell-cushion,
@@ -171,9 +172,36 @@
   color: #a1a1aa;                          /* zinc-400 */
 }
 .dark .fc .fc-day-other .fc-daygrid-day-number { color: #52525b; }
-.dark .fc .fc-list-event:hover td { background: #27272a; }
-.dark .fc .fc-popover { background: #18181b; border-color: #3f3f46; }
-.dark .fc .fc-popover-header { background: #27272a; color: #e4e4e7; }
+.dark .fc .fc-daygrid-more-link { color: #a1a1aa; }
+.dark .fc .fc-list-event:hover td { background: #26262a; }
+.dark .fc .fc-popover { background: #1c1c1f; border-color: #34343a; }
+.dark .fc .fc-popover-header { background: #26262a; color: #e4e4e7; }
+/* Preenchimento dos eventos no escuro — sobrescreve as cores CLARAS inline
+   (#DAF3FF / #D3F8E5 / #F1F3F4) por tons escuros. As tirinhas coloridas do topo
+   (tipo/etiqueta, estilo Astrea) são REAPLICADAS depois, com a mesma
+   especificidade, pra não serem apagadas pelo border-color. */
+.dark .fc .ag-tarefa,
+.dark .fc .ag-prazo {
+  background-color: #15304a !important;    /* azul escuro — a concluir */
+  border-color: #15304a !important;
+}
+.dark .fc .ag-evento {
+  background-color: #143528 !important;     /* verde escuro — compromisso */
+  border-color: #143528 !important;
+}
+.dark .fc .ag-done {
+  background-color: #242428 !important;      /* cinza — cumprido/cancelado */
+  border-color: #242428 !important;
+}
+.dark .fc .ag-tarefa .fc-event-title, .dark .fc .ag-tarefa .fc-event-time,
+.dark .fc .ag-prazo .fc-event-title, .dark .fc .ag-prazo .fc-event-time { color: #74c0fc !important; }
+.dark .fc .ag-evento .fc-event-title, .dark .fc .ag-evento .fc-event-time { color: #69db7c !important; }
+.dark .fc .ag-done .fc-event-title, .dark .fc .ag-done .fc-event-time { color: #8b8b93 !important; }
+/* reaplica as tirinhas coloridas do topo por cima do border-color escuro */
+.dark .fc .ag-prazo { border-top-color: #ce0000 !important; }
+.dark .fc .ag-tarefa { border-top-color: #23cbff !important; }
+.dark .fc .ag-evento { border-top-color: #02883c !important; }
+.dark .fc .ag-done { border-top-color: #adb5bd !important; }
 .fc .fc-col-header-cell-cushion {
   padding: 8px 4px;
   font-size: 11px;
