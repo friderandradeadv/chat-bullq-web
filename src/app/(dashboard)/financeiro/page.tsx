@@ -16,6 +16,7 @@ import {
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
@@ -1951,8 +1952,28 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
 
 /** Aba "Meu financeiro" dentro do dashboard completo (admin/sócio/membro com acesso). */
 function MeuTab() {
-  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'meu'], queryFn: () => financeiroService.meuFinanceiro(), staleTime: 60_000 });
-  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
-  if (!data) return <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os seus dados.</p></Card>;
-  return <div className="mt-2"><MeuFinanceiroConteudo data={data} /></div>;
+  const { user } = useAuthStore();
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
+  const meuMembro = members.find((m) => m.user.id === user?.id);
+  const isAdmin = meuMembro?.role === 'OWNER' || meuMembro?.role === 'ADMIN';
+  const advs = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+  const [alvo, setAlvo] = useState('');
+  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'meu', alvo], queryFn: () => financeiroService.meuFinanceiro(alvo || undefined), staleTime: 60_000 });
+
+  return (
+    <div className="mt-2">
+      {isAdmin && advs.length > 1 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-zinc-400">Ver a visão pessoal de:</span>
+          <select value={alvo} onChange={(e) => setAlvo(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            <option value="">Eu ({user?.name || 'minha conta'})</option>
+            {advs.filter((a) => a.id !== user?.id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+      )}
+      {isLoading ? <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>
+        : !data ? <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os dados.</p></Card>
+        : <MeuFinanceiroConteudo data={data} />}
+    </div>
+  );
 }

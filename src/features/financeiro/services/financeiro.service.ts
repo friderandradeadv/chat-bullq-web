@@ -120,8 +120,8 @@ export const financeiroService = {
     const { data } = await api.get('/financeiro/dashboard');
     return data.data ?? data;
   },
-  async meuFinanceiro(): Promise<FinDashboard> {
-    const { data } = await api.get('/financeiro/meu');
+  async meuFinanceiro(alvoUserId?: string): Promise<FinDashboard> {
+    const { data } = await api.get('/financeiro/meu', { params: alvoUserId ? { userId: alvoUserId } : undefined });
     return data.data ?? data;
   },
   async addTransacao(input: AddTransacaoInput): Promise<{ criados: number; transacoes: FinTransacao[] }> {
