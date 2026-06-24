@@ -12,7 +12,29 @@ export interface FinMes {
 }
 export interface FinCategoria { nome: string; total: number; cor: string }
 export interface FinCliente { cliente: string; recebido: number; parcelas: number; ultima: number | null; total: number | null }
-export interface FinTransacao { id?: string; data: string; mes: string; tipo: string; categoria: string; valor: number; party: string | null; parcela?: string | null; manual?: boolean }
+
+export type TxStatus = 'a_receber' | 'recebido' | 'a_pagar' | 'pago';
+export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
+export interface FinTransacao {
+  id?: string;
+  serieId?: string | null;
+  parcelaNum?: number | null;
+  parcelaTot?: number | null;
+  data: string;
+  vencimento?: string | null;
+  dataPagamento?: string | null;
+  mes: string;
+  tipo: string;
+  categoria: string;
+  valor: number;
+  party: string | null;
+  pagador?: string | null;
+  recebedor?: string | null;
+  status?: TxStatus;
+  split?: SplitItem[] | null;
+  parcela?: string | null;
+  manual?: boolean;
+}
 export interface FinInsight { nivel: 'critico' | 'alerta' | 'ok' | 'info'; titulo: string; texto: string }
 
 export interface FinDashboard {
@@ -44,19 +66,34 @@ export interface FinDashboard {
   categoriasConhecidas?: string[];
 }
 
-export interface AddTransacaoInput { data: string; tipo: 'receita' | 'despesa'; categoria: string; valor: number; party?: string }
+export interface AddTransacaoInput {
+  data: string; tipo: 'receita' | 'despesa'; categoria: string; valor: number;
+  party?: string; pagador?: string; recebedor?: string;
+  vencimento?: string; dataPagamento?: string;
+  status?: TxStatus; parcelas?: number; split?: SplitItem[];
+}
+export interface UpdateTransacaoInput {
+  data?: string; vencimento?: string; dataPagamento?: string;
+  tipo?: 'receita' | 'despesa'; categoria?: string; valor?: number;
+  pagador?: string; recebedor?: string; status?: TxStatus; split?: SplitItem[];
+  escopo?: 'uma' | 'proximas';
+}
 
 export const financeiroService = {
   async dashboard(): Promise<FinDashboard> {
     const { data } = await api.get('/financeiro/dashboard');
     return data.data ?? data;
   },
-  async addTransacao(input: AddTransacaoInput): Promise<FinTransacao> {
+  async addTransacao(input: AddTransacaoInput): Promise<{ criados: number; transacoes: FinTransacao[] }> {
     const { data } = await api.post('/financeiro/transacoes', input);
     return data.data ?? data;
   },
-  async removeTransacao(id: string): Promise<{ removidos: number }> {
-    const { data } = await api.delete(`/financeiro/transacoes/${id}`);
+  async updateTransacao(id: string, input: UpdateTransacaoInput): Promise<{ atualizados: number }> {
+    const { data } = await api.patch(`/financeiro/transacoes/${id}`, input);
+    return data.data ?? data;
+  },
+  async removeTransacao(id: string, escopo: 'uma' | 'proximas' = 'uma'): Promise<{ removidos: number }> {
+    const { data } = await api.delete(`/financeiro/transacoes/${id}`, { params: { escopo } });
     return data.data ?? data;
   },
 };

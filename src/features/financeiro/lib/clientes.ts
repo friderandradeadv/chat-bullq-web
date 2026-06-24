@@ -72,7 +72,8 @@ export function aggregarClientes(data: FinDashboard | undefined | null): Cliente
       c = { nome, recebido: 0, repassado: 0, liquido: 0, n: 0, medio: 0, primeiro: null, ultimo: null, ultimoMes: null, mesesAtivos: 0, recorrente: false, mesesParado: 0, status: 'inativo', pagamentos: [] };
       map.set(key, c);
     }
-    if (t.valor >= 0) c.pagamentos.push({ data: t.data, mes: mesKey(t), valor: t.valor });
+    // conta só honorários efetivamente recebidos (ignora 'a_receber'); repasses contam sempre
+    if (t.valor >= 0) { if (!t.status || t.status === 'recebido') c.pagamentos.push({ data: t.data, mes: mesKey(t), valor: t.valor }); }
     else c.repassado += -t.valor;
   }
   const out = [...map.values()];

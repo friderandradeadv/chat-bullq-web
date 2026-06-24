@@ -11,8 +11,9 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt,
   ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
+  Pencil, Check, Layers,
 } from 'lucide-react';
-import { financeiroService, type FinDashboard, type FinTransacao } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput } from '@/features/financeiro/services/financeiro.service';
 import {
   aggregarClientes, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
@@ -165,32 +166,45 @@ function Card({ title, sub, action, children, className }: { title?: React.React
 // ═══════════════════════════ ABA · LANÇAMENTOS (filtrado por mês) ═══════════════
 
 const ABAS = [{ key: 'todos', label: 'Todos' }, { key: 'receitas', label: 'Receitas' }, { key: 'despesas', label: 'Despesas' }] as const;
+const ST_FILTROS = [{ key: 'todos', label: 'Todos' }, { key: 'a_receber', label: 'A receber/pagar' }, { key: 'liquidado', label: 'Liquidados' }] as const;
 const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
 const toBR = (iso: string) => { const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };
-const toISOInput = (br: string) => { const m = br.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+const toISOInput = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+const parseValor = (s: string) => Number(String(s).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0;
+
+const STATUS_TX: Record<TxStatus, { label: string; badge: string; cor: string }> = {
+  a_receber: { label: 'A receber', badge: 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300', cor: '#F59F00' },
+  recebido: { label: 'Recebido', badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300', cor: '#2F9E44' },
+  a_pagar: { label: 'A pagar', badge: 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300', cor: '#F59F00' },
+  pago: { label: 'Pago', badge: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400', cor: '#868E96' },
+};
+const txStatus = (t: FinTransacao): TxStatus => t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
+const ehLiquidado = (s: TxStatus) => s === 'recebido' || s === 'pago';
+
+interface Editor {
+  id: string | null; serieId: string | null; tipo: 'receita' | 'despesa';
+  dataISO: string; vencISO: string; pagtoISO: string;
+  categoria: string; pagador: string; recebedor: string; valor: string;
+  status: TxStatus; parcelas: string; escopo: 'uma' | 'proximas';
+}
 
 function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
   const [mesSel, setMesSel] = useState<string>(mesesDisp[0] ?? '');
   const [aba, setAba] = useState<'todos' | 'receitas' | 'despesas'>('todos');
+  const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('todos');
   const [busca, setBusca] = useState('');
-  const [showForm, setShowForm] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [f, setF] = useState({ dataISO: toISOInput(hojeBR()), tipo: 'receita' as 'receita' | 'despesa', categoria: 'Honorários', party: '', valor: '' });
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [serieDel, setSerieDel] = useState<FinTransacao | null>(null);
 
   const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
 
-  const addM = useMutation({
-    mutationFn: () => financeiroService.addTransacao({ data: toBR(f.dataISO), tipo: f.tipo, categoria: f.categoria, valor: Number(f.valor.replace(',', '.')) || 0, party: f.party }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success('Lançamento adicionado'); setShowForm(false); setF((p) => ({ ...p, party: '', valor: '' })); },
-    onError: (e: any) => toast.error(e?.message || 'Erro ao lançar'),
-  });
-  const delM = useMutation({
-    mutationFn: (id: string) => financeiroService.removeTransacao(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success('Lançamento removido'); },
-    onError: (e: any) => toast.error(e?.message || 'Erro ao remover'),
-  });
+  const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
+  const updM = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpdateTransacaoInput }) => financeiroService.updateTransacao(id, input), onSuccess: () => { invalidate(); toast.success('Lançamento atualizado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar') });
+  const delM = useMutation({ mutationFn: ({ id, escopo }: { id: string; escopo: 'uma' | 'proximas' }) => financeiroService.removeTransacao(id, escopo), onSuccess: (r) => { invalidate(); toast.success(`${r.removidos} lançamento(s) removido(s)`); setSerieDel(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
 
   const txs = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -198,10 +212,13 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       if (mesSel && mesKey(t) !== mesSel) return false;
       if (aba === 'receitas' && t.valor < 0) return false;
       if (aba === 'despesas' && t.valor >= 0) return false;
-      if (q && !`${t.party ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
+      const st = txStatus(t);
+      if (stFiltro === 'a_receber' && ehLiquidado(st)) return false;
+      if (stFiltro === 'liquidado' && !ehLiquidado(st)) return false;
+      if (q && !`${t.pagador ?? t.party ?? ''} ${t.recebedor ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data.transacoes, mesSel, aba, busca]);
+  }, [data.transacoes, mesSel, aba, stFiltro, busca]);
 
   const grupos = useMemo(() => {
     const map = new Map<string, FinTransacao[]>();
@@ -213,39 +230,43 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     }).sort((a, b) => b.key.localeCompare(a.key));
   }, [txs]);
 
-  const resumo = useMemo(() => ({
-    rec: txs.filter((t) => t.valor >= 0).reduce((s, t) => s + t.valor, 0),
-    desp: txs.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0),
-    saldo: txs.reduce((s, t) => s + t.valor, 0),
-  }), [txs]);
+  const resumo = useMemo(() => {
+    let recebido = 0, aReceber = 0, despesas = 0, aPagar = 0;
+    for (const t of txs) {
+      const st = txStatus(t);
+      if (t.valor >= 0) { if (st === 'a_receber') aReceber += t.valor; else recebido += t.valor; }
+      else { if (st === 'a_pagar') aPagar += -t.valor; else despesas += -t.valor; }
+    }
+    return { recebido, aReceber, despesas, aPagar, saldo: recebido - despesas };
+  }, [txs]);
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const podeSalvar = f.dataISO && f.categoria && Number(f.valor.replace(',', '.')) > 0;
+
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', escopo: 'uma' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', escopo: 'uma' });
+
+  const salvar = () => {
+    if (!editor) return;
+    const v = parseValor(editor.valor);
+    if (!(v > 0)) { toast.error('Informe um valor maior que zero'); return; }
+    const liq = ehLiquidado(editor.status);
+    if (editor.id == null) {
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: Math.max(1, parseInt(editor.parcelas, 10) || 1) });
+    } else {
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo } });
+    }
+  };
+  const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
+  const pedirExcluir = (t: FinTransacao) => { if (t.serieId) setSerieDel(t); else if (confirm('Remover este lançamento?')) delM.mutate({ id: t.id!, escopo: 'uma' }); };
+
+  const ehSerie = !!editor?.serieId;
+  const statusOpts: TxStatus[] = editor?.tipo === 'despesa' ? ['pago', 'a_pagar'] : ['recebido', 'a_receber'];
 
   return (
-    <Card title={<>Lançamentos <span className="font-normal text-zinc-400">· livro-razão</span></>}
-      action={<button onClick={() => setShowForm((v) => !v)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90">{showForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}{showForm ? 'Fechar' : 'Novo lançamento'}</button>}>
+    <Card title={<>Lançamentos <span className="font-normal text-zinc-400">· livro-razão editável</span></>}
+      action={<button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>}>
 
-      {showForm && (
-        <div className="mb-3 grid gap-2 rounded-xl border border-zinc-200/70 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-800/30 sm:grid-cols-[auto_auto_1fr_auto_auto]">
-          <input type="date" value={f.dataISO} onChange={(e) => setF({ ...f, dataISO: e.target.value })} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-          <div className="inline-flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700">
-            {(['receita', 'despesa'] as const).map((tp) => (
-              <button key={tp} onClick={() => setF({ ...f, tipo: tp, categoria: tp === 'receita' ? 'Honorários' : 'Aluguel' })} className={`px-3 py-1.5 text-xs font-semibold capitalize ${f.tipo === tp ? (tp === 'receita' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{tp}</button>
-            ))}
-          </div>
-          <input value={f.party} onChange={(e) => setF({ ...f, party: e.target.value })} placeholder="Cliente / descrição" className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-          <select value={f.categoria} onChange={(e) => setF({ ...f, categoria: e.target.value })} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-            {cats.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <div className="flex gap-2">
-            <input value={f.valor} onChange={(e) => setF({ ...f, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-28 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
-            <button disabled={!podeSalvar || addM.isPending} onClick={() => addM.mutate()} className="inline-flex items-center gap-1 rounded-md bg-[#228BE6] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{addM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Lançar'}</button>
-          </div>
-        </div>
-      )}
-
-      {/* Filtros: MÊS (principal) + tipo + busca */}
+      {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
           <Calendar className="h-3.5 w-3.5 text-zinc-400" />
@@ -257,6 +278,9 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
           {ABAS.map((a) => <button key={a.key} onClick={() => setAba(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${aba === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}
         </div>
+        <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+          {ST_FILTROS.map((a) => <button key={a.key} onClick={() => setStFiltro(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${stFiltro === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}
+        </div>
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="w-40 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
@@ -264,10 +288,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       </div>
 
       {/* Resumo do filtro */}
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-lg bg-emerald-50 py-1.5 dark:bg-emerald-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Receitas</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(resumo.rec)}</p></div>
-        <div className="rounded-lg bg-rose-50 py-1.5 dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesas</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(resumo.desp)}</p></div>
-        <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+        <div className="rounded-lg bg-emerald-50 py-1.5 dark:bg-emerald-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Recebido</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(resumo.recebido)}</p></div>
+        <div className="rounded-lg bg-amber-50 py-1.5 dark:bg-amber-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">A receber</p><p className="text-sm font-bold tabular-nums text-amber-600">{brl(resumo.aReceber)}</p></div>
+        <div className="rounded-lg bg-rose-50 py-1.5 dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesas</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(resumo.despesas)}</p>{resumo.aPagar > 0 && <p className="text-[10px] text-amber-600">+{brl(resumo.aPagar)} a pagar</p>}</div>
+        <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo realizado</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
       </div>
 
       <p className="mt-2 text-xs text-zinc-400">{txs.length} lançamento(s){mesSel ? ` em ${mesLabel(mesSel)}` : ` · ${grupos.length} ${grupos.length === 1 ? 'mês' : 'meses'}`}</p>
@@ -291,19 +316,28 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
               )}
               {aberto && (
                 <div>
-                  {g.items.map((t) => (
-                    <div key={t.id} className="group grid grid-cols-[3.5rem_1fr_auto_2rem] items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-sm dark:border-zinc-800/70 sm:grid-cols-[3.5rem_1fr_10rem_auto_2rem]">
-                      <span className="text-xs tabular-nums text-zinc-400">{t.data.slice(0, 5)}</span>
-                      <span className="flex min-w-0 items-center gap-1.5">
+                  {g.items.map((t) => {
+                    const st = txStatus(t);
+                    return (
+                      <div key={t.id} className="group flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-sm dark:border-zinc-800/70">
+                        <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{((!ehLiquidado(st) && t.vencimento) ? t.vencimento : t.data).slice(0, 5)}</span>
                         {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
-                        <span className="truncate text-zinc-700 dark:text-zinc-300">{t.party || t.categoria}</span>
-                        {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
-                      </span>
-                      <span className="hidden items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="truncate">{t.categoria}</span></span>
-                      <span className={`justify-self-end whitespace-nowrap text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
-                      <button onClick={() => { if (confirm('Remover este lançamento?')) delM.mutate(t.id!); }} disabled={delM.isPending} title="Remover" className="justify-self-end rounded p-1 text-zinc-300 opacity-0 transition hover:text-rose-600 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
-                    </div>
-                  ))}
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <span className="truncate text-zinc-700 dark:text-zinc-300">{t.pagador || t.recebedor || t.party || t.categoria}</span>
+                          {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
+                          {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
+                        </span>
+                        <span className="hidden items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden max-w-[8rem] truncate md:inline">{t.categoria}</span></span>
+                        <span className={`hidden shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:inline ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span>
+                        <span className={`w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
+                        <span className="flex shrink-0 items-center">
+                          {!ehLiquidado(st) && <button onClick={() => quickReceber(t)} title={t.valor >= 0 ? 'Marcar como recebido' : 'Marcar como pago'} className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>}
+                          <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
+                          <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -311,8 +345,96 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         })}
         {grupos.length === 0 && <p className="py-10 text-center text-sm text-zinc-400">Nenhum lançamento neste filtro.</p>}
       </div>
+
+      {/* Modal de edição / novo lançamento */}
+      {editor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditor(null)}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 scrollbar-thin" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">{editor.id ? 'Editar lançamento' : 'Novo lançamento'}{editor.parcelas && +editor.parcelas > 1 && !editor.id ? ` · ${editor.parcelas}×` : ''}</h3>
+              <button onClick={() => setEditor(null)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="space-y-3">
+              {/* tipo */}
+              <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
+                {(['receita', 'despesa'] as const).map((tp) => (
+                  <button key={tp} onClick={() => setEditor({ ...editor, tipo: tp, categoria: tp === 'receita' ? 'Honorários' : 'Aluguel', status: tp === 'receita' ? (editor.status === 'a_receber' ? 'a_receber' : 'recebido') : (editor.status === 'a_pagar' ? 'a_pagar' : 'pago') })} className={`px-4 py-1.5 text-sm font-semibold capitalize ${editor.tipo === tp ? (tp === 'receita' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{tp}</button>
+                ))}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Valor (cada parcela)"><input value={editor.valor} onChange={(e) => setEditor({ ...editor, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Fonte"><select value={editor.categoria} onChange={(e) => setEditor({ ...editor, categoria: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
+              </div>
+
+              {/* status */}
+              <Field label="Situação">
+                <div className="inline-flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700">
+                  {statusOpts.map((s) => <button key={s} onClick={() => setEditor({ ...editor, status: s })} className={`px-3 py-1.5 text-xs font-semibold ${editor.status === s ? 'bg-[#228BE6] text-white' : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{STATUS_TX[s].label}</button>)}
+                </div>
+              </Field>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label={editor.tipo === 'receita' ? 'Competência' : 'Data'}><input type="date" value={editor.dataISO} onChange={(e) => setEditor({ ...editor, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Vencimento"><input type="date" value={editor.vencISO} onChange={(e) => setEditor({ ...editor, vencISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                {ehLiquidado(editor.status) && <Field label="Pagamento"><input type="date" value={editor.pagtoISO} onChange={(e) => setEditor({ ...editor, pagtoISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Pagador (cliente/origem)"><input value={editor.pagador} onChange={(e) => setEditor({ ...editor, pagador: e.target.value })} placeholder="quem paga" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Recebedor (destino)"><input value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="quem recebe (escritório, advogado…)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              </div>
+
+              {!editor.id && (
+                <Field label="Parcelas (lança N parcelas mensais)">
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-zinc-400" />
+                    <input type="number" min={1} max={120} value={editor.parcelas} onChange={(e) => setEditor({ ...editor, parcelas: e.target.value })} className="w-24 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+                    {+editor.parcelas > 1 && <span className="text-xs text-zinc-400">{editor.parcelas}× de {editor.valor ? brl2(parseValor(editor.valor)) : 'R$ 0,00'} = {brl2(parseValor(editor.valor) * (+editor.parcelas || 1))}</span>}
+                  </div>
+                </Field>
+              )}
+
+              {editor.id && ehSerie && (
+                <Field label="Aplicar a">
+                  <div className="inline-flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700">
+                    {(['uma', 'proximas'] as const).map((es) => <button key={es} onClick={() => setEditor({ ...editor, escopo: es })} className={`px-3 py-1.5 text-xs font-semibold ${editor.escopo === es ? 'bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900' : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{es === 'uma' ? 'Só esta' : 'Esta e as próximas'}</button>)}
+                  </div>
+                </Field>
+              )}
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-2">
+              {editor.id ? <button onClick={() => { const t = data.transacoes.find((x) => x.id === editor.id); setEditor(null); if (t) pedirExcluir(t); }} className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"><Trash2 className="h-3.5 w-3.5" /> Excluir</button> : <span />}
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditor(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+                <button onClick={salvar} disabled={addM.isPending || updM.isPending} className="inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{(addM.isPending || updM.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mini-sheet: excluir série */}
+      {serieDel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSerieDel(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm text-zinc-700 dark:text-zinc-200">Este lançamento faz parte de um parcelamento{serieDel.parcelaNum ? ` (${serieDel.parcelaNum}/${serieDel.parcelaTot})` : ''}. O que deseja remover?</p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button onClick={() => delM.mutate({ id: serieDel.id!, escopo: 'uma' })} disabled={delM.isPending} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">Só esta parcela</button>
+              <button onClick={() => delM.mutate({ id: serieDel.id!, escopo: 'proximas' })} disabled={delM.isPending} className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700">Esta e as próximas</button>
+              <button onClick={() => setSerieDel(null)} className="rounded-lg px-3 py-2 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-400">{label}</span>{children}</label>;
 }
 
 // ═══════════════════════════ ABA · HONORÁRIOS (clientes) ═══════════════════════
