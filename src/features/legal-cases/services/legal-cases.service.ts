@@ -256,12 +256,12 @@ export interface JurimetriaData {
 export interface CsBase { caseId: string; title: string; cliente: string | null; cnj: string | null; area: string | null; responsavel: string | null; valorCausa: number | null; legalPhaseAt: string | null }
 export interface CsCumprimento extends CsBase { fase: 'cumprimento'; protocolado: boolean; valorCalculo: number; numeroCs: string | null }
 export interface CsPrestacao extends CsBase { fase: 'prestacao_contas'; valorAlvara: number; honorariosNossos: number; sucumbencia: number; valorCliente: number; aReceberNosso: number }
-export interface CsFavoravel extends CsBase { fase: 'sentenca' | 'transito'; resultado: string | null; exito: number | null; estimado: number | null }
+export interface CsFavoravel extends CsBase { fase: 'sentenca' | 'transito'; resultado: string | null; exito: number | null; estimado: number | null; manualEstimado?: boolean }
 export interface CumprimentoFinanceiro {
   prestacao: CsPrestacao[];
   cumprimento: CsCumprimento[];
   favoraveis: CsFavoravel[];
-  totais: { nPrestacao: number; aReceberPrestacao: number; nCumprimento: number; brutoEmCumprimento: number; nFavoraveis: number; estimadoFavoraveis: number };
+  totais: { nPrestacao: number; aReceberPrestacao: number; nCumprimento: number; brutoEmCumprimento: number; nossoEmCumprimento: number; nFavoraveis: number; estimadoFavoraveis: number };
 }
 
 /** Processo do cliente — usado no painel lateral do chat. */

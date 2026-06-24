@@ -77,6 +77,7 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'julgamento', label: 'Julgamento', type: 'textarea' },
     { key: 'recorrer', label: 'Vamos recorrer?', type: 'radio', options: ['Sim', 'Não'] },
     { key: 'motivo', label: 'Motivo (se não recorrer)', type: 'text' },
+    { key: 'valor_estimado', label: 'Estimativa do que vamos receber (CS)', type: 'currency' },
   ],
   recurso: [
     { key: 'especie', label: 'Espécie de recurso', type: 'select', options: ['Apelação', 'Agravo de instrumento', 'Embargos de declaração', 'Recurso especial', 'Recurso extraordinário', 'Recurso inominado'] },
