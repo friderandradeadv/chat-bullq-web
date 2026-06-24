@@ -6,6 +6,7 @@ import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X, Hash
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { toast } from 'sonner';
 import { membersService, type Member } from '@/features/settings/services/members.service';
+import { financeiroService, type AcessoNivel } from '@/features/financeiro/services/financeiro.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { MemberChannelsDrawer } from '@/features/settings/components/member-channels-drawer';
 import { Avatar } from '@/components/ui/avatar';
@@ -39,6 +40,18 @@ export default function SettingsMembersPage() {
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['members'] });
+
+  // Acesso ao FINANCEIRO por membro (completo / limitado aos casos / sem acesso)
+  const { data: acessoFin = {} } = useQuery({ queryKey: ['financeiro', 'acesso'], queryFn: () => financeiroService.getAcesso() });
+  const setAcessoFin = async (userId: string, nivel: AcessoNivel) => {
+    try {
+      await financeiroService.setAcesso(userId, nivel);
+      queryClient.invalidateQueries({ queryKey: ['financeiro', 'acesso'] });
+      toast.success('Acesso ao financeiro atualizado');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar');
+    }
+  };
 
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [drawerMember, setDrawerMember] = useState<Member | null>(null);
@@ -197,6 +210,7 @@ export default function SettingsMembersPage() {
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Role</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Canais</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Módulos</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Financeiro</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Entrou em</th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-zinc-500">Ações</th>
             </tr>
@@ -215,7 +229,7 @@ export default function SettingsMembersPage() {
               ))
             ) : !members?.length ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center">
+                <td colSpan={7} className="px-4 py-12 text-center">
                   <Users className="mx-auto h-10 w-10 text-zinc-200 dark:text-zinc-700" />
                   <p className="mt-3 text-sm text-zinc-500">Nenhum membro encontrado</p>
                 </td>
@@ -304,6 +318,22 @@ export default function SettingsMembersPage() {
                             ? `${APP_MODULES.length - (m.restrictedModules?.length ?? 0)}/${APP_MODULES.length} liberados`
                             : 'Acesso total'}
                         </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {m.role === 'OWNER' || m.role === 'ADMIN' ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Acesso total</span>
+                      ) : (
+                        <select
+                          value={(acessoFin[m.userId] as AcessoNivel) ?? 'full'}
+                          onChange={(e) => setAcessoFin(m.userId, e.target.value as AcessoNivel)}
+                          className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                          title="Nível de acesso ao módulo Financeiro"
+                        >
+                          <option value="full">Completo</option>
+                          <option value="cases">Só os casos dele</option>
+                          <option value="none">Sem acesso</option>
+                        </select>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">

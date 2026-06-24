@@ -68,6 +68,19 @@ export default function FinanceiroPage() {
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
 
+  if (data?.semAcesso) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#f5f6f8] p-6 dark:bg-zinc-950">
+        <div className="max-w-md rounded-2xl border border-[#DEE2E6] bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-zinc-100 text-zinc-400 dark:bg-zinc-800"><CircleDollarSign className="h-6 w-6" /></span>
+          <h1 className="mt-3 text-lg font-bold text-zinc-800 dark:text-zinc-100">Financeiro restrito</h1>
+          <p className="mt-1 text-sm text-zinc-500">Você não tem acesso ao módulo financeiro. Fale com o administrador do escritório se precisar.</p>
+        </div>
+      </div>
+    );
+  }
+  if (data?.limited) return <FinanceiroLimitado data={data} />;
+
   if (!data || data.vazio || !data.kpis) {
     return (
       <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950">
@@ -1318,5 +1331,67 @@ function MotivacaoTab({ data }: { data: FinDashboard }) {
         </div>
       </Card>
     </>
+  );
+}
+
+// ═══════════════════════════ VISÃO LIMITADA (advogado · só os casos dele) ═════
+
+function FinanceiroLimitado({ data }: { data: FinDashboard }) {
+  const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nLancamentos: 0 };
+  const txs = (data.transacoes ?? []).slice(0, 300);
+  const primeiro = (data.meuNome || '').split(' ')[0] || 'Dr(a).';
+  const aReceberTotal = r.aReceber + r.minhaParte;
+
+  return (
+    <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+      <div className="mx-auto w-full max-w-5xl p-6">
+        <div className="flex items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600"><CircleDollarSign className="h-5 w-5" /></span>
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Seu financeiro</h1>
+            <p className="text-sm text-zinc-500">Olá, {primeiro}! Aqui está o financeiro <strong>dos seus casos</strong> — o que você já recebeu, o que tem a receber e a sua parte.</p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MiniStat label="Recebido (seus casos)" value={brl(r.recebido)} hint={`${r.nClientes} cliente(s) seus`} accent="#2F9E44" />
+          <MiniStat label="A receber" value={brl(r.aReceber)} hint="lançamentos pendentes" accent="#F59F00" />
+          <MiniStat label="Sua parte (rateio)" value={brl(r.minhaParte)} hint="honorários divididos com você" accent="#7048E8" />
+          <MiniStat label="Total a entrar" value={brl(aReceberTotal)} hint="a receber + sua parte" accent="#228BE6" />
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 dark:border-zinc-800 dark:from-amber-900/15 dark:via-zinc-900 dark:to-emerald-900/15">
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-400/20 text-amber-600"><Flame className="h-5 w-5" /></span>
+            <p className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
+              {r.recebido > 0
+                ? `Você já trouxe ${brl(r.recebido)} em honorários${aReceberTotal > 0 ? `, e ainda tem ${brl(aReceberTotal)} a entrar` : ''}. Cada caso bem conduzido vira o próximo. Continue!`
+                : 'Seu histórico financeiro aparece aqui conforme os honorários dos seus casos entram. Bora construir!'}
+            </p>
+          </div>
+        </div>
+
+        <Card title={<>Seus lançamentos <span className="font-normal text-zinc-400">· {r.nLancamentos}</span></>} sub="movimentações dos processos em que você é o responsável.">
+          <div className="max-h-[34rem] overflow-y-auto scrollbar-thin">
+            {txs.length === 0 ? (
+              <p className="py-10 text-center text-sm text-zinc-400">Nenhum lançamento vinculado aos seus casos ainda.</p>
+            ) : txs.map((t) => {
+              const st = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
+              return (
+                <div key={t.id} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
+                  <span className="w-12 shrink-0 text-xs tabular-nums text-zinc-400">{t.data.slice(0, 5)}</span>
+                  {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
+                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{t.pagador || t.recebedor || t.party || t.categoria}</span>
+                  <span className={`hidden shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:inline ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span>
+                  <span className={`w-24 shrink-0 text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <p className="mt-4 pb-2 text-center text-xs text-zinc-400">Você vê apenas o financeiro dos seus casos. O caixa geral do escritório é restrito.</p>
+      </div>
+    </div>
   );
 }

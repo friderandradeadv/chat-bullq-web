@@ -71,6 +71,12 @@ export interface FinDashboard {
   categoriasConhecidas?: string[];
   contas?: Conta[];
   acessoMembros?: Record<string, AcessoNivel>;
+  // controle de acesso por membro
+  nivel?: AcessoNivel;
+  limited?: boolean;
+  semAcesso?: boolean;
+  meuNome?: string;
+  resumo?: { recebido: number; aReceber: number; minhaParte: number; nClientes: number; nLancamentos: number };
 }
 
 export interface AddTransacaoInput {
