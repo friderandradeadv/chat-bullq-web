@@ -169,4 +169,8 @@ export const financeiroService = {
     const { data } = await api.post(`/financeiro/cobrancas/${id}/parcelas/${num}/desfazer`, {});
     return data.data ?? data;
   },
+  async classificarExtrato(itens: { descricao: string; valor: number }[]): Promise<{ i: number; tipo: 'receita' | 'despesa'; categoria: string; party: string }[]> {
+    const { data } = await api.post('/financeiro/conciliacao/classificar', { itens });
+    return data.data ?? data;
+  },
 };

@@ -1054,9 +1054,34 @@ const BANCOS = [
   { id: 'outro', nome: 'Outro', cor: '#868E96' },
 ];
 
+// Parser flexível de extrato bancário colado (CSV/TSV/;) — best-effort.
+function parseExtrato(text: string): { data: string; valor: number; descricao: string }[] {
+  const num = (s: string) => { const t = String(s).replace(/[^\d,.-]/g, ''); if (!t || !/\d/.test(t)) return NaN; return /,\d{1,2}$/.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : Number(t.replace(/,/g, '')); };
+  const out: { data: string; valor: number; descricao: string }[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const row = raw.trim(); if (!row) continue;
+    const sep = row.includes(';') ? ';' : row.includes('\t') ? '\t' : ',';
+    const cols = row.split(sep).map((c) => c.trim().replace(/^"|"$/g, ''));
+    let dataBR = '', valor = NaN; const desc: string[] = [];
+    for (const c of cols) {
+      const br = c.match(/^(\d{2})[\/-](\d{2})[\/-](\d{2,4})$/); const iso = c.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!dataBR && br) { dataBR = `${br[1]}/${br[2]}/${br[3].length === 2 ? '20' + br[3] : br[3]}`; continue; }
+      if (!dataBR && iso) { dataBR = `${iso[3]}/${iso[2]}/${iso[1]}`; continue; }
+      const n = num(c);
+      if (Number.isFinite(n) && /[,.\-]/.test(c)) { valor = n; continue; } // última col numérica = valor
+      if (c && !/^\d+$/.test(c)) desc.push(c);
+    }
+    if (dataBR && Number.isFinite(valor)) out.push({ data: dataBR, valor, descricao: desc.join(' ').slice(0, 140) });
+  }
+  return out;
+}
+
 function ContasTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const contas = data.contas ?? [];
+  const [conc, setConc] = useState<{ conta: string; texto: string } | null>(null);
+  const [concResult, setConcResult] = useState<{ conciliados: number; semPar: { data: string; valor: number; descricao: string }[] } | null>(null);
+  const [iaLoading, setIaLoading] = useState(false);
   const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string } | null>(null);
   const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
   const addM = useMutation({ mutationFn: (i: { nome: string; banco: string; saldoInicial: number }) => financeiroService.addConta(i), onSuccess: () => { inval(); toast.success('Conta adicionada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
@@ -1083,13 +1108,54 @@ function ContasTab({ data }: { data: FinDashboard }) {
     if (form.id) updM.mutate({ id: form.id, i }); else addM.mutate(i);
   };
 
+  // ── Conciliação: casa as linhas do extrato com lançamentos por valor + data (±5 dias) ──
+  const isoNum = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? +`${m[3]}${m[2]}${m[1]}` : 0; };
+  const analisar = () => {
+    if (!conc) return;
+    const linhas = parseExtrato(conc.texto);
+    if (!linhas.length) { toast.error('Não consegui ler nenhuma linha. Cole o extrato com data, valor e descrição.'); return; }
+    const usadas = new Set<string>();
+    let conciliados = 0; const semPar: typeof linhas = [];
+    for (const l of linhas) {
+      const alvo = isoNum(l.data);
+      const match = data.transacoes.find((t) => {
+        if (t.id && usadas.has(t.id)) return false;
+        if (t.conta && t.conta !== conc.conta) return false;
+        if (Math.sign(t.valor) !== Math.sign(l.valor)) return false;
+        if (Math.abs(Math.abs(t.valor) - Math.abs(l.valor)) > 0.01) return false;
+        return Math.abs(isoNum(t.data) - alvo) <= 5 || Math.abs((t.vencimento ? isoNum(t.vencimento) : 0) - alvo) <= 5;
+      });
+      if (match) { conciliados++; if (match.id) usadas.add(match.id); } else semPar.push(l);
+    }
+    setConcResult({ conciliados, semPar });
+  };
+  const criarComIA = async () => {
+    if (!conc || !concResult?.semPar.length) return;
+    setIaLoading(true);
+    try {
+      const sug = await financeiroService.classificarExtrato(concResult.semPar.map((l) => ({ descricao: l.descricao, valor: l.valor })));
+      for (let i = 0; i < concResult.semPar.length; i++) {
+        const l = concResult.semPar[i]; const s = sug.find((x) => x.i === i);
+        await financeiroService.addTransacao({ data: l.data, tipo: (s?.tipo as 'receita' | 'despesa') ?? (l.valor >= 0 ? 'receita' : 'despesa'), categoria: s?.categoria ?? (l.valor >= 0 ? 'Honorários' : 'Outros'), valor: Math.abs(l.valor), pagador: s?.party || l.descricao.slice(0, 60), conta: conc.conta, status: l.valor >= 0 ? 'recebido' : 'pago' });
+      }
+      qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
+      toast.success(`${concResult.semPar.length} lançamento(s) criado(s) e conciliado(s)`);
+      setConc(null); setConcResult(null);
+    } catch (e: any) { toast.error(e?.message || 'Erro ao criar lançamentos'); } finally { setIaLoading(false); }
+  };
+
   return (
     <>
       <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-violet-50 to-white p-5 dark:border-zinc-800 dark:from-violet-900/15 dark:to-zinc-900">
-        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Banknote className="h-5 w-5 text-[#820AD1]" /> Contas bancárias</h2>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
-          Marque a conta em cada lançamento para filtrar e ver o saldo de cada uma. A <strong>conciliação bancária diária com extrato automático (IA)</strong> entra na próxima etapa — por ora, o saldo é calculado dos lançamentos marcados.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Banknote className="h-5 w-5 text-[#820AD1]" /> Contas bancárias</h2>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+              Marque a conta em cada lançamento para filtrar e ver o saldo de cada uma. Use <strong>Importar extrato</strong> para conciliar: o sistema casa as linhas com os lançamentos e a <strong>IA cria os que faltam</strong>.
+            </p>
+          </div>
+          <button onClick={() => { setConc({ conta: contas[0]?.id ?? '', texto: '' }); setConcResult(null); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"><Sparkles className="h-3.5 w-3.5" /> Importar extrato</button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1099,6 +1165,47 @@ function ContasTab({ data }: { data: FinDashboard }) {
           <button onClick={() => setForm({ nome: '', banco: 'nubank', saldoInicial: '' })} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Nova conta</button>
         </div>
       </div>
+
+      {/* Modal conciliação (importar extrato) */}
+      {conc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { setConc(null); setConcResult(null); }}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 scrollbar-thin" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between"><h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Sparkles className="h-4 w-4 text-[#7048E8]" /> Conciliação bancária</h3><button onClick={() => { setConc(null); setConcResult(null); }} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button></div>
+            <div className="space-y-3">
+              <Field label="Conta"><select value={conc.conta} onChange={(e) => { setConc({ ...conc, conta: e.target.value }); setConcResult(null); }} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></Field>
+              <Field label="Cole o extrato (CSV: data, valor, descrição — um por linha)">
+                <textarea value={conc.texto} onChange={(e) => { setConc({ ...conc, texto: e.target.value }); setConcResult(null); }} rows={6} placeholder={'10/06/2026;47,00;Pix recebido Júlia Macedo\n12/06/2026;-2850,00;Aluguel Top Oce'} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900" />
+              </Field>
+              <button onClick={analisar} className="rounded-lg bg-[#228BE6] px-3 py-1.5 text-sm font-semibold text-white">Analisar e casar</button>
+
+              {concResult && (
+                <div className="rounded-xl border border-zinc-200/70 p-3 dark:border-zinc-800">
+                  <div className="flex gap-4 text-sm">
+                    <span className="text-emerald-600">✓ {concResult.conciliados} já conciliado(s)</span>
+                    <span className="text-amber-600">⚠ {concResult.semPar.length} sem par</span>
+                  </div>
+                  {concResult.semPar.length > 0 && (
+                    <>
+                      <div className="mt-2 max-h-40 space-y-0.5 overflow-y-auto scrollbar-thin">
+                        {concResult.semPar.map((l, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs">
+                            <span className="w-12 shrink-0 text-zinc-400">{l.data.slice(0, 5)}</span>
+                            <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">{l.descricao || '—'}</span>
+                            <span className={`shrink-0 tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={criarComIA} disabled={iaLoading} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{iaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Criar os {concResult.semPar.length} faltantes com IA</button>
+                    </>
+                  )}
+                  {concResult.semPar.length === 0 && <p className="mt-2 text-xs text-emerald-600">Tudo conciliado! Nenhum lançamento faltando.</p>}
+                </div>
+              )}
+              <p className="text-[11px] text-zinc-400">Dica: exporte o extrato em CSV no app do banco (Nubank/ASAAS/Mercado Pago) e cole aqui. A integração automática por API entra depois.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {contas.map((c) => {
