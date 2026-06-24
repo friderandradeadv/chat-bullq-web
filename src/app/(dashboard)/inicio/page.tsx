@@ -347,7 +347,7 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
   };
 
   return (
-    <div className="welcome-pop w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.21s' }}>
+    <div className="welcome-pop flex w-full flex-col rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.21s' }}>
       <div className="mb-1.5 flex items-center justify-between px-1">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
           <MessageSquare className="h-3.5 w-3.5 text-[#228BE6]" />
@@ -366,7 +366,7 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
           <Loader2 className="h-4 w-4 animate-spin" /> Procurando mensagens novas…
         </div>
       ) : pending.length === 0 ? (
-        <div className="flex flex-col items-center gap-1 px-2 py-6 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center gap-1 px-2 py-6 text-center">
           <Inbox className="h-7 w-7 text-[#02883C]" />
           <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Tudo respondido! 🎉</p>
           <p className="text-xs text-zinc-400">Nenhum cliente seu esperando resposta. Suas conversas estão em dia — manda ver no resto do dia!</p>
@@ -742,7 +742,7 @@ export default function InicioPage() {
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-thin">
-    <div className="relative flex min-h-full flex-col items-center justify-center px-6 py-10">
+    <div className="relative flex min-h-full flex-col items-center justify-start px-6 py-8">
       <div className="welcome-gradient pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-[#228BE6]/10 via-[#7048E8]/10 to-[#15AABF]/10 dark:from-[#228BE6]/15 dark:via-[#7048E8]/15 dark:to-[#15AABF]/10" />
 
       {mounted && (
@@ -753,9 +753,9 @@ export default function InicioPage() {
         </div>
       )}
 
-      <div className="relative z-10 w-full max-w-6xl text-center">
+      <div className="relative z-10 w-full max-w-5xl text-center">
         {/* Saudação */}
-        <h1 className="welcome-pop text-4xl font-bold tracking-tight text-[#202124] dark:text-zinc-50 sm:text-5xl" style={{ animationDelay: '0.05s' }}>
+        <h1 className="welcome-pop text-3xl font-bold tracking-tight text-[#202124] dark:text-zinc-50 sm:text-4xl" style={{ animationDelay: '0.05s' }}>
           {saud},{' '}
           <span className="bg-gradient-to-r from-[#228BE6] via-[#7048E8] to-[#E64980] bg-clip-text text-transparent">{dr} {first}</span>{' '}
           <span className="welcome-float inline-block">{GREET_EMOJI[emojiIdx]}</span>
@@ -767,14 +767,14 @@ export default function InicioPage() {
           {mounted ? msg : ' '}
         </p>
 
-        <button onClick={novoIncentivo} className="welcome-pop mt-5 inline-flex items-center gap-2 rounded-full bg-[#228BE6] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:scale-[1.03] hover:bg-[#1c7ed6] active:scale-95" style={{ animationDelay: '0.15s' }}>
+        <button onClick={novoIncentivo} className="welcome-pop mt-4 inline-flex items-center gap-2 rounded-full bg-[#228BE6] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:scale-[1.03] hover:bg-[#1c7ed6] active:scale-95" style={{ animationDelay: '0.15s' }}>
           <PartyPopper className="h-4 w-4" />
           Me motiva de novo
         </button>
 
         {/* Seus números (com count-up) */}
         {mounted && (
-          <div className="welcome-pop mx-auto mt-6 grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4" style={{ animationDelay: '0.2s' }}>
+          <div className="welcome-pop mt-6 grid w-full grid-cols-2 gap-3 sm:grid-cols-4" style={{ animationDelay: '0.2s' }}>
             <StatCard href="/agenda" icon={CalendarClock} color="#228BE6" value={stats.hoje} label="compromissos hoje" on={statOn} />
             <StatCard href="/agenda" icon={AlarmClock} color="#E03131" value={stats.fatais} label="prazos fatais (7d)" on={statOn} />
             <StatCard href="/agenda" icon={CheckCircle2} color="#02883C" value={stats.concluidas} label="concluídas hoje" on={statOn} />
@@ -784,7 +784,7 @@ export default function InicioPage() {
 
         {/* Painel — 2 colunas em telas largas: mensagens | agenda + compromissos */}
         {mounted && (
-          <div className="welcome-pop mt-6 grid w-full items-start gap-4 text-left lg:grid-cols-2" style={{ animationDelay: '0.21s' }}>
+          <div className="welcome-pop mt-4 grid w-full items-stretch gap-4 text-left lg:grid-cols-2" style={{ animationDelay: '0.21s' }}>
             <PendingMessages now={now} onCelebrate={() => setBurst((b) => b + 1)} />
             <div className="flex flex-col gap-4">
               <NewTodayAgenda now={now} />
