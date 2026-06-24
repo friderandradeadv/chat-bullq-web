@@ -11,12 +11,13 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt,
   ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
+import { membersService } from '@/features/settings/services/members.service';
 import {
-  aggregarClientes, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
+  aggregarClientes, aggregarRetiradas, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
 
 const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(Math.round(n)).toLocaleString('pt-BR');
@@ -48,11 +49,12 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-type View = 'lancamentos' | 'honorarios' | 'cumprimento' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
+type View = 'lancamentos' | 'honorarios' | 'cumprimento' | 'retiradas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
 const TABS: { key: View; label: string; icon: React.ElementType }[] = [
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt },
   { key: 'honorarios', label: 'Honorários', icon: Users },
   { key: 'cumprimento', label: 'Cumprimento de Sentença', icon: Gavel },
+  { key: 'retiradas', label: 'Retiradas / Pró-labore', icon: Wallet },
   { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2 },
   { key: 'crescimento', label: 'Crescimento', icon: TrendingUp },
   { key: 'projecoes', label: 'Projeções', icon: Rocket },
@@ -113,6 +115,7 @@ export default function FinanceiroPage() {
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
         {view === 'cumprimento' && <CumprimentoTab />}
+        {view === 'retiradas' && <RetiradasTab data={data} />}
         {view === 'fluxo' && <FluxoTab data={data} />}
         {view === 'crescimento' && <CrescimentoTab data={data} />}
         {view === 'projecoes' && <ProjecoesTab data={data} />}
@@ -184,11 +187,12 @@ const STATUS_TX: Record<TxStatus, { label: string; badge: string; cor: string }>
 const txStatus = (t: FinTransacao): TxStatus => t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
 const ehLiquidado = (s: TxStatus) => s === 'recebido' || s === 'pago';
 
+interface SplitRow { tipo: 'socio' | 'associado'; userId: string; valor: string }
 interface Editor {
   id: string | null; serieId: string | null; tipo: 'receita' | 'despesa';
   dataISO: string; vencISO: string; pagtoISO: string;
   categoria: string; pagador: string; recebedor: string; valor: string;
-  status: TxStatus; parcelas: string; escopo: 'uma' | 'proximas';
+  status: TxStatus; parcelas: string; escopo: 'uma' | 'proximas'; split: SplitRow[];
 }
 
 function LancamentosTab({ data }: { data: FinDashboard }) {
@@ -203,6 +207,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const [serieDel, setSerieDel] = useState<FinTransacao | null>(null);
 
   const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
+  const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
 
   const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
@@ -245,18 +251,21 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', escopo: 'uma' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', escopo: 'uma' });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', escopo: 'uma', split: [] });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', escopo: 'uma', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })) });
+
+  const buildSplit = (ed: Editor) => ed.split.filter((r) => r.userId && parseValor(r.valor) > 0).map((r) => ({ tipo: r.tipo, userId: r.userId, nome: advogados.find((a) => a.id === r.userId)?.name ?? '', valor: parseValor(r.valor) }));
 
   const salvar = () => {
     if (!editor) return;
     const v = parseValor(editor.valor);
     if (!(v > 0)) { toast.error('Informe um valor maior que zero'); return; }
     const liq = ehLiquidado(editor.status);
+    const split = buildSplit(editor);
     if (editor.id == null) {
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: Math.max(1, parseInt(editor.parcelas, 10) || 1) });
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: Math.max(1, parseInt(editor.parcelas, 10) || 1), split });
     } else {
-      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo } });
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split } });
     }
   };
   const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
@@ -388,6 +397,32 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 <Field label="Pagador (cliente/origem)"><input value={editor.pagador} onChange={(e) => setEditor({ ...editor, pagador: e.target.value })} placeholder="quem paga" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
                 <Field label="Recebedor (destino)"><input value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="quem recebe (escritório, advogado…)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
               </div>
+
+              {/* Rateio (split) — só para honorários */}
+              {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && (
+                <Field label="Rateio de honorários (sócio / associado · o resto fica com o escritório)">
+                  <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
+                    {editor.split.map((r, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <select value={r.userId} onChange={(e) => setEditor({ ...editor, split: editor.split.map((x, j) => j === i ? { ...x, userId: e.target.value } : x) })} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                          <option value="">advogado…</option>
+                          {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                        <select value={r.tipo} onChange={(e) => setEditor({ ...editor, split: editor.split.map((x, j) => j === i ? { ...x, tipo: e.target.value as 'socio' | 'associado' } : x) })} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                          <option value="socio">Sócio</option>
+                          <option value="associado">Associado</option>
+                        </select>
+                        <input value={r.valor} onChange={(e) => setEditor({ ...editor, split: editor.split.map((x, j) => j === i ? { ...x, valor: e.target.value } : x) })} inputMode="decimal" placeholder="R$" className="w-24 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+                        <button onClick={() => setEditor({ ...editor, split: editor.split.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => setEditor({ ...editor, split: [...editor.split, { tipo: 'socio', userId: '', valor: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar advogado</button>
+                      {(() => { const v = parseValor(editor.valor); const assigned = editor.split.reduce((s, r) => s + parseValor(r.valor), 0); const sobra = v - assigned; return <span className={`text-[11px] ${sobra < -0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório: <strong className="text-zinc-600 dark:text-zinc-300">{brl2(Math.max(0, sobra))}</strong>{sobra < -0.01 ? ' · rateio excede o valor!' : ''}</span>; })()}
+                    </div>
+                  </div>
+                </Field>
+              )}
 
               {!editor.id && (
                 <Field label="Parcelas (lança N parcelas mensais)">
@@ -652,6 +687,81 @@ function CsTabela({ cols, children }: { cols: string[]; children: React.ReactNod
         <tbody>{children}</tbody>
       </table>
     </div>
+  );
+}
+
+// ═══════════════════════════ ABA · RETIRADAS / PRÓ-LABORE ═════════════════════
+
+function RetiradasTab({ data }: { data: FinDashboard }) {
+  const qc = useQueryClient();
+  const { data: members = [], isLoading } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
+  const advs = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+  const r = useMemo(() => aggregarRetiradas(data, advs), [data, advs]);
+  const [ret, setRet] = useState<{ nome: string } | null>(null);
+  const [f, setF] = useState({ dataISO: toISOInput(hojeBR()), valor: '' });
+  const addRet = useMutation({
+    mutationFn: () => financeiroService.addTransacao({ data: toBR(f.dataISO), tipo: 'despesa', categoria: 'Pró-labore', valor: parseValor(f.valor), recebedor: ret?.nome, status: 'pago' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success('Retirada lançada'); setRet(null); setF((p) => ({ ...p, valor: '' })); },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao lançar'),
+  });
+
+  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
+  const totalParts = r.porUser.reduce((s, u) => s + u.aReceber, 0);
+
+  return (
+    <>
+      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-cyan-50 to-white p-5 dark:border-zinc-800 dark:from-cyan-900/15 dark:to-zinc-900">
+        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Wallet className="h-5 w-5 text-[#15AABF]" /> Retiradas e pró-labore</h2>
+        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+          Quando um honorário entra, o rateio (no lançamento) separa a parte do <strong>escritório</strong>, do <strong>sócio</strong> e do <strong>associado</strong>. Aqui você vê quanto cada advogado tem a receber e quanto já retirou — e lança novas retiradas.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MiniStat label="Honorários recebidos" value={brl(r.totalHonorarios)} hint="base do rateio" accent="#2F9E44" />
+        <MiniStat label="Parte do escritório" value={brl(r.escritorio)} hint="caixa do escritório" accent="#228BE6" />
+        <MiniStat label="Parte dos advogados" value={brl(totalParts)} hint="a receber pelo rateio" accent="#7048E8" />
+        <MiniStat label="Total já retirado" value={brl(r.totalRetirado)} hint="pró-labore + retiradas pagas" accent="#E64980" />
+      </div>
+
+      <Card title="Por advogado" sub="parte do rateio × retiradas pagas (categoria Pró-labore/Retirada).">
+        <div className="overflow-x-auto scrollbar-thin">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Advogado</th><th className="px-2 py-1.5 text-right font-medium">A receber (parte)</th><th className="px-2 py-1.5 text-right font-medium">Já retirou</th><th className="px-2 py-1.5 text-right font-medium">Saldo</th><th className="w-24"></th></tr></thead>
+            <tbody>
+              {r.porUser.map((u) => (
+                <tr key={u.userId} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><UserCircle2 className="h-4 w-4 shrink-0 text-zinc-400" />{u.nome}</span></td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-violet-600">{u.aReceber ? brl2(u.aReceber) : '—'}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-pink-600">{u.retirado ? brl2(u.retirado) : '—'}</td>
+                  <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${u.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(u.saldo)}</td>
+                  <td className="px-2 py-1.5 text-right"><button onClick={() => setRet({ nome: u.nome })} className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:border-[#15AABF] hover:text-[#15AABF] dark:border-zinc-700 dark:text-zinc-300">Lançar retirada</button></td>
+                </tr>
+              ))}
+              {r.porUser.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Nenhum advogado ativo encontrado.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-[11px] text-zinc-400">A parte de cada advogado vem do rateio definido na hora do recebimento do honorário (no lançamento). Sem rateio, o valor inteiro fica com o escritório.</p>
+      </Card>
+
+      {/* Modal: lançar retirada */}
+      {ret && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRet(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 text-base font-bold text-zinc-800 dark:text-zinc-100">Retirada · {ret.nome}</h3>
+            <div className="space-y-3">
+              <Field label="Data"><input type="date" value={f.dataISO} onChange={(e) => setF({ ...f, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              <Field label="Valor"><input value={f.valor} onChange={(e) => setF({ ...f, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setRet(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              <button onClick={() => addRet.mutate()} disabled={addRet.isPending || !(parseValor(f.valor) > 0)} className="inline-flex items-center gap-1 rounded-lg bg-[#15AABF] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{addRet.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Lançar retirada'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

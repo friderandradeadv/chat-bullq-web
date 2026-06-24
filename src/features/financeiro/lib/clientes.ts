@@ -95,6 +95,55 @@ export function aggregarClientes(data: FinDashboard | undefined | null): Cliente
   return out.filter((c) => c.n > 0).sort((a, b) => b.recebido - a.recebido);
 }
 
+// ── Retiradas / Pró-labore por advogado ───────────────────────────────────────
+export interface RetiradaUser { userId: string; nome: string; aReceber: number; retirado: number; saldo: number }
+export interface RetiradasResumo { porUser: RetiradaUser[]; escritorio: number; totalHonorarios: number; totalRetirado: number; totalAdvogados: number }
+const ehRetirada = (cat: string) => /pr[óo]\s*-?\s*labore|retirada/i.test(cat || '');
+
+/**
+ * Rateio de honorários por advogado: a parte de cada sócio/associado (do split dos
+ * honorários recebidos) × o que já foi retirado (despesas de Pró-labore/Retirada).
+ */
+export function aggregarRetiradas(data: FinDashboard | undefined | null, users: { id: string; name: string }[]): RetiradasResumo {
+  const txs = data?.transacoes ?? [];
+  const aReceber = new Map<string, number>();
+  const retirado = new Map<string, number>();
+  let escritorio = 0, totalHon = 0, totalRetirado = 0;
+  const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+  for (const t of txs) {
+    // honorários recebidos → distribui pelo split
+    if (/honor/i.test(t.categoria) && t.valor >= 0 && (!t.status || t.status === 'recebido')) {
+      totalHon += t.valor;
+      const split = t.split ?? [];
+      if (!split.length) { escritorio += t.valor; continue; }
+      let assigned = 0;
+      for (const s of split) {
+        const v = Number(s.valor) || 0; assigned += v;
+        if (s.tipo === 'escritorio') escritorio += v;
+        else { const k = s.userId || normNome(s.nome); aReceber.set(k, (aReceber.get(k) ?? 0) + v); }
+      }
+      if (t.valor - assigned > 0.01) escritorio += t.valor - assigned;
+    }
+    // retiradas/pró-labore pagas → por recebedor (advogado)
+    if (t.valor < 0 && ehRetirada(t.categoria) && (!t.status || t.status === 'pago')) {
+      const nome = (t.recebedor || t.party || '').trim();
+      const u = users.find((x) => normNome(x.name) === normNome(nome));
+      const k = u ? u.id : normNome(nome);
+      retirado.set(k, (retirado.get(k) ?? 0) - t.valor);
+      totalRetirado += -t.valor;
+    }
+  }
+
+  const porUser: RetiradaUser[] = users.map((u) => {
+    const ar = round((aReceber.get(u.id) ?? 0) + (aReceber.get(normNome(u.name)) ?? 0));
+    const rt = round((retirado.get(u.id) ?? 0) + (retirado.get(normNome(u.name)) ?? 0));
+    return { userId: u.id, nome: u.name, aReceber: ar, retirado: rt, saldo: round(ar - rt) };
+  }).sort((a, b) => (b.aReceber + b.retirado) - (a.aReceber + a.retirado));
+
+  return { porUser, escritorio: round(escritorio), totalHonorarios: round(totalHon), totalRetirado: round(totalRetirado), totalAdvogados: users.length };
+}
+
 /** Resumo financeiro de um cliente específico (casa por nome normalizado). */
 export function clienteFinanceiro(data: FinDashboard | undefined | null, nome: string): ClienteFin | null {
   if (!nome) return null;
