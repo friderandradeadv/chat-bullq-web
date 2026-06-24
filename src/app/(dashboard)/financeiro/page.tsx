@@ -62,6 +62,20 @@ const TABS: { key: View; label: string; icon: React.ElementType }[] = [
   { key: 'motivacao', label: 'Motivação', icon: HeartHandshake },
 ];
 
+// Produto cru do card (RMC, RCC, "CS - RMC", Contribuições, 7780-Indenização…)
+// → Área jurídica (Bancário/Previdenciário/Trabalhista/Consumidor/Cível).
+// Espelha areaFromProduto do backend (legal-phases.ts) para o filtro agrupar bonito.
+const upperNoAcc = (s?: string | null) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+function areaJuridica(produto?: string | null): string {
+  const s = upperNoAcc(produto);
+  if (!s) return 'Cível';
+  if (/TRABALH|RESCIS|FERIAS|RECLAMA|VERBAS/.test(s)) return 'Trabalhista';
+  if (/BPC|LOAS|APOSENTAD|BENEFICIO|PREVID|AUXILIO|INSS/.test(s)) return 'Previdenciário';
+  if (/RMC|RCC|PORTABIL|REVISIONAL|CONSIGNAD|CONTRIBUI|TARIFA|SEGURO|EMPRESTIM|BANC|CARTAO/.test(s)) return 'Bancário';
+  if (/CONSUMID|DANO|INDENIZ|VOO|FRAUDE|INSCRICAO|NULID|OBRIGACAO|MONITORIA|ANULA/.test(s)) return 'Consumidor';
+  return 'Cível';
+}
+
 export default function FinanceiroPage() {
   const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 60_000 });
   const [view, setView] = useState<View>('lancamentos');
@@ -118,12 +132,14 @@ export default function FinanceiroPage() {
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
-        {/* Abas estilo Astrea — quebram linha em telas estreitas (nunca cortam) */}
-        <div className="mt-5 flex flex-wrap items-center gap-x-1 gap-y-0 border-b border-[#DEE2E6] dark:border-zinc-800">
-          {TABS.map((t) => (
-            <TabBtn key={t.key} active={view === t.key} onClick={() => setView(t.key)} icon={t.icon}
-              count={t.key === 'lancamentos' ? data.resumoLancamentos?.total : undefined}>{t.label}</TabBtn>
-          ))}
+        {/* Abas estilo Astrea — sempre em UMA linha; rolam na horizontal em telas estreitas */}
+        <div className="mt-5 border-b border-[#DEE2E6] dark:border-zinc-800">
+          <div className="flex items-center gap-x-1 overflow-x-auto pb-px scrollbar-thin [scrollbar-width:thin]">
+            {TABS.map((t) => (
+              <TabBtn key={t.key} active={view === t.key} onClick={() => setView(t.key)} icon={t.icon}
+                count={t.key === 'lancamentos' ? data.resumoLancamentos?.total : undefined}>{t.label}</TabBtn>
+            ))}
+          </div>
         </div>
 
         {view === 'lancamentos' && <LancamentosTab data={data} />}
@@ -699,9 +715,9 @@ function CumprimentoTab() {
   if (!cs) return <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os processos.</p></Card>;
 
   const allCs = [...cs.cumprimento, ...cs.prestacao, ...cs.favoraveis];
-  const areas = Array.from(new Set(allCs.map((x) => x.area).filter(Boolean))).sort() as string[];
+  const areas = Array.from(new Set(allCs.map((x) => areaJuridica(x.area)))).sort() as string[];
   const resps = Array.from(new Set(allCs.map((x) => x.responsavel).filter(Boolean))).sort() as string[];
-  const match = (x: { area: string | null; responsavel: string | null }) => (!areaF || x.area === areaF) && (!respF || x.responsavel === respF);
+  const match = (x: { area: string | null; responsavel: string | null }) => (!areaF || areaJuridica(x.area) === areaF) && (!respF || x.responsavel === respF);
   const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
   const cumprimento = cs.cumprimento.filter(match);
