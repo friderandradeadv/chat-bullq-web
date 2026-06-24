@@ -14,6 +14,8 @@ export interface FinCategoria { nome: string; total: number; cor: string }
 export interface FinCliente { cliente: string; recebido: number; parcelas: number; ultima: number | null; total: number | null }
 
 export type TxStatus = 'a_receber' | 'recebido' | 'a_pagar' | 'pago';
+export type AcessoNivel = 'full' | 'cases' | 'none';
+export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
 export interface FinTransacao {
   id?: string;
@@ -32,6 +34,9 @@ export interface FinTransacao {
   recebedor?: string | null;
   status?: TxStatus;
   split?: SplitItem[] | null;
+  responsavelId?: string | null;
+  responsavel?: string | null;
+  conta?: string | null;
   parcela?: string | null;
   manual?: boolean;
 }
@@ -64,6 +69,8 @@ export interface FinDashboard {
   transacoes: FinTransacao[];
   resumoLancamentos?: { total: number; receitas: number; despesas: number; saldo: number };
   categoriasConhecidas?: string[];
+  contas?: Conta[];
+  acessoMembros?: Record<string, AcessoNivel>;
 }
 
 export interface AddTransacaoInput {
@@ -71,11 +78,13 @@ export interface AddTransacaoInput {
   party?: string; pagador?: string; recebedor?: string;
   vencimento?: string; dataPagamento?: string;
   status?: TxStatus; parcelas?: number; split?: SplitItem[];
+  responsavelId?: string; responsavel?: string; conta?: string;
 }
 export interface UpdateTransacaoInput {
   data?: string; vencimento?: string; dataPagamento?: string;
   tipo?: 'receita' | 'despesa'; categoria?: string; valor?: number;
   pagador?: string; recebedor?: string; status?: TxStatus; split?: SplitItem[];
+  responsavelId?: string; responsavel?: string; conta?: string;
   escopo?: 'uma' | 'proximas';
 }
 
@@ -94,6 +103,30 @@ export const financeiroService = {
   },
   async removeTransacao(id: string, escopo: 'uma' | 'proximas' = 'uma'): Promise<{ removidos: number }> {
     const { data } = await api.delete(`/financeiro/transacoes/${id}`, { params: { escopo } });
+    return data.data ?? data;
+  },
+  async listContas(): Promise<Conta[]> {
+    const { data } = await api.get('/financeiro/contas');
+    return data.data ?? data;
+  },
+  async addConta(input: { nome: string; banco?: string; cor?: string; saldoInicial?: number }): Promise<Conta> {
+    const { data } = await api.post('/financeiro/contas', input);
+    return data.data ?? data;
+  },
+  async updateConta(id: string, input: Partial<Conta>): Promise<{ ok: boolean }> {
+    const { data } = await api.patch(`/financeiro/contas/${id}`, input);
+    return data.data ?? data;
+  },
+  async removeConta(id: string): Promise<{ ok: boolean }> {
+    const { data } = await api.delete(`/financeiro/contas/${id}`);
+    return data.data ?? data;
+  },
+  async getAcesso(): Promise<Record<string, AcessoNivel>> {
+    const { data } = await api.get('/financeiro/acesso');
+    return data.data ?? data;
+  },
+  async setAcesso(userId: string, nivel: AcessoNivel): Promise<{ ok: boolean }> {
+    const { data } = await api.patch(`/financeiro/acesso/${userId}`, { nivel });
     return data.data ?? data;
   },
 };

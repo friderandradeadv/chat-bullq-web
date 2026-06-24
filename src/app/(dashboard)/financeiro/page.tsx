@@ -11,13 +11,13 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt,
   ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
 import {
-  aggregarClientes, aggregarRetiradas, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
+  aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
 
 const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(Math.round(n)).toLocaleString('pt-BR');
@@ -49,12 +49,13 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-type View = 'lancamentos' | 'honorarios' | 'cumprimento' | 'retiradas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
+type View = 'lancamentos' | 'honorarios' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
 const TABS: { key: View; label: string; icon: React.ElementType }[] = [
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt },
   { key: 'honorarios', label: 'Honorários', icon: Users },
-  { key: 'cumprimento', label: 'Cumprimento', icon: Gavel },
+  { key: 'cumprimento', label: 'CS', icon: Gavel },
   { key: 'retiradas', label: 'Retiradas', icon: Wallet },
+  { key: 'contas', label: 'Contas', icon: Banknote },
   { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2 },
   { key: 'crescimento', label: 'Crescimento', icon: TrendingUp },
   { key: 'projecoes', label: 'Projeções', icon: Rocket },
@@ -91,9 +92,9 @@ export default function FinanceiroPage() {
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600"><CircleDollarSign className="h-5 w-5" /></span>
               Financeiro
             </h1>
-            <p className="mt-1 text-sm text-zinc-500">Espelho do Astrea — lançamentos, honorários, fluxo de caixa, crescimento e projeções do escritório.</p>
+            <p className="mt-1 text-sm text-zinc-500">Lançamentos, honorários, fluxo de caixa, crescimento e projeções do escritório.</p>
           </div>
-          {data.geradoEm && <p className="text-xs text-zinc-400">dados de {data.fonte?.split('—')[0]?.trim() || 'Astrea'} · {new Date(data.geradoEm).toLocaleDateString('pt-BR')}</p>}
+          {data.geradoEm && <p className="text-xs text-zinc-400">atualizado em {new Date(data.geradoEm).toLocaleDateString('pt-BR')}</p>}
         </div>
 
         {/* KPIs — pulso financeiro sempre visível */}
@@ -116,6 +117,7 @@ export default function FinanceiroPage() {
         {view === 'honorarios' && <HonorariosTab data={data} />}
         {view === 'cumprimento' && <CumprimentoTab />}
         {view === 'retiradas' && <RetiradasTab data={data} />}
+        {view === 'contas' && <ContasTab data={data} />}
         {view === 'fluxo' && <FluxoTab data={data} />}
         {view === 'crescimento' && <CrescimentoTab data={data} />}
         {view === 'projecoes' && <ProjecoesTab data={data} />}
@@ -193,6 +195,7 @@ interface Editor {
   dataISO: string; vencISO: string; pagtoISO: string;
   categoria: string; pagador: string; recebedor: string; valor: string;
   status: TxStatus; parcelas: string; escopo: 'uma' | 'proximas'; split: SplitRow[];
+  responsavelId: string; conta: string;
 }
 
 function LancamentosTab({ data }: { data: FinDashboard }) {
@@ -201,14 +204,30 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const [mesSel, setMesSel] = useState<string>(mesesDisp[0] ?? '');
   const [aba, setAba] = useState<'todos' | 'receitas' | 'despesas'>('todos');
   const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('todos');
+  const [respFiltro, setRespFiltro] = useState('');
+  const [contaFiltro, setContaFiltro] = useState('');
   const [busca, setBusca] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<Editor | null>(null);
   const [serieDel, setSerieDel] = useState<FinTransacao | null>(null);
 
   const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
+  const contas = data.contas ?? [];
+  const contaNome = (id?: string | null) => contas.find((c) => c.id === id)?.nome ?? null;
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+  // cliente → responsável (do processo) para sugestão automática nos honorários
+  const { data: juri } = useQuery({ queryKey: ['jurimetria'], queryFn: () => legalCasesService.jurimetria(), staleTime: 300_000 });
+  const clienteResp = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of juri?.rows ?? []) if (r.cliente && r.responsavel) m.set(normNome(r.cliente), r.responsavel);
+    return m;
+  }, [juri]);
+  const sugereResp = (pagador: string) => {
+    const nome = clienteResp.get(normNome(pagador || ''));
+    if (!nome) return '';
+    return advogados.find((a) => normNome(a.name) === normNome(nome))?.id ?? '';
+  };
   const invalidate = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
 
   const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
@@ -224,10 +243,12 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       const st = txStatus(t);
       if (stFiltro === 'a_receber' && ehLiquidado(st)) return false;
       if (stFiltro === 'liquidado' && !ehLiquidado(st)) return false;
-      if (q && !`${t.pagador ?? t.party ?? ''} ${t.recebedor ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
+      if (respFiltro && (t.responsavelId ?? '') !== respFiltro) return false;
+      if (contaFiltro && (t.conta ?? '') !== contaFiltro) return false;
+      if (q && !`${t.pagador ?? t.party ?? ''} ${t.recebedor ?? ''} ${t.responsavel ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data.transacoes, mesSel, aba, stFiltro, busca]);
+  }, [data.transacoes, mesSel, aba, stFiltro, respFiltro, contaFiltro, busca]);
 
   const grupos = useMemo(() => {
     const map = new Map<string, FinTransacao[]>();
@@ -251,8 +272,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', escopo: 'uma', split: [] });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', escopo: 'uma', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })) });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', escopo: 'uma', split: [], responsavelId: '', conta: contas[0]?.id ?? '' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })) });
+  // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
+  const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
   const buildSplit = (ed: Editor) => ed.split.filter((r) => r.userId && parseValor(r.valor) > 0).map((r) => ({ tipo: r.tipo, userId: r.userId, nome: advogados.find((a) => a.id === r.userId)?.name ?? '', valor: parseValor(r.valor) }));
 
@@ -262,10 +285,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     if (!(v > 0)) { toast.error('Informe um valor maior que zero'); return; }
     const liq = ehLiquidado(editor.status);
     const split = buildSplit(editor);
+    const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: Math.max(1, parseInt(editor.parcelas, 10) || 1), split });
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: Math.max(1, parseInt(editor.parcelas, 10) || 1), split, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined });
     } else {
-      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split } });
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
     }
   };
   const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
@@ -293,6 +317,16 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
           {ST_FILTROS.map((a) => <button key={a.key} onClick={() => setStFiltro(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${stFiltro === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}
         </div>
+        <select value={respFiltro} onChange={(e) => setRespFiltro(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+          <option value="">Todos responsáveis</option>
+          {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        {contas.length > 0 && (
+          <select value={contaFiltro} onChange={(e) => setContaFiltro(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            <option value="">Todas as contas</option>
+            {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        )}
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="w-40 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
@@ -337,6 +371,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
                           <span className="truncate text-zinc-700 dark:text-zinc-300">{t.pagador || t.recebedor || t.party || t.categoria}</span>
                           {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
+                          {t.responsavel ? <span className="hidden shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 lg:inline-flex">{t.responsavel.split(' ')[0]}</span> : null}
+                          {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
                         </span>
                         <span className="hidden items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden max-w-[8rem] truncate md:inline">{t.categoria}</span></span>
@@ -394,8 +430,23 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Pagador (cliente/origem)"><input value={editor.pagador} onChange={(e) => setEditor({ ...editor, pagador: e.target.value })} placeholder="quem paga" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Pagador (cliente/origem)"><input value={editor.pagador} onChange={(e) => onPagador(e.target.value)} placeholder="quem paga" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
                 <Field label="Recebedor (destino)"><input value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="quem recebe (escritório, advogado…)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Responsável (advogado)">
+                  <select value={editor.responsavelId} onChange={(e) => setEditor({ ...editor, responsavelId: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                    <option value="">— sem responsável —</option>
+                    {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Conta bancária">
+                  <select value={editor.conta} onChange={(e) => setEditor({ ...editor, conta: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                    <option value="">— sem conta —</option>
+                    {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </Field>
               </div>
 
               {/* Rateio (split) — só para honorários */}
@@ -480,14 +531,34 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const STATUS_ORDER: StatusFin[] = ['em-dia', 'atencao', 'pontual', 'inativo'];
 
 function HonorariosTab({ data }: { data: FinDashboard }) {
-  const clientes = useMemo(() => aggregarClientes(data), [data]);
   const [filtro, setFiltro] = useState<'todos' | StatusFin>('todos');
   const [busca, setBusca] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
+  const [respF, setRespF] = useState('');
+  const [mesDe, setMesDe] = useState('');
+  const [mesAte, setMesAte] = useState('');
+
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
+  const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+  const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort(), [data.transacoes]);
+
+  // aplica filtros de responsável + período às transações antes de agregar
+  const dataF = useMemo(() => ({
+    ...data,
+    transacoes: data.transacoes.filter((t) => {
+      if (respF && (t.responsavelId ?? '') !== respF) return false;
+      const mk = mesKey(t);
+      if (mesDe && mk < mesDe) return false;
+      if (mesAte && mk > mesAte) return false;
+      return true;
+    }),
+  }), [data, respF, mesDe, mesAte]);
+
+  const clientes = useMemo(() => aggregarClientes(dataF), [dataF]);
 
   const tot = useMemo(() => {
     // somatórios EXATOS, direto das transações de honorários (inclui estornos a quem nunca pagou)
-    const honor = data.transacoes.filter((t) => /honor/i.test(t.categoria));
+    const honor = dataF.transacoes.filter((t) => /honor/i.test(t.categoria));
     const recebido = Math.round(honor.filter((t) => t.valor >= 0).reduce((s, t) => s + t.valor, 0));
     const repassado = Math.round(honor.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0));
     const porStatus = (st: StatusFin) => clientes.filter((c) => c.status === st).length;
@@ -512,6 +583,19 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
         action={
           <div className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente…" className="w-44 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
         }>
+        {/* Filtros: responsável + período */}
+        <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-zinc-100 pb-3 dark:border-zinc-800">
+          <select value={respF} onChange={(e) => setRespF(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            <option value="">Todos responsáveis</option>
+            {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <span className="flex items-center gap-1 text-xs text-zinc-400"><Calendar className="h-3.5 w-3.5" /> de
+            <select value={mesDe} onChange={(e) => setMesDe(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-1.5 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">início</option>{mesesDisp.map((m) => <option key={m} value={m}>{mesCurtoKey(m)}</option>)}</select>
+            até
+            <select value={mesAte} onChange={(e) => setMesAte(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-1.5 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">fim</option>{mesesDisp.map((m) => <option key={m} value={m}>{mesCurtoKey(m)}</option>)}</select>
+          </span>
+          {(respF || mesDe || mesAte) && <button onClick={() => { setRespF(''); setMesDe(''); setMesAte(''); }} className="text-xs text-zinc-400 hover:text-zinc-600 underline">limpar</button>}
+        </div>
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
           <Chip active={filtro === 'todos'} onClick={() => setFiltro('todos')}>Todos ({clientes.length})</Chip>
           {STATUS_ORDER.map((st) => {
@@ -596,14 +680,29 @@ const VerProcesso = ({ id, children }: { id: string; children: React.ReactNode }
 
 function CumprimentoTab() {
   const { data: cs, isLoading } = useCumprimentoFin();
+  const [areaF, setAreaF] = useState('');
+  const [respF, setRespF] = useState('');
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
   if (!cs) return <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os processos.</p></Card>;
 
-  const t = cs.totais;
-  const prestacaoCheia = cs.prestacao.filter((x) => x.aReceberNosso > 0);
-  const cumpCheio = cs.cumprimento.filter((x) => x.valorCalculo > 0);
-  const cumpVazio = cs.cumprimento.length - cumpCheio.length;
-  const prestVazio = cs.prestacao.length - prestacaoCheia.length;
+  const allCs = [...cs.cumprimento, ...cs.prestacao, ...cs.favoraveis];
+  const areas = Array.from(new Set(allCs.map((x) => x.area).filter(Boolean))).sort() as string[];
+  const resps = Array.from(new Set(allCs.map((x) => x.responsavel).filter(Boolean))).sort() as string[];
+  const match = (x: { area: string | null; responsavel: string | null }) => (!areaF || x.area === areaF) && (!respF || x.responsavel === respF);
+  const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+  const cumprimento = cs.cumprimento.filter(match);
+  const prestacao = cs.prestacao.filter(match);
+  const favoraveis = cs.favoraveis.filter(match);
+  const prestacaoCheia = prestacao.filter((x) => x.aReceberNosso > 0);
+  const cumpCheio = cumprimento.filter((x) => x.valorCalculo > 0);
+  const cumpVazio = cumprimento.length - cumpCheio.length;
+  const prestVazio = prestacao.length - prestacaoCheia.length;
+  const t = {
+    nPrestacao: prestacao.length, aReceberPrestacao: r2(prestacao.reduce((s, x) => s + (x.aReceberNosso || 0), 0)),
+    nCumprimento: cumprimento.length, brutoEmCumprimento: r2(cumpCheio.reduce((s, x) => s + (x.valorCalculo || 0), 0)),
+    nFavoraveis: favoraveis.length, estimadoFavoraveis: r2(favoraveis.reduce((s, x) => s + (x.estimado || 0), 0)),
+  };
 
   return (
     <>
@@ -613,6 +712,15 @@ function CumprimentoTab() {
           Puxado direto dos cards da Fase Judicial. Em <strong>Cumprimento de Sentença</strong> você lança o valor do cálculo; em <strong>Prestação de Contas</strong>, a divisão (nosso / sucumbência / cliente). O que está na prestação já é <strong>caixa nosso, quase certo</strong>; as sentenças favoráveis são <strong>parâmetro</strong> (ainda há risco de reforma no tribunal).
         </p>
       </div>
+
+      {(areas.length > 0 || resps.length > 0) && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-zinc-400">Filtrar:</span>
+          <select value={areaF} onChange={(e) => setAreaF(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Todas as áreas</option>{areas.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+          <select value={respF} onChange={(e) => setRespF(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Todos responsáveis</option>{resps.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+          {(areaF || respF) && <button onClick={() => { setAreaF(''); setRespF(''); }} className="text-xs text-zinc-400 underline hover:text-zinc-600">limpar</button>}
+        </div>
+      )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MiniStat label="A receber (nosso) — prestação" value={brl(t.aReceberPrestacao)} hint={`${t.nPrestacao} processo(s)`} accent="#2F9E44" />
@@ -661,10 +769,10 @@ function CumprimentoTab() {
       </Card>
 
       {/* Sentenças favoráveis — parâmetro */}
-      {cs.favoraveis.length > 0 && (
+      {favoraveis.length > 0 && (
         <Card title="Sentenças favoráveis — parâmetro (maior risco)" sub="ganhamos em 1º grau mas ainda cabe recurso/reforma. Estimativa = valor da causa × % de êxito.">
           <CsTabela cols={['Cliente', 'Resultado', 'Êxito', 'Estimado (nosso)']}>
-            {cs.favoraveis.map((x) => (
+            {favoraveis.map((x) => (
               <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
                 <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
                 <td className="px-2 py-1.5 text-xs text-zinc-500">{x.resultado || '—'}</td>
@@ -765,11 +873,124 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
   );
 }
 
+// ═══════════════════════════ ABA · CONTAS BANCÁRIAS ═══════════════════════════
+
+const BANCOS = [
+  { id: 'nubank', nome: 'Nubank', cor: '#820AD1' },
+  { id: 'asaas', nome: 'ASAAS', cor: '#0052FF' },
+  { id: 'mercadopago', nome: 'Mercado Pago', cor: '#00B1EA' },
+  { id: 'outro', nome: 'Outro', cor: '#868E96' },
+];
+
+function ContasTab({ data }: { data: FinDashboard }) {
+  const qc = useQueryClient();
+  const contas = data.contas ?? [];
+  const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string } | null>(null);
+  const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
+  const addM = useMutation({ mutationFn: (i: { nome: string; banco: string; saldoInicial: number }) => financeiroService.addConta(i), onSuccess: () => { inval(); toast.success('Conta adicionada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+  const updM = useMutation({ mutationFn: ({ id, i }: { id: string; i: any }) => financeiroService.updateConta(id, i), onSuccess: () => { inval(); toast.success('Conta atualizada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+  const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeConta(id), onSuccess: () => { inval(); toast.success('Conta removida'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+
+  const saldoConta = (id: string) => {
+    const ini = contas.find((c) => c.id === id)?.saldoInicial ?? 0;
+    let mov = 0, aReceber = 0, aPagar = 0, n = 0;
+    for (const t of data.transacoes) {
+      if (t.conta !== id) continue; n++;
+      const st = txStatus(t);
+      if (t.valor >= 0) { if (st === 'recebido') mov += t.valor; else aReceber += t.valor; }
+      else { if (st === 'pago') mov += t.valor; else aPagar += -t.valor; }
+    }
+    return { saldo: ini + mov, aReceber, aPagar, n };
+  };
+  const semConta = data.transacoes.filter((t) => !t.conta).length;
+  const total = contas.reduce((s, c) => s + saldoConta(c.id).saldo, 0);
+
+  const salvar = () => {
+    if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
+    const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial) };
+    if (form.id) updM.mutate({ id: form.id, i }); else addM.mutate(i);
+  };
+
+  return (
+    <>
+      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-violet-50 to-white p-5 dark:border-zinc-800 dark:from-violet-900/15 dark:to-zinc-900">
+        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Banknote className="h-5 w-5 text-[#820AD1]" /> Contas bancárias</h2>
+        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+          Marque a conta em cada lançamento para filtrar e ver o saldo de cada uma. A <strong>conciliação bancária diária com extrato automático (IA)</strong> entra na próxima etapa — por ora, o saldo é calculado dos lançamentos marcados.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <MiniStat label="Saldo somado das contas" value={brl(total)} hint={`${contas.length} conta(s)`} accent={total >= 0 ? '#2F9E44' : '#E03131'} />
+        <MiniStat label="Lançamentos sem conta" value={String(semConta)} hint="marque a conta neles para conciliar" accent="#F59F00" />
+        <div className="rounded-2xl border border-dashed border-[#DEE2E6] bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-900">
+          <button onClick={() => setForm({ nome: '', banco: 'nubank', saldoInicial: '' })} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Nova conta</button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {contas.map((c) => {
+          const s = saldoConta(c.id);
+          return (
+            <div key={c.id} className="group rounded-2xl border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100"><span className="h-3 w-3 rounded-full" style={{ background: c.cor ?? '#868E96' }} />{c.nome}</span>
+                <span className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                  <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ',') })} className="rounded p-1 text-zinc-300 hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => { if (confirm(`Remover a conta "${c.nome}"?`)) delM.mutate(c.id); }} className="rounded p-1 text-zinc-300 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                </span>
+              </div>
+              <p className={`mt-2 text-2xl font-bold tabular-nums ${s.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(s.saldo)}</p>
+              <p className="text-[11px] text-zinc-400">{s.n} lançamento(s) nesta conta</p>
+              {(s.aReceber > 0 || s.aPagar > 0) && (
+                <div className="mt-2 flex gap-3 text-[11px]">
+                  {s.aReceber > 0 && <span className="text-amber-600">a receber {brl(s.aReceber)}</span>}
+                  {s.aPagar > 0 && <span className="text-rose-500">a pagar {brl(s.aPagar)}</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {contas.length === 0 && <p className="col-span-full py-8 text-center text-sm text-zinc-400">Nenhuma conta cadastrada. Clique em "Nova conta".</p>}
+      </div>
+
+      <p className="mt-4 rounded-xl border border-dashed border-zinc-200 px-4 py-3 text-xs text-zinc-500 dark:border-zinc-700">
+        💡 Você pretende migrar tudo para o <strong className="text-[#820AD1]">Nubank</strong>. Conforme for movendo, basta marcar os novos lançamentos na conta Nubank — o saldo das outras vai zerando naturalmente.
+      </p>
+
+      {/* Modal conta */}
+      {form && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setForm(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 text-base font-bold text-zinc-800 dark:text-zinc-100">{form.id ? 'Editar conta' : 'Nova conta'}</h3>
+            <div className="space-y-3">
+              <Field label="Banco"><select value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value, nome: form.nome || (BANCOS.find((b) => b.id === e.target.value)?.nome ?? '') })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{BANCOS.map((b) => <option key={b.id} value={b.id}>{b.nome}</option>)}</select></Field>
+              <Field label="Nome / apelido"><input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="ex.: Nubank PJ" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              <Field label="Saldo inicial (opcional)"><input value={form.saldoInicial} onChange={(e) => setForm({ ...form, saldoInicial: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setForm(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              <button onClick={salvar} disabled={addM.isPending || updM.isPending} className="rounded-lg bg-[#228BE6] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ═══════════════════════════ ABA · FLUXO DE CAIXA (tabela Astrea) ══════════════
 
+const JANELAS = [{ key: 'tudo', label: 'Tudo' }, { key: '12', label: 'Últimos 12m' }, { key: 'ano', label: 'Ano atual' }] as const;
 function FluxoTab({ data }: { data: FinDashboard }) {
   const k = data.kpis!;
-  const meses = data.meses;
+  const [janela, setJanela] = useState<'tudo' | '12' | 'ano'>('tudo');
+  const anoAtual = (data.mesAtual || '').slice(0, 4);
+  const meses = useMemo(() => {
+    if (janela === 'ano') return data.meses.filter((m) => m.key.startsWith(anoAtual));
+    if (janela === '12') return [...data.meses.filter((m) => !m.projecao).slice(-12), ...data.meses.filter((m) => m.projecao)];
+    return data.meses;
+  }, [data.meses, janela, anoAtual]);
   const realizados = meses.filter((m) => !m.projecao);
   const cats = data.categorias.map((c) => c.nome); // ordenadas por total desc
   const totReceita = realizados.reduce((s, m) => s + m.receita, 0);
@@ -789,7 +1010,8 @@ function FluxoTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Meses no vermelho" value={`${k.mesesNoVermelho} / ${k.totalMesesRealizados}`} hint={k.melhorMes ? `melhor: ${k.melhorMes.label}` : ''} accent="#F59F00" />
       </div>
 
-      <Card title="Fluxo de caixa" sub="matriz mensal de receitas e despesas, como no Astrea. Role na horizontal para ver todos os meses; à direita da faixa, projeção.">
+      <Card title="Fluxo de caixa" sub="matriz mensal de receitas e despesas, como no Astrea. Role na horizontal para ver todos os meses; à direita da faixa, projeção."
+        action={<div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">{JANELAS.map((j) => <button key={j.key} onClick={() => setJanela(j.key)} className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${janela === j.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{j.label}</button>)}</div>}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full border-collapse text-xs">
             <thead>
