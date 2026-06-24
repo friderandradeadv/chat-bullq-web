@@ -820,13 +820,13 @@ export default function InicioPage() {
         {/* Atalhos */}
         <div className="welcome-pop mt-9" style={{ animationDelay: '0.26s' }}>
           <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">Por onde vamos começar?</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {QUICK.map((q) => (
               <Link key={q.href} href={q.href} className="group flex items-center gap-3 rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 text-left backdrop-blur transition hover:-translate-y-0.5 hover:border-[#228BE6]/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:border-[#228BE6]/40">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${q.color}1A`, color: q.color }}><q.icon className="h-5 w-5" /></span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{q.label}</span>
-                  <span className="block truncate text-xs text-zinc-400">{q.desc}</span>
+                  <span className="block text-sm font-semibold text-zinc-800 dark:text-zinc-100">{q.label}</span>
+                  <span className="block text-xs text-zinc-400">{q.desc}</span>
                 </span>
                 <ArrowRight className="h-4 w-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-[#228BE6]" />
               </Link>
