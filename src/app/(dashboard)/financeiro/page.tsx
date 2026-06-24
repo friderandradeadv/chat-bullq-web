@@ -22,6 +22,9 @@ import {
 
 const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(Math.round(n)).toLocaleString('pt-BR');
 const brl2 = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Nomes vêm em CAPS do Pipefy/Astrea — exibe em Title Case (preserva siglas/conectivos).
+const MINUS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'du', 'a', 'o']);
+const titleCase = (s?: string | null) => (s ?? '').toLowerCase().replace(/\b[\p{L}']+/gu, (w, i) => (i > 0 && MINUS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)));
 const kbrl = (n: number) => { const a = Math.abs(n); const s = n < 0 ? '-' : ''; return a >= 1000 ? `${s}${(a / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : `${s}${a}`; };
 const pct = (n: number) => (n > 0 ? '+' : '') + n.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
 const mesCurto = (label: string) => label.replace('/20', '/');
@@ -50,18 +53,19 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 type View = 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
-const TABS: { key: View; label: string; icon: React.ElementType }[] = [
-  { key: 'lancamentos', label: 'Lançamentos', icon: Receipt },
-  { key: 'honorarios', label: 'Honorários', icon: Users },
-  { key: 'cobrancas', label: 'Cobranças', icon: CreditCard },
-  { key: 'cumprimento', label: 'CS', icon: Gavel },
-  { key: 'retiradas', label: 'Retiradas', icon: Wallet },
-  { key: 'contas', label: 'Contas', icon: Banknote },
-  { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2 },
-  { key: 'crescimento', label: 'Crescimento', icon: TrendingUp },
-  { key: 'projecoes', label: 'Projeções', icon: Rocket },
-  { key: 'motivacao', label: 'Motivação', icon: HeartHandshake },
+const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }[] = [
+  { key: 'lancamentos', label: 'Lançamentos', icon: Receipt, grupo: 'Caixa' },
+  { key: 'honorarios', label: 'Honorários', icon: Users, grupo: 'Caixa' },
+  { key: 'cobrancas', label: 'Cobranças', icon: CreditCard, grupo: 'Caixa' },
+  { key: 'contas', label: 'Contas', icon: Banknote, grupo: 'Caixa' },
+  { key: 'retiradas', label: 'Retiradas', icon: Wallet, grupo: 'Caixa' },
+  { key: 'cumprimento', label: 'CS — recebíveis dos processos', icon: Gavel, grupo: 'Processos' },
+  { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2, grupo: 'Análise & futuro' },
+  { key: 'crescimento', label: 'Crescimento', icon: TrendingUp, grupo: 'Análise & futuro' },
+  { key: 'projecoes', label: 'Projeções', icon: Rocket, grupo: 'Análise & futuro' },
+  { key: 'motivacao', label: 'Motivação', icon: HeartHandshake, grupo: 'Análise & futuro' },
 ];
+const GRUPOS = ['Caixa', 'Processos', 'Análise & futuro'];
 
 // Produto cru do card (RMC, RCC, "CS - RMC", Contribuições, 7780-Indenização…)
 // → Área jurídica (Bancário/Previdenciário/Trabalhista/Consumidor/Cível).
@@ -133,15 +137,8 @@ export default function FinanceiroPage() {
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
-        {/* Abas estilo Astrea — sempre em UMA linha; rolam na horizontal em telas estreitas */}
-        <div className="mt-5 border-b border-[#DEE2E6] dark:border-zinc-800">
-          <div className="flex items-center gap-x-1 overflow-x-auto pb-px scrollbar-thin [scrollbar-width:thin]">
-            {TABS.map((t) => (
-              <TabBtn key={t.key} active={view === t.key} onClick={() => setView(t.key)} icon={t.icon}
-                count={t.key === 'lancamentos' ? data.resumoLancamentos?.total : undefined}>{t.label}</TabBtn>
-            ))}
-          </div>
-        </div>
+        {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
+        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
 
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
@@ -162,13 +159,41 @@ export default function FinanceiroPage() {
   );
 }
 
-function TabBtn({ active, onClick, icon: Icon, count, children }: { active: boolean; onClick: () => void; icon: React.ElementType; count?: number; children: React.ReactNode }) {
+function TabsMenu({ view, setView, lancCount }: { view: View; setView: (v: View) => void; lancCount?: number }) {
+  const [open, setOpen] = useState(false);
+  const active = TABS.find((t) => t.key === view) ?? TABS[0];
   return (
-    <button onClick={onClick} className={`relative -mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-2 text-sm font-medium transition ${active ? 'border-[#228BE6] text-[#228BE6]' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
-      <Icon className="h-4 w-4" />
-      {children}
-      {count != null && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${active ? 'bg-[#228BE6]/10 text-[#228BE6]' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800'}`}>{count}</span>}
-    </button>
+    <div className="relative z-30 mt-5">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#DEE2E6] bg-white px-3.5 py-2.5 text-left shadow-sm transition hover:border-[#228BE6]/40 dark:border-zinc-800 dark:bg-zinc-900 sm:w-auto sm:min-w-[300px]">
+        <span className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#228BE6]/10 text-[#228BE6]"><active.icon className="h-4 w-4" /></span>
+          <span className="truncate">{active.label}</span>
+          {view === 'lancamentos' && lancCount != null && <span className="rounded-full bg-[#228BE6]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#228BE6]">{lancCount}</span>}
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 z-40 mt-1.5 w-[min(92vw,440px)] rounded-2xl border border-[#DEE2E6] bg-white p-2 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            {GRUPOS.map((g) => (
+              <div key={g} className="mb-1 last:mb-0">
+                <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{g}</p>
+                <div className="grid grid-cols-2 gap-1">
+                  {TABS.filter((t) => t.grupo === g).map((t) => (
+                    <button key={t.key} onClick={() => { setView(t.key); setOpen(false); }} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${view === t.key ? 'bg-[#228BE6]/10 font-semibold text-[#228BE6]' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'}`}>
+                      <t.icon className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{t.label}</span>
+                      {t.key === 'lancamentos' && lancCount != null && <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-400 dark:bg-zinc-800">{lancCount}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -285,9 +310,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     const map = new Map<string, FinTransacao[]>();
     for (const t of txs) { const key = mesKey(t); if (!map.has(key)) map.set(key, []); map.get(key)!.push(t); }
     return Array.from(map.entries()).map(([key, items]) => {
+      // Liquidados (caixa real: pago/recebido) primeiro; depois os a receber/pagar.
+      const ord = [...items].sort((a, b) => (ehLiquidado(txStatus(a)) ? 0 : 1) - (ehLiquidado(txStatus(b)) ? 0 : 1));
       const rec = items.filter((t) => t.valor >= 0).reduce((s, t) => s + t.valor, 0);
       const desp = items.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0);
-      return { key, items, rec, desp, saldo: rec - desp };
+      return { key, items: ord, rec, desp, saldo: rec - desp };
     }).sort((a, b) => b.key.localeCompare(a.key));
   }, [txs]);
 
@@ -400,13 +427,13 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                         <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{((!ehLiquidado(st) && t.vencimento) ? t.vencimento : t.data).slice(0, 5)}</span>
                         {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                          <span className="truncate text-zinc-700 dark:text-zinc-300">{t.pagador || t.recebedor || t.party || t.categoria}</span>
+                          <span className="truncate text-zinc-700 dark:text-zinc-300">{titleCase(t.pagador || t.recebedor || t.party || '') || t.categoria}</span>
                           {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
                           {t.responsavel ? <span className="hidden shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 lg:inline-flex">{t.responsavel.split(' ')[0]}</span> : null}
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
                         </span>
-                        <span className="hidden items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden max-w-[8rem] truncate md:inline">{t.categoria}</span></span>
+                        <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden truncate md:inline">{t.categoria}</span></span>
                         <span className={`hidden shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:inline ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span>
                         <span className={`w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
                         <span className="flex shrink-0 items-center">
@@ -847,7 +874,7 @@ function useCumprimentoFin() {
   return useQuery({ queryKey: ['financeiro', 'cumprimento'], queryFn: () => legalCasesService.cumprimentoFinanceiro(), staleTime: 60_000 });
 }
 const VerProcesso = ({ id, children }: { id: string; children: React.ReactNode }) => (
-  <a href={`/processos/${id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 truncate text-zinc-700 hover:text-[#228BE6] hover:underline dark:text-zinc-200">{children}<ExternalLink className="h-3 w-3 shrink-0 opacity-50" /></a>
+  <a href={`/processos/${id}`} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1 text-zinc-700 hover:text-[#228BE6] hover:underline dark:text-zinc-200"><span className="truncate">{children}</span><ExternalLink className="h-3 w-3 shrink-0 opacity-50" /></a>
 );
 
 // Editor inline do nº do processo (numero_cs) direto na aba CS — salva no card.
@@ -936,10 +963,16 @@ function CumprimentoTab() {
         {prestacaoCheia.length === 0 ? (
           <p className="py-6 text-center text-sm text-zinc-400">Nenhuma prestação de contas com valores preenchidos.{prestVazio > 0 ? ` ${prestVazio} processo(s) nesta fase aguardando o preenchimento no card.` : ''}</p>
         ) : (
-          <CsTabela cols={['Cliente', 'Nossos honorários', 'Sucumbência', 'A receber']}>
+          <CsTabela cols={['Cliente', 'Nossos honorários', 'Sucumbência', 'A receber']}
+            foot={<tr className="font-bold text-zinc-700 dark:text-zinc-100">
+              <td className="px-2 py-1.5">Total ({prestacaoCheia.length})</td>
+              <td className="px-2 py-1.5 text-right tabular-nums">{brl2(prestacaoCheia.reduce((s, x) => s + x.honorariosNossos, 0))}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums">{brl2(prestacaoCheia.reduce((s, x) => s + (x.sucumbencia || 0), 0))}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{brl2(t.aReceberPrestacao)}</td>
+            </tr>}>
             {prestacaoCheia.map((x) => (
               <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
-                <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
+                <td className="px-2 py-1.5"><VerProcesso id={x.caseId}>{titleCase(x.cliente || x.title)}</VerProcesso></td>
                 <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{brl2(x.honorariosNossos)}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{x.sucumbencia ? brl2(x.sucumbencia) : '—'}</td>
                 <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-emerald-600">{brl2(x.aReceberNosso)}</td>
@@ -955,10 +988,16 @@ function CumprimentoTab() {
           <p className="py-6 text-center text-sm text-zinc-400">Nenhum processo com valor de cálculo preenchido.{cumpVazio > 0 ? ` ${cumpVazio} em cumprimento aguardando o "Valor do cálculo" no card.` : ''}</p>
         ) : (
           <>
-            <CsTabela cols={['Cliente', 'Valor do cálculo', 'Situação', 'Nº dos autos']}>
+            <CsTabela cols={['Cliente', 'Valor do cálculo', 'Situação', 'Nº dos autos']}
+              foot={<tr className="font-bold text-zinc-700 dark:text-zinc-100">
+                <td className="px-2 py-1.5">Total ({cumpCheio.length})</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-[#228BE6]">{brl2(t.brutoEmCumprimento)}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] font-semibold text-zinc-500">nosso ~40%: {brl(t.nossoEmCumprimento)}</td>
+                <td className="px-2 py-1.5" />
+              </tr>}>
               {cumpCheio.map((x) => (
                 <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
-                  <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
+                  <td className="px-2 py-1.5"><VerProcesso id={x.caseId}>{titleCase(x.cliente || x.title)}</VerProcesso></td>
                   <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-[#228BE6]">{brl2(x.valorCalculo)}</td>
                   <td className="px-2 py-1.5 text-center"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${x.protocolado ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'}`}>{x.protocolado ? 'Protocolado' : 'A protocolar'}</span></td>
                   <td className="px-2 py-1.5 text-right"><EditNumeroCs caseId={x.caseId} value={x.numeroCs} /></td>
@@ -973,12 +1012,17 @@ function CumprimentoTab() {
       {/* Sentenças favoráveis — parâmetro */}
       {favoraveis.length > 0 && (
         <Card title="Sentenças favoráveis — parâmetro (maior risco)" sub="ganhamos em 1º grau mas ainda cabe recurso/reforma. ✨ = estimativa de IA (valor da causa + dano moral → nossa parte); senão, valor da causa × % de êxito.">
-          <CsTabela cols={['Cliente', 'Resultado', 'Base', 'Estimado (nosso)']}>
+          <CsTabela cols={['Cliente', 'Resultado', 'Base', 'Estimado (nosso)']}
+            foot={<tr className="font-bold text-zinc-700 dark:text-zinc-100">
+              <td className="px-2 py-1.5">Total ({favoraveis.length})</td>
+              <td className="px-2 py-1.5" /><td className="px-2 py-1.5" />
+              <td className="px-2 py-1.5 text-right tabular-nums text-amber-600">{brl2(t.estimadoFavoraveis)}</td>
+            </tr>}>
             {favoraveis.map((x) => (
               <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
-                <td className="max-w-0 px-2 py-1.5"><VerProcesso id={x.caseId}>{x.cliente || x.title}</VerProcesso></td>
-                <td className="px-2 py-1.5 text-xs text-zinc-500">{x.resultado || '—'}</td>
-                <td className="px-2 py-1.5 text-center text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.exito != null ? `êxito ${x.exito}%` : '—')}</td>
+                <td className="px-2 py-1.5"><VerProcesso id={x.caseId}>{titleCase(x.cliente || x.title)}</VerProcesso></td>
+                <td className="px-2 py-1.5 text-right text-xs text-zinc-500">{/parcial/i.test(x.resultado || '') ? 'Parcial' : /procedente/i.test(x.resultado || '') ? 'Procedente' : (x.resultado || '—')}</td>
+                <td className="px-2 py-1.5 text-right text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.exito != null ? `êxito ${x.exito}%` : '—')}</td>
                 <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-amber-600">{x.estimado != null ? brl2(x.estimado) : '—'}</td>
               </tr>
             ))}
@@ -989,12 +1033,14 @@ function CumprimentoTab() {
   );
 }
 
-function CsTabela({ cols, children }: { cols: string[]; children: React.ReactNode }) {
+function CsTabela({ cols, children, foot, w0 = '44%' }: { cols: string[]; children: React.ReactNode; foot?: React.ReactNode; w0?: string }) {
   return (
     <div className="overflow-x-auto scrollbar-thin">
-      <table className="w-full text-sm">
-        <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400">{cols.map((c, i) => <th key={c} className={`px-2 py-1.5 font-medium ${i === 0 ? '' : i === cols.length - 1 ? 'text-right' : 'text-right'}`}>{c}</th>)}</tr></thead>
+      <table className="w-full table-fixed text-sm">
+        <colgroup><col style={{ width: w0 }} />{cols.slice(1).map((c) => <col key={c} />)}</colgroup>
+        <thead><tr className="text-[11px] uppercase tracking-wide text-zinc-400">{cols.map((c, i) => <th key={c} className={`px-2 py-1.5 font-medium ${i === 0 ? 'text-left' : 'text-right'}`}>{c}</th>)}</tr></thead>
         <tbody>{children}</tbody>
+        {foot && <tfoot className="border-t-2 border-zinc-200 dark:border-zinc-700">{foot}</tfoot>}
       </table>
     </div>
   );
