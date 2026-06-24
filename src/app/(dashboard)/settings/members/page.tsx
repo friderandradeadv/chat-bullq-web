@@ -62,6 +62,17 @@ export default function SettingsMembersPage() {
       toast.error(err instanceof Error ? err.message : 'Erro ao atualizar %');
     }
   };
+  // % padrão do escritório sobre a condenação (usado quando o processo não tem o honorário definido)
+  const { data: escritorioPct } = useQuery({ queryKey: ['financeiro', 'escritorio-pct'], queryFn: () => financeiroService.getEscritorioPct() });
+  const setEscritorio = async (pct: number) => {
+    try {
+      await financeiroService.setEscritorioPct(pct);
+      queryClient.invalidateQueries({ queryKey: ['financeiro', 'escritorio-pct'] });
+      toast.success('% padrão do escritório atualizado');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar');
+    }
+  };
 
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [drawerMember, setDrawerMember] = useState<Member | null>(null);
@@ -156,6 +167,14 @@ export default function SettingsMembersPage() {
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Membros</h2>
           <p className="mt-0.5 text-sm text-zinc-500">Gerencie os membros da sua organização</p>
         </div>
+        <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900" title="% padrão do escritório sobre a condenação — usado nas projeções quando o processo não tem honorário definido. Varia por cliente (o sistema lê o do processo quando houver).">
+          <span className="font-medium text-zinc-600 dark:text-zinc-300">% padrão do escritório</span>
+          <input
+            type="number" min={0} max={100} key={escritorioPct?.padrao ?? 40} defaultValue={escritorioPct?.padrao ?? 40}
+            onBlur={(e) => { const v = Number(e.target.value); if (v !== (escritorioPct?.padrao ?? 40)) setEscritorio(v); }}
+            className="w-14 rounded-md border border-zinc-200 bg-white px-1.5 py-1 text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+        </label>
       </div>
 
       <div className="mt-6 flex items-end gap-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">

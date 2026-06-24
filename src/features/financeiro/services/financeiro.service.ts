@@ -81,8 +81,8 @@ export interface FinDashboard {
   clientes?: { nome: string; recebido: number; n: number; ultimo: string | null }[];
   serie?: { mes: string; valor: number }[];
   melhorMes?: { mes: string; valor: number } | null;
-  casos?: { caseId: string; autor: string | null; reu: string | null; area: string | null; produto: string | null; fase: string | null; cnj: string | null; valorCausa: number; liquido: number; exito: number | null }[];
-  projecaoCasos?: { pctExito: number; brutoEmProcesso: number; liquidoProvavel: number; nComValor: number };
+  casos?: { caseId: string; autor: string | null; reu: string | null; area: string | null; produto: string | null; fase: string | null; cnj: string | null; valorCausa: number; firmPct: number; escritorioValor: number; liquido: number; exito: number | null }[];
+  projecaoCasos?: { pctExito: number; escritorioPadrao: number; brutoEmProcesso: number; escritorioEmProcesso: number; liquidoProvavel: number; nComValor: number };
   cs?: { prestacao: number; cumprimento: number; itens: { caseId: string; cliente: string; tipo: string; valor: number }[] };
 }
 
@@ -186,6 +186,14 @@ export const financeiroService = {
   },
   async setHonorariosPct(userId: string, pct: number): Promise<{ ok: boolean }> {
     const { data } = await api.patch(`/financeiro/honorarios-pct/${userId}`, { pct });
+    return data.data ?? data;
+  },
+  async getEscritorioPct(): Promise<{ padrao: number }> {
+    const { data } = await api.get('/financeiro/escritorio-pct');
+    return data.data ?? data;
+  },
+  async setEscritorioPct(pct: number): Promise<{ ok: boolean; padrao: number }> {
+    const { data } = await api.patch('/financeiro/escritorio-pct', { pct });
     return data.data ?? data;
   },
 };

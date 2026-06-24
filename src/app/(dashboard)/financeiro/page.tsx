@@ -1858,24 +1858,25 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
           </Card>
         )}
 
-        {/* Projeção: valores em processo (pelo contrato do advogado) */}
+        {/* Projeção: valores em processo (condenação → escritório → sua parte) */}
         {data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
           <Card title={<span className="flex items-center gap-2"><Target className="h-4 w-4 text-[#7048E8]" /> Valores em processo — sua projeção</span>}
-            sub={`indicador pelo seu contrato (${data.projecaoCasos.pctExito}% do êxito). É horizonte, não garantia — depende de ganhar e da fase.`}>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-zinc-200/70 p-3 dark:border-zinc-800"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Valor de causa (bruto)</p><p className="mt-0.5 text-2xl font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{brl(data.projecaoCasos.brutoEmProcesso)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.nComValor} processo(s) com valor</p></div>
-              <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900/40 dark:bg-violet-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável (líquido)</p><p className="mt-0.5 text-2xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.pctExito}% sobre o valor de causa</p></div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Já realizado + a entrar</p><p className="mt-0.5 text-2xl font-bold tabular-nums text-emerald-600">{brl(r.recebido + aReceberTotal)}</p><p className="text-[11px] text-zinc-400">o que já se concretizou</p></div>
+            sub={`da condenação, o escritório fica com o % do contrato (varia por cliente, padrão ${data.projecaoCasos.escritorioPadrao}%); você recebe ${data.projecaoCasos.pctExito}% sobre a parte do escritório. Indicador, não garantia.`}>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-zinc-200/70 p-3 dark:border-zinc-800"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Valor de causa (bruto)</p><p className="mt-0.5 text-xl font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{brl(data.projecaoCasos.brutoEmProcesso)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.nComValor} processo(s) com valor</p></div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900/40 dark:bg-blue-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Parte do escritório</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#228BE6]">{brl(data.projecaoCasos.escritorioEmProcesso)}</p><p className="text-[11px] text-zinc-400">% do contrato sobre a condenação</p></div>
+              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.pctExito}% da parte do escritório</p></div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Já realizado + a entrar</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl(r.recebido + aReceberTotal)}</p><p className="text-[11px] text-zinc-400">o que já se concretizou</p></div>
             </div>
           </Card>
         )}
 
-        {/* Seus processos — autor × réu, etiquetas, valor */}
+        {/* Seus processos — autor × réu, etiquetas, valor → escritório → sua parte */}
         {casos.length > 0 && (
-          <Card title={<>Seus processos <span className="font-normal text-zinc-400">· {casos.length}</span></>} sub="autor × réu, etiquetas e valor da causa (bruto e a sua parte pelo contrato).">
+          <Card title={<>Seus processos <span className="font-normal text-zinc-400">· {casos.length}</span></>} sub="autor × réu, etiquetas, valor da causa → parte do escritório → a sua parte.">
             <div className="max-h-[32rem] overflow-auto scrollbar-thin">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900"><tr><th className="px-2 py-1.5 font-medium">Autor × Réu</th><th className="hidden px-2 py-1.5 font-medium sm:table-cell">Etiquetas</th><th className="px-2 py-1.5 text-right font-medium">Valor causa</th><th className="px-2 py-1.5 text-right font-medium">Sua parte</th></tr></thead>
+                <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900"><tr><th className="px-2 py-1.5 font-medium">Autor × Réu</th><th className="hidden px-2 py-1.5 font-medium sm:table-cell">Etiquetas</th><th className="px-2 py-1.5 text-right font-medium">Valor causa</th><th className="hidden px-2 py-1.5 text-right font-medium md:table-cell">Escritório</th><th className="px-2 py-1.5 text-right font-medium">Sua parte</th></tr></thead>
                 <tbody>
                   {casos.map((c) => (
                     <tr key={c.caseId} className="border-t border-zinc-100 dark:border-zinc-800/70">
@@ -1890,6 +1891,7 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{c.valorCausa > 0 ? brl(c.valorCausa) : '—'}</td>
+                      <td className="hidden whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[#228BE6] md:table-cell">{c.escritorioValor > 0 ? <>{brl(c.escritorioValor)} <span className="text-[10px] text-zinc-400">{c.firmPct}%</span></> : '—'}</td>
                       <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-[#7048E8]">{c.liquido > 0 ? brl(c.liquido) : '—'}</td>
                     </tr>
                   ))}
