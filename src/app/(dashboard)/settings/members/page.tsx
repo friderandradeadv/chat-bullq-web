@@ -325,10 +325,10 @@ export default function SettingsMembersPage() {
                         <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Acesso total</span>
                       ) : (
                         <select
-                          value={(acessoFin[m.userId] as AcessoNivel) ?? 'full'}
+                          value={(acessoFin[m.userId] as AcessoNivel) ?? 'cases'}
                           onChange={(e) => setAcessoFin(m.userId, e.target.value as AcessoNivel)}
                           className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                          title="Nível de acesso ao módulo Financeiro"
+                          title="Nível de acesso ao módulo Financeiro (padrão do Agente: só os casos dele)"
                         >
                           <option value="full">Completo</option>
                           <option value="cases">Só os casos dele</option>
