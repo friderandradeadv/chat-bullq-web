@@ -234,6 +234,7 @@
   font-weight: 400;
   padding: 3px 8px;
   cursor: pointer;
+  overflow: hidden; /* recorta a barra do topo nos cantos arredondados (suave) */
 }
 .fc .ag-done .fc-event-title,
 .fc .ag-done .fc-event-time {
@@ -284,8 +285,8 @@
    uma etiqueta — cada segmento ganha a cor de uma etiqueta. */
 .ag-tagstrip {
   display: flex;
-  gap: 1px;
-  height: 4px;
+  gap: 0;
+  height: 2px;
   margin: -3px -8px 3px;
   overflow: hidden;
 }

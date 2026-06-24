@@ -62,9 +62,33 @@ interface Activity {
   faseMovida: { de: string; para: string } | null; dispositivo: string | null;
 }
 
+// Desenha a barra colorida no topo do evento (estilo Astrea): 1 segmento por
+// ETIQUETA, dividido igualmente; sem etiqueta usa a cor do TIPO; cumprido fica
+// cinza. Idempotente (remove a barra anterior) — assim dá pra repintar quando as
+// etiquetas, que carregam de forma assíncrona, chegam depois do mount do evento.
+function renderEventStrip(el: HTMLElement, a: Activity) {
+  el.querySelector(':scope > .ag-tagstrip')?.remove();
+  const segs = (a.done || a.cancelled)
+    ? [{ color: '#CED4DA', name: 'Cumprido' }]
+    : a.tags.length
+      ? a.tags.slice(0, 4).map((t) => ({ color: t.color, name: t.name }))
+      : [{ color: TYPE_TAG[a.source].bg, name: TYPE_TAG[a.source].label }];
+  const strip = document.createElement('div');
+  strip.className = 'ag-tagstrip';
+  for (const s of segs) {
+    const sp = document.createElement('span');
+    sp.style.backgroundColor = s.color;
+    sp.title = s.name;
+    strip.appendChild(sp);
+  }
+  el.prepend(strip);
+}
+
 export default function AgendaPage() {
   const router = useRouter();
   const calRef = useRef<FullCalendar | null>(null);
+  // id do evento → elemento montado (pra repintar a barra quando as tags chegam)
+  const elMapRef = useRef(new Map<string, HTMLElement>());
   const [mode, setMode] = useState<ViewMode>('list');
   const [viewMenu, setViewMenu] = useState(false);
   const [addMenu, setAddMenu] = useState(false);
@@ -200,6 +224,15 @@ export default function AgendaPage() {
   }), [activities, exibir, status, personId]);
 
   const byId = useMemo(() => new Map(filtered.map((a) => [a.id, a])), [filtered]);
+  // Repinta a barra do topo de cada evento já montado quando as etiquetas/filtro
+  // mudam — as tags carregam async, depois do mount, e sem isto a barra ficava
+  // presa na cor do tipo (a divisão por etiqueta "não funcionava").
+  useEffect(() => {
+    for (const [id, el] of elMapRef.current) {
+      const a = byId.get(id);
+      if (a) renderEventStrip(el, a);
+    }
+  }, [byId]);
   const fcEvents = useMemo<EventInput[]>(() => filtered.map((a) => {
     const c = a.done || a.cancelled ? EV_DONE : a.source === 'evento' ? EV_TIMED : EV_PENDING;
     // Eventos com hora precisam de FIM pra ter altura no timeGrid — sem isso o
@@ -379,27 +412,14 @@ export default function AgendaPage() {
                 datesSet={(arg: DatesSetArg) => setTitle(arg.view.title)}
                 dateClick={onDateClick} eventClick={onEventClick} eventDrop={onEventDrop}
                 eventDidMount={(arg) => {
-                  // Barra colorida no topo (estilo Astrea): dividida nas cores das
-                  // ETIQUETAS (1 segmento por etiqueta); sem etiqueta, usa a cor do
-                  // TIPO; cumprido/cancelado fica cinza. A lista não usa blocos.
+                  // A lista não usa blocos coloridos. Guarda o elemento e pinta a
+                  // barra (re-pintada depois pelo efeito quando as tags chegam).
                   if (arg.view.type.startsWith('list')) return;
+                  elMapRef.current.set(arg.event.id, arg.el);
                   const a = byId.get(arg.event.id);
-                  if (!a) return;
-                  const segs = (a.done || a.cancelled)
-                    ? [{ color: '#ADB5BD', name: 'Cumprido' }]
-                    : a.tags.length
-                      ? a.tags.slice(0, 4).map((t) => ({ color: t.color, name: t.name }))
-                      : [{ color: TYPE_TAG[a.source].bg, name: TYPE_TAG[a.source].label }];
-                  const strip = document.createElement('div');
-                  strip.className = 'ag-tagstrip';
-                  for (const s of segs) {
-                    const el = document.createElement('span');
-                    el.style.backgroundColor = s.color;
-                    el.title = s.name;
-                    strip.appendChild(el);
-                  }
-                  arg.el.prepend(strip);
+                  if (a) renderEventStrip(arg.el, a);
                 }}
+                eventWillUnmount={(arg) => { elMapRef.current.delete(arg.event.id); }}
               />
             )}
           </div>
