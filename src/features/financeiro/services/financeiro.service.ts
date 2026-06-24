@@ -79,6 +79,20 @@ export interface FinDashboard {
   resumo?: { recebido: number; aReceber: number; minhaParte: number; nClientes: number; nLancamentos: number };
 }
 
+export interface Parcela { num: number; vencimento: string; valor: number; status: 'aberta' | 'paga' | 'cancelada'; dataPagamento?: string | null; txId?: string | null; atrasada?: boolean }
+export interface Cobranca {
+  id: string; cliente: string; descricao?: string;
+  valorTotal: number; nParcelas: number; valorParcela: number;
+  diaVencimento: number; dataInicio: string;
+  responsavelId?: string | null; responsavel?: string | null; conta?: string | null;
+  status: 'ativa' | 'quitada' | 'cancelada'; criadoEm: string;
+  parcelas: Parcela[];
+  // enriquecidos pelo backend
+  pago: number; saldoDevedor: number; pagas: number; nAtrasadas: number; valorAtrasado: number;
+  proximaParcela: Parcela | null; statusCalc: 'em_dia' | 'atrasada' | 'quitada' | 'cancelada';
+}
+export interface AddCobrancaInput { cliente: string; descricao?: string; valorTotal: number; nParcelas: number; dataInicio: string; responsavelId?: string; responsavel?: string; conta?: string }
+
 export interface AddTransacaoInput {
   data: string; tipo: 'receita' | 'despesa'; categoria: string; valor: number;
   party?: string; pagador?: string; recebedor?: string;
@@ -133,6 +147,26 @@ export const financeiroService = {
   },
   async setAcesso(userId: string, nivel: AcessoNivel): Promise<{ ok: boolean }> {
     const { data } = await api.patch(`/financeiro/acesso/${userId}`, { nivel });
+    return data.data ?? data;
+  },
+  async listCobrancas(): Promise<Cobranca[]> {
+    const { data } = await api.get('/financeiro/cobrancas');
+    return data.data ?? data;
+  },
+  async addCobranca(input: AddCobrancaInput): Promise<Cobranca> {
+    const { data } = await api.post('/financeiro/cobrancas', input);
+    return data.data ?? data;
+  },
+  async removeCobranca(id: string): Promise<{ ok: boolean }> {
+    const { data } = await api.delete(`/financeiro/cobrancas/${id}`);
+    return data.data ?? data;
+  },
+  async pagarParcela(id: string, num: number, dataPagamento?: string): Promise<{ ok: boolean }> {
+    const { data } = await api.post(`/financeiro/cobrancas/${id}/parcelas/${num}/pagar`, { dataPagamento });
+    return data.data ?? data;
+  },
+  async desfazerParcela(id: string, num: number): Promise<{ ok: boolean }> {
+    const { data } = await api.post(`/financeiro/cobrancas/${id}/parcelas/${num}/desfazer`, {});
     return data.data ?? data;
   },
 };

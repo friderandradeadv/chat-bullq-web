@@ -11,9 +11,9 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt,
   ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock,
 } from 'lucide-react';
-import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
 import {
@@ -49,10 +49,11 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-type View = 'lancamentos' | 'honorarios' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
+type View = 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
 const TABS: { key: View; label: string; icon: React.ElementType }[] = [
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt },
   { key: 'honorarios', label: 'Honorários', icon: Users },
+  { key: 'cobrancas', label: 'Cobranças', icon: CreditCard },
   { key: 'cumprimento', label: 'CS', icon: Gavel },
   { key: 'retiradas', label: 'Retiradas', icon: Wallet },
   { key: 'contas', label: 'Contas', icon: Banknote },
@@ -144,6 +145,7 @@ export default function FinanceiroPage() {
 
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
+        {view === 'cobrancas' && <CobrancasTab data={data} />}
         {view === 'cumprimento' && <CumprimentoTab />}
         {view === 'retiradas' && <RetiradasTab data={data} />}
         {view === 'contas' && <ContasTab data={data} />}
@@ -608,7 +610,7 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Em dia / Atenção" value={`${tot.emDia} / ${tot.atencao}`} hint="recorrentes que pararam = atenção" accent="#F59F00" />
       </div>
 
-      <Card title="Carteira de honorários por cliente" sub="vinculado aos lançamentos. Status é comportamental (frequência de pagamento) — o saldo devedor exato vem com o módulo de cobrança."
+      <Card title="Carteira de honorários por cliente" sub="vinculado aos lançamentos. Status é comportamental (frequência de pagamento). O saldo devedor exato dos parcelados está na aba Cobranças."
         action={
           <div className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente…" className="w-44 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
         }>
@@ -696,6 +698,147 @@ function Info2({ label, value }: { label: string; value: string }) {
 }
 function Chip({ active, onClick, cor, children }: { active: boolean; onClick: () => void; cor?: string; children: React.ReactNode }) {
   return <button onClick={onClick} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${active ? 'border-transparent bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900' : 'border-zinc-200 text-zinc-500 hover:border-zinc-300 dark:border-zinc-700'}`}>{cor && <span className="h-2 w-2 rounded-full" style={{ background: cor }} />}{children}</button>;
+}
+
+// ═══════════════════════════ ABA · COBRANÇAS (parcelamento) ═══════════════════
+
+const STATUS_COB: Record<string, { label: string; badge: string }> = {
+  em_dia: { label: 'Em dia', badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300' },
+  atrasada: { label: 'Em atraso', badge: 'bg-rose-50 text-rose-700 dark:bg-rose-900/25 dark:text-rose-300' },
+  quitada: { label: 'Quitada', badge: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' },
+  cancelada: { label: 'Cancelada', badge: 'bg-zinc-100 text-zinc-400' },
+};
+
+function CobrancasTab({ data }: { data: FinDashboard }) {
+  const qc = useQueryClient();
+  const { data: cobrancas = [], isLoading } = useQuery({ queryKey: ['financeiro', 'cobrancas'], queryFn: () => financeiroService.listCobrancas() });
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
+  const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+  const contas = data.contas ?? [];
+  const [form, setForm] = useState<{ cliente: string; descricao: string; valorTotal: string; nParcelas: string; dataISO: string; responsavelId: string; conta: string } | null>(null);
+  const [aberta, setAberta] = useState<string | null>(null);
+
+  const inval = () => { qc.invalidateQueries({ queryKey: ['financeiro', 'cobrancas'] }); qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); };
+  const addM = useMutation({ mutationFn: () => financeiroService.addCobranca({ cliente: form!.cliente.trim(), descricao: form!.descricao.trim() || undefined, valorTotal: parseValor(form!.valorTotal), nParcelas: Math.max(1, parseInt(form!.nParcelas, 10) || 1), dataInicio: toBR(form!.dataISO), responsavelId: form!.responsavelId || undefined, responsavel: advogados.find((a) => a.id === form!.responsavelId)?.name, conta: form!.conta || undefined }), onSuccess: () => { inval(); toast.success('Cobrança criada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+  const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeCobranca(id), onSuccess: () => { inval(); toast.success('Cobrança removida'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+  const pagarM = useMutation({ mutationFn: ({ id, num }: { id: string; num: number }) => financeiroService.pagarParcela(id, num), onSuccess: () => { inval(); toast.success('Parcela baixada (lançada como recebida)'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+  const desfazerM = useMutation({ mutationFn: ({ id, num }: { id: string; num: number }) => financeiroService.desfazerParcela(id, num), onSuccess: () => { inval(); toast.success('Baixa desfeita'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+
+  const tot = useMemo(() => {
+    const ativas = cobrancas.filter((c) => c.statusCalc !== 'cancelada');
+    return {
+      devedor: ativas.reduce((s, c) => s + c.saldoDevedor, 0),
+      atrasado: ativas.reduce((s, c) => s + c.valorAtrasado, 0),
+      nAtraso: ativas.filter((c) => c.statusCalc === 'atrasada').length,
+      n: cobrancas.length,
+      recebido: cobrancas.reduce((s, c) => s + c.pago, 0),
+    };
+  }, [cobrancas]);
+
+  const openNew = () => setForm({ cliente: '', descricao: '', valorTotal: '', nParcelas: '12', dataISO: toISOInput(hojeBR()), responsavelId: '', conta: contas[0]?.id ?? '' });
+
+  return (
+    <>
+      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-blue-50 to-white p-5 dark:border-zinc-800 dark:from-blue-900/15 dark:to-zinc-900">
+        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><CreditCard className="h-5 w-5 text-[#228BE6]" /> Cobranças de honorários parcelados</h2>
+        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+          Como no Asaas: cadastre o contrato do cliente (valor total + parcelas + 1º vencimento) e acompanhe o <strong>saldo devedor real</strong>, parcelas em aberto e atrasadas. Ao baixar uma parcela, ela vira automaticamente um <strong>honorário recebido</strong> no livro-razão.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MiniStat label="Saldo devedor (a receber)" value={brl(tot.devedor)} hint={`${tot.n} cobrança(s)`} accent="#228BE6" />
+        <MiniStat label="Em atraso" value={brl(tot.atrasado)} hint={`${tot.nAtraso} cliente(s) atrasado(s)`} accent="#E03131" />
+        <MiniStat label="Já recebido (parcelas baixadas)" value={brl(tot.recebido)} hint="entrou no livro-razão" accent="#2F9E44" />
+        <div className="rounded-2xl border border-dashed border-[#DEE2E6] bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-900">
+          <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Nova cobrança</button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>
+      ) : cobrancas.length === 0 ? (
+        <Card><p className="py-8 text-center text-sm text-zinc-400">Nenhuma cobrança ainda. Clique em "Nova cobrança" para cadastrar um contrato parcelado.</p></Card>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {cobrancas.map((c) => {
+            const s = STATUS_COB[c.statusCalc] ?? STATUS_COB.em_dia;
+            const exp = aberta === c.id;
+            return (
+              <div key={c.id} className="overflow-hidden rounded-2xl border border-[#DEE2E6] bg-white dark:border-zinc-800 dark:bg-zinc-900">
+                <button onClick={() => setAberta(exp ? null : c.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30">
+                  {exp ? <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{c.cliente}<span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.badge}`}>{s.label}</span></p>
+                    <p className="truncate text-xs text-zinc-400">{c.descricao ? `${c.descricao} · ` : ''}{c.pagas}/{c.nParcelas} pagas · total {brl(c.valorTotal)}{c.proximaParcela ? ` · próx. ${c.proximaParcela.vencimento}` : ''}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={`text-lg font-bold tabular-nums ${c.saldoDevedor > 0.01 ? 'text-[#228BE6]' : 'text-emerald-600'}`}>{brl(c.saldoDevedor)}</p>
+                    <p className="text-[10px] text-zinc-400">saldo devedor{c.valorAtrasado > 0 ? ` · ${brl(c.valorAtrasado)} vencido` : ''}</p>
+                  </div>
+                </button>
+                {exp && (
+                  <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-medium text-zinc-500">Parcelas</span>
+                      <button onClick={() => { if (confirm(`Remover a cobrança de ${c.cliente}? (os lançamentos já baixados permanecem)`)) delM.mutate(c.id); }} className="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700"><Trash2 className="h-3 w-3" /> Remover cobrança</button>
+                    </div>
+                    <div className="space-y-1">
+                      {c.parcelas.map((p) => (
+                        <div key={p.num} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm odd:bg-zinc-50/60 dark:odd:bg-zinc-800/30">
+                          <span className="w-8 shrink-0 text-xs text-zinc-400">{p.num}/{c.nParcelas}</span>
+                          <span className="flex items-center gap-1.5 text-xs text-zinc-500"><CalendarClock className="h-3.5 w-3.5" />{p.vencimento}</span>
+                          <span className="flex-1" />
+                          {p.status === 'paga' ? (
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300">Paga {p.dataPagamento ? `· ${p.dataPagamento.slice(0, 5)}` : ''}</span>
+                          ) : p.atrasada ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-900/25 dark:text-rose-300"><AlertCircle className="h-3 w-3" /> Vencida</span>
+                          ) : (
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/25 dark:text-amber-300">Em aberto</span>
+                          )}
+                          <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(p.valor)}</span>
+                          {p.status === 'paga'
+                            ? <button onClick={() => desfazerM.mutate({ id: c.id, num: p.num })} disabled={desfazerM.isPending} title="Desfazer baixa" className="rounded p-1 text-zinc-300 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                            : <button onClick={() => pagarM.mutate({ id: c.id, num: p.num })} disabled={pagarM.isPending} title="Dar baixa (lançar recebido)" className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700">Baixar</button>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal nova cobrança */}
+      {form && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setForm(null)}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 scrollbar-thin" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between"><h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Nova cobrança</h3><button onClick={() => setForm(null)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button></div>
+            <div className="space-y-3">
+              <Field label="Cliente"><input value={form.cliente} onChange={(e) => setForm({ ...form, cliente: e.target.value })} placeholder="nome do cliente" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              <Field label="Descrição (opcional)"><input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} placeholder="ex.: honorários contratuais RMC" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Valor total"><input value={form.valorTotal} onChange={(e) => setForm({ ...form, valorTotal: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Nº de parcelas"><input type="number" min={1} max={120} value={form.nParcelas} onChange={(e) => setForm({ ...form, nParcelas: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="1º vencimento"><input type="date" value={form.dataISO} onChange={(e) => setForm({ ...form, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              </div>
+              {parseValor(form.valorTotal) > 0 && +form.nParcelas > 0 && <p className="text-xs text-zinc-500">{form.nParcelas}× de <strong className="text-zinc-700 dark:text-zinc-200">{brl2(parseValor(form.valorTotal) / (+form.nParcelas || 1))}</strong> (mensal, a partir do 1º vencimento).</p>}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Responsável (advogado)"><select value={form.responsavelId} onChange={(e) => setForm({ ...form, responsavelId: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">— sem —</option>{advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
+                <Field label="Conta de recebimento"><select value={form.conta} onChange={(e) => setForm({ ...form, conta: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">— sem —</option>{contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></Field>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setForm(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              <button onClick={() => addM.mutate()} disabled={addM.isPending || !form.cliente.trim() || !(parseValor(form.valorTotal) > 0)} className="inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{addM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Criar cobrança'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 // ═══════════════════════════ ABA · CUMPRIMENTO DE SENTENÇA ════════════════════

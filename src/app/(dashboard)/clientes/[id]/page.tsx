@@ -191,17 +191,45 @@ function ClienteFinanceiroCard({ nome }: { nome: string }) {
     queryFn: () => financeiroService.dashboard(),
     staleTime: 60_000,
   });
+  const { data: cobrancas = [] } = useQuery({
+    queryKey: ['financeiro', 'cobrancas'],
+    queryFn: () => financeiroService.listCobrancas(),
+    staleTime: 60_000,
+  });
   const fin = useMemo(() => clienteFinanceiro(dash, nome), [dash, nome]);
+  const cob = useMemo(() => cobrancas.find((c) => norm(c.cliente) === norm(nome)) ?? null, [cobrancas, nome]);
+
+  const blocoCobranca = cob ? (
+    <div className={`mt-3 rounded-lg border px-3 py-2.5 ${cob.statusCalc === 'atrasada' ? 'border-rose-200 bg-rose-50/50 dark:border-rose-900/40 dark:bg-rose-900/10' : cob.statusCalc === 'quitada' ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-900/10' : 'border-blue-200 bg-blue-50/40 dark:border-blue-900/40 dark:bg-blue-900/10'}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Cobrança parcelada</span>
+        <span className="text-[11px] font-semibold" style={{ color: cob.statusCalc === 'atrasada' ? '#E03131' : cob.statusCalc === 'quitada' ? '#2F9E44' : '#228BE6' }}>{cob.pagas}/{cob.nParcelas} pagas</span>
+      </div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className={`text-xl font-bold tabular-nums ${cob.saldoDevedor > 0.01 ? 'text-[#228BE6]' : 'text-emerald-600'}`}>{brlc(cob.saldoDevedor)}</span>
+        <span className="text-xs text-zinc-400">de saldo devedor · total {brlc(cob.valorTotal)}</span>
+      </div>
+      {cob.valorAtrasado > 0 && <p className="mt-0.5 text-xs font-medium text-rose-600">⚠ {brlc(cob.valorAtrasado)} vencido ({cob.nAtrasadas} parcela{cob.nAtrasadas > 1 ? 's' : ''})</p>}
+      {cob.proximaParcela && cob.saldoDevedor > 0.01 && <p className="mt-0.5 text-[11px] text-zinc-400">próxima parcela: {brlc(cob.proximaParcela.valor)} em {cob.proximaParcela.vencimento}</p>}
+    </div>
+  ) : (
+    <p className="mt-3 rounded-lg border border-dashed border-zinc-200 px-3 py-2 text-[11px] text-zinc-400 dark:border-zinc-700">
+      Sem cobrança parcelada cadastrada. Crie uma na aba <strong className="font-medium text-zinc-500">Cobranças</strong> do Financeiro para acompanhar o saldo devedor.
+    </p>
+  );
 
   return (
     <Card title="Financeiro do cliente" icon={CircleDollarSign}>
       {isLoading ? (
         <p className="text-sm text-zinc-400">Carregando honorários…</p>
       ) : !fin ? (
-        <p className="text-sm text-zinc-400">
-          Nenhum honorário lançado para este cliente ainda. Quando houver pagamentos vinculados ao nome
-          dele nos lançamentos, o histórico aparece aqui.
-        </p>
+        <>
+          <p className="text-sm text-zinc-400">
+            Nenhum honorário lançado para este cliente ainda. Quando houver pagamentos vinculados ao nome
+            dele nos lançamentos, o histórico aparece aqui.
+          </p>
+          {blocoCobranca}
+        </>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -220,9 +248,7 @@ function ClienteFinanceiroCard({ nome }: { nome: string }) {
               </div>
             ))}
           </div>
-          <p className="mt-3 rounded-lg border border-dashed border-zinc-200 px-3 py-2 text-[11px] text-zinc-400 dark:border-zinc-700">
-            O saldo devedor exato e a régua de cobrança chegam com o módulo de cobrança de parcelas (em construção).
-          </p>
+          {blocoCobranca}
         </>
       )}
     </Card>
