@@ -52,8 +52,9 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-type View = 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
+type View = 'meu' | 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
 const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }[] = [
+  { key: 'meu', label: 'Meu financeiro', icon: UserCircle2, grupo: 'Pessoal' },
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt, grupo: 'Caixa' },
   { key: 'honorarios', label: 'Honorários', icon: Users, grupo: 'Caixa' },
   { key: 'cobrancas', label: 'Cobranças', icon: CreditCard, grupo: 'Caixa' },
@@ -65,7 +66,7 @@ const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }
   { key: 'projecoes', label: 'Projeções', icon: Rocket, grupo: 'Análise & futuro' },
   { key: 'motivacao', label: 'Motivação', icon: HeartHandshake, grupo: 'Análise & futuro' },
 ];
-const GRUPOS = ['Caixa', 'Processos', 'Análise & futuro'];
+const GRUPOS = ['Pessoal', 'Caixa', 'Processos', 'Análise & futuro'];
 
 // Produto cru do card (RMC, RCC, "CS - RMC", Contribuições, 7780-Indenização…)
 // → Área jurídica (Bancário/Previdenciário/Trabalhista/Consumidor/Cível).
@@ -83,7 +84,7 @@ function areaJuridica(produto?: string | null): string {
 
 export default function FinanceiroPage() {
   const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 60_000 });
-  const [view, setView] = useState<View>('lancamentos');
+  const [view, setView] = useState<View>('meu');
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
 
@@ -140,6 +141,7 @@ export default function FinanceiroPage() {
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
 
+        {view === 'meu' && <MeuTab />}
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
         {view === 'cobrancas' && <CobrancasTab data={data} />}
@@ -1748,7 +1750,7 @@ const FRASES_ADV = [
 ];
 const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido', label: 'Recebidos' }, { key: 'a_receber', label: 'A receber' }] as const;
 
-function FinanceiroLimitado({ data }: { data: FinDashboard }) {
+function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
   const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nCasos: 0, nLancamentos: 0 };
   const clientes = data.clientes ?? [];
   const serie = data.serie ?? [];
@@ -1778,8 +1780,7 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
   const chartData = serie.map((s) => ({ nome: mesCurtoKey(s.mes), valor: s.valor }));
 
   return (
-    <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
-      <div className="mx-auto w-full max-w-5xl p-6">
+    <>
         {/* Cabeçalho personalizado */}
         <div className="flex items-center gap-3">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-[#228BE6] text-base font-bold text-white">{iniciais}</span>
@@ -1932,8 +1933,26 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
           </div>
         </Card>
 
-        <p className="mt-4 pb-2 text-center text-xs text-zinc-400">Você vê apenas o financeiro dos seus casos. O caixa geral do escritório é restrito.</p>
+        <p className="mt-4 pb-2 text-center text-xs text-zinc-400">Esta visão mostra apenas os seus processos — em que você é o responsável.</p>
+    </>
+  );
+}
+
+/** Página standalone (advogado com acesso limitado) — embrulha o conteúdo pessoal. */
+function FinanceiroLimitado({ data }: { data: FinDashboard }) {
+  return (
+    <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+      <div className="mx-auto w-full max-w-5xl p-6">
+        <MeuFinanceiroConteudo data={data} />
       </div>
     </div>
   );
+}
+
+/** Aba "Meu financeiro" dentro do dashboard completo (admin/sócio/membro com acesso). */
+function MeuTab() {
+  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'meu'], queryFn: () => financeiroService.meuFinanceiro(), staleTime: 60_000 });
+  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
+  if (!data) return <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os seus dados.</p></Card>;
+  return <div className="mt-2"><MeuFinanceiroConteudo data={data} /></div>;
 }

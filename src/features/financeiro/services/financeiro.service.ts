@@ -120,6 +120,10 @@ export const financeiroService = {
     const { data } = await api.get('/financeiro/dashboard');
     return data.data ?? data;
   },
+  async meuFinanceiro(): Promise<FinDashboard> {
+    const { data } = await api.get('/financeiro/meu');
+    return data.data ?? data;
+  },
   async addTransacao(input: AddTransacaoInput): Promise<{ criados: number; transacoes: FinTransacao[] }> {
     const { data } = await api.post('/financeiro/transacoes', input);
     return data.data ?? data;
