@@ -197,11 +197,6 @@
 .dark .fc .ag-prazo .fc-event-title, .dark .fc .ag-prazo .fc-event-time { color: #74c0fc !important; }
 .dark .fc .ag-evento .fc-event-title, .dark .fc .ag-evento .fc-event-time { color: #69db7c !important; }
 .dark .fc .ag-done .fc-event-title, .dark .fc .ag-done .fc-event-time { color: #8b8b93 !important; }
-/* reaplica as tirinhas coloridas do topo por cima do border-color escuro */
-.dark .fc .ag-prazo { border-top-color: #ce0000 !important; }
-.dark .fc .ag-tarefa { border-top-color: #23cbff !important; }
-.dark .fc .ag-evento { border-top-color: #02883c !important; }
-.dark .fc .ag-done { border-top-color: #adb5bd !important; }
 .fc .fc-col-header-cell-cushion {
   padding: 8px 4px;
   font-size: 11px;
@@ -244,19 +239,8 @@
 .fc .ag-done .fc-event-time {
   text-decoration: line-through;
 }
-/* Barra fina colorida no TOPO de cada atividade (cor da etiqueta/tipo), estilo Astrea. */
-.fc .ag-prazo {
-  border-top: 3px solid #ce0000 !important;
-}
-.fc .ag-tarefa {
-  border-top: 3px solid #23cbff !important;
-}
-.fc .ag-evento {
-  border-top: 3px solid #02883c !important;
-}
-.fc .ag-done {
-  border-top: 3px solid #adb5bd !important;
-}
+/* A barra colorida do topo é desenhada via .ag-tagstrip (eventDidMount):
+   dividida nas cores das ETIQUETAS, ou na cor do TIPO quando não há etiqueta. */
 .fc .fc-timegrid-now-indicator-line {
   border-color: #228be6;
   border-width: 2px;
@@ -295,17 +279,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Tirinhas das etiquetas no topo do evento (estilo Astrea). */
+/* Barra colorida no topo do evento (estilo Astrea): encosta nas bordas
+   (anula o padding 3px 8px do .fc-event) e divide igualmente quando há mais de
+   uma etiqueta — cada segmento ganha a cor de uma etiqueta. */
 .ag-tagstrip {
   display: flex;
-  gap: 2px;
-  padding: 1px 4px 0;
+  gap: 1px;
+  height: 4px;
+  margin: -3px -8px 3px;
+  overflow: hidden;
 }
 .ag-tagstrip span {
-  height: 3px;
-  flex: 1 1 auto;
-  min-width: 6px;
-  border-radius: 2px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* ── Hub / página de boas-vindas (/inicio) — "sempre uma festa" ── */

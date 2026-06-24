@@ -379,16 +379,24 @@ export default function AgendaPage() {
                 datesSet={(arg: DatesSetArg) => setTitle(arg.view.title)}
                 dateClick={onDateClick} eventClick={onEventClick} eventDrop={onEventDrop}
                 eventDidMount={(arg) => {
-                  // Tirinhas coloridas das etiquetas no topo do evento (estilo Astrea).
+                  // Barra colorida no topo (estilo Astrea): dividida nas cores das
+                  // ETIQUETAS (1 segmento por etiqueta); sem etiqueta, usa a cor do
+                  // TIPO; cumprido/cancelado fica cinza. A lista não usa blocos.
+                  if (arg.view.type.startsWith('list')) return;
                   const a = byId.get(arg.event.id);
-                  if (!a || !a.tags.length) return;
+                  if (!a) return;
+                  const segs = (a.done || a.cancelled)
+                    ? [{ color: '#ADB5BD', name: 'Cumprido' }]
+                    : a.tags.length
+                      ? a.tags.slice(0, 4).map((t) => ({ color: t.color, name: t.name }))
+                      : [{ color: TYPE_TAG[a.source].bg, name: TYPE_TAG[a.source].label }];
                   const strip = document.createElement('div');
                   strip.className = 'ag-tagstrip';
-                  for (const t of a.tags.slice(0, 5)) {
-                    const s = document.createElement('span');
-                    s.style.backgroundColor = t.color;
-                    s.title = t.name;
-                    strip.appendChild(s);
+                  for (const s of segs) {
+                    const el = document.createElement('span');
+                    el.style.backgroundColor = s.color;
+                    el.title = s.name;
+                    strip.appendChild(el);
                   }
                   arg.el.prepend(strip);
                 }}
