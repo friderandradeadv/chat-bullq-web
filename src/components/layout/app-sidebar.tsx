@@ -205,16 +205,29 @@ export function AppSidebar() {
           {/* JURÍDICO — Prazos removido (= Agenda/Tarefas); Caixa DJEN → Publicações */}
           <div className="mt-3">
             <NavSection label="Jurídico">
+              {/* Fluxo do dia a dia — sempre à vista */}
               <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
               <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
               <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
               <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
-              <NavItem href="/clientes" icon={Users} label="Clientes" />
-              <NavItem href="/juridico/partes-adversas" icon={Gavel} label="Partes Adversas" />
-              <NavItem href="/processos" icon={Folder} label="Processos" />
-              <NavItem href="/juridico/recursos" icon={Scale} label="Recursos" />
               <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
-              <NavItem href="/juridico/jurimetria" icon={BarChart3} label="Jurimetria" />
+
+              {/* Análise — subaba (consulta / inteligência) */}
+              <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
+                <NavSection label="Análise" defaultOpen={false}>
+                  <NavItem href="/juridico/recursos" icon={Scale} label="Recursos" />
+                  <NavItem href="/juridico/jurimetria" icon={BarChart3} label="Jurimetria" />
+                  <NavItem href="/juridico/partes-adversas" icon={Gavel} label="Partes Adversas" />
+                </NavSection>
+              </div>
+
+              {/* Cadastros — subaba (base) */}
+              <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
+                <NavSection label="Cadastros" defaultOpen={false}>
+                  <NavItem href="/clientes" icon={Users} label="Clientes" />
+                  <NavItem href="/processos" icon={Folder} label="Processos" />
+                </NavSection>
+              </div>
             </NavSection>
           </div>
 
@@ -226,10 +239,6 @@ export function AppSidebar() {
             </NavSection>
           </div>
 
-          {/* Configurações (aba "Tarefas" removida — agenda concentra prazos/tarefas) */}
-          <div className="mt-3 flex flex-col gap-0.5">
-            <NavItem href="/settings" icon={Settings} label="Configurações" />
-          </div>
         </SidebarSection>
 
         <SidebarSpacer />
@@ -246,6 +255,10 @@ export function AppSidebar() {
           {isDark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
           <span className="flex-1 text-left">{isDark ? 'Modo claro' : 'Modo escuro'}</span>
         </button>
+        {/* Configurações — fixa logo abaixo do alternador de tema */}
+        <div className="mb-1">
+          <NavItem href="/settings" icon={Settings} label="Configurações" />
+        </div>
         <Dropdown>
           <DropdownButton className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-950/5 dark:hover:bg-white/5">
             <Avatar

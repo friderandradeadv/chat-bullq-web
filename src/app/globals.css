@@ -154,6 +154,26 @@
   --fc-event-border-color: transparent;
   font-size: 13px;
 }
+/* Dark mode da agenda (FullCalendar): fundo/bordas escuros + texto claro. */
+.dark .fc {
+  --fc-page-bg-color: #18181b;            /* zinc-900 */
+  --fc-neutral-bg-color: #27272a;         /* zinc-800 (all-day / desabilitado) */
+  --fc-border-color: #3f3f46;             /* zinc-700 */
+  --fc-today-bg-color: rgba(34, 139, 230, 0.08);
+  color: #e4e4e7;                          /* zinc-200 */
+}
+.dark .fc .fc-col-header-cell-cushion,
+.dark .fc .fc-daygrid-day-number,
+.dark .fc .fc-timegrid-slot-label-cushion,
+.dark .fc .fc-timegrid-axis-cushion,
+.dark .fc .fc-list-day-text,
+.dark .fc .fc-list-day-side-text {
+  color: #a1a1aa;                          /* zinc-400 */
+}
+.dark .fc .fc-day-other .fc-daygrid-day-number { color: #52525b; }
+.dark .fc .fc-list-event:hover td { background: #27272a; }
+.dark .fc .fc-popover { background: #18181b; border-color: #3f3f46; }
+.dark .fc .fc-popover-header { background: #27272a; color: #e4e4e7; }
 .fc .fc-col-header-cell-cushion {
   padding: 8px 4px;
   font-size: 11px;
