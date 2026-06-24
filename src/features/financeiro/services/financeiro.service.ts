@@ -81,8 +81,8 @@ export interface FinDashboard {
   clientes?: { nome: string; recebido: number; n: number; ultimo: string | null }[];
   serie?: { mes: string; valor: number }[];
   melhorMes?: { mes: string; valor: number } | null;
-  casos?: { caseId: string; autor: string | null; reu: string | null; area: string | null; produto: string | null; fase: string | null; cnj: string | null; valorCausa: number; firmPct: number; escritorioValor: number; liquido: number; exito: number | null }[];
-  projecaoCasos?: { pctExito: number; escritorioPadrao: number; brutoEmProcesso: number; escritorioEmProcesso: number; liquidoProvavel: number; nComValor: number };
+  casos?: { caseId: string; autor: string | null; reu: string | null; area: string | null; produto: string | null; fase: string | null; cnj: string | null; valorCausa: number; realizacao: number; condenacaoEstimada: number; firmPct: number; escritorioValor: number; liquido: number; exito: number | null }[];
+  projecaoCasos?: { pctExito: number; escritorioPadrao: number; fatorRealizacao: number; brutoEmProcesso: number; condenacaoEstimada: number; escritorioEmProcesso: number; liquidoProvavel: number; nComValor: number };
   cs?: { prestacao: number; cumprimento: number; itens: { caseId: string; cliente: string; tipo: string; valor: number }[] };
 }
 
@@ -194,6 +194,14 @@ export const financeiroService = {
   },
   async setEscritorioPct(pct: number): Promise<{ ok: boolean; padrao: number }> {
     const { data } = await api.patch('/financeiro/escritorio-pct', { pct });
+    return data.data ?? data;
+  },
+  async getFatorRealizacao(): Promise<{ fator: number }> {
+    const { data } = await api.get('/financeiro/fator-realizacao');
+    return data.data ?? data;
+  },
+  async setFatorRealizacao(pct: number): Promise<{ ok: boolean; fator: number }> {
+    const { data } = await api.patch('/financeiro/fator-realizacao', { pct });
     return data.data ?? data;
   },
 };

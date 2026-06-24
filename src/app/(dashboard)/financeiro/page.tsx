@@ -1865,10 +1865,11 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
             sub="cada processo seu é uma pessoa esperando uma resposta. Aqui está o tamanho disso — e o que volta pra você.">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-pink-200 bg-pink-50/40 p-3 dark:border-pink-900/40 dark:bg-pink-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Em busca pelos seus clientes</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#E64980]">{brl(data.projecaoCasos.brutoEmProcesso)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.nComValor} {data.projecaoCasos.nComValor === 1 ? 'pessoa conta' : 'pessoas contam'} com você</p></div>
-              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">pelo seu trabalho nesses casos</p></div>
+              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">já com a defasagem da sentença</p></div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Já realizado + a entrar</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl(r.recebido + aReceberTotal)}</p><p className="text-[11px] text-zinc-400">o que já se concretizou</p></div>
             </div>
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">💜 Você não move só números — move <strong>vidas</strong>. São <strong>{r.nCasos ?? casos.length} histórias</strong> que passam pelas suas mãos.</p>
+            <p className="mt-1.5 text-[11px] text-zinc-400">Estimativa: a condenação real costuma sair diferente do valor da causa (pra mais ou pra menos) — sua parte já é calculada pela média de êxito de cada caso.</p>
           </Card>
         )}
 
