@@ -12,6 +12,7 @@ export interface CalendarEvent {
   caseId: string | null;
   assignedTo: { id: string; name: string; avatarUrl: string | null } | null;
   case: { id: string; title: string; cnjNumber: string | null } | null;
+  metadata?: { completedAt?: string | null; coResponsibleIds?: string[] } & Record<string, unknown>;
 }
 
 export interface CreateEventInput {
@@ -50,7 +51,7 @@ export const calendarService = {
     const { data } = await api.post('/calendar', input);
     return data.data ?? data;
   },
-  async update(id: string, input: Partial<CreateEventInput>): Promise<CalendarEvent> {
+  async update(id: string, input: Partial<CreateEventInput> & { completedAt?: string | null }): Promise<CalendarEvent> {
     const { data } = await api.patch(`/calendar/${id}`, input);
     return data.data ?? data;
   },

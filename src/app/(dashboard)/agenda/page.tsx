@@ -203,10 +203,10 @@ export default function AgendaPage() {
         triggerDate: null,
         tags: tagMap.get('event:' + e.id) ?? [],
         coResponsibleIds: (e as any).metadata?.coResponsibleIds ?? [],
-        hasTime: true, done: false, cancelled: false, fatal: false,
+        hasTime: true, done: !!e.metadata?.completedAt, cancelled: false, fatal: false,
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
-        createdName: null, priorityLabel: null, completedAt: null, description: e.location,
+        createdName: null, priorityLabel: null, completedAt: (e.metadata?.completedAt as string) ?? null, description: e.location,
         prazoFatal: null, recorte: null, tipoPublicacao: null,
         faseMovida: null, dispositivo: null,
       });
@@ -749,10 +749,10 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     } finally { setPrazoBusy(false); }
   };
   const toggleDone = async () => {
-    if (activity.source === 'evento') return;
     setBusy(true);
     try {
       if (activity.source === 'tarefa') { await tasksService.update(activity.rawId, { status: done ? 'TODO' : 'DONE' }); toast.success(done ? 'Tarefa reaberta' : 'Tarefa concluída'); setDone(!done); }
+      else if (activity.source === 'evento') { await calendarService.update(activity.rawId, { completedAt: done ? null : new Date().toISOString() }); toast.success(done ? 'Compromisso reaberto' : 'Compromisso concluído'); setDone(!done); }
       else { if (done) { await deadlinesService.update(activity.rawId, { status: 'OPEN' }); toast.success('Prazo reaberto'); setDone(false); } else { await deadlinesService.complete(activity.rawId, activity.fatal); toast.success('Prazo concluído'); setDone(true); } }
       onRefetch();
     } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
@@ -816,7 +816,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
 
         {/* Checkbox + título */}
         <div className="mb-4 flex items-start gap-3">
-          <button onClick={toggleDone} disabled={busy || activity.source === 'evento'} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${done ? 'border-[#228BE6] bg-[#228BE6] text-white' : 'border-zinc-300 dark:border-zinc-600'} disabled:opacity-40`}>{done && <Check className="h-3.5 w-3.5" />}</button>
+          <button onClick={toggleDone} disabled={busy} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${done ? 'border-[#228BE6] bg-[#228BE6] text-white' : 'border-zinc-300 dark:border-zinc-600'} disabled:opacity-40`}>{done && <Check className="h-3.5 w-3.5" />}</button>
           {editing ? (
             <div className="flex flex-1 items-center gap-2">
               <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') { setEditing(false); setEditTitle(titleVal); } }} className="flex-1 rounded-md border border-zinc-300 px-2 py-1 text-lg outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
@@ -980,13 +980,11 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           </div>
         </div>
 
-        {(activity.source === 'tarefa' || activity.source === 'prazo') && (
-          <div className="mt-4 flex justify-end">
-            {done
-              ? <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Reabrir</button>
-              : <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Check className="h-4 w-4" /> Concluir</button>}
-          </div>
-        )}
+        <div className="mt-4 flex justify-end">
+          {done
+            ? <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Reabrir</button>
+            : <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Check className="h-4 w-4" /> Concluir</button>}
+        </div>
       </div>
     </div>
   );
