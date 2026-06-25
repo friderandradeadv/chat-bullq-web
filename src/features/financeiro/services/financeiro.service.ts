@@ -84,6 +84,16 @@ export interface FinDashboard {
   casos?: { caseId: string; autor: string | null; reu: string | null; area: string | null; produto: string | null; fase: string | null; cnj: string | null; valorCausa: number; realizacao: number; condenacaoEstimada: number; firmPct: number; escritorioValor: number; minhaPct?: number; liquido: number; exito: number | null }[];
   projecaoCasos?: { pctExito: number; escritorioPadrao: number; fatorRealizacao: number; isSocio?: boolean; brutoEmProcesso: number; condenacaoEstimada: number; escritorioEmProcesso: number; liquidoProvavel: number; nComValor: number; divisao?: { quem: string; eu: boolean; escritorio: boolean; valor: number; pct: number }[] };
   cs?: { prestacao: number; cumprimento: number; itens: { caseId: string; cliente: string; tipo: string; valor: number }[] };
+  crescimento?: FinCrescimento;
+}
+
+export interface FinCrescimento {
+  carteira: { brutoCausas: number; condenacaoEstimada: number; honorariosEscritorio: number; nComValor: number; nCasos: number; porArea: { area: string; valor: number }[] };
+  base: { clientesTotal: number; casosTotal: number; serie: { mes: string; novosCasos: number; novosClientes: number; casosAcum: number; clientesAcum: number }[] };
+  recorrente: { ativasN: number; saldoDevedor: number; parcelaMensal: number };
+  recebiveisCS: number;
+  caixaAtual: number;
+  receita: { r12m: number; media: number; ult3Media: number; ant3Media: number; cresc3: number };
 }
 
 export interface Parcela { num: number; vencimento: string; valor: number; status: 'aberta' | 'paga' | 'cancelada'; dataPagamento?: string | null; txId?: string | null; atrasada?: boolean }

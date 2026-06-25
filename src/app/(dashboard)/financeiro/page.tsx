@@ -11,7 +11,7 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt,
   ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
@@ -1437,45 +1437,116 @@ function FluxoTab({ data }: { data: FinDashboard }) {
 
 // ═══════════════════════════ ABA · CRESCIMENTO ═════════════════════════════════
 
+const MES_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const fmtMesKey = (mk: string) => { const [y, m] = (mk || '').split('-'); const i = +m - 1; return MES_ABBR[i] ? `${MES_ABBR[i]}/${y.slice(2)}` : mk; };
+
 function CrescimentoTab({ data }: { data: FinDashboard }) {
+  const c = data.crescimento;
   const realizados = data.meses.filter((m) => !m.projecao);
   const serie = realizados.map((m, i) => {
     const prev = realizados[i - 1];
     const mom = prev && prev.receita > 0 ? ((m.receita - prev.receita) / prev.receita) * 100 : null;
     return { nome: mesCurto(m.label), receita: m.receita, resultado: m.resultado, mom, label: m.label, key: m.key };
   });
-  const receitaTotal = realizados.reduce((s, m) => s + m.receita, 0);
-  const mesesComLucro = realizados.filter((m) => m.resultado > 0).length;
-  const ult3 = realizados.slice(-3).reduce((s, m) => s + m.receita, 0) / Math.min(3, realizados.length || 1);
-  const ant3arr = realizados.slice(-6, -3);
-  const ant3 = ant3arr.length ? ant3arr.reduce((s, m) => s + m.receita, 0) / ant3arr.length : 0;
-  const cresc3 = ant3 > 0 ? ((ult3 - ant3) / ant3) * 100 : 0;
-  const maior = [...realizados].sort((a, b) => b.receita - a.receita)[0];
-  const momMedio = (() => { const vs = serie.map((s) => s.mom).filter((v): v is number => v != null); return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : 0; })();
+
+  // Valuation: faturamento anual × múltiplo + carteira em processo (× peso) + recebíveis + recorrente + caixa
+  const [mult, setMult] = useState(1.5);
+  const [pesoCarteira, setPesoCarteira] = useState(50);
+  const val = useMemo(() => {
+    if (!c) return null;
+    const fatur = c.receita.r12m * mult;
+    const carteira = c.carteira.honorariosEscritorio * (pesoCarteira / 100);
+    const total = fatur + carteira + c.recebiveisCS + c.recorrente.saldoDevedor + c.caixaAtual;
+    return { fatur, carteira, total };
+  }, [c, mult, pesoCarteira]);
+
+  const baseSerie = (c?.base.serie ?? []).map((s) => ({ ...s, nome: fmtMesKey(s.mes) }));
 
   return (
     <>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MiniStat label="Receita acumulada" value={brl(receitaTotal)} hint={`${realizados.length} meses de história`} accent="#2F9E44" />
-        <MiniStat label="Maior faturamento" value={brl(maior?.receita ?? 0)} hint={maior?.label} accent="#7048E8" />
-        <MiniStat label="Crescimento médio/mês" value={pct(momMedio)} hint="variação média mês a mês" accent={momMedio >= 0 ? '#2F9E44' : '#E03131'} />
-        <MiniStat label="Meses com lucro" value={`${mesesComLucro} / ${realizados.length}`} hint={`${Math.round((mesesComLucro / (realizados.length || 1)) * 100)}% dos meses`} accent="#228BE6" />
-      </div>
+      {c && val && (
+        <>
+          {/* Patrimônio / valuation — o valor real do escritório, além do que já entrou */}
+          <Card title={<span className="flex items-center gap-2"><Gem className="h-4 w-4 text-[#7048E8]" /> Quanto vale o escritório hoje</span>}
+            sub="muito além da receita recebida: a carteira de honorários em processo é o maior ativo. Estimativa — ajuste o múltiplo e o peso da carteira.">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-zinc-400">Valuation estimado</p>
+                <p className="text-3xl font-bold tabular-nums text-[#7048E8]">{brl(val.total)}</p>
+                <p className="mt-0.5 text-[11px] text-zinc-400">faturamento × {mult.toFixed(1)} + {pesoCarteira}% da carteira + recebíveis + caixa</p>
+              </div>
+              <div className="grid w-full gap-3 sm:max-w-xs">
+                <label className="text-xs text-zinc-500">
+                  <span className="flex justify-between"><span>Múltiplo do faturamento anual</span><b className="text-zinc-700 dark:text-zinc-200">{mult.toFixed(1)}×</b></span>
+                  <input type="range" min={0.5} max={4} step={0.1} value={mult} onChange={(e) => setMult(Number(e.target.value))} className="mt-1 w-full accent-[#7048E8]" />
+                </label>
+                <label className="text-xs text-zinc-500">
+                  <span className="flex justify-between"><span>Peso da carteira em processo</span><b className="text-zinc-700 dark:text-zinc-200">{pesoCarteira}%</b></span>
+                  <input type="range" min={0} max={100} step={5} value={pesoCarteira} onChange={(e) => setPesoCarteira(Number(e.target.value))} className="mt-1 w-full accent-[#7048E8]" />
+                </label>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              <CompValor label={`Faturamento × ${mult.toFixed(1)}`} sub={`${brl(c.receita.r12m)}/ano`} valor={val.fatur} cor="#2F9E44" />
+              <CompValor label="Carteira em processo" sub={`${pesoCarteira}% de ${brl(c.carteira.honorariosEscritorio)}`} valor={val.carteira} cor="#7048E8" />
+              <CompValor label="Recebíveis (CS)" sub="prestação + cumprimento" valor={c.recebiveisCS} cor="#228BE6" />
+              <CompValor label="Recorrente a receber" sub={`${c.recorrente.ativasN} cobrança(s)`} valor={c.recorrente.saldoDevedor} cor="#F08C00" />
+              <CompValor label="Caixa" sub={c.caixaAtual < 0 ? 'no vermelho' : 'acumulado'} valor={c.caixaAtual} cor={c.caixaAtual < 0 ? '#E03131' : '#2F9E44'} />
+            </div>
+            <p className="mt-3 text-[11px] text-zinc-400">⚠️ Estimativa de gestão, não avaliação contábil/oficial. A carteira em processo é honorário provável (depende de êxito e prazo) — por isso o peso ajustável.</p>
+          </Card>
 
-      <Card title={`Últimos 3 meses vs 3 anteriores`} sub="a tendência recente da receita do escritório.">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{brl(ult3)}</span>
-            <span className="text-xs text-zinc-400">média/mês agora</span>
+          {/* Pilares de crescimento */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MiniStat label="Carteira em processo" value={brl(c.carteira.honorariosEscritorio)} hint={`honorários prováveis · ${c.carteira.nComValor} processos com valor`} accent="#7048E8" />
+            <MiniStat label="Causas sob patrocínio" value={brl(c.carteira.brutoCausas)} hint={`${c.carteira.nCasos} processos no total`} accent="#E64980" />
+            <MiniStat label="Base de clientes" value={String(c.base.clientesTotal)} hint={`${c.base.casosTotal} casos abertos`} accent="#228BE6" />
+            <MiniStat label="Faturamento (12m)" value={brl(c.receita.r12m)} hint={`média ${brl(c.receita.media)}/mês`} accent="#2F9E44" />
           </div>
-          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-bold ${cresc3 >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20' : 'bg-rose-50 text-rose-600 dark:bg-rose-900/20'}`}>
-            {cresc3 >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}{pct(cresc3)}
-          </span>
-          <span className="text-xs text-zinc-400">vs {brl(ant3)}/mês no trimestre anterior</span>
-        </div>
-      </Card>
 
-      <Card title="Receita mês a mês" sub="barras = faturamento · linha = resultado (lucro/prejuízo).">
+          {/* Carteira por área */}
+          {c.carteira.porArea.length > 0 && (
+            <Card title="Carteira de honorários por área" sub="onde está concentrado o valor em processo (parte do escritório).">
+              <div className="space-y-1.5">
+                {c.carteira.porArea.map((a) => {
+                  const p = c.carteira.honorariosEscritorio > 0 ? (a.valor / c.carteira.honorariosEscritorio) * 100 : 0;
+                  return (
+                    <div key={a.area} className="flex items-center gap-3">
+                      <span className="w-28 shrink-0 text-sm text-zinc-600 dark:text-zinc-300">{a.area}</span>
+                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <div className="h-full rounded-full bg-[#7048E8]" style={{ width: `${Math.max(2, p)}%` }} />
+                      </div>
+                      <span className="w-28 shrink-0 text-right text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{brl(a.valor)}</span>
+                      <span className="w-10 shrink-0 text-right text-[11px] text-zinc-400">{Math.round(p)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* Crescimento da base (casos/clientes ao longo do tempo) */}
+          {baseSerie.length > 1 && (
+            <Card title="Crescimento da base" sub="barras = novos casos no mês · linha = total acumulado de processos.">
+              <ResponsiveContainer width="100%" height={260}>
+                <ComposedChart data={baseSerie} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" className="dark:opacity-20" />
+                  <XAxis dataKey="nome" tick={{ fontSize: 11, fill: '#868e96' }} interval="preserveStartEnd" />
+                  <YAxis yAxisId="l" tick={{ fontSize: 11, fill: '#868e96' }} width={36} />
+                  <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: '#868e96' }} width={42} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar yAxisId="l" name="Novos casos" dataKey="novosCasos" fill="#E64980" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                  <Line yAxisId="r" name="Total de processos" type="monotone" dataKey="casosAcum" stroke="#7048E8" strokeWidth={2.5} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* Receita recebida — a história do caixa que já entrou */}
+      <Card title="Receita recebida, mês a mês" sub="barras = faturamento que entrou · linha = resultado (lucro/prejuízo).">
         <ResponsiveContainer width="100%" height={280}>
           <ComposedChart data={serie} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" className="dark:opacity-20" />
@@ -1488,24 +1559,17 @@ function CrescimentoTab({ data }: { data: FinDashboard }) {
           </ComposedChart>
         </ResponsiveContainer>
       </Card>
-
-      <Card title="Variação mês a mês (%)" sub="quanto a receita subiu ou caiu em relação ao mês anterior.">
-        <div className="max-h-80 overflow-y-auto scrollbar-thin">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white text-left text-xs uppercase tracking-wide text-zinc-400 dark:bg-zinc-900"><tr><th className="px-2 py-1.5 font-medium">Mês</th><th className="px-2 py-1.5 text-right font-medium">Receita</th><th className="px-2 py-1.5 text-right font-medium">Variação</th></tr></thead>
-            <tbody>
-              {[...serie].reverse().map((s) => (
-                <tr key={s.key} className="border-t border-zinc-100 dark:border-zinc-800">
-                  <td className="px-2 py-1.5 capitalize text-zinc-600 dark:text-zinc-300">{s.label}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-zinc-700 dark:text-zinc-200">{brl(s.receita)}</td>
-                  <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${s.mom == null ? 'text-zinc-300' : s.mom >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{s.mom == null ? '—' : pct(s.mom)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </>
+  );
+}
+
+function CompValor({ label, sub, valor, cor }: { label: string; sub: string; valor: number; cor: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+      <p className="truncate text-[10px] uppercase tracking-wide text-zinc-400">{label}</p>
+      <p className="mt-0.5 text-base font-bold tabular-nums" style={{ color: cor }}>{brl(valor)}</p>
+      <p className="truncate text-[10px] text-zinc-400">{sub}</p>
+    </div>
   );
 }
 
