@@ -7,8 +7,8 @@ import {
   PieChart, Pie, Legend, CartesianGrid, AreaChart, Area,
 } from 'recharts';
 import {
-  BarChart3, Scale, TrendingUp, Wallet, Trophy, Landmark, Layers, Cpu,
-  Sparkles, Target, Users, CalendarDays, Filter as FilterIcon, Briefcase,
+  BarChart3, Scale, TrendingUp, Trophy, Landmark, Layers, Cpu,
+  Target, Users, CalendarDays, Filter as FilterIcon, Briefcase, Gavel, Award,
 } from 'lucide-react';
 import { legalCasesService, type JuriRow } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -22,19 +22,26 @@ const fmtCompact = (v: number) => {
 const tooltipStyle = { fontSize: 12, borderRadius: 8, border: '1px solid #e9ecef' };
 type Metrica = 'qtd' | 'valor';
 
-interface Bucket { key: string; count: number; valor: number; exitoSum: number; exitoN: number }
-function agrupar(rows: JuriRow[], keyOf: (r: JuriRow) => string | null): (Bucket & { exitoMedio: number | null })[] {
-  const m = new Map<string, Bucket>();
+// Agrupa com placar de resultado (favorável/perdido/andamento) → taxa de êxito real.
+interface ResBucket { key: string; count: number; valor: number; fav: number; perd: number; and: number; exitoSum: number; exitoN: number }
+type ResRow = ResBucket & { dec: number; taxa: number | null; exitoMedio: number | null };
+function agruparRes(rows: JuriRow[], keyOf: (r: JuriRow) => string | null): ResRow[] {
+  const m = new Map<string, ResBucket>();
   for (const r of rows) {
     const k = keyOf(r);
     if (k == null) continue;
-    const o = m.get(k) ?? { key: k, count: 0, valor: 0, exitoSum: 0, exitoN: 0 };
+    const o = m.get(k) ?? { key: k, count: 0, valor: 0, fav: 0, perd: 0, and: 0, exitoSum: 0, exitoN: 0 };
     o.count++; o.valor += r.value;
+    if (r.resultado === 'favoravel') o.fav++; else if (r.resultado === 'perdido') o.perd++; else o.and++;
     if (r.exito != null) { o.exitoSum += r.exito; o.exitoN++; }
     m.set(k, o);
   }
-  return [...m.values()].map((o) => ({ ...o, exitoMedio: o.exitoN ? Math.round(o.exitoSum / o.exitoN) : null }));
+  return [...m.values()].map((o) => {
+    const dec = o.fav + o.perd;
+    return { ...o, dec, taxa: dec ? Math.round((o.fav / dec) * 100) : null, exitoMedio: o.exitoN ? Math.round(o.exitoSum / o.exitoN) : null };
+  });
 }
+const taxaCor = (t: number | null) => (t == null ? '#94a3b8' : t >= 70 ? '#10B981' : t >= 50 ? '#228BE6' : t >= 30 ? '#F59E0B' : '#EF4444');
 
 export default function JurimetriaPage() {
   const { data, isLoading } = useQuery({ queryKey: ['legal-cases', 'jurimetria'], queryFn: () => legalCasesService.jurimetria() });
@@ -71,53 +78,57 @@ export default function JurimetriaPage() {
     return true;
   }), [allRows, tipo, area, tribunal, sistema, responsavel, ano]);
 
-  // ── KPIs ──
+  // ── KPIs (foco em desempenho, não em dinheiro) ──
   const k = useMemo(() => {
     const nProc = rows.filter((r) => r.temProcesso).length;
     const nLeads = rows.filter((r) => !r.temProcesso).length;
-    const valorTotal = rows.reduce((s, r) => s + r.value, 0);
-    const valorEsperado = rows.reduce((s, r) => s + r.value * ((r.exito ?? 0) / 100), 0);
     const comExito = rows.filter((r) => r.exito != null);
     const exitoMedio = comExito.length ? Math.round(comExito.reduce((s, r) => s + (r.exito ?? 0), 0) / comExito.length) : null;
-    const favoraveis = rows.filter((r) => r.resultado === 'favoravel').length;
-    const perdidos = rows.filter((r) => r.resultado === 'perdido').length;
-    const andamento = rows.filter((r) => r.resultado === 'andamento').length;
-    const decididos = favoraveis + perdidos;
-    const provaveis = rows.filter((r) => (r.exito ?? 0) >= 50);
-    const ganhosProjetados = favoraveis + Math.round(rows.filter((r) => r.resultado === 'andamento').reduce((s, r) => s + (r.exito ?? 0) / 100, 0));
-    return {
-      nProc, nLeads, valorTotal, valorEsperado, exitoMedio, favoraveis, perdidos, andamento,
-      taxaReal: decididos ? Math.round((favoraveis / decididos) * 100) : null,
-      provaveis: provaveis.length, valorProvavel: provaveis.reduce((s, r) => s + r.value, 0),
-      ganhosProjetados,
-    };
+    const fav = rows.filter((r) => r.resultado === 'favoravel').length;
+    const perd = rows.filter((r) => r.resultado === 'perdido').length;
+    const and = rows.filter((r) => r.resultado === 'andamento').length;
+    const dec = fav + perd;
+    return { nProc, nLeads, exitoMedio, fav, perd, and, taxaReal: dec ? Math.round((fav / dec) * 100) : null, dec };
   }, [rows]);
 
   const val = (b: { count: number; valor: number }) => (metrica === 'valor' ? b.valor : b.count);
-  const porArea = useMemo(() => agrupar(rows, (r) => r.area).sort((a, b) => val(b) - val(a)), [rows, metrica]);
-  const porTribunal = useMemo(() => agrupar(rows, (r) => r.tribunal).sort((a, b) => val(b) - val(a)), [rows, metrica]);
-  const porSistema = useMemo(() => agrupar(rows, (r) => r.sistema).sort((a, b) => val(b) - val(a)), [rows, metrica]);
-  const porAssunto = useMemo(() => agrupar(rows, (r) => r.assunto).sort((a, b) => val(b) - val(a)), [rows, metrica]);
-  const porResponsavel = useMemo(() => agrupar(rows, (r) => r.responsavel).sort((a, b) => val(b) - val(a)), [rows, metrica]);
+
+  // tribunal: ranking por taxa de êxito; desempata por volume de favoráveis (importante: se
+  // "perdidos" não são marcados, a taxa fica 100% e o que diferencia é quanto se ganha)
+  const porTribunal = useMemo(() => agruparRes(rows, (r) => r.tribunal), [rows]);
+  const tribunalRank = useMemo(() => porTribunal.filter((t) => t.dec >= 3).sort((a, b) => (b.taxa ?? -1) - (a.taxa ?? -1) || b.fav - a.fav), [porTribunal]);
+  const tribunalRankFew = useMemo(() => porTribunal.filter((t) => t.dec > 0 && t.dec < 3).sort((a, b) => (b.taxa ?? -1) - (a.taxa ?? -1) || b.fav - a.fav), [porTribunal]);
+
+  // teses (assunto/produto): qual performa mais
+  const porTese = useMemo(() => agruparRes(rows, (r) => r.assunto).sort((a, b) => b.count - a.count), [rows]);
+  const teseRank = useMemo(() => [...porTese].filter((t) => t.dec > 0).sort((a, b) => (b.taxa ?? -1) - (a.taxa ?? -1) || b.fav - a.fav), [porTese]);
+  const semPerdidos = k.perd === 0 && k.fav > 0;
+
+  // entendimento: combinações tribunal × tese com volume, ordenadas por taxa
+  const tribTese = useMemo(() => agruparRes(rows, (r) => (r.tribunal && r.assunto ? `${r.tribunal}|||${r.assunto}` : null))
+    .filter((c) => c.dec >= 2)
+    .sort((a, b) => (b.taxa ?? -1) - (a.taxa ?? -1) || b.dec - a.dec)
+    .map((c) => { const [trib, tese] = c.key.split('|||'); return { ...c, trib, tese }; }), [rows]);
+
+  // descritivos (mantidos)
+  const porArea = useMemo(() => agruparRes(rows, (r) => r.area).sort((a, b) => val(b) - val(a)), [rows, metrica]);
+  const porSistema = useMemo(() => agruparRes(rows, (r) => r.sistema).sort((a, b) => val(b) - val(a)), [rows, metrica]);
+  const porResponsavel = useMemo(() => agruparRes(rows, (r) => r.responsavel).sort((a, b) => (b.taxa ?? -1) - (a.taxa ?? -1) || b.count - a.count), [rows]);
   const porFase = useMemo(() => {
     const m = new Map<string, { key: string; count: number; order: number }>();
-    for (const r of rows) {
-      const o = m.get(r.fase) ?? { key: r.faseLabel, count: 0, order: r.faseOrder };
-      o.count++; m.set(r.fase, o);
-    }
+    for (const r of rows) { const o = m.get(r.fase) ?? { key: r.faseLabel, count: 0, order: r.faseOrder }; o.count++; m.set(r.fase, o); }
     return [...m.values()].sort((a, b) => a.order - b.order);
   }, [rows]);
-  const exitoPorArea = useMemo(() => porArea.filter((a) => a.exitoMedio != null).sort((a, b) => (b.exitoMedio ?? 0) - (a.exitoMedio ?? 0)), [porArea]);
   const timeline = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) if (r.mes) m.set(r.mes, (m.get(r.mes) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([mes, count]) => ({ mes, count }));
   }, [rows]);
-  const honorarios = useMemo(() => agrupar(rows, (r) => r.honorarios), [rows]);
 
   if (isLoading) return <div className="p-8 text-sm text-zinc-400">Carregando jurimetria…</div>;
 
   const metricaLabel = metrica === 'valor' ? 'R$' : 'qtd';
+  const melhorTrib = tribunalRank[0];
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-[#fafafa] p-6 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
@@ -126,7 +137,7 @@ export default function JurimetriaPage() {
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Jurimetria</h1>
         <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">{rows.length} {tipo === 'leads' ? 'leads' : tipo === 'todos' ? 'registros' : 'processos'}</span>
       </div>
-      <p className="mt-0.5 text-sm text-zinc-500">Inteligência da carteira — processos reais (com nº CNJ) separados de leads, com previsões e filtros dinâmicos.</p>
+      <p className="mt-0.5 text-sm text-zinc-500">Onde, em quê e com quem o escritório ganha mais — tribunais, teses e o entendimento de cada juízo.</p>
 
       {/* Filtros */}
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#e9ecef] bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -138,62 +149,105 @@ export default function JurimetriaPage() {
         <Sel value={responsavel} onChange={setResponsavel} placeholder="Responsável" options={opts.responsaveis} />
         <Sel value={ano} onChange={setAno} placeholder="Ano" options={opts.anos} />
         <div className="ml-auto flex items-center gap-1.5 text-xs text-zinc-500">
-          métrica:
+          distribuição:
           <Segmented value={metrica} onChange={(v) => setMetrica(v as Metrica)} options={[['qtd', 'Qtd'], ['valor', 'R$']]} />
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs de desempenho */}
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Kpi icon={<Scale className="h-4 w-4" />} label="Processos (com CNJ)" value={String(k.nProc)} hint="ações ajuizadas" />
         <Kpi icon={<Briefcase className="h-4 w-4" />} label="Leads (sem processo)" value={String(k.nLeads)} hint="fechados, não ajuizados" accent="#F59E0B" />
-        <Kpi icon={<Wallet className="h-4 w-4" />} label="Valor em causa" value={fmtCompact(k.valorTotal)} accent="#7C3AED" />
-        <Kpi icon={<Sparkles className="h-4 w-4" />} label="Valor esperado de êxito" value={fmtCompact(k.valorEsperado)} hint="Σ valor × prob." accent="#10B981" />
-        <Kpi icon={<TrendingUp className="h-4 w-4" />} label="Êxito médio estimado" value={k.exitoMedio != null ? `${k.exitoMedio}%` : '—'} accent="#0D9488" />
-        <Kpi icon={<Trophy className="h-4 w-4" />} label="Taxa real (decididos)" value={k.taxaReal != null ? `${k.taxaReal}%` : '—'} hint={`${k.favoraveis} ganhos · ${k.perdidos} perdidos`} accent="#228BE6" />
+        <Kpi icon={<Trophy className="h-4 w-4" />} label="Taxa de êxito real" value={k.taxaReal != null ? `${k.taxaReal}%` : '—'} hint={`${k.dec} já decididos`} accent="#10B981" />
+        <Kpi icon={<Award className="h-4 w-4" />} label="Favoráveis" value={String(k.fav)} hint="cumprimento + trânsito + prestação" accent="#0D9488" />
+        <Kpi icon={<Target className="h-4 w-4" />} label="Perdidos" value={String(k.perd)} hint="arquivo por insucesso" accent="#EF4444" />
+        <Kpi icon={<TrendingUp className="h-4 w-4" />} label="Êxito médio estimado" value={k.exitoMedio != null ? `${k.exitoMedio}%` : '—'} hint="dos processos em andamento" accent="#228BE6" />
       </div>
 
-      {/* Previsões */}
-      <div className="mt-4 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 dark:border-emerald-900/40 dark:from-emerald-900/10 dark:to-zinc-900">
-        <div className="mb-2 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-emerald-600" />
-          <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Previsões</h3>
-          <span className="text-[11px] text-zinc-400">com base na probabilidade de êxito da carteira filtrada</span>
+      {/* Destaque: melhor tribunal */}
+      {melhorTrib && (
+        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 dark:border-emerald-900/40 dark:from-emerald-900/10 dark:to-zinc-900">
+          <Landmark className="h-8 w-8 text-emerald-600" />
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-zinc-400">Tribunal onde mais vencemos</p>
+            <p className="text-lg font-bold text-zinc-800 dark:text-zinc-100">{melhorTrib.key} <span className="text-emerald-600">· {melhorTrib.taxa}% de êxito</span></p>
+            <p className="text-[11px] text-zinc-400">{melhorTrib.fav} favoráveis de {melhorTrib.dec} decididos · {melhorTrib.and} em andamento</p>
+          </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Prev big={fmtCompact(k.valorEsperado)} label="Recuperação esperada" sub={`de ${fmtCompact(k.valorTotal)} em causa`} color="#10B981" />
-          <Prev big={String(k.provaveis)} label="Êxito provável (≥50%)" sub={`${fmtCompact(k.valorProvavel)} em jogo`} color="#228BE6" />
-          <Prev big={`~${k.ganhosProjetados}`} label="Ganhos projetados" sub={`${k.favoraveis} já favoráveis + andamento`} color="#7C3AED" />
+      )}
+
+      {semPerdidos && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-400">
+          <Target className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Nenhum processo está marcado como <b>perdido</b> hoje — por isso a “taxa de êxito real” aparece em 100% onde há decisão. Enquanto a fase “Perdidos” não for usada, compare os tribunais pelo <b>nº de favoráveis</b> e pelo <b>êxito estimado</b>, não só pela taxa.</span>
         </div>
+      )}
+
+      {/* Sucesso por tribunal — o coração da jurimetria */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card title="Sucesso por tribunal" icon={<Landmark className="h-4 w-4" />} subtitle="taxa de êxito real · mín. 3 decididos">
+          <TaxaTabela data={tribunalRank} colLabel="Tribunal" />
+          {tribunalRankFew.length > 0 && (
+            <p className="mt-2 text-[11px] text-zinc-400">Amostra pequena (1–2 decididos): {tribunalRankFew.map((t) => `${t.key} ${t.taxa}%`).join(' · ')}</p>
+          )}
+        </Card>
+        <Card title="Taxa de êxito por tribunal" icon={<Trophy className="h-4 w-4" />} subtitle="barra = % favoráveis dos decididos">
+          <TaxaBar data={tribunalRank.slice(0, 10)} />
+        </Card>
       </div>
 
-      {/* Gráficos */}
+      {/* Desempenho por tese */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card title="Desempenho por tese" icon={<Gavel className="h-4 w-4" />} subtitle="qual tese mais performa (taxa de êxito)">
+          <TaxaTabela data={teseRank.slice(0, 12)} colLabel="Tese / produto" />
+        </Card>
+        <Card title="Volume por tese" icon={<Scale className="h-4 w-4" />} subtitle={`carteira por tese (${metricaLabel})`}>
+          <HBar data={porTese.slice(0, 10)} metrica={metrica} color="#7C3AED" />
+        </Card>
+      </div>
+
+      {/* Entendimento: tribunal × tese */}
+      <div className="mt-4">
+        <Card title="Entendimento por tribunal × tese" icon={<Award className="h-4 w-4" />} subtitle="onde cada tese vence ou apanha (mín. 2 decididos)">
+          {tribTese.length === 0 ? (
+            <p className="py-6 text-center text-sm text-zinc-400">Ainda sem combinações com decisões suficientes nesta seleção.</p>
+          ) : (
+            <div className="max-h-96 overflow-y-auto scrollbar-thin">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
+                  <tr><th className="px-2 py-1.5 font-medium">Tribunal</th><th className="px-2 py-1.5 font-medium">Tese</th><th className="px-2 py-1.5 text-right font-medium">Decididos</th><th className="px-2 py-1.5 text-right font-medium">Favoráveis</th><th className="px-2 py-1.5 text-right font-medium">Taxa</th></tr>
+                </thead>
+                <tbody>
+                  {tribTese.map((c) => (
+                    <tr key={c.key} className="border-t border-zinc-100 dark:border-zinc-800">
+                      <td className="px-2 py-1.5 font-medium text-zinc-700 dark:text-zinc-200">{c.trib}</td>
+                      <td className="px-2 py-1.5 text-zinc-600 dark:text-zinc-300">{c.tese}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{c.dec}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{c.fav}</td>
+                      <td className="px-2 py-1.5 text-right"><span className="rounded-full px-1.5 py-0.5 text-xs font-bold text-white" style={{ background: taxaCor(c.taxa) }}>{c.taxa}%</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Descritivos da carteira */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title="Distribuição por área" icon={<Layers className="h-4 w-4" />}><Donut data={porArea} metrica={metrica} /></Card>
-        <Card title={`Por tribunal (${metricaLabel})`} icon={<Landmark className="h-4 w-4" />} subtitle="derivado do nº CNJ"><HBar data={porTribunal.slice(0, 10)} metrica={metrica} color="#228BE6" /></Card>
-        <Card title={`Assuntos processuais (${metricaLabel})`} icon={<Scale className="h-4 w-4" />}><HBar data={porAssunto.slice(0, 10)} metrica={metrica} color="#7C3AED" /></Card>
-        <Card title="Taxa de êxito estimada por área" icon={<TrendingUp className="h-4 w-4" />}><ExitoBar data={exitoPorArea} /></Card>
-        <Card title="Novos por mês" icon={<CalendarDays className="h-4 w-4" />} subtitle="distribuição/criação"><Timeline data={timeline} /></Card>
-        <Card title="Funil por fase" icon={<BarChart3 className="h-4 w-4" />}><HBar data={porFase.map((f) => ({ key: f.key, count: f.count, valor: 0, exitoMedio: null, exitoSum: 0, exitoN: 0 }))} metrica="qtd" color="#0D9488" max={14} /></Card>
-        <Card title={`Por responsável (${metricaLabel})`} icon={<Users className="h-4 w-4" />}><HBar data={porResponsavel.slice(0, 10)} metrica={metrica} color="#E11970" /></Card>
+        <Card title="Sucesso por responsável" icon={<Users className="h-4 w-4" />} subtitle="taxa de êxito por advogado"><TaxaTabela data={porResponsavel.filter((r) => r.dec > 0).slice(0, 10)} colLabel="Responsável" /></Card>
+        <Card title="Funil por fase" icon={<BarChart3 className="h-4 w-4" />}><HBar data={porFase.map((f) => ({ key: f.key, count: f.count, valor: 0 }))} metrica="qtd" color="#0D9488" max={14} /></Card>
         <Card title="Por sistema" icon={<Cpu className="h-4 w-4" />}><Donut data={porSistema} metrica={metrica} /></Card>
-      </div>
-
-      {/* Resultado + honorários */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card title="Novos por mês" icon={<CalendarDays className="h-4 w-4" />} subtitle="distribuição/criação"><Timeline data={timeline} /></Card>
         <Card title="Resultado dos processos" icon={<Target className="h-4 w-4" />}>
           <div className="flex items-center justify-around py-3">
-            <Stat big={k.favoraveis} label="Favoráveis" color="#10B981" />
-            <Stat big={k.perdidos} label="Perdidos" color="#EF4444" />
-            <Stat big={k.andamento} label="Em andamento" color="#F59E0B" />
+            <Stat big={k.fav} label="Favoráveis" color="#10B981" />
+            <Stat big={k.perd} label="Perdidos" color="#EF4444" />
+            <Stat big={k.and} label="Em andamento" color="#F59E0B" />
           </div>
           <p className="px-1 text-center text-[11px] text-zinc-400">Favoráveis = cumprimento + trânsito + prestação de contas · Perdidos = arquivo por insucesso.</p>
-        </Card>
-        <Card title="Honorários" icon={<Wallet className="h-4 w-4" />}>
-          <div className="flex items-center justify-around py-3">
-            {honorarios.length === 0 && <span className="text-sm text-zinc-400">Sem dados.</span>}
-            {honorarios.map((h, i) => <Stat key={h.key} big={h.count} label={h.key} color={COLORS[i % COLORS.length]} />)}
-          </div>
         </Card>
       </div>
       <div className="h-6" />
@@ -234,15 +288,6 @@ function Kpi({ icon, label, value, hint, accent = '#64748b' }: { icon: React.Rea
     </div>
   );
 }
-function Prev({ big, label, sub, color }: { big: string; label: string; sub: string; color: string }) {
-  return (
-    <div className="rounded-lg border border-[#e9ecef] bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-      <p className="text-2xl font-bold" style={{ color }}>{big}</p>
-      <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{label}</p>
-      <p className="text-[11px] text-zinc-400">{sub}</p>
-    </div>
-  );
-}
 function Card({ title, subtitle, icon, children }: { title: string; subtitle?: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-[#e9ecef] bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -264,10 +309,52 @@ function Stat({ big, label, color }: { big: number; label: string; color: string
   );
 }
 
-type ChartRow = { key: string; count: number; valor: number; exitoMedio: number | null };
-const showVal = (r: ChartRow, metrica: Metrica) => (metrica === 'valor' ? r.valor : r.count);
+// Tabela de taxa de êxito (tribunal/tese/responsável)
+function TaxaTabela({ data, colLabel }: { data: ResRow[]; colLabel: string }) {
+  if (data.length === 0) return <p className="py-6 text-center text-sm text-zinc-400">Sem decisões nesta seleção.</p>;
+  return (
+    <div className="max-h-80 overflow-y-auto scrollbar-thin">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
+          <tr><th className="px-2 py-1.5 font-medium">{colLabel}</th><th className="px-2 py-1.5 text-right font-medium">Decid.</th><th className="px-2 py-1.5 text-right font-medium">Fav.</th><th className="px-2 py-1.5 text-right font-medium">And.</th><th className="px-2 py-1.5 text-right font-medium">Taxa</th></tr>
+        </thead>
+        <tbody>
+          {data.map((r) => (
+            <tr key={r.key} className="border-t border-zinc-100 dark:border-zinc-800">
+              <td className="px-2 py-1.5 font-medium text-zinc-700 dark:text-zinc-200">{r.key}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{r.dec}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{r.fav}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{r.and}</td>
+              <td className="px-2 py-1.5 text-right"><span className="rounded-full px-1.5 py-0.5 text-xs font-bold text-white" style={{ background: taxaCor(r.taxa) }}>{r.taxa == null ? '—' : `${r.taxa}%`}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
-function HBar({ data, color, metrica, max = 10 }: { data: ChartRow[]; color: string; metrica: Metrica; max?: number }) {
+function TaxaBar({ data }: { data: ResRow[] }) {
+  const rows = data.map((r) => ({ key: r.key, v: r.taxa ?? 0 }));
+  if (rows.length === 0) return <p className="py-10 text-center text-sm text-zinc-400">Sem decisões suficientes.</p>;
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(160, rows.length * 30)}>
+      <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 44, top: 4, bottom: 4 }}>
+        <CartesianGrid horizontal={false} stroke="#f1f3f5" />
+        <XAxis type="number" domain={[0, 100]} hide />
+        <YAxis type="category" dataKey="key" width={130} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
+        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v}% de êxito`, '']} />
+        <Bar dataKey="v" radius={[0, 4, 4, 0]} barSize={16} label={{ position: 'right', fontSize: 11, formatter: (v: unknown) => `${v}%` }}>
+          {rows.map((r, i) => <Cell key={i} fill={taxaCor(r.v)} />)}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+type SimpleRow = { key: string; count: number; valor: number };
+const showVal = (r: SimpleRow, metrica: Metrica) => (metrica === 'valor' ? r.valor : r.count);
+function HBar({ data, color, metrica, max = 10 }: { data: SimpleRow[]; color: string; metrica: Metrica; max?: number }) {
   const rows = data.slice(0, max).map((r) => ({ key: r.key, v: showVal(r, metrica) }));
   const h = Math.max(160, rows.length * 28);
   return (
@@ -283,7 +370,7 @@ function HBar({ data, color, metrica, max = 10 }: { data: ChartRow[]; color: str
     </ResponsiveContainer>
   );
 }
-function Donut({ data, metrica }: { data: ChartRow[]; metrica: Metrica }) {
+function Donut({ data, metrica }: { data: SimpleRow[]; metrica: Metrica }) {
   const rows = data.slice(0, 8).map((r) => ({ key: r.key, v: showVal(r, metrica) }));
   return (
     <ResponsiveContainer width="100%" height={220}>
@@ -294,22 +381,6 @@ function Donut({ data, metrica }: { data: ChartRow[]; metrica: Metrica }) {
         <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [metrica === 'valor' ? fmtMoney(Number(v)) : `${v} processos`, n]} />
         <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
       </PieChart>
-    </ResponsiveContainer>
-  );
-}
-function ExitoBar({ data }: { data: ChartRow[] }) {
-  const rows = data.map((r) => ({ key: r.key, v: r.exitoMedio ?? 0 }));
-  return (
-    <ResponsiveContainer width="100%" height={Math.max(160, rows.length * 30)}>
-      <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
-        <CartesianGrid horizontal={false} stroke="#f1f3f5" />
-        <XAxis type="number" domain={[0, 100]} hide />
-        <YAxis type="category" dataKey="key" width={110} tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v}% êxito estimado`, '']} />
-        <Bar dataKey="v" radius={[0, 4, 4, 0]} barSize={16} fill="#10B981" label={{ position: 'right', fontSize: 11, fill: '#10B981', formatter: (v: unknown) => `${v}%` }}>
-          {rows.map((_, i) => <Cell key={i} fill="#10B981" />)}
-        </Bar>
-      </BarChart>
     </ResponsiveContainer>
   );
 }

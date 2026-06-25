@@ -53,7 +53,7 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-type View = 'meu' | 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao';
+type View = 'meu' | 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao' | 'previsoes';
 const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }[] = [
   { key: 'meu', label: 'Meu financeiro', icon: UserCircle2, grupo: 'Pessoal' },
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt, grupo: 'Caixa' },
@@ -62,12 +62,13 @@ const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }
   { key: 'contas', label: 'Contas', icon: Banknote, grupo: 'Caixa' },
   { key: 'retiradas', label: 'Retiradas', icon: Wallet, grupo: 'Caixa' },
   { key: 'cumprimento', label: 'CS — recebíveis dos processos', icon: Gavel, grupo: 'Processos' },
+  { key: 'previsoes', label: 'Previsões da carteira', icon: Sparkles, grupo: 'Sócios' },
   { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2, grupo: 'Análise & futuro' },
   { key: 'crescimento', label: 'Crescimento', icon: TrendingUp, grupo: 'Análise & futuro' },
   { key: 'projecoes', label: 'Projeções', icon: Rocket, grupo: 'Análise & futuro' },
   { key: 'motivacao', label: 'Motivação', icon: HeartHandshake, grupo: 'Análise & futuro' },
 ];
-const GRUPOS = ['Pessoal', 'Caixa', 'Processos', 'Análise & futuro'];
+const GRUPOS = ['Pessoal', 'Caixa', 'Processos', 'Sócios', 'Análise & futuro'];
 
 // Produto cru do card (RMC, RCC, "CS - RMC", Contribuições, 7780-Indenização…)
 // → Área jurídica (Bancário/Previdenciário/Trabalhista/Consumidor/Cível).
@@ -143,6 +144,7 @@ export default function FinanceiroPage() {
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
 
         {view === 'meu' && <MeuTab />}
+        {view === 'previsoes' && <PrevisoesTab />}
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
         {view === 'cobrancas' && <CobrancasTab data={data} />}
@@ -2022,6 +2024,14 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
     <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       <div className="mx-auto w-full max-w-5xl p-6">
         <MeuFinanceiroConteudo data={data} />
+        {/* Sócio (mesmo limitado) também vê as previsões da carteira do escritório */}
+        {data.projecaoCasos?.isSocio && (
+          <div className="mt-8">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-zinc-100"><Sparkles className="h-5 w-5 text-[#7048E8]" /> Previsões da carteira do escritório</h2>
+            <p className="mt-0.5 text-sm text-zinc-500">Visão de sócio — valor em causa e recuperação provável de toda a carteira.</p>
+            <PrevisoesCarteira />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2052,5 +2062,66 @@ function MeuTab() {
         : !data ? <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os dados.</p></Card>
         : <MeuFinanceiroConteudo data={data} />}
     </div>
+  );
+}
+
+// ═══════════════════════════ ABA · PREVISÕES (SÓCIOS) ═════════════════════════
+/** Previsões da carteira (valor de causa × probabilidade) — restrito a sócios/admin. */
+function PrevisoesTab() {
+  return <div className="mt-2"><PrevisoesCarteira /></div>;
+}
+
+function PrevisoesCarteira() {
+  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'previsoes'], queryFn: () => financeiroService.getPrevisoes(), staleTime: 60_000 });
+  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
+  if (!data || data.semAcesso) return <Card><p className="py-8 text-center text-sm text-zinc-400">Previsões da carteira são visíveis apenas para os sócios.</p></Card>;
+  const taxaCor = (t: number | null) => (t == null ? 'text-zinc-400' : t >= 60 ? 'text-emerald-600' : t >= 40 ? 'text-[#228BE6]' : 'text-amber-600');
+  return (
+    <>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MiniStat label="Valor em causa" value={brl(data.valorTotal)} hint={`${data.nComValor} processos com valor`} accent="#7C3AED" />
+        <MiniStat label="Recuperação esperada" value={brl(data.recuperacaoEsperada)} hint="Σ valor × probabilidade" accent="#10B981" />
+        <MiniStat label="Êxito provável (≥50%)" value={String(data.provaveis.n)} hint={`${brl(data.provaveis.valor)} em jogo`} accent="#228BE6" />
+        <MiniStat label="Ganhos projetados" value={`~${data.ganhosProjetados}`} hint={`${data.favoraveis} já favoráveis + andamento`} accent="#E64980" />
+      </div>
+
+      <Card title="Recuperação esperada por área" sub="valor em causa × probabilidade de êxito de cada caso.">
+        <div className="space-y-1.5">
+          {data.porArea.map((a) => {
+            const p = data.recuperacaoEsperada > 0 ? (a.esperado / data.recuperacaoEsperada) * 100 : 0;
+            return (
+              <div key={a.key} className="flex items-center gap-3">
+                <span className="w-28 shrink-0 text-sm text-zinc-600 dark:text-zinc-300">{a.key}</span>
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(2, p)}%` }} /></div>
+                <span className="w-28 shrink-0 text-right text-sm font-semibold tabular-nums text-emerald-600">{brl(a.esperado)}</span>
+                <span className="hidden w-16 shrink-0 text-right text-[11px] text-zinc-400 sm:inline">{a.exitoMedio != null ? `${a.exitoMedio}% êxito` : '—'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card title="Por tese — valor, recuperação e desempenho" sub="onde está o valor e quanto tende a voltar (por tese/produto).">
+        <div className="max-h-96 overflow-y-auto scrollbar-thin">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
+              <tr><th className="px-2 py-1.5 font-medium">Tese</th><th className="px-2 py-1.5 text-right font-medium">Casos</th><th className="px-2 py-1.5 text-right font-medium">Em causa</th><th className="px-2 py-1.5 text-right font-medium">Esperado</th><th className="px-2 py-1.5 text-right font-medium">Êxito real</th></tr>
+            </thead>
+            <tbody>
+              {data.porTese.map((t) => (
+                <tr key={t.key} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <td className="px-2 py-1.5 font-medium text-zinc-700 dark:text-zinc-200">{t.key}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{t.n}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{brl(t.valor)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-emerald-600">{brl(t.esperado)}</td>
+                  <td className={`px-2 py-1.5 text-right tabular-nums font-semibold ${taxaCor(t.taxa)}`}>{t.taxa == null ? '—' : `${t.taxa}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <p className="mt-3 text-[11px] text-zinc-400">⚠️ Estimativa: usa o % de êxito de cada caso (ou o fator de realização padrão). A condenação real pode sair pra mais ou pra menos. Esta visão é restrita aos sócios.</p>
+    </>
   );
 }

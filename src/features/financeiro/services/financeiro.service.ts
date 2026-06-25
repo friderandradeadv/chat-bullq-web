@@ -218,6 +218,10 @@ export const financeiroService = {
     const { data } = await api.patch('/financeiro/fator-realizacao', { pct });
     return data.data ?? data;
   },
+  async getPrevisoes(): Promise<FinPrevisoes> {
+    const { data } = await api.get('/financeiro/previsoes');
+    return data.data ?? data;
+  },
   async getSocioConfig(): Promise<SocioConfig> {
     const { data } = await api.get('/financeiro/socio-config');
     return data.data ?? data;
@@ -227,6 +231,17 @@ export const financeiroService = {
     return data.data ?? data;
   },
 };
+
+/** Previsões da carteira (sócios/admin): valor de causa × probabilidade de êxito. */
+export interface FinPrevAg { key: string; n: number; valor: number; esperado: number; exitoMedio: number | null; taxa: number | null }
+export interface FinPrevisoes {
+  semAcesso?: boolean;
+  valorTotal: number; recuperacaoEsperada: number; exitoMedio: number | null;
+  favoraveis: number; perdidos: number; emAndamento: number; taxaReal: number | null;
+  provaveis: { n: number; valor: number }; ganhosProjetados: number;
+  nCasos: number; nComValor: number;
+  porArea: FinPrevAg[]; porTese: FinPrevAg[];
+}
 
 /** Divisão dos honorários por DONO do caso: socioSplit[donoUserId][área|'default'][destino: userId|'escritorio'] = %. */
 export interface SocioConfig {
