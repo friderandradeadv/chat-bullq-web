@@ -234,6 +234,7 @@ export function AppSidebar() {
                 <NavSection label="Análise" defaultOpen={false}>
                   <NavItem href="/juridico/recursos" icon={Scale} label="Recursos" />
                   <NavItem href="/juridico/jurimetria" icon={BarChart3} label="Jurimetria" />
+                  <NavItem href="/juridico/calculadora-rmc" icon={Calculator} label="Cálculo RMC/RCC" />
                 </NavSection>
               </div>
 
