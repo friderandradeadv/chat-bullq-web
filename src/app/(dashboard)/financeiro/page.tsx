@@ -1822,9 +1822,14 @@ function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
   const clientes = data.clientes ?? [];
   const serie = data.serie ?? [];
   const casos = data.casos ?? [];
-  const cs = data.cs ?? { prestacao: 0, cumprimento: 0, itens: [] as { caseId: string; cliente: string; tipo: string; valor: number }[] };
+  const cs = data.cs ?? { prestacao: 0, cumprimento: 0, cumprimentoNosso: 0, itens: [] as { caseId: string; cliente: string; tipo: string; valor: number; nosso?: number }[] };
+  // parte do escritório no cumprimento (bruto × % do contrato). Usa o valor do
+  // backend (por caso); se vier de uma API antiga, cai na % padrão do escritório.
+  const csCumprimentoNosso = cs.cumprimentoNosso ?? Math.round(cs.cumprimento * (data.projecaoCasos?.escritorioPadrao ?? 40)) / 100;
   const melhorMes = data.melhorMes ?? null;
-  const aReceberTotal = r.aReceber + r.minhaParte + cs.prestacao;
+  // Total a entrar = a receber (lançamentos) + sua parte (rateio) + CS NOSSO
+  // (prestação já é nossa; no cumprimento entra a parte do escritório, não o bruto).
+  const aReceberTotal = r.aReceber + r.minhaParte + cs.prestacao + csCumprimentoNosso;
   const primeiro = (data.meuNome || '').split(' ')[0] || 'Dr(a).';
   const iniciais = (data.meuNome || 'AD').slice(0, 2).toUpperCase();
   const hora = new Date().getHours();
@@ -1899,6 +1904,7 @@ function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
             <div className="mb-2 flex flex-wrap gap-4 text-sm">
               {cs.prestacao > 0 && <span className="text-emerald-600">Prestação (nosso): <strong>{brl(cs.prestacao)}</strong></span>}
               {cs.cumprimento > 0 && <span className="text-[#228BE6]">Em cumprimento (bruto): <strong>{brl(cs.cumprimento)}</strong></span>}
+              {csCumprimentoNosso > 0 && <span className="text-[#7048E8]">Cumprimento (nosso ~%): <strong>{brl(csCumprimentoNosso)}</strong></span>}
             </div>
             <div className="max-h-56 space-y-0.5 overflow-y-auto scrollbar-thin">
               {cs.itens.map((x, i) => (
