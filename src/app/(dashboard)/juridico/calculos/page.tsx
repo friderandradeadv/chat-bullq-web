@@ -1,0 +1,142 @@
+'use client';
+
+import Link from 'next/link';
+import {
+  ArrowRight,
+  Briefcase,
+  Calculator,
+  Gavel,
+  Landmark,
+  Percent,
+  Wrench,
+} from 'lucide-react';
+
+type Calc = {
+  href: string;
+  titulo: string;
+  descricao: string;
+  icon: React.ComponentType<{ className?: string }>;
+  disponivel: boolean;
+};
+
+const CALCULADORAS: Calc[] = [
+  {
+    href: '/juridico/calculos/rmc-rcc',
+    titulo: 'Revisão de RMC / RCC',
+    descricao:
+      'Conversão em empréstimo + restituição em dobro (CDC 42) com correção monetária. Taxa do BACEN e validado contra cálculos reais.',
+    icon: Landmark,
+    disponivel: true,
+  },
+  {
+    href: '#',
+    titulo: 'Cumprimento de Sentença',
+    descricao:
+      'Atualização da condenação: correção + juros de mora + multa 10% e honorários 10% (CPC 523).',
+    icon: Gavel,
+    disponivel: false,
+  },
+  {
+    href: '#',
+    titulo: 'Rescisão Trabalhista',
+    descricao:
+      'Verbas rescisórias por motivo: aviso prévio, 13º, férias + 1/3, FGTS + multa, saldo de salário.',
+    icon: Briefcase,
+    disponivel: false,
+  },
+  {
+    href: '#',
+    titulo: 'Provisionamento Bancário',
+    descricao:
+      'Provisão de risco/êxito da carteira de ações bancárias para planejamento financeiro do escritório.',
+    icon: Calculator,
+    disponivel: false,
+  },
+  {
+    href: '#',
+    titulo: 'Juros Abusivos',
+    descricao:
+      'Revisão de contrato: compara a taxa pactuada com a taxa média de mercado do BACEN na época.',
+    icon: Percent,
+    disponivel: false,
+  },
+];
+
+export default function CalculosHubPage() {
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      <header className="mb-6 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+          <Calculator className="h-5 w-5" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-white">Calculadoras</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Ferramentas de cálculo jurídico do escritório
+          </p>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {CALCULADORAS.map((c) => {
+          const Icon = c.icon;
+          const inner = (
+            <div
+              className={`group flex h-full flex-col rounded-xl border p-5 transition-colors ${
+                c.disponivel
+                  ? 'border-zinc-200 bg-white hover:border-blue-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-blue-500/40'
+                  : 'border-dashed border-zinc-200 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-900/40'
+              }`}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                    c.disponivel
+                      ? 'bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400'
+                      : 'bg-zinc-200/60 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                </div>
+                {c.disponivel ? (
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    Disponível
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                    <Wrench className="h-3 w-3" /> Em breve
+                  </span>
+                )}
+              </div>
+              <h2
+                className={`text-sm font-semibold ${
+                  c.disponivel ? 'text-zinc-900 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'
+                }`}
+              >
+                {c.titulo}
+              </h2>
+              <p className="mt-1 flex-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                {c.descricao}
+              </p>
+              {c.disponivel && (
+                <div className="mt-3 flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400">
+                  Abrir calculadora
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              )}
+            </div>
+          );
+          return c.disponivel ? (
+            <Link key={c.titulo} href={c.href} className="block">
+              {inner}
+            </Link>
+          ) : (
+            <div key={c.titulo} className="cursor-not-allowed">
+              {inner}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

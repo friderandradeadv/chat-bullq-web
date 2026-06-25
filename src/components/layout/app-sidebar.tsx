@@ -234,7 +234,13 @@ export function AppSidebar() {
                 <NavSection label="Análise" defaultOpen={false}>
                   <NavItem href="/juridico/recursos" icon={Scale} label="Recursos" />
                   <NavItem href="/juridico/jurimetria" icon={BarChart3} label="Jurimetria" />
-                  <NavItem href="/juridico/calculadora-rmc" icon={Calculator} label="Cálculo RMC/RCC" />
+                </NavSection>
+              </div>
+
+              {/* Cálculos — subaba (calculadoras jurídicas) */}
+              <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
+                <NavSection label="Cálculos" defaultOpen={false}>
+                  <NavItem href="/juridico/calculos" icon={Calculator} label="Calculadoras" />
                 </NavSection>
               </div>
 

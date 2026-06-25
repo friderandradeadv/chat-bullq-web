@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Calculator, Loader2, Plus, Sparkles, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Calculator, Landmark, Loader2, Plus, Sparkles, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
 import {
   calculadoraRmcService,
   type CalcularRmcInput,
@@ -68,6 +69,8 @@ export default function CalculadoraRmcPage() {
   const [form, setForm] = useState({
     nomeCalculo: '',
     valorEmprestimo: '',
+    dataContratacao: '',
+    modalidadeConsignado: 'INSS' as 'INSS' | 'PUBLICO',
     taxaConversao: '2.50',
     dobro: true,
     indiceCorrecao: 'INPC' as IndiceCorrecao,
@@ -117,12 +120,35 @@ export default function CalculadoraRmcPage() {
     },
   });
 
+  const [taxaInfo, setTaxaInfo] = useState<string | null>(null);
+  const taxaMut = useMutation({
+    mutationFn: () =>
+      calculadoraRmcService.buscarTaxaConsignado(form.dataContratacao, form.modalidadeConsignado),
+    onSuccess: (r) => {
+      if (r.taxa != null) {
+        set('taxaConversao', String(r.taxa).replace('.', ','));
+        const modLabel = form.modalidadeConsignado === 'INSS' ? 'INSS' : 'setor público';
+        const mesLabel = r.mes ? r.mes.split('-').reverse().join('/') : '';
+        setTaxaInfo(`Taxa média do consignado ${modLabel} em ${mesLabel}: ${r.taxa}% a.m. (BACEN). Ajuste se quiser.`);
+      } else {
+        setTaxaInfo(r.mensagem ?? 'Sem taxa do BACEN para essa data.');
+      }
+    },
+    onError: (e) => setTaxaInfo((e as Error)?.message ?? 'Erro ao buscar a taxa.'),
+  });
+
   const podeCalcular =
     parseValor(form.valorEmprestimo) > 0 && parseValor(form.taxaConversao) > 0 && parcelas.length > 0;
   const res = calc.data;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
+      <Link
+        href="/juridico/calculos"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+      >
+        <ArrowLeft className="h-4 w-4" /> Calculadoras
+      </Link>
       <header className="mb-6 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
           <Calculator className="h-5 w-5" />
@@ -165,6 +191,17 @@ export default function CalculadoraRmcPage() {
                   />
                 </div>
                 <div>
+                  <label className={labelCls}>Data da contratação</label>
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={form.dataContratacao}
+                    onChange={(e) => set('dataContratacao', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className={labelCls}>Taxa conversão (% a.m.)</label>
                   <input
                     className={inputCls}
@@ -174,7 +211,34 @@ export default function CalculadoraRmcPage() {
                     onChange={(e) => set('taxaConversao', e.target.value)}
                   />
                 </div>
+                <div>
+                  <label className={labelCls}>Modalidade (consignado)</label>
+                  <select
+                    className={inputCls}
+                    value={form.modalidadeConsignado}
+                    onChange={(e) => set('modalidadeConsignado', e.target.value as 'INSS' | 'PUBLICO')}
+                  >
+                    <option value="INSS">INSS</option>
+                    <option value="PUBLICO">Setor público</option>
+                  </select>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => taxaMut.mutate()}
+                disabled={!form.dataContratacao || taxaMut.isPending}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                {taxaMut.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Landmark className="h-3.5 w-3.5" />
+                )}
+                Sugerir taxa média do BACEN (data da contratação)
+              </button>
+              {taxaInfo && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{taxaInfo}</p>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Índice de correção</label>

@@ -59,9 +59,27 @@ export interface ResultadoRmc {
   };
 }
 
+export interface TaxaConsignado {
+  taxa: number | null;
+  mes?: string;
+  modalidade?: string;
+  fonte?: string;
+  mensagem?: string;
+}
+
 export const calculadoraRmcService = {
   async calcular(input: CalcularRmcInput): Promise<ResultadoRmc> {
     const { data } = await api.post('/calculadora-rmc-rcc/calcular', input);
     return data.data ?? data;
+  },
+
+  async buscarTaxaConsignado(
+    data: string,
+    modalidade: 'INSS' | 'PUBLICO' = 'INSS',
+  ): Promise<TaxaConsignado> {
+    const { data: d } = await api.get('/calculadora-rmc-rcc/taxa-consignado', {
+      params: { data, modalidade },
+    });
+    return d.data ?? d;
   },
 };
