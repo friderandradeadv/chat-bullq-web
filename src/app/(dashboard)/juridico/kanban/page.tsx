@@ -6,7 +6,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Plus, Download, ChevronDown } from 'lucide-react';
+import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Plus, Download, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -56,6 +56,12 @@ const fmtMoney = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.floor(d / 365)}a` : d >= 30 ? `${Math.floor(d / 30)}m` : `${d}d`);
 
+type SortKey = 'prazo' | 'alfabetica' | 'movimentacao' | 'recente' | 'valor';
+const SORT_LABEL: Record<SortKey, string> = {
+  prazo: 'Próximo prazo', alfabetica: 'Cliente (A–Z)', movimentacao: 'Última movimentação', recente: 'Adicionado por último', valor: 'Maior valor',
+};
+const tms = (d: string | null | undefined) => (d ? new Date(d).getTime() : 0);
+
 export default function FaseJudicialKanbanPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -66,6 +72,7 @@ export default function FaseJudicialKanbanPage() {
   const [resp, setResp] = useState('');
   const [phaseSel, setPhaseSel] = useState<string[]>([]);
   const [tagSel, setTagSel] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<SortKey>('prazo');
   const [showFora, setShowFora] = useState(false);
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
@@ -122,15 +129,22 @@ export default function FaseJudicialKanbanPage() {
   const byPhase = useMemo(() => {
     const map: Record<string, KanbanCard[]> = {};
     for (const c of filtered) (map[c.phase] ??= []).push(c);
-    for (const k of Object.keys(map)) {
-      map[k].sort((a, b) => {
-        const ap = a.proximoPrazo?.dueDate ? new Date(a.proximoPrazo.dueDate).getTime() : Infinity;
-        const bp = b.proximoPrazo?.dueDate ? new Date(b.proximoPrazo.dueDate).getTime() : Infinity;
-        return ap - bp;
-      });
-    }
+    const cmp = (a: KanbanCard, b: KanbanCard) => {
+      switch (sortBy) {
+        case 'alfabetica': return (a.client ?? a.title ?? '').localeCompare(b.client ?? b.title ?? '', 'pt-BR');
+        case 'movimentacao': return tms(b.ultimoAndamento?.date) - tms(a.ultimoAndamento?.date);
+        case 'recente': return tms(b.createdAt) - tms(a.createdAt);
+        case 'valor': return (b.value ?? 0) - (a.value ?? 0);
+        default: {
+          const ap = a.proximoPrazo?.dueDate ? new Date(a.proximoPrazo.dueDate).getTime() : Infinity;
+          const bp = b.proximoPrazo?.dueDate ? new Date(b.proximoPrazo.dueDate).getTime() : Infinity;
+          return ap - bp;
+        }
+      }
+    };
+    for (const k of Object.keys(map)) map[k].sort(cmp);
     return map;
-  }, [filtered]);
+  }, [filtered, sortBy]);
 
   const FORA = new Set(['arquivado', 'abandonado', 'perdidos_valeska']);
   const visiblePhases = useMemo(() => {
@@ -224,6 +238,12 @@ export default function FaseJudicialKanbanPage() {
           <Select value={resp} onChange={setResp} placeholder="Todos os responsáveis" valueMap={resps} />
           <MultiSelect label="Fases" options={phaseOptions} selected={phaseSel} onChange={setPhaseSel} />
           <MultiSelect label="Etiquetas" options={tagOptions} selected={tagSel} onChange={setTagSel} />
+          <div className="flex items-center gap-1" title="Ordenar os cards">
+            <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)} className="h-9 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+              {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
+            </select>
+          </div>
           <label className="ml-1 flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
             <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#e11970]" />
             Mostrar arquivados/abandonados
