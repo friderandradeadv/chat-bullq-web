@@ -301,23 +301,46 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
 
-  // Só as conversas das quais ESTE advogado é o responsável (assignedToId).
-  const q = useQuery({
-    queryKey: ['hub', 'pending-msgs', user?.id],
+  // "Esperando você" = (a) conversas atribuídas a mim, não lidas +
+  // (b) conversas PENDING não lidas — quando o cliente reabre, o resolver zera o
+  // assignedToId, então ninguém é "dono" e elas não cairiam no filtro de (a),
+  // mas são justamente as que mais precisam de resposta.
+  const qMine = useQuery({
+    queryKey: ['hub', 'pending-msgs', 'mine', user?.id],
     queryFn: () => inboxService.getConversations({ limit: '40', unread: 'true', archived: 'exclude', groups: 'exclude', assignedToId: user!.id }),
     enabled: !!user?.id,
     staleTime: 30_000,
     retry: 1,
     refetchInterval: 60_000,
   });
+  const qPending = useQuery({
+    queryKey: ['hub', 'pending-msgs', 'pending', user?.id],
+    queryFn: () => inboxService.getConversations({ limit: '40', unread: 'true', archived: 'exclude', groups: 'exclude', status: 'PENDING' }),
+    enabled: !!user?.id,
+    staleTime: 30_000,
+    retry: 1,
+    refetchInterval: 60_000,
+  });
+  const isLoading = qMine.isLoading || qPending.isLoading;
 
-  const pending = useMemo(
-    () =>
-      (q.data?.conversations ?? [])
-        .filter((c) => c.messages?.[0]?.direction === 'INBOUND' && !handled.has(c.id))
-        .sort((a, b) => (b.lastMessageAt || '').localeCompare(a.lastMessageAt || '')),
-    [q.data, handled],
-  );
+  const pending = useMemo(() => {
+    const myId = user?.id;
+    const byId = new Map<string, Conversation>();
+    // (a) minhas atribuídas — entram todas.
+    // (b) PENDING — só as sem dono ou já minhas (nunca a pendência de outro advogado).
+    const add = (list: Conversation[], onlyMineOrUnclaimed: boolean) => {
+      for (const c of list) {
+        if (c.messages?.[0]?.direction !== 'INBOUND' || handled.has(c.id)) continue;
+        if (onlyMineOrUnclaimed && c.assignedToId && c.assignedToId !== myId) continue;
+        byId.set(c.id, c);
+      }
+    };
+    add(qMine.data?.conversations ?? [], false);
+    add(qPending.data?.conversations ?? [], true);
+    return [...byId.values()].sort(
+      (a, b) => (b.lastMessageAt || '').localeCompare(a.lastMessageAt || ''),
+    );
+  }, [qMine.data, qPending.data, handled, user?.id]);
 
   const shown = showAll ? pending.slice(0, 12) : pending.slice(0, 5);
 
@@ -361,7 +384,7 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
         <Link href="/inbox" className="text-[11px] font-semibold text-[#228BE6] hover:underline">abrir chat →</Link>
       </div>
 
-      {q.isLoading ? (
+      {isLoading ? (
         <div className="flex items-center gap-2 px-2 py-6 text-sm text-zinc-400">
           <Loader2 className="h-4 w-4 animate-spin" /> Procurando mensagens novas…
         </div>
