@@ -100,7 +100,7 @@ export default function CalculadoraRmcPage() {
     mutationFn: () => {
       const payload: CalcularRmcInput = {
         valorEmprestimo: parseValor(form.valorEmprestimo),
-        taxaConversao: Number(form.taxaConversao),
+        taxaConversao: parseValor(form.taxaConversao),
         dobro: form.dobro,
         indiceCorrecao: form.indiceCorrecao,
         dataBase: form.dataBase,
@@ -118,7 +118,7 @@ export default function CalculadoraRmcPage() {
   });
 
   const podeCalcular =
-    parseValor(form.valorEmprestimo) > 0 && Number(form.taxaConversao) > 0 && parcelas.length > 0;
+    parseValor(form.valorEmprestimo) > 0 && parseValor(form.taxaConversao) > 0 && parcelas.length > 0;
   const res = calc.data;
 
   return (
