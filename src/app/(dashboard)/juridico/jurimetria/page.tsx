@@ -22,18 +22,18 @@ const fmtCompact = (v: number) => {
 const tooltipStyle = { fontSize: 12, borderRadius: 8, border: '1px solid #e9ecef' };
 type Metrica = 'qtd' | 'valor';
 
-// Agrupa com placar de resultado (favorável/perdido/andamento) → taxa de êxito real.
-interface ResBucket { key: string; count: number; valor: number; fav: number; perd: number; and: number; exitoSum: number; exitoN: number }
+// Agrupa com placar de resultado (favorável/perdido/andamento/limbo) → taxa de êxito real.
+interface ResBucket { key: string; count: number; valor: number; fav: number; perd: number; and: number; lim: number; exitoSum: number; exitoN: number }
 type ResRow = ResBucket & { dec: number; taxa: number | null; exitoMedio: number | null };
 function agruparRes(rows: JuriRow[], keyOf: (r: JuriRow) => string | null): ResRow[] {
   const m = new Map<string, ResBucket>();
   for (const r of rows) {
     const k = keyOf(r);
     if (k == null) continue;
-    const o = m.get(k) ?? { key: k, count: 0, valor: 0, fav: 0, perd: 0, and: 0, exitoSum: 0, exitoN: 0 };
+    const o = m.get(k) ?? { key: k, count: 0, valor: 0, fav: 0, perd: 0, and: 0, lim: 0, exitoSum: 0, exitoN: 0 };
     o.count++; o.valor += r.value;
-    if (r.resultado === 'favoravel') o.fav++; else if (r.resultado === 'perdido') o.perd++; else o.and++;
-    if (r.exito != null) { o.exitoSum += r.exito; o.exitoN++; }
+    if (r.resultado === 'favoravel') o.fav++; else if (r.resultado === 'perdido') o.perd++; else if (r.resultado === 'limbo') o.lim++; else o.and++;
+    if (r.exito != null && r.resultado !== 'limbo') { o.exitoSum += r.exito; o.exitoN++; }
     m.set(k, o);
   }
   return [...m.values()].map((o) => {
@@ -87,8 +87,9 @@ export default function JurimetriaPage() {
     const fav = rows.filter((r) => r.resultado === 'favoravel').length;
     const perd = rows.filter((r) => r.resultado === 'perdido').length;
     const and = rows.filter((r) => r.resultado === 'andamento').length;
+    const limboRows = rows.filter((r) => r.limbo || r.resultado === 'limbo');
     const dec = fav + perd;
-    return { nProc, nLeads, exitoMedio, fav, perd, and, taxaReal: dec ? Math.round((fav / dec) * 100) : null, dec };
+    return { nProc, nLeads, exitoMedio, fav, perd, and, lim: limboRows.length, limboValor: limboRows.reduce((s, r) => s + r.value, 0), taxaReal: dec ? Math.round((fav / dec) * 100) : null, dec };
   }, [rows]);
 
   const val = (b: { count: number; valor: number }) => (metrica === 'valor' ? b.valor : b.count);
@@ -173,6 +174,13 @@ export default function JurimetriaPage() {
             <p className="text-lg font-bold text-zinc-800 dark:text-zinc-100">{melhorTrib.key} <span className="text-emerald-600">· {melhorTrib.taxa}% de êxito</span></p>
             <p className="text-[11px] text-zinc-400">{melhorTrib.fav} favoráveis de {melhorTrib.dec} decididos · {melhorTrib.and} em andamento</p>
           </div>
+        </div>
+      )}
+
+      {k.lim > 0 && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-zinc-300 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          <Briefcase className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+          <span><b>{k.lim} processos em limbo</b> (Contribuições — associações sumiram, execução frustrada, investigação PF): <b>{fmtCompact(k.limboValor)}</b> em causa. Ficam <b>fora</b> da taxa de êxito e entram nas previsões só com ~10% de chance.</span>
         </div>
       )}
 

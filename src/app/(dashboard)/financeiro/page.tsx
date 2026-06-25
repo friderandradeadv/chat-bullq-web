@@ -2085,6 +2085,21 @@ function PrevisoesCarteira() {
         <MiniStat label="Ganhos projetados" value={`~${data.ganhosProjetados}`} hint={`${data.favoraveis} já favoráveis + andamento`} accent="#E64980" />
       </div>
 
+      {data.limbo && data.limbo.n > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl border border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-zinc-400">Em limbo / execução frustrada</p>
+            <p className="text-xl font-bold tabular-nums text-zinc-600 dark:text-zinc-300">{brl(data.limbo.valor)}</p>
+            <p className="text-[11px] text-zinc-400">{data.limbo.n} processos de Contribuições (associações sumiram)</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-zinc-400">Recuperação considerada</p>
+            <p className="text-xl font-bold tabular-nums text-amber-600">{brl(data.limbo.esperado)}</p>
+            <p className="text-[11px] text-zinc-400">só {data.limbo.pct}% de chance (execução frustrada + PF)</p>
+          </div>
+        </div>
+      )}
+
       <Card title="Recuperação esperada por área" sub="valor em causa × probabilidade de êxito de cada caso.">
         <div className="space-y-1.5">
           {data.porArea.map((a) => {

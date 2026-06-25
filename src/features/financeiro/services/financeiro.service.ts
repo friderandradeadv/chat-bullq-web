@@ -239,6 +239,7 @@ export interface FinPrevisoes {
   valorTotal: number; recuperacaoEsperada: number; exitoMedio: number | null;
   favoraveis: number; perdidos: number; emAndamento: number; taxaReal: number | null;
   provaveis: { n: number; valor: number }; ganhosProjetados: number;
+  limbo?: { n: number; valor: number; esperado: number; pct: number };
   nCasos: number; nComValor: number;
   porArea: FinPrevAg[]; porTese: FinPrevAg[];
 }
