@@ -67,6 +67,18 @@ export interface TaxaConsignado {
   mensagem?: string;
 }
 
+export interface HiscreContrato {
+  banco: string | null;
+  tipo: string;
+  contrato: string | null;
+  parcelas: { data: string; valor: number }[];
+}
+
+export interface HiscreResultado {
+  contratos: HiscreContrato[];
+  aviso?: string;
+}
+
 export const calculadoraRmcService = {
   async calcular(input: CalcularRmcInput): Promise<ResultadoRmc> {
     const { data } = await api.post('/calculadora-rmc-rcc/calcular', input);
@@ -79,6 +91,16 @@ export const calculadoraRmcService = {
   ): Promise<TaxaConsignado> {
     const { data: d } = await api.get('/calculadora-rmc-rcc/taxa-consignado', {
       params: { data, modalidade },
+    });
+    return d.data ?? d;
+  },
+
+  async extrairHiscre(file: File): Promise<HiscreResultado> {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data: d } = await api.post('/calculadora-rmc-rcc/hiscre/extrair', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // extração via IA pode levar alguns segundos
     });
     return d.data ?? d;
   },

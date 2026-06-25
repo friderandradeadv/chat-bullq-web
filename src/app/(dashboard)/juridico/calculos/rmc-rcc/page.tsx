@@ -1,12 +1,23 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Calculator, Landmark, Loader2, Plus, Sparkles, TriangleAlert } from 'lucide-react';
+import {
+  ArrowLeft,
+  Calculator,
+  FileText,
+  Landmark,
+  Loader2,
+  Plus,
+  Sparkles,
+  TriangleAlert,
+  Upload,
+} from 'lucide-react';
 import Link from 'next/link';
 import {
   calculadoraRmcService,
   type CalcularRmcInput,
+  type HiscreContrato,
   type IndiceCorrecao,
   type ParcelaInput,
 } from '@/features/calculadora-rmc/services/calculadora-rmc.service';
@@ -136,6 +147,51 @@ export default function CalculadoraRmcPage() {
     },
     onError: (e) => setTaxaInfo((e as Error)?.message ?? 'Erro ao buscar a taxa.'),
   });
+
+  // ── HISCRE: upload do extrato → extração dos descontos por IA ──
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [contratosHiscre, setContratosHiscre] = useState<HiscreContrato[] | null>(null);
+  const [hiscreAviso, setHiscreAviso] = useState<string | null>(null);
+
+  const aplicarContrato = (c: HiscreContrato) => {
+    const linhas = c.parcelas.map((p) => `${p.data}\t${p.valor.toFixed(2)}`).join('\n');
+    setParcelasTexto(linhas);
+    if (!form.nomeCalculo) {
+      const nome = [c.tipo, c.banco].filter(Boolean).join(' - ');
+      if (nome) set('nomeCalculo', nome);
+    }
+    setContratosHiscre(null);
+    setHiscreAviso(`${c.parcelas.length} parcela(s) importada(s) do HISCRE.`);
+  };
+
+  const hiscreMut = useMutation({
+    mutationFn: (file: File) => calculadoraRmcService.extrairHiscre(file),
+    onSuccess: (r) => {
+      const cs = r.contratos ?? [];
+      if (cs.length === 1) {
+        aplicarContrato(cs[0]);
+      } else if (cs.length > 1) {
+        setContratosHiscre(cs);
+        setHiscreAviso(`${cs.length} contratos de RMC/RCC encontrados — escolha qual usar:`);
+      } else {
+        setContratosHiscre(null);
+        setHiscreAviso(r.aviso ?? 'Nenhum desconto de RMC/RCC encontrado no extrato.');
+      }
+    },
+    onError: (e) => {
+      setContratosHiscre(null);
+      setHiscreAviso((e as Error)?.message ?? 'Erro ao processar o HISCRE.');
+    },
+  });
+
+  const onPickHiscre = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite re-selecionar o mesmo arquivo
+    if (file) {
+      setHiscreAviso(null);
+      hiscreMut.mutate(file);
+    }
+  };
 
   const podeCalcular =
     parseValor(form.valorEmprestimo) > 0 && parseValor(form.taxaConversao) > 0 && parcelas.length > 0;
@@ -335,9 +391,62 @@ export default function CalculadoraRmcPage() {
               Parcelas descontadas
             </h2>
             <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-              Uma por linha: <code>data valor</code> (ex.: <code>01/12/2022 60,60</code>). Use o
-              gerador para preencher rápido.
+              Importe do HISCRE, use o gerador, ou cole uma por linha: <code>data valor</code>{' '}
+              (ex.: <code>01/12/2022 60,60</code>).
             </p>
+
+            {/* Importar do HISCRE (PDF → IA extrai os descontos de RMC/RCC) */}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={onPickHiscre}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={hiscreMut.isPending}
+              className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 py-2.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-60 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/15"
+            >
+              {hiscreMut.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Lendo o extrato com IA…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" /> Importar descontos do HISCRE (PDF)
+                </>
+              )}
+            </button>
+            {hiscreAviso && (
+              <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">{hiscreAviso}</p>
+            )}
+            {contratosHiscre && contratosHiscre.length > 1 && (
+              <div className="mb-3 space-y-1.5">
+                {contratosHiscre.map((c, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => aplicarContrato(c)}
+                    className="flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs hover:border-blue-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-blue-500/40"
+                  >
+                    <FileText className="h-4 w-4 shrink-0 text-zinc-400" />
+                    <span className="flex-1">
+                      <span className="font-medium text-zinc-800 dark:text-zinc-100">
+                        {c.tipo}
+                        {c.banco ? ` · ${c.banco}` : ''}
+                      </span>
+                      <span className="block text-zinc-500 dark:text-zinc-400">
+                        {c.parcelas.length} parcela(s)
+                        {c.contrato ? ` · contrato ${c.contrato}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="mb-3 grid grid-cols-[1fr_1fr_70px_auto] items-end gap-2">
               <div>
                 <label className={labelCls}>1ª competência</label>
