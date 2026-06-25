@@ -199,6 +199,7 @@ export interface KanbanCard {
   opponent: string | null;
   proximoPrazo: { id: string; title: string; dueDate: string; type: string } | null;
   ultimoAndamento: { date: string; description: string } | null;
+  createdAt: string;
   updatedAt: string;
 }
 export interface KanbanData {
@@ -253,9 +254,10 @@ export interface JuriRow {
   limbo?: boolean; // execução frustrada (ex.: Contribuições — associações sumiram)
   resultado: 'favoravel' | 'perdido' | 'extinto' | 'encerrado' | 'andamento' | 'limbo';
   resultadoMotivo?: string; // motivo do desfecho (improcedência, extinção, acordo…) lido dos andamentos
-  predatoria?: boolean; // flag de advocacia predatória / NUMOPEDE nos andamentos
+  predatoria?: boolean; // flag de advocacia predatória / NUMOPEDE nos andamentos/intimações
   recursoNegado?: boolean; // RESP/RE não conhecido / inadmitido
-  nMov?: number; // nº de andamentos analisados
+  emendaInicial?: boolean; // intimação para emendar a inicial (sinal de inicial frágil)
+  nMov?: number; // nº de sinais analisados (andamentos + publicações + tarefas)
   honorarios: string | null;
   responsavel: string | null;
   mes: string | null; // YYYY-MM

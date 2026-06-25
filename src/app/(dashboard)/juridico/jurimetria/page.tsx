@@ -98,8 +98,9 @@ export default function JurimetriaPage() {
     const limboRows = rows.filter((r) => r.limbo || r.resultado === 'limbo');
     const predat = rows.filter((r) => r.predatoria).length;
     const respNeg = rows.filter((r) => r.recursoNegado).length;
+    const emenda = rows.filter((r) => r.emendaInicial).length;
     const dec = fav + perd + ext;
-    return { nProc, nLeads, exitoMedio, fav, perd, ext, enc, and, predat, respNeg, lim: limboRows.length, limboValor: limboRows.reduce((s, r) => s + r.value, 0), taxaReal: dec ? Math.round((fav / dec) * 100) : null, dec };
+    return { nProc, nLeads, exitoMedio, fav, perd, ext, enc, and, predat, respNeg, emenda, lim: limboRows.length, limboValor: limboRows.reduce((s, r) => s + r.value, 0), taxaReal: dec ? Math.round((fav / dec) * 100) : null, dec };
   }, [rows]);
 
   const val = (b: { count: number; valor: number }) => (metrica === 'valor' ? b.valor : b.count);
@@ -134,12 +135,6 @@ export default function JurimetriaPage() {
     for (const r of rows) if (r.mes) m.set(r.mes, (m.get(r.mes) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([mes, count]) => ({ mes, count }));
   }, [rows]);
-
-  if (isLoading) return <div className="p-8 text-sm text-zinc-400">Carregando jurimetria…</div>;
-
-  const metricaLabel = metrica === 'valor' ? 'R$' : 'qtd';
-  const melhorTrib = tribunalRank[0];
-  const piorTrib = tribunalRank.length > 1 ? tribunalRank[tribunalRank.length - 1] : null;
   // motivos das derrotas (perdido + extinto), agregados
   const motivosDerrota = useMemo(() => {
     const m = new Map<string, { motivo: string; n: number; valor: number }>();
@@ -151,6 +146,12 @@ export default function JurimetriaPage() {
     return [...m.values()].sort((a, b) => b.n - a.n);
   }, [rows]);
   const predatorios = useMemo(() => rows.filter((r) => r.predatoria), [rows]);
+
+  if (isLoading) return <div className="p-8 text-sm text-zinc-400">Carregando jurimetria…</div>;
+
+  const metricaLabel = metrica === 'valor' ? 'R$' : 'qtd';
+  const melhorTrib = tribunalRank[0];
+  const piorTrib = tribunalRank.length > 1 ? tribunalRank[tribunalRank.length - 1] : null;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-[#fafafa] p-6 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
@@ -215,10 +216,10 @@ export default function JurimetriaPage() {
         <span>Resultado lido dos <b>andamentos reais</b> (DataJud + DJEN + e-SAJ/Projudi), não da fase do kanban: improcedência, extinção sem mérito, indeferimento da inicial, RESP/RE não conhecido e procedência/acordo. <b>{k.enc} processos arquivados</b> não têm decisão clara nos autos — ficam como “a conferir”, fora da taxa.</span>
       </div>
 
-      {(k.predat > 0 || k.respNeg > 0) && (
+      {(k.predat > 0 || k.respNeg > 0 || k.emenda > 0) && (
         <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/10 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{k.predat > 0 && <><b>{k.predat} processos com flag de advocacia predatória / NUMOPEDE</b> nos andamentos. </>}{k.respNeg > 0 && <><b>{k.respNeg} com RESP/RE não conhecido.</b></>} Conferir abaixo nos motivos das derrotas.</span>
+          <span>Sinais de risco nas intimações: {k.predat > 0 && <><b>{k.predat} com flag de advocacia predatória / NUMOPEDE</b>; </>}{k.emenda > 0 && <><b>{k.emenda} intimados a emendar a inicial</b>; </>}{k.respNeg > 0 && <><b>{k.respNeg} com RESP/RE não conhecido</b>; </>}lidos das tarefas + publicações DJEN + andamentos. Detalhe nos motivos das derrotas.</span>
         </div>
       )}
 
