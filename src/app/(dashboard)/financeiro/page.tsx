@@ -2086,10 +2086,12 @@ function PrevisoesCarteira() {
     <>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MiniStat label="Valor em causa" value={brl(data.valorTotal)} hint={`${data.nComValor} processos com valor`} accent="#7C3AED" />
-        <MiniStat label="Recuperação esperada" value={brl(data.recuperacaoEsperada)} hint="Σ valor × probabilidade" accent="#10B981" />
+        <MiniStat label="Recuperação esperada" value={brl(data.recuperacaoEsperada)} hint="já tira os perdidos/extintos" accent="#10B981" />
         <MiniStat label="Êxito provável (≥50%)" value={String(data.provaveis.n)} hint={`${brl(data.provaveis.valor)} em jogo`} accent="#228BE6" />
-        <MiniStat label="Ganhos projetados" value={`~${data.ganhosProjetados}`} hint={`${data.favoraveis} já favoráveis + andamento`} accent="#E64980" />
+        <MiniStat label="Já perdidos / extintos" value={String((data.perdidos ?? 0) + (data.extintos ?? 0))} hint={`${brl(data.perdidoValor ?? 0)} que não volta`} accent="#EF4444" />
       </div>
+
+      <p className="mt-2 text-[11px] text-zinc-400">✅ Recuperação esperada já <b>exclui</b> processos perdidos/extintos (lidos dos andamentos reais — improcedência, RESP negado, extinção). Só conta o que está em andamento (× probabilidade) e o limbo a 10%.</p>
 
       {data.limbo && data.limbo.n > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl border border-zinc-300 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900">

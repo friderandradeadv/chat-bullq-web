@@ -237,7 +237,8 @@ export interface FinPrevAg { key: string; n: number; valor: number; esperado: nu
 export interface FinPrevisoes {
   semAcesso?: boolean;
   valorTotal: number; recuperacaoEsperada: number; exitoMedio: number | null;
-  favoraveis: number; perdidos: number; emAndamento: number; taxaReal: number | null;
+  favoraveis: number; perdidos: number; extintos?: number; encerrados?: number; emAndamento: number;
+  perdidoValor?: number; taxaReal: number | null;
   provaveis: { n: number; valor: number }; ganhosProjetados: number;
   limbo?: { n: number; valor: number; esperado: number; pct: number };
   nCasos: number; nComValor: number;
