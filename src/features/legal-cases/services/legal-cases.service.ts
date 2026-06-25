@@ -114,6 +114,14 @@ export interface DocumentRef {
   createdAt: string;
 }
 
+export interface ContratoImpugnar {
+  id: string;
+  reu: string;
+  doc: string | null;
+  produto: string;
+  valor: number | null;
+}
+
 export interface CaseDetail extends Omit<CaseListItem, 'parties' | '_count'> {
   jurisdiction: string | null;
   legalPhase: string | null;
@@ -241,7 +249,8 @@ export interface JuriRow {
   status: 'ACTIVE' | 'ARCHIVED' | 'SUSPENDED' | 'CLOSED';
   value: number;
   exito: number | null; // % de êxito estimado
-  resultado: 'favoravel' | 'perdido' | 'andamento';
+  limbo?: boolean; // execução frustrada (ex.: Contribuições — associações sumiram)
+  resultado: 'favoravel' | 'perdido' | 'andamento' | 'limbo';
   honorarios: string | null;
   responsavel: string | null;
   mes: string | null; // YYYY-MM
@@ -370,6 +379,23 @@ export const legalCasesService = {
     input: { date: string; description: string },
   ): Promise<MovementItem> {
     const { data } = await api.post(`/legal-cases/${caseId}/movements`, input);
+    return data.data ?? data;
+  },
+  async saveContratos(
+    id: string,
+    contratos: { id?: string; reu: string; doc?: string | null; produto: string; valor?: number | null }[],
+  ): Promise<{ ok: boolean; contratos: ContratoImpugnar[] }> {
+    const { data } = await api.patch(`/legal-cases/${id}/contratos`, { contratos });
+    return data.data ?? data;
+  },
+  async sugerirContratos(id: string): Promise<{ contratos: ContratoImpugnar[] }> {
+    const { data } = await api.post(`/legal-cases/${id}/contratos/sugerir`);
+    return data.data ?? data;
+  },
+  async gerarIniciais(
+    id: string,
+  ): Promise<{ ok: boolean; criados: number; filhos: { id: string; title: string; reu: string; produto: string }[] }> {
+    const { data } = await api.post(`/legal-cases/${id}/gerar-iniciais`);
     return data.data ?? data;
   },
 };

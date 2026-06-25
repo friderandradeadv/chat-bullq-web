@@ -39,6 +39,10 @@ const cleanArea = (s: string | null): string | null => {
   return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim();
 };
 const fmtSize = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+// Fases da raia pré-judicial e detecção de produto bancário (RMC/RCC) — gate da
+// seção "Contratos a impugnar".
+const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
+const isBancarioProduto = (p: string | null) => /RMC|RCC|CONSIGNAD|CART[ÃA]O|BANC|EMPR[ÉE]STIM|PORTABIL|REVISIONAL|TARIFA|SEGURO/i.test(cleanArea(p) ?? '');
 // Cor da etiqueta por produto (igual ao card do kanban).
 const produtoColor = (p: string | null): { bg: string; fg: string } => {
   const s = (cleanArea(p) ?? '').toUpperCase();
@@ -228,6 +232,16 @@ export function CaseDetailDrawer({
 
                 {/* Parte adversa (editável) */}
                 <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+
+                {/* Contratos a impugnar + gerar iniciais (intake pré-judicial bancário) */}
+                {phaseKey && PRE_PHASES.has(phaseKey) && isBancarioProduto(c.area) && (
+                  <ContratosImpugnar
+                    caseId={c.id}
+                    phaseKey={phaseKey}
+                    initial={((c.metadata as any)?.contratos ?? []) as any[]}
+                    onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
+                  />
+                )}
 
                 {pf.recordUrl && (
                   <a href={pf.recordUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
@@ -430,6 +444,108 @@ function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa
         <button onClick={() => setEditing(true)} className="mt-1.5 inline-flex items-center gap-1 rounded border border-dashed border-[#cfe0ed] px-3 py-2 text-xs font-medium text-[#005efc] hover:bg-[#005efc]/5 dark:border-zinc-700">
           <Plus className="h-3.5 w-3.5" /> Cadastrar parte adversa
         </button>
+      )}
+    </div>
+  );
+}
+
+// Contratos a impugnar (intake pré-judicial bancário): cada linha = banco × produto
+// × valor. "Sugerir com IA" lê a conversa; "Gerar iniciais" desmembra em 1 card por
+// linha (na fase Montar inicial) e arquiva o intake.
+type CRow = { id: string; reu: string; produto: string; valor: string };
+const PRODUTOS_IMPUGNAR = ['RMC', 'RCC', 'Empréstimo consignado', 'Portabilidade', 'Revisional'];
+const rowId = () => `ct_${Math.round(Math.random() * 1e9)}`;
+const fmtValorBR = (n: number | null) => (n == null ? '' : n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const parseValorBR = (s: string): number | null => {
+  const t = (s || '').replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.');
+  const v = parseFloat(t);
+  return isFinite(v) ? v : null;
+};
+
+function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: string; phaseKey: string | undefined; initial: any[]; onChanged: () => void }) {
+  const [rows, setRows] = useState<CRow[]>(() =>
+    (initial ?? []).map((c: any) => ({ id: c.id || rowId(), reu: c.reu ?? '', produto: c.produto ?? 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })),
+  );
+  const [sug, setSug] = useState(false);
+  const [gen, setGen] = useState(false);
+  const [sav, setSav] = useState(false);
+  const [done, setDone] = useState<number | null>(null);
+
+  const setRow = (id: string, patch: Partial<CRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const addRow = () => setRows((r) => [...r, { id: rowId(), reu: '', produto: 'RMC', valor: '' }]);
+  const rmRow = (id: string) => setRows((r) => r.filter((x) => x.id !== id));
+  const payload = () => rows.filter((r) => r.reu.trim()).map((r) => ({ id: r.id, reu: r.reu.trim(), produto: r.produto.trim() || 'RMC', valor: parseValorBR(r.valor) }));
+
+  const salvar = async () => {
+    setSav(true);
+    try { await legalCasesService.saveContratos(caseId, payload()); toast.success('Contratos salvos'); onChanged(); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao salvar'); } finally { setSav(false); }
+  };
+  const sugerir = async () => {
+    setSug(true);
+    try {
+      const { contratos } = await legalCasesService.sugerirContratos(caseId);
+      setRows((contratos ?? []).map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })));
+      toast.success(contratos?.length ? `${contratos.length} sugestão(ões) da IA — confira e salve` : 'A IA não achou bancos/produtos claros na conversa');
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao sugerir'); } finally { setSug(false); }
+  };
+  const gerar = async () => {
+    const n = payload().length;
+    if (!n) { toast.error('Adicione ao menos um contrato (banco + produto)'); return; }
+    if (!confirm(`Gerar ${n} inicial(is)? O intake será arquivado e cada linha vira um card na fase "Montar inicial".`)) return;
+    setGen(true);
+    try {
+      await legalCasesService.saveContratos(caseId, payload());
+      const res = await legalCasesService.gerarIniciais(caseId);
+      setDone(res.criados);
+      toast.success(`${res.criados} inicial(is) criada(s) — intake arquivado`);
+      onChanged();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao gerar iniciais'); } finally { setGen(false); }
+  };
+
+  if (done != null) {
+    return (
+      <div className="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/15">
+        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">✓ {done} inicial(is) criada(s)</p>
+        <p className="mt-0.5 text-xs text-emerald-700/80 dark:text-emerald-400/80">Cada uma está na fase “Montar inicial” da raia judicial. Este intake foi arquivado — pode fechar.</p>
+      </div>
+    );
+  }
+
+  const nValid = payload().length;
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Contratos a impugnar</p>
+        <button onClick={sugerir} disabled={sug} className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
+          <Sparkles className="h-3.5 w-3.5" /> {sug ? 'Lendo a conversa…' : 'Sugerir com IA'}
+        </button>
+      </div>
+      <div className="mt-1.5 space-y-2">
+        {rows.length === 0 && <p className="text-xs italic text-zinc-400">Liste cada banco × produto (RMC/RCC). A IA pode sugerir a partir da conversa do cliente.</p>}
+        {rows.map((r) => (
+          <div key={r.id} className="flex items-center gap-1.5">
+            <input value={r.reu} onChange={(e) => setRow(r.id, { reu: e.target.value })} placeholder="Banco (réu)" className={INPUT + ' flex-1'} />
+            <select value={r.produto} onChange={(e) => setRow(r.id, { produto: e.target.value })} className={INPUT + ' w-28 shrink-0'}>
+              {PRODUTOS_IMPUGNAR.map((p) => <option key={p} value={p}>{p}</option>)}
+              {r.produto && !PRODUTOS_IMPUGNAR.includes(r.produto) && <option value={r.produto}>{r.produto}</option>}
+            </select>
+            <input value={r.valor} onChange={(e) => setRow(r.id, { valor: e.target.value })} placeholder="Valor" inputMode="decimal" className={INPUT + ' w-24 shrink-0'} />
+            <button onClick={() => rmRow(r.id)} title="Remover" className="shrink-0 rounded p-1 text-zinc-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button onClick={addRow} className="inline-flex items-center gap-1 rounded border border-dashed border-[#cfe0ed] px-2.5 py-1 text-xs font-medium text-[#005efc] hover:bg-[#005efc]/5 dark:border-zinc-700"><Plus className="h-3.5 w-3.5" /> Adicionar</button>
+        <button onClick={salvar} disabled={sav} className="rounded px-2.5 py-1 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">{sav ? 'Salvando…' : 'Salvar'}</button>
+        {phaseKey === 'montar_inicial' && (
+          <button onClick={gerar} disabled={gen || nValid === 0} className="ml-auto inline-flex items-center gap-1 rounded bg-[#005efc] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
+            <ArrowRight className="h-3.5 w-3.5" /> {gen ? 'Gerando…' : `Gerar iniciais (${nValid})`}
+          </button>
+        )}
+      </div>
+      {phaseKey !== 'montar_inicial' && (
+        <p className="mt-1.5 text-[11px] text-zinc-400">Mova o card para “Montar inicial” para liberar a geração das iniciais (1 card por linha).</p>
       )}
     </div>
   );
