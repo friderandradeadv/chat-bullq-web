@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   BarChart3, Scale, TrendingUp, Trophy, Landmark, Layers, Cpu,
-  Target, Users, CalendarDays, Filter as FilterIcon, Briefcase, Gavel, Award,
+  Target, Users, CalendarDays, Filter as FilterIcon, Briefcase, Gavel, Award, AlertTriangle,
 } from 'lucide-react';
 import { legalCasesService, type JuriRow } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -22,22 +22,28 @@ const fmtCompact = (v: number) => {
 const tooltipStyle = { fontSize: 12, borderRadius: 8, border: '1px solid #e9ecef' };
 type Metrica = 'qtd' | 'valor';
 
-// Agrupa com placar de resultado (favorável/perdido/andamento/limbo) → taxa de êxito real.
-interface ResBucket { key: string; count: number; valor: number; fav: number; perd: number; and: number; lim: number; exitoSum: number; exitoN: number }
+// Agrupa com placar de resultado REAL (lido dos andamentos) → taxa de êxito honesta.
+// Decididos = favorável + perdido + extinto (extinção sem mérito/indeferimento).
+interface ResBucket { key: string; count: number; valor: number; fav: number; perd: number; ext: number; enc: number; and: number; lim: number; exitoSum: number; exitoN: number }
 type ResRow = ResBucket & { dec: number; taxa: number | null; exitoMedio: number | null };
 function agruparRes(rows: JuriRow[], keyOf: (r: JuriRow) => string | null): ResRow[] {
   const m = new Map<string, ResBucket>();
   for (const r of rows) {
     const k = keyOf(r);
     if (k == null) continue;
-    const o = m.get(k) ?? { key: k, count: 0, valor: 0, fav: 0, perd: 0, and: 0, lim: 0, exitoSum: 0, exitoN: 0 };
+    const o = m.get(k) ?? { key: k, count: 0, valor: 0, fav: 0, perd: 0, ext: 0, enc: 0, and: 0, lim: 0, exitoSum: 0, exitoN: 0 };
     o.count++; o.valor += r.value;
-    if (r.resultado === 'favoravel') o.fav++; else if (r.resultado === 'perdido') o.perd++; else if (r.resultado === 'limbo') o.lim++; else o.and++;
+    if (r.resultado === 'favoravel') o.fav++;
+    else if (r.resultado === 'perdido') o.perd++;
+    else if (r.resultado === 'extinto') o.ext++;
+    else if (r.resultado === 'encerrado') o.enc++;
+    else if (r.resultado === 'limbo') o.lim++;
+    else o.and++;
     if (r.exito != null && r.resultado !== 'limbo') { o.exitoSum += r.exito; o.exitoN++; }
     m.set(k, o);
   }
   return [...m.values()].map((o) => {
-    const dec = o.fav + o.perd;
+    const dec = o.fav + o.perd + o.ext;
     return { ...o, dec, taxa: dec ? Math.round((o.fav / dec) * 100) : null, exitoMedio: o.exitoN ? Math.round(o.exitoSum / o.exitoN) : null };
   });
 }
@@ -86,10 +92,14 @@ export default function JurimetriaPage() {
     const exitoMedio = comExito.length ? Math.round(comExito.reduce((s, r) => s + (r.exito ?? 0), 0) / comExito.length) : null;
     const fav = rows.filter((r) => r.resultado === 'favoravel').length;
     const perd = rows.filter((r) => r.resultado === 'perdido').length;
+    const ext = rows.filter((r) => r.resultado === 'extinto').length;
+    const enc = rows.filter((r) => r.resultado === 'encerrado').length;
     const and = rows.filter((r) => r.resultado === 'andamento').length;
     const limboRows = rows.filter((r) => r.limbo || r.resultado === 'limbo');
-    const dec = fav + perd;
-    return { nProc, nLeads, exitoMedio, fav, perd, and, lim: limboRows.length, limboValor: limboRows.reduce((s, r) => s + r.value, 0), taxaReal: dec ? Math.round((fav / dec) * 100) : null, dec };
+    const predat = rows.filter((r) => r.predatoria).length;
+    const respNeg = rows.filter((r) => r.recursoNegado).length;
+    const dec = fav + perd + ext;
+    return { nProc, nLeads, exitoMedio, fav, perd, ext, enc, and, predat, respNeg, lim: limboRows.length, limboValor: limboRows.reduce((s, r) => s + r.value, 0), taxaReal: dec ? Math.round((fav / dec) * 100) : null, dec };
   }, [rows]);
 
   const val = (b: { count: number; valor: number }) => (metrica === 'valor' ? b.valor : b.count);
@@ -103,7 +113,6 @@ export default function JurimetriaPage() {
   // teses (assunto/produto): qual performa mais
   const porTese = useMemo(() => agruparRes(rows, (r) => r.assunto).sort((a, b) => b.count - a.count), [rows]);
   const teseRank = useMemo(() => [...porTese].filter((t) => t.dec > 0).sort((a, b) => (b.taxa ?? -1) - (a.taxa ?? -1) || b.fav - a.fav), [porTese]);
-  const semPerdidos = k.perd === 0 && k.fav > 0;
 
   // entendimento: combinações tribunal × tese com volume, ordenadas por taxa
   const tribTese = useMemo(() => agruparRes(rows, (r) => (r.tribunal && r.assunto ? `${r.tribunal}|||${r.assunto}` : null))
@@ -130,6 +139,18 @@ export default function JurimetriaPage() {
 
   const metricaLabel = metrica === 'valor' ? 'R$' : 'qtd';
   const melhorTrib = tribunalRank[0];
+  const piorTrib = tribunalRank.length > 1 ? tribunalRank[tribunalRank.length - 1] : null;
+  // motivos das derrotas (perdido + extinto), agregados
+  const motivosDerrota = useMemo(() => {
+    const m = new Map<string, { motivo: string; n: number; valor: number }>();
+    for (const r of rows) {
+      if (r.resultado !== 'perdido' && r.resultado !== 'extinto') continue;
+      const k = r.resultadoMotivo || 'sem motivo identificado';
+      const o = m.get(k) ?? { motivo: k, n: 0, valor: 0 }; o.n++; o.valor += r.value; m.set(k, o);
+    }
+    return [...m.values()].sort((a, b) => b.n - a.n);
+  }, [rows]);
+  const predatorios = useMemo(() => rows.filter((r) => r.predatoria), [rows]);
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-[#fafafa] p-6 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
@@ -155,39 +176,56 @@ export default function JurimetriaPage() {
         </div>
       </div>
 
-      {/* KPIs de desempenho */}
+      {/* KPIs de desempenho REAL (lido dos andamentos, não da fase) */}
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Kpi icon={<Scale className="h-4 w-4" />} label="Processos (com CNJ)" value={String(k.nProc)} hint="ações ajuizadas" />
-        <Kpi icon={<Briefcase className="h-4 w-4" />} label="Leads (sem processo)" value={String(k.nLeads)} hint="fechados, não ajuizados" accent="#F59E0B" />
-        <Kpi icon={<Trophy className="h-4 w-4" />} label="Taxa de êxito real" value={k.taxaReal != null ? `${k.taxaReal}%` : '—'} hint={`${k.dec} já decididos`} accent="#10B981" />
-        <Kpi icon={<Award className="h-4 w-4" />} label="Favoráveis" value={String(k.fav)} hint="cumprimento + trânsito + prestação" accent="#0D9488" />
-        <Kpi icon={<Target className="h-4 w-4" />} label="Perdidos" value={String(k.perd)} hint="arquivo por insucesso" accent="#EF4444" />
-        <Kpi icon={<TrendingUp className="h-4 w-4" />} label="Êxito médio estimado" value={k.exitoMedio != null ? `${k.exitoMedio}%` : '—'} hint="dos processos em andamento" accent="#228BE6" />
+        <Kpi icon={<Scale className="h-4 w-4" />} label="Processos (com CNJ)" value={String(k.nProc)} hint={`+${k.nLeads} leads sem ação`} />
+        <Kpi icon={<Trophy className="h-4 w-4" />} label="Taxa de êxito REAL" value={k.taxaReal != null ? `${k.taxaReal}%` : '—'} hint={`${k.fav} de ${k.dec} decididos`} accent={taxaCor(k.taxaReal)} />
+        <Kpi icon={<Award className="h-4 w-4" />} label="Favoráveis" value={String(k.fav)} hint="procedência · acordo · execução" accent="#10B981" />
+        <Kpi icon={<Target className="h-4 w-4" />} label="Perdidos" value={String(k.perd)} hint="improcedência · RESP negado" accent="#EF4444" />
+        <Kpi icon={<Scale className="h-4 w-4" />} label="Extintos / indeferidos" value={String(k.ext)} hint="sem mérito · emenda à inicial" accent="#F59E0B" />
+        <Kpi icon={<TrendingUp className="h-4 w-4" />} label="Em andamento" value={String(k.and)} hint={`+${k.enc} encerrados a conferir`} accent="#228BE6" />
       </div>
 
-      {/* Destaque: melhor tribunal */}
-      {melhorTrib && (
-        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 dark:border-emerald-900/40 dark:from-emerald-900/10 dark:to-zinc-900">
-          <Landmark className="h-8 w-8 text-emerald-600" />
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-zinc-400">Tribunal onde mais vencemos</p>
-            <p className="text-lg font-bold text-zinc-800 dark:text-zinc-100">{melhorTrib.key} <span className="text-emerald-600">· {melhorTrib.taxa}% de êxito</span></p>
-            <p className="text-[11px] text-zinc-400">{melhorTrib.fav} favoráveis de {melhorTrib.dec} decididos · {melhorTrib.and} em andamento</p>
+      {/* Destaque: onde ganhamos × onde apanhamos */}
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {melhorTrib && (
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 dark:border-emerald-900/40 dark:from-emerald-900/10 dark:to-zinc-900">
+            <Landmark className="h-7 w-7 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-zinc-400">Onde mais vencemos</p>
+              <p className="text-lg font-bold text-zinc-800 dark:text-zinc-100">{melhorTrib.key} <span className="text-emerald-600">· {melhorTrib.taxa}%</span></p>
+              <p className="text-[11px] text-zinc-400">{melhorTrib.fav} favoráveis de {melhorTrib.dec} decididos</p>
+            </div>
           </div>
+        )}
+        {piorTrib && (
+          <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-white p-4 dark:border-rose-900/40 dark:from-rose-900/10 dark:to-zinc-900">
+            <Landmark className="h-7 w-7 shrink-0 text-rose-600" />
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-zinc-400">Onde mais apanhamos</p>
+              <p className="text-lg font-bold text-zinc-800 dark:text-zinc-100">{piorTrib.key} <span className="text-rose-600">· {piorTrib.taxa}%</span></p>
+              <p className="text-[11px] text-zinc-400">{piorTrib.perd + piorTrib.ext} derrotas de {piorTrib.dec} decididos</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/10 dark:text-blue-300">
+        <Cpu className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>Resultado lido dos <b>andamentos reais</b> (DataJud + DJEN + e-SAJ/Projudi), não da fase do kanban: improcedência, extinção sem mérito, indeferimento da inicial, RESP/RE não conhecido e procedência/acordo. <b>{k.enc} processos arquivados</b> não têm decisão clara nos autos — ficam como “a conferir”, fora da taxa.</span>
+      </div>
+
+      {(k.predat > 0 || k.respNeg > 0) && (
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/10 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{k.predat > 0 && <><b>{k.predat} processos com flag de advocacia predatória / NUMOPEDE</b> nos andamentos. </>}{k.respNeg > 0 && <><b>{k.respNeg} com RESP/RE não conhecido.</b></>} Conferir abaixo nos motivos das derrotas.</span>
         </div>
       )}
 
       {k.lim > 0 && (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-zinc-300 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-zinc-300 bg-zinc-50 p-3 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
           <Briefcase className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
           <span><b>{k.lim} processos em limbo</b> (Contribuições — associações sumiram, execução frustrada, investigação PF): <b>{fmtCompact(k.limboValor)}</b> em causa. Ficam <b>fora</b> da taxa de êxito e entram nas previsões só com ~10% de chance.</span>
-        </div>
-      )}
-
-      {semPerdidos && (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-400">
-          <Target className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>Nenhum processo está marcado como <b>perdido</b> hoje — por isso a “taxa de êxito real” aparece em 100% onde há decisão. Enquanto a fase “Perdidos” não for usada, compare os tribunais pelo <b>nº de favoráveis</b> e pelo <b>êxito estimado</b>, não só pela taxa.</span>
         </div>
       )}
 
@@ -242,6 +280,43 @@ export default function JurimetriaPage() {
         </Card>
       </div>
 
+      {/* Por que perdemos — motivos das derrotas + alertas */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card title="Por que perdemos" icon={<Target className="h-4 w-4" />} subtitle="motivos das derrotas (perdidos + extintos), dos andamentos">
+          {motivosDerrota.length === 0 ? (
+            <p className="py-6 text-center text-sm text-zinc-400">Nenhuma derrota identificada nos andamentos desta seleção.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {motivosDerrota.map((m) => {
+                const tot = motivosDerrota.reduce((s, x) => s + x.n, 0) || 1;
+                const p = (m.n / tot) * 100;
+                return (
+                  <div key={m.motivo} className="flex items-center gap-3">
+                    <span className="w-56 shrink-0 truncate text-sm text-zinc-600 dark:text-zinc-300" title={m.motivo}>{m.motivo}</span>
+                    <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full rounded-full bg-rose-500" style={{ width: `${Math.max(3, p)}%` }} /></div>
+                    <span className="w-8 shrink-0 text-right text-sm font-bold tabular-nums text-rose-600">{m.n}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+        <Card title="Alertas — advocacia predatória / NUMOPEDE" icon={<AlertTriangle className="h-4 w-4" />} subtitle="processos sinalizados nos andamentos">
+          {predatorios.length === 0 ? (
+            <p className="py-6 text-center text-sm text-zinc-400">Nenhum processo com flag de predatória nesta seleção.</p>
+          ) : (
+            <div className="max-h-80 space-y-1.5 overflow-y-auto scrollbar-thin">
+              {predatorios.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50/40 px-2.5 py-1.5 text-sm dark:border-amber-900/40 dark:bg-amber-900/10">
+                  <span className="min-w-0 truncate text-zinc-700 dark:text-zinc-200">{r.cliente}</span>
+                  <span className="flex shrink-0 items-center gap-2"><span className="text-[11px] text-zinc-400">{r.tribunal ?? '—'}</span><span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{r.resultado}</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
       {/* Descritivos da carteira */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card title="Distribuição por área" icon={<Layers className="h-4 w-4" />}><Donut data={porArea} metrica={metrica} /></Card>
@@ -250,12 +325,15 @@ export default function JurimetriaPage() {
         <Card title="Por sistema" icon={<Cpu className="h-4 w-4" />}><Donut data={porSistema} metrica={metrica} /></Card>
         <Card title="Novos por mês" icon={<CalendarDays className="h-4 w-4" />} subtitle="distribuição/criação"><Timeline data={timeline} /></Card>
         <Card title="Resultado dos processos" icon={<Target className="h-4 w-4" />}>
-          <div className="flex items-center justify-around py-3">
+          <div className="flex flex-wrap items-center justify-around gap-y-3 py-3">
             <Stat big={k.fav} label="Favoráveis" color="#10B981" />
             <Stat big={k.perd} label="Perdidos" color="#EF4444" />
-            <Stat big={k.and} label="Em andamento" color="#F59E0B" />
+            <Stat big={k.ext} label="Extintos" color="#F59E0B" />
+            <Stat big={k.enc} label="Encerrados" color="#94A3B8" />
+            <Stat big={k.and} label="Em andamento" color="#228BE6" />
+            <Stat big={k.lim} label="Limbo" color="#A855F7" />
           </div>
-          <p className="px-1 text-center text-[11px] text-zinc-400">Favoráveis = cumprimento + trânsito + prestação de contas · Perdidos = arquivo por insucesso.</p>
+          <p className="px-1 text-center text-[11px] text-zinc-400">Lido dos andamentos reais. Favoráveis = procedência/acordo/execução · Perdidos = improcedência/RESP negado · Extintos = sem mérito/indeferimento · Encerrados = arquivados sem decisão clara (a conferir).</p>
         </Card>
       </div>
       <div className="h-6" />
@@ -324,7 +402,7 @@ function TaxaTabela({ data, colLabel }: { data: ResRow[]; colLabel: string }) {
     <div className="max-h-80 overflow-y-auto scrollbar-thin">
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
-          <tr><th className="px-2 py-1.5 font-medium">{colLabel}</th><th className="px-2 py-1.5 text-right font-medium">Decid.</th><th className="px-2 py-1.5 text-right font-medium">Fav.</th><th className="px-2 py-1.5 text-right font-medium">And.</th><th className="px-2 py-1.5 text-right font-medium">Taxa</th></tr>
+          <tr><th className="px-2 py-1.5 font-medium">{colLabel}</th><th className="px-2 py-1.5 text-right font-medium">Dec.</th><th className="px-2 py-1.5 text-right font-medium">Fav.</th><th className="px-2 py-1.5 text-right font-medium">Perd.</th><th className="px-2 py-1.5 text-right font-medium">Ext.</th><th className="px-2 py-1.5 text-right font-medium">Taxa</th></tr>
         </thead>
         <tbody>
           {data.map((r) => (
@@ -332,7 +410,8 @@ function TaxaTabela({ data, colLabel }: { data: ResRow[]; colLabel: string }) {
               <td className="px-2 py-1.5 font-medium text-zinc-700 dark:text-zinc-200">{r.key}</td>
               <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{r.dec}</td>
               <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{r.fav}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{r.and}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-rose-600">{r.perd || ''}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-amber-600">{r.ext || ''}</td>
               <td className="px-2 py-1.5 text-right"><span className="rounded-full px-1.5 py-0.5 text-xs font-bold text-white" style={{ background: taxaCor(r.taxa) }}>{r.taxa == null ? '—' : `${r.taxa}%`}</span></td>
             </tr>
           ))}

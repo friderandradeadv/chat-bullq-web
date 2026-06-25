@@ -251,7 +251,11 @@ export interface JuriRow {
   value: number;
   exito: number | null; // % de êxito estimado
   limbo?: boolean; // execução frustrada (ex.: Contribuições — associações sumiram)
-  resultado: 'favoravel' | 'perdido' | 'andamento' | 'limbo';
+  resultado: 'favoravel' | 'perdido' | 'extinto' | 'encerrado' | 'andamento' | 'limbo';
+  resultadoMotivo?: string; // motivo do desfecho (improcedência, extinção, acordo…) lido dos andamentos
+  predatoria?: boolean; // flag de advocacia predatória / NUMOPEDE nos andamentos
+  recursoNegado?: boolean; // RESP/RE não conhecido / inadmitido
+  nMov?: number; // nº de andamentos analisados
   honorarios: string | null;
   responsavel: string | null;
   mes: string | null; // YYYY-MM
