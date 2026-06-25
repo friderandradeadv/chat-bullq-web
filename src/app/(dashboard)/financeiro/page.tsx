@@ -1868,24 +1868,24 @@ function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl border border-pink-200 bg-pink-50/40 p-3 dark:border-pink-900/40 dark:bg-pink-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Em busca pelos seus clientes</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#E64980]">{brl(data.projecaoCasos.brutoEmProcesso)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.nComValor} {data.projecaoCasos.nComValor === 1 ? 'pessoa conta' : 'pessoas contam'} com você</p></div>
               <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900/40 dark:bg-blue-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Honorários do escritório</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#228BE6]">{brl(data.projecaoCasos.escritorioEmProcesso)}</p><p className="text-[11px] text-zinc-400">% do contrato sobre a condenação</p></div>
-              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.isSocio ? (data.projecaoCasos.socioPoolPct != null && data.projecaoCasos.socioPoolPct < 100 ? `sua fatia de sócio (${data.projecaoCasos.socioPoolPct}% vai pros sócios)` : 'sua fatia de sócio por área') : `${data.projecaoCasos.pctExito}% dos honorários do escritório`}</p></div>
+              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte provável</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p><p className="text-[11px] text-zinc-400">{data.projecaoCasos.isSocio ? 'sua fatia dos honorários (o resto fica com o escritório)' : `${data.projecaoCasos.pctExito}% dos honorários do escritório`}</p></div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Já realizado + a entrar</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl(r.recebido + aReceberTotal)}</p><p className="text-[11px] text-zinc-400">o que já se concretizou</p></div>
             </div>
-            {data.projecaoCasos.isSocio && (data.projecaoCasos.porArea?.length ?? 0) > 0 && (
+            {data.projecaoCasos.isSocio && (data.projecaoCasos.divisao?.length ?? 0) > 0 && (
               <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/30 p-3 dark:border-violet-900/40 dark:bg-violet-900/10">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-500">Sua parte de sócio por área</p>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-500">Como os honorários se dividem</p>
                 <div className="space-y-1">
-                  {data.projecaoCasos.porArea!.map((a) => (
-                    <div key={a.area} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300"><span className="font-medium">{a.area}</span><span className="rounded-full bg-violet-100 px-1.5 text-[10px] font-bold text-violet-600 dark:bg-violet-900/40 dark:text-violet-300">{a.pct}%</span><span className="text-[11px] text-zinc-400">{a.n} {a.n === 1 ? 'caso' : 'casos'}</span></span>
-                      <span className="tabular-nums"><span className="text-zinc-400">{brl(a.escritorio)} → </span><span className="font-semibold text-[#7048E8]">{brl(a.suaParte)}</span></span>
+                  {data.projecaoCasos.divisao!.map((d) => (
+                    <div key={d.quem} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300"><span className={`font-medium ${d.eu ? 'text-[#7048E8]' : ''}`}>{d.quem}</span><span className={`rounded-full px-1.5 text-[10px] font-bold ${d.eu ? 'bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800'}`}>{d.pct}%</span></span>
+                      <span className={`tabular-nums font-semibold ${d.eu ? 'text-[#7048E8]' : 'text-zinc-500 dark:text-zinc-400'}`}>{brl(d.valor)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">💜 Você não move só números — move <strong>vidas</strong>. São <strong>{r.nCasos ?? casos.length} histórias</strong> que passam pelas suas mãos.</p>
-            <p className="mt-1.5 text-[11px] text-zinc-400">Estimativa: a condenação real costuma sair diferente do valor da causa (pra mais ou pra menos) — {data.projecaoCasos.isSocio ? 'sua parte de sócio é dividida por área de atuação.' : 'sua parte já é calculada pela média de êxito de cada caso.'}</p>
+            <p className="mt-1.5 text-[11px] text-zinc-400">Estimativa: a condenação real costuma sair diferente do valor da causa (pra mais ou pra menos) — {data.projecaoCasos.isSocio ? 'sua parte de sócio sai dos honorários do escritório, conforme a divisão acima.' : 'sua parte já é calculada pela média de êxito de cada caso.'}</p>
           </Card>
         )}
 

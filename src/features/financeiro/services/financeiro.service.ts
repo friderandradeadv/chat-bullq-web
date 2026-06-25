@@ -82,7 +82,7 @@ export interface FinDashboard {
   serie?: { mes: string; valor: number }[];
   melhorMes?: { mes: string; valor: number } | null;
   casos?: { caseId: string; autor: string | null; reu: string | null; area: string | null; produto: string | null; fase: string | null; cnj: string | null; valorCausa: number; realizacao: number; condenacaoEstimada: number; firmPct: number; escritorioValor: number; minhaPct?: number; liquido: number; exito: number | null }[];
-  projecaoCasos?: { pctExito: number; escritorioPadrao: number; fatorRealizacao: number; isSocio?: boolean; socioPoolPct?: number; brutoEmProcesso: number; condenacaoEstimada: number; escritorioEmProcesso: number; liquidoProvavel: number; nComValor: number; porArea?: { area: string; escritorio: number; suaParte: number; pct: number; n: number }[] };
+  projecaoCasos?: { pctExito: number; escritorioPadrao: number; fatorRealizacao: number; isSocio?: boolean; brutoEmProcesso: number; condenacaoEstimada: number; escritorioEmProcesso: number; liquidoProvavel: number; nComValor: number; divisao?: { quem: string; eu: boolean; escritorio: boolean; valor: number; pct: number }[] };
   cs?: { prestacao: number; cumprimento: number; itens: { caseId: string; cliente: string; tipo: string; valor: number }[] };
 }
 
