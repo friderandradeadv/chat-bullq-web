@@ -208,4 +208,18 @@ export const financeiroService = {
     const { data } = await api.patch('/financeiro/fator-realizacao', { pct });
     return data.data ?? data;
   },
+  async getSocioConfig(): Promise<SocioConfig> {
+    const { data } = await api.get('/financeiro/socio-config');
+    return data.data ?? data;
+  },
+  async setSocioConfig(payload: Partial<SocioConfig>): Promise<{ ok: boolean } & SocioConfig> {
+    const { data } = await api.patch('/financeiro/socio-config', payload);
+    return data.data ?? data;
+  },
 };
+
+/** Divisão dos honorários por DONO do caso: socioSplit[donoUserId][área|'default'][destino: userId|'escritorio'] = %. */
+export interface SocioConfig {
+  socios: Record<string, boolean>;
+  socioSplit: Record<string, Record<string, Record<string, number>>>;
+}
