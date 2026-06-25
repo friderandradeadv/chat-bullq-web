@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { maskCurrencyBR, currencyToInput } from '@/lib/masks';
 
 type FieldType = 'checklist' | 'radio' | 'text' | 'textarea' | 'date' | 'datetime' | 'currency' | 'select';
 interface Field { key: string; label: string; type: FieldType; options?: string[] }
@@ -140,9 +141,9 @@ export function FaseFields({ caseId, phase, data }: { caseId: string; phase: str
 }
 
 function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave: (v: any) => void }) {
-  const [local, setLocal] = useState(value ?? '');
+  const [local, setLocal] = useState(field.type === 'currency' ? currencyToInput(value) : (value ?? ''));
   const debRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { setLocal(value ?? ''); }, [value]);
+  useEffect(() => { setLocal(field.type === 'currency' ? currencyToInput(value) : (value ?? '')); }, [value, field.type]);
 
   if (field.type === 'checklist') {
     const obj: Record<string, boolean> = value ?? {};
@@ -201,12 +202,14 @@ function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave
   }
 
   const inputType = field.type === 'date' ? 'date' : field.type === 'datetime' ? 'datetime-local' : 'text';
+  const isCurrency = field.type === 'currency';
   return (
     <input
       type={inputType}
+      inputMode={isCurrency ? 'decimal' : undefined}
       value={local}
-      placeholder={field.type === 'currency' ? 'R$ 0,00' : undefined}
-      onChange={(e) => { setLocal(e.target.value); if (inputType !== 'text') onSave(e.target.value); }}
+      placeholder={isCurrency ? 'R$ 0,00' : undefined}
+      onChange={(e) => { const v = isCurrency ? maskCurrencyBR(e.target.value) : e.target.value; setLocal(v); if (inputType !== 'text') onSave(v); }}
       onBlur={() => onSave(local)}
       className={INPUT}
     />

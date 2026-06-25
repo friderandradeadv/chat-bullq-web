@@ -13,6 +13,7 @@ import {
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 import { membersService } from '@/features/settings/services/members.service';
 import { FaseFields } from './fase-fields';
+import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
@@ -397,9 +398,9 @@ function EditField({ label, children }: { label: string; children: ReactNode }) 
 function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa: PartyDetail | null; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(adversa?.name ?? '');
-  const [doc, setDoc] = useState(adversa?.document ?? '');
+  const [doc, setDoc] = useState(maskCpfCnpj(adversa?.document ?? ''));
   const [busy, setBusy] = useState(false);
-  useEffect(() => { setName(adversa?.name ?? ''); setDoc(adversa?.document ?? ''); }, [adversa?.id]);
+  useEffect(() => { setName(adversa?.name ?? ''); setDoc(maskCpfCnpj(adversa?.document ?? '')); }, [adversa?.id]);
 
   const save = async () => {
     if (!name.trim()) { toast.error('Informe o nome da parte adversa'); return; }
@@ -423,9 +424,9 @@ function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa
       {editing ? (
         <div className="mt-1.5 space-y-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome (ex.: BANCO BMG S/A)" className={INPUT} autoFocus />
-          <input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="CNPJ (opcional)" className={INPUT} />
+          <input value={doc} onChange={(e) => setDoc(maskCpfCnpj(e.target.value))} placeholder="CPF/CNPJ (opcional)" className={INPUT} inputMode="numeric" />
           <div className="flex justify-end gap-2">
-            <button onClick={() => { setEditing(false); setName(adversa?.name ?? ''); setDoc(adversa?.document ?? ''); }} className="rounded px-2.5 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+            <button onClick={() => { setEditing(false); setName(adversa?.name ?? ''); setDoc(maskCpfCnpj(adversa?.document ?? '')); }} className="rounded px-2.5 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
             <button onClick={save} disabled={busy} className="rounded bg-[#005efc] px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar'}</button>
           </div>
         </div>
@@ -530,7 +531,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
               {PRODUTOS_IMPUGNAR.map((p) => <option key={p} value={p}>{p}</option>)}
               {r.produto && !PRODUTOS_IMPUGNAR.includes(r.produto) && <option value={r.produto}>{r.produto}</option>}
             </select>
-            <input value={r.valor} onChange={(e) => setRow(r.id, { valor: e.target.value })} placeholder="Valor" inputMode="decimal" className={INPUT + ' w-24 shrink-0'} />
+            <input value={r.valor} onChange={(e) => setRow(r.id, { valor: maskCurrencyBR(e.target.value) })} placeholder="Valor" inputMode="decimal" className={INPUT + ' w-24 shrink-0'} />
             <button onClick={() => rmRow(r.id)} title="Remover" className="shrink-0 rounded p-1 text-zinc-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
         ))}
@@ -583,14 +584,14 @@ function ResumoAtendimento({ caseId, resumo, geradoEm, onDone }: { caseId: strin
 function DadosForm({ c, pf, showJuizo, onSaved }: { c: CaseDetail; pf: any; showJuizo: boolean; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
   const [cnj, setCnj] = useState(c.cnjNumber ?? '');
-  const [valor, setValor] = useState(c.value ?? '');
+  const [valor, setValor] = useState(currencyToInput(c.value));
   const [court, setCourt] = useState(c.court ?? '');
   const [comarca, setComarca] = useState(c.jurisdiction ?? '');
   const [area, setArea] = useState(c.area ?? '');
   const [dataProt, setDataProt] = useState(c.distributedAt ? c.distributedAt.slice(0, 10) : '');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    setCnj(c.cnjNumber ?? ''); setValor(c.value ?? ''); setCourt(c.court ?? '');
+    setCnj(c.cnjNumber ?? ''); setValor(currencyToInput(c.value)); setCourt(c.court ?? '');
     setComarca(c.jurisdiction ?? ''); setArea(c.area ?? ''); setDataProt(c.distributedAt ? c.distributedAt.slice(0, 10) : '');
   }, [c.id]);
 
@@ -618,7 +619,7 @@ function DadosForm({ c, pf, showJuizo, onSaved }: { c: CaseDetail; pf: any; show
       {editing ? (
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <EditField label="Número do processo"><input value={cnj} onChange={(e) => setCnj(e.target.value)} className={INPUT} placeholder="0000000-00.0000.0.00.0000" /></EditField>
-          <EditField label="Valor da causa"><input value={valor} onChange={(e) => setValor(e.target.value)} className={INPUT} placeholder="0,00" inputMode="decimal" /></EditField>
+          <EditField label="Valor da causa"><input value={valor} onChange={(e) => setValor(maskCurrencyBR(e.target.value))} className={INPUT} placeholder="0,00" inputMode="decimal" /></EditField>
           <EditField label="Tribunal"><input value={court} onChange={(e) => setCourt(e.target.value)} className={INPUT} placeholder="TJSP…" /></EditField>
           <EditField label="Comarca"><input value={comarca} onChange={(e) => setComarca(e.target.value)} className={INPUT} /></EditField>
           <EditField label="Área"><input value={area} onChange={(e) => setArea(e.target.value)} className={INPUT} placeholder="Bancário…" /></EditField>
