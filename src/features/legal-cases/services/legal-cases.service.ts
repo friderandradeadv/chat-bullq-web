@@ -184,6 +184,7 @@ export interface KanbanCard {
   cnj: string | null;
   produto: string | null; // 1ª etiqueta (RMC/BPC-LOAS…)
   areaJuridica: string | null; // 2ª etiqueta (Bancário/Previdenciário…)
+  tags: { id: string; name: string; color: string }[];
   court: string | null;
   value: number | null;
   status: CaseStatus;

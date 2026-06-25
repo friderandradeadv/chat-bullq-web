@@ -6,7 +6,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Plus } from 'lucide-react';
+import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Plus, Download, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -64,6 +64,8 @@ export default function FaseJudicialKanbanPage() {
   const [area, setArea] = useState('');
   const [produto, setProduto] = useState('');
   const [resp, setResp] = useState('');
+  const [phaseSel, setPhaseSel] = useState<string[]>([]);
+  const [tagSel, setTagSel] = useState<string[]>([]);
   const [showFora, setShowFora] = useState(false);
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
@@ -92,6 +94,15 @@ export default function FaseJudicialKanbanPage() {
     for (const c of cards) if (c.responsible) m.set(c.responsible.id, c.responsible.name);
     return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [cards]);
+  const phaseOptions = useMemo(
+    () => phases.filter((p) => p.lane !== 'pre').map((p) => ({ id: p.key, name: p.label })),
+    [phases],
+  );
+  const tagOptions = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; color: string }>();
+    for (const c of cards) for (const t of c.tags ?? []) m.set(t.id, t);
+    return Array.from(m.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [cards]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -99,13 +110,14 @@ export default function FaseJudicialKanbanPage() {
       if (area && c.areaJuridica !== area) return false;
       if (produto && c.produto !== produto) return false;
       if (resp && c.responsible?.id !== resp) return false;
+      if (tagSel.length && !(c.tags ?? []).some((t) => tagSel.includes(t.id))) return false;
       if (q) {
         const hay = `${c.title} ${c.cnj ?? ''} ${c.client ?? ''} ${c.opponent ?? ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [cards, search, area, produto, resp]);
+  }, [cards, search, area, produto, resp, tagSel]);
 
   const byPhase = useMemo(() => {
     const map: Record<string, KanbanCard[]> = {};
@@ -121,10 +133,11 @@ export default function FaseJudicialKanbanPage() {
   }, [filtered]);
 
   const FORA = new Set(['arquivado', 'abandonado', 'perdidos_valeska']);
-  const visiblePhases = useMemo(
-    () => phases.filter((p) => p.lane !== 'pre' && (showFora || !FORA.has(p.key))),
-    [phases, showFora],
-  );
+  const visiblePhases = useMemo(() => {
+    let ph = phases.filter((p) => p.lane !== 'pre' && (showFora || !FORA.has(p.key)));
+    if (phaseSel.length) ph = ph.filter((p) => phaseSel.includes(p.key));
+    return ph;
+  }, [phases, showFora, phaseSel]);
 
   const active = cards.find((c) => c.id === activeId) ?? null;
 
@@ -149,6 +162,36 @@ export default function FaseJudicialKanbanPage() {
     const to = e.over?.id as string | undefined;
     const card = cards.find((x) => x.id === e.active.id);
     if (to && card && phases.some((p) => p.key === to)) move(card, to);
+  };
+
+  // Exporta a lista FILTRADA (as mesmas linhas que aparecem no quadro/lista) em CSV.
+  const exportCsv = () => {
+    const phaseLabel = (k: string) => phases.find((p) => p.key === k)?.label ?? k;
+    const headers = ['Cliente', 'Parte adversa', 'Produto', 'Área', 'Etiquetas', 'CNJ', 'Valor', 'Fase', 'Responsável', 'Próximo prazo', 'Dias no processo', 'Dias na fase'];
+    const cell = (v: unknown) => { const s = v == null ? '' : String(v); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const lines = filtered.map((c) => [
+      c.client ?? c.title,
+      c.opponent ?? '',
+      cleanProduto(c.produto) ?? '',
+      c.areaJuridica ?? '',
+      (c.tags ?? []).map((t) => t.name).join(', '),
+      c.cnj ?? '',
+      c.value != null ? c.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '',
+      phaseLabel(c.phase),
+      c.responsible?.name ?? '',
+      c.proximoPrazo ? fmtDate(c.proximoPrazo.dueDate) : '',
+      c.diasNoProcesso ?? '',
+      c.diasNaFase ?? '',
+    ].map(cell).join(';'));
+    const csv = '﻿' + [headers.join(';'), ...lines].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `processos_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${filtered.length} processos exportados`);
   };
 
   return (
@@ -179,12 +222,17 @@ export default function FaseJudicialKanbanPage() {
           <Select value={area} onChange={setArea} placeholder="Todas as áreas" options={areas} />
           <Select value={produto} onChange={setProduto} placeholder="Todos os produtos" options={produtos} />
           <Select value={resp} onChange={setResp} placeholder="Todos os responsáveis" valueMap={resps} />
+          <MultiSelect label="Fases" options={phaseOptions} selected={phaseSel} onChange={setPhaseSel} />
+          <MultiSelect label="Etiquetas" options={tagOptions} selected={tagSel} onChange={setTagSel} />
           <label className="ml-1 flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
             <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#e11970]" />
             Mostrar arquivados/abandonados
           </label>
           <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
             <Plus className="h-4 w-4" /> Novo processo
+          </button>
+          <button onClick={exportCsv} title="Exportar a lista filtrada (CSV)" className="inline-flex items-center gap-1 rounded-lg border border-[#cfe0ed] bg-white px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            <Download className="h-4 w-4" /> Exportar
           </button>
           <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
             <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
@@ -232,6 +280,44 @@ function Select({
         <option key={o.id} value={o.id}>{o.name}</option>
       ))}
     </select>
+  );
+}
+
+// Filtro multi-seleção (popover com checkboxes) — usado para Fases e Etiquetas.
+function MultiSelect({
+  label, options, selected, onChange,
+}: {
+  label: string; options: { id: string; name: string; color?: string }[]; selected: string[]; onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex h-9 items-center gap-1 rounded-lg border px-2.5 text-sm dark:bg-zinc-900 ${selected.length ? 'border-[#e11970] bg-[#e11970]/5 text-[#e11970]' : 'border-[#cfe0ed] bg-white text-[#101820] dark:border-zinc-700 dark:text-zinc-300'}`}
+      >
+        {label}{selected.length ? ` (${selected.length})` : ''} <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 z-20 mt-1 max-h-72 w-60 overflow-y-auto rounded-lg border border-[#cfe0ed] bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            {options.length === 0 && <p className="px-2 py-2 text-xs text-zinc-400">Nada disponível</p>}
+            {selected.length > 0 && (
+              <button onClick={() => onChange([])} className="mb-1 w-full rounded px-2 py-1 text-left text-xs font-medium text-[#e11970] hover:bg-[#e11970]/5">Limpar seleção</button>
+            )}
+            {options.map((o) => (
+              <label key={o.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <input type="checkbox" checked={selected.includes(o.id)} onChange={() => toggle(o.id)} className="accent-[#e11970]" />
+                {o.color && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: o.color }} />}
+                <span className="truncate text-[#101820] dark:text-zinc-300">{o.name}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
