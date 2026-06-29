@@ -39,6 +39,7 @@ import { deadlinesService } from '@/features/deadlines/services/deadlines.servic
 import { calendarService } from '@/features/calendar/services/calendar.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
+import { dashboardService, type HubNewsItem } from '@/features/dashboard/services/dashboard.service';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { formatPhone } from '@/lib/brazil-states';
 
@@ -721,6 +722,45 @@ function CasosParaAtencao() {
   );
 }
 
+// Notícias do dia (mundo + jurídico), pesquisadas pela IA e cacheadas 1×/dia.
+function NewsCol({ titulo, emoji, cor, itens, loading }: { titulo: string; emoji: string; cor: string; itens: HubNewsItem[]; loading: boolean }) {
+  return (
+    <div className="welcome-pop w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60">
+      <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wider" style={{ color: cor }}>
+        <span>{emoji}</span> {titulo}
+      </p>
+      {loading ? (
+        <div className="flex items-center gap-2 px-2 py-5 text-sm text-zinc-400"><Loader2 className="h-4 w-4 animate-spin" /> Buscando as notícias de hoje…</div>
+      ) : itens.length === 0 ? (
+        <p className="px-2 py-3 text-xs text-zinc-400">Sem novidades por aqui hoje.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {itens.map((n, i) => (
+            <li key={i} className="rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+              <p className="text-sm font-semibold leading-snug text-zinc-800 dark:text-zinc-100">{n.t}</p>
+              {n.d && <p className="mt-0.5 text-xs leading-snug text-zinc-500 dark:text-zinc-400">{n.d}</p>}
+              {n.fonte && <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">{n.fonte}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function HojeNoMundo() {
+  const q = useQuery({ queryKey: ['hub', 'news'], queryFn: () => dashboardService.hubNews(), staleTime: 30 * 60_000, retry: 1 });
+  const mundo = q.data?.mundo ?? [];
+  const juridico = q.data?.juridico ?? [];
+  if (!q.isLoading && !mundo.length && !juridico.length) return null;
+  return (
+    <div className="welcome-pop mt-4 grid w-full items-start gap-4 text-left lg:grid-cols-2" style={{ animationDelay: '0.235s' }}>
+      <NewsCol titulo="Hoje no mundo" emoji="🌎" cor="#228BE6" itens={mundo} loading={q.isLoading} />
+      <NewsCol titulo="No jurídico hoje" emoji="⚖️" cor="#7048e8" itens={juridico} loading={q.isLoading} />
+    </div>
+  );
+}
+
 export default function InicioPage() {
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
@@ -904,6 +944,9 @@ export default function InicioPage() {
 
         {/* Casos que pedem atenção — largura total */}
         {mounted && <CasosParaAtencao />}
+
+        {/* Notícias do dia — mundo + jurídico (pesquisadas, atualizadas 1×/dia) */}
+        {mounted && <HojeNoMundo />}
 
         {/* Atalhos */}
         <div className="welcome-pop mt-9" style={{ animationDelay: '0.26s' }}>

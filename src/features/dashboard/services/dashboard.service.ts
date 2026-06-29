@@ -1,5 +1,8 @@
 import { api } from '@/lib/api';
 
+export interface HubNewsItem { t: string; d: string; fonte: string | null }
+export interface HubNews { date: string; mundo: HubNewsItem[]; juridico: HubNewsItem[]; geradoEm: string | null }
+
 export interface DashboardOverview {
   activeConversations: number;
   activeBreakdown: { pending: number; open: number; waiting: number; bot: number };
@@ -189,5 +192,9 @@ export const dashboardService = {
     if (limit) params.limit = String(limit);
     const { data } = await api.get('/dashboard/top-tags', { params });
     return data.data;
+  },
+  async hubNews(): Promise<HubNews> {
+    const { data } = await api.get('/dashboard/news');
+    return data.data ?? data;
   },
 };
