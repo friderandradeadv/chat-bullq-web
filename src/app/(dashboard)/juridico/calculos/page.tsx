@@ -64,7 +64,8 @@ const CALCULADORAS: Calc[] = [
 
 export default function CalculosHubPage() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
+    <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950">
+      <div className="mx-auto max-w-6xl px-4 py-6">
       <header className="mb-6 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
           <Calculator className="h-5 w-5" />
@@ -136,6 +137,7 @@ export default function CalculosHubPage() {
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

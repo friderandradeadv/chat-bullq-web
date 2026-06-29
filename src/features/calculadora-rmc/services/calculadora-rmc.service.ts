@@ -13,6 +13,7 @@ export interface CalcularRmcInput {
   valorEmprestimo: number;
   taxaConversao: number; // % a.m.
   dobro: boolean;
+  modulacaoStj?: boolean; // dobro só >= 30/03/2021 (EAREsp 676.608)
   indiceCorrecao: IndiceCorrecao;
   dataBase: string; // YYYY-MM-DD
   proRataDie?: boolean;
@@ -34,8 +35,29 @@ export interface LinhaEvolucao {
   saque: number;
   saldoAtual: number;
   valorRestituir: number;
+  dobroAplicado: boolean;
   fatorCorrecao: number;
   valorAtualizado: number;
+}
+
+export interface ResumoCenario {
+  totalDebitado: number;
+  somaNominalRestituir: number;
+  saldoConversao: number;
+  restituicao: number;
+  danosMorais: number;
+  honorarios: number;
+  total: number;
+}
+
+export type CenarioId = 'apenasConversao' | 'conversaoDobro' | 'restituicaoTotal';
+
+export interface Cenario {
+  id: CenarioId;
+  titulo: string;
+  descricao: string;
+  linhas: LinhaEvolucao[];
+  resumo: ResumoCenario;
 }
 
 export interface ResultadoRmc {
@@ -44,19 +66,14 @@ export interface ResultadoRmc {
     valorEmprestimo: number;
     taxaConversao: number;
     dobro: boolean;
+    modulacaoStj: boolean;
     indiceCorrecao: IndiceCorrecao;
     dataBase: string;
     proRataDie: boolean;
   };
+  cenarios: Cenario[];
   linhas: LinhaEvolucao[];
-  resumo: {
-    totalDebitado: number;
-    somaNominalRestituir: number;
-    restituicao: number;
-    danosMorais: number;
-    honorarios: number;
-    total: number;
-  };
+  resumo: ResumoCenario;
 }
 
 export interface TaxaConsignado {
@@ -76,6 +93,23 @@ export interface HiscreContrato {
 
 export interface HiscreResultado {
   contratos: HiscreContrato[];
+  aviso?: string;
+}
+
+export interface HisconContrato {
+  banco: string | null;
+  tipo: 'RMC' | 'RCC' | 'EMPRESTIMO' | string;
+  contrato: string | null;
+  dataInclusao: string | null;
+  dataContratacao: string | null;
+  valorEmprestimo: number | null;
+  valorReservado: number | null;
+  parcelasQtd: number | null;
+  situacao: string | null;
+}
+
+export interface HisconResultado {
+  contratos: HisconContrato[];
   aviso?: string;
 }
 
@@ -101,6 +135,16 @@ export const calculadoraRmcService = {
     const { data: d } = await api.post('/calculadora-rmc-rcc/hiscre/extrair', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000, // extração via IA pode levar alguns segundos
+    });
+    return d.data ?? d;
+  },
+
+  async extrairHiscon(file: File): Promise<HisconResultado> {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data: d } = await api.post('/calculadora-rmc-rcc/hiscon/extrair', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
     });
     return d.data ?? d;
   },
