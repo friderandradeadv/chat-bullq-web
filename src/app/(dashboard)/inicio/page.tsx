@@ -79,6 +79,61 @@ const DOW_MSG: Record<number, string> = {
 
 const GREET_EMOJI = ['👋', '🚀', '⚖️', '✨', '🔥', '💪', '🌟', '🎯'];
 
+// Saudação granular pelo horário do dia.
+function saudacaoFor(h: number): string {
+  if (h < 5) return 'Boa madrugada';
+  if (h < 12) return 'Bom dia';
+  if (h < 13) return 'Bom início de tarde';
+  if (h < 17) return 'Boa tarde';
+  if (h < 19) return 'Bom final de tarde';
+  return 'Boa noite';
+}
+
+// Frases instigantes por contexto (horário + dia da semana). {dr}=Dr./Dra., {nome}=primeiro nome.
+// d: 0=dom 1=seg 2=ter 3=qua 4=qui 5=sex 6=sáb.
+const CTX_PHRASES: { when: (h: number, d: number) => boolean; t: string }[] = [
+  // Madrugada (0–5)
+  { when: (h) => h < 5, t: 'Trabalhando de madrugada, {dr}? O escritório nunca dorme. 🌙' },
+  { when: (h) => h < 5, t: 'Queimando as pestanas hoje, {dr}? Cuidado pra não virar coruja. 🦉' },
+  { when: (h) => h < 5, t: 'Madrugada é prazo apertado ou inspiração batendo, {dr}?' },
+  // Manhã cedo (5–8)
+  { when: (h) => h >= 5 && h < 8, t: 'Começou cedo hoje, hein, {dr}? É assim que se constrói um escritório. ☕' },
+  { when: (h) => h >= 5 && h < 8, t: 'Bom e cedo, {dr} — o cliente madrugador agradece.' },
+  { when: (h) => h >= 5 && h < 8, t: 'Café na mão e pra cima, {dr}? Bora atacar a lista.' },
+  // Manhã (8–12)
+  { when: (h) => h >= 8 && h < 12, t: 'Voltando ao trabalho, {dr}? A manhã rende. 💪' },
+  { when: (h) => h >= 8 && h < 12, t: 'Manhã é hora de atacar os prazos mais cabeludos, {dr}.' },
+  { when: (h) => h >= 8 && h < 12, t: 'Bom dia produtivo, {dr} — qual processo cai primeiro hoje?' },
+  // Pós-almoço (12–14)
+  { when: (h) => h >= 12 && h < 14, t: 'Hora de dar o gás após o almoço, {dr}. 🚀' },
+  { when: (h) => h >= 12 && h < 14, t: 'Pós-almoço é teste de foco — segura o sono e bora, {dr}.' },
+  { when: (h) => h >= 12 && h < 14, t: 'Tarde começando: um café e a gente decola, {dr}.' },
+  // Tarde (14–17)
+  { when: (h) => h >= 14 && h < 17, t: 'Tarde rendendo, {dr}? Mantém o ritmo.' },
+  { when: (h) => h >= 14 && h < 17, t: 'Reta da tarde — foco total nos prazos de hoje, {dr}.' },
+  // Final de tarde (17–19)
+  { when: (h) => h >= 17 && h < 19, t: 'Final de tarde, {dr} — fechando o dia com chave de ouro?' },
+  { when: (h) => h >= 17 && h < 19, t: 'Últimos protocolos antes de encerrar, {dr}?' },
+  // Começo de noite (19–22)
+  { when: (h) => h >= 19 && h < 22, t: 'Ainda no batente, {dr}? Dedicação nível advogado.' },
+  { when: (h) => h >= 19 && h < 22, t: 'Começo de noite produtivo, {dr}? Não esquece de jantar.' },
+  // Final de noite (22–24)
+  { when: (h) => h >= 22, t: 'Trabalhando até tarde, {dr}? O cliente nem imagina o esforço.' },
+  { when: (h) => h >= 22, t: 'Vira-noite jurídico, {dr}? Descansar também é estratégia. 😴' },
+  // Segunda
+  { when: (_h, d) => d === 1, t: 'Segunda é dia de planejar a semana, {dr}. Bora com tudo!' },
+  { when: (_h, d) => d === 1, t: 'Começo de semana, {dr} — o tom que você dá hoje vale os cinco dias.' },
+  // Quarta (brincadeira do rosa)
+  { when: (_h, d) => d === 3, t: 'Às quartas a gente usa rosa 💗 (e fecha uns acordos também).' },
+  { when: (_h, d) => d === 3, t: 'Quarta-feira: metade do caminho já é sua, {dr}. Segura firme.' },
+  // Sexta
+  { when: (_h, d) => d === 5, t: 'Sextou! Mas o cliente não espera, né, {dr}? 😄' },
+  { when: (_h, d) => d === 5, t: 'Sexta-feira: limpa a mesa e entra no fim de semana mais leve, {dr}.' },
+  // Fim de semana
+  { when: (_h, d) => d === 6, t: 'Sábado de escritório, {dr}? Quem joga no detalhe ganha a causa.' },
+  { when: (_h, d) => d === 0, t: 'Domingo no batente, {dr}? Foco raro — aproveita o silêncio.' },
+];
+
 const HYPE: string[] = [
   'O fórum que se prepare: chegou {dr} {nome}, a mente mais afiada do escritório. ⚖️',
   'Cada processo seu é a esperança de uma família inteira. Bora mudar vidas hoje, {dr} {nome}? 💪',
@@ -674,6 +729,7 @@ export default function InicioPage() {
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [dicaIdx, setDicaIdx] = useState(0);
   const [emojiIdx, setEmojiIdx] = useState(0);
+  const [ctxIdx, setCtxIdx] = useState(0);
   const [burst, setBurst] = useState(0);
 
   useEffect(() => {
@@ -682,6 +738,7 @@ export default function InicioPage() {
     setQuoteIdx(nextFromBag('quote', QUOTES.length));
     setDicaIdx(nextFromBag('dica', DICAS.length));
     setEmojiIdx(nextFromBag('emoji', GREET_EMOJI.length));
+    setCtxIdx(nextFromBag('ctx', 64));
     setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
@@ -690,15 +747,22 @@ export default function InicioPage() {
   const first = firstNameOf(user?.name, user?.email);
   const dr = honorificOf(first);
   const hour = now?.getHours() ?? 12;
-  const saud = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  const saud = saudacaoFor(hour);
   const msg = HYPE[msgIdx].replace(/\{dr\}/g, dr).replace(/\{nome\}/g, first);
   const quote = QUOTES[quoteIdx];
   const dica = DICAS[dicaIdx];
-  const dowMsg = now ? DOW_MSG[now.getDay()] : '';
+  const ctxHour = now?.getHours() ?? -1;
+  const ctxDay = now?.getDay() ?? -1;
+  const ctxPhrase = useMemo(() => {
+    if (ctxHour < 0) return '';
+    const cands = CTX_PHRASES.filter((p) => p.when(ctxHour, ctxDay));
+    const base = cands.length ? cands[ctxIdx % cands.length].t : (DOW_MSG[ctxDay] ?? '');
+    return base.replace(/\{dr\}/g, dr).replace(/\{nome\}/g, first);
+  }, [ctxHour, ctxDay, ctxIdx, dr, first]);
 
-  const tasksQ = useQuery({ queryKey: ['hub', 'tasks'], queryFn: () => tasksService.list({}), enabled: mounted, staleTime: 60_000, retry: 1 });
-  const dlQ = useQuery({ queryKey: ['hub', 'deadlines'], queryFn: () => deadlinesService.list({}), enabled: mounted, staleTime: 60_000, retry: 1 });
-  const evQ = useQuery({ queryKey: ['hub', 'events'], queryFn: () => calendarService.list({}), enabled: mounted, staleTime: 60_000, retry: 1 });
+  const tasksQ = useQuery({ queryKey: ['hub', 'tasks', user?.id], queryFn: () => tasksService.list({ assigneeId: user!.id }), enabled: mounted && !!user?.id, staleTime: 60_000, retry: 1 });
+  const dlQ = useQuery({ queryKey: ['hub', 'deadlines', user?.id], queryFn: () => deadlinesService.list({ assignedToId: user!.id }), enabled: mounted && !!user?.id, staleTime: 60_000, retry: 1 });
+  const evQ = useQuery({ queryKey: ['hub', 'events', user?.id], queryFn: () => calendarService.list({ assignedToId: user!.id }), enabled: mounted && !!user?.id, staleTime: 60_000, retry: 1 });
   const casesQ = useQuery({ queryKey: ['hub', 'cases', user?.id], queryFn: () => legalCasesService.list({ responsibleId: user!.id }), enabled: mounted && !!user?.id, staleTime: 300_000, retry: 1 });
 
   const { stats, proximos } = useMemo(() => {
@@ -758,6 +822,7 @@ export default function InicioPage() {
     setQuoteIdx(nextFromBag('quote', QUOTES.length));
     setDicaIdx(nextFromBag('dica', DICAS.length));
     setEmojiIdx(nextFromBag('emoji', GREET_EMOJI.length));
+    setCtxIdx(nextFromBag('ctx', 64));
     setBurst((b) => b + 1);
   };
 
@@ -783,7 +848,7 @@ export default function InicioPage() {
           <span className="bg-gradient-to-r from-[#228BE6] via-[#7048E8] to-[#E64980] bg-clip-text text-transparent">{dr} {first}</span>{' '}
           <span className="welcome-float inline-block">{GREET_EMOJI[emojiIdx]}</span>
         </h1>
-        {mounted && dowMsg && <p className="welcome-pop mt-2 text-sm font-medium text-zinc-400" style={{ animationDelay: '0.08s' }}>{dowMsg}</p>}
+        {mounted && ctxPhrase && <p className="welcome-pop mt-2 text-sm font-medium text-zinc-400" style={{ animationDelay: '0.08s' }}>{ctxPhrase}</p>}
 
         {/* Incentivo rotativo */}
         <p key={msgIdx} className="welcome-pop mx-auto mt-4 max-w-2xl text-lg font-medium leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-xl" style={{ animationDelay: '0.1s' }}>
