@@ -47,6 +47,10 @@ const toDatetimeLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)
 const toDateInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const initials = (name: string | null) => { if (!name) return 'Eu'; const p = name.trim().split(/\s+/); return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || 'Eu'; };
+// Capitaliza só a 1ª letra (mantém "de/da" minúsculos). A classe CSS `capitalize`
+// deixava "junho de 2026" → "Junho De 2026"; aqui vira "Junho de 2026".
+const capFirst = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const SEEN_NEW_KEY = 'agenda:seenNew';
 
 interface Activity {
   id: string; source: Src; rawId: string; title: string; date: string;
@@ -54,6 +58,7 @@ interface Activity {
   triggerDate: string | null; // disponibilização (base p/ contar prazo de recurso da sentença)
   tags: { id: string; name: string; color: string }[];
   coResponsibleIds: string[]; // responsáveis extras (metadata.coResponsibleIds)
+  createdAt: string | null; // p/ marcar como "novo" (adicionado hoje)
   hasTime: boolean; done: boolean; cancelled: boolean; fatal: boolean;
   caseId: string | null; caseTitle: string | null; cnj: string | null;
   responsibleId: string | null; responsibleName: string | null; createdName: string | null;
@@ -66,8 +71,9 @@ interface Activity {
 // ETIQUETA, dividido igualmente; sem etiqueta usa a cor do TIPO; cumprido fica
 // cinza. Idempotente (remove a barra anterior) — assim dá pra repintar quando as
 // etiquetas, que carregam de forma assíncrona, chegam depois do mount do evento.
-function renderEventStrip(el: HTMLElement, a: Activity) {
+function renderEventStrip(el: HTMLElement, a: Activity, isNew = false) {
   el.querySelector(':scope > .ag-tagstrip')?.remove();
+  el.querySelector(':scope > .ag-newdot')?.remove();
   const segs = (a.done || a.cancelled)
     ? [{ color: '#CED4DA', name: 'Cumprido' }]
     : a.tags.length
@@ -82,7 +88,16 @@ function renderEventStrip(el: HTMLElement, a: Activity) {
     strip.appendChild(sp);
   }
   el.prepend(strip);
+  if (isNew) {
+    const dot = document.createElement('span');
+    dot.className = 'ag-newdot';
+    dot.title = 'Adicionado hoje';
+    el.appendChild(dot);
+  }
 }
+
+// Atividade adicionada HOJE e ainda não vista (marca/desmarca a bolinha vermelha).
+const isCreatedToday = (a: Activity) => !!a.createdAt && sameDay(new Date(a.createdAt), new Date());
 
 export default function AgendaPage() {
   const router = useRouter();
@@ -107,6 +122,32 @@ export default function AgendaPage() {
   const [dExibir, setDExibir] = useState(exibir);
   const [dStatus, setDStatus] = useState(status);
   const [dPerson, setDPerson] = useState(personId);
+
+  // Etiquetas (filtro), busca por tarefa e menu "Mais" — estilo Astrea.
+  const [fTags, setFTags] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [moreMenu, setMoreMenu] = useState(false);
+  // Atividades novas (criadas hoje) já visualizadas → some a bolinha vermelha.
+  // Persistido em localStorage; o ref espelha o estado p/ o eventDidMount (que roda
+  // no mount, antes de o efeito repintar).
+  const seenRef = useRef<Set<string>>(new Set());
+  const [seenNew, setSeenNew] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SEEN_NEW_KEY);
+      const set = new Set<string>(raw ? JSON.parse(raw) : []);
+      seenRef.current = set;
+      setSeenNew(set);
+    } catch { /* */ }
+  }, []);
+  const markSeen = (id: string) => {
+    if (seenRef.current.has(id)) return;
+    const next = new Set(seenRef.current); next.add(id);
+    seenRef.current = next; setSeenNew(next);
+    try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify([...next])); } catch { /* */ }
+  };
 
   // Por padrão a agenda abre nas atribuições do usuário logado (não "Todas"),
   // igual ao Astrea. Aplica uma única vez quando o usuário fica disponível;
@@ -135,7 +176,8 @@ export default function AgendaPage() {
   const tkQ = useQuery({ queryKey: ['tasks', 'agenda'], queryFn: () => tasksService.list() });
   const mbQ = useQuery({ queryKey: ['members', 'agenda'], queryFn: () => membersService.list() });
   const tagsQ = useQuery({ queryKey: ['activity-tags-index'], queryFn: () => activitiesService.tagsIndex() });
-  const refetchAll = () => { evQ.refetch(); dlQ.refetch(); tkQ.refetch(); tagsQ.refetch(); };
+  const legalTagsQ = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+  const refetchAll = () => { evQ.refetch(); dlQ.refetch(); tkQ.refetch(); tagsQ.refetch(); legalTagsQ.refetch(); };
 
   const userMap = useMemo(() => new Map((mbQ.data ?? []).map((m) => [m.user.id, m.user.name])), [mbQ.data]);
   // entityType:entityId → etiquetas, montado do índice (1 request p/ a agenda toda).
@@ -169,6 +211,7 @@ export default function AgendaPage() {
         triggerDate: null,
         tags: tagMap.get('task:' + t.id) ?? [],
         coResponsibleIds: (t.metadata as any)?.coResponsibleIds ?? [],
+        createdAt: t.createdAt ?? null,
         hasTime: !taskAllDay,
         done: t.status === 'DONE', cancelled: false, fatal: t.priority === 'HIGH',
         caseId: t.case?.id ?? null, caseTitle: t.case?.title ?? null, cnj: t.case?.cnjNumber ?? null,
@@ -188,6 +231,7 @@ export default function AgendaPage() {
         triggerDate: d.triggerDate ?? null,
         tags: tagMap.get('deadline:' + d.id) ?? [],
         coResponsibleIds: (d.metadata as any)?.coResponsibleIds ?? [],
+        createdAt: d.createdAt ?? null,
         hasTime: false, done: d.status === 'DONE', cancelled: d.status === 'CANCELLED', fatal: d.type === 'FATAL',
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
@@ -203,6 +247,7 @@ export default function AgendaPage() {
         triggerDate: null,
         tags: tagMap.get('event:' + e.id) ?? [],
         coResponsibleIds: (e as any).metadata?.coResponsibleIds ?? [],
+        createdAt: (e as any).createdAt ?? null,
         hasTime: true, done: !!e.metadata?.completedAt, cancelled: false, fatal: false,
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
@@ -214,14 +259,22 @@ export default function AgendaPage() {
     return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
   }, [tkQ.data, dlQ.data, evQ.data, userMap, tagMap]);
 
+  const q = searchQuery.trim().toLowerCase();
+  const qDigits = q.replace(/\D/g, '');
   const filtered = useMemo(() => activities.filter((a) => {
     if (a.source === 'evento' ? !exibir.eventos : !exibir.tarefas) return false;
     if (status === 'aconcluir' && (a.done || a.cancelled)) return false;
     if (status === 'concluidas' && !a.done) return false;
     if (status === 'canceladas' && !a.cancelled) return false;
     if (personId !== 'all' && a.responsibleId !== personId) return false;
+    if (tagFilter.length && !a.tags.some((t) => tagFilter.includes(t.id))) return false;
+    if (q) {
+      const byText = a.title.toLowerCase().includes(q) || (a.caseTitle ?? '').toLowerCase().includes(q);
+      const byCnj = qDigits.length >= 3 && (a.cnj ?? '').replace(/\D/g, '').includes(qDigits);
+      if (!byText && !byCnj) return false;
+    }
     return true;
-  }), [activities, exibir, status, personId]);
+  }), [activities, exibir, status, personId, tagFilter, q, qDigits]);
 
   const byId = useMemo(() => new Map(filtered.map((a) => [a.id, a])), [filtered]);
   // Repinta a barra do topo de cada evento já montado quando as etiquetas/filtro
@@ -230,9 +283,9 @@ export default function AgendaPage() {
   useEffect(() => {
     for (const [id, el] of elMapRef.current) {
       const a = byId.get(id);
-      if (a) renderEventStrip(el, a);
+      if (a) renderEventStrip(el, a, isCreatedToday(a) && !seenNew.has(a.id));
     }
-  }, [byId]);
+  }, [byId, seenNew]);
   const fcEvents = useMemo<EventInput[]>(() => filtered.map((a) => {
     const c = a.done || a.cancelled ? EV_DONE : a.source === 'evento' ? EV_TIMED : EV_PENDING;
     // Eventos com hora precisam de FIM pra ter altura no timeGrid — sem isso o
@@ -258,7 +311,10 @@ export default function AgendaPage() {
   const pickMode = (m: ViewMode) => { setMode(m); setViewMenu(false); try { localStorage.setItem(VIEW_KEY, m); } catch { /* */ } };
   const openCreate = (type: 'evento' | 'tarefa', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
-  const onEventClick = (arg: EventClickArg) => { const a = byId.get(arg.event.id); if (a) setDetail(a); };
+  // Abrir a atividade = visualizá-la → tira a bolinha de "novo".
+  const openDetail = (a: Activity) => { markSeen(a.id); setDetail(a); };
+  const isUnseenNew = (a: Activity) => isCreatedToday(a) && !seenNew.has(a.id);
+  const onEventClick = (arg: EventClickArg) => { const a = byId.get(arg.event.id); if (a) openDetail(a); };
   // Arrastar tarefa/evento/prazo para outra data (ou horário, na semana/dia) →
   // reagenda. No PRAZO movemos a data de EXECUÇÃO (safeDate); a data FATAL é
   // legal e permanece intacta (só editável na ficha do prazo).
@@ -291,8 +347,16 @@ export default function AgendaPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">Agenda</h1>
         <div className="flex items-center gap-2">
-          <button onClick={refetchAll} className="flex h-9 w-9 items-center justify-center rounded-md border border-[#DEE2E6] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Atualizar"><RefreshCw className="h-4 w-4" /></button>
-          <button className="flex h-9 w-9 items-center justify-center rounded-md border border-[#DEE2E6] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Mais"><MoreVertical className="h-4 w-4" /></button>
+          <button onClick={() => { refetchAll(); toast.success('Agenda atualizada'); }} className="flex h-9 w-9 items-center justify-center rounded-md border border-[#E9ECEF] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Atualizar"><RefreshCw className={`h-4 w-4 ${(evQ.isFetching || dlQ.isFetching || tkQ.isFetching || tagsQ.isFetching) ? 'animate-spin' : ''}`} /></button>
+          <div className="relative">
+            <button onClick={() => setMoreMenu((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-md border border-[#E9ECEF] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Mais"><MoreVertical className="h-4 w-4" /></button>
+            {moreMenu && (<><div className="fixed inset-0 z-10" onClick={() => setMoreMenu(false)} />
+              <div className="absolute right-0 top-11 z-20 w-52 overflow-hidden rounded-lg border border-[#E9ECEF] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                <button onClick={() => { refetchAll(); toast.success('Agenda atualizada'); setMoreMenu(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><RefreshCw className="h-4 w-4 text-zinc-400" /> Atualizar agenda</button>
+                <button onClick={() => { setMoreMenu(false); window.print(); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><List className="h-4 w-4 text-zinc-400" /> Imprimir</button>
+                <button onClick={() => { setMoreMenu(false); router.push('/prazos'); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarClock className="h-4 w-4 text-zinc-400" /> Ver prazos</button>
+              </div></>)}
+          </div>
           <div className="relative">
             <button onClick={() => setAddMenu((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-md text-white hover:opacity-90" style={{ backgroundColor: ASTREA_BLUE }} title="Adicionar"><Plus className="h-5 w-5" /></button>
             {addMenu && (<><div className="fixed inset-0 z-10" onClick={() => setAddMenu(false)} />
@@ -364,8 +428,17 @@ export default function AgendaPage() {
             </div></>)}
         </div>
 
-        <button className="flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-[#DEE2E6] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Etiquetas"><Tag className="h-4 w-4" /></button>
-        <button className="flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-[#DEE2E6] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Buscar"><Search className="h-4 w-4" /></button>
+        <TagFilterMenu open={fTags} onOpenChange={setFTags} selected={tagFilter} onChange={setTagFilter} onRecolored={refetchAll} />
+
+        {searchOpen ? (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <input autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setSearchQuery(''); setSearchOpen(false); } }} placeholder="Buscar tarefa, processo ou nº…" className="h-[38px] w-64 rounded-lg border border-[#E9ECEF] bg-white pl-9 pr-8 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+            <button onClick={() => { setSearchQuery(''); setSearchOpen(false); }} title="Fechar busca" className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"><X className="h-4 w-4" /></button>
+          </div>
+        ) : (
+          <button onClick={() => setSearchOpen(true)} className={`flex h-[38px] w-[38px] items-center justify-center rounded-lg border bg-white hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 ${searchQuery ? 'border-[#228BE6] text-[#228BE6]' : 'border-[#E9ECEF] text-zinc-500'}`} title="Buscar"><Search className="h-4 w-4" /></button>
+        )}
       </div>
 
       {/* Conteúdo */}
@@ -376,7 +449,7 @@ export default function AgendaPage() {
               {mode === 'list' ? (
                 <span className="text-lg font-medium text-[#202124] dark:text-zinc-100">Hoje</span>
               ) : (
-                <button onClick={() => setTitlePicker((v) => !v)} className="flex items-center gap-1 text-lg font-medium capitalize text-[#202124] hover:text-[#228BE6] dark:text-zinc-100">{title}<ChevronDown className="h-4 w-4" /></button>
+                <button onClick={() => setTitlePicker((v) => !v)} className="flex items-center gap-1 text-lg font-medium text-[#202124] hover:text-[#228BE6] dark:text-zinc-100">{capFirst(title)}<ChevronDown className="h-4 w-4" /></button>
               )}
               {titlePicker && mode !== 'list' && (<><div className="fixed inset-0 z-10" onClick={() => setTitlePicker(false)} />
                 <div className="absolute left-0 top-9 z-20"><MiniCalendar initial={api()?.getDate() ?? new Date()} onPick={(d) => { api()?.gotoDate(d); setTitlePicker(false); }} /></div></>)}
@@ -391,7 +464,7 @@ export default function AgendaPage() {
           </div>
           <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${isMonth ? 'agenda-month' : ''}`}>
             {mode === 'list' ? (
-              <ActivityList activities={filtered} onOpen={setDetail} />
+              <ActivityList activities={filtered} onOpen={openDetail} isUnseenNew={isUnseenNew} />
             ) : (
               <FullCalendar
                 key={mode} ref={calRef}
@@ -417,14 +490,14 @@ export default function AgendaPage() {
                   if (arg.view.type.startsWith('list')) return;
                   elMapRef.current.set(arg.event.id, arg.el);
                   const a = byId.get(arg.event.id);
-                  if (a) renderEventStrip(arg.el, a);
+                  if (a) renderEventStrip(arg.el, a, isCreatedToday(a) && !seenRef.current.has(a.id));
                 }}
                 eventWillUnmount={(arg) => { elMapRef.current.delete(arg.event.id); }}
               />
             )}
           </div>
         </div>
-        {showSidePanel && (<div className="w-[360px] shrink-0 overflow-y-auto"><SidePanel activities={filtered} mode={mode} onOpen={setDetail} /></div>)}
+        {showSidePanel && (<div className="w-[360px] shrink-0 overflow-y-auto"><SidePanel activities={filtered} mode={mode} onOpen={openDetail} isUnseenNew={isUnseenNew} /></div>)}
       </div>
 
       {chooser && (
@@ -447,7 +520,74 @@ export default function AgendaPage() {
 
 function FilterBtn({ children, onClick, active }: { children: React.ReactNode; onClick?: () => void; active?: boolean }) {
   return (
-    <button onClick={onClick} className={`inline-flex h-[38px] items-center gap-2 rounded-lg border bg-white px-5 text-xs font-bold uppercase tracking-wide hover:bg-zinc-50 dark:bg-zinc-900 ${active ? 'border-[#228BE6] text-[#228BE6]' : 'border-[#DEE2E6] text-[#6C757D] dark:border-zinc-700 dark:text-zinc-400'}`}>{children}</button>
+    <button onClick={onClick} className={`inline-flex h-[38px] items-center gap-2 rounded-lg border bg-white px-4 text-[13px] font-medium hover:bg-zinc-50 dark:bg-zinc-900 ${active ? 'border-[#228BE6] text-[#228BE6]' : 'border-[#E9ECEF] text-[#495057] dark:border-zinc-700 dark:text-zinc-300'}`}>{children}</button>
+  );
+}
+
+const TAG_PALETTE = ['#E03131', '#F76707', '#F59F00', '#2F9E44', '#228BE6', '#7048E8', '#868E96', '#CE0000', '#23CBFF', '#02883C'];
+
+// Menu de etiquetas da barra superior: FILTRA a agenda pelas etiquetas escolhidas
+// e permite AJUSTAR A COR de cada etiqueta globalmente (clique no pingo de cor) —
+// a cor nova reflete em todas as atividades (configuração global, scope=legal).
+function TagFilterMenu({ open, onOpenChange, selected, onChange, onRecolored }: {
+  open: boolean; onOpenChange: (v: boolean) => void;
+  selected: string[]; onChange: (ids: string[]) => void; onRecolored: () => void;
+}) {
+  const qc = useQueryClient();
+  const tagsQ = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+  const [paletteFor, setPaletteFor] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const tags = tagsQ.data ?? [];
+  const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  const recolor = async (id: string, color: string) => {
+    setBusy(true);
+    try {
+      await activitiesService.updateTag(id, { color });
+      setPaletteFor(null);
+      await qc.invalidateQueries({ queryKey: ['tags-available'] });
+      await qc.invalidateQueries({ queryKey: ['activity-tags-index'] });
+      onRecolored();
+      toast.success('Cor da etiqueta atualizada');
+    } catch (e: any) { toast.error(e?.message || 'Erro ao atualizar cor'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="relative">
+      <button onClick={() => onOpenChange(!open)} title="Etiquetas" className={`flex h-[38px] items-center gap-1.5 rounded-lg border bg-white px-3 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 ${selected.length ? 'border-[#228BE6] text-[#228BE6]' : 'border-[#E9ECEF] text-zinc-500'}`}>
+        <Tag className="h-4 w-4" />
+        {selected.length > 0 && <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#228BE6] px-1 text-[10px] font-bold text-white">{selected.length}</span>}
+      </button>
+      {open && (<><div className="fixed inset-0 z-10" onClick={() => { onOpenChange(false); setPaletteFor(null); }} />
+        <div className="absolute right-0 top-11 z-20 w-72 rounded-lg border border-[#E9ECEF] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="flex items-center justify-between px-3 py-1.5">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Filtrar por etiqueta</p>
+            {selected.length > 0 && <button onClick={() => onChange([])} className="text-[11px] font-semibold text-[#228BE6] hover:underline">Limpar</button>}
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {tags.map((t) => {
+              const on = selected.includes(t.id);
+              return (
+                <div key={t.id}>
+                  <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                    <button onClick={(e) => { e.stopPropagation(); setPaletteFor(paletteFor === t.id ? null : t.id); }} title="Alterar cor" className="h-3.5 w-3.5 shrink-0 rounded-full ring-offset-1 transition hover:ring-2 hover:ring-zinc-300 dark:ring-offset-zinc-900" style={{ backgroundColor: t.color }} />
+                    <button onClick={() => toggle(t.id)} className="flex min-w-0 flex-1 items-center justify-between text-left text-sm">
+                      <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-200">{t.name}</span>
+                      {on && <Check className="h-4 w-4 shrink-0 text-[#228BE6]" />}
+                    </button>
+                  </div>
+                  {paletteFor === t.id && (
+                    <div className="flex flex-wrap gap-1.5 bg-zinc-50 px-3 py-2 dark:bg-zinc-800/50">
+                      {TAG_PALETTE.map((c) => (
+                        <button key={c} disabled={busy} onClick={() => recolor(t.id, c)} className={`h-5 w-5 rounded-full transition disabled:opacity-40 ${t.color.toLowerCase() === c.toLowerCase() ? 'ring-2 ring-zinc-400 ring-offset-1 dark:ring-offset-zinc-800' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {tags.length === 0 && <p className="px-3 py-3 text-xs text-zinc-400">Nenhuma etiqueta jurídica ainda.</p>}
+          </div>
+        </div></>)}
+    </div>
   );
 }
 
@@ -482,7 +622,7 @@ function MiniCalendar({ initial, onPick }: { initial: Date; onPick: (d: Date) =>
     <div className="w-64 rounded-lg border border-[#DEE2E6] bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
       <div className="mb-2 flex items-center justify-between">
         <button onClick={() => setCursor(new Date(year, month - 1, 1))} className="rounded p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ChevronLeft className="h-4 w-4 text-[#228BE6]" /></button>
-        <span className="text-sm font-medium capitalize text-[#202124] dark:text-zinc-100">{cursor.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+        <span className="text-sm font-medium text-[#202124] dark:text-zinc-100">{capFirst(cursor.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }))}</span>
         <button onClick={() => setCursor(new Date(year, month + 1, 1))} className="rounded p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ChevronRight className="h-4 w-4 text-[#228BE6]" /></button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[11px]">
@@ -495,7 +635,7 @@ function MiniCalendar({ initial, onPick }: { initial: Date; onPick: (d: Date) =>
   );
 }
 
-function ActivityList({ activities, onOpen }: { activities: Activity[]; onOpen: (a: Activity) => void }) {
+function ActivityList({ activities, onOpen, isUnseenNew }: { activities: Activity[]; onOpen: (a: Activity) => void; isUnseenNew: (a: Activity) => boolean }) {
   const today = new Date();
   const todays = activities.filter((a) => sameDay(new Date(a.date), today));
   const list = todays.length ? todays : activities.slice(0, 40);
@@ -509,7 +649,7 @@ function ActivityList({ activities, onOpen }: { activities: Activity[]; onOpen: 
             <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${a.done ? 'border-emerald-500 bg-emerald-500 text-white' : a.fatal ? 'border-red-400' : 'border-zinc-300'}`}>{a.done && <Check className="h-3 w-3" />}</span>
             <div className="w-24 shrink-0 text-xs text-zinc-500">{new Date(a.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', ...(a.hasTime ? {} : { timeZone: 'UTC' as const }) })}{a.hasTime && <div className="font-medium text-zinc-700 dark:text-zinc-300">{new Date(a.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>}</div>
             <div className="min-w-0 flex-1">
-              <p className={`text-sm font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{a.title}</p>
+              <p className={`flex items-center gap-1.5 text-sm font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{isUnseenNew(a) && <span title="Adicionado hoje" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FA5252]" />}{a.title}</p>
               {a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}{a.cnj ? ` · ${a.cnj}` : ''}</p>}
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5"><TypeChip source={a.source} /><TagStrip tags={a.tags} /></div>
             </div>
@@ -521,7 +661,7 @@ function ActivityList({ activities, onOpen }: { activities: Activity[]; onOpen: 
   );
 }
 
-function SidePanel({ activities, mode, onOpen }: { activities: Activity[]; mode: ViewMode; onOpen: (a: Activity) => void }) {
+function SidePanel({ activities, mode, onOpen, isUnseenNew }: { activities: Activity[]; mode: ViewMode; onOpen: (a: Activity) => void; isUnseenNew: (a: Activity) => boolean }) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const isToday = (iso: string) => sameDay(new Date(iso), today);
   const concluidas = activities.filter((a) => a.done && isToday(a.date)).length;
@@ -535,7 +675,7 @@ function SidePanel({ activities, mode, onOpen }: { activities: Activity[]; mode:
           <h3 className="mb-3 text-base font-medium text-[#202124] dark:text-zinc-100">{dayList.length} {dayList.length === 1 ? 'atividade' : 'atividades'}</h3>
           <div className="space-y-3">
             {dayList.length === 0 && <p className="text-sm text-zinc-400">Sem atividades hoje.</p>}
-            {dayList.map((a) => (<button key={a.id} onClick={() => onOpen(a)} className="block w-full text-left text-sm"><p className={`font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{a.title}</p>{a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}</p>}<span className="mt-1 inline-block"><TypeChip source={a.source} /></span></button>))}
+            {dayList.map((a) => (<button key={a.id} onClick={() => onOpen(a)} className="block w-full text-left text-sm"><p className={`flex items-center gap-1.5 font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{isUnseenNew(a) && <span title="Adicionado hoje" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FA5252]" />}{a.title}</p>{a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}</p>}<span className="mt-1 inline-block"><TypeChip source={a.source} /></span></button>))}
           </div>
         </div>
       ) : (
@@ -920,8 +1060,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.faseMovida && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Movimentação de fase:</dt>
-              <dd className="m-0 font-normal leading-relaxed text-zinc-600 dark:text-zinc-300">
-                Card movido de <span className="font-medium">{activity.faseMovida.de}</span> para{' '}
+              <dd className="m-0 font-normal leading-relaxed text-zinc-400 dark:text-zinc-500">
+                Card movido de <span className="font-normal text-zinc-500 dark:text-zinc-400">{activity.faseMovida.de}</span> para{' '}
                 <span className="font-medium text-emerald-600 dark:text-emerald-400">{activity.faseMovida.para}</span> — fase judicial
               </dd>
             </div>

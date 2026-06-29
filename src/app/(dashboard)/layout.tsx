@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { authService } from '@/features/auth/services/auth.service';
 import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sync';
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
+import { GlobalSearch } from '@/components/layout/global-search';
 
 /** Mapeia a rota atual para o módulo gateável (ou null = sempre liberado). */
 function moduleForPath(p: string): string | null {
@@ -97,6 +98,10 @@ export default function DashboardLayout({
     >
       <div className="flex h-full flex-col">
         <ToolFailureBanner />
+        {/* Barra de busca global central (estilo Astrea) — em cima de todas as telas. */}
+        <div className="flex h-14 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5">
+          <GlobalSearch />
+        </div>
         <div className="flex-1 min-h-0">{children}</div>
       </div>
     </SidebarLayout>

@@ -81,4 +81,10 @@ export const activitiesService = {
     const { data } = await api.post('/tags', { name, color, scope: 'legal' });
     return data.data ?? data;
   },
+  // Ajusta a etiqueta jurídica globalmente (cor/nome) — reflete em todas as
+  // atividades que a usam. Mesmo endpoint das tags do atendimento (PATCH /tags/:id).
+  async updateTag(id: string, payload: { name?: string; color?: string }): Promise<TagOption> {
+    const { data } = await api.patch(`/tags/${id}`, payload);
+    return data.data ?? data;
+  },
 };

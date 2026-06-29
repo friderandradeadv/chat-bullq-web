@@ -12,6 +12,7 @@ export interface CalendarEvent {
   caseId: string | null;
   assignedTo: { id: string; name: string; avatarUrl: string | null } | null;
   case: { id: string; title: string; cnjNumber: string | null } | null;
+  createdAt?: string | null;
   metadata?: { completedAt?: string | null; coResponsibleIds?: string[] } & Record<string, unknown>;
 }
 

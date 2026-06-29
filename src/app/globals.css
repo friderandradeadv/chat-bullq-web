@@ -294,6 +294,22 @@
   flex: 1 1 0;
   min-width: 0;
 }
+/* Bolinha vermelha = compromisso adicionado HOJE e ainda não visto na agenda.
+   Some assim que o usuário abre a atividade (markSeen). */
+.fc .fc-event { position: relative; }
+.ag-newdot {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: #fa5252;
+  box-shadow: 0 0 0 1.5px #fff;
+  pointer-events: none;
+  z-index: 4;
+}
+.dark .ag-newdot { box-shadow: 0 0 0 1.5px #18181b; }
 
 /* ── Hub / página de boas-vindas (/inicio) — "sempre uma festa" ── */
 @keyframes confetti-fall {
