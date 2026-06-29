@@ -1578,13 +1578,13 @@ function CrescimentoFundacao({ cc }: { cc: CrescimentoCarteira }) {
       <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
         O escritório saiu de <b>{r.carteiraJan2024}</b> processos em jan/2024 para <b>{r.carteiraHoje}</b> hoje
         {r.crescimentoTotalPct != null && <> — um salto de <b className="text-[#2F9E44]">{totalFmt}</b></>}
-        {r.cagrMensalPct != null && <>, crescendo cerca de <b className="text-[#2F9E44]">+{r.cagrMensalPct}%</b> ao mês, em média</>}.
+        {r.cagrMensalPct != null && <>, crescendo cerca de <b className="text-[#2F9E44]">+{r.cagrMensalPct.toLocaleString('pt-BR')}%</b> ao mês, em média</>}.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <BigStat label="Carteira hoje" value={String(r.carteiraHoje)} hint={`${r.totalProcessos} processos no total${r.semDataDistribuicao ? ` · ${r.semDataDistribuicao} sem data` : ''}`} cor="#7048E8" />
         <BigStat label="Crescimento total" value={totalFmt} hint="desde jan/2024" cor="#2F9E44" />
-        <BigStat label="Ritmo médio" value={r.cagrMensalPct != null ? `+${r.cagrMensalPct}%/mês` : '—'} hint={`~${r.mediaNovosMes} novos processos/mês`} cor="#228BE6" />
+        <BigStat label="Ritmo médio" value={r.cagrMensalPct != null ? `+${r.cagrMensalPct.toLocaleString('pt-BR')}%/mês` : '—'} hint={`~${r.mediaNovosMes.toLocaleString('pt-BR')} novos processos/mês`} cor="#228BE6" />
         <BigStat label="Melhor mês" value={r.melhorMes ? String(r.melhorMes.novos) : '—'} hint={r.melhorMes ? `novos em ${fmtMesKey(r.melhorMes.mes)}` : ''} cor="#F08C00" />
       </div>
 
