@@ -345,6 +345,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
+  const [importing, setImporting] = useState(false);
   const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '' });
   const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })), rateio: t.rateio ? { bruto: String(t.rateio.bruto).replace('.', ','), cliente: String(t.rateio.cliente).replace('.', ','), sucumbencia: String(t.rateio.sucumbencia).replace('.', ','), honorarios: String(t.rateio.honorarios).replace('.', ',') } : { ...RATEIO_VAZIO } });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
@@ -380,7 +381,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   return (
     <Card title={<>Lançamentos <span className="font-normal text-zinc-400">· livro-razão editável</span></>}
-      action={<button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>}>
+      action={<div className="flex items-center gap-2">
+        <button onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-[#02883C] hover:text-[#02883C] dark:border-zinc-700 dark:text-zinc-300"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar extrato</button>
+        <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>
+      </div>}>
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
@@ -659,7 +663,102 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
           </div>
         </div>
       )}
+
+      {importing && <ImportExtratoModal contas={contas} onClose={() => setImporting(false)} />}
     </Card>
+  );
+}
+
+// ── Modal: importar extrato (PDF/CSV/OFX) → lançamentos, com dedup server-side ──
+function ImportExtratoModal({ contas, onClose }: { contas: { id: string; nome: string }[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [conta, setConta] = useState(contas[0]?.id ?? '');
+  const [nome, setNome] = useState('');
+  const [parsing, setParsing] = useState(false);
+  const [conf, setConf] = useState<import('@/features/financeiro/services/financeiro.service').ExtratoConferencia | null>(null);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+
+  const conferir = async (linhas: { data: string; valor: number; descricao: string }[]) => {
+    if (!linhas.length) { toast.error('Não consegui ler lançamentos desse arquivo. Tente OFX/CSV ou cole o texto.'); return; }
+    try {
+      const r = await financeiroService.conferirExtrato(conta || null, linhas);
+      setConf(r);
+      setSel(new Set(r.linhas.map((l, i) => (!l.duplicado ? i : -1)).filter((i) => i >= 0))); // novos marcados
+      if (r.novos === 0) toast('Tudo nesse extrato já está lançado — nada novo.', { icon: '✅' });
+      else toast.success(`${r.novos} novo(s) · ${r.duplicados} já existem`);
+    } catch (e: any) { toast.error(e?.message || 'Erro ao conferir'); }
+  };
+  const onArquivo = async (f: File) => {
+    setNome(f.name); setParsing(true); setConf(null);
+    try {
+      const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+      let texto = '';
+      if (isPdf) { const b64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] ?? ''); r.onerror = rej; r.readAsDataURL(f); }); texto = (await financeiroService.lerExtratoPdf(b64)).texto; }
+      else texto = await f.text();
+      let linhas = lerExtrato(texto);
+      if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
+      await conferir(linhas);
+    } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setParsing(false); }
+  };
+
+  const importM = useMutation({
+    mutationFn: () => { if (!conf) throw new Error('confira primeiro'); const linhas = conf.linhas.filter((_, i) => sel.has(i)).map((l) => ({ data: l.data, valor: l.valor, descricao: l.descricao })); return financeiroService.importarExtratoLinhas(conta || null, linhas); },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s)${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`); onClose(); },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao importar'),
+  });
+
+  const toggle = (i: number) => setSel((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl scrollbar-thin dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><ArrowDownCircle className="h-4 w-4 text-[#02883C]" /> Importar extrato</h3>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <div><label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-400">Conta</label>
+            <select value={conta} onChange={(e) => setConta(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">— sem conta —</option>{contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select>
+          </div>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-2 text-sm font-semibold text-white hover:opacity-90">
+            {parsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownCircle className="h-4 w-4" />} Escolher arquivo (PDF/CSV/OFX)
+            <input type="file" accept=".pdf,.csv,.ofx,.txt,.tsv,text/csv,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onArquivo(f); e.currentTarget.value = ''; }} />
+          </label>
+          {nome && <span className="text-xs text-zinc-400">{nome}</span>}
+        </div>
+        <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, classifica e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (por valor+data) e contra reenvio do mesmo arquivo.</p>
+
+        {conf && (
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="text-zinc-500">{conf.novos} novo(s) · <span className="text-amber-600">{conf.duplicados} já existe(m)</span></span>
+              <span className="text-xs text-zinc-400">{sel.size} selecionado(s)</span>
+            </div>
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-zinc-200/70 scrollbar-thin dark:border-zinc-800">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white dark:bg-zinc-900"><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium"></th><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="px-2 py-1.5 font-medium">Status</th></tr></thead>
+                <tbody>
+                  {conf.linhas.map((l, i) => (
+                    <tr key={i} className={`border-t border-zinc-100 dark:border-zinc-800 ${l.duplicado ? 'opacity-60' : ''}`}>
+                      <td className="px-2 py-1.5"><input type="checkbox" checked={sel.has(i)} onChange={() => toggle(i)} className="accent-[#02883C]" /></td>
+                      <td className="px-2 py-1.5 tabular-nums text-zinc-500">{l.data}</td>
+                      <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{l.descricao || '—'}</td>
+                      <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</td>
+                      <td className="px-2 py-1.5">{l.duplicado ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={l.motivo || ''}>Já existe</span> : <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Novo</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -282,7 +282,19 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/integracao/asaas/importar', { desde, ate });
     return data.data ?? data;
   },
+  // ── Importar extrato (PDF/CSV/OFX) como lançamentos, com dedup ──
+  async conferirExtrato(conta: string | null, linhas: { data: string; valor: number; descricao: string }[]): Promise<ExtratoConferencia> {
+    const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false });
+    return data.data ?? data;
+  },
+  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string }[]): Promise<{ importados: number; duplicados: number; total: number }> {
+    const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true });
+    return data.data ?? data;
+  },
 };
+
+export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; motivo: string | null }
+export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; linhas: ExtratoLinhaConf[] }
 
 export interface AsaasPreview {
   configurado: boolean;
