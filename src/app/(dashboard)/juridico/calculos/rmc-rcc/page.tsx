@@ -13,9 +13,9 @@ import {
   FileSearch,
   FileText,
   Info,
+  Download,
   Landmark,
   Loader2,
-  Percent,
   Plus,
   RefreshCw,
   Scale,
@@ -28,6 +28,7 @@ import Link from 'next/link';
 import {
   calculadoraRmcService,
   type CalcularRmcInput,
+  type Cenario,
   type CenarioId,
   type HiscreContrato,
   type HisconContrato,
@@ -116,9 +117,6 @@ export default function CalculadoraRmcPage() {
     indiceCorrecao: 'INPC' as IndiceCorrecao,
     dataBase: hoje,
     proRataDie: false,
-    danosMorais: '',
-    honorariosTipo: 'NENHUM' as 'NENHUM' | 'FIXO' | 'PERCENTUAL',
-    honorariosValor: '',
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -150,14 +148,9 @@ export default function CalculadoraRmcPage() {
         indiceCorrecao: form.indiceCorrecao,
         dataBase: form.dataBase,
         proRataDie: form.proRataDie,
-        danosMorais: form.danosMorais ? parseValor(form.danosMorais) : 0,
         nomeCalculo: form.nomeCalculo || undefined,
         parcelas,
       };
-      if (form.honorariosTipo !== 'NENHUM') {
-        payload.honorariosTipo = form.honorariosTipo;
-        payload.honorariosValor = form.honorariosValor ? parseValor(form.honorariosValor) : 0;
-      }
       return calculadoraRmcService.calcular(payload);
     },
   });
@@ -301,9 +294,74 @@ export default function CalculadoraRmcPage() {
   const cenarios = res?.cenarios ?? [];
   const cenarioView = cenarios.find((c) => c.id === cenarioAtivo) ?? cenarios[0];
 
+  // ── Baixar um cenário em CSV (parâmetros + Resultado + evolução) ───────────
+  const baixarCenario = (c: Cenario) => {
+    if (!res) return;
+    const cfg = res.config;
+    const tipo = form.tipo;
+    const nome = form.nomeCalculo || [tipo, form.banco].filter(Boolean).join(' - ') || 'calculo-rmc';
+    const m = (n: number) => n.toFixed(2).replace('.', ',');
+    const taxa = `${cfg.taxaConversao}`.replace('.', ',') + '%';
+    const L = (...cells: (string | number)[]) =>
+      cells.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';');
+    const linhas: string[] = [
+      L('Cálculo de Revisão da RMC / RCC'),
+      L('Nome', nome),
+      L('Cenário', c.titulo),
+      L('Método', METODO_LABEL[c.id]),
+      L('Tipo', tipo),
+      L('Banco', form.banco || '—'),
+      L('Nº do contrato', form.numeroContrato || '—'),
+      L('Valor do empréstimo', m(cfg.valorEmprestimo)),
+      L('Taxa de conversão', taxa),
+      L('Índice de correção', cfg.indiceCorrecao),
+      L('Data-base', cfg.dataBase.split('-').reverse().join('/')),
+      L('Restituir em dobro', cfg.dobro ? 'Sim' : 'Não'),
+      L('Modulação STJ (Tema 929)', cfg.modulacaoStj ? 'Sim' : 'Não'),
+      '',
+      L('Resultado'),
+      L('Saldo da conversão em empréstimo consignado', m(c.resumo.saldoConversao)),
+      L('Restituição de Valores', m(c.resumo.restituicao)),
+      L('Total', m(c.resumo.total)),
+      '',
+      L(
+        'Nº', 'Data', `Valor ${tipo} debitado`, 'Saldo devedor anterior (base juros)',
+        'Taxa de juros', 'Valor dos juros mensais', '(-) Amortização', '(+) Outros Saques',
+        'Saldo devedor atual', 'Valor a restituir', 'Correção Monetária', 'Juros',
+        'Valor atualizado a restituir',
+      ),
+      ...c.linhas.map((l) =>
+        L(
+          l.numero,
+          l.data.split('-').reverse().join('/'),
+          m(l.valorDebitado),
+          m(l.saldoAnterior),
+          taxa,
+          m(l.juros),
+          m(l.amortizacao),
+          m(l.saque),
+          m(l.saldoAtual),
+          m(l.valorRestituir),
+          l.fatorCorrecao.toFixed(6).replace('.', ','),
+          '0,0000%',
+          m(l.valorAtualizado),
+        ),
+      ),
+    ];
+    const csv = '\ufeff' + linhas.join('\r\n'); // BOM p/ acentos no Excel
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${nome} - ${c.titulo}.csv`.replace(/[\\/:*?"<>|]/g, '-');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950">
-      <div className="mx-auto max-w-7xl px-4 py-6">
+      <div className="w-full px-4 py-6 lg:px-6">
         <Link
           href="/juridico/calculos"
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition-colors hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
@@ -324,7 +382,7 @@ export default function CalculadoraRmcPage() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[400px_1fr]">
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
           {/* ── Coluna de entrada ─────────────────────────────────────────── */}
           <div className="space-y-4">
             {/* Importar documentos (HISCON + HISCRE) */}
@@ -599,51 +657,6 @@ export default function CalculadoraRmcPage() {
               </div>
             </div>
 
-            {/* Danos morais & honorários */}
-            <div className={cardCls}>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-                <Percent className="h-4 w-4 text-zinc-400" /> Danos morais & honorários
-              </h2>
-              <div className="space-y-3">
-                <div>
-                  <label className={labelCls}>Danos morais (R$)</label>
-                  <input
-                    className={inputCls}
-                    inputMode="decimal"
-                    placeholder="0,00"
-                    value={form.danosMorais}
-                    onChange={(e) => set('danosMorais', e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Honorários</label>
-                    <select
-                      className={inputCls}
-                      value={form.honorariosTipo}
-                      onChange={(e) => set('honorariosTipo', e.target.value as typeof form.honorariosTipo)}
-                    >
-                      <option value="NENHUM">Nenhum</option>
-                      <option value="PERCENTUAL">% sobre o devido</option>
-                      <option value="FIXO">Valor fixo</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>
-                      {form.honorariosTipo === 'FIXO' ? 'Valor (R$)' : 'Percentual (%)'}
-                    </label>
-                    <input
-                      className={inputCls}
-                      inputMode="decimal"
-                      disabled={form.honorariosTipo === 'NENHUM'}
-                      value={form.honorariosValor}
-                      onChange={(e) => set('honorariosValor', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Parcelas descontadas */}
             <div className={cardCls}>
               <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
@@ -727,7 +740,7 @@ export default function CalculadoraRmcPage() {
           </div>
 
           {/* ── Coluna de resultado ───────────────────────────────────────── */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {!res && (
               <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/50 text-center text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900/40">
                 <Calculator className="mb-2 h-8 w-8 opacity-40" />
@@ -746,6 +759,7 @@ export default function CalculadoraRmcPage() {
                       cenario={c}
                       ativo={c.id === cenarioAtivo}
                       onClick={() => setCenarioAtivo(c.id)}
+                      onDownload={() => baixarCenario(c)}
                     />
                   ))}
                 </div>
@@ -761,9 +775,7 @@ export default function CalculadoraRmcPage() {
                   <dl className="text-sm">
                     <ResRow label="Saldo da conversão em empréstimo consignado" valor={cenarioView.resumo.saldoConversao} />
                     <ResRow label="Restituição de Valores" valor={cenarioView.resumo.restituicao} />
-                    <ResRow label="Danos Morais" valor={cenarioView.resumo.danosMorais} />
                     <ResRow label="Total" valor={cenarioView.resumo.total} destaque />
-                    <ResRow label="Honorários" valor={cenarioView.resumo.honorarios} />
                   </dl>
                 </div>
 
@@ -920,18 +932,27 @@ function CenarioCard({
   cenario,
   ativo,
   onClick,
+  onDownload,
 }: {
   cenario: { id: CenarioId; titulo: string; descricao: string; resumo: { total: number } };
   ativo: boolean;
   onClick: () => void;
+  onDownload: () => void;
 }) {
   const Icon = CENARIO_ICON[cenario.id] ?? Banknote;
   const cor = CENARIO_COR[cenario.id];
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className={`flex flex-col rounded-2xl border-2 bg-white p-4 text-left shadow-sm transition-all dark:bg-zinc-900 ${
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={`flex cursor-pointer flex-col rounded-2xl border-2 bg-white p-4 text-left shadow-sm transition-all dark:bg-zinc-900 ${
         ativo ? cor.ativo : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700'
       }`}
     >
@@ -942,7 +963,17 @@ function CenarioCard({
         <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{cenario.titulo}</span>
       </div>
       <div className={`text-xl font-bold ${cor.total}`}>{brl(cenario.resumo.total)}</div>
-      <p className="mt-1 text-[11px] leading-snug text-zinc-400 dark:text-zinc-500">{cenario.descricao}</p>
-    </button>
+      <p className="mt-1 flex-1 text-[11px] leading-snug text-zinc-400 dark:text-zinc-500">{cenario.descricao}</p>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDownload();
+        }}
+        className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white py-1.5 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      >
+        <Download className="h-3 w-3" /> Baixar (CSV)
+      </button>
+    </div>
   );
 }
