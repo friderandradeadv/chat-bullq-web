@@ -29,12 +29,12 @@ const CALCULADORAS: Calc[] = [
     disponivel: true,
   },
   {
-    href: '#',
+    href: '/juridico/calculos/cumprimento-sentenca',
     titulo: 'Cumprimento de Sentença',
     descricao:
-      'Atualização da condenação: correção + juros de mora + multa 10% e honorários 10% (CPC 523).',
+      'Atualização da condenação: correção + juros de mora + multa e honorários do art. 523 (CPC). Importe a sentença/inicial e a IA preenche o cálculo.',
     icon: Gavel,
-    disponivel: false,
+    disponivel: true,
   },
   {
     href: '#',
