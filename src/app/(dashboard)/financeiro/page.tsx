@@ -255,7 +255,7 @@ interface SplitRow { tipo: 'socio' | 'associado'; userId: string; valor: string 
 interface Editor {
   id: string | null; serieId: string | null; tipo: 'receita' | 'despesa';
   dataISO: string; vencISO: string; pagtoISO: string;
-  categoria: string; pagador: string; recebedor: string; valor: string;
+  categoria: string; subtipo: 'inicial' | 'exito'; pagador: string; recebedor: string; valor: string;
   status: TxStatus; parcelas: string; repetir: 'nao' | 'mensal' | 'anual'; escopo: 'uma' | 'proximas'; split: SplitRow[];
   responsavelId: string; conta: string;
 }
@@ -341,8 +341,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], responsavelId: '', conta: contas[0]?.id ?? '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })) });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], responsavelId: '', conta: contas[0]?.id ?? '' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
@@ -357,9 +357,9 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined });
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined });
     } else {
-      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
     }
   };
   const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
@@ -490,6 +490,16 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 <Field label="Valor (cada parcela)"><input value={editor.valor} onChange={(e) => setEditor({ ...editor, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
                 <Field label="Fonte"><select value={editor.categoria} onChange={(e) => setEditor({ ...editor, categoria: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
               </div>
+
+              {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && (
+                <Field label="Tipo de honorário">
+                  <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+                    {([['inicial', 'Inicial (contrato/entrada)'], ['exito', 'Êxito (alvará/acordo)']] as const).map(([k, label]) => (
+                      <button key={k} type="button" onClick={() => setEditor({ ...editor, subtipo: k })} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${editor.subtipo === k ? (k === 'exito' ? 'bg-violet-600 text-white' : 'bg-emerald-600 text-white') : 'text-zinc-500'}`}>{label}</button>
+                    ))}
+                  </div>
+                </Field>
+              )}
 
               {/* status */}
               <Field label="Situação">
@@ -645,11 +655,14 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
   const tot = useMemo(() => {
     // somatórios EXATOS, direto das transações de honorários (inclui estornos a quem nunca pagou)
     const honor = dataF.transacoes.filter((t) => /honor/i.test(t.categoria));
-    const recebido = Math.round(honor.filter((t) => t.valor >= 0).reduce((s, t) => s + t.valor, 0));
+    const entradas = honor.filter((t) => t.valor >= 0);
+    const recebido = Math.round(entradas.reduce((s, t) => s + t.valor, 0));
     const repassado = Math.round(honor.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0));
+    const exito = Math.round(entradas.filter((t) => t.subtipo === 'exito').reduce((s, t) => s + t.valor, 0));
+    const inicial = recebido - exito; // tudo que não é êxito = inicial (contrato/entrada)
     const porStatus = (st: StatusFin) => clientes.filter((c) => c.status === st).length;
-    return { recebido, repassado, liquido: recebido - repassado, nClientes: clientes.length, emDia: porStatus('em-dia'), atencao: porStatus('atencao') };
-  }, [clientes, data.transacoes]);
+    return { recebido, repassado, inicial, exito, liquido: recebido - repassado, nClientes: clientes.length, emDia: porStatus('em-dia'), atencao: porStatus('atencao') };
+  }, [clientes, dataF.transacoes]);
 
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -658,11 +671,12 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
 
   return (
     <>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <MiniStat label="Honorários recebidos" value={brl(tot.recebido)} hint={`${tot.nClientes} clientes`} accent="#2F9E44" />
-        <MiniStat label="Repassado / estornado" value={brl(tot.repassado)} hint="saídas de honorários" accent="#868E96" />
+        <MiniStat label="Iniciais (contrato)" value={brl(tot.inicial)} hint="entrada / parcelas do contrato" accent="#10B981" />
+        <MiniStat label="De êxito (alvará/acordo)" value={brl(tot.exito)} hint="ganho no processo" accent="#7048E8" />
         <MiniStat label="Líquido p/ o escritório" value={brl(tot.liquido)} hint="recebido − repassado" accent="#228BE6" />
-        <MiniStat label="Em dia / Atenção" value={`${tot.emDia} / ${tot.atencao}`} hint="recorrentes que pararam = atenção" accent="#F59F00" />
+        <MiniStat label="Em dia / Atenção" value={`${tot.emDia} / ${tot.atencao}`} hint="recorrentes que pararam" accent="#F59F00" />
       </div>
 
       <Card title="Carteira de honorários por cliente" sub="vinculado aos lançamentos. Status é comportamental (frequência de pagamento). O saldo devedor exato dos parcelados está na aba Cobranças."
@@ -1593,7 +1607,7 @@ function CrescimentoFundacao({ cc }: { cc: CrescimentoCarteira }) {
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <BigStat label="Carteira hoje" value={String(r.carteiraHoje)} hint={`${r.totalProcessos} processos no total${r.semDataDistribuicao ? ` · ${r.semDataDistribuicao} sem data` : ''}`} cor="#7048E8" />
+        <BigStat label="Carteira hoje" value={String(r.carteiraHoje)} hint={`${r.totalProcessos} no total${r.preProcessuais ? ` · ${r.preProcessuais} pré-processuais` : ''}`} cor="#7048E8" />
         <BigStat label="Crescimento total" value={totalFmt} hint="desde jan/2024" cor="#2F9E44" />
         <BigStat label="Ritmo médio" value={r.cagrMensalPct != null ? `+${r.cagrMensalPct.toLocaleString('pt-BR')}%/mês` : '—'} hint={`~${r.mediaNovosMes.toLocaleString('pt-BR')} novos processos/mês`} cor="#228BE6" />
         <BigStat label="Melhor mês" value={r.melhorMes ? String(r.melhorMes.novos) : '—'} hint={r.melhorMes ? `novos em ${fmtMesKey(r.melhorMes.mes)}` : ''} cor="#F08C00" />
@@ -1609,7 +1623,10 @@ function CrescimentoFundacao({ cc }: { cc: CrescimentoCarteira }) {
               <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: '#868e96' }} width={42} />
               <Tooltip content={<ChartTooltip />} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar yAxisId="l" name="Novos processos no mês" dataKey="novos" fill="#E64980" radius={[3, 3, 0, 0]} maxBarSize={22} />
+              <Bar yAxisId="l" stackId="m" name="Novos processos no mês" dataKey="novos" fill="#E64980" maxBarSize={22} />
+              {r.estimadosNaCurva > 0 && (
+                <Bar yAxisId="l" stackId="m" name="Estimados pelo nº CNJ" dataKey="estimados" fill="#F783AC" radius={[3, 3, 0, 0]} maxBarSize={22} />
+              )}
               <Line yAxisId="r" name="Carteira acumulada" type="monotone" dataKey="acum" stroke="#2F9E44" strokeWidth={2.5} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -1617,9 +1634,10 @@ function CrescimentoFundacao({ cc }: { cc: CrescimentoCarteira }) {
       )}
 
       <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">
-        Contado pela <b>data de distribuição</b> de cada processo.
-        {r.baseHerdada > 0 && <> Inclui {r.baseHerdada} processo(s) já em andamento antes de jan/2024 (base herdada, no ponto de partida).</>}
-        {r.semDataDistribuicao > 0 && <> {r.semDataDistribuicao} processo(s) sem data de distribuição ficam fora da curva, mas entram no total da carteira.</>}
+        Contado pela <b>data de distribuição</b> ({r.comDataDistribuicao} processos).
+        {r.baseHerdada > 0 && <> Inclui {r.baseHerdada} já em andamento antes de jan/2024 (base herdada, no ponto de partida).</>}
+        {r.estimadosPorCnj > 0 && <> Outros {r.estimadosPorCnj} sem data registrada tiveram o <b>ano de ajuizamento recuperado do nº&nbsp;CNJ</b> e foram estimados dentro do ano (barra rosa-clara).</>}
+        {r.preProcessuais > 0 && <> {r.preProcessuais} casos pré-processuais (sem ação ajuizada) entram no total, mas ficam fora da curva.</>}
       </p>
     </Card>
   );

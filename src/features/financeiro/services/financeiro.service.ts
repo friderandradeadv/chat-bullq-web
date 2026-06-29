@@ -28,6 +28,7 @@ export interface FinTransacao {
   mes: string;
   tipo: string;
   categoria: string;
+  subtipo?: 'inicial' | 'exito' | null;
   valor: number;
   party: string | null;
   pagador?: string | null;
@@ -98,11 +99,13 @@ export interface FinCrescimento {
 
 export interface CrescimentoCarteira {
   desde: string; // 'AAAA-MM'
-  serie: { mes: string; novos: number; acum: number; momPct: number | null }[];
+  serie: { mes: string; novos: number; estimados: number; acum: number; momPct: number | null }[];
   resumo: {
     totalProcessos: number;
     comDataDistribuicao: number;
-    semDataDistribuicao: number;
+    estimadosPorCnj: number;
+    estimadosNaCurva: number;
+    preProcessuais: number;
     baseHerdada: number;
     carteiraJan2024: number;
     carteiraHoje: number;
@@ -129,7 +132,7 @@ export interface Cobranca {
 export interface AddCobrancaInput { cliente: string; descricao?: string; valorTotal: number; nParcelas: number; dataInicio: string; responsavelId?: string; responsavel?: string; conta?: string }
 
 export interface AddTransacaoInput {
-  data: string; tipo: 'receita' | 'despesa'; categoria: string; valor: number;
+  data: string; tipo: 'receita' | 'despesa'; categoria: string; subtipo?: 'inicial' | 'exito'; valor: number;
   party?: string; pagador?: string; recebedor?: string;
   vencimento?: string; dataPagamento?: string;
   status?: TxStatus; parcelas?: number; intervalo?: 'mensal' | 'anual'; split?: SplitItem[];
@@ -137,7 +140,7 @@ export interface AddTransacaoInput {
 }
 export interface UpdateTransacaoInput {
   data?: string; vencimento?: string; dataPagamento?: string;
-  tipo?: 'receita' | 'despesa'; categoria?: string; valor?: number;
+  tipo?: 'receita' | 'despesa'; categoria?: string; subtipo?: 'inicial' | 'exito'; valor?: number;
   pagador?: string; recebedor?: string; status?: TxStatus; split?: SplitItem[];
   responsavelId?: string; responsavel?: string; conta?: string;
   escopo?: 'uma' | 'proximas';
