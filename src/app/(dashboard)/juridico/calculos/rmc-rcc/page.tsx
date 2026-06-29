@@ -413,7 +413,8 @@ export default function CalculadoraRmcPage() {
   td{padding:3px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap}
   th:first-child,td:first-child,.l{text-align:left}
   tr.r td{background:#ecfdf5}
-  .secfull{margin-top:4px}
+  .secfull{margin-top:14px;border:none;border-radius:0;overflow:visible;break-inside:auto}
+  .secfull>h2{border:1px solid #e5e7eb;border-bottom:none;border-radius:8px 8px 0 0}
   .foot{margin-top:18px;padding-top:8px;border-top:1px solid #e5e7eb;text-align:center;font-size:9px;color:#9ca3af}
   @page{size:A4 portrait;margin:12mm}
   @media print{body{padding:0}}
