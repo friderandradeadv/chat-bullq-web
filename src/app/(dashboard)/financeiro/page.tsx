@@ -13,7 +13,7 @@ import {
   ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem,
 } from 'lucide-react';
-import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
@@ -1444,6 +1444,8 @@ const fmtMesKey = (mk: string) => { const [y, m] = (mk || '').split('-'); const 
 
 function CrescimentoTab({ data }: { data: FinDashboard }) {
   const c = data.crescimento;
+  const crescQ = useQuery({ queryKey: ['crescimento-carteira'], queryFn: () => financeiroService.getCrescimentoCarteira(), staleTime: 5 * 60_000 });
+  const cc = crescQ.data;
   const realizados = data.meses.filter((m) => !m.projecao);
   const serie = realizados.map((m, i) => {
     const prev = realizados[i - 1];
@@ -1462,10 +1464,9 @@ function CrescimentoTab({ data }: { data: FinDashboard }) {
     return { fatur, carteira, total };
   }, [c, mult, pesoCarteira]);
 
-  const baseSerie = (c?.base.serie ?? []).map((s) => ({ ...s, nome: fmtMesKey(s.mes) }));
-
   return (
     <>
+      {cc && <CrescimentoFundacao cc={cc} />}
       {c && val && (
         <>
           {/* Patrimônio / valuation — o valor real do escritório, além do que já entrou */}
@@ -1505,6 +1506,13 @@ function CrescimentoTab({ data }: { data: FinDashboard }) {
             <MiniStat label="Base de clientes" value={String(c.base.clientesTotal)} hint={`${c.base.casosTotal} casos abertos`} accent="#228BE6" />
             <MiniStat label="Faturamento (12m)" value={brl(c.receita.r12m)} hint={`média ${brl(c.receita.media)}/mês`} accent="#2F9E44" />
           </div>
+          {/* Glossário didático dos pilares */}
+          <div className="mt-2 grid gap-x-4 gap-y-1.5 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400 sm:grid-cols-2">
+            <p><b className="text-zinc-600 dark:text-zinc-300">Carteira em processo</b> — honorários que o escritório ainda vai receber dos processos em andamento (valor da causa × chance de êxito × % do escritório). É o maior ativo &ldquo;oculto&rdquo;: dinheiro a caminho, que ainda não entrou no caixa.</p>
+            <p><b className="text-zinc-600 dark:text-zinc-300">Causas sob patrocínio</b> — a soma do valor de todas as ações que o escritório defende hoje. Mostra o tamanho do que está em jogo para os clientes.</p>
+            <p><b className="text-zinc-600 dark:text-zinc-300">Base de clientes</b> — quantas pessoas o escritório atende e quantos processos estão ativos.</p>
+            <p><b className="text-zinc-600 dark:text-zinc-300">Faturamento (12m)</b> — o que de fato entrou em caixa nos últimos 12 meses (diferente da carteira, que ainda vai entrar).</p>
+          </div>
 
           {/* Carteira por área */}
           {c.carteira.porArea.length > 0 && (
@@ -1527,28 +1535,11 @@ function CrescimentoTab({ data }: { data: FinDashboard }) {
             </Card>
           )}
 
-          {/* Crescimento da base (casos/clientes ao longo do tempo) */}
-          {baseSerie.length > 1 && (
-            <Card title="Crescimento da base" sub="barras = novos casos no mês · linha = total acumulado de processos.">
-              <ResponsiveContainer width="100%" height={260}>
-                <ComposedChart data={baseSerie} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" className="dark:opacity-20" />
-                  <XAxis dataKey="nome" tick={{ fontSize: 11, fill: '#868e96' }} interval="preserveStartEnd" />
-                  <YAxis yAxisId="l" tick={{ fontSize: 11, fill: '#868e96' }} width={36} />
-                  <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: '#868e96' }} width={42} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar yAxisId="l" name="Novos casos" dataKey="novosCasos" fill="#E64980" radius={[3, 3, 0, 0]} maxBarSize={26} />
-                  <Line yAxisId="r" name="Total de processos" type="monotone" dataKey="casosAcum" stroke="#7048E8" strokeWidth={2.5} dot={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </Card>
-          )}
         </>
       )}
 
       {/* Receita recebida — a história do caixa que já entrou */}
-      <Card title="Receita recebida, mês a mês" sub="barras = faturamento que entrou · linha = resultado (lucro/prejuízo).">
+      <Card title="Receita recebida, mês a mês" sub="barras = faturamento que entrou · linha = resultado (lucro/prejuízo). Os lançamentos no financeiro começam em mai/2025 — antes disso o controle era fora do sistema.">
         <ResponsiveContainer width="100%" height={280}>
           <ComposedChart data={serie} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" className="dark:opacity-20" />
@@ -1562,6 +1553,64 @@ function CrescimentoTab({ data }: { data: FinDashboard }) {
         </ResponsiveContainer>
       </Card>
     </>
+  );
+}
+
+function BigStat({ label, value, hint, cor }: { label: string; value: string; hint?: string; cor: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+      <p className="text-[11px] uppercase tracking-wide text-zinc-400">{label}</p>
+      <p className="mt-0.5 text-2xl font-bold tabular-nums" style={{ color: cor }}>{value}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-zinc-400">{hint}</p>}
+    </div>
+  );
+}
+
+function CrescimentoFundacao({ cc }: { cc: CrescimentoCarteira }) {
+  const r = cc.resumo;
+  const serie = cc.serie.map((p) => ({ ...p, nome: fmtMesKey(p.mes) }));
+  const totalFmt = r.crescimentoTotalPct != null ? `+${r.crescimentoTotalPct.toLocaleString('pt-BR')}%` : '—';
+  return (
+    <Card
+      title={<span className="flex items-center gap-2"><Rocket className="h-4 w-4 text-[#2F9E44]" /> Crescimento desde a fundação (jan/2024)</span>}
+      sub="quantos processos o escritório acumula mês a mês, pela data de distribuição — a medida mais fiel do crescimento."
+    >
+      <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+        O escritório saiu de <b>{r.carteiraJan2024}</b> processos em jan/2024 para <b>{r.carteiraHoje}</b> hoje
+        {r.crescimentoTotalPct != null && <> — um salto de <b className="text-[#2F9E44]">{totalFmt}</b></>}
+        {r.cagrMensalPct != null && <>, crescendo cerca de <b className="text-[#2F9E44]">+{r.cagrMensalPct}%</b> ao mês, em média</>}.
+      </p>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <BigStat label="Carteira hoje" value={String(r.carteiraHoje)} hint={`${r.totalProcessos} processos no total${r.semDataDistribuicao ? ` · ${r.semDataDistribuicao} sem data` : ''}`} cor="#7048E8" />
+        <BigStat label="Crescimento total" value={totalFmt} hint="desde jan/2024" cor="#2F9E44" />
+        <BigStat label="Ritmo médio" value={r.cagrMensalPct != null ? `+${r.cagrMensalPct}%/mês` : '—'} hint={`~${r.mediaNovosMes} novos processos/mês`} cor="#228BE6" />
+        <BigStat label="Melhor mês" value={r.melhorMes ? String(r.melhorMes.novos) : '—'} hint={r.melhorMes ? `novos em ${fmtMesKey(r.melhorMes.mes)}` : ''} cor="#F08C00" />
+      </div>
+
+      {serie.length > 1 && (
+        <div className="mt-4">
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={serie} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" className="dark:opacity-20" />
+              <XAxis dataKey="nome" tick={{ fontSize: 11, fill: '#868e96' }} interval="preserveStartEnd" />
+              <YAxis yAxisId="l" tick={{ fontSize: 11, fill: '#868e96' }} width={36} />
+              <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: '#868e96' }} width={42} />
+              <Tooltip content={<ChartTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar yAxisId="l" name="Novos processos no mês" dataKey="novos" fill="#E64980" radius={[3, 3, 0, 0]} maxBarSize={22} />
+              <Line yAxisId="r" name="Carteira acumulada" type="monotone" dataKey="acum" stroke="#2F9E44" strokeWidth={2.5} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">
+        Contado pela <b>data de distribuição</b> de cada processo.
+        {r.baseHerdada > 0 && <> Inclui {r.baseHerdada} processo(s) já em andamento antes de jan/2024 (base herdada, no ponto de partida).</>}
+        {r.semDataDistribuicao > 0 && <> {r.semDataDistribuicao} processo(s) sem data de distribuição ficam fora da curva, mas entram no total da carteira.</>}
+      </p>
+    </Card>
   );
 }
 

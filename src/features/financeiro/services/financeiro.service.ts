@@ -96,6 +96,24 @@ export interface FinCrescimento {
   receita: { r12m: number; media: number; ult3Media: number; ant3Media: number; cresc3: number };
 }
 
+export interface CrescimentoCarteira {
+  desde: string; // 'AAAA-MM'
+  serie: { mes: string; novos: number; acum: number; momPct: number | null }[];
+  resumo: {
+    totalProcessos: number;
+    comDataDistribuicao: number;
+    semDataDistribuicao: number;
+    baseHerdada: number;
+    carteiraJan2024: number;
+    carteiraHoje: number;
+    crescimentoTotalPct: number | null;
+    cagrMensalPct: number | null;
+    mediaNovosMes: number;
+    melhorMes: { mes: string; novos: number } | null;
+    clientesTotal: number;
+  };
+}
+
 export interface Parcela { num: number; vencimento: string; valor: number; status: 'aberta' | 'paga' | 'cancelada'; dataPagamento?: string | null; txId?: string | null; atrasada?: boolean }
 export interface Cobranca {
   id: string; cliente: string; descricao?: string;
@@ -224,6 +242,10 @@ export const financeiroService = {
   },
   async getSocioConfig(): Promise<SocioConfig> {
     const { data } = await api.get('/financeiro/socio-config');
+    return data.data ?? data;
+  },
+  async getCrescimentoCarteira(): Promise<CrescimentoCarteira> {
+    const { data } = await api.get('/crescimento/carteira');
     return data.data ?? data;
   },
   async setSocioConfig(payload: Partial<SocioConfig>): Promise<{ ok: boolean } & SocioConfig> {
