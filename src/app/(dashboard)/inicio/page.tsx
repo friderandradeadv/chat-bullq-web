@@ -749,14 +749,23 @@ function NewsCol({ titulo, emoji, cor, itens, loading }: { titulo: string; emoji
 }
 
 function HojeNoMundo() {
-  const q = useQuery({ queryKey: ['hub', 'news'], queryFn: () => dashboardService.hubNews(), staleTime: 30 * 60_000, retry: 1 });
+  const q = useQuery({
+    queryKey: ['hub', 'news'],
+    queryFn: () => dashboardService.hubNews(),
+    staleTime: 5 * 60_000,
+    retry: 1,
+    // Enquanto o backend está buscando (background), refaz a cada 8s até chegar.
+    refetchInterval: (query) => (query.state.data?.generating ? 8000 : false),
+  });
   const mundo = q.data?.mundo ?? [];
   const juridico = q.data?.juridico ?? [];
-  if (!q.isLoading && !mundo.length && !juridico.length) return null;
+  const loading = q.isLoading || !!q.data?.generating;
+  // Esconde só quando realmente não há nada e não está gerando.
+  if (!loading && !mundo.length && !juridico.length) return null;
   return (
     <div className="welcome-pop mt-4 grid w-full items-start gap-4 text-left lg:grid-cols-2" style={{ animationDelay: '0.235s' }}>
-      <NewsCol titulo="Hoje no mundo" emoji="🌎" cor="#228BE6" itens={mundo} loading={q.isLoading} />
-      <NewsCol titulo="No jurídico hoje" emoji="⚖️" cor="#7048e8" itens={juridico} loading={q.isLoading} />
+      <NewsCol titulo="Hoje no mundo" emoji="🌎" cor="#228BE6" itens={mundo} loading={loading && !mundo.length} />
+      <NewsCol titulo="No jurídico hoje" emoji="⚖️" cor="#7048e8" itens={juridico} loading={loading && !juridico.length} />
     </div>
   );
 }

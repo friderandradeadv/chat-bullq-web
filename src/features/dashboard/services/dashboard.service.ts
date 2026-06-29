@@ -1,7 +1,7 @@
 import { api } from '@/lib/api';
 
 export interface HubNewsItem { t: string; d: string; fonte: string | null }
-export interface HubNews { date: string; mundo: HubNewsItem[]; juridico: HubNewsItem[]; geradoEm: string | null }
+export interface HubNews { date: string; mundo: HubNewsItem[]; juridico: HubNewsItem[]; geradoEm: string | null; generating?: boolean }
 
 export interface DashboardOverview {
   activeConversations: number;
