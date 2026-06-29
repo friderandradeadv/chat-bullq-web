@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -209,6 +209,15 @@ export default function CalculadoraRmcPage() {
     },
     onError: (e) => setTaxaInfo((e as Error)?.message ?? 'Erro ao buscar a taxa.'),
   });
+
+  // Aplica a taxa de conversão automaticamente: assim que há data de
+  // contratação (ou muda a modalidade), busca a taxa média do BACEN da época.
+  useEffect(() => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(form.dataContratacao)) {
+      taxaMut.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.dataContratacao, form.modalidadeConsignado]);
 
   // ── HISCON: metadados do contrato (nº, datas, valores) ────────────────────
   const hisconRef = useRef<HTMLInputElement>(null);
@@ -680,7 +689,7 @@ export default function CalculadoraRmcPage() {
                   ) : (
                     <Landmark className="h-3.5 w-3.5" />
                   )}
-                  Sugerir taxa média do BACEN (data da contratação)
+                  Reaplicar taxa do BACEN (preenche sozinha pela data)
                 </button>
                 {taxaInfo && <p className="text-xs text-zinc-500 dark:text-zinc-400">{taxaInfo}</p>}
                 <div className="grid grid-cols-2 gap-3">
