@@ -1438,7 +1438,7 @@ function AsaasImport() {
   }
 
   return (
-    <Card title="Importar do ASAAS (extrato → caixa)" sub="puxa pagamentos recebidos, taxas e compras direto da API do ASAAS e cria os lançamentos (sem duplicar).">
+    <Card title="Importar do ASAAS (extrato → caixa)" sub="sincroniza sozinho de hora em hora (pagamentos, taxas e compras viram lançamentos, sem duplicar). Use abaixo para puxar um período específico na hora.">
       <div className="flex flex-wrap items-end gap-3">
         <div><label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-400">De</label><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
         <div><label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-400">Até</label><input type="date" value={ate} onChange={(e) => setAte(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
