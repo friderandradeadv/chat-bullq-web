@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  AreaChart, Area, ReferenceLine,
+  AreaChart, Area, ReferenceLine, Cell,
 } from 'recharts';
 import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
@@ -53,7 +53,7 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-type View = 'meu' | 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao' | 'previsoes';
+type View = 'meu' | 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao' | 'previsoes' | 'verticais';
 const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }[] = [
   { key: 'meu', label: 'Meu financeiro', icon: UserCircle2, grupo: 'Pessoal' },
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt, grupo: 'Caixa' },
@@ -63,6 +63,7 @@ const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }
   { key: 'retiradas', label: 'Retiradas', icon: Wallet, grupo: 'Caixa' },
   { key: 'cumprimento', label: 'CS — recebíveis dos processos', icon: Gavel, grupo: 'Processos' },
   { key: 'previsoes', label: 'Previsões da carteira', icon: Sparkles, grupo: 'Sócios' },
+  { key: 'verticais', label: 'Verticais (por área)', icon: Layers, grupo: 'Análise & futuro' },
   { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2, grupo: 'Análise & futuro' },
   { key: 'crescimento', label: 'Crescimento', icon: TrendingUp, grupo: 'Análise & futuro' },
   { key: 'projecoes', label: 'Projeções', icon: Rocket, grupo: 'Análise & futuro' },
@@ -152,6 +153,7 @@ export default function FinanceiroPage() {
         {view === 'cumprimento' && <CumprimentoTab />}
         {view === 'retiradas' && <RetiradasTab data={data} />}
         {view === 'contas' && <ContasTab data={data} />}
+        {view === 'verticais' && <VerticaisTab data={data} />}
         {view === 'fluxo' && <FluxoTab data={data} />}
         {view === 'crescimento' && <CrescimentoTab data={data} />}
         {view === 'projecoes' && <ProjecoesTab data={data} />}
@@ -252,13 +254,15 @@ const txStatus = (t: FinTransacao): TxStatus => t.status ?? (t.valor >= 0 ? 'rec
 const ehLiquidado = (s: TxStatus) => s === 'recebido' || s === 'pago';
 
 interface SplitRow { tipo: 'socio' | 'associado'; userId: string; valor: string }
+interface RateioForm { bruto: string; cliente: string; sucumbencia: string; honorarios: string }
 interface Editor {
   id: string | null; serieId: string | null; tipo: 'receita' | 'despesa';
   dataISO: string; vencISO: string; pagtoISO: string;
   categoria: string; subtipo: 'inicial' | 'exito'; pagador: string; recebedor: string; valor: string;
   status: TxStatus; parcelas: string; repetir: 'nao' | 'mensal' | 'anual'; escopo: 'uma' | 'proximas'; split: SplitRow[];
-  responsavelId: string; conta: string;
+  rateio: RateioForm; responsavelId: string; conta: string;
 }
+const RATEIO_VAZIO: RateioForm = { bruto: '', cliente: '', sucumbencia: '', honorarios: '' };
 
 function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
@@ -341,25 +345,31 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], responsavelId: '', conta: contas[0]?.id ?? '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })) });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })), rateio: t.rateio ? { bruto: String(t.rateio.bruto).replace('.', ','), cliente: String(t.rateio.cliente).replace('.', ','), sucumbencia: String(t.rateio.sucumbencia).replace('.', ','), honorarios: String(t.rateio.honorarios).replace('.', ',') } : { ...RATEIO_VAZIO } });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
   const buildSplit = (ed: Editor) => ed.split.filter((r) => r.userId && parseValor(r.valor) > 0).map((r) => ({ tipo: r.tipo, userId: r.userId, nome: advogados.find((a) => a.id === r.userId)?.name ?? '', valor: parseValor(r.valor) }));
+  // rateio (prestação de contas) só faz sentido em honorário de êxito com bruto preenchido
+  const ehExito = (ed: Editor) => /honor/i.test(ed.categoria) && ed.subtipo === 'exito';
+  const rateioNosso = (r: RateioForm) => parseValor(r.honorarios) + parseValor(r.sucumbencia);
+  const buildRateio = (ed: Editor) => (ehExito(ed) && parseValor(ed.rateio.bruto) > 0) ? { bruto: parseValor(ed.rateio.bruto), cliente: parseValor(ed.rateio.cliente), sucumbencia: parseValor(ed.rateio.sucumbencia), honorarios: parseValor(ed.rateio.honorarios) } : null;
 
   const salvar = () => {
     if (!editor) return;
-    const v = parseValor(editor.valor);
-    if (!(v > 0)) { toast.error('Informe um valor maior que zero'); return; }
+    const rateio = buildRateio(editor);
+    // com rateio de êxito, o que entra no caixa é a parte do escritório (honorário + sucumbência)
+    const v = rateio ? rateioNosso(editor.rateio) : parseValor(editor.valor);
+    if (!(v > 0)) { toast.error(rateio ? 'Preencha honorário e/ou sucumbência do escritório' : 'Informe um valor maior que zero'); return; }
     const liq = ehLiquidado(editor.status);
     const split = buildSplit(editor);
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined });
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined });
     } else {
-      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
     }
   };
   const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
@@ -486,10 +496,18 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 ))}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Valor (cada parcela)"><input value={editor.valor} onChange={(e) => setEditor({ ...editor, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-                <Field label="Fonte"><select value={editor.categoria} onChange={(e) => setEditor({ ...editor, categoria: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
-              </div>
+              {(() => {
+                const exitoRateio = /honor/i.test(editor.categoria) && editor.subtipo === 'exito' && parseValor(editor.rateio.bruto) > 0;
+                const nosso = parseValor(editor.rateio.honorarios) + parseValor(editor.rateio.sucumbencia);
+                return (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {exitoRateio
+                      ? <Field label="Valor (entra no caixa = honorário + sucumbência)"><input value={brl2(nosso)} readOnly className="w-full cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-right text-sm font-semibold tabular-nums text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300" /></Field>
+                      : <Field label="Valor (cada parcela)"><input value={editor.valor} onChange={(e) => setEditor({ ...editor, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>}
+                    <Field label="Fonte"><select value={editor.categoria} onChange={(e) => setEditor({ ...editor, categoria: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
+                  </div>
+                );
+              })()}
 
               {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && (
                 <Field label="Tipo de honorário">
@@ -497,6 +515,33 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                     {([['inicial', 'Inicial (contrato/entrada)'], ['exito', 'Êxito (alvará/acordo)']] as const).map(([k, label]) => (
                       <button key={k} type="button" onClick={() => setEditor({ ...editor, subtipo: k })} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${editor.subtipo === k ? (k === 'exito' ? 'bg-violet-600 text-white' : 'bg-emerald-600 text-white') : 'text-zinc-500'}`}>{label}</button>
                     ))}
+                  </div>
+                </Field>
+              )}
+
+              {/* Prestação de contas — rateio do alvará/acordo (só honorário de êxito) */}
+              {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && editor.subtipo === 'exito' && (
+                <Field label="Prestação de contas (rateio do alvará/acordo)">
+                  <div className="space-y-2.5 rounded-lg border border-violet-200/70 bg-violet-50/40 p-3 dark:border-violet-900/40 dark:bg-violet-900/10">
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Do <strong>bruto</strong> recebido, separe o que volta ao <strong>cliente</strong> e o que fica para o escritório (<strong>honorário contratual</strong> + <strong>sucumbência</strong>). O que fica é o que entra no caixa e depois se divide entre os advogados (abaixo).</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Bruto recebido"><input value={editor.rateio.bruto} onChange={(e) => setEditor({ ...editor, rateio: { ...editor.rateio, bruto: e.target.value } })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                      <Field label="Cliente recebe"><input value={editor.rateio.cliente} onChange={(e) => setEditor({ ...editor, rateio: { ...editor.rateio, cliente: e.target.value } })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                      <Field label="Honorário (escritório)"><input value={editor.rateio.honorarios} onChange={(e) => setEditor({ ...editor, rateio: { ...editor.rateio, honorarios: e.target.value } })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                      <Field label="Sucumbência (escritório)"><input value={editor.rateio.sucumbencia} onChange={(e) => setEditor({ ...editor, rateio: { ...editor.rateio, sucumbencia: e.target.value } })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                    </div>
+                    {(() => {
+                      const bruto = parseValor(editor.rateio.bruto);
+                      const cliente = parseValor(editor.rateio.cliente);
+                      const nosso = parseValor(editor.rateio.honorarios) + parseValor(editor.rateio.sucumbencia);
+                      const conferir = bruto - cliente - nosso;
+                      return (
+                        <div className="flex items-center justify-between border-t border-violet-200/60 pt-2 text-[11px] dark:border-violet-900/40">
+                          <span className="text-zinc-500 dark:text-zinc-400">Escritório (caixa): <strong className="text-violet-700 dark:text-violet-300">{brl2(nosso)}</strong></span>
+                          {bruto > 0 && Math.abs(conferir) > 0.01 && <span className="text-amber-600 dark:text-amber-400">⚠️ bruto ≠ cliente + escritório (dif. {brl2(conferir)})</span>}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </Field>
               )}
@@ -554,7 +599,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                     ))}
                     <div className="flex items-center justify-between">
                       <button onClick={() => setEditor({ ...editor, split: [...editor.split, { tipo: 'socio', userId: '', valor: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar advogado</button>
-                      {(() => { const v = parseValor(editor.valor); const assigned = editor.split.reduce((s, r) => s + parseValor(r.valor), 0); const sobra = v - assigned; return <span className={`text-[11px] ${sobra < -0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório: <strong className="text-zinc-600 dark:text-zinc-300">{brl2(Math.max(0, sobra))}</strong>{sobra < -0.01 ? ' · rateio excede o valor!' : ''}</span>; })()}
+                      {(() => { const exitoR = editor.subtipo === 'exito' && parseValor(editor.rateio.bruto) > 0; const v = exitoR ? parseValor(editor.rateio.honorarios) + parseValor(editor.rateio.sucumbencia) : parseValor(editor.valor); const assigned = editor.split.reduce((s, r) => s + parseValor(r.valor), 0); const sobra = v - assigned; return <span className={`text-[11px] ${sobra < -0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório: <strong className="text-zinc-600 dark:text-zinc-300">{brl2(Math.max(0, sobra))}</strong>{sobra < -0.01 ? ' · rateio excede o valor!' : ''}</span>; })()}
                     </div>
                   </div>
                 </Field>
@@ -1095,24 +1140,38 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
   const { data: members = [], isLoading } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advs = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const r = useMemo(() => aggregarRetiradas(data, advs), [data, advs]);
-  const [ret, setRet] = useState<{ nome: string } | null>(null);
-  const [f, setF] = useState({ dataISO: toISOInput(hojeBR()), valor: '' });
-  const addRet = useMutation({
-    mutationFn: () => financeiroService.addTransacao({ data: toBR(f.dataISO), tipo: 'despesa', categoria: 'Pró-labore', valor: parseValor(f.valor), recebedor: ret?.nome, status: 'pago' }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success('Retirada lançada'); setRet(null); setF((p) => ({ ...p, valor: '' })); },
-    onError: (e: any) => toast.error(e?.message || 'Erro ao lançar'),
+  const contas = data.contas ?? [];
+  type RetEd = { id: string | null; tipo: 'Pró-labore' | 'Retirada'; recebedor: string; dataISO: string; valor: string; conta: string };
+  const [ed, setEd] = useState<RetEd | null>(null);
+  const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
+  const openNovo = (nome?: string) => setEd({ id: null, tipo: 'Pró-labore', recebedor: nome ?? '', dataISO: toISOInput(hojeBR()), valor: '', conta: contas[0]?.id ?? '' });
+  const openEdit = (t: FinTransacao) => setEd({ id: t.id ?? null, tipo: t.categoria === 'Retirada' ? 'Retirada' : 'Pró-labore', recebedor: t.recebedor ?? t.party ?? '', dataISO: toISOInput(t.data), valor: String(Math.abs(t.valor)).replace('.', ','), conta: t.conta ?? '' });
+  const saveM = useMutation({
+    mutationFn: async () => {
+      if (!ed) throw new Error('sem editor');
+      const base = { data: toBR(ed.dataISO), tipo: 'despesa' as const, categoria: ed.tipo, valor: parseValor(ed.valor), recebedor: ed.recebedor || undefined, conta: ed.conta || undefined, status: 'pago' as const };
+      if (ed.id) await financeiroService.updateTransacao(ed.id, { ...base, recebedor: ed.recebedor || '', conta: ed.conta || '', escopo: 'uma' });
+      else await financeiroService.addTransacao(base);
+    },
+    onSuccess: () => { inval(); toast.success(ed?.id ? 'Retirada atualizada' : 'Retirada lançada'); setEd(null); },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao salvar'),
   });
+  const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeTransacao(id, 'uma'), onSuccess: () => { inval(); toast.success('Retirada removida'); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
+  const retiradas = useMemo(() => data.transacoes.filter((t) => t.categoria === 'Pró-labore' || t.categoria === 'Retirada').sort((a, b) => toISOInput(b.data).localeCompare(toISOInput(a.data))), [data.transacoes]);
 
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
   const totalParts = r.porUser.reduce((s, u) => s + u.aReceber, 0);
 
   return (
     <>
-      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-cyan-50 to-white p-5 dark:border-zinc-800 dark:from-cyan-900/15 dark:to-zinc-900">
-        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Wallet className="h-5 w-5 text-[#15AABF]" /> Retiradas e pró-labore</h2>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
-          Quando um honorário entra, o rateio (no lançamento) separa a parte do <strong>escritório</strong>, do <strong>sócio</strong> e do <strong>associado</strong>. Aqui você vê quanto cada advogado tem a receber e quanto já retirou — e lança novas retiradas.
-        </p>
+      <div className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-cyan-50 to-white p-5 dark:border-zinc-800 dark:from-cyan-900/15 dark:to-zinc-900">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Wallet className="h-5 w-5 text-[#15AABF]" /> Retiradas e pró-labore</h2>
+          <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+            Quando um honorário entra, o rateio (no lançamento) separa a parte do <strong>escritório</strong>, do <strong>sócio</strong> e do <strong>associado</strong>. Aqui você vê quanto cada advogado tem a receber e quanto já retirou — e lança novas retiradas.
+          </p>
+        </div>
+        <button onClick={() => openNovo()} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#15AABF] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1098AD]"><Plus className="h-4 w-4" /> Nova retirada</button>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1133,7 +1192,7 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
                   <td className="px-2 py-1.5 text-right tabular-nums text-violet-600">{u.aReceber ? brl2(u.aReceber) : '—'}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-pink-600">{u.retirado ? brl2(u.retirado) : '—'}</td>
                   <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${u.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(u.saldo)}</td>
-                  <td className="px-2 py-1.5 text-right"><button onClick={() => setRet({ nome: u.nome })} className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:border-[#15AABF] hover:text-[#15AABF] dark:border-zinc-700 dark:text-zinc-300">Lançar retirada</button></td>
+                  <td className="px-2 py-1.5 text-right"><button onClick={() => openNovo(u.nome)} className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:border-[#15AABF] hover:text-[#15AABF] dark:border-zinc-700 dark:text-zinc-300">Lançar retirada</button></td>
                 </tr>
               ))}
               {r.porUser.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Nenhum advogado ativo encontrado.</td></tr>}
@@ -1143,21 +1202,154 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
         <p className="mt-2 text-[11px] text-zinc-400">A parte de cada advogado vem do rateio definido na hora do recebimento do honorário (no lançamento). Sem rateio, o valor inteiro fica com o escritório.</p>
       </Card>
 
-      {/* Modal: lançar retirada */}
-      {ret && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRet(null)}>
+      <Card title="Retiradas lançadas" sub="pró-labore e retiradas pagas — clique para editar ou remover.">
+        <div className="overflow-x-auto scrollbar-thin">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Tipo</th><th className="px-2 py-1.5 font-medium">Recebedor</th><th className="px-2 py-1.5 font-medium">Conta</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="w-20"></th></tr></thead>
+            <tbody>
+              {retiradas.map((t) => {
+                const conta = contas.find((c) => c.id === t.conta);
+                return (
+                  <tr key={t.id} className="border-t border-zinc-100 dark:border-zinc-800">
+                    <td className="px-2 py-1.5 tabular-nums text-zinc-600 dark:text-zinc-300">{t.data}</td>
+                    <td className="px-2 py-1.5"><span className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${t.categoria === 'Retirada' ? 'bg-pink-50 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' : 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'}`}>{t.categoria}</span></td>
+                    <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{t.recebedor || t.party || '—'}</td>
+                    <td className="px-2 py-1.5 text-zinc-500 dark:text-zinc-400">{conta?.nome || '—'}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-rose-600">{brl2(Math.abs(t.valor))}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => openEdit(t)} className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-[#15AABF] dark:hover:bg-zinc-800" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { if (t.id && confirm('Remover esta retirada?')) delM.mutate(t.id); }} className="rounded-md p-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30" title="Remover"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {retiradas.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-sm text-zinc-400">Nenhuma retirada lançada ainda.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Modal: lançar / editar retirada */}
+      {ed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEd(null)}>
           <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-3 text-base font-bold text-zinc-800 dark:text-zinc-100">Retirada · {ret.nome}</h3>
+            <h3 className="mb-3 text-base font-bold text-zinc-800 dark:text-zinc-100">{ed.id ? 'Editar retirada' : 'Nova retirada'}</h3>
             <div className="space-y-3">
-              <Field label="Data"><input type="date" value={f.dataISO} onChange={(e) => setF({ ...f, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-              <Field label="Valor"><input value={f.valor} onChange={(e) => setF({ ...f, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              <Field label="Tipo">
+                <div className="flex gap-2">
+                  {(['Pró-labore', 'Retirada'] as const).map((tp) => (
+                    <button key={tp} onClick={() => setEd({ ...ed, tipo: tp })} className={`flex-1 rounded-md border px-2 py-1.5 text-sm font-medium ${ed.tipo === tp ? 'border-[#15AABF] bg-cyan-50 text-[#15AABF] dark:bg-cyan-900/20' : 'border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300'}`}>{tp}</button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Recebedor">
+                <input list="ret-advs" value={ed.recebedor} onChange={(e) => setEd({ ...ed, recebedor: e.target.value })} placeholder="Nome do advogado" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                <datalist id="ret-advs">{advs.map((a) => <option key={a.id} value={a.name} />)}</datalist>
+              </Field>
+              <Field label="Conta">
+                <select value={ed.conta} onChange={(e) => setEd({ ...ed, conta: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                  <option value="">— sem conta —</option>
+                  {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Data"><input type="date" value={ed.dataISO} onChange={(e) => setEd({ ...ed, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Valor"><input value={ed.valor} onChange={(e) => setEd({ ...ed, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              </div>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setRet(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
-              <button onClick={() => addRet.mutate()} disabled={addRet.isPending || !(parseValor(f.valor) > 0)} className="inline-flex items-center gap-1 rounded-lg bg-[#15AABF] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{addRet.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Lançar retirada'}</button>
+              <button onClick={() => setEd(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              <button onClick={() => saveM.mutate()} disabled={saveM.isPending || !(parseValor(ed.valor) > 0)} className="inline-flex items-center gap-1 rounded-lg bg-[#15AABF] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{saveM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : ed.id ? 'Salvar' : 'Lançar retirada'}</button>
             </div>
           </div>
         </div>
+      )}
+    </>
+  );
+}
+
+// ═══════════════════════════ ABA · VERTICAIS (POR ÁREA) ═══════════════════════
+
+const CORES_AREA: Record<string, string> = {
+  'Bancário': '#7048E8', 'Previdenciário': '#228BE6', 'Trabalhista': '#E8590C',
+  'Consumidor': '#0CA678', 'Cível': '#F08C00', 'Geral (escritório)': '#868E96', 'Não identificada': '#ADB5BD',
+};
+const corArea = (a: string) => CORES_AREA[a] ?? '#15AABF';
+
+function VerticaisTab({ data }: { data: FinDashboard }) {
+  const verticais = data.crescimento?.verticalArea ?? [];
+  const carteira = data.crescimento?.carteira.porArea ?? [];
+  const totRec = verticais.reduce((s, v) => s + v.receita, 0);
+  const totDesp = verticais.reduce((s, v) => s + v.despesa, 0);
+  const recVerticais = verticais.filter((v) => v.receita > 0).sort((a, b) => b.receita - a.receita);
+  const naoId = verticais.find((v) => v.area === 'Não identificada')?.receita ?? 0;
+  const chart = recVerticais.map((v) => ({ area: v.area, receita: v.receita }));
+
+  return (
+    <>
+      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-violet-50 to-white p-5 dark:border-zinc-800 dark:from-violet-900/15 dark:to-zinc-900">
+        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Layers className="h-5 w-5 text-[#7048E8]" /> Verticais por área</h2>
+        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+          Quanto cada área (<strong>Bancário</strong>, <strong>Previdenciário</strong>, <strong>Trabalhista</strong>…) traz de honorário recebido e quanto pesa de despesa. A receita é casada pelo cliente do processo; despesas gerais do escritório ficam fora das áreas.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MiniStat label="Receita por área (honorários)" value={brl(totRec)} hint="recebido, casado por cliente" accent="#2F9E44" />
+        <MiniStat label="Despesa atribuída" value={brl(totDesp)} hint="repasses + geral" accent="#E03131" />
+        <MiniStat label="Áreas com receita" value={String(recVerticais.filter((v) => v.area !== 'Não identificada').length)} hint="verticais ativas" accent="#7048E8" />
+        <MiniStat label="Não identificada" value={brl(naoId)} hint="cliente sem processo casado" accent="#ADB5BD" />
+      </div>
+
+      {chart.length > 0 ? (
+        <Card title="Receita recebida por área" sub="honorários casados ao cliente do processo.">
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chart} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+                <CartesianGrid horizontal={false} strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
+                <XAxis type="number" tickFormatter={(v) => brl(v)} tick={{ fontSize: 11 }} className="text-zinc-400" />
+                <YAxis type="category" dataKey="area" width={110} tick={{ fontSize: 12 }} className="text-zinc-500" />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="receita" name="Receita" radius={[0, 6, 6, 0]} barSize={22}>
+                  {chart.map((c) => <Cell key={c.area} fill={corArea(c.area)} />)}
+                </Bar>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      ) : (
+        <Card title="Receita recebida por área"><p className="py-8 text-center text-sm text-zinc-400">Ainda não há honorários recebidos casados a um cliente com processo. Lance honorários com o nome do cliente igual ao do processo para verticalizar.</p></Card>
+      )}
+
+      <Card title="Resumo por área" sub="receita recebida, despesa atribuída e resultado.">
+        <CsTabela cols={['Área', 'Receita', 'Despesa', 'Resultado', '% receita']} w0="34%">
+          {verticais.map((v) => (
+            <tr key={v.area} className="border-t border-zinc-100 dark:border-zinc-800">
+              <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span></td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{v.receita ? brl2(v.receita) : '—'}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-rose-600">{v.despesa ? brl2(v.despesa) : '—'}</td>
+              <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${v.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(v.resultado)}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{totRec > 0 && v.receita > 0 ? `${Math.round((v.receita / totRec) * 100)}%` : '—'}</td>
+            </tr>
+          ))}
+          {verticais.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Sem dados de verticalização ainda.</td></tr>}
+        </CsTabela>
+      </Card>
+
+      {carteira.length > 0 && (
+        <Card title="Carteira em processo por área" sub="honorário provável (valor da causa × chance de êxito × % do escritório) — ainda não é caixa.">
+          <CsTabela cols={['Área', 'Carteira provável', '% da carteira']} w0="40%">
+            {(() => { const tot = carteira.reduce((s, c) => s + c.valor, 0); return carteira.map((c) => (
+              <tr key={c.area} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(c.area) }} />{c.area}</span></td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-violet-600">{brl2(c.valor)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{tot > 0 ? `${Math.round((c.valor / tot) * 100)}%` : '—'}</td>
+              </tr>
+            )); })()}
+          </CsTabela>
+        </Card>
       )}
     </>
   );
@@ -1220,11 +1412,12 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const contas = data.contas ?? [];
   const [conc, setConc] = useState<{ conta: string; texto: string } | null>(null);
   const [concResult, setConcResult] = useState<{ conciliados: number; semPar: { data: string; valor: number; descricao: string }[] } | null>(null);
+  const [concLinhas, setConcLinhas] = useState<ExtratoLinha[]>([]);
   const [iaLoading, setIaLoading] = useState(false);
   const [upLoading, setUpLoading] = useState(false);
   const [upNome, setUpNome] = useState('');
   const onArquivo = async (f: File) => {
-    setUpNome(f.name); setUpLoading(true); setConcResult(null);
+    setUpNome(f.name); setUpLoading(true); setConcResult(null); setConcLinhas([]);
     try {
       const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
       let texto = '';
@@ -1234,10 +1427,13 @@ function ContasTab({ data }: { data: FinDashboard }) {
       } else {
         texto = await f.text();
       }
-      const n = lerExtrato(texto).length;
       setConc((c) => (c ? { ...c, texto } : c));
-      if (n === 0) toast.error('Não consegui ler lançamentos. Tente OFX, ou cole o CSV manualmente.');
-      else toast.success(`${n} lançamento(s) lido(s) do extrato`);
+      // OFX/CSV tabular: regex local (rápido). Senão (PDF do Nubank, texto livre): IA parseia.
+      let linhas = lerExtrato(texto);
+      if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
+      setConcLinhas(linhas);
+      if (linhas.length === 0) toast.error('Não consegui ler lançamentos desse arquivo. Tente OFX ou cole o texto do extrato.');
+      else toast.success(`${linhas.length} lançamento(s) lido(s) do extrato`);
     } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setUpLoading(false); }
   };
   const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string } | null>(null);
@@ -1268,10 +1464,16 @@ function ContasTab({ data }: { data: FinDashboard }) {
 
   // ── Conciliação: casa as linhas do extrato com lançamentos por valor + data (±5 dias) ──
   const isoNum = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? +`${m[3]}${m[2]}${m[1]}` : 0; };
-  const analisar = () => {
+  const analisar = async () => {
     if (!conc) return;
-    const linhas = lerExtrato(conc.texto);
-    if (!linhas.length) { toast.error('Não consegui ler nenhuma linha. Cole o extrato com data, valor e descrição.'); return; }
+    let linhas = concLinhas.length ? concLinhas : lerExtrato(conc.texto);
+    if (!linhas.length && conc.texto.trim()) {
+      setIaLoading(true);
+      try { linhas = await financeiroService.extrairExtrato(conc.texto); setConcLinhas(linhas); }
+      catch { /* trata abaixo */ }
+      finally { setIaLoading(false); }
+    }
+    if (!linhas.length) { toast.error('Não consegui ler nenhuma linha. Suba um extrato (PDF/OFX/CSV) ou cole o texto com data, valor e descrição.'); return; }
     const usadas = new Set<string>();
     let conciliados = 0; const semPar: typeof linhas = [];
     for (const l of linhas) {
@@ -1312,7 +1514,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
               Marque a conta em cada lançamento para filtrar e ver o saldo de cada uma. Use <strong>Importar extrato</strong> para conciliar: o sistema casa as linhas com os lançamentos e a <strong>IA cria os que faltam</strong>.
             </p>
           </div>
-          <button onClick={() => { setConc({ conta: contas[0]?.id ?? '', texto: '' }); setConcResult(null); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"><Sparkles className="h-3.5 w-3.5" /> Importar extrato</button>
+          <button onClick={() => { setConc({ conta: contas[0]?.id ?? '', texto: '' }); setConcResult(null); setConcLinhas([]); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"><Sparkles className="h-3.5 w-3.5" /> Importar extrato</button>
         </div>
       </div>
 
@@ -1340,9 +1542,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
                 <p className="mt-1 text-[11px] text-zinc-400">No app do banco (Nubank/ASAAS/Mercado Pago): exportar extrato em OFX (mais preciso) ou PDF. A plataforma lê e faz o caixa.</p>
               </Field>
               <Field label="…ou cole o extrato (CSV: data; valor; descrição)">
-                <textarea value={conc.texto} onChange={(e) => { setConc({ ...conc, texto: e.target.value }); setConcResult(null); }} rows={4} placeholder={'10/06/2026;47,00;Pix recebido Júlia Macedo\n12/06/2026;-2850,00;Aluguel Top Office'} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900" />
+                <textarea value={conc.texto} onChange={(e) => { setConc({ ...conc, texto: e.target.value }); setConcResult(null); setConcLinhas([]); }} rows={4} placeholder={'10/06/2026;47,00;Pix recebido Júlia Macedo\n12/06/2026;-2850,00;Aluguel Top Office'} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900" />
               </Field>
-              <button onClick={analisar} className="rounded-lg bg-[#228BE6] px-3 py-1.5 text-sm font-semibold text-white">Analisar e casar</button>
+              <button onClick={analisar} disabled={iaLoading} className="inline-flex items-center gap-1.5 rounded-lg bg-[#228BE6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{iaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Analisar e casar</button>
 
               {concResult && (
                 <div className="rounded-xl border border-zinc-200/70 p-3 dark:border-zinc-800">

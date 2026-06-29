@@ -17,6 +17,7 @@ export type TxStatus = 'a_receber' | 'recebido' | 'a_pagar' | 'pago';
 export type AcessoNivel = 'full' | 'cases' | 'none';
 export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
+export interface RateioExito { bruto: number; cliente: number; sucumbencia: number; honorarios: number }
 export interface FinTransacao {
   id?: string;
   serieId?: string | null;
@@ -35,6 +36,7 @@ export interface FinTransacao {
   recebedor?: string | null;
   status?: TxStatus;
   split?: SplitItem[] | null;
+  rateio?: RateioExito | null;
   responsavelId?: string | null;
   responsavel?: string | null;
   conta?: string | null;
@@ -88,8 +90,10 @@ export interface FinDashboard {
   crescimento?: FinCrescimento;
 }
 
+export interface FinVerticalArea { area: string; receita: number; despesa: number; resultado: number }
 export interface FinCrescimento {
   carteira: { brutoCausas: number; condenacaoEstimada: number; honorariosEscritorio: number; nComValor: number; nCasos: number; porArea: { area: string; valor: number }[] };
+  verticalArea?: FinVerticalArea[];
   base: { clientesTotal: number; casosTotal: number; serie: { mes: string; novosCasos: number; novosClientes: number; casosAcum: number; clientesAcum: number }[] };
   recorrente: { ativasN: number; saldoDevedor: number; parcelaMensal: number };
   recebiveisCS: number;
@@ -136,12 +140,14 @@ export interface AddTransacaoInput {
   party?: string; pagador?: string; recebedor?: string;
   vencimento?: string; dataPagamento?: string;
   status?: TxStatus; parcelas?: number; intervalo?: 'mensal' | 'anual'; split?: SplitItem[];
+  rateio?: RateioExito | null;
   responsavelId?: string; responsavel?: string; conta?: string;
 }
 export interface UpdateTransacaoInput {
   data?: string; vencimento?: string; dataPagamento?: string;
   tipo?: 'receita' | 'despesa'; categoria?: string; subtipo?: 'inicial' | 'exito'; valor?: number;
   pagador?: string; recebedor?: string; status?: TxStatus; split?: SplitItem[];
+  rateio?: RateioExito | null;
   responsavelId?: string; responsavel?: string; conta?: string;
   escopo?: 'uma' | 'proximas';
 }
@@ -217,6 +223,10 @@ export const financeiroService = {
   },
   async classificarExtrato(itens: { descricao: string; valor: number }[]): Promise<{ i: number; tipo: 'receita' | 'despesa'; categoria: string; party: string }[]> {
     const { data } = await api.post('/financeiro/conciliacao/classificar', { itens });
+    return data.data ?? data;
+  },
+  async extrairExtrato(texto: string): Promise<{ data: string; valor: number; descricao: string }[]> {
+    const { data } = await api.post('/financeiro/conciliacao/extrair', { texto });
     return data.data ?? data;
   },
   async getHonorariosPct(): Promise<Record<string, number>> {
