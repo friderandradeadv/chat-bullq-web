@@ -112,6 +112,7 @@ export default function CalculadoraRmcPage() {
     dataContratacao: '',
     modalidadeConsignado: 'INSS' as 'INSS' | 'PUBLICO',
     taxaConversao: '2.50',
+    jurosMora: '1,00',
     dobro: true,
     modulacaoStj: false,
     indiceCorrecao: 'INPC' as IndiceCorrecao,
@@ -120,6 +121,21 @@ export default function CalculadoraRmcPage() {
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  // ── Cumprimento de Sentença (opcional) ─────────────────────────────────────
+  const [cs, setCs] = useState({
+    ativar: false,
+    baseCenario: 'conversaoDobro' as CenarioId,
+    sucPercentual: '10',
+    sucBase: 'valorCausa' as 'principal' | 'valorCausa',
+    valorCausa: '',
+    atualizarValorCausa: false,
+    valorCausaData: '',
+    multaMoratoria: false,
+    multaHonorarios: false,
+  });
+  const setCsField = <K extends keyof typeof cs>(k: K, v: (typeof cs)[K]) =>
+    setCs((c) => ({ ...c, [k]: v }));
 
   const [parcelasTexto, setParcelasTexto] = useState('');
   const [ger, setGer] = useState({ dataInicial: '', valor: '', meses: '12' });
@@ -140,9 +156,11 @@ export default function CalculadoraRmcPage() {
   // ── Cálculo ──────────────────────────────────────────────────────────────
   const calc = useMutation({
     mutationFn: () => {
+      const jm = parseValor(form.jurosMora);
       const payload: CalcularRmcInput = {
         valorEmprestimo: parseValor(form.valorEmprestimo),
         taxaConversao: parseValor(form.taxaConversao),
+        jurosMora: isNaN(jm) ? 0 : jm,
         dobro: form.dobro,
         modulacaoStj: form.modulacaoStj,
         indiceCorrecao: form.indiceCorrecao,
@@ -151,6 +169,25 @@ export default function CalculadoraRmcPage() {
         nomeCalculo: form.nomeCalculo || undefined,
         parcelas,
       };
+      if (cs.ativar) {
+        const vc = parseValor(cs.valorCausa);
+        payload.cs = {
+          ativar: true,
+          baseCenario: cs.baseCenario,
+          sucumbencia: {
+            percentual: parseValor(cs.sucPercentual) || 0,
+            base: cs.sucBase,
+            valorCausa: cs.sucBase === 'valorCausa' && !isNaN(vc) ? vc : undefined,
+            atualizarValorCausa: cs.sucBase === 'valorCausa' ? cs.atualizarValorCausa : undefined,
+            valorCausaData:
+              cs.sucBase === 'valorCausa' && cs.atualizarValorCausa && cs.valorCausaData
+                ? cs.valorCausaData
+                : undefined,
+          },
+          multaMoratoria523: cs.multaMoratoria,
+          honorarios523: cs.multaHonorarios,
+        };
+      }
       return calculadoraRmcService.calcular(payload);
     },
   });
@@ -294,69 +331,119 @@ export default function CalculadoraRmcPage() {
   const cenarios = res?.cenarios ?? [];
   const cenarioView = cenarios.find((c) => c.id === cenarioAtivo) ?? cenarios[0];
 
-  // ── Baixar um cenário em CSV (parâmetros + Resultado + evolução) ───────────
+  // ── Baixar um cenário em PDF (relatório no formato do escritório, à la CJ) ──
   const baixarCenario = (c: Cenario) => {
     if (!res) return;
     const cfg = res.config;
     const tipo = form.tipo;
-    const nome = form.nomeCalculo || [tipo, form.banco].filter(Boolean).join(' - ') || 'calculo-rmc';
-    const m = (n: number) => n.toFixed(2).replace('.', ',');
-    const taxa = `${cfg.taxaConversao}`.replace('.', ',') + '%';
-    const L = (...cells: (string | number)[]) =>
-      cells.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';');
-    const linhas: string[] = [
-      L('Cálculo de Revisão da RMC / RCC'),
-      L('Nome', nome),
-      L('Cenário', c.titulo),
-      L('Método', METODO_LABEL[c.id]),
-      L('Tipo', tipo),
-      L('Banco', form.banco || '—'),
-      L('Nº do contrato', form.numeroContrato || '—'),
-      L('Valor do empréstimo', m(cfg.valorEmprestimo)),
-      L('Taxa de conversão', taxa),
-      L('Índice de correção', cfg.indiceCorrecao),
-      L('Data-base', cfg.dataBase.split('-').reverse().join('/')),
-      L('Restituir em dobro', cfg.dobro ? 'Sim' : 'Não'),
-      L('Modulação STJ (Tema 929)', cfg.modulacaoStj ? 'Sim' : 'Não'),
-      '',
-      L('Resultado'),
-      L('Saldo da conversão em empréstimo consignado', m(c.resumo.saldoConversao)),
-      L('Restituição de Valores', m(c.resumo.restituicao)),
-      L('Total', m(c.resumo.total)),
-      '',
-      L(
-        'Nº', 'Data', `Valor ${tipo} debitado`, 'Saldo devedor anterior (base juros)',
-        'Taxa de juros', 'Valor dos juros mensais', '(-) Amortização', '(+) Outros Saques',
-        'Saldo devedor atual', 'Valor a restituir', 'Correção Monetária', 'Juros',
-        'Valor atualizado a restituir',
-      ),
-      ...c.linhas.map((l) =>
-        L(
-          l.numero,
-          l.data.split('-').reverse().join('/'),
-          m(l.valorDebitado),
-          m(l.saldoAnterior),
-          taxa,
-          m(l.juros),
-          m(l.amortizacao),
-          m(l.saque),
-          m(l.saldoAtual),
-          m(l.valorRestituir),
-          l.fatorCorrecao.toFixed(6).replace('.', ','),
-          '0,0000%',
-          m(l.valorAtualizado),
-        ),
-      ),
+    const nome = form.nomeCalculo || [tipo, form.banco].filter(Boolean).join(' - ') || 'Cálculo RMC/RCC';
+    const esc = (s: string) =>
+      String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const dataBr = (iso?: string) => (iso ? iso.split('-').reverse().join('/') : '—');
+    const taxa = pct(cfg.taxaConversao);
+    const jmora = pct(cfg.jurosMora);
+    const gerado = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+
+    const kv = (k: string, v: string, cls = '') =>
+      `<div class="kv ${cls}"><span>${k}</span><span>${v}</span></div>`;
+    const dados =
+      kv('Nome do cálculo', esc(nome)) +
+      kv('Tipo de contrato', tipo === 'RMC' ? 'RMC — Reserva de Margem Consignável' : 'RCC — Cartão de Crédito Consignado') +
+      kv('Banco', esc(form.banco || '—')) +
+      kv('Nº do contrato', esc(form.numeroContrato || '—')) +
+      kv('Valor do empréstimo', brl(cfg.valorEmprestimo)) +
+      kv('Data de obtenção do empréstimo', dataBr(form.dataContratacao)) +
+      kv('Taxa de conversão (a.m.)', taxa) +
+      kv('Juros de mora (a.m.)', jmora) +
+      kv('Índice de correção', cfg.indiceCorrecao) +
+      kv('Pro rata die', cfg.proRataDie ? 'Sim' : 'Não') +
+      kv('Restituir em dobro (CDC 42)', cfg.dobro ? 'Sim' : 'Não') +
+      kv('Modulação STJ (Tema 929)', cfg.modulacaoStj ? 'Sim' : 'Não') +
+      kv('Data-base do cálculo', dataBr(cfg.dataBase));
+
+    const resultado =
+      kv('Saldo da conversão em empréstimo consignado', brl(c.resumo.saldoConversao)) +
+      kv('Restituição de Valores', brl(c.resumo.restituicao)) +
+      kv('Total', brl(c.resumo.total), 'total');
+
+    const cols = [
+      'Nº', 'Data', `Valor ${tipo} debitado`, 'Saldo devedor anterior (base juros)',
+      'Taxa de juros', 'Valor dos juros mensais', '(-) Amortização', '(+) Outros Saques',
+      'Saldo devedor atual', 'Valor a restituir', 'Correção Monetária', 'Juros',
+      'Valor atualizado a restituir',
     ];
-    const csv = '\ufeff' + linhas.join('\r\n'); // BOM p/ acentos no Excel
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${nome} - ${c.titulo}.csv`.replace(/[\\/:*?"<>|]/g, '-');
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const head = `<tr>${cols.map((h) => `<th>${h}</th>`).join('')}</tr>`;
+    const body = c.linhas
+      .map(
+        (l) => `<tr class="${l.valorRestituir > 0 ? 'r' : ''}">` +
+          `<td>${l.numero}</td><td class="l">${dataBr(l.data)}</td>` +
+          `<td>${brl(l.valorDebitado)}</td><td>${brl(l.saldoAnterior)}</td>` +
+          `<td>${taxa}</td><td>${brl(l.juros)}</td><td>${brl(l.amortizacao)}</td>` +
+          `<td>${brl(l.saque)}</td><td>${brl(l.saldoAtual)}</td>` +
+          `<td>${l.valorRestituir ? brl(l.valorRestituir) : 'R$ 0,00'}</td>` +
+          `<td>${l.fatorCorrecao.toFixed(6).replace('.', ',')}</td>` +
+          `<td>${l.valorRestituir ? pct(l.jurosMoraPct * 100) : '0,0000%'}</td>` +
+          `<td>${l.valorAtualizado ? brl(l.valorAtualizado) : 'R$ 0,00'}</td></tr>`,
+      )
+      .join('');
+
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>${esc(nome)} — ${esc(c.titulo)}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;padding:26px 30px;font-size:11px}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1d4ed8;padding-bottom:10px;margin-bottom:16px}
+  .brand{font-size:16px;font-weight:800;color:#1d4ed8;letter-spacing:.02em}
+  .brand small{display:block;font-size:8.5px;font-weight:600;color:#6b7280;letter-spacing:.18em;margin-top:2px}
+  .meta{text-align:right;font-size:9px;color:#9ca3af;line-height:1.5}
+  h1{font-size:14px;margin:0 0 4px;color:#111827}
+  .sub{font-size:10px;color:#6b7280;margin:0 0 16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+  .sec{border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;break-inside:avoid}
+  .sec>h2{font-size:10.5px;margin:0;padding:7px 11px;background:#eef2f7;color:#374151;border-bottom:1px solid #e5e7eb;text-transform:uppercase;letter-spacing:.04em}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 11px;font-size:10px}
+  .kv:nth-child(even){background:#f8fafc}
+  .kv span:first-child{color:#6b7280}
+  .kv span:last-child{font-weight:700;text-align:right}
+  .res .kv.total{background:#eff6ff;border-top:1px solid #dbeafe}
+  .res .kv.total span{color:#1d4ed8;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:7.6px;margin-top:4px}
+  thead{display:table-header-group}
+  th{background:#eef2f7;color:#374151;font-weight:700;padding:5px 3px;border-bottom:1px solid #cbd5e1;text-align:right;vertical-align:bottom;line-height:1.15}
+  td{padding:3px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child,.l{text-align:left}
+  tr.r td{background:#ecfdf5}
+  .secfull{margin-top:4px}
+  .foot{margin-top:18px;padding-top:8px;border-top:1px solid #e5e7eb;text-align:center;font-size:9px;color:#9ca3af}
+  @page{size:A4 portrait;margin:12mm}
+  @media print{body{padding:0}}
+</style></head>
+<body>
+  <div class="head">
+    <div class="brand">FRIDER ANDRADE<small>ADVOGADOS</small></div>
+    <div class="meta">Relatório gerado em ${gerado}<br>Revisão de RMC / RCC</div>
+  </div>
+  <h1>Cálculo de Revisão da RMC (Reserva de Margem Consignável) /<br>RCC (Cartão de Crédito Consignado de Benefício)</h1>
+  <p class="sub">Método: ${esc(METODO_LABEL[c.id])}</p>
+  <div class="grid">
+    <div class="sec"><h2>Dados do contrato</h2>${dados}</div>
+    <div class="sec res"><h2>Resultado — ${esc(c.titulo)}</h2>${resultado}</div>
+  </div>
+  <div class="sec secfull"><h2>Evolução do Saldo Devedor</h2>
+    <table><thead>${head}</thead><tbody>${body}</tbody></table>
+  </div>
+  <div class="foot">Frider Andrade | Advogados · cálculo gerado eletronicamente · ${gerado}</div>
+  <scrip` + `t>window.onload=function(){window.focus();window.print();};window.onafterprint=function(){window.close();};</scrip` + `t>
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Permita pop-ups para gerar o PDF (depois é só escolher "Salvar como PDF").');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   };
 
   return (
@@ -597,6 +684,22 @@ export default function CalculadoraRmcPage() {
                 {taxaInfo && <p className="text-xs text-zinc-500 dark:text-zinc-400">{taxaInfo}</p>}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
+                    <label className={labelCls}>Juros de mora (% a.m.)</label>
+                    <input
+                      className={inputCls}
+                      inputMode="decimal"
+                      placeholder="1,00"
+                      value={form.jurosMora}
+                      onChange={(e) => set('jurosMora', e.target.value)}
+                    />
+                    <p className="mt-1 text-[10px] leading-tight text-zinc-400 dark:text-zinc-500">
+                      Simples, sobre o valor a restituir (CC 406). 0 = sem juros.
+                    </p>
+                  </div>
+                  <div />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
                     <label className={labelCls}>Índice de correção</label>
                     <select
                       className={inputCls}
@@ -723,6 +826,130 @@ export default function CalculadoraRmcPage() {
               </div>
             </div>
 
+            {/* Cumprimento de Sentença (opcional) */}
+            <div className={cardCls}>
+              <label className="flex items-start gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
+                  checked={cs.ativar}
+                  onChange={(e) => setCsField('ativar', e.target.checked)}
+                />
+                <span className="flex items-center gap-2">
+                  <Landmark className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  Cumprimento de Sentença (Atualização de Débitos)
+                </span>
+              </label>
+              <p className="mt-1 pl-6 text-xs text-zinc-500 dark:text-zinc-400">
+                Pega a restituição da RMC como Principal e soma honorários de
+                sucumbência + multa do art. 523 — num cálculo só.
+              </p>
+
+              {cs.ativar && (
+                <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                  <div>
+                    <label className={labelCls}>Principal = restituição do cenário</label>
+                    <select
+                      className={inputCls}
+                      value={cs.baseCenario}
+                      onChange={(e) => setCsField('baseCenario', e.target.value as CenarioId)}
+                    >
+                      <option value="apenasConversao">Apenas conversão (simples)</option>
+                      <option value="conversaoDobro">Conversão + dobro</option>
+                      <option value="restituicaoTotal">Restituição total</option>
+                    </select>
+                  </div>
+
+                  <div className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                    <p className="mb-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                      Honorários sucumbenciais (CPC 85)
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Percentual (%)</label>
+                        <input
+                          className={inputCls}
+                          inputMode="decimal"
+                          placeholder="10"
+                          value={cs.sucPercentual}
+                          onChange={(e) => setCsField('sucPercentual', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Base de cálculo</label>
+                        <select
+                          className={inputCls}
+                          value={cs.sucBase}
+                          onChange={(e) => setCsField('sucBase', e.target.value as 'principal' | 'valorCausa')}
+                        >
+                          <option value="valorCausa">Valor da causa</option>
+                          <option value="principal">Principal (restituição)</option>
+                        </select>
+                      </div>
+                    </div>
+                    {cs.sucBase === 'valorCausa' && (
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <label className={labelCls}>Valor da causa (R$)</label>
+                          <input
+                            className={inputCls}
+                            inputMode="decimal"
+                            placeholder="12.268,18"
+                            value={cs.valorCausa}
+                            onChange={(e) => setCsField('valorCausa', e.target.value)}
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
+                            checked={cs.atualizarValorCausa}
+                            onChange={(e) => setCsField('atualizarValorCausa', e.target.checked)}
+                          />
+                          Atualizar o valor da causa (correção até a data-base)
+                        </label>
+                        {cs.atualizarValorCausa && (
+                          <div>
+                            <label className={labelCls}>Data inicial da correção</label>
+                            <input
+                              type="date"
+                              className={inputCls}
+                              value={cs.valorCausaData}
+                              onChange={(e) => setCsField('valorCausaData', e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                    <p className="mb-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                      Multa do art. 523 do CPC
+                    </p>
+                    <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
+                        checked={cs.multaMoratoria}
+                        onChange={(e) => setCsField('multaMoratoria', e.target.checked)}
+                      />
+                      Multa moratória de 10%
+                    </label>
+                    <label className="mt-1.5 flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
+                        checked={cs.multaHonorarios}
+                        onChange={(e) => setCsField('multaHonorarios', e.target.checked)}
+                      />
+                      Honorários de 10%
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               disabled={!podeCalcular || calc.isPending}
@@ -730,7 +957,7 @@ export default function CalculadoraRmcPage() {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {calc.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Calcular os 3 cenários
+              {cs.ativar ? 'Calcular RMC + Cumprimento de Sentença' : 'Calcular os 3 cenários'}
             </button>
             {calc.isError && (
               <p className="text-sm text-red-600 dark:text-red-400">
@@ -778,6 +1005,46 @@ export default function CalculadoraRmcPage() {
                     <ResRow label="Total" valor={cenarioView.resumo.total} destaque />
                   </dl>
                 </div>
+
+                {/* Bloco "Cumprimento de Sentença" — RMC já atualizada + sucumbência + multa 523 */}
+                {res.cs && (
+                  <div className="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm dark:border-violet-500/30 dark:bg-zinc-900">
+                    <div className="flex items-center gap-2 border-b border-violet-100 bg-violet-50/60 px-5 py-3.5 dark:border-violet-500/20 dark:bg-violet-500/10">
+                      <Landmark className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      <div>
+                        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                          Cumprimento de Sentença
+                        </h2>
+                        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                          Principal = restituição já atualizada até{' '}
+                          {res.cs.termoFinal.split('-').reverse().join('/')}
+                        </p>
+                      </div>
+                    </div>
+                    <dl className="text-sm">
+                      <ResRow label="Principal (repetição do indébito)" valor={res.cs.principal} />
+                      <ResRow
+                        label={`Honorários sucumbenciais — ${pct(res.cs.sucumbencia.percentual)} ${
+                          res.cs.sucumbencia.base === 'valorCausa'
+                            ? `sobre o valor da causa (${brl(
+                                res.cs.sucumbencia.valorCausaAtualizado ?? res.cs.sucumbencia.valorCausa ?? 0,
+                              )}${res.cs.sucumbencia.valorCausaAtualizado != null ? ' atualizado' : ''})`
+                            : res.cs.sucumbencia.base === 'diferenca'
+                              ? 'sobre a diferença'
+                              : 'sobre o principal'
+                        }`}
+                        valor={res.cs.sucumbencia.valor}
+                      />
+                      {res.cs.multa523.moratoria > 0 && (
+                        <ResRow label="Multa moratória de 10% (art. 523, CPC)" valor={res.cs.multa523.moratoria} />
+                      )}
+                      {res.cs.multa523.honorarios > 0 && (
+                        <ResRow label="Honorários de 10% (art. 523, CPC)" valor={res.cs.multa523.honorarios} />
+                      )}
+                      <ResRow label="Total geral (execução)" valor={res.cs.total} destaque />
+                    </dl>
+                  </div>
+                )}
 
                 {res.config.modulacaoStj && form.dobro && (
                   <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
@@ -854,7 +1121,9 @@ export default function CalculadoraRmcPage() {
                               )}
                             </td>
                             <td className="px-2 py-1.5 text-zinc-400">{l.fatorCorrecao.toFixed(6).replace('.', ',')}</td>
-                            <td className="px-2 py-1.5 text-zinc-400">0,0000%</td>
+                            <td className="px-2 py-1.5 text-zinc-400">
+                              {l.valorRestituir ? pct(l.jurosMoraPct * 100) : '0,0000%'}
+                            </td>
                             <td className="px-2 py-1.5 font-semibold text-emerald-700 dark:text-emerald-400">
                               {l.valorAtualizado ? brl(l.valorAtualizado) : 'R$ 0,00'}
                             </td>
@@ -972,7 +1241,7 @@ function CenarioCard({
         }}
         className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white py-1.5 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
       >
-        <Download className="h-3 w-3" /> Baixar (CSV)
+        <Download className="h-3 w-3" /> Baixar PDF
       </button>
     </div>
   );

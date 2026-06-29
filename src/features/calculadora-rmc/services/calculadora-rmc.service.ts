@@ -9,6 +9,24 @@ export interface ParcelaInput {
   saque?: number;
 }
 
+export type CenarioId = 'apenasConversao' | 'conversaoDobro' | 'restituicaoTotal';
+export type SucumbenciaBase = 'principal' | 'valorCausa' | 'diferenca';
+
+export interface CsInput {
+  ativar: boolean;
+  baseCenario?: CenarioId;
+  principalManual?: number;
+  sucumbencia?: {
+    percentual: number;
+    base: SucumbenciaBase;
+    valorCausa?: number;
+    atualizarValorCausa?: boolean;
+    valorCausaData?: string;
+  };
+  multaMoratoria523?: boolean;
+  honorarios523?: boolean;
+}
+
 export interface CalcularRmcInput {
   valorEmprestimo: number;
   taxaConversao: number; // % a.m.
@@ -23,6 +41,7 @@ export interface CalcularRmcInput {
   honorariosValor?: number;
   nomeCalculo?: string;
   parcelas: ParcelaInput[];
+  cs?: CsInput;
 }
 
 export interface LinhaEvolucao {
@@ -37,7 +56,26 @@ export interface LinhaEvolucao {
   valorRestituir: number;
   dobroAplicado: boolean;
   fatorCorrecao: number;
+  valorCorrigido: number;
+  jurosMoraPct: number;
+  jurosMoraValor: number;
   valorAtualizado: number;
+}
+
+export interface ResultadoCs {
+  baseCenario: CenarioId;
+  termoFinal: string;
+  principal: number;
+  sucumbencia: {
+    percentual: number;
+    base: SucumbenciaBase;
+    valorCausa: number | null;
+    valorCausaAtualizado: number | null;
+    baseCalculo: number;
+    valor: number;
+  };
+  multa523: { moratoria: number; honorarios: number; total: number };
+  total: number;
 }
 
 export interface ResumoCenario {
@@ -49,8 +87,6 @@ export interface ResumoCenario {
   honorarios: number;
   total: number;
 }
-
-export type CenarioId = 'apenasConversao' | 'conversaoDobro' | 'restituicaoTotal';
 
 export interface Cenario {
   id: CenarioId;
@@ -65,6 +101,7 @@ export interface ResultadoRmc {
   config: {
     valorEmprestimo: number;
     taxaConversao: number;
+    jurosMora: number;
     dobro: boolean;
     modulacaoStj: boolean;
     indiceCorrecao: IndiceCorrecao;
@@ -72,6 +109,7 @@ export interface ResultadoRmc {
     proRataDie: boolean;
   };
   cenarios: Cenario[];
+  cs: ResultadoCs | null;
   linhas: LinhaEvolucao[];
   resumo: ResumoCenario;
 }
