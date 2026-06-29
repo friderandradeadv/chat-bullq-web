@@ -29,6 +29,8 @@ import {
   CornerUpLeft,
   Sparkles,
   Loader2,
+  ExternalLink,
+  ChevronDown,
   X,
   CalendarPlus,
   ListChecks,
@@ -736,10 +738,20 @@ function NewsCol({ titulo, emoji, cor, itens, loading }: { titulo: string; emoji
       ) : (
         <ul className="space-y-1.5">
           {itens.map((n, i) => (
-            <li key={i} className="rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
-              <p className="text-sm font-semibold leading-snug text-zinc-800 dark:text-zinc-100">{n.t}</p>
-              {n.d && <p className="mt-0.5 text-xs leading-snug text-zinc-500 dark:text-zinc-400">{n.d}</p>}
-              {n.fonte && <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">{n.fonte}</p>}
+            <li key={i}>
+              <a
+                href={n.url || `https://www.google.com/search?q=${encodeURIComponent(n.t)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="group block rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+              >
+                <p className="flex items-start gap-1 text-sm font-semibold leading-snug text-zinc-800 group-hover:text-[#228BE6] dark:text-zinc-100 dark:group-hover:text-[#74b1f7]">
+                  <span className="min-w-0 flex-1">{n.t}</span>
+                  <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-zinc-300 transition group-hover:text-[#228BE6]" />
+                </p>
+                {n.d && <p className="mt-0.5 text-xs leading-snug text-zinc-500 dark:text-zinc-400">{n.d}</p>}
+                {n.fonte && <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400">{n.fonte}</p>}
+              </a>
             </li>
           ))}
         </ul>
@@ -757,15 +769,25 @@ function HojeNoMundo() {
     // Enquanto o backend está buscando (background), refaz a cada 8s até chegar.
     refetchInterval: (query) => (query.state.data?.generating ? 8000 : false),
   });
+  const [open, setOpen] = useState(true);
   const mundo = q.data?.mundo ?? [];
   const juridico = q.data?.juridico ?? [];
   const loading = q.isLoading || !!q.data?.generating;
   // Esconde só quando realmente não há nada e não está gerando.
   if (!loading && !mundo.length && !juridico.length) return null;
   return (
-    <div className="welcome-pop mt-4 grid w-full items-start gap-4 text-left lg:grid-cols-2" style={{ animationDelay: '0.235s' }}>
-      <NewsCol titulo="Hoje no mundo" emoji="🌎" cor="#228BE6" itens={mundo} loading={loading && !mundo.length} />
-      <NewsCol titulo="No jurídico hoje" emoji="⚖️" cor="#7048e8" itens={juridico} loading={loading && !juridico.length} />
+    <div className="welcome-pop mt-9 w-full text-left" style={{ animationDelay: '0.235s' }}>
+      <button onClick={() => setOpen((o) => !o)} className="mb-2 flex w-full items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-zinc-600 dark:hover:text-zinc-200">
+        <Newspaper className="h-3.5 w-3.5" /> Notícias do dia
+        {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+        <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+      </button>
+      {open && (
+        <div className="grid w-full items-start gap-4 lg:grid-cols-2">
+          <NewsCol titulo="Hoje no mundo" emoji="🌎" cor="#228BE6" itens={mundo} loading={loading && !mundo.length} />
+          <NewsCol titulo="No jurídico hoje" emoji="⚖️" cor="#7048e8" itens={juridico} loading={loading && !juridico.length} />
+        </div>
+      )}
     </div>
   );
 }
@@ -954,9 +976,6 @@ export default function InicioPage() {
         {/* Casos que pedem atenção — largura total */}
         {mounted && <CasosParaAtencao />}
 
-        {/* Notícias do dia — mundo + jurídico (pesquisadas, atualizadas 1×/dia) */}
-        {mounted && <HojeNoMundo />}
-
         {/* Atalhos */}
         <div className="welcome-pop mt-9" style={{ animationDelay: '0.26s' }}>
           <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">Por onde vamos começar?</p>
@@ -988,6 +1007,9 @@ export default function InicioPage() {
             </div>
           </div>
         )}
+
+        {/* Notícias do dia — mundo + jurídico (no fim da página, colapsável, clicável) */}
+        {mounted && <HojeNoMundo />}
 
         <p className="welcome-pop mt-8 text-sm text-zinc-400" style={{ animationDelay: '0.34s' }}>
           Hoje é um ótimo dia pra mudar a vida de alguém. Vamos? ⚖️✨
