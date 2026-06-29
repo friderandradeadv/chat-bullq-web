@@ -85,7 +85,8 @@ function areaJuridica(produto?: string | null): string {
 }
 
 export default function FinanceiroPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 60_000 });
+  // Organismo vivo: refaz sozinho a cada 60s e ao voltar pra aba — reflete movimentação dos processos/recebimentos.
+  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   const [view, setView] = useState<View>('meu');
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
@@ -262,7 +263,9 @@ interface Editor {
 function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
-  const [mesSel, setMesSel] = useState<string>(mesesDisp[0] ?? '');
+  const mesHoje = useMemo(() => { const p = hojeBR().split('/'); return `${p[2]}-${p[1]}`; }, []);
+  const [mesSel, setMesSel] = useState<string>(mesesDisp.includes(mesHoje) ? mesHoje : (mesesDisp.find((m) => m <= mesHoje) ?? mesesDisp[0] ?? ''));
+  const [mostrarFuturas, setMostrarFuturas] = useState(false); // parcelas a receber/pagar de meses futuros só sob demanda
   const [aba, setAba] = useState<'todos' | 'receitas' | 'despesas'>('todos');
   const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('todos');
   const [respFiltro, setRespFiltro] = useState('');
@@ -302,6 +305,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       if (aba === 'receitas' && t.valor < 0) return false;
       if (aba === 'despesas' && t.valor >= 0) return false;
       const st = txStatus(t);
+      // por padrão esconde parcelas a receber/pagar de meses FUTUROS (só aparecem com o toggle)
+      if (!mostrarFuturas && !ehLiquidado(st) && mesKey(t) > mesHoje) return false;
       if (stFiltro === 'a_receber' && ehLiquidado(st)) return false;
       if (stFiltro === 'liquidado' && !ehLiquidado(st)) return false;
       if (respFiltro && (t.responsavelId ?? '') !== respFiltro) return false;
@@ -309,7 +314,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       if (q && !`${t.pagador ?? t.party ?? ''} ${t.recebedor ?? ''} ${t.responsavel ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data.transacoes, mesSel, aba, stFiltro, respFiltro, contaFiltro, busca]);
+  }, [data.transacoes, mesSel, aba, stFiltro, respFiltro, contaFiltro, busca, mostrarFuturas, mesHoje]);
+  const nFuturas = useMemo(() => data.transacoes.filter((t) => !ehLiquidado(txStatus(t)) && mesKey(t) > mesHoje).length, [data.transacoes, mesHoje]);
 
   const grupos = useMemo(() => {
     const map = new Map<string, FinTransacao[]>();
@@ -381,6 +387,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
           {ST_FILTROS.map((a) => <button key={a.key} onClick={() => setStFiltro(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${stFiltro === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}
         </div>
+        {nFuturas > 0 && (
+          <button onClick={() => setMostrarFuturas((v) => !v)} title="Parcelas a receber/pagar de meses futuros" className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${mostrarFuturas ? 'border-[#228BE6] bg-[#228BE6]/10 text-[#228BE6]' : 'border-zinc-300 text-zinc-500 dark:border-zinc-700'}`}>
+            <CalendarClock className="h-3.5 w-3.5" /> {mostrarFuturas ? 'Ocultar futuras' : `Futuras (${nFuturas})`}
+          </button>
+        )}
         <select value={respFiltro} onChange={(e) => setRespFiltro(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
           <option value="">Todos responsáveis</option>
           {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -2100,7 +2111,7 @@ function MeuTab() {
   const isAdmin = meuMembro?.role === 'OWNER' || meuMembro?.role === 'ADMIN';
   const advs = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const [alvo, setAlvo] = useState('');
-  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'meu', alvo], queryFn: () => financeiroService.meuFinanceiro(alvo || undefined), staleTime: 60_000 });
+  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'meu', alvo], queryFn: () => financeiroService.meuFinanceiro(alvo || undefined), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
 
   return (
     <div className="mt-2">
@@ -2127,7 +2138,7 @@ function PrevisoesTab() {
 }
 
 function PrevisoesCarteira() {
-  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'previsoes'], queryFn: () => financeiroService.getPrevisoes(), staleTime: 60_000 });
+  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'previsoes'], queryFn: () => financeiroService.getPrevisoes(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
   if (!data || data.semAcesso) return <Card><p className="py-8 text-center text-sm text-zinc-400">Previsões da carteira são visíveis apenas para os sócios.</p></Card>;
   const taxaCor = (t: number | null) => (t == null ? 'text-zinc-400' : t >= 60 ? 'text-emerald-600' : t >= 40 ? 'text-[#228BE6]' : 'text-amber-600');

@@ -50,7 +50,7 @@ function agruparRes(rows: JuriRow[], keyOf: (r: JuriRow) => string | null): ResR
 const taxaCor = (t: number | null) => (t == null ? '#94a3b8' : t >= 70 ? '#10B981' : t >= 50 ? '#228BE6' : t >= 30 ? '#F59E0B' : '#EF4444');
 
 export default function JurimetriaPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['legal-cases', 'jurimetria'], queryFn: () => legalCasesService.jurimetria() });
+  const { data, isLoading } = useQuery({ queryKey: ['legal-cases', 'jurimetria'], queryFn: () => legalCasesService.jurimetria(), staleTime: 30_000, refetchInterval: 90_000, refetchOnWindowFocus: true });
   const allRows = data?.rows ?? [];
 
   // ── Filtros ──
