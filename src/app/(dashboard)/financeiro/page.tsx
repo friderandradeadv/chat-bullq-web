@@ -1484,24 +1484,65 @@ function lerExtrato(text: string): ExtratoLinha[] {
   if (/<STMTTRN>|<OFX>/i.test(text)) return parseOfx(text);
   return parseExtrato(text);
 }
-// Parser flexível de extrato bancário colado (CSV/TSV/;) — best-effort.
+// Divide UMA linha de CSV respeitando aspas (RFC4180: "" = aspas escapada;
+// vírgulas dentro de aspas não separam). Sem isso, "IOF de ""X""","18,22" quebra.
+function splitCsvLine(line: string, sep: string): string[] {
+  const out: string[] = []; let cur = ''; let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === sep) { out.push(cur.trim()); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+const brNum = (s: string): number => { const t = String(s).replace(/[^\d,.-]/g, ''); if (!t || !/\d/.test(t)) return NaN; return /,\d{1,2}$/.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : Number(t.replace(/,/g, '')); };
+const toBRdate = (c: string): string => {
+  const br = c.match(/(\d{2})[\/-](\d{2})[\/-](\d{2,4})/); const iso = c.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  if (br) return `${br[1]}/${br[2]}/${br[3].length === 2 ? '20' + br[3] : br[3]}`;
+  return '';
+};
+// Parser de extrato CSV/TSV/; — entende cabeçalho (date/title/amount, Data/Histórico/Valor)
+// e a convenção da FATURA DE CARTÃO Nubank (amount positivo = compra = DESPESA).
 function parseExtrato(text: string): { data: string; valor: number; descricao: string }[] {
-  const num = (s: string) => { const t = String(s).replace(/[^\d,.-]/g, ''); if (!t || !/\d/.test(t)) return NaN; return /,\d{1,2}$/.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : Number(t.replace(/,/g, '')); };
+  const linhas = text.split(/\r?\n/).filter((l) => l.trim());
+  if (!linhas.length) return [];
+  const sep = linhas[0].includes(';') ? ';' : linhas[0].includes('\t') ? '\t' : ',';
+  const header = splitCsvLine(linhas[0], sep).map((h) => h.toLowerCase());
+  const hasHeader = header.some((h) => /date|data|title|descr|amount|valor|value|hist/.test(h));
+  const idxOf = (...names: string[]) => header.findIndex((h) => names.some((n) => h.includes(n)));
+  const iDate = hasHeader ? idxOf('date', 'data') : -1;
+  const iAmt = hasHeader ? idxOf('amount', 'valor', 'value') : -1;
+  const iDesc = hasHeader ? idxOf('title', 'descr', 'hist', 'estabelec', 'lanc', 'lanç') : -1;
+  // Fatura de cartão Nubank: header exatamente date,title,amount → compra (amount +) é despesa
+  const cartaoNubank = hasHeader && ['date', 'title', 'amount'].every((h, i) => (header[i] || '') === h);
   const out: { data: string; valor: number; descricao: string }[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const row = raw.trim(); if (!row) continue;
-    const sep = row.includes(';') ? ';' : row.includes('\t') ? '\t' : ',';
-    const cols = row.split(sep).map((c) => c.trim().replace(/^"|"$/g, ''));
-    let dataBR = '', valor = NaN; const desc: string[] = [];
-    for (const c of cols) {
-      const br = c.match(/^(\d{2})[\/-](\d{2})[\/-](\d{2,4})$/); const iso = c.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!dataBR && br) { dataBR = `${br[1]}/${br[2]}/${br[3].length === 2 ? '20' + br[3] : br[3]}`; continue; }
-      if (!dataBR && iso) { dataBR = `${iso[3]}/${iso[2]}/${iso[1]}`; continue; }
-      const n = num(c);
-      if (Number.isFinite(n) && /[,.\-]/.test(c)) { valor = n; continue; } // última col numérica = valor
-      if (c && !/^\d+$/.test(c)) desc.push(c);
+  for (let r = hasHeader ? 1 : 0; r < linhas.length; r++) {
+    const cols = splitCsvLine(linhas[r], sep);
+    let dataBR = '', valor = NaN, desc = '';
+    if (hasHeader && iDate >= 0 && iAmt >= 0) {
+      dataBR = toBRdate(cols[iDate] || '');
+      let v = brNum(cols[iAmt] || '');
+      if (cartaoNubank && Number.isFinite(v)) v = -v; // cartão: o valor da fatura é saída de caixa
+      valor = v;
+      desc = (iDesc >= 0 ? cols[iDesc] : cols.filter((_, i) => i !== iDate && i !== iAmt).join(' ')) || '';
+    } else {
+      const rest: string[] = [];
+      for (const c of cols) {
+        const d = toBRdate(c);
+        if (!dataBR && d && /^\d/.test(c)) { dataBR = d; continue; }
+        const n = brNum(c);
+        if (Number.isFinite(n) && /[,.]/.test(c)) { valor = n; continue; } // última col com decimal = valor
+        if (c && !/^\d+$/.test(c)) rest.push(c);
+      }
+      desc = rest.join(' ');
     }
-    if (dataBR && Number.isFinite(valor)) out.push({ data: dataBR, valor, descricao: desc.join(' ').slice(0, 140) });
+    if (dataBR && Number.isFinite(valor) && valor !== 0) out.push({ data: dataBR, valor, descricao: desc.slice(0, 140) });
   }
   return out;
 }
