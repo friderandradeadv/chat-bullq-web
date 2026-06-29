@@ -269,7 +269,29 @@ export const financeiroService = {
     const { data } = await api.patch('/financeiro/socio-config', payload);
     return data.data ?? data;
   },
+  // ── Integração ASAAS (extrato → caixa) ──
+  async asaasStatus(): Promise<{ configurado: boolean; ambiente: string }> {
+    const { data } = await api.get('/financeiro/integracao/asaas/status');
+    return data.data ?? data;
+  },
+  async asaasPreview(desde?: string, ate?: string): Promise<AsaasPreview> {
+    const { data } = await api.get('/financeiro/integracao/asaas/preview', { params: { desde, ate } });
+    return data.data ?? data;
+  },
+  async asaasImportar(desde?: string, ate?: string): Promise<{ configurado: boolean; importados: number; total?: number }> {
+    const { data } = await api.post('/financeiro/integracao/asaas/importar', { desde, ate });
+    return data.data ?? data;
+  },
 };
+
+export interface AsaasPreview {
+  configurado: boolean;
+  total?: number; novos?: number; jaImportados?: number; ignorados?: number;
+  receitas?: number; despesas?: number; saldo?: number | null;
+  porTipo?: Record<string, number>;
+  amostra?: { data: string; tipo: 'receita' | 'despesa'; categoria: string; valor: number; party: string | null }[];
+  forbidden?: boolean;
+}
 
 /** Previsões da carteira (sócios/admin): valor de causa × probabilidade de êxito. */
 export interface FinPrevAg { key: string; n: number; valor: number; esperado: number; exitoMedio: number | null; taxa: number | null }
