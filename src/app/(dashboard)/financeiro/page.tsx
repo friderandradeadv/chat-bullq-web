@@ -1172,6 +1172,27 @@ const BANCOS = [
   { id: 'outro', nome: 'Outro', cor: '#868E96' },
 ];
 
+type ExtratoLinha = { data: string; valor: number; descricao: string };
+// Parser OFX (.ofx — exportação padrão de banco; Nubank/ASAAS/MP oferecem). Lê os <STMTTRN>.
+function parseOfx(text: string): ExtratoLinha[] {
+  const out: ExtratoLinha[] = [];
+  const blocos = text.split(/<STMTTRN>/i).slice(1);
+  for (const b of blocos) {
+    const tag = (t: string) => { const m = b.match(new RegExp(`<${t}>([^<\\r\\n]+)`, 'i')); return m ? m[1].trim() : ''; };
+    const dt = tag('DTPOSTED').replace(/[^\d]/g, '').slice(0, 8); // YYYYMMDD
+    const amt = Number(tag('TRNAMT').replace(/[^\d.-]/g, ''));
+    if (dt.length !== 8 || !Number.isFinite(amt)) continue;
+    const data = `${dt.slice(6, 8)}/${dt.slice(4, 6)}/${dt.slice(0, 4)}`;
+    const desc = (tag('MEMO') || tag('NAME') || '').slice(0, 140);
+    out.push({ data, valor: amt, descricao: desc });
+  }
+  return out;
+}
+// Detecta o formato e lê (OFX ou CSV/TSV).
+function lerExtrato(text: string): ExtratoLinha[] {
+  if (/<STMTTRN>|<OFX>/i.test(text)) return parseOfx(text);
+  return parseExtrato(text);
+}
 // Parser flexível de extrato bancário colado (CSV/TSV/;) — best-effort.
 function parseExtrato(text: string): { data: string; valor: number; descricao: string }[] {
   const num = (s: string) => { const t = String(s).replace(/[^\d,.-]/g, ''); if (!t || !/\d/.test(t)) return NaN; return /,\d{1,2}$/.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : Number(t.replace(/,/g, '')); };
@@ -1200,6 +1221,25 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const [conc, setConc] = useState<{ conta: string; texto: string } | null>(null);
   const [concResult, setConcResult] = useState<{ conciliados: number; semPar: { data: string; valor: number; descricao: string }[] } | null>(null);
   const [iaLoading, setIaLoading] = useState(false);
+  const [upLoading, setUpLoading] = useState(false);
+  const [upNome, setUpNome] = useState('');
+  const onArquivo = async (f: File) => {
+    setUpNome(f.name); setUpLoading(true); setConcResult(null);
+    try {
+      const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+      let texto = '';
+      if (isPdf) {
+        const b64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] ?? ''); r.onerror = rej; r.readAsDataURL(f); });
+        texto = (await financeiroService.lerExtratoPdf(b64)).texto;
+      } else {
+        texto = await f.text();
+      }
+      const n = lerExtrato(texto).length;
+      setConc((c) => (c ? { ...c, texto } : c));
+      if (n === 0) toast.error('Não consegui ler lançamentos. Tente OFX, ou cole o CSV manualmente.');
+      else toast.success(`${n} lançamento(s) lido(s) do extrato`);
+    } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setUpLoading(false); }
+  };
   const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string } | null>(null);
   const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
   const addM = useMutation({ mutationFn: (i: { nome: string; banco: string; saldoInicial: number }) => financeiroService.addConta(i), onSuccess: () => { inval(); toast.success('Conta adicionada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
@@ -1230,7 +1270,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const isoNum = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? +`${m[3]}${m[2]}${m[1]}` : 0; };
   const analisar = () => {
     if (!conc) return;
-    const linhas = parseExtrato(conc.texto);
+    const linhas = lerExtrato(conc.texto);
     if (!linhas.length) { toast.error('Não consegui ler nenhuma linha. Cole o extrato com data, valor e descrição.'); return; }
     const usadas = new Set<string>();
     let conciliados = 0; const semPar: typeof linhas = [];
@@ -1291,8 +1331,16 @@ function ContasTab({ data }: { data: FinDashboard }) {
             <div className="mb-3 flex items-center justify-between"><h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Sparkles className="h-4 w-4 text-[#7048E8]" /> Conciliação bancária</h3><button onClick={() => { setConc(null); setConcResult(null); }} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button></div>
             <div className="space-y-3">
               <Field label="Conta"><select value={conc.conta} onChange={(e) => { setConc({ ...conc, conta: e.target.value }); setConcResult(null); }} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></Field>
-              <Field label="Cole o extrato (CSV: data, valor, descrição — um por linha)">
-                <textarea value={conc.texto} onChange={(e) => { setConc({ ...conc, texto: e.target.value }); setConcResult(null); }} rows={6} placeholder={'10/06/2026;47,00;Pix recebido Júlia Macedo\n12/06/2026;-2850,00;Aluguel Top Oce'} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900" />
+              <Field label="Suba o extrato (OFX, CSV ou PDF do banco)">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[#7048E8]/40 bg-[#7048E8]/5 px-3 py-4 text-sm font-medium text-[#7048E8] transition hover:bg-[#7048E8]/10">
+                  {upLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+                  {upLoading ? 'Lendo arquivo…' : (upNome || 'Escolher arquivo (.ofx, .csv, .pdf)')}
+                  <input type="file" accept=".ofx,.csv,.txt,.pdf,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onArquivo(f); e.target.value = ''; }} />
+                </label>
+                <p className="mt-1 text-[11px] text-zinc-400">No app do banco (Nubank/ASAAS/Mercado Pago): exportar extrato em OFX (mais preciso) ou PDF. A plataforma lê e faz o caixa.</p>
+              </Field>
+              <Field label="…ou cole o extrato (CSV: data; valor; descrição)">
+                <textarea value={conc.texto} onChange={(e) => { setConc({ ...conc, texto: e.target.value }); setConcResult(null); }} rows={4} placeholder={'10/06/2026;47,00;Pix recebido Júlia Macedo\n12/06/2026;-2850,00;Aluguel Top Office'} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900" />
               </Field>
               <button onClick={analisar} className="rounded-lg bg-[#228BE6] px-3 py-1.5 text-sm font-semibold text-white">Analisar e casar</button>
 
