@@ -6,6 +6,7 @@ export interface Cargo {
   descricao: string;
   parentId?: string | null; // cargo acima na hierarquia (organograma em árvore)
   divisaoHonorarios?: string; // sensível — só sócios recebem do backend
+  modulos?: string[]; // módulos do Hub que este cargo pode acessar (undefined = todos)
 }
 export interface Cultura { missao: string; visao: string; valores: string[]; cultura: string }
 export interface Manual { id: string; titulo: string; conteudo: string }

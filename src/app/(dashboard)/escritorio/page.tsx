@@ -5,7 +5,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Building2, Target, Eye, Heart, Users, Briefcase, BookOpen, ListChecks,
-  Pencil, Plus, Trash2, Save, X, Loader2, User as UserIcon, ChevronDown,
+  Pencil, Plus, Trash2, Save, X, Loader2, User as UserIcon, ChevronDown, Lock,
 } from 'lucide-react';
 import { escritorioService, type Escritorio, type Cargo } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
@@ -13,6 +13,18 @@ import { useAuthStore } from '@/stores/auth-store';
 
 const rid = () => `c_${Math.round(Math.random() * 1e9)}`;
 const EMPTY: Escritorio = { cultura: { missao: '', visao: '', valores: [], cultura: '' }, cargos: [], pessoas: {}, manuais: [], onboarding: [], canEdit: false };
+
+// Módulos do Hub que dá pra liberar/bloquear por cargo (espelha APP_MODULES da API).
+// Início e Escritório aparecem pra todos — não entram aqui.
+const HUB_MODULES: { key: string; label: string }[] = [
+  { key: 'atendimento', label: 'Atendimento' },
+  { key: 'automacoes', label: 'Automações' },
+  { key: 'juridico', label: 'Jurídico' },
+  { key: 'financeiro', label: 'Financeiro' },
+  { key: 'tarefas', label: 'Tarefas' },
+  { key: 'configuracoes', label: 'Configurações' },
+];
+const HUB_MODULE_KEYS = HUB_MODULES.map((m) => m.key);
 
 const CARD = 'rounded-2xl border border-zinc-200/80 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900';
 const INPUT = 'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100';
@@ -31,6 +43,29 @@ export default function EscritorioPage() {
     mutationFn: (d: Escritorio) => escritorioService.save(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['escritorio'] }); toast.success('Escritório atualizado'); setEditing(false); },
     onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao salvar'),
+  });
+
+  // Aplica o acesso aos módulos do Hub a cada pessoa a partir do cargo dela
+  // (só cargos COM módulos definidos; sócios o backend sempre libera tudo).
+  const applyAcessosM = useMutation({
+    mutationFn: async () => {
+      let aplicados = 0;
+      for (const m of members) {
+        const cargo = cargoById[data.pessoas?.[m.user.id]?.cargoId ?? ''];
+        const liberados = cargo?.modulos;
+        if (!cargo || !liberados) continue; // sem cargo ou cargo sem regra → não mexe
+        const restricted = HUB_MODULE_KEYS.filter((k) => !liberados.includes(k));
+        await membersService.updateModules(m.userId, restricted);
+        aplicados++;
+      }
+      return aplicados;
+    },
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ['members'] });
+      qc.invalidateQueries({ queryKey: ['org-members'] });
+      toast.success(n > 0 ? `Acesso aplicado a ${n} ${n === 1 ? 'pessoa' : 'pessoas'} pelo cargo (vale no próximo login dela)` : 'Nenhum cargo com regra de acesso definida');
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao aplicar acessos'),
   });
 
   const startEdit = () => { setDraft(JSON.parse(JSON.stringify(data))); setEditing(true); };
@@ -193,12 +228,29 @@ export default function EscritorioPage() {
                     <p className={LABEL}>Divisão de honorários (só sócios veem)</p>
                     <input value={cg.divisaoHonorarios ?? ''} onChange={(e) => updateCargo(setDraft, i, { divisaoHonorarios: e.target.value })} placeholder="ex.: 10% do êxito dos casos que atua" className={`${INPUT} mt-1`} />
                   </div>
+                  <div>
+                    <p className={LABEL}>Acesso aos módulos do Hub</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {HUB_MODULES.map((mod) => {
+                        const on = (cg.modulos ?? HUB_MODULE_KEYS).includes(mod.key);
+                        return (
+                          <button key={mod.key} type="button" onClick={() => toggleModulo(setDraft, i, mod.key)} className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${on ? 'border-[#228BE6] bg-[#228BE6]/10 text-[#228BE6]' : 'border-zinc-300 text-zinc-400 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-500'}`}>
+                            {on ? '✓ ' : ''}{mod.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 text-[11px] text-zinc-400">Início e Escritório aparecem para todos. Marque o que este cargo deve acessar — depois clique em “Aplicar acessos pelos cargos”. Sócios sempre veem tudo.</p>
+                  </div>
                 </div>
               ) : (
                 <>
                   <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{cg.nome}</p>
                   {cg.descricao && <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">{cg.descricao}</p>}
                   {cg.divisaoHonorarios && <p className="mt-1.5 inline-block rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">💰 {cg.divisaoHonorarios}</p>}
+                  {cg.modulos && cg.modulos.length < HUB_MODULE_KEYS.length && (
+                    <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-zinc-400">Acessa: {cg.modulos.length === 0 ? <span className="italic">só Início e Escritório</span> : HUB_MODULES.filter((mod) => cg.modulos!.includes(mod.key)).map((mod) => <span key={mod.key} className="rounded bg-zinc-100 px-1.5 py-0.5 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{mod.label}</span>)}</p>
+                  )}
                 </>
               )}
             </div>
@@ -207,6 +259,19 @@ export default function EscritorioPage() {
             <button onClick={() => setDraft((d) => ({ ...d, cargos: [...(d.cargos ?? []), { id: rid(), nome: '', descricao: '' }] }))} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-medium text-[#228BE6] hover:bg-[#228BE6]/5 dark:border-zinc-700"><Plus className="h-4 w-4" /> Adicionar cargo</button>
           )}
         </div>
+
+        {/* Aplicar acesso aos módulos a partir do cargo de cada pessoa */}
+        {data.canEdit && !editing && (cur.cargos ?? []).some((c) => Array.isArray(c.modulos)) && (
+          <div className={`${CARD} mt-3 flex flex-wrap items-center justify-between gap-3`}>
+            <div className="flex items-start gap-2">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[#228BE6]" />
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">Aplicar o acesso aos módulos do Hub para cada pessoa <strong>conforme o cargo dela</strong>. Sócios continuam vendo tudo; vale no próximo login de cada um.</p>
+            </div>
+            <button onClick={() => applyAcessosM.mutate()} disabled={applyAcessosM.isPending} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#228BE6] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#1c7ed6] disabled:opacity-60">
+              {applyAcessosM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Aplicar acessos pelos cargos
+            </button>
+          </div>
+        )}
 
         {/* Manuais */}
         <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><BookOpen className="h-4 w-4 text-[#15AABF]" /> Manuais &amp; procedimentos</h2>
@@ -324,6 +389,17 @@ function updateCargo(setDraft: (f: (d: Escritorio) => Escritorio) => void, i: nu
 }
 function removeCargo(setDraft: (f: (d: Escritorio) => Escritorio) => void, i: number) {
   setDraft((d) => ({ ...d, cargos: (d.cargos ?? []).filter((_, j) => j !== i) }));
+}
+function toggleModulo(setDraft: (f: (d: Escritorio) => Escritorio) => void, i: number, key: string) {
+  setDraft((d) => ({
+    ...d,
+    cargos: (d.cargos ?? []).map((c, j) => {
+      if (j !== i) return c;
+      const base = c.modulos ?? HUB_MODULE_KEYS; // undefined = vê tudo → parte de "todos"
+      const next = base.includes(key) ? base.filter((k) => k !== key) : HUB_MODULE_KEYS.filter((k) => base.includes(k) || k === key);
+      return { ...c, modulos: next };
+    }),
+  }));
 }
 function updateList(setDraft: (f: (d: Escritorio) => Escritorio) => void, key: 'manuais', i: number, patch: any) {
   setDraft((d) => ({ ...d, [key]: (d[key] ?? []).map((x: any, j: number) => (j === i ? { ...x, ...patch } : x)) }));
