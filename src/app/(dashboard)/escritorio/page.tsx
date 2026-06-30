@@ -186,24 +186,22 @@ export default function EscritorioPage() {
           </div>
         )}
 
-        {/* Organograma — árvore interativa (clica num cargo pra ver o que se espera + as pessoas) */}
+        {/* Organograma — árvore top-down (igual a um organograma de verdade) */}
         <h2 id="sec-organograma" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Users className="h-4 w-4 text-[#228BE6]" /> Organograma</h2>
         <div className={`${CARD} mt-2`}>
           {(cur.cargos ?? []).length === 0 ? (
             <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — adicione abaixo.' : '.'}</p>
           ) : (
             <>
-              <div className="mb-2 flex items-center justify-end gap-2 text-[11px]">
-                <button onClick={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))} className="font-medium text-[#228BE6] hover:underline">Expandir tudo</button>
-                <span className="text-zinc-300">·</span>
-                <button onClick={() => setTreeSig((s) => ({ n: s.n + 1, open: false }))} className="font-medium text-zinc-500 hover:underline">Recolher tudo</button>
+              <div className="mb-2 flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-zinc-400">Clique num cargo para recolher/abrir o ramo. Arraste para o lado se a árvore for larga.</span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button onClick={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))} className="font-medium text-[#228BE6] hover:underline">Expandir tudo</button>
+                  <span className="text-zinc-300">·</span>
+                  <button onClick={() => setTreeSig((s) => ({ n: s.n + 1, open: false }))} className="font-medium text-zinc-500 hover:underline">Recolher tudo</button>
+                </div>
               </div>
-              <div className="space-y-2">
-                {(cur.cargos ?? []).filter((c) => !c.parentId || !cargoById[c.parentId]).map((c) => (
-                  <OrgNode key={c.id} cargo={c} cargos={cur.cargos ?? []} grupos={grupos} depth={0} meuCargoId={meuCargo?.id} sig={treeSig} />
-                ))}
-              </div>
-              <p className="mt-3 text-[11px] text-zinc-400">Clique num cargo para ver o que se espera dele e quem está nele. O seu cargo aparece destacado.</p>
+              <OrgChart cargos={cur.cargos ?? []} grupos={grupos} meuCargoId={meuCargo?.id} sig={treeSig} />
             </>
           )}
         </div>
@@ -432,59 +430,91 @@ function OnboardingChecklist({ itens, userId }: { itens: OnboardingItem[]; userI
   );
 }
 
-const LEVEL_COLORS = ['#7048E8', '#228BE6', '#F08C00', '#15AABF', '#E64980'];
+const ROOT_COLOR = '#64748b';
+const BRANCH_COLORS = ['#228BE6', '#7048E8', '#E64980', '#15AABF', '#F08C00', '#02883C'];
 
-// Nó do organograma (árvore visual): card colorido por nível, conectores e
-// avatares; expande pra mostrar "O que esperamos" + as pessoas + os subordinados.
-function OrgNode({ cargo, cargos, grupos, depth, meuCargoId, sig }: { cargo: Cargo; cargos: Cargo[]; grupos: Map<string, Member[]>; depth: number; meuCargoId?: string; sig: { n: number; open: boolean } }) {
+// CSS de árvore top-down (conectores via pseudo-elementos, cor = currentColor do nível).
+const ORG_CSS = `
+.org-tree, .org-tree ul { list-style:none; margin:0; padding:0; }
+.org-tree ul { display:flex; justify-content:center; padding-top:24px; position:relative; }
+.org-tree li { display:flex; flex-direction:column; align-items:center; position:relative; padding:24px 14px 0; }
+.org-tree li::before, .org-tree li::after { content:''; position:absolute; top:0; width:50%; height:24px; border-top:2px solid currentColor; }
+.org-tree li::before { right:50%; }
+.org-tree li::after { left:50%; border-left:2px solid currentColor; }
+.org-tree li:only-child::before, .org-tree li:only-child::after { display:none; }
+.org-tree li:only-child { padding-top:24px; }
+.org-tree li:first-child::before, .org-tree li:last-child::after { border:0 none; }
+.org-tree li:last-child::before { border-right:2px solid currentColor; border-radius:0 8px 0 0; }
+.org-tree li:first-child::after { border-radius:8px 0 0 0; }
+.org-tree li > ul::before { content:''; position:absolute; top:0; left:50%; width:0; height:24px; border-left:2px solid currentColor; }
+`;
+
+// Organograma top-down: raiz no topo, ramifica pra baixo com conectores coloridos por ramo.
+function OrgChart({ cargos, grupos, meuCargoId, sig }: { cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; sig: { n: number; open: boolean } }) {
+  const byId = useMemo(() => Object.fromEntries(cargos.map((c) => [c.id, c])), [cargos]);
+  const roots = useMemo(() => cargos.filter((c) => !c.parentId || !byId[c.parentId]), [cargos, byId]);
+  return (
+    <div className="overflow-x-auto pb-3">
+      <style>{ORG_CSS}</style>
+      <div className="flex min-w-max flex-col items-center gap-10 px-4 pt-1">
+        {roots.map((r) => (
+          <ul key={r.id} className="org-tree" style={{ color: ROOT_COLOR }}>
+            <OrgNodeTop cargo={r} cargos={cargos} grupos={grupos} meuCargoId={meuCargoId} depth={0} color={ROOT_COLOR} sig={sig} />
+          </ul>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OrgNodeTop({ cargo, cargos, grupos, meuCargoId, depth, color, sig }: { cargo: Cargo; cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; depth: number; color: string; sig: { n: number; open: boolean } }) {
   const children = useMemo(() => cargos.filter((c) => c.parentId === cargo.id), [cargos, cargo.id]);
   const people = grupos.get(cargo.id) ?? [];
   const isMine = cargo.id === meuCargoId;
-  const cor = LEVEL_COLORS[depth % LEVEL_COLORS.length];
-  const [open, setOpen] = useState(depth < 1 || isMine);
+  const hasChildren = children.length > 0;
+  const [collapsed, setCollapsed] = useState(false);
   const first = useRef(true);
-  useEffect(() => { if (first.current) { first.current = false; return; } setOpen(sig.open); }, [sig.n]);
-  const ini = (n?: string | null) => (n ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  useEffect(() => { if (first.current) { first.current = false; return; } setCollapsed(!sig.open); }, [sig.n]);
+  const tip = [cargo.descricao, people.length ? `Quem: ${people.map((m) => m.user.name).join(', ')}` : ''].filter(Boolean).join('\n\n');
+
+  // Estilo do card por nível: raiz (destaque), departamentos (pílula sólida), demais (pílula branca c/ borda).
+  let cardCls: string, cardStyle: React.CSSProperties, countCls: string;
+  if (depth === 0) {
+    cardCls = 'border-2 bg-white text-zinc-800 dark:bg-zinc-900 dark:text-zinc-100';
+    cardStyle = { borderColor: '#cbd5e1' };
+    countCls = 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300';
+  } else if (depth === 1) {
+    cardCls = 'text-white';
+    cardStyle = { background: color };
+    countCls = 'bg-white/25 text-white';
+  } else {
+    cardCls = 'border bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
+    cardStyle = { borderColor: color };
+    countCls = 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300';
+  }
+
   return (
-    <div className={depth > 0 ? "relative ml-5 pl-5 before:absolute before:left-0 before:top-0 before:h-full before:w-px before:bg-zinc-200 before:content-[''] dark:before:bg-zinc-700" : ''}>
-      {depth > 0 && <span className="absolute left-0 top-6 h-px w-5 bg-zinc-200 dark:bg-zinc-700" />}
-      <button onClick={() => setOpen((o) => !o)} className={`group flex w-full items-center gap-2.5 rounded-xl border bg-white px-3 py-2.5 text-left shadow-sm transition hover:-translate-y-px hover:shadow-md dark:bg-zinc-900 ${isMine ? 'border-[#7048E8] ring-2 ring-[#7048E8]/20' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ borderLeftColor: cor, borderLeftWidth: 4 }}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: `${cor}1A`, color: cor }}><Briefcase className="h-4 w-4" /></span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-bold text-zinc-800 dark:text-zinc-100">{cargo.nome || 'Cargo'}</span>
-            {isMine && <span className="rounded-full bg-[#7048E8] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">você</span>}
-          </span>
-          <span className="text-[11px] text-zinc-400">{people.length} {people.length === 1 ? 'pessoa' : 'pessoas'}{children.length ? ` · ${children.length} subordinado${children.length > 1 ? 's' : ''}` : ''}</span>
-        </span>
-        <span className="flex shrink-0 items-center -space-x-2">
-          {people.slice(0, 4).map((m) => <span key={m.user.id} title={m.user.name ?? ''} className="flex h-7 w-7 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-white dark:ring-zinc-900" style={{ background: cor }}>{ini(m.user.name)}</span>)}
-          {people.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-500 ring-2 ring-white dark:bg-zinc-700 dark:text-zinc-300 dark:ring-zinc-900">+{people.length - 4}</span>}
-        </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-300 transition-transform ${open ? '' : '-rotate-90'}`} />
+    <li style={{ color }}>
+      <button
+        onClick={() => hasChildren && setCollapsed((c) => !c)}
+        title={tip || undefined}
+        className={`relative z-[1] flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 font-semibold shadow-sm transition ${hasChildren ? 'cursor-pointer hover:-translate-y-px hover:shadow-md' : 'cursor-default'} ${depth === 0 ? 'text-base' : 'text-[13px]'} ${cardCls} ${isMine ? 'ring-2 ring-offset-2 ring-[#7048E8] dark:ring-offset-zinc-900' : ''}`}
+        style={cardStyle}
+      >
+        {depth >= 2 && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />}
+        <span>{cargo.nome || 'Cargo'}</span>
+        {isMine && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${depth === 1 ? 'bg-white/25 text-white' : 'bg-[#7048E8] text-white'}`}>você</span>}
+        {people.length > 0 && <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold ${countCls}`}>{people.length}</span>}
+        {hasChildren && <ChevronDown className={`h-3.5 w-3.5 shrink-0 opacity-50 transition-transform ${collapsed ? '-rotate-90' : ''}`} />}
       </button>
-      {open && (
-        <div className="mb-1 mt-1.5 space-y-1.5">
-          {cargo.descricao && (
-            <div className="rounded-lg border-l-2 bg-zinc-50/70 px-3 py-2 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/30 dark:text-zinc-300" style={{ borderLeftColor: cor }}>
-              <span className="font-semibold text-zinc-700 dark:text-zinc-200">O que esperamos:</span> {cargo.descricao}
-            </div>
-          )}
-          {cargo.divisaoHonorarios && <p className="inline-block rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">💰 {cargo.divisaoHonorarios}</p>}
-          {people.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {people.map((m) => (
-                <span key={m.user.id} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ background: cor }}>{ini(m.user.name)}</span>
-                  {m.user.name}
-                </span>
-              ))}
-            </div>
-          )}
-          {children.length > 0 && <div className="space-y-2 pt-1">{children.map((ch) => <OrgNode key={ch.id} cargo={ch} cargos={cargos} grupos={grupos} depth={depth + 1} meuCargoId={meuCargoId} sig={sig} />)}</div>}
-        </div>
+      {hasChildren && !collapsed && (
+        <ul style={{ color }}>
+          {children.map((ch, i) => (
+            <OrgNodeTop key={ch.id} cargo={ch} cargos={cargos} grupos={grupos} meuCargoId={meuCargoId} depth={depth + 1} color={depth === 0 ? BRANCH_COLORS[i % BRANCH_COLORS.length] : color} sig={sig} />
+          ))}
+        </ul>
       )}
-    </div>
+    </li>
   );
 }
 
