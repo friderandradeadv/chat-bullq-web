@@ -442,7 +442,7 @@ const ORG_CSS = `
 .org-tree li::before { right:50%; }
 .org-tree li::after { left:50%; border-left:2px solid currentColor; }
 .org-tree li:only-child::before, .org-tree li:only-child::after { display:none; }
-.org-tree li:only-child { padding-top:24px; }
+.org-tree li:only-child { padding-top:0; }
 .org-tree li:first-child::before, .org-tree li:last-child::after { border:0 none; }
 .org-tree li:last-child::before { border-right:2px solid currentColor; border-radius:0 8px 0 0; }
 .org-tree li:first-child::after { border-radius:8px 0 0 0; }
