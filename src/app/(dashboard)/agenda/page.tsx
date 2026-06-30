@@ -247,7 +247,7 @@ export default function AgendaPage() {
         triggerDate: null,
         tags: tagMap.get('event:' + e.id) ?? [],
         coResponsibleIds: (e as any).metadata?.coResponsibleIds ?? [],
-        createdAt: (e as any).createdAt ?? null,
+        createdAt: e.createdAt ?? null,
         hasTime: true, done: !!e.metadata?.completedAt, cancelled: false, fatal: false,
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,

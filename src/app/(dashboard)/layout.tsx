@@ -99,7 +99,7 @@ export default function DashboardLayout({
       <div className="flex h-full flex-col">
         <ToolFailureBanner />
         {/* Barra de busca global central (estilo Astrea) — em cima de todas as telas. */}
-        <div className="flex h-14 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5">
+        <div className="flex h-11 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5">
           <GlobalSearch />
         </div>
         <div className="flex-1 min-h-0">{children}</div>

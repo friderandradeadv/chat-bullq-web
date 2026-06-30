@@ -99,7 +99,7 @@ export function GlobalSearch() {
   const firstClientIdx = results.findIndex((r) => r.kind === 'client');
 
   return (
-    <div ref={boxRef} className="relative w-full max-w-xl">
+    <div ref={boxRef} className="relative w-full max-w-lg">
       <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
       <input
         ref={inputRef}
@@ -108,7 +108,7 @@ export function GlobalSearch() {
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder="Buscar processos, clientes…"
-        className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50 pl-10 pr-16 text-sm text-zinc-700 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-300 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200 dark:focus:bg-zinc-900"
+        className="h-8 w-full rounded-lg border border-zinc-200 bg-zinc-50 pl-10 pr-16 text-sm text-zinc-700 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-300 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200 dark:focus:bg-zinc-900"
       />
       {query ? (
         <button onClick={() => { setQuery(''); inputRef.current?.focus(); }} title="Limpar" className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
@@ -119,7 +119,7 @@ export function GlobalSearch() {
       )}
 
       {showPanel && (
-        <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="absolute left-0 right-0 top-9 z-50 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
           {loading ? (
             <p className="px-4 py-6 text-center text-sm text-zinc-400">Buscando…</p>
           ) : results.length === 0 ? (
