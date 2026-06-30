@@ -9,11 +9,12 @@ import {
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
   Award, Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
-  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera,
+  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera, Layers,
 } from 'lucide-react';
-import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
+import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo, type Vertical } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
+import { MeuFinanceiroConteudo } from '@/features/financeiro/components/meu-financeiro-conteudo';
 import { useAuthStore } from '@/stores/auth-store';
 
 const rid = () => `c_${Math.round(Math.random() * 1e9)}`;
@@ -98,6 +99,13 @@ export default function EscritorioPage() {
   const memberByUser = useMemo(() => Object.fromEntries(members.map((m) => [m.user.id, m])), [members]);
   const meuInfo = user?.id ? cur.pessoas?.[user.id] : undefined;
   const meuCargo = cargoById[meuInfo?.cargoId ?? ''];
+  // Caminho (ids dos ancestrais) até o meu cargo — o organograma já abre por aqui.
+  const meuCaminho = useMemo(() => {
+    const ids = new Set<string>();
+    let c: Cargo | undefined = meuCargo; let g = 0;
+    while (c && g++ < 30) { ids.add(c.id); c = cargoById[c.parentId ?? '']; }
+    return ids;
+  }, [meuCargo, cargoById]);
 
   // Salva uma alteração pontual (modais do organograma/perfil) mesclando em cima do salvo.
   const patchEscritorio = (mut: (d: Escritorio) => Escritorio) => saveM.mutate(mut(JSON.parse(JSON.stringify(data))));
@@ -143,7 +151,7 @@ export default function EscritorioPage() {
 
         {/* Navegação rápida entre seções */}
         <div className="sticky top-0 z-10 -mx-6 mb-1 mt-4 flex flex-wrap gap-2 border-b border-zinc-200/70 bg-[#fafafa]/90 px-6 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
-          {([['sec-cultura', 'Cultura', Heart, '#e64980'], ['sec-organograma', 'Organograma', Users, '#228BE6'], ['sec-manuais', 'Manuais', BookOpen, '#15AABF'], ['sec-onboarding', 'Onboarding', ListChecks, '#02883C']] as const).map(([id, label, Icon, cor]) => (
+          {([['sec-financeiro', 'Financeiro', CircleDollarSign, '#02883C'], ['sec-organograma', 'Organograma', Users, '#228BE6'], ['sec-verticais', 'Verticais', Layers, '#F08C00'], ['sec-cultura', 'Cultura', Heart, '#e64980'], ['sec-manuais', 'Manuais', BookOpen, '#15AABF'], ['sec-onboarding', 'Onboarding', ListChecks, '#02883C']] as const).map(([id, label, Icon, cor]) => (
             <a key={id} href={`#${id}`} className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
               <Icon className="h-3.5 w-3.5" style={{ color: cor }} /> {label}
             </a>
@@ -160,6 +168,16 @@ export default function EscritorioPage() {
           canEdit={data.canEdit}
           onEdit={user?.id ? () => setPerfilUserId(user.id!) : undefined}
         />
+
+        {/* Financeiro — visão pessoal completa (idêntica ao módulo Financeiro) */}
+        <h2 id="sec-financeiro" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><CircleDollarSign className="h-4 w-4 text-[#02883C]" /> Seu financeiro</h2>
+        <div className="mt-2">
+          {meuFin && !meuFin.vazio ? (
+            <MeuFinanceiroConteudo data={meuFin} />
+          ) : (
+            <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>
+          )}
+        </div>
 
         {/* Cultura: missão / visão / valores */}
         <h2 id="sec-cultura" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Cultura</h2>
@@ -213,6 +231,7 @@ export default function EscritorioPage() {
                 cargos={cur.cargos ?? []}
                 grupos={grupos}
                 meuCargoId={meuCargo?.id}
+                abertos={meuCaminho}
                 sig={treeSig}
                 canEdit={data.canEdit}
                 onExpandAll={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))}
@@ -306,6 +325,11 @@ export default function EscritorioPage() {
             </button>
           </div>
         )}
+
+        {/* Verticais (áreas de atuação) */}
+        <h2 id="sec-verticais" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Layers className="h-4 w-4 text-[#F08C00]" /> Verticais (áreas de atuação)</h2>
+        <p className="mt-1 text-xs text-zinc-400">O escritório se organiza por <strong>verticais</strong> — cada área tem um titular e regras próprias de honorários. É assim que cada um sabe onde atua e como é remunerado por área.</p>
+        <VerticaisSection verticais={cur.verticais ?? []} pessoas={cur.pessoas ?? {}} team={team} editing={editing} setDraft={setDraft} onVerPerfil={(uid) => setPerfilUserId(uid)} />
 
         {/* Manuais */}
         <h2 id="sec-manuais" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><BookOpen className="h-4 w-4 text-[#15AABF]" /> Manuais &amp; procedimentos</h2>
@@ -504,10 +528,10 @@ const ORG_CSS = `
 .org-tree li > ul::before { content:''; position:absolute; top:0; left:50%; width:0; height:24px; border-left:2px solid currentColor; }
 `;
 
-type OrgShared = { cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; sig: { n: number; open: boolean }; canEdit?: boolean; onEditNode?: (id: string) => void; onOpenNode?: (id: string) => void };
+type OrgShared = { cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; abertos?: Set<string>; sig: { n: number; open: boolean }; canEdit?: boolean; onEditNode?: (id: string) => void; onOpenNode?: (id: string) => void };
 
 // Organograma top-down: raiz no topo, ramifica pra baixo com conectores coloridos por ramo.
-function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpenNode, onExpandAll, onCollapseAll, onAddRoot }: OrgShared & { onExpandAll: () => void; onCollapseAll: () => void; onAddRoot?: () => void }) {
+function OrgChart({ cargos, grupos, meuCargoId, abertos, sig, canEdit, onEditNode, onOpenNode, onExpandAll, onCollapseAll, onAddRoot }: OrgShared & { onExpandAll: () => void; onCollapseAll: () => void; onAddRoot?: () => void }) {
   const byId = useMemo(() => Object.fromEntries(cargos.map((c) => [c.id, c])), [cargos]);
   const roots = useMemo(() => cargos.filter((c) => !c.parentId || !byId[c.parentId]), [cargos, byId]);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -560,7 +584,7 @@ function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpen
         <div className="flex min-w-max flex-col items-center gap-10 px-8 py-7" style={{ zoom } as React.CSSProperties}>
           {roots.map((r) => (
             <ul key={r.id} className="org-tree" style={{ color: ROOT_COLOR }}>
-              <OrgNodeTop cargo={r} depth={0} color={ROOT_COLOR} shared={{ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpenNode }} />
+              <OrgNodeTop cargo={r} depth={0} color={ROOT_COLOR} shared={{ cargos, grupos, meuCargoId, abertos, sig, canEdit, onEditNode, onOpenNode }} />
             </ul>
           ))}
         </div>
@@ -573,13 +597,13 @@ function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpen
 }
 
 function OrgNodeTop({ cargo, depth, color, shared }: { cargo: Cargo; depth: number; color: string; shared: OrgShared }) {
-  const { cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpenNode } = shared;
+  const { cargos, grupos, meuCargoId, abertos, sig, canEdit, onEditNode, onOpenNode } = shared;
   const children = useMemo(() => cargos.filter((c) => c.parentId === cargo.id), [cargos, cargo.id]);
   const people = grupos.get(cargo.id) ?? [];
   const isMine = cargo.id === meuCargoId;
   const hasChildren = children.length > 0;
   // Começa recolhido abaixo da raiz (mostra raiz + verticais) — evita árvore larga demais.
-  const [collapsed, setCollapsed] = useState(depth >= 1);
+  const [collapsed, setCollapsed] = useState(depth >= 1 && !abertos?.has(cargo.id));
   const first = useRef(true);
   useEffect(() => { if (first.current) { first.current = false; return; } setCollapsed(!sig.open); }, [sig.n]);
   const tip = [cargo.descricao, people.length ? `Quem: ${people.map((m) => m.user.name).join(', ')}` : ''].filter(Boolean).join('\n\n');
@@ -635,6 +659,60 @@ function OrgNodeTop({ cargo, depth, color, shared }: { cargo: Cargo; depth: numb
   );
 }
 
+// Seção de Verticais (áreas de atuação): cards com titular, regra de honorários e quem atua.
+function VerticaisSection({ verticais, pessoas, team, editing, setDraft, onVerPerfil }: { verticais: Vertical[]; pessoas: Record<string, PessoaInfo>; team: Member[]; editing: boolean; setDraft: (f: (d: Escritorio) => Escritorio) => void; onVerPerfil: (uid: string) => void }) {
+  const upd = (i: number, patch: Partial<Vertical>) => setDraft((d) => ({ ...d, verticais: (d.verticais ?? []).map((v, j) => (j === i ? { ...v, ...patch } : v)) }));
+  const del = (i: number) => setDraft((d) => ({ ...d, verticais: (d.verticais ?? []).filter((_, j) => j !== i) }));
+  if (editing) {
+    return (
+      <div className="mt-2 space-y-3">
+        {verticais.map((v, i) => (
+          <div key={v.id} className={CARD}>
+            <div className="flex items-center gap-2">
+              <input value={v.nome} onChange={(e) => upd(i, { nome: e.target.value })} placeholder="Nome da vertical (ex.: Previdenciário)" className={`${INPUT} font-semibold`} />
+              <button onClick={() => del(i)} className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input value={v.titular ?? ''} onChange={(e) => upd(i, { titular: e.target.value })} placeholder="Titular (ex.: Sócio / Julia)" className={INPUT} />
+              <input value={v.regra ?? ''} onChange={(e) => upd(i, { regra: e.target.value })} placeholder="Honorários (ex.: 60% sócia / 40% escritório)" className={INPUT} />
+            </div>
+            <textarea value={v.descricao ?? ''} onChange={(e) => upd(i, { descricao: e.target.value })} rows={2} placeholder="Como funciona / o que é a área" className={`${INPUT} mt-2`} />
+          </div>
+        ))}
+        <button onClick={() => setDraft((d) => ({ ...d, verticais: [...(d.verticais ?? []), { id: rid(), nome: '' }] }))} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-medium text-[#228BE6] hover:bg-[#228BE6]/5 dark:border-zinc-700"><Plus className="h-4 w-4" /> Adicionar vertical</button>
+      </div>
+    );
+  }
+  if (verticais.length === 0) return <p className="mt-2 text-sm text-zinc-400">Nenhuma vertical cadastrada ainda.</p>;
+  return (
+    <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
+      {verticais.map((v, i) => {
+        const cor = BRANCH_COLORS[i % BRANCH_COLORS.length];
+        const gente = team.filter((m) => (pessoas[m.user.id]?.atuacao ?? []).some((a) => a.toLowerCase() === v.nome.toLowerCase()));
+        return (
+          <div key={v.id} className="rounded-xl border border-zinc-200/80 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-900" style={{ borderLeftColor: cor, borderLeftWidth: 4 }}>
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <span className="font-bold text-zinc-800 dark:text-zinc-100">{v.nome}</span>
+              {v.titular && <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: cor }}>{v.titular}</span>}
+            </div>
+            {v.descricao && <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{v.descricao}</p>}
+            {v.regra && <p className="mt-1.5 inline-flex w-fit items-center gap-1 rounded bg-[#02883C]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#02883C]"><CircleDollarSign className="h-3 w-3" /> {v.regra}</p>}
+            {gente.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {gente.map((m) => (
+                  <button key={m.user.id} onClick={() => onVerPerfil(m.user.id)} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ background: cor }}>{iniciaisDe(m.user.name)}</span>{m.user.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function iniciaisDe(n?: string | null) { return (n ?? '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); }
 
 // Redimensiona uma imagem escolhida para até `max`px e devolve um data-URL JPEG leve (upload sem backend).
@@ -659,16 +737,10 @@ function resizeToDataUrl(file: File, max = 320): Promise<string> {
   });
 }
 
-const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
 function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; onEdit?: () => void }) {
   const foto = info?.fotoUrl || avatarUrl;
-  const r = fin && !fin.vazio ? fin.resumo : undefined;
-  const cs = fin && !fin.vazio ? fin.cs : undefined;
-  const totalAEntrar = r ? (r.aReceber || 0) + (r.minhaParte || 0) + (cs?.prestacao || 0) + (cs?.cumprimentoNosso || 0) : 0;
-  const topClientes = fin && !fin.vazio ? (fin.clientes ?? []).slice(0, 3) : [];
-  const casosN = r?.nCasos ?? info?.casos;
+  const casosN = fin && !fin.vazio ? fin.resumo?.nCasos : info?.casos;
   const stats = ([[Scale, 'Casos que você cuida', casosN], [Heart, 'Vidas que você muda', info?.vidas]] as const).filter(([, , v]) => typeof v === 'number');
   return (
     <div className="mt-5 overflow-hidden rounded-2xl border border-[#7048E8]/25 bg-gradient-to-br from-[#7048E8]/10 via-white to-[#228BE6]/5 dark:border-[#7048E8]/30 dark:from-[#7048E8]/15 dark:via-zinc-900 dark:to-zinc-900">
@@ -686,10 +758,11 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
             <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{nome}</h2>
             {cargo && <span className="rounded-full bg-[#7048E8] px-2.5 py-0.5 text-xs font-semibold text-white">{cargo.nome}</span>}
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {info?.oab && <span className="inline-flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> OAB {info.oab}</span>}
-            {info?.conoscoDesde && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> Conosco desde {info.conoscoDesde}</span>}
-            {info?.contratadaDesde && <span className="inline-flex items-center gap-1"><Award className="h-3.5 w-3.5" /> Contratada desde {info.contratadaDesde}</span>}
+          <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {info?.oab && <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 shrink-0 text-[#7048E8]" /> OAB {info.oab}</span>}
+            {info?.conoscoDesde && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> Conosco desde {info.conoscoDesde}</span>}
+            {info?.contratadaDesde && <span className="inline-flex items-center gap-1.5"><Award className="h-3.5 w-3.5 shrink-0 text-[#F08C00]" /> Contratada desde {info.contratadaDesde}</span>}
+            {cargo?.vertical && <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 shrink-0 text-[#15AABF]" /> Vertical: {cargo.vertical}</span>}
           </div>
         </div>
         {canEdit && onEdit && (
@@ -711,31 +784,6 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
                 <div><p className="text-2xl font-extrabold text-zinc-800 dark:text-zinc-100">{valor}</p><p className="text-[11px] font-medium text-zinc-500">{label}</p></div>
               </div>
             ))}
-          </div>
-        )}
-        {r && (
-          <div className="rounded-2xl border border-[#02883C]/25 bg-[#02883C]/5 p-4 dark:bg-[#02883C]/10">
-            <div className="flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> Seu financeiro</p>
-              <span className="text-[11px] text-zinc-400">{r.nCasos ?? 0} casos · {r.nClientes ?? 0} clientes</span>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {([['Recebido', r.recebido, 'text-zinc-800 dark:text-zinc-100'], ['A receber', r.aReceber, 'text-zinc-800 dark:text-zinc-100'], ['Sua parte (rateio)', r.minhaParte, 'text-zinc-800 dark:text-zinc-100'], ['Total a entrar', totalAEntrar, 'text-[#02883C]']] as const).map(([label, valor, cls]) => (
-                <div key={label} className="rounded-xl border border-zinc-200/70 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-                  <p className={`text-lg font-extrabold ${cls}`}>{brl(valor)}</p>
-                  <p className="text-[10px] font-medium text-zinc-500">{label}</p>
-                </div>
-              ))}
-            </div>
-            {(cs?.prestacao > 0 || cs?.cumprimentoNosso > 0) && (
-              <p className="mt-2 text-[11px] text-zinc-500">Inclui cumprimento de sentença: {brl((cs?.prestacao || 0) + (cs?.cumprimentoNosso || 0))} a entrar dos seus casos.</p>
-            )}
-            {topClientes.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <span className="text-[11px] font-medium text-zinc-400">Quem mais rendeu:</span>
-                {topClientes.map((c: any) => <span key={c.nome} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">{c.nome} · {brl(c.recebido)}</span>)}
-              </div>
-            )}
           </div>
         )}
         {(info?.financeiro?.length || cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios) && (

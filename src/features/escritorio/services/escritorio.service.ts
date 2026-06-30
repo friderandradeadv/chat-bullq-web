@@ -22,6 +22,8 @@ export interface Cargo {
 export interface Cultura { missao: string; visao: string; valores: string[]; cultura: string }
 export interface Manual { id: string; titulo: string; conteudo: string }
 export interface OnboardingItem { id: string; texto: string }
+// Vertical = área de atuação do escritório (Previdenciário, Bancário RMC/RCC, etc.).
+export interface Vertical { id: string; nome: string; titular?: string; regra?: string; descricao?: string }
 export interface PessoaInfo {
   cargoId?: string;
   bio?: string;            // perfil pessoal (a própria pessoa escreve)
@@ -34,12 +36,14 @@ export interface PessoaInfo {
   vidas?: number;          // vidas que muda
   destaque?: string;       // reconhecimento/motivação (o sócio escreve)
   financeiro?: string[];   // condições financeiras pessoais (do contrato): percentuais, custos…
+  atuacao?: string[];      // verticais/áreas em que a pessoa atua (nomes)
 }
 
 export interface Escritorio {
   cultura: Cultura;
   cargos: Cargo[];
   pessoas: Record<string, PessoaInfo>; // userId -> { cargoId, bio }
+  verticais?: Vertical[];  // áreas de atuação + titularidade
   manuais: Manual[];
   onboarding: OnboardingItem[];
   canEdit: boolean; // true para sócios (OWNER/ADMIN)
