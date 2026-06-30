@@ -467,7 +467,7 @@ export function BulkActionsMenu({
                   ) : members.length === 0 ? (
                     <p className="py-4 text-center text-[11px] text-zinc-400">Nenhum membro</p>
                   ) : (
-                    members.map((m) => (
+                    members.filter((m) => m.assignable !== false).map((m) => (
                       <button key={m.user.id} onClick={() => assignAll(m.user.id, m.user.name)} disabled={busy === `assign-${m.user.id}`} className={itemClass}>
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
                           {(m.user.name || '?').slice(0, 1).toUpperCase()}

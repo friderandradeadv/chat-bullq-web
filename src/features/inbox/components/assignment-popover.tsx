@@ -125,6 +125,8 @@ export function AssignmentPopover({
     const q = search.trim().toLowerCase();
     return members
       .filter((m) => m.user.isActive)
+      // Esconde perfil Admin / logins duplicados (assignable=false) das atribuições do chat.
+      .filter((m) => m.assignable !== false)
       .filter((m) =>
         q
           ? m.user.name.toLowerCase().includes(q) ||

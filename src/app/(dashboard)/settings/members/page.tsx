@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X, Hash, LayoutGrid, Loader2, MoreHorizontal, Pencil, Power, PowerOff, HandCoins, Save, Plus } from 'lucide-react';
+import { UserPlus, Trash2, Shield, ShieldCheck, User, Users, Copy, Link, X, Hash, LayoutGrid, Loader2, MoreHorizontal, Pencil, Power, PowerOff, HandCoins, Save, Plus, Eye, EyeOff } from 'lucide-react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { toast } from 'sonner';
 import { membersService, type Member } from '@/features/settings/services/members.service';
@@ -165,6 +165,24 @@ export default function SettingsMembersPage() {
     try {
       await membersService.setActive(memberId, active);
       toast.success(active ? 'Membro reativado' : 'Membro desativado');
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar');
+    }
+  };
+
+  const handleToggleAssignable = async (
+    memberId: string,
+    assignable: boolean,
+    name: string,
+  ) => {
+    try {
+      await membersService.setAssignable(memberId, assignable);
+      toast.success(
+        assignable
+          ? `${name} volta a aparecer nas atribuições`
+          : `${name} escondido das atribuições`,
+      );
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao atualizar');
@@ -429,6 +447,25 @@ export default function SettingsMembersPage() {
                                 ) : (
                                   <>
                                     <Power className="h-3.5 w-3.5 text-emerald-500" /> Reativar
+                                  </>
+                                )}
+                              </button>
+                            </MenuItem>
+                            <MenuItem>
+                              <button
+                                onClick={() =>
+                                  handleToggleAssignable(m.id, m.assignable === false, m.user.name)
+                                }
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                title="Define se o membro aparece nos seletores de responsável (kanban, chat, novo processo). Tire o perfil Admin e logins duplicados daqui."
+                              >
+                                {m.assignable === false ? (
+                                  <>
+                                    <Eye className="h-3.5 w-3.5 text-emerald-500" /> Mostrar nas atribuições
+                                  </>
+                                ) : (
+                                  <>
+                                    <EyeOff className="h-3.5 w-3.5 text-zinc-400" /> Esconder das atribuições
                                   </>
                                 )}
                               </button>

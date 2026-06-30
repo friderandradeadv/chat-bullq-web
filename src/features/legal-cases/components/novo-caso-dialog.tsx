@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type PartyInput } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
+import { OpponentCombobox } from '@/features/legal-cases/components/opponent-combobox';
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 const PRODUTOS = ['RMC', 'RCC', 'RMC + RCC', 'BPC-LOAS', 'Aposentadoria', 'Auxílio-doença', 'Revisional', 'Consumidor', 'Trabalhista'];
@@ -15,6 +16,8 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
   const [cliente, setCliente] = useState('');
   const [produto, setProduto] = useState('');
   const [adversa, setAdversa] = useState('');
+  const [adversaDoc, setAdversaDoc] = useState<string>('');
+  const [adversaContactId, setAdversaContactId] = useState<string>('');
   const [respId, setRespId] = useState('');
   const [phase, setPhase] = useState(targetPhase ?? phases[0]?.key ?? '');
   const [busy, setBusy] = useState(false);
@@ -25,7 +28,13 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
     setBusy(true);
     try {
       const parties: PartyInput[] = [{ role: 'CLIENT', name: cliente.trim() }];
-      if (adversa.trim()) parties.push({ role: 'OPPONENT', name: adversa.trim() });
+      if (adversa.trim())
+        parties.push({
+          role: 'OPPONENT',
+          name: adversa.trim(),
+          document: adversaDoc || undefined,
+          contactId: adversaContactId || undefined,
+        });
       const novo = await legalCasesService.create({
         title: cliente.trim(),
         area: produto.trim() || undefined,
@@ -61,12 +70,19 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
             <Field label="Responsável">
               <select value={respId} onChange={(e) => setRespId(e.target.value)} className={INPUT}>
                 <option value="">—</option>
-                {members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}</option>)}
+                {members.filter((m) => m.assignable !== false).map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}</option>)}
               </select>
             </Field>
           </div>
           <Field label="Parte adversa (opcional)">
-            <input value={adversa} onChange={(e) => setAdversa(e.target.value)} placeholder="Banco / réu (ex.: BANCO BMG S/A)" className={INPUT} />
+            <OpponentCombobox
+              value={adversa}
+              onSelect={(s) => {
+                setAdversa(s.name);
+                setAdversaDoc(s.document ?? '');
+                setAdversaContactId(s.contactId ?? '');
+              }}
+            />
           </Field>
           {phases.length > 0 && (
             <Field label="Criar na fase">

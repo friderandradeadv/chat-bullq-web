@@ -9,6 +9,8 @@ export interface Member {
   joinedAt: string;
   /** Módulos que este membro NÃO pode acessar (denylist). */
   restrictedModules?: string[];
+  /** false = não aparece nos seletores de responsável (perfil admin, login duplicado). */
+  assignable?: boolean;
   user: {
     id: string;
     name: string;
@@ -43,5 +45,9 @@ export const membersService = {
   },
   async setActive(memberId: string, active: boolean): Promise<void> {
     await api.patch(`/organizations/members/${memberId}/active`, { active });
+  },
+  /** Mostra/esconde o membro nos seletores de responsável (perfil admin, login duplicado). */
+  async setAssignable(memberId: string, assignable: boolean): Promise<void> {
+    await api.patch(`/organizations/members/${memberId}/assignable`, { assignable });
   },
 };

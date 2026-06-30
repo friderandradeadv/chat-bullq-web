@@ -112,6 +112,7 @@ export interface DocumentRef {
   mime: string;
   sizeBytes: number;
   createdAt: string;
+  url?: string | null;
 }
 
 export interface ContratoImpugnar {
@@ -414,6 +415,33 @@ export const legalCasesService = {
     id: string,
   ): Promise<{ ok: boolean; criados: number; filhos: { id: string; title: string; reu: string; produto: string }[] }> {
     const { data } = await api.post(`/legal-cases/${id}/gerar-iniciais`);
+    return data.data ?? data;
+  },
+  /** Upload do JG (PDF base64) → IA extrai líquido/anual para a justiça gratuita. */
+  async uploadJg(id: string, pdfBase64: string): Promise<{ ok: boolean; jg: { liquido: number | null; anual: number | null; media: number | null } }> {
+    const { data } = await api.post(`/legal-cases/${id}/jg`, { pdfBase64 });
+    return data.data ?? data;
+  },
+  /** Gera a petição inicial de RMC/RCC (base no timbrado preenchida) → .docx base64. */
+  async gerarInicial(
+    id: string,
+  ): Promise<{ base: string; fileName: string; valorCausa: number; documentId: string; docxBase64: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/inicial/gerar`);
+    return data.data ?? data;
+  },
+  /** Salva no processo o cálculo de RMC/RCC escolhido (e define o valor da causa). */
+  async salvarCalculo(
+    id: string,
+    payload: {
+      cenario: string;
+      cenarioTitulo?: string;
+      total: number;
+      resumo?: Record<string, any>;
+      config?: Record<string, any>;
+      definirValorCausa?: boolean;
+    },
+  ): Promise<{ ok: boolean; calculo: any }> {
+    const { data } = await api.post(`/legal-cases/${id}/calculo`, payload);
     return data.data ?? data;
   },
 };

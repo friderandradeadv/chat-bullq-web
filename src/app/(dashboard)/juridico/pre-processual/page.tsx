@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -47,6 +47,11 @@ export default function PreProcessualPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
+  // Abre direto a ficha quando vier ?case=<id> (link "Ver no Kanban" do chat).
+  useEffect(() => {
+    const cid = new URLSearchParams(window.location.search).get('case');
+    if (cid) setOpenCaseId(cid);
+  }, []);
   const [protocolarId, setProtocolarId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');

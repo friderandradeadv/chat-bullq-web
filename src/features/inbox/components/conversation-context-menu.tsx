@@ -648,7 +648,7 @@ export function ConversationContextMenu({
             ) : members.length === 0 ? (
               <p className="py-4 text-center text-[11px] text-zinc-400">Nenhum membro</p>
             ) : (
-              members.map((m) => {
+              members.filter((m) => m.assignable !== false).map((m) => {
                 const isActive = conversation.assignedTo?.id === m.user.id;
                 return (
                   <button

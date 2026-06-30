@@ -34,6 +34,7 @@ import {
   Wrench,
   AlertTriangle,
   ExternalLink,
+  Columns3,
   Building2,
   Mail,
   StickyNote,
@@ -158,11 +159,11 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
       </div>
       <div className="space-y-1.5">
         {cases.map((c: ClientCaseRow) => (
+          <div key={c.id} className="group relative">
           <button
-            key={c.id}
             onClick={() => router.push(`/processos/${c.id}`)}
             title="Abrir processo"
-            className="group block w-full rounded-lg border border-zinc-200/70 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/60"
+            className="block w-full rounded-lg border border-zinc-200/70 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/60"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 truncate text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
@@ -183,6 +184,28 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
               {c.responsavel && <span className="shrink-0 truncate">{c.responsavel.split(' ')[0]}</span>}
             </div>
           </button>
+          {/* Ações no hover: abrir em nova guia · ver no Kanban */}
+          <div className="absolute right-1.5 top-1.5 hidden gap-0.5 group-hover:flex">
+            <button
+              onClick={(e) => { e.stopPropagation(); window.open(`/processos/${c.id}`, '_blank', 'noopener'); }}
+              title="Abrir em nova guia"
+              className="rounded bg-white/90 p-1 text-zinc-400 shadow-sm hover:text-primary dark:bg-zinc-900/90"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const board = c.lane === 'pre' ? '/juridico/pre-processual' : '/juridico/kanban';
+                window.open(`${board}?case=${c.id}`, '_blank', 'noopener');
+              }}
+              title="Ver no Kanban"
+              className="rounded bg-white/90 p-1 text-zinc-400 shadow-sm hover:text-primary dark:bg-zinc-900/90"
+            >
+              <Columns3 className="h-3 w-3" />
+            </button>
+          </div>
+          </div>
         ))}
       </div>
     </div>

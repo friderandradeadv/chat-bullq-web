@@ -103,6 +103,16 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'honorarios_contratuais', label: 'Honorários contratuais', type: 'currency' },
     { key: 'valor_cliente', label: 'Valor do cliente', type: 'currency' },
   ],
+  acoes_vencidas: [
+    { key: 'resultado', label: 'Resultado', type: 'radio', options: ['Procedente', 'Parcialmente procedente'] },
+    { key: 'valor_recebido', label: 'Valor recebido (estimado)', type: 'currency' },
+    { key: 'obs', label: 'Anotações', type: 'textarea' },
+  ],
+  acoes_perdidas: [
+    { key: 'motivo', label: 'Motivo da derrota', type: 'textarea' },
+    { key: 'recorremos', label: 'Recorremos?', type: 'radio', options: ['Sim', 'Não', 'Não cabível'] },
+    { key: 'obs', label: 'Anotações', type: 'textarea' },
+  ],
   suspenso: [{ key: 'motivo', label: 'Motivo da suspensão/sobrestamento', type: 'textarea' }],
   arquivado: [{ key: 'motivo', label: 'Motivo do arquivamento', type: 'textarea' }],
   abandonado: [{ key: 'motivo', label: 'Motivo', type: 'textarea' }],

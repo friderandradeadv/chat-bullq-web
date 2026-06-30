@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -14,6 +14,7 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
+import { membersService } from '@/features/settings/services/members.service';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
 const KEY = ['legal-cases', 'kanban'];
@@ -50,6 +51,17 @@ function produtoColor(p: string | null): { bg: string; fg: string } {
   return { bg: 'rgb(209,209,209)', fg: '#101820' };
 }
 
+// Badge de resultado da ação (vencemos/perdemos/parcial) — vem do "Vencemos a
+// ação?" do trânsito em julgado ou do resultado da sentença.
+function resultadoBadge(v: string | null): { label: string; bg: string; fg: string } | null {
+  if (!v) return null;
+  const s = v.toLowerCase();
+  if (s.includes('parcial')) return { label: 'Parcial', bg: '#f59f00', fg: '#fff' };
+  if (s === 'não' || s === 'nao' || s.includes('improcedente')) return { label: '✗ Perdemos', bg: '#e03131', fg: '#fff' };
+  if (s === 'sim' || s.includes('procedente')) return { label: '✓ Vencemos', bg: '#2f9e44', fg: '#fff' };
+  return null;
+}
+
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) =>
@@ -66,6 +78,11 @@ export default function FaseJudicialKanbanPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
+  // Abre direto a ficha quando vier ?case=<id> (link "Ver no Kanban" do chat).
+  useEffect(() => {
+    const cid = new URLSearchParams(window.location.search).get('case');
+    if (cid) setOpenCaseId(cid);
+  }, []);
   const [search, setSearch] = useState('');
   const [area, setArea] = useState('');
   const [produto, setProduto] = useState('');
@@ -84,6 +101,7 @@ export default function FaseJudicialKanbanPage() {
     queryFn: () => legalCasesService.kanban({}),
     refetchInterval: 30_000,
   });
+  const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
   const phases = data?.phases ?? [];
   const cards = data?.cards ?? [];
@@ -96,11 +114,19 @@ export default function FaseJudicialKanbanPage() {
     () => Array.from(new Set(cards.map((c) => c.produto).filter(Boolean))).sort() as string[],
     [cards],
   );
+  // Responsáveis do filtro: deduplica por ID e ESCONDE quem não é "assignable"
+  // (perfil Admin, logins duplicados) — assim o "Matheus" duplicado e o "Admin
+  // Frider" somem do dropdown. O badge no card ainda mostra o nome real.
+  const hiddenRespIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of members) if (m.assignable === false) s.add(m.user.id);
+    return s;
+  }, [members]);
   const resps = useMemo(() => {
     const m = new Map<string, string>();
-    for (const c of cards) if (c.responsible) m.set(c.responsible.id, c.responsible.name);
+    for (const c of cards) if (c.responsible && !hiddenRespIds.has(c.responsible.id)) m.set(c.responsible.id, c.responsible.name);
     return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [cards]);
+  }, [cards, hiddenRespIds]);
   const phaseOptions = useMemo(
     () => phases.filter((p) => p.lane !== 'pre').map((p) => ({ id: p.key, name: p.label })),
     [phases],
@@ -419,6 +445,14 @@ function Card({
             {c.areaJuridica}
           </span>
         )}
+        {(() => {
+          const r = resultadoBadge(c.vencemos);
+          return r ? (
+            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: r.bg, color: r.fg }}>
+              {r.label}
+            </span>
+          ) : null;
+        })()}
       </div>
 
       {/* Cliente (título, CAPS, clicável) × parte adversa */}

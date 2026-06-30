@@ -25,6 +25,8 @@ import {
   Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
+import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import {
   calculadoraRmcService,
   type CalcularRmcInput,
@@ -121,6 +123,26 @@ export default function CalculadoraRmcPage() {
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  // Quando aberta a partir de um card (Pré-processual → "Calcular RMC/RCC"),
+  // pré-preenche banco/cliente/tipo e habilita "Salvar no processo". Lemos da URL
+  // via window (client-only) p/ não exigir Suspense boundary do useSearchParams.
+  const [caseId, setCaseId] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    setCaseId(sp.get('case'));
+    const banco = sp.get('banco');
+    const cliente = sp.get('cliente');
+    const tipo = sp.get('tipo');
+    setForm((f) => ({
+      ...f,
+      ...(banco ? { banco } : {}),
+      ...(cliente ? { nomeCalculo: cliente } : {}),
+      ...(tipo === 'RMC' || tipo === 'RCC' ? { tipo } : {}),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Cumprimento de Sentença (opcional) ─────────────────────────────────────
   const [cs, setCs] = useState({
@@ -1014,6 +1036,42 @@ export default function CalculadoraRmcPage() {
                     <ResRow label="Restituição de Valores" valor={cenarioView.resumo.restituicao} />
                     <ResRow label="Total" valor={cenarioView.resumo.total} destaque />
                   </dl>
+                  {caseId && (
+                    <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
+                      <button
+                        onClick={async () => {
+                          setSalvando(true);
+                          try {
+                            await legalCasesService.salvarCalculo(caseId, {
+                              cenario: cenarioView.id,
+                              cenarioTitulo: cenarioView.titulo,
+                              total: cenarioView.resumo.total,
+                              resumo: cenarioView.resumo,
+                              config: {
+                                banco: form.banco,
+                                tipo: form.tipo,
+                                valorEmprestimo: parseValor(form.valorEmprestimo),
+                                indiceCorrecao: form.indiceCorrecao,
+                                dataBase: form.dataBase,
+                                taxaConversao: parseValor(form.taxaConversao),
+                              },
+                            });
+                            toast.success('Cálculo salvo no processo — valor da causa definido');
+                            window.history.back();
+                          } catch (e: any) {
+                            toast.error(e?.response?.data?.message || 'Erro ao salvar no processo');
+                          } finally {
+                            setSalvando(false);
+                          }
+                        }}
+                        disabled={salvando}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#005efc] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                      >
+                        {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                        {salvando ? 'Salvando…' : 'Salvar no processo (valor da causa)'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bloco "Cumprimento de Sentença" — RMC já atualizada + sucumbência + multa 523 */}

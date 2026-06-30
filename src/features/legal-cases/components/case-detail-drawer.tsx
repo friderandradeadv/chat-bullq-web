@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload,
+  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -248,6 +248,39 @@ export function CaseDetailDrawer({
                   />
                 )}
 
+                {/* Cálculo RMC/RCC: abre a calculadora nativa pré-preenchida (HISCON/
+                    HISCRE → conversão + restituição) e salva o total como valor da causa. */}
+                {phaseKey && PRE_PHASES.has(phaseKey) && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cálculo RMC/RCC</p>
+                      <a
+                        href={`/juridico/calculos/rmc-rcc?case=${c.id}&cliente=${encodeURIComponent(cliente?.name ?? c.title ?? '')}&banco=${encodeURIComponent(adversa?.name ?? '')}&tipo=${encodeURIComponent(cleanArea(c.area) ?? '')}`}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline"
+                      >
+                        <Calculator className="h-3.5 w-3.5" /> Calcular RMC/RCC
+                      </a>
+                    </div>
+                    {(() => {
+                      const calc = (c.metadata as any)?.calculo;
+                      if (!calc) {
+                        return <p className="mt-1.5 text-xs italic text-zinc-400">Abra a calculadora (HISCON/HISCRE → conversão + restituição) e salve aqui — vira o valor da causa.</p>;
+                      }
+                      return (
+                        <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-900/15">
+                          <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                            {fmtMoney(calc.total)} <span className="font-normal">— valor da causa</span>
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                            {calc.cenarioTitulo ?? calc.cenario}{calc.config?.banco ? ` · ${calc.config.banco}` : ''}
+                          </p>
+                        </div>
+                      );
+                    })()}
+                    <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                  </div>
+                )}
+
                 {pf.recordUrl && (
                   <a href={pf.recordUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
                     Ver no Pipefy <ExternalLink className="h-3 w-3" />
@@ -269,9 +302,11 @@ export function CaseDetailDrawer({
               c.documents.length === 0 ? <Empty t="Nenhum anexo" />
               : <ul className="space-y-2">{c.documents.map((d) => (
                   <li key={d.id} className="flex items-center gap-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
-                    <Paperclip className="h-4 w-4 text-[#48626f]" />
-                    <span className="flex-1 truncate text-sm text-black dark:text-zinc-100">{d.name}</span>
-                    <span className="text-xs text-zinc-400">{fmtSize(d.sizeBytes)}</span>
+                    <Paperclip className="h-4 w-4 shrink-0 text-[#48626f]" />
+                    {d.url
+                      ? <a href={d.url} target="_blank" rel="noreferrer" download={d.name} className="flex-1 truncate text-sm font-medium text-[#005efc] hover:underline">{d.name}</a>
+                      : <span className="flex-1 truncate text-sm text-black dark:text-zinc-100">{d.name}</span>}
+                    <span className="shrink-0 text-xs text-zinc-400">{fmtSize(d.sizeBytes)}</span>
                   </li>
                 ))}</ul>
             )}
@@ -495,6 +530,10 @@ function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa
 // linha (na fase Montar inicial) e arquiva o intake.
 type CRow = { id: string; reu: string; produto: string; valor: string };
 const PRODUTOS_IMPUGNAR = ['RMC', 'RCC', 'Empréstimo consignado', 'Portabilidade', 'Revisional'];
+// Chave de deduplicação banco × produto (sem acento/caixa) — evita o card repetido
+// quando o mesmo contrato vem do HISCON e do HISCRE.
+const contratoKey = (reu: string, produto: string) =>
+  `${(reu || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()}|${(produto || '').toLowerCase().trim()}`;
 const rowId = () => `ct_${Math.round(Math.random() * 1e9)}`;
 const fmtValorBR = (n: number | null) => (n == null ? '' : n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const parseValorBR = (s: string): number | null => {
@@ -508,16 +547,29 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
     (initial ?? []).map((c: any) => ({ id: c.id || rowId(), reu: c.reu ?? '', produto: c.produto ?? 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })),
   );
   const [sug, setSug] = useState(false);
-  const [gen, setGen] = useState(false);
   const [sav, setSav] = useState(false);
   const [hiscon, setHiscon] = useState(false);
   const [hiscre, setHiscre] = useState(false);
-  const [done, setDone] = useState<number | null>(null);
 
   const setRow = (id: string, patch: Partial<CRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const addRow = () => setRows((r) => [...r, { id: rowId(), reu: '', produto: 'RMC', valor: '' }]);
   const rmRow = (id: string) => setRows((r) => r.filter((x) => x.id !== id));
   const payload = () => rows.filter((r) => r.reu.trim()).map((r) => ({ id: r.id, reu: r.reu.trim(), produto: r.produto.trim() || 'RMC', valor: parseValorBR(r.valor) }));
+  // Adiciona contratos (HISCON/HISCRE) deduplicando por banco×produto contra o que
+  // já está na lista — só popula pra você revisar (NÃO cria card-filhote).
+  const mergeContratos = (contratos: { id?: string; reu: string; produto?: string | null; valor?: number | null }[]): number => {
+    const seen = new Set(rows.map((x) => contratoKey(x.reu, x.produto)));
+    const add = contratos
+      .filter((c) => !seen.has(contratoKey(c.reu, c.produto || 'RMC')))
+      .map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' }));
+    if (add.length) {
+      setRows((r) => {
+        const seen2 = new Set(r.map((x) => contratoKey(x.reu, x.produto)));
+        return [...r, ...add.filter((c) => !seen2.has(contratoKey(c.reu, c.produto)))];
+      });
+    }
+    return add.length;
+  };
 
   const salvar = async () => {
     setSav(true);
@@ -532,110 +584,51 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
       toast.success(contratos?.length ? `${contratos.length} sugestão(ões) da IA — confira e salve` : 'A IA não achou bancos/produtos claros na conversa');
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao sugerir'); } finally { setSug(false); }
   };
-  // Upload do HISCON (PDF) → IA extrai os contratos RMC/RCC ativos. Ao confirmar,
-  // JÁ cria 1 card filho por contrato (RMC/RCC × banco réu) e arquiva o intake
-  // (pai). Se cancelar, só popula as linhas pra revisão manual.
+  const fileToB64 = (file: File) => new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+    fr.readAsDataURL(file);
+  });
+  // Upload do HISCON (PDF) → IA extrai os contratos RMC/RCC ativos e POPULA as
+  // linhas (deduplicando) — NÃO cria card. Você revisa, marca quais quer e clica
+  // "Gerar iniciais". Era isso que criava cards repetidos a cada upload.
   const onHiscon = async (file?: File | null) => {
     if (!file) return;
     setHiscon(true);
     try {
-      const b64 = await new Promise<string>((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(String(fr.result));
-        fr.onerror = () => reject(new Error('Falha ao ler o arquivo'));
-        fr.readAsDataURL(file);
-      });
-      const { contratos } = await legalCasesService.uploadHiscon(caseId, b64);
+      const { contratos } = await legalCasesService.uploadHiscon(caseId, await fileToB64(file));
       if (!contratos?.length) { toast.info('Nenhum contrato RMC/RCC ativo encontrado no HISCON'); return; }
-      const lista = contratos.map((c) => `• ${c.produto} – ${c.reu}`).join('\n');
-      const popular = () => setRows((r) => [
-        ...r,
-        ...contratos.map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })),
-      ]);
-      if (!confirm(`HISCON lido — ${contratos.length} contrato(s) ativo(s):\n\n${lista}\n\nCriar ${contratos.length} card(s) (1 por banco/produto) e arquivar este intake?`)) {
-        popular();
-        toast.info('Contratos carregados — confira e gere quando quiser');
-        return;
-      }
-      setGen(true);
-      await legalCasesService.saveContratos(
-        caseId,
-        contratos.map((c) => ({ id: c.id, reu: c.reu, produto: c.produto, valor: c.valor ?? undefined })),
-      );
-      const res = await legalCasesService.gerarIniciais(caseId);
-      setDone(res.criados);
-      toast.success(`${res.criados} card(s) criado(s) a partir do HISCON — intake arquivado`);
-      onChanged();
+      const novas = mergeContratos(contratos);
+      toast.success(novas ? `HISCON lido — ${novas} contrato(s) adicionado(s). Marque os que quer e clique em Gerar iniciais.` : 'HISCON lido — nada novo além do que já estava listado');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao processar o HISCON');
-    } finally { setHiscon(false); setGen(false); }
+    } finally { setHiscon(false); }
   };
-  // Upload do HISCRE (PDF) — documento COMPLEMENTAR. A IA extrai consignações
-  // RMC/RCC e MESCLA nas linhas (dedupe por banco+produto) pra revisão — nunca
-  // cria cards sozinho (o HISCON é a fonte das iniciais).
+  // Upload do HISCRE (PDF) — complementar. Mesma lógica: popula+deduplica, não cria.
   const onHiscre = async (file?: File | null) => {
     if (!file) return;
     setHiscre(true);
     try {
-      const b64 = await new Promise<string>((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(String(fr.result));
-        fr.onerror = () => reject(new Error('Falha ao ler o arquivo'));
-        fr.readAsDataURL(file);
-      });
-      const { contratos } = await legalCasesService.uploadHiscre(caseId, b64);
+      const { contratos } = await legalCasesService.uploadHiscre(caseId, await fileToB64(file));
       if (!contratos?.length) { toast.info('Nenhuma consignação RMC/RCC ativa encontrada no HISCRE'); return; }
-      const keyOf = (reu: string, produto: string) =>
-        `${reu.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()}|${(produto || '').toLowerCase().trim()}`;
-      let novas = 0;
-      setRows((r) => {
-        const seen = new Set(r.map((x) => keyOf(x.reu, x.produto)));
-        const add = contratos
-          .filter((c) => !seen.has(keyOf(c.reu, c.produto || 'RMC')))
-          .map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' }));
-        novas = add.length;
-        return [...r, ...add];
-      });
+      const novas = mergeContratos(contratos);
       toast.success(novas ? `HISCRE lido — ${novas} consignação(ões) adicionada(s) para revisão` : 'HISCRE lido — nada novo além do que já estava listado');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao processar o HISCRE');
     } finally { setHiscre(false); }
   };
-  const gerar = async () => {
-    const n = payload().length;
-    if (!n) { toast.error('Adicione ao menos um contrato (banco + produto)'); return; }
-    if (!confirm(`Gerar ${n} inicial(is)? O intake será arquivado e cada linha vira um card na fase "Montar inicial".`)) return;
-    setGen(true);
-    try {
-      await legalCasesService.saveContratos(caseId, payload());
-      const res = await legalCasesService.gerarIniciais(caseId);
-      setDone(res.criados);
-      toast.success(`${res.criados} inicial(is) criada(s) — intake arquivado`);
-      onChanged();
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao gerar iniciais'); } finally { setGen(false); }
-  };
-
-  if (done != null) {
-    return (
-      <div className="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/15">
-        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">✓ {done} inicial(is) criada(s)</p>
-        <p className="mt-0.5 text-xs text-emerald-700/80 dark:text-emerald-400/80">Cada uma está na fase “Montar inicial” da raia judicial. Este intake foi arquivado — pode fechar.</p>
-      </div>
-    );
-  }
-
-  const nValid = payload().length;
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Contratos a impugnar</p>
         <div className="flex items-center gap-3">
-          <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${hiscon ? 'opacity-50' : 'cursor-pointer'}`} title="Lê o HISCON e JÁ cria os cards RMC/RCC por banco (arquiva este intake). Cancelar = só carrega pra revisar.">
+          <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${hiscon ? 'opacity-50' : 'cursor-pointer'}`} title="Lê o HISCON e POPULA os contratos RMC/RCC nas linhas (deduplicando). Não cria card nenhum — é só a lista de contratos do cliente.">
             <Upload className="h-3.5 w-3.5" /> {hiscon ? 'Lendo HISCON…' : 'Upar HISCON'}
             <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscon}
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscon(f); }} />
           </label>
-          <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${hiscre ? 'opacity-50' : 'cursor-pointer'}`} title="HISCRE (complementar): lê e ADICIONA as consignações nas linhas pra revisão — não cria cards. Use junto do HISCON pra reforçar o polo passivo.">
+          <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${hiscre ? 'opacity-50' : 'cursor-pointer'}`} title="HISCRE (complementar): lê e ADICIONA as consignações nas linhas (deduplicando) — não cria card.">
             <Upload className="h-3.5 w-3.5" /> {hiscre ? 'Lendo HISCRE…' : 'Upar HISCRE'}
             <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscre}
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscre(f); }} />
@@ -646,7 +639,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
         </div>
       </div>
       <div className="mt-1.5 space-y-2">
-        {rows.length === 0 && <p className="text-xs italic text-zinc-400">Liste cada banco × produto (RMC/RCC). A IA pode sugerir a partir da conversa do cliente.</p>}
+        {rows.length === 0 && <p className="text-xs italic text-zinc-400">Liste cada banco × produto (RMC/RCC), ou upe o HISCON/HISCRE. Esses contratos alimentam o cálculo e a petição inicial.</p>}
         {rows.map((r) => (
           <div key={r.id} className="flex items-center gap-1.5">
             <input value={r.reu} onChange={(e) => setRow(r.id, { reu: e.target.value })} placeholder="Banco (réu)" className={INPUT + ' flex-1'} />
@@ -662,15 +655,56 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button onClick={addRow} className="inline-flex items-center gap-1 rounded border border-dashed border-[#cfe0ed] px-2.5 py-1 text-xs font-medium text-[#005efc] hover:bg-[#005efc]/5 dark:border-zinc-700"><Plus className="h-3.5 w-3.5" /> Adicionar</button>
         <button onClick={salvar} disabled={sav} className="rounded px-2.5 py-1 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">{sav ? 'Salvando…' : 'Salvar'}</button>
-        {phaseKey === 'montar_inicial' && (
-          <button onClick={gerar} disabled={gen || nValid === 0} className="ml-auto inline-flex items-center gap-1 rounded bg-[#005efc] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
-            <ArrowRight className="h-3.5 w-3.5" /> {gen ? 'Gerando…' : `Gerar iniciais (${nValid})`}
-          </button>
-        )}
+        <span className="ml-auto text-[11px] text-zinc-400">A petição inicial é gerada no bloco “Cálculo RMC/RCC” abaixo.</span>
       </div>
-      {phaseKey !== 'montar_inicial' && (
-        <p className="mt-1.5 text-[11px] text-zinc-400">Mova o card para “Montar inicial” para liberar a geração das iniciais (1 card por linha).</p>
-      )}
+    </div>
+  );
+}
+
+// Ações da inicial: upar o JG (justiça gratuita → renda) e GERAR a petição inicial
+// (base no timbrado preenchida com cliente/réu/contrato/cálculo/JG; baixa o .docx).
+// A base (QUITADO/EM ABERTO) é escolhida pelo cálculo.
+function InicialActions({ caseId, jg, onChanged }: { caseId: string; jg: any; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [jgBusy, setJgBusy] = useState(false);
+  const fmtBRL = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+
+  const onJg = async (file?: File | null) => {
+    if (!file) return;
+    setJgBusy(true);
+    try {
+      const b64 = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error('falha')); fr.readAsDataURL(file); });
+      const { jg: r } = await legalCasesService.uploadJg(caseId, b64);
+      toast.success(`JG lido — líquido ${fmtBRL(r.liquido)}${r.anual != null ? `, anual ${fmtBRL(r.anual)}` : ''}`);
+      onChanged();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao ler o JG'); } finally { setJgBusy(false); }
+  };
+
+  const gerar = async () => {
+    setBusy(true);
+    try {
+      const r = await legalCasesService.gerarInicial(caseId);
+      onChanged(); // recarrega a ficha → a inicial aparece na aba Anexos
+      toast.success(`Inicial gerada (base ${r.base === 'quitado' ? 'QUITADO' : 'EM ABERTO'}) — anexada na aba Anexos. Confira as lacunas “[ • ]” antes do protocolo.`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao gerar a inicial');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-[#48626f] dark:text-zinc-400">
+          {jg?.liquido != null ? <>Justiça gratuita: líquido <b>{fmtBRL(jg.liquido)}</b>{jg.anual != null ? <> · anual {fmtBRL(jg.anual)}</> : ''}</> : 'JG: upe o Histórico de Créditos / IR para a renda'}
+        </span>
+        <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'}`} title="Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a seção de justiça gratuita.">
+          <Upload className="h-3.5 w-3.5" /> {jgBusy ? 'Lendo JG…' : 'Upar JG'}
+          <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={jgBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onJg(f); }} />
+        </label>
+      </div>
+      <button onClick={gerar} disabled={busy} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#005efc] px-3 py-1.5 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">
+        <FileText className="h-3.5 w-3.5" /> {busy ? 'Gerando inicial…' : 'Gerar petição inicial (.docx)'}
+      </button>
     </div>
   );
 }
