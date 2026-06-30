@@ -265,6 +265,31 @@ interface Editor {
 }
 const RATEIO_VAZIO: RateioForm = { bruto: '', cliente: '', sucumbencia: '', honorarios: '' };
 
+// ── Ficha do cliente: clicar no nome abre o processo (drawer com o card financeiro) ──
+function useFichaCliente() {
+  const { data: juri } = useQuery({ queryKey: ['jurimetria'], queryFn: () => legalCasesService.jurimetria(), staleTime: 300_000 });
+  const { data: kb } = useQuery({ queryKey: ['kanban', 'fin'], queryFn: () => legalCasesService.kanban(), staleTime: 300_000 });
+  const phases = useMemo(() => kb?.phases ?? [], [kb]);
+  const clienteCaseId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of juri?.rows ?? []) { const k = normNome(r.cliente || ''); if (k && r.id && !m.has(k)) m.set(k, r.id); }
+    return m;
+  }, [juri]);
+  const caseDoCliente = (nome?: string | null) => clienteCaseId.get(normNome(nome || '')) ?? null;
+  const [openCaseId, setOpenCaseId] = useState<string | null>(null);
+  return { caseDoCliente, openCaseId, setOpenCaseId, phases };
+}
+type Ficha = ReturnType<typeof useFichaCliente>;
+// span clicável (não <button>) p/ poder ficar DENTRO de botões de toggle (Honorários/Cobranças)
+function ClienteLink({ nome, ficha, className }: { nome: string; ficha: Ficha; className?: string }) {
+  const cid = ficha.caseDoCliente(nome);
+  if (!cid) return <span className={className}>{nome}</span>;
+  return <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); ficha.setOpenCaseId(cid); }} className={`${className ?? ''} cursor-pointer text-[#228BE6] hover:underline`} title="Abrir ficha do cliente">{nome}</span>;
+}
+function FichaDrawerMount({ ficha }: { ficha: Ficha }) {
+  return ficha.openCaseId ? <CaseDetailDrawer caseId={ficha.openCaseId} phases={ficha.phases} onClose={() => ficha.setOpenCaseId(null)} /> : null;
+}
+
 function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
@@ -297,16 +322,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     if (!nome) return '';
     return advogados.find((a) => normNome(a.name) === normNome(nome))?.id ?? '';
   };
-  // cliente → caseId (p/ abrir a ficha do processo ao clicar no nome)
-  const { data: kb } = useQuery({ queryKey: ['kanban', 'fin'], queryFn: () => legalCasesService.kanban(), staleTime: 300_000 });
-  const phases = useMemo(() => kb?.phases ?? [], [kb]);
-  const clienteCaseId = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const r of juri?.rows ?? []) { const k = normNome(r.cliente || ''); if (k && r.id && !m.has(k)) m.set(k, r.id); }
-    return m;
-  }, [juri]);
-  const caseDoCliente = (nome?: string | null) => clienteCaseId.get(normNome(nome || '')) ?? null;
-  const [openCaseId, setOpenCaseId] = useState<string | null>(null);
+  const ficha = useFichaCliente(); // clicar no nome abre a ficha do processo
   const invalidate = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
 
   const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
@@ -470,13 +486,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                         <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{((!ehLiquidado(st) && t.vencimento) ? t.vencimento : t.data).slice(0, 5)}</span>
                         {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                          {(() => {
-                            const nome = titleCase(t.pagador || t.recebedor || t.party || '') || t.categoria;
-                            const cid = caseDoCliente(t.pagador || t.recebedor || t.party);
-                            return cid
-                              ? <button onClick={() => setOpenCaseId(cid)} className="truncate text-left text-[#228BE6] hover:underline" title="Abrir ficha do cliente">{nome}</button>
-                              : <span className="truncate text-zinc-700 dark:text-zinc-300">{nome}</span>;
-                          })()}
+                          <ClienteLink nome={titleCase(t.pagador || t.recebedor || t.party || '') || t.categoria} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />
                           {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
                           {t.responsavel ? <span className="hidden shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 lg:inline-flex">{t.responsavel.split(' ')[0]}</span> : null}
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
@@ -683,7 +693,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       )}
 
       {importing && <ImportExtratoModal contas={contas} onClose={() => setImporting(false)} />}
-      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />}
+      <FichaDrawerMount ficha={ficha} />
     </Card>
   );
 }
@@ -790,6 +800,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const STATUS_ORDER: StatusFin[] = ['em-dia', 'atencao', 'pontual', 'inativo'];
 
 function HonorariosTab({ data }: { data: FinDashboard }) {
+  const ficha = useFichaCliente();
   const [filtro, setFiltro] = useState<'todos' | StatusFin>('todos');
   const [busca, setBusca] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
@@ -878,7 +889,7 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
                 <button onClick={() => setAberto(exp ? null : c.nome)} className="grid w-full grid-cols-[1fr_auto] items-center gap-2 px-3 py-2 text-left transition hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 sm:grid-cols-[1fr_7rem_5rem_6rem_6rem]">
                   <span className="flex min-w-0 items-center gap-1.5">
                     {exp ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />}
-                    <span className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{c.nome}</span>
+                    <ClienteLink nome={c.nome} ficha={ficha} className="truncate text-sm font-medium" />
                     {c.recorrente && <span className="hidden shrink-0 rounded bg-violet-100 px-1 text-[9px] font-semibold text-violet-600 dark:bg-violet-900/30 sm:inline">recorrente</span>}
                   </span>
                   <span className="text-right text-sm font-semibold tabular-nums text-emerald-600">{brl(c.recebido)}</span>
@@ -912,6 +923,7 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
           {lista.length === 0 && <p className="border-t border-zinc-100 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhum cliente neste filtro.</p>}
         </div>
       </Card>
+      <FichaDrawerMount ficha={ficha} />
     </>
   );
 }
@@ -943,6 +955,7 @@ const STATUS_COB: Record<string, { label: string; badge: string }> = {
 
 function CobrancasTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
+  const ficha = useFichaCliente();
   const { data: cobrancas = [], isLoading } = useQuery({ queryKey: ['financeiro', 'cobrancas'], queryFn: () => financeiroService.listCobrancas() });
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
@@ -1005,7 +1018,7 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
                 <button onClick={() => setAberta(exp ? null : c.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30">
                   {exp ? <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />}
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{c.cliente}<span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.badge}`}>{s.label}</span>{c.fonte === 'asaas' && <span className="rounded-full bg-[#0052FF]/10 px-2 py-0.5 text-[10px] font-semibold text-[#0052FF]">ASAAS</span>}</p>
+                    <p className="flex items-center gap-2 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100"><ClienteLink nome={c.cliente} ficha={ficha} className="truncate" /><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.badge}`}>{s.label}</span>{c.fonte === 'asaas' && <span className="rounded-full bg-[#0052FF]/10 px-2 py-0.5 text-[10px] font-semibold text-[#0052FF]">ASAAS</span>}</p>
                     <p className="truncate text-xs text-zinc-400">{c.descricao ? `${c.descricao} · ` : ''}{c.pagas}/{c.nParcelas} pagas · total {brl(c.valorTotal)}{c.proximaParcela ? ` · próx. ${c.proximaParcela.vencimento}` : ''}</p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -1075,6 +1088,7 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
           </div>
         </div>
       )}
+      <FichaDrawerMount ficha={ficha} />
     </>
   );
 }
