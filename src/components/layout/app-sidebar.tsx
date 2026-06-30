@@ -31,6 +31,7 @@ import {
   CircleDot,
   Tags,
   CircleDollarSign,
+  Building2,
   Calculator,
   Users,
   BarChart3,
@@ -257,6 +258,7 @@ export function AppSidebar() {
           {/* ADMINISTRATIVO — Financeiro, Contabilidade, etc. */}
           <div className="mt-3">
             <NavSection label="Administrativo" defaultOpen={false}>
+              <NavItem href="/escritorio" icon={Building2} label="Escritório" />
               <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
               <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
             </NavSection>
