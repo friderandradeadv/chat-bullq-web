@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
+import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -296,6 +297,16 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     if (!nome) return '';
     return advogados.find((a) => normNome(a.name) === normNome(nome))?.id ?? '';
   };
+  // cliente → caseId (p/ abrir a ficha do processo ao clicar no nome)
+  const { data: kb } = useQuery({ queryKey: ['kanban', 'fin'], queryFn: () => legalCasesService.kanban(), staleTime: 300_000 });
+  const phases = useMemo(() => kb?.phases ?? [], [kb]);
+  const clienteCaseId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of juri?.rows ?? []) { const k = normNome(r.cliente || ''); if (k && r.id && !m.has(k)) m.set(k, r.id); }
+    return m;
+  }, [juri]);
+  const caseDoCliente = (nome?: string | null) => clienteCaseId.get(normNome(nome || '')) ?? null;
+  const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
 
   const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
@@ -459,7 +470,13 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                         <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{((!ehLiquidado(st) && t.vencimento) ? t.vencimento : t.data).slice(0, 5)}</span>
                         {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                          <span className="truncate text-zinc-700 dark:text-zinc-300">{titleCase(t.pagador || t.recebedor || t.party || '') || t.categoria}</span>
+                          {(() => {
+                            const nome = titleCase(t.pagador || t.recebedor || t.party || '') || t.categoria;
+                            const cid = caseDoCliente(t.pagador || t.recebedor || t.party);
+                            return cid
+                              ? <button onClick={() => setOpenCaseId(cid)} className="truncate text-left text-[#228BE6] hover:underline" title="Abrir ficha do cliente">{nome}</button>
+                              : <span className="truncate text-zinc-700 dark:text-zinc-300">{nome}</span>;
+                          })()}
                           {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
                           {t.responsavel ? <span className="hidden shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 lg:inline-flex">{t.responsavel.split(' ')[0]}</span> : null}
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
@@ -666,6 +683,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       )}
 
       {importing && <ImportExtratoModal contas={contas} onClose={() => setImporting(false)} />}
+      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />}
     </Card>
   );
 }
