@@ -5,9 +5,11 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Building2, Target, Eye, Heart, Users, Briefcase, BookOpen, ListChecks,
-  Pencil, Plus, Trash2, Save, X, Loader2, User as UserIcon, ChevronDown, Lock,
+  Pencil, Plus, Trash2, Save, X, Loader2, ChevronDown, Lock,
+  Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
+  CheckCircle2, Circle, Sparkles,
 } from 'lucide-react';
-import { escritorioService, type Escritorio, type Cargo } from '@/features/escritorio/services/escritorio.service';
+import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -25,6 +27,17 @@ const HUB_MODULES: { key: string; label: string }[] = [
   { key: 'configuracoes', label: 'Configurações' },
 ];
 const HUB_MODULE_KEYS = HUB_MODULES.map((m) => m.key);
+
+// Ícone + cor por manual (cicla conforme a ordem) — deixa a leitura mais visual.
+const MANUAL_STYLES = [
+  { icon: Compass, cor: '#7048E8' },
+  { icon: MessageSquare, cor: '#228BE6' },
+  { icon: CalendarClock, cor: '#F08C00' },
+  { icon: FolderKanban, cor: '#15AABF' },
+  { icon: Calculator, cor: '#E64980' },
+  { icon: ShieldCheck, cor: '#02883C' },
+];
+const VALOR_CORES = ['#7048E8', '#228BE6', '#F08C00', '#15AABF', '#E64980', '#02883C'];
 
 const CARD = 'rounded-2xl border border-zinc-200/80 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900';
 const INPUT = 'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100';
@@ -113,6 +126,15 @@ export default function EscritorioPage() {
           )}
         </div>
 
+        {/* Navegação rápida entre seções */}
+        <div className="sticky top-0 z-10 -mx-6 mb-1 mt-4 flex flex-wrap gap-2 border-b border-zinc-200/70 bg-[#fafafa]/90 px-6 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
+          {([['sec-cultura', 'Cultura', Heart, '#e64980'], ['sec-organograma', 'Organograma', Users, '#228BE6'], ['sec-manuais', 'Manuais', BookOpen, '#15AABF'], ['sec-onboarding', 'Onboarding', ListChecks, '#02883C']] as const).map(([id, label, Icon, cor]) => (
+            <a key={id} href={`#${id}`} className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
+              <Icon className="h-3.5 w-3.5" style={{ color: cor }} /> {label}
+            </a>
+          ))}
+        </div>
+
         {/* Minha área */}
         <div className="mt-5 rounded-2xl border border-[#7048E8]/30 bg-[#7048E8]/5 p-5 dark:border-[#7048E8]/30 dark:bg-[#7048E8]/10">
           <p className={LABEL}>Sua área</p>
@@ -126,7 +148,7 @@ export default function EscritorioPage() {
         </div>
 
         {/* Cultura: missão / visão / valores */}
-        <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Cultura</h2>
+        <h2 id="sec-cultura" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Cultura</h2>
         <div className="mt-2 grid gap-3 sm:grid-cols-3">
           {([['missao', 'Missão', Target, '#228BE6'], ['visao', 'Visão', Eye, '#7048E8']] as const).map(([k, label, Icon, cor]) => (
             <div key={k} className={CARD}>
@@ -143,10 +165,13 @@ export default function EscritorioPage() {
             {editing ? (
               <textarea value={(cur.cultura.valores ?? []).join('\n')} onChange={(e) => setCultura({ valores: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} className={`${INPUT} mt-2`} placeholder={'Um valor por linha\nÉtica\nExcelência'} />
             ) : (
-              <ul className="mt-2 space-y-1">
-                {(cur.cultura.valores ?? []).length === 0 && <li className="text-sm text-zinc-400">—</li>}
-                {(cur.cultura.valores ?? []).map((v, i) => <li key={i} className="flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="h-1.5 w-1.5 rounded-full bg-[#02883C]" /> {v}</li>)}
-              </ul>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(cur.cultura.valores ?? []).length === 0 && <span className="text-sm text-zinc-400">—</span>}
+                {(cur.cultura.valores ?? []).map((v, i) => {
+                  const c = VALOR_CORES[i % VALOR_CORES.length];
+                  return <span key={i} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${c}14`, color: c }}><Heart className="h-3 w-3" /> {v}</span>;
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -162,7 +187,7 @@ export default function EscritorioPage() {
         )}
 
         {/* Organograma — árvore interativa (clica num cargo pra ver o que se espera + as pessoas) */}
-        <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Users className="h-4 w-4 text-[#228BE6]" /> Organograma</h2>
+        <h2 id="sec-organograma" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Users className="h-4 w-4 text-[#228BE6]" /> Organograma</h2>
         <div className={`${CARD} mt-2`}>
           {(cur.cargos ?? []).length === 0 ? (
             <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — adicione abaixo.' : '.'}</p>
@@ -274,26 +299,20 @@ export default function EscritorioPage() {
         )}
 
         {/* Manuais */}
-        <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><BookOpen className="h-4 w-4 text-[#15AABF]" /> Manuais &amp; procedimentos</h2>
-        <div className="mt-2 space-y-3">
-          {(cur.manuais ?? []).map((mn, i) => (
+        <h2 id="sec-manuais" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><BookOpen className="h-4 w-4 text-[#15AABF]" /> Manuais &amp; procedimentos</h2>
+        {!editing && (cur.manuais ?? []).length > 0 && <p className="mt-1 text-xs text-zinc-400">Toque num manual para abrir.</p>}
+        <div className="mt-2 space-y-2">
+          {editing ? (cur.manuais ?? []).map((mn, i) => (
             <div key={mn.id} className={CARD}>
-              {editing ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <input value={mn.titulo} onChange={(e) => updateList(setDraft, 'manuais', i, { titulo: e.target.value })} placeholder="Título do manual" className={`${INPUT} font-semibold`} />
-                    <button onClick={() => removeList(setDraft, 'manuais', i)} className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                  <textarea value={mn.conteudo} onChange={(e) => updateList(setDraft, 'manuais', i, { conteudo: e.target.value })} rows={4} placeholder="Passo a passo, regras, link…" className={INPUT} />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input value={mn.titulo} onChange={(e) => updateList(setDraft, 'manuais', i, { titulo: e.target.value })} placeholder="Título do manual" className={`${INPUT} font-semibold`} />
+                  <button onClick={() => removeList(setDraft, 'manuais', i)} className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
                 </div>
-              ) : (
-                <>
-                  <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{mn.titulo}</p>
-                  {mn.conteudo && <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">{mn.conteudo}</p>}
-                </>
-              )}
+                <textarea value={mn.conteudo} onChange={(e) => updateList(setDraft, 'manuais', i, { conteudo: e.target.value })} rows={4} placeholder="Passo a passo, regras, link…" className={INPUT} />
+              </div>
             </div>
-          ))}
+          )) : (cur.manuais ?? []).map((mn, i) => <ManualCard key={mn.id} manual={mn} index={i} defaultOpen={i === 0} />)}
           {(cur.manuais ?? []).length === 0 && !editing && <p className="text-sm text-zinc-400">Nenhum manual ainda.</p>}
           {editing && (
             <button onClick={() => setDraft((d) => ({ ...d, manuais: [...(d.manuais ?? []), { id: rid(), titulo: '', conteudo: '' }] }))} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-medium text-[#228BE6] hover:bg-[#228BE6]/5 dark:border-zinc-700"><Plus className="h-4 w-4" /> Adicionar manual</button>
@@ -301,7 +320,7 @@ export default function EscritorioPage() {
         </div>
 
         {/* Onboarding */}
-        <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><ListChecks className="h-4 w-4 text-[#02883C]" /> Onboarding do novo integrante</h2>
+        <h2 id="sec-onboarding" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><ListChecks className="h-4 w-4 text-[#02883C]" /> Onboarding do novo integrante</h2>
         <div className={`${CARD} mt-2`}>
           {editing ? (
             <textarea
@@ -312,17 +331,103 @@ export default function EscritorioPage() {
               className={INPUT}
             />
           ) : (
-            <ul className="space-y-1.5">
-              {(cur.onboarding ?? []).length === 0 && <li className="text-sm text-zinc-400">Sem checklist de onboarding ainda.</li>}
-              {(cur.onboarding ?? []).map((o) => (
-                <li key={o.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200"><span className="flex h-4 w-4 items-center justify-center rounded border border-zinc-300 dark:border-zinc-600"><UserIcon className="hidden" /></span> {o.texto}</li>
-              ))}
-            </ul>
+            <OnboardingChecklist itens={cur.onboarding ?? []} userId={user?.id} />
           )}
         </div>
 
         <div className="h-10" />
       </div>
+    </div>
+  );
+}
+
+// Formata uma linha do manual: destaca "Rótulo:" em negrito quando houver.
+function fmtLinha(s: string) {
+  const m = s.match(/^([^:]{2,32}):\s+(.+)/);
+  return m ? <><strong className="font-semibold text-zinc-700 dark:text-zinc-200">{m[1]}:</strong> {m[2]}</> : s;
+}
+
+// Corpo do manual: vira tópicos (•), passos numerados (1.) ou parágrafos — nada de bloco corrido.
+function ManualBody({ linhas, cor }: { linhas: string[]; cor: string }) {
+  return (
+    <div className="space-y-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+      {linhas.map((line, i) => {
+        if (line.startsWith('•')) {
+          return <div key={i} className="flex gap-2"><span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: cor }} /><span>{fmtLinha(line.replace(/^•\s*/, ''))}</span></div>;
+        }
+        const num = line.match(/^(\d+)\.\s+(.*)/);
+        if (num) {
+          return <div key={i} className="flex items-start gap-2.5"><span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white" style={{ background: cor }}>{num[1]}</span><span>{fmtLinha(num[2])}</span></div>;
+        }
+        return <p key={i}>{fmtLinha(line)}</p>;
+      })}
+    </div>
+  );
+}
+
+// Manual em accordion: ícone colorido + prévia de 1 linha; abre ao clicar.
+function ManualCard({ manual, index, defaultOpen }: { manual: Manual; index: number; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  const { icon: Icon, cor } = MANUAL_STYLES[index % MANUAL_STYLES.length];
+  const linhas = useMemo(() => manual.conteudo.split('\n').map((l) => l.trim()).filter(Boolean), [manual.conteudo]);
+  const teaser = linhas[0] ?? '';
+  return (
+    <div className={`overflow-hidden rounded-2xl border bg-white transition dark:bg-zinc-900 ${open ? 'border-zinc-200 shadow-sm dark:border-zinc-700' : 'border-zinc-200/80 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700'}`}>
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: `${cor}1A`, color: cor }}><Icon className="h-5 w-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-zinc-800 dark:text-zinc-100">{manual.titulo}</span>
+          {!open && teaser && <span className="mt-0.5 line-clamp-1 block text-xs text-zinc-400">{teaser}</span>}
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-300 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="border-t border-zinc-100 px-4 pb-4 pt-3.5 dark:border-zinc-800">
+          <ManualBody linhas={linhas} cor={cor} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Checklist de onboarding interativo: marca/desmarca + barra de progresso (salva por pessoa no navegador).
+function OnboardingChecklist({ itens, userId }: { itens: OnboardingItem[]; userId?: string }) {
+  const key = `bullq:onboarding:${userId ?? 'anon'}`;
+  const [done, setDone] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try { const raw = localStorage.getItem(key); if (raw) setDone(new Set(JSON.parse(raw))); } catch { /* ignora */ }
+  }, [key]);
+  const toggle = (id: string) => setDone((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    try { localStorage.setItem(key, JSON.stringify([...next])); } catch { /* ignora */ }
+    return next;
+  });
+  if (itens.length === 0) return <p className="text-sm text-zinc-400">Sem checklist de onboarding ainda.</p>;
+  const feitos = itens.filter((o) => done.has(o.id)).length;
+  const pct = Math.round((feitos / itens.length) * 100);
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-3">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="h-full rounded-full bg-[#02883C] transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="shrink-0 text-xs font-semibold text-zinc-500">{feitos}/{itens.length}</span>
+      </div>
+      {feitos === itens.length && <p className="mb-3 flex items-center gap-1.5 rounded-lg bg-[#02883C]/10 px-3 py-2 text-sm font-medium text-[#02883C]"><Sparkles className="h-4 w-4" /> Onboarding completo! Bem-vindo(a) ao time. 🎉</p>}
+      <ul className="space-y-0.5">
+        {itens.map((o) => {
+          const ok = done.has(o.id);
+          return (
+            <li key={o.id}>
+              <button onClick={() => toggle(o.id)} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                {ok ? <CheckCircle2 className="h-5 w-5 shrink-0 text-[#02883C]" /> : <Circle className="h-5 w-5 shrink-0 text-zinc-300 dark:text-zinc-600" />}
+                <span className={`text-sm ${ok ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-200'}`}>{o.texto}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
