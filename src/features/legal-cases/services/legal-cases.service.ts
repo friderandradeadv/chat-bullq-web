@@ -158,6 +158,8 @@ export interface ListCasesQuery {
   responsibleId?: string;
   area?: string;
   search?: string;
+  /** true → só processos com nº CNJ (ajuizados). Esconde leads/pré-judiciais. */
+  hasCnj?: boolean;
 }
 
 function qs(params: object): string {
@@ -368,6 +370,16 @@ export const legalCasesService = {
   async remove(id: string): Promise<void> {
     await api.delete(`/legal-cases/${id}`);
   },
+  /** Ações em massa na aba Processos (seleção). 'delete' = arquivar (lixeira). */
+  async bulk(payload: {
+    ids: string[];
+    action: 'delete' | 'status' | 'responsible';
+    status?: CaseStatus;
+    responsibleId?: string;
+  }): Promise<{ ok: boolean; count: number }> {
+    const { data } = await api.post('/legal-cases/bulk', payload);
+    return data.data ?? data;
+  },
   async resumoAtendimento(id: string): Promise<{ resumo: string; geradoEm: string }> {
     const { data } = await api.post(`/legal-cases/${id}/resumo-atendimento`);
     return data.data ?? data;
@@ -425,8 +437,9 @@ export const legalCasesService = {
   /** Gera a petição inicial de RMC/RCC (base no timbrado preenchida) → .docx base64. */
   async gerarInicial(
     id: string,
+    produto?: string,
   ): Promise<{ base: string; fileName: string; valorCausa: number; documentId: string; docxBase64: string }> {
-    const { data } = await api.post(`/legal-cases/${id}/inicial/gerar`);
+    const { data } = await api.post(`/legal-cases/${id}/inicial/gerar${produto ? `?produto=${encodeURIComponent(produto)}` : ''}`);
     return data.data ?? data;
   },
   /** Salva no processo o cálculo de RMC/RCC escolhido (e define o valor da causa). */

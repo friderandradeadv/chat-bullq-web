@@ -129,6 +129,7 @@ export default function CalculadoraRmcPage() {
   // via window (client-only) p/ não exigir Suspense boundary do useSearchParams.
   const [caseId, setCaseId] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [salvouOk, setSalvouOk] = useState(false);
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     setCaseId(sp.get('case'));
@@ -1056,20 +1057,28 @@ export default function CalculadoraRmcPage() {
                                 taxaConversao: parseValor(form.taxaConversao),
                               },
                             });
-                            toast.success('Cálculo salvo no processo — valor da causa definido');
-                            window.history.back();
+                            // Avisa a aba do card (BroadcastChannel) p/ ele recarregar
+                            // sozinho e mostrar o cálculo + liberar "Gerar inicial".
+                            try { new BroadcastChannel('bullq-calculo').postMessage({ caseId }); } catch { /* sem suporte */ }
+                            setSalvouOk(true);
+                            toast.success('Cálculo salvo no processo — volte para a aba do processo (pode fechar esta).');
                           } catch (e: any) {
                             toast.error(e?.response?.data?.message || 'Erro ao salvar no processo');
                           } finally {
                             setSalvando(false);
                           }
                         }}
-                        disabled={salvando}
+                        disabled={salvando || salvouOk}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#005efc] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
                       >
                         {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                        {salvando ? 'Salvando…' : 'Salvar no processo (valor da causa)'}
+                        {salvando ? 'Salvando…' : salvouOk ? 'Salvo no processo ✓' : 'Salvar no processo (valor da causa)'}
                       </button>
+                      {salvouOk && (
+                        <p className="mt-2 text-center text-xs text-emerald-600 dark:text-emerald-400">
+                          ✓ Salvo. Volte para a aba do processo — o cálculo já aparece lá e o botão “Gerar petição inicial” está liberado. Pode fechar esta aba.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

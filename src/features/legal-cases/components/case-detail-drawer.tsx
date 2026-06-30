@@ -89,6 +89,20 @@ export function CaseDetailDrawer({
   });
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
+  // A calculadora (aberta em outra aba) avisa por BroadcastChannel quando salva o
+  // cálculo deste processo → recarrega a ficha sozinha (mostra o cálculo + libera
+  // "Gerar inicial"), sem precisar fechar/reabrir o card.
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const ch = new BroadcastChannel('bullq-calculo');
+    ch.onmessage = (e) => {
+      if (e.data?.caseId === caseId) {
+        qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
+      }
+    };
+    return () => ch.close();
+  }, [caseId, qc]);
+
   const onChangeResp = async (userId: string) => {
     if (!c) return;
     try {
@@ -256,7 +270,10 @@ export function CaseDetailDrawer({
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cálculo RMC/RCC</p>
                       <a
                         href={`/juridico/calculos/rmc-rcc?case=${c.id}&cliente=${encodeURIComponent(cliente?.name ?? c.title ?? '')}&banco=${encodeURIComponent(adversa?.name ?? '')}&tipo=${encodeURIComponent(cleanArea(c.area) ?? '')}`}
+                        target="_blank"
+                        rel="noopener"
                         className="inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline"
+                        title="Abre a calculadora em nova aba (este card continua aberto). Ao salvar lá, o cálculo aparece aqui sozinho."
                       >
                         <Calculator className="h-3.5 w-3.5" /> Calcular RMC/RCC
                       </a>
@@ -665,7 +682,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
 // (base no timbrado preenchida com cliente/réu/contrato/cálculo/JG; baixa o .docx).
 // A base (QUITADO/EM ABERTO) é escolhida pelo cálculo.
 function InicialActions({ caseId, jg, onChanged }: { caseId: string; jg: any; onChanged: () => void }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [jgBusy, setJgBusy] = useState(false);
   const fmtBRL = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
@@ -680,17 +697,21 @@ function InicialActions({ caseId, jg, onChanged }: { caseId: string; jg: any; on
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao ler o JG'); } finally { setJgBusy(false); }
   };
 
-  const gerar = async () => {
-    setBusy(true);
+  const gerar = async (produto?: string) => {
+    setBusy(produto || 'all');
     try {
-      const r = await legalCasesService.gerarInicial(caseId);
+      const r = await legalCasesService.gerarInicial(caseId, produto);
       onChanged(); // recarrega a ficha → a inicial aparece na aba Anexos
-      toast.success(`Inicial gerada (base ${r.base === 'quitado' ? 'QUITADO' : 'EM ABERTO'}) — anexada na aba Anexos. Confira as lacunas “[ • ]” antes do protocolo.`);
+      toast.success(`Inicial${produto ? ` de ${produto}` : ''} gerada (base ${r.base === 'quitado' ? 'QUITADO' : 'EM ABERTO'}) — anexada na aba Anexos. Confira as lacunas “[ • ]” antes do protocolo.`);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao gerar a inicial');
-    } finally { setBusy(false); }
+    } finally { setBusy(null); }
   };
 
+  // Escolha SEMPRE disponível: gerar a inicial só de RMC ou só de RCC,
+  // independente de quantos contratos o HISCON trouxe. Cada botão gera a peça
+  // daquele produto (usa o contrato do produto se houver; senão o réu do card).
+  const OPCOES = ['RMC', 'RCC'];
   return (
     <div className="mt-2 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -702,9 +723,14 @@ function InicialActions({ caseId, jg, onChanged }: { caseId: string; jg: any; on
           <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={jgBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onJg(f); }} />
         </label>
       </div>
-      <button onClick={gerar} disabled={busy} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#005efc] px-3 py-1.5 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">
-        <FileText className="h-3.5 w-3.5" /> {busy ? 'Gerando inicial…' : 'Gerar petição inicial (.docx)'}
-      </button>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Gerar petição inicial — escolha o produto</p>
+      <div className="flex gap-1.5">
+        {OPCOES.map((p) => (
+          <button key={p} onClick={() => gerar(p)} disabled={!!busy} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#005efc] px-3 py-2 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">
+            <FileText className="h-3.5 w-3.5" /> {busy === p ? 'Gerando…' : `Inicial ${p}`}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
