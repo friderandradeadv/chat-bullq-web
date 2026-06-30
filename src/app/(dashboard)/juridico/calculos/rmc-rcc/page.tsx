@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import {
   calculadoraRmcService,
@@ -130,6 +131,7 @@ export default function CalculadoraRmcPage() {
   const [caseId, setCaseId] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [salvouOk, setSalvouOk] = useState(false);
+  const [autoLoad, setAutoLoad] = useState<string | null>(null); // status do auto-carregamento do HISCON/HISCRE
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     setCaseId(sp.get('case'));
@@ -352,6 +354,44 @@ export default function CalculadoraRmcPage() {
     }
   };
 
+  // Auto-carrega o HISCON/HISCRE que JÁ foram upados no card — evita re-upar. Quando
+  // aberta pelo card (?case=), busca os arquivos guardados (metadata.docs), extrai e
+  // aplica o contrato do produto pedido (?tipo). Roda uma vez no mount.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const cid = sp.get('case');
+    const want = (sp.get('tipo') || '').toUpperCase();
+    if (!cid) return;
+    const keyToFile = async (storageKey: string, name: string): Promise<File> => {
+      const { data } = await api.get(`/uploads/${storageKey}`, { responseType: 'blob' });
+      return new File([data], name, { type: 'application/pdf' });
+    };
+    (async () => {
+      try {
+        const caso: any = await legalCasesService.get(cid);
+        const docs = ((caso?.metadata as any)?.docs ?? {}) as { hiscon?: string; hiscre?: string };
+        if (!docs.hiscon && !docs.hiscre) return;
+        setAutoLoad('Carregando HISCON/HISCRE do processo…');
+        if (docs.hiscon) {
+          const r = await calculadoraRmcService.extrairHiscon(await keyToFile(docs.hiscon, 'HISCON.pdf'));
+          const cs = (r.contratos ?? []).filter((c) => c.tipo === 'RMC' || c.tipo === 'RCC');
+          const pick = cs.find((c) => c.tipo === want) ?? cs[0];
+          if (pick) aplicarHiscon(pick);
+          else if (cs.length) setHisconContratos(cs);
+        }
+        if (docs.hiscre) {
+          const r = await calculadoraRmcService.extrairHiscre(await keyToFile(docs.hiscre, 'HISCRE.pdf'));
+          const cs = r.contratos ?? [];
+          const pick = cs.find((c) => c.tipo === want) ?? cs[0];
+          if (pick) aplicarHiscre(pick);
+          else if (cs.length) setHiscreContratos(cs);
+        }
+      } catch { /* sem docs guardados / falha → usuário upa manual */ }
+      finally { setAutoLoad(null); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const podeCalcular =
     parseValor(form.valorEmprestimo) > 0 &&
     parseValor(form.taxaConversao) > 0 &&
@@ -534,6 +574,13 @@ export default function CalculadoraRmcPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Auto-carregamento do HISCON/HISCRE vindos do card (sem re-upar) */}
+              {autoLoad && (
+                <div className="mb-2 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300">
+                  <Loader2 className="h-4 w-4 animate-spin" /> {autoLoad} (reaproveitando os arquivos do processo)
+                </div>
+              )}
 
               {/* Upload HISCON */}
               <input ref={hisconRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickHiscon} />
@@ -1061,7 +1108,11 @@ export default function CalculadoraRmcPage() {
                             // sozinho e mostrar o cálculo + liberar "Gerar inicial".
                             try { new BroadcastChannel('bullq-calculo').postMessage({ caseId }); } catch { /* sem suporte */ }
                             setSalvouOk(true);
-                            toast.success('Cálculo salvo no processo — volte para a aba do processo (pode fechar esta).');
+                            toast.success('Cálculo salvo no processo ✓');
+                            // A aba foi aberta via window.open pelo card → fecha sozinha
+                            // (volta o foco pro card, que já se atualizou). Se não fechar
+                            // (aberta direto pela URL), fica o banner de sucesso abaixo.
+                            setTimeout(() => { try { window.close(); } catch { /* */ } }, 700);
                           } catch (e: any) {
                             toast.error(e?.response?.data?.message || 'Erro ao salvar no processo');
                           } finally {

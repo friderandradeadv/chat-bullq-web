@@ -268,15 +268,14 @@ export function CaseDetailDrawer({
                   <div className="mt-4">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cálculo RMC/RCC</p>
-                      <a
-                        href={`/juridico/calculos/rmc-rcc?case=${c.id}&cliente=${encodeURIComponent(cliente?.name ?? c.title ?? '')}&banco=${encodeURIComponent(adversa?.name ?? '')}&tipo=${encodeURIComponent(cleanArea(c.area) ?? '')}`}
-                        target="_blank"
-                        rel="noopener"
+                      <button
+                        type="button"
+                        onClick={() => window.open(`/juridico/calculos/rmc-rcc?case=${c.id}&cliente=${encodeURIComponent(cliente?.name ?? c.title ?? '')}&banco=${encodeURIComponent(adversa?.name ?? '')}&tipo=${encodeURIComponent(cleanArea(c.area) ?? '')}`, '_blank')}
                         className="inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline"
-                        title="Abre a calculadora em nova aba (este card continua aberto). Ao salvar lá, o cálculo aparece aqui sozinho."
+                        title="Abre a calculadora em nova aba já com o HISCON/HISCRE do processo carregados. Ao salvar, o cálculo aparece aqui e a aba fecha sozinha."
                       >
                         <Calculator className="h-3.5 w-3.5" /> Calcular RMC/RCC
-                      </a>
+                      </button>
                     </div>
                     {(() => {
                       const calc = (c.metadata as any)?.calculo;
