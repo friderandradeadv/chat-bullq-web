@@ -9,6 +9,7 @@ import {
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
   Award, Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
+  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet,
 } from 'lucide-react';
 import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
@@ -53,6 +54,7 @@ export default function EscritorioPage() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
   const [treeSig, setTreeSig] = useState({ n: 0, open: true });
+  const [viewCargoId, setViewCargoId] = useState<string | null>(null); // detalhe do cargo (leitura)
   const [editCargoId, setEditCargoId] = useState<string | null>(null); // modal de cargo (org chart)
   const [perfilUserId, setPerfilUserId] = useState<string | null>(null); // modal de perfil de uma pessoa
   const saveM = useMutation({
@@ -208,6 +210,7 @@ export default function EscritorioPage() {
                 canEdit={data.canEdit}
                 onExpandAll={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))}
                 onCollapseAll={() => setTreeSig((s) => ({ n: s.n + 1, open: false }))}
+                onOpenNode={(id) => setViewCargoId(id)}
                 onEditNode={data.canEdit ? (id) => setEditCargoId(id) : undefined}
                 onAddRoot={data.canEdit ? () => {
                   const id = rid();
@@ -347,6 +350,23 @@ export default function EscritorioPage() {
 
         <div className="h-10" />
       </div>
+
+      {/* Modal: detalhe do cargo (leitura, qualquer pessoa) */}
+      {viewCargoId && (() => {
+        const c = cargoById[viewCargoId];
+        if (!c) return null;
+        const pessoas = grupos.get(c.id) ?? [];
+        return (
+          <CargoDetalheModal
+            cargo={c}
+            pessoas={pessoas}
+            canEdit={data.canEdit}
+            onClose={() => setViewCargoId(null)}
+            onEdit={() => { setViewCargoId(null); setEditCargoId(c.id); }}
+            onVerPerfil={(uid) => { setViewCargoId(null); setPerfilUserId(uid); }}
+          />
+        );
+      })()}
 
       {/* Modal: editar cargo + responsáveis (a partir do organograma) */}
       {editCargoId && (
@@ -488,10 +508,10 @@ const ORG_CSS = `
 .org-tree li > ul::before { content:''; position:absolute; top:0; left:50%; width:0; height:24px; border-left:2px solid currentColor; }
 `;
 
-type OrgShared = { cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; sig: { n: number; open: boolean }; canEdit?: boolean; onEditNode?: (id: string) => void };
+type OrgShared = { cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; sig: { n: number; open: boolean }; canEdit?: boolean; onEditNode?: (id: string) => void; onOpenNode?: (id: string) => void };
 
 // Organograma top-down: raiz no topo, ramifica pra baixo com conectores coloridos por ramo.
-function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onExpandAll, onCollapseAll, onAddRoot }: OrgShared & { onExpandAll: () => void; onCollapseAll: () => void; onAddRoot?: () => void }) {
+function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpenNode, onExpandAll, onCollapseAll, onAddRoot }: OrgShared & { onExpandAll: () => void; onCollapseAll: () => void; onAddRoot?: () => void }) {
   const byId = useMemo(() => Object.fromEntries(cargos.map((c) => [c.id, c])), [cargos]);
   const roots = useMemo(() => cargos.filter((c) => !c.parentId || !byId[c.parentId]), [cargos, byId]);
   const [zoom, setZoom] = useState(1);
@@ -516,7 +536,7 @@ function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onExpa
         <div className="flex min-w-max flex-col items-center gap-10 px-8 py-7" style={{ zoom } as React.CSSProperties}>
           {roots.map((r) => (
             <ul key={r.id} className="org-tree" style={{ color: ROOT_COLOR }}>
-              <OrgNodeTop cargo={r} depth={0} color={ROOT_COLOR} shared={{ cargos, grupos, meuCargoId, sig, canEdit, onEditNode }} />
+              <OrgNodeTop cargo={r} depth={0} color={ROOT_COLOR} shared={{ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpenNode }} />
             </ul>
           ))}
         </div>
@@ -529,7 +549,7 @@ function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onExpa
 }
 
 function OrgNodeTop({ cargo, depth, color, shared }: { cargo: Cargo; depth: number; color: string; shared: OrgShared }) {
-  const { cargos, grupos, meuCargoId, sig, canEdit, onEditNode } = shared;
+  const { cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpenNode } = shared;
   const children = useMemo(() => cargos.filter((c) => c.parentId === cargo.id), [cargos, cargo.id]);
   const people = grupos.get(cargo.id) ?? [];
   const isMine = cargo.id === meuCargoId;
@@ -558,18 +578,22 @@ function OrgNodeTop({ cargo, depth, color, shared }: { cargo: Cargo; depth: numb
   return (
     <li style={{ color }}>
       <div className="group relative z-[1]">
-        <button
-          onClick={() => hasChildren && setCollapsed((c) => !c)}
-          title={tip || undefined}
-          className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 font-semibold shadow-sm transition ${hasChildren ? 'cursor-pointer hover:-translate-y-px hover:shadow-md' : 'cursor-default'} ${depth === 0 ? 'text-base' : 'text-[13px]'} ${cardCls} ${isMine ? 'ring-2 ring-offset-2 ring-[#7048E8] dark:ring-offset-zinc-900' : ''}`}
+        <div
+          onClick={() => onOpenNode?.(cargo.id)}
+          title={tip || 'Ver detalhes do cargo'}
+          className={`flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 font-semibold shadow-sm transition hover:-translate-y-px hover:shadow-md ${depth === 0 ? 'text-base' : 'text-[13px]'} ${cardCls} ${isMine ? 'ring-2 ring-offset-2 ring-[#7048E8] dark:ring-offset-zinc-900' : ''}`}
           style={cardStyle}
         >
           {depth >= 2 && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />}
           <span>{cargo.nome || 'Cargo'}</span>
           {isMine && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${depth === 1 ? 'bg-white/25 text-white' : 'bg-[#7048E8] text-white'}`}>você</span>}
           {people.length > 0 && <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold ${countCls}`}>{people.length}</span>}
-          {hasChildren && <ChevronDown className={`h-3.5 w-3.5 shrink-0 opacity-50 transition-transform ${collapsed ? '-rotate-90' : ''}`} />}
-        </button>
+          {hasChildren && (
+            <button onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }} title={collapsed ? 'Abrir ramo' : 'Recolher ramo'} className="-mr-1.5 ml-0.5 rounded p-0.5 hover:bg-black/10">
+              <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+            </button>
+          )}
+        </div>
         {canEdit && onEditNode && (
           <button onClick={(e) => { e.stopPropagation(); onEditNode(cargo.id); }} title="Editar cargo e responsáveis" className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 opacity-0 shadow-sm transition group-hover:opacity-100 hover:text-[#228BE6] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"><Pencil className="h-3 w-3" /></button>
         )}
@@ -632,6 +656,17 @@ function PerfilHero({ nome, avatarUrl, info, cargo, canEdit, onEdit }: { nome: s
                 <div><p className="text-2xl font-extrabold text-zinc-800 dark:text-zinc-100">{valor}</p><p className="text-[11px] font-medium text-zinc-500">{label}</p></div>
               </div>
             ))}
+          </div>
+        )}
+        {(cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios || cargo?.custoFirma) && (
+          <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3.5 dark:bg-[#02883C]/10">
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> Como você é remunerado</p>
+            <div className="mt-2 space-y-2.5">
+              <SecaoLista icon={Wallet} titulo="Salário / bolsa & benefícios" itens={cargo?.remuneracao} cor="#02883C" />
+              <SecaoLista icon={CircleDollarSign} titulo="Honorários" itens={cargo?.honorarios} cor="#02883C" />
+              {cargo?.divisaoHonorarios && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Divisão:</span> {cargo.divisaoHonorarios}</p>}
+              {cargo?.custoFirma && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Custo da firma:</span> {cargo.custoFirma}</p>}
+            </div>
           </div>
         )}
         {info?.destaque && (
@@ -701,19 +736,112 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose
   );
 }
 
+// Mini-card de informação (horário, duração, carreira).
+function Mini({ icon: Icon, label, valor }: { icon: React.ElementType; label: string; valor: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-200/70 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+      <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400"><Icon className="h-3 w-3" /> {label}</p>
+      <p className="mt-0.5 text-sm font-medium leading-snug text-zinc-700 dark:text-zinc-200">{valor}</p>
+    </div>
+  );
+}
+
+// Seção de lista com ícone (seleção, atribuições, remuneração…).
+function SecaoLista({ icon: Icon, titulo, itens, cor }: { icon: React.ElementType; titulo: string; itens?: string[]; cor: string }) {
+  if (!itens || itens.length === 0) return null;
+  return (
+    <div>
+      <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: cor }}><Icon className="h-3.5 w-3.5" /> {titulo}</p>
+      <ul className="mt-1.5 space-y-1">
+        {itens.map((t, i) => <li key={i} className="flex gap-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300"><span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: cor }} /><span>{fmtLinha(t)}</span></li>)}
+      </ul>
+    </div>
+  );
+}
+
+// Detalhe rico de um cargo (leitura): resumo, pessoas, horário/duração/carreira, seleção, atribuições, financeiro.
+function CargoDetalhe({ cargo, pessoas, onVerPerfil }: { cargo: Cargo; pessoas: Member[]; onVerPerfil?: (uid: string) => void }) {
+  const temFin = !!(cargo.remuneracao?.length || cargo.honorarios?.length || cargo.custoFirma || cargo.divisaoHonorarios);
+  return (
+    <div className="space-y-4">
+      {cargo.vertical && <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"><Briefcase className="h-3 w-3" /> {cargo.vertical}</span>}
+      {(cargo.resumo || cargo.descricao) && <p className="text-[15px] font-medium leading-relaxed text-zinc-700 dark:text-zinc-200">{cargo.resumo || cargo.descricao}</p>}
+
+      {pessoas.length > 0 && (
+        <div>
+          <p className={LABEL}>Quem está aqui</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {pessoas.map((m) => (
+              <button key={m.user.id} onClick={() => onVerPerfil?.(m.user.id)} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#7048E8] text-[8px] font-bold text-white">{iniciaisDe(m.user.name)}</span>{m.user.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(cargo.horario || cargo.duracao || cargo.progride) && (
+        <div className="grid gap-2 sm:grid-cols-3">
+          {cargo.horario && <Mini icon={Clock} label="Horário" valor={cargo.horario} />}
+          {cargo.duracao && <Mini icon={CalendarDays} label="Duração" valor={cargo.duracao} />}
+          {cargo.progride && <Mini icon={TrendingUp} label="Carreira" valor={cargo.progride} />}
+        </div>
+      )}
+
+      <SecaoLista icon={ClipboardList} titulo="Como se entra" itens={cargo.selecao} cor="#228BE6" />
+      <SecaoLista icon={ListChecks} titulo="O que faz no dia a dia" itens={cargo.atribuicoes} cor="#7048E8" />
+
+      {temFin && (
+        <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3.5 dark:bg-[#02883C]/10">
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> Remuneração & financeiro</p>
+          <div className="mt-2 space-y-3">
+            <SecaoLista icon={Wallet} titulo="Salário / bolsa & benefícios" itens={cargo.remuneracao} cor="#02883C" />
+            <SecaoLista icon={CircleDollarSign} titulo="Honorários" itens={cargo.honorarios} cor="#02883C" />
+            {cargo.divisaoHonorarios && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Divisão:</span> {cargo.divisaoHonorarios}</p>}
+            {cargo.custoFirma && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Custo da firma:</span> {cargo.custoFirma}</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CargoDetalheModal({ cargo, pessoas, canEdit, onClose, onEdit, onVerPerfil }: { cargo: Cargo; pessoas: Member[]; canEdit?: boolean; onClose: () => void; onEdit: () => void; onVerPerfil: (uid: string) => void }) {
+  return (
+    <ModalShell
+      title={cargo.nome || 'Cargo'}
+      onClose={onClose}
+      footer={<div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Fechar</button>{canEdit && <button onClick={onEdit} className={SAVE_BTN}><Pencil className="h-4 w-4" /> Editar</button>}</div>}
+    >
+      <CargoDetalhe cargo={cargo} pessoas={pessoas} onVerPerfil={onVerPerfil} />
+    </ModalShell>
+  );
+}
+
 // Modal de edição de cargo + responsáveis (aberto pelo lápis no organograma).
 function CargoModal({ cargoId, data, members, saving, onClose, onSave, onEditPerfil }: { cargoId: string; data: Escritorio; members: Member[]; saving: boolean; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void; onEditPerfil: (uid: string) => void }) {
   const cargo = (data.cargos ?? []).find((c) => c.id === cargoId);
   const [nome, setNome] = useState(cargo?.nome ?? '');
+  const [vertical, setVertical] = useState(cargo?.vertical ?? '');
+  const [resumo, setResumo] = useState(cargo?.resumo ?? '');
   const [descricao, setDescricao] = useState(cargo?.descricao ?? '');
   const [parentId, setParentId] = useState(cargo?.parentId ?? '');
+  const [horario, setHorario] = useState(cargo?.horario ?? '');
+  const [duracao, setDuracao] = useState(cargo?.duracao ?? '');
+  const [progride, setProgride] = useState(cargo?.progride ?? '');
+  const [selecao, setSelecao] = useState((cargo?.selecao ?? []).join('\n'));
+  const [atribuicoes, setAtribuicoes] = useState((cargo?.atribuicoes ?? []).join('\n'));
+  const [remuneracao, setRemuneracao] = useState((cargo?.remuneracao ?? []).join('\n'));
+  const [honorarios, setHonorarios] = useState((cargo?.honorarios ?? []).join('\n'));
+  const [custoFirma, setCustoFirma] = useState(cargo?.custoFirma ?? '');
   const [divisao, setDivisao] = useState(cargo?.divisaoHonorarios ?? '');
   const [assigned, setAssigned] = useState<Set<string>>(() => new Set(members.filter((m) => data.pessoas?.[m.user.id]?.cargoId === cargoId).map((m) => m.user.id)));
   if (!cargo) return null;
   const outros = (data.cargos ?? []).filter((c) => c.id !== cargoId);
+  const linhas = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
   const toggle = (uid: string) => setAssigned((s) => { const n = new Set(s); if (n.has(uid)) n.delete(uid); else n.add(uid); return n; });
   const salvar = () => onSave((d) => {
-    const cargos = (d.cargos ?? []).map((c) => (c.id === cargoId ? { ...c, nome, descricao, parentId: parentId || null, divisaoHonorarios: divisao } : c));
+    const cargos = (d.cargos ?? []).map((c) => (c.id === cargoId ? { ...c, nome, vertical, resumo, descricao, parentId: parentId || null, horario, duracao, progride, selecao: linhas(selecao), atribuicoes: linhas(atribuicoes), remuneracao: linhas(remuneracao), honorarios: linhas(honorarios), custoFirma, divisaoHonorarios: divisao } : c));
     const pessoas = { ...(d.pessoas ?? {}) };
     for (const m of members) {
       const uid = m.user.id;
@@ -738,16 +866,35 @@ function CargoModal({ cargoId, data, members, saving, onClose, onSave, onEditPer
       onClose={onClose}
       footer={<><button onClick={remover} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"><Trash2 className="h-4 w-4" /> Remover</button><div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Cancelar</button><button onClick={salvar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button></div></>}
     >
-      <div><p className={LABEL}>Nome do cargo</p><input value={nome} onChange={(e) => setNome(e.target.value)} className={`${INPUT} mt-1 font-semibold`} /></div>
-      <div><p className={LABEL}>O que esperamos / o que faz</p><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Responsabilidades, entregas, do que cuida…" className={`${INPUT} mt-1`} /></div>
       <div className="grid grid-cols-2 gap-2">
-        <div><p className={LABEL}>Reporta a</p>
+        <div><p className={LABEL}>Nome do cargo</p><input value={nome} onChange={(e) => setNome(e.target.value)} className={`${INPUT} mt-1 font-semibold`} /></div>
+        <div><p className={LABEL}>Vertical / trilha</p><input value={vertical} onChange={(e) => setVertical(e.target.value)} placeholder="ex.: Advocacia, Sociedade, Back Office" className={`${INPUT} mt-1`} /></div>
+      </div>
+      <div><p className={LABEL}>Resumo (1 linha)</p><input value={resumo} onChange={(e) => setResumo(e.target.value)} placeholder="ex.: Advogado em início de carreira, atua sob revisão de um sócio." className={`${INPUT} mt-1`} /></div>
+      <div><p className={LABEL}>O que esperamos / o que faz</p><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} placeholder="Resumo das responsabilidades…" className={`${INPUT} mt-1`} /></div>
+      <div className="grid grid-cols-2 gap-2">
+        <div><p className={LABEL}>Reporta a (organograma)</p>
           <select value={parentId ?? ''} onChange={(e) => setParentId(e.target.value)} className={`${INPUT} mt-1`}>
             <option value="">— topo —</option>
             {outros.map((c) => <option key={c.id} value={c.id}>{c.nome || '(sem nome)'}</option>)}
           </select>
         </div>
-        <div><p className={LABEL}>Divisão de honorários</p><input value={divisao} onChange={(e) => setDivisao(e.target.value)} placeholder="ex.: 10% do êxito" className={`${INPUT} mt-1`} /></div>
+        <div><p className={LABEL}>Progressão de carreira</p><input value={progride} onChange={(e) => setProgride(e.target.value)} placeholder="ex.: Vem de Estagiário Interno · Vai p/ Pleno" className={`${INPUT} mt-1`} /></div>
+        <div><p className={LABEL}>Horário</p><input value={horario} onChange={(e) => setHorario(e.target.value)} placeholder="ex.: Integral (10h–19h)" className={`${INPUT} mt-1`} /></div>
+        <div><p className={LABEL}>Duração no cargo</p><input value={duracao} onChange={(e) => setDuracao(e.target.value)} placeholder="ex.: 1 ano, depois avaliação" className={`${INPUT} mt-1`} /></div>
+      </div>
+      <div><p className={LABEL}>Como se entra (seleção) — um item por linha</p><textarea value={selecao} onChange={(e) => setSelecao(e.target.value)} rows={3} placeholder={'Currículo: histórico, idiomas, fit com a firma\nProva escrita\nEntrevista com sócios\nLabor Day (1 dia na rotina)'} className={`${INPUT} mt-1`} /></div>
+      <div><p className={LABEL}>O que faz no dia a dia — um item por linha</p><textarea value={atribuicoes} onChange={(e) => setAtribuicoes(e.target.value)} rows={3} placeholder={'Uma atribuição por linha'} className={`${INPUT} mt-1`} /></div>
+      <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3 dark:bg-[#02883C]/10">
+        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> Remuneração & financeiro</p>
+        <div className="mt-2 space-y-2">
+          <div><p className={LABEL}>Salário / bolsa & benefícios — um por linha</p><textarea value={remuneracao} onChange={(e) => setRemuneracao(e.target.value)} rows={2} placeholder={'Salário-base (CLT)\nVale-transporte\nSeguro jurídico'} className={`${INPUT} mt-1`} /></div>
+          <div><p className={LABEL}>Honorários (percentuais) — um por linha</p><textarea value={honorarios} onChange={(e) => setHonorarios(e.target.value)} rows={2} placeholder={'40% dos honorários iniciais de quem captar e atuar\n50% da taxa de manutenção'} className={`${INPUT} mt-1`} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><p className={LABEL}>Divisão de honorários (resumo)</p><input value={divisao} onChange={(e) => setDivisao(e.target.value)} placeholder="ex.: até 40% do êxito" className={`${INPUT} mt-1`} /></div>
+            <div><p className={LABEL}>Custo da firma / cota</p><input value={custoFirma} onChange={(e) => setCustoFirma(e.target.value)} placeholder="ex.: sem custo / cota mensal" className={`${INPUT} mt-1`} /></div>
+          </div>
+        </div>
       </div>
       <div>
         <p className={LABEL}>Responsáveis neste cargo</p>

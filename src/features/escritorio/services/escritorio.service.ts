@@ -7,6 +7,17 @@ export interface Cargo {
   parentId?: string | null; // cargo acima na hierarquia (organograma em árvore)
   divisaoHonorarios?: string; // sensível — só sócios recebem do backend
   modulos?: string[]; // módulos do Hub que este cargo pode acessar (undefined = todos)
+  // Detalhe do cargo (Plano de Carreira) — tudo opcional, renderizado em seções:
+  vertical?: string;       // trilha: Sociedade / Advocacia / Estágio / Back Office
+  resumo?: string;         // 1 linha do que é o cargo
+  selecao?: string[];      // como entra (currículo, prova, entrevista, labor day…)
+  atribuicoes?: string[];  // o que faz no dia a dia
+  horario?: string;        // jornada
+  duracao?: string;        // tempo no cargo / o que vem depois
+  remuneracao?: string[];  // CLT/bolsa + benefícios (back office / estágio)
+  honorarios?: string[];   // percentuais de honorários (associados / sócios)
+  custoFirma?: string;     // cota / contribuição com a estrutura
+  progride?: string;       // de onde vem · pra onde vai
 }
 export interface Cultura { missao: string; visao: string; valores: string[]; cultura: string }
 export interface Manual { id: string; titulo: string; conteudo: string }
