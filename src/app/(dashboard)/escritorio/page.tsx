@@ -4,15 +4,16 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Building2, Target, Eye, Heart, Users, Briefcase, BookOpen, ListChecks,
+  UserCircle, Target, Eye, Heart, Users, Briefcase, BookOpen, ListChecks,
   Pencil, Plus, Trash2, Save, X, Loader2, ChevronDown, Lock,
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
   Award, Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
-  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move,
+  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera,
 } from 'lucide-react';
 import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
+import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { useAuthStore } from '@/stores/auth-store';
 
 const rid = () => `c_${Math.round(Math.random() * 1e9)}`;
@@ -50,6 +51,8 @@ export default function EscritorioPage() {
   const { user } = useAuthStore();
   const { data = EMPTY, isLoading } = useQuery({ queryKey: ['escritorio'], queryFn: () => escritorioService.get(), staleTime: 60_000 });
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
+  // Financeiro pessoal do usuário logado (a mesma fonte do "Meu financeiro"), trazido pro perfil.
+  const { data: meuFin } = useQuery({ queryKey: ['meu-financeiro-perfil'], queryFn: () => financeiroService.meuFinanceiro(), retry: false, staleTime: 60_000 });
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
@@ -120,10 +123,10 @@ export default function EscritorioPage() {
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Building2 className="h-6 w-6 text-[#7048E8]" />
+            <UserCircle className="h-6 w-6 text-[#7048E8]" />
             <div>
-              <h1 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">Escritório</h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">Organograma, cargos, cultura e manuais — para todo mundo saber exatamente o seu papel aqui.</p>
+              <h1 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">Meu Espaço</h1>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">Seu perfil, seu financeiro, o organograma e a cultura — o seu lugar na Frider Andrade.</p>
             </div>
           </div>
           {data.canEdit && (
@@ -153,6 +156,7 @@ export default function EscritorioPage() {
           avatarUrl={user?.id ? memberByUser[user.id]?.user.avatarUrl ?? null : null}
           info={meuInfo}
           cargo={meuCargo}
+          fin={meuFin}
           canEdit={data.canEdit}
           onEdit={user?.id ? () => setPerfilUserId(user.id!) : undefined}
         />
@@ -574,7 +578,8 @@ function OrgNodeTop({ cargo, depth, color, shared }: { cargo: Cargo; depth: numb
   const people = grupos.get(cargo.id) ?? [];
   const isMine = cargo.id === meuCargoId;
   const hasChildren = children.length > 0;
-  const [collapsed, setCollapsed] = useState(false);
+  // Começa recolhido abaixo da raiz (mostra raiz + verticais) — evita árvore larga demais.
+  const [collapsed, setCollapsed] = useState(depth >= 1);
   const first = useRef(true);
   useEffect(() => { if (first.current) { first.current = false; return; } setCollapsed(!sig.open); }, [sig.n]);
   const tip = [cargo.descricao, people.length ? `Quem: ${people.map((m) => m.user.name).join(', ')}` : ''].filter(Boolean).join('\n\n');
@@ -632,10 +637,39 @@ function OrgNodeTop({ cargo, depth, color, shared }: { cargo: Cargo; depth: numb
 
 function iniciaisDe(n?: string | null) { return (n ?? '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); }
 
-// Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, motivação).
-function PerfilHero({ nome, avatarUrl, info, cargo, canEdit, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; canEdit?: boolean; onEdit?: () => void }) {
+// Redimensiona uma imagem escolhida para até `max`px e devolve um data-URL JPEG leve (upload sem backend).
+function resizeToDataUrl(file: File, max = 320): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Canvas indisponível')); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Imagem inválida')); };
+    img.src = url;
+  });
+}
+
+const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+// Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
+function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; onEdit?: () => void }) {
   const foto = info?.fotoUrl || avatarUrl;
-  const stats = ([[Scale, 'Casos que você cuida', info?.casos], [Heart, 'Vidas que você muda', info?.vidas]] as const).filter(([, , v]) => typeof v === 'number');
+  const r = fin && !fin.vazio ? fin.resumo : undefined;
+  const cs = fin && !fin.vazio ? fin.cs : undefined;
+  const totalAEntrar = r ? (r.aReceber || 0) + (r.minhaParte || 0) + (cs?.prestacao || 0) + (cs?.cumprimentoNosso || 0) : 0;
+  const topClientes = fin && !fin.vazio ? (fin.clientes ?? []).slice(0, 3) : [];
+  const casosN = r?.nCasos ?? info?.casos;
+  const stats = ([[Scale, 'Casos que você cuida', casosN], [Heart, 'Vidas que você muda', info?.vidas]] as const).filter(([, , v]) => typeof v === 'number');
   return (
     <div className="mt-5 overflow-hidden rounded-2xl border border-[#7048E8]/25 bg-gradient-to-br from-[#7048E8]/10 via-white to-[#228BE6]/5 dark:border-[#7048E8]/30 dark:from-[#7048E8]/15 dark:via-zinc-900 dark:to-zinc-900">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
@@ -679,9 +713,34 @@ function PerfilHero({ nome, avatarUrl, info, cargo, canEdit, onEdit }: { nome: s
             ))}
           </div>
         )}
-        {(info?.financeiro?.length || cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios || cargo?.custoFirma) && (
-          <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3.5 dark:bg-[#02883C]/10">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> Seu financeiro</p>
+        {r && (
+          <div className="rounded-2xl border border-[#02883C]/25 bg-[#02883C]/5 p-4 dark:bg-[#02883C]/10">
+            <div className="flex items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> Seu financeiro</p>
+              <span className="text-[11px] text-zinc-400">{r.nCasos ?? 0} casos · {r.nClientes ?? 0} clientes</span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {([['Recebido', r.recebido, 'text-zinc-800 dark:text-zinc-100'], ['A receber', r.aReceber, 'text-zinc-800 dark:text-zinc-100'], ['Sua parte (rateio)', r.minhaParte, 'text-zinc-800 dark:text-zinc-100'], ['Total a entrar', totalAEntrar, 'text-[#02883C]']] as const).map(([label, valor, cls]) => (
+                <div key={label} className="rounded-xl border border-zinc-200/70 bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className={`text-lg font-extrabold ${cls}`}>{brl(valor)}</p>
+                  <p className="text-[10px] font-medium text-zinc-500">{label}</p>
+                </div>
+              ))}
+            </div>
+            {(cs?.prestacao > 0 || cs?.cumprimentoNosso > 0) && (
+              <p className="mt-2 text-[11px] text-zinc-500">Inclui cumprimento de sentença: {brl((cs?.prestacao || 0) + (cs?.cumprimentoNosso || 0))} a entrar dos seus casos.</p>
+            )}
+            {topClientes.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="text-[11px] font-medium text-zinc-400">Quem mais rendeu:</span>
+                {topClientes.map((c: any) => <span key={c.nome} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">{c.nome} · {brl(c.recebido)}</span>)}
+              </div>
+            )}
+          </div>
+        )}
+        {(info?.financeiro?.length || cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios) && (
+          <div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500"><Wallet className="h-3.5 w-3.5" /> Como você é remunerado</p>
             <div className="mt-2 space-y-2.5">
               <SecaoLista icon={Wallet} titulo="Pelo seu contrato" itens={info?.financeiro} cor="#02883C" />
               {!info?.financeiro?.length && <SecaoLista icon={Wallet} titulo="Salário / bolsa & benefícios" itens={cargo?.remuneracao} cor="#02883C" />}
@@ -727,6 +786,13 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose
   const [f, setF] = useState<PessoaInfo>({ ...(atual ?? {}) });
   const set = (p: Partial<PessoaInfo>) => setF((x) => ({ ...x, ...p }));
   const num = (s: string) => (s === '' ? undefined : Math.max(0, parseInt(s, 10) || 0));
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [up, setUp] = useState(false);
+  const enviarFoto = async (file?: File) => {
+    if (!file) return;
+    setUp(true);
+    try { set({ fotoUrl: await resizeToDataUrl(file) }); } catch { toast.error('Não consegui ler essa imagem'); } finally { setUp(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
   const cargo = cargoById[f.cargoId ?? atual?.cargoId ?? ''];
   const foto = f.fotoUrl || avatarUrl;
   const salvar = () => onSave((d) => ({ ...d, pessoas: { ...(d.pessoas ?? {}), [userId]: { ...(d.pessoas?.[userId] ?? {}), ...f } } }));
@@ -740,7 +806,15 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose
         {foto ? <img src={foto} alt={nome} className="h-20 w-20 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7048E8] text-2xl font-bold text-white">{iniciaisDe(nome)}</div>}
         <div className="min-w-0 flex-1"><p className="font-semibold text-zinc-800 dark:text-zinc-100">{nome}</p>{cargo && <p className="text-xs text-zinc-400">{cargo.nome}</p>}</div>
       </div>
-      <div><p className={LABEL}>Foto (URL)</p><input value={f.fotoUrl ?? ''} onChange={(e) => set({ fotoUrl: e.target.value })} placeholder="https://…/foto.jpg" className={`${INPUT} mt-1`} /></div>
+      <div>
+        <p className={LABEL}>Foto</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => enviarFoto(e.target.files?.[0])} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={up} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">{up ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />} Enviar foto do computador</button>
+          {f.fotoUrl && <button type="button" onClick={() => set({ fotoUrl: '' })} className="text-xs font-medium text-rose-500 hover:underline">remover</button>}
+        </div>
+        <input value={f.fotoUrl?.startsWith('data:') ? '' : (f.fotoUrl ?? '')} onChange={(e) => set({ fotoUrl: e.target.value })} placeholder="ou cole uma URL: https://…/foto.jpg" className={`${INPUT} mt-1.5`} />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <div><p className={LABEL}>Conosco desde</p><input value={f.conoscoDesde ?? ''} onChange={(e) => set({ conoscoDesde: e.target.value })} placeholder="ex.: março de 2024" className={`${INPUT} mt-1`} /></div>
         <div><p className={LABEL}>Contratada desde</p><input value={f.contratadaDesde ?? ''} onChange={(e) => set({ contratadaDesde: e.target.value })} placeholder="ex.: 01/03/2024" className={`${INPUT} mt-1`} /></div>
@@ -828,23 +902,32 @@ function CargoDetalhe({ cargo, pessoas, onVerPerfil }: { cargo: Cargo; pessoas: 
   );
 }
 
-// Lista de cargos agrupada por vertical, compacta e clicável (abre o detalhe).
+// Lista de cargos agrupada por vertical, recolhível e clicável (abre o detalhe).
 function CargosPorVertical({ cargos, grupos, onOpen }: { cargos: Cargo[]; grupos: Map<string, Member[]>; onOpen: (id: string) => void }) {
   const verticais: string[] = [];
   for (const c of cargos) if (c.vertical && !verticais.includes(c.vertical)) verticais.push(c.vertical);
+  const [fechadas, setFechadas] = useState<Set<string>>(new Set());
+  const toggle = (v: string) => setFechadas((s) => { const n = new Set(s); if (n.has(v)) n.delete(v); else n.add(v); return n; });
   if (verticais.length === 0) {
     return <p className="mt-2 text-sm text-zinc-400">Nenhum cargo cadastrado. Use o organograma acima para montar a estrutura.</p>;
   }
   return (
-    <div className="mt-2 space-y-5">
+    <div className="mt-2 space-y-3">
       {verticais.map((v, vi) => {
         const cor = BRANCH_COLORS[vi % BRANCH_COLORS.length];
         const itens = cargos.filter((c) => c.vertical === v && c.nome !== v);
         if (itens.length === 0) return null;
+        const aberta = !fechadas.has(v);
         return (
-          <div key={v}>
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: cor }}><span className="h-2 w-2 rounded-full" style={{ background: cor }} /> {v}</p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <div key={v} className="rounded-xl border border-zinc-200/70 bg-white/40 p-2 dark:border-zinc-800 dark:bg-zinc-900/30">
+            <button onClick={() => toggle(v)} className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: cor }} />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: cor }}>{v}</span>
+              <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">{itens.length}</span>
+              <ChevronDown className={`ml-auto h-4 w-4 text-zinc-300 transition-transform ${aberta ? '' : '-rotate-90'}`} />
+            </button>
+            {aberta && (
+            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
               {itens.map((c) => {
                 const ppl = grupos.get(c.id) ?? [];
                 const fin = c.honorarios?.[0] || c.remuneracao?.[0] || c.divisaoHonorarios;
@@ -865,6 +948,7 @@ function CargosPorVertical({ cargos, grupos, onOpen }: { cargos: Cargo[]; grupos
                 );
               })}
             </div>
+            )}
           </div>
         );
       })}
