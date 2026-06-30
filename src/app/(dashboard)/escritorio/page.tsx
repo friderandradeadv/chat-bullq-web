@@ -99,15 +99,18 @@ export default function EscritorioPage() {
   // Salva uma alteração pontual (modais do organograma/perfil) mesclando em cima do salvo.
   const patchEscritorio = (mut: (d: Escritorio) => Escritorio) => saveM.mutate(mut(JSON.parse(JSON.stringify(data))));
 
+  // Time real (esconde logins duplicados/Admin marcados como não-atribuíveis).
+  const team = useMemo(() => members.filter((m) => m.assignable !== false), [members]);
+
   // Organograma: pessoas agrupadas por cargo (+ "sem cargo")
   const grupos = useMemo(() => {
     const byCargo = new Map<string, Member[]>();
-    for (const m of members) {
+    for (const m of team) {
       const cid = cur.pessoas?.[m.user.id]?.cargoId ?? '__sem__';
       (byCargo.get(cid) ?? byCargo.set(cid, []).get(cid)!).push(m);
     }
     return byCargo;
-  }, [members, cur.pessoas]);
+  }, [team, cur.pessoas]);
 
   if (isLoading) return <div className="flex h-full items-center justify-center text-sm text-zinc-400"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando…</div>;
 
@@ -226,7 +229,7 @@ export default function EscritorioPage() {
           <div className={`${CARD} mt-3`}>
             <p className={LABEL}>Definir o cargo de cada pessoa</p>
             <div className="mt-2 space-y-2">
-              {members.map((m) => (
+              {team.map((m) => (
                 <div key={m.user.id} className="flex items-center justify-between gap-2">
                   <span className="text-sm text-zinc-700 dark:text-zinc-200">{m.user.name} <span className="text-xs text-zinc-400">· {m.role === 'AGENT' ? 'associado' : 'sócio'}</span></span>
                   <select
@@ -362,7 +365,7 @@ export default function EscritorioPage() {
         <CargoModal
           cargoId={editCargoId}
           data={data}
-          members={members}
+          members={team}
           saving={saveM.isPending}
           onClose={() => setEditCargoId(null)}
           onSave={patchEscritorio}
