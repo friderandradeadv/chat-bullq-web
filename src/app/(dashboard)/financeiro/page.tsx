@@ -268,7 +268,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
   const mesHoje = useMemo(() => { const p = hojeBR().split('/'); return `${p[2]}-${p[1]}`; }, []);
-  const [mesSel, setMesSel] = useState<string>(mesesDisp.includes(mesHoje) ? mesHoje : (mesesDisp.find((m) => m <= mesHoje) ?? mesesDisp[0] ?? ''));
+  const [mesSel, setMesSel] = useState<string>(''); // "" = Todos os meses (livro-razão inteiro por padrão)
   const [mostrarFuturas, setMostrarFuturas] = useState(false); // parcelas a receber/pagar de meses futuros só sob demanda
   const [aba, setAba] = useState<'todos' | 'receitas' | 'despesas'>('todos');
   const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('todos');
