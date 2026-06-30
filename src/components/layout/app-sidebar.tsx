@@ -258,7 +258,6 @@ export function AppSidebar() {
           {/* ADMINISTRATIVO — Financeiro, Contabilidade, etc. */}
           <div className="mt-3">
             <NavSection label="Administrativo" defaultOpen={false}>
-              <NavItem href="/escritorio" icon={Building2} label="Escritório" />
               <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
               <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
             </NavSection>
@@ -280,6 +279,10 @@ export function AppSidebar() {
           {isDark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
           <span className="flex-1 text-left">{isDark ? 'Modo claro' : 'Modo escuro'}</span>
         </button>
+        {/* Escritório — fixa, acima de Configurações (organograma, cargos, cultura, manuais) */}
+        <div className="mb-1">
+          <NavItem href="/escritorio" icon={Building2} label="Escritório" />
+        </div>
         {/* Configurações — fixa logo abaixo do alternador de tema */}
         <div className="mb-1">
           <NavItem href="/settings" icon={Settings} label="Configurações" />

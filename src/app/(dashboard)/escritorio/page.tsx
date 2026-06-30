@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -26,6 +26,7 @@ export default function EscritorioPage() {
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
+  const [treeSig, setTreeSig] = useState({ n: 0, open: true });
   const saveM = useMutation({
     mutationFn: (d: Escritorio) => escritorioService.save(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['escritorio'] }); toast.success('Escritório atualizado'); setEditing(false); },
@@ -132,12 +133,17 @@ export default function EscritorioPage() {
             <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — adicione abaixo.' : '.'}</p>
           ) : (
             <>
-              <div className="space-y-1">
+              <div className="mb-2 flex items-center justify-end gap-2 text-[11px]">
+                <button onClick={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))} className="font-medium text-[#228BE6] hover:underline">Expandir tudo</button>
+                <span className="text-zinc-300">·</span>
+                <button onClick={() => setTreeSig((s) => ({ n: s.n + 1, open: false }))} className="font-medium text-zinc-500 hover:underline">Recolher tudo</button>
+              </div>
+              <div className="space-y-2">
                 {(cur.cargos ?? []).filter((c) => !c.parentId || !cargoById[c.parentId]).map((c) => (
-                  <OrgNode key={c.id} cargo={c} cargos={cur.cargos ?? []} grupos={grupos} depth={0} meuCargoId={meuCargo?.id} />
+                  <OrgNode key={c.id} cargo={c} cargos={cur.cargos ?? []} grupos={grupos} depth={0} meuCargoId={meuCargo?.id} sig={treeSig} />
                 ))}
               </div>
-              <p className="mt-2.5 text-[11px] text-zinc-400">Clique num cargo para ver o que se espera dele e quem está nele. O seu cargo aparece destacado.</p>
+              <p className="mt-3 text-[11px] text-zinc-400">Clique num cargo para ver o que se espera dele e quem está nele. O seu cargo aparece destacado.</p>
             </>
           )}
         </div>
@@ -256,48 +262,56 @@ export default function EscritorioPage() {
   );
 }
 
-// Nó do organograma (árvore): cargo + chevron, expande pra mostrar "o que se
-// espera / o que faz" + as pessoas, e os cargos-filho recursivamente.
-function OrgNode({ cargo, cargos, grupos, depth, meuCargoId }: { cargo: Cargo; cargos: Cargo[]; grupos: Map<string, Member[]>; depth: number; meuCargoId?: string }) {
+const LEVEL_COLORS = ['#7048E8', '#228BE6', '#F08C00', '#15AABF', '#E64980'];
+
+// Nó do organograma (árvore visual): card colorido por nível, conectores e
+// avatares; expande pra mostrar "O que esperamos" + as pessoas + os subordinados.
+function OrgNode({ cargo, cargos, grupos, depth, meuCargoId, sig }: { cargo: Cargo; cargos: Cargo[]; grupos: Map<string, Member[]>; depth: number; meuCargoId?: string; sig: { n: number; open: boolean } }) {
   const children = useMemo(() => cargos.filter((c) => c.parentId === cargo.id), [cargos, cargo.id]);
   const people = grupos.get(cargo.id) ?? [];
   const isMine = cargo.id === meuCargoId;
+  const cor = LEVEL_COLORS[depth % LEVEL_COLORS.length];
   const [open, setOpen] = useState(depth < 1 || isMine);
-  const iniciais = (n?: string | null) => (n ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const first = useRef(true);
+  useEffect(() => { if (first.current) { first.current = false; return; } setOpen(sig.open); }, [sig.n]);
+  const ini = (n?: string | null) => (n ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   return (
-    <div className={depth > 0 ? 'ml-3 border-l border-zinc-200 pl-3 dark:border-zinc-700' : ''}>
-      <button onClick={() => setOpen((o) => !o)} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ${isMine ? 'bg-[#7048E8]/5 ring-1 ring-[#7048E8]/40' : ''}`}>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? '' : '-rotate-90'}`} />
-        <Briefcase className="h-4 w-4 shrink-0 text-[#f08c00]" />
-        <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{cargo.nome || 'Cargo sem nome'}</span>
-        {isMine && <span className="rounded-full bg-[#7048E8] px-1.5 py-0.5 text-[10px] font-bold text-white">você</span>}
-        <span className="ml-auto flex items-center -space-x-1.5">
-          {people.slice(0, 5).map((m) => <span key={m.user.id} title={m.user.name ?? ''} className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-600 ring-2 ring-white dark:bg-zinc-700 dark:text-zinc-300 dark:ring-zinc-900">{iniciais(m.user.name)}</span>)}
-          {people.length === 0 && <span className="text-[11px] text-zinc-400">vazio</span>}
-          {people.length > 5 && <span className="pl-2.5 text-[11px] text-zinc-400">+{people.length - 5}</span>}
+    <div className={depth > 0 ? "relative ml-5 pl-5 before:absolute before:left-0 before:top-0 before:h-full before:w-px before:bg-zinc-200 before:content-[''] dark:before:bg-zinc-700" : ''}>
+      {depth > 0 && <span className="absolute left-0 top-6 h-px w-5 bg-zinc-200 dark:bg-zinc-700" />}
+      <button onClick={() => setOpen((o) => !o)} className={`group flex w-full items-center gap-2.5 rounded-xl border bg-white px-3 py-2.5 text-left shadow-sm transition hover:-translate-y-px hover:shadow-md dark:bg-zinc-900 ${isMine ? 'border-[#7048E8] ring-2 ring-[#7048E8]/20' : 'border-zinc-200 dark:border-zinc-800'}`} style={{ borderLeftColor: cor, borderLeftWidth: 4 }}>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: `${cor}1A`, color: cor }}><Briefcase className="h-4 w-4" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-bold text-zinc-800 dark:text-zinc-100">{cargo.nome || 'Cargo'}</span>
+            {isMine && <span className="rounded-full bg-[#7048E8] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">você</span>}
+          </span>
+          <span className="text-[11px] text-zinc-400">{people.length} {people.length === 1 ? 'pessoa' : 'pessoas'}{children.length ? ` · ${children.length} subordinado${children.length > 1 ? 's' : ''}` : ''}</span>
         </span>
+        <span className="flex shrink-0 items-center -space-x-2">
+          {people.slice(0, 4).map((m) => <span key={m.user.id} title={m.user.name ?? ''} className="flex h-7 w-7 items-center justify-center rounded-full text-[9px] font-bold text-white ring-2 ring-white dark:ring-zinc-900" style={{ background: cor }}>{ini(m.user.name)}</span>)}
+          {people.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-500 ring-2 ring-white dark:bg-zinc-700 dark:text-zinc-300 dark:ring-zinc-900">+{people.length - 4}</span>}
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-300 transition-transform ${open ? '' : '-rotate-90'}`} />
       </button>
       {open && (
-        <div className="mb-1 ml-6 mt-0.5">
+        <div className="mb-1 mt-1.5 space-y-1.5">
           {cargo.descricao && (
-            <div className="rounded-lg border border-zinc-200/70 bg-zinc-50/70 p-2.5 text-xs leading-relaxed text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/30 dark:text-zinc-300">
-              <span className="font-semibold text-zinc-700 dark:text-zinc-200">O que esperamos / o que faz:</span> {cargo.descricao}
+            <div className="rounded-lg border-l-2 bg-zinc-50/70 px-3 py-2 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/30 dark:text-zinc-300" style={{ borderLeftColor: cor }}>
+              <span className="font-semibold text-zinc-700 dark:text-zinc-200">O que esperamos:</span> {cargo.descricao}
             </div>
           )}
-          {cargo.divisaoHonorarios && (
-            <p className="mt-1.5 inline-block rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">💰 {cargo.divisaoHonorarios}</p>
-          )}
+          {cargo.divisaoHonorarios && <p className="inline-block rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">💰 {cargo.divisaoHonorarios}</p>}
           {people.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {people.map((m) => (
-                <span key={m.user.id} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-zinc-300 text-[8px] font-bold text-zinc-600 dark:bg-zinc-600 dark:text-zinc-200">{iniciais(m.user.name)}</span>
+                <span key={m.user.id} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ background: cor }}>{ini(m.user.name)}</span>
                   {m.user.name}
                 </span>
               ))}
             </div>
           )}
-          {children.length > 0 && <div className="mt-1.5 space-y-1">{children.map((ch) => <OrgNode key={ch.id} cargo={ch} cargos={cargos} grupos={grupos} depth={depth + 1} meuCargoId={meuCargoId} />)}</div>}
+          {children.length > 0 && <div className="space-y-2 pt-1">{children.map((ch) => <OrgNode key={ch.id} cargo={ch} cargos={cargos} grupos={grupos} depth={depth + 1} meuCargoId={meuCargoId} sig={sig} />)}</div>}
         </div>
       )}
     </div>
