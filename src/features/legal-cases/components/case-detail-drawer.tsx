@@ -45,7 +45,6 @@ const fmtSize = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math
 // Fases da raia pré-judicial e detecção de produto bancário (RMC/RCC) — gate da
 // seção "Contratos a impugnar".
 const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
-const isBancarioProduto = (p: string | null) => /RMC|RCC|CONSIGNAD|CART[ÃA]O|BANC|EMPR[ÉE]STIM|PORTABIL|REVISIONAL|TARIFA|SEGURO/i.test(cleanArea(p) ?? '');
 // Cor da etiqueta por produto (igual ao card do kanban).
 const produtoColor = (p: string | null): { bg: string; fg: string } => {
   const s = (cleanArea(p) ?? '').toUpperCase();
@@ -237,8 +236,10 @@ export function CaseDetailDrawer({
                 {/* Parte adversa (editável) */}
                 <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
 
-                {/* Contratos a impugnar + gerar iniciais (intake pré-judicial bancário) */}
-                {phaseKey && PRE_PHASES.has(phaseKey) && isBancarioProduto(c.area) && (
+                {/* Contratos a impugnar + gerar iniciais (intake pré-judicial). Disponível
+                    em TODA fase pré (HISCON/HISCRE são opcionais) — não fica escondido só
+                    porque o card veio com etiqueta genérica/sem produto. */}
+                {phaseKey && PRE_PHASES.has(phaseKey) && (
                   <ContratosImpugnar
                     caseId={c.id}
                     phaseKey={phaseKey}
@@ -510,6 +511,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
   const [gen, setGen] = useState(false);
   const [sav, setSav] = useState(false);
   const [hiscon, setHiscon] = useState(false);
+  const [hiscre, setHiscre] = useState(false);
   const [done, setDone] = useState<number | null>(null);
 
   const setRow = (id: string, patch: Partial<CRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -568,6 +570,37 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
       toast.error(e?.response?.data?.message || 'Erro ao processar o HISCON');
     } finally { setHiscon(false); setGen(false); }
   };
+  // Upload do HISCRE (PDF) — documento COMPLEMENTAR. A IA extrai consignações
+  // RMC/RCC e MESCLA nas linhas (dedupe por banco+produto) pra revisão — nunca
+  // cria cards sozinho (o HISCON é a fonte das iniciais).
+  const onHiscre = async (file?: File | null) => {
+    if (!file) return;
+    setHiscre(true);
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+        fr.readAsDataURL(file);
+      });
+      const { contratos } = await legalCasesService.uploadHiscre(caseId, b64);
+      if (!contratos?.length) { toast.info('Nenhuma consignação RMC/RCC ativa encontrada no HISCRE'); return; }
+      const keyOf = (reu: string, produto: string) =>
+        `${reu.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()}|${(produto || '').toLowerCase().trim()}`;
+      let novas = 0;
+      setRows((r) => {
+        const seen = new Set(r.map((x) => keyOf(x.reu, x.produto)));
+        const add = contratos
+          .filter((c) => !seen.has(keyOf(c.reu, c.produto || 'RMC')))
+          .map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' }));
+        novas = add.length;
+        return [...r, ...add];
+      });
+      toast.success(novas ? `HISCRE lido — ${novas} consignação(ões) adicionada(s) para revisão` : 'HISCRE lido — nada novo além do que já estava listado');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao processar o HISCRE');
+    } finally { setHiscre(false); }
+  };
   const gerar = async () => {
     const n = payload().length;
     if (!n) { toast.error('Adicione ao menos um contrato (banco + produto)'); return; }
@@ -601,6 +634,11 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
             <Upload className="h-3.5 w-3.5" /> {hiscon ? 'Lendo HISCON…' : 'Upar HISCON'}
             <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscon}
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscon(f); }} />
+          </label>
+          <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${hiscre ? 'opacity-50' : 'cursor-pointer'}`} title="HISCRE (complementar): lê e ADICIONA as consignações nas linhas pra revisão — não cria cards. Use junto do HISCON pra reforçar o polo passivo.">
+            <Upload className="h-3.5 w-3.5" /> {hiscre ? 'Lendo HISCRE…' : 'Upar HISCRE'}
+            <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscre}
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscre(f); }} />
           </label>
           <button onClick={sugerir} disabled={sug} className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
             <Sparkles className="h-3.5 w-3.5" /> {sug ? 'Lendo a conversa…' : 'Sugerir com IA'}

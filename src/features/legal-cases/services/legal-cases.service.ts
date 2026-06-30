@@ -184,6 +184,7 @@ export interface KanbanCard {
   cnj: string | null;
   produto: string | null; // 1ª etiqueta (RMC/BPC-LOAS…)
   areaJuridica: string | null; // 2ª etiqueta (Bancário/Previdenciário…)
+  vencemos: string | null; // 'Sim' | 'Não' | 'Parcial' | resultado da sentença → badge
   tags: { id: string; name: string; color: string }[];
   court: string | null;
   value: number | null;
@@ -397,6 +398,16 @@ export const legalCasesService = {
   },
   async sugerirContratos(id: string): Promise<{ contratos: ContratoImpugnar[] }> {
     const { data } = await api.post(`/legal-cases/${id}/contratos/sugerir`);
+    return data.data ?? data;
+  },
+  /** Upload de HISCON (PDF base64) → IA extrai os contratos RMC/RCC ativos. */
+  async uploadHiscon(id: string, pdfBase64: string): Promise<{ contratos: ContratoImpugnar[]; contratosCount: number }> {
+    const { data } = await api.post(`/legal-cases/${id}/contratos/hiscon`, { pdfBase64 });
+    return data.data ?? data;
+  },
+  /** Upload de HISCRE (PDF base64) → IA extrai consignações RMC/RCC (complementar; mescla pra revisão). */
+  async uploadHiscre(id: string, pdfBase64: string): Promise<{ contratos: ContratoImpugnar[]; contratosCount: number }> {
+    const { data } = await api.post(`/legal-cases/${id}/contratos/hiscre`, { pdfBase64 });
     return data.data ?? data;
   },
   async gerarIniciais(
