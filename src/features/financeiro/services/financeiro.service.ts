@@ -129,6 +129,7 @@ export interface Cobranca {
   responsavelId?: string | null; responsavel?: string | null; conta?: string | null;
   status: 'ativa' | 'quitada' | 'cancelada'; criadoEm: string;
   parcelas: Parcela[];
+  asaasId?: string | null; fonte?: string | null;
   // enriquecidos pelo backend
   pago: number; saldoDevedor: number; pagas: number; nAtrasadas: number; valorAtrasado: number;
   proximaParcela: Parcela | null; statusCalc: 'em_dia' | 'atrasada' | 'quitada' | 'cancelada';
@@ -289,6 +290,11 @@ export const financeiroService = {
   },
   async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string }[]): Promise<{ importados: number; duplicados: number; total: number }> {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true });
+    return data.data ?? data;
+  },
+  // ── Cobranças (vendas a prazo) do ASAAS ──
+  async asaasCobrancas(commit: boolean): Promise<{ configurado: boolean; novas: number; atualizadas: number; total?: number; forbidden?: boolean }> {
+    const { data } = await api.post('/financeiro/integracao/asaas/cobrancas', { commit });
     return data.data ?? data;
   },
 };

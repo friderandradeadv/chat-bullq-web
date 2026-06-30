@@ -936,6 +936,7 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
   const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeCobranca(id), onSuccess: () => { inval(); toast.success('Cobrança removida'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
   const pagarM = useMutation({ mutationFn: ({ id, num }: { id: string; num: number }) => financeiroService.pagarParcela(id, num), onSuccess: () => { inval(); toast.success('Parcela baixada (lançada como recebida)'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
   const desfazerM = useMutation({ mutationFn: ({ id, num }: { id: string; num: number }) => financeiroService.desfazerParcela(id, num), onSuccess: () => { inval(); toast.success('Baixa desfeita'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+  const syncAsaasM = useMutation({ mutationFn: () => financeiroService.asaasCobrancas(true), onSuccess: (r) => { if (r.forbidden) { toast.error('Só sócios/admin podem sincronizar.'); return; } if (!r.configurado) { toast.error('ASAAS não configurado no servidor.'); return; } inval(); toast.success(`ASAAS: ${r.novas} nova(s) · ${r.atualizadas} atualizada(s)`); }, onError: (e: any) => toast.error(e?.message || 'Erro ao sincronizar com o ASAAS') });
 
   const tot = useMemo(() => {
     const ativas = cobrancas.filter((c) => c.statusCalc !== 'cancelada');
@@ -952,11 +953,14 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
 
   return (
     <>
-      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-blue-50 to-white p-5 dark:border-zinc-800 dark:from-blue-900/15 dark:to-zinc-900">
-        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><CreditCard className="h-5 w-5 text-[#228BE6]" /> Cobranças de honorários parcelados</h2>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
-          Como no Asaas: cadastre o contrato do cliente (valor total + parcelas + 1º vencimento) e acompanhe o <strong>saldo devedor real</strong>, parcelas em aberto e atrasadas. Ao baixar uma parcela, ela vira automaticamente um <strong>honorário recebido</strong> no livro-razão.
-        </p>
+      <div className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-blue-50 to-white p-5 dark:border-zinc-800 dark:from-blue-900/15 dark:to-zinc-900">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><CreditCard className="h-5 w-5 text-[#228BE6]" /> Cobranças de honorários parcelados</h2>
+          <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+            Espelha as <strong>vendas a prazo do ASAAS</strong> (atualiza sozinho de hora em hora) e também aceita contratos cadastrados na mão. Acompanhe o <strong>saldo devedor real</strong>, parcelas em aberto e atrasadas. Ao baixar uma parcela manual, ela vira <strong>honorário recebido</strong> no livro-razão.
+          </p>
+        </div>
+        <button onClick={() => syncAsaasM.mutate()} disabled={syncAsaasM.isPending} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#0052FF] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{syncAsaasM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Sincronizar ASAAS</button>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -982,7 +986,7 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
                 <button onClick={() => setAberta(exp ? null : c.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30">
                   {exp ? <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />}
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{c.cliente}<span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.badge}`}>{s.label}</span></p>
+                    <p className="flex items-center gap-2 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{c.cliente}<span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.badge}`}>{s.label}</span>{c.fonte === 'asaas' && <span className="rounded-full bg-[#0052FF]/10 px-2 py-0.5 text-[10px] font-semibold text-[#0052FF]">ASAAS</span>}</p>
                     <p className="truncate text-xs text-zinc-400">{c.descricao ? `${c.descricao} · ` : ''}{c.pagas}/{c.nParcelas} pagas · total {brl(c.valorTotal)}{c.proximaParcela ? ` · próx. ${c.proximaParcela.vencimento}` : ''}</p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -1010,9 +1014,11 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
                             <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/25 dark:text-amber-300">Em aberto</span>
                           )}
                           <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(p.valor)}</span>
-                          {p.status === 'paga'
-                            ? <button onClick={() => desfazerM.mutate({ id: c.id, num: p.num })} disabled={desfazerM.isPending} title="Desfazer baixa" className="rounded p-1 text-zinc-300 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
-                            : <button onClick={() => pagarM.mutate({ id: c.id, num: p.num })} disabled={pagarM.isPending} title="Dar baixa (lançar recebido)" className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700">Baixar</button>}
+                          {c.fonte === 'asaas'
+                            ? <span className="w-7 shrink-0 text-center text-[9px] text-zinc-300" title="Status sincronizado do ASAAS — o recebimento entra no caixa automaticamente">ⓘ</span>
+                            : p.status === 'paga'
+                              ? <button onClick={() => desfazerM.mutate({ id: c.id, num: p.num })} disabled={desfazerM.isPending} title="Desfazer baixa" className="rounded p-1 text-zinc-300 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                              : <button onClick={() => pagarM.mutate({ id: c.id, num: p.num })} disabled={pagarM.isPending} title="Dar baixa (lançar recebido)" className="rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-700">Baixar</button>}
                         </div>
                       ))}
                     </div>
