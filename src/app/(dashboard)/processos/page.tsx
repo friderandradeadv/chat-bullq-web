@@ -388,7 +388,7 @@ function CaseRow({ c, selected, onToggle, onChange }: { c: CaseListItem; selecte
           <div className="min-w-0">
             <Link
               href={`/processos/${c.id}`}
-              className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline"
+              className="text-sm font-medium text-zinc-800 dark:text-zinc-100 hover:text-[#228BE6] hover:underline"
             >
               {c.title}
             </Link>
@@ -419,7 +419,7 @@ function CaseRow({ c, selected, onToggle, onChange }: { c: CaseListItem; selecte
         )}
       </td>
       <td className="px-3 py-4 align-top">
-        <p className="text-sm text-zinc-700">{c.area ?? '—'}</p>
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">{c.area ?? '—'}</p>
         {c.court && <p className="text-xs text-zinc-400">{c.court}</p>}
       </td>
       <td className="px-3 py-4 align-top whitespace-nowrap text-sm text-zinc-500">
@@ -528,7 +528,7 @@ function IconBtn({
     <button
       title={title}
       onClick={onClick}
-      className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700"
+      className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
     >
       {children}
     </button>
@@ -571,7 +571,7 @@ function CreateCaseDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-50 w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 text-zinc-800 shadow-2xl">
+      <div className="relative z-50 w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 text-zinc-800 shadow-2xl dark:bg-zinc-900 dark:text-zinc-100">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium text-zinc-700">Novo processo</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700">
@@ -651,7 +651,7 @@ function CreateCaseDialog({
 
 // Reaproveitados pelas outras telas jurídicas (estilo claro Astrea).
 export const inputCls =
-  'h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-[#228BE6]';
+  'h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
 
 export function Field({
   label,
