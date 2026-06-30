@@ -1553,25 +1553,21 @@ function parseExtrato(text: string): { data: string; valor: number; descricao: s
   return out;
 }
 
-// ── Integração ASAAS: puxa o extrato direto da API e cria os lançamentos ──
+// ── Integração ASAAS: reconcilia pagamentos (a receber/recebido) + taxas/cartão ──
 function AsaasImport() {
   const qc = useQueryClient();
-  const hoje = useMemo(() => toISOInput(hojeBR()), []);
-  const inicioMes = useMemo(() => { const p = hojeBR().split('/'); return `${p[2]}-${p[1]}-01`; }, []);
-  const [desde, setDesde] = useState(inicioMes);
-  const [ate, setAte] = useState(hoje);
   const [prev, setPrev] = useState<import('@/features/financeiro/services/financeiro.service').AsaasPreview | null>(null);
   const { data: status } = useQuery({ queryKey: ['asaas', 'status'], queryFn: () => financeiroService.asaasStatus(), staleTime: 600_000 });
 
   const previewM = useMutation({
-    mutationFn: () => financeiroService.asaasPreview(desde, ate),
+    mutationFn: () => financeiroService.asaasPreview(),
     onSuccess: (r) => { setPrev(r); if (!r.configurado) toast.error('ASAAS não configurado no servidor.'); },
     onError: (e: any) => toast.error(e?.message || 'Erro ao consultar o ASAAS'),
   });
   const importM = useMutation({
-    mutationFn: () => financeiroService.asaasImportar(desde, ate),
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s) do ASAAS`); previewM.mutate(); },
-    onError: (e: any) => toast.error(e?.message || 'Erro ao importar do ASAAS'),
+    mutationFn: () => financeiroService.asaasImportar(),
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); setPrev(r); toast.success(`ASAAS sincronizado: ${r.novos ?? 0} novos · ${r.atualizados ?? 0} atualizados`); },
+    onError: (e: any) => toast.error(e?.message || 'Erro ao sincronizar com o ASAAS'),
   });
 
   if (status && !status.configurado) {
@@ -1584,44 +1580,19 @@ function AsaasImport() {
   }
 
   return (
-    <Card title="Importar do ASAAS (extrato → caixa)" sub="sincroniza sozinho de hora em hora (pagamentos, taxas e compras viram lançamentos, sem duplicar). Use abaixo para puxar um período específico na hora.">
-      <div className="flex flex-wrap items-end gap-3">
-        <div><label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-400">De</label><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
-        <div><label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-400">Até</label><input type="date" value={ate} onChange={(e) => setAte(e.target.value)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
+    <Card title="ASAAS → caixa (recebimentos e a receber)" sub="sincroniza sozinho de hora em hora: cada cobrança vira um lançamento (a receber se pendente, recebido se paga); taxas e compras viram despesa. Sem duplicar.">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={() => importM.mutate()} disabled={importM.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052FF] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownCircle className="h-4 w-4" />} Sincronizar agora</button>
         <button onClick={() => previewM.mutate()} disabled={previewM.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:border-[#0052FF] hover:text-[#0052FF] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{previewM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Pré-visualizar</button>
-        {prev?.configurado && (prev.novos ?? 0) > 0 && (
-          <button onClick={() => importM.mutate()} disabled={importM.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052FF] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownCircle className="h-4 w-4" />} Importar {prev.novos} novo(s)</button>
-        )}
         {typeof prev?.saldo === 'number' && <span className="ml-auto text-xs text-zinc-400">Saldo ASAAS: <strong className="text-zinc-600 dark:text-zinc-300">{brl2(prev.saldo)}</strong></span>}
       </div>
 
       {prev?.configurado && (
-        <div className="mt-3">
-          <div className="grid gap-2 sm:grid-cols-4">
-            <MiniStat label="Novos a importar" value={String(prev.novos ?? 0)} hint={`${prev.total ?? 0} no extrato`} accent="#0052FF" />
-            <MiniStat label="Receitas (novos)" value={brl(prev.receitas ?? 0)} hint="pagamentos recebidos" accent="#2F9E44" />
-            <MiniStat label="Despesas (novos)" value={brl(prev.despesas ?? 0)} hint="taxas + compras" accent="#E03131" />
-            <MiniStat label="Já importados" value={String(prev.jaImportados ?? 0)} hint={`${prev.ignorados ?? 0} ignorados (transf.)`} accent="#868E96" />
-          </div>
-          {(prev.amostra?.length ?? 0) > 0 && (
-            <div className="mt-3 overflow-x-auto scrollbar-thin">
-              <table className="w-full text-sm">
-                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1 font-medium">Data</th><th className="px-2 py-1 font-medium">Categoria</th><th className="px-2 py-1 font-medium">Quem</th><th className="px-2 py-1 text-right font-medium">Valor</th></tr></thead>
-                <tbody>
-                  {prev.amostra!.map((a, i) => (
-                    <tr key={i} className="border-t border-zinc-100 dark:border-zinc-800">
-                      <td className="px-2 py-1 tabular-nums text-zinc-500">{a.data}</td>
-                      <td className="px-2 py-1 text-zinc-700 dark:text-zinc-200">{a.categoria}</td>
-                      <td className="px-2 py-1 text-zinc-500">{a.party || '—'}</td>
-                      <td className={`px-2 py-1 text-right font-semibold tabular-nums ${a.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(a.valor)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {(prev.novos ?? 0) > (prev.amostra?.length ?? 0) && <p className="mt-1.5 text-[11px] text-zinc-400">…e mais {(prev.novos ?? 0) - (prev.amostra?.length ?? 0)} lançamento(s).</p>}
-            </div>
-          )}
-          {(prev.novos ?? 0) === 0 && <p className="mt-2 text-sm text-zinc-400">Nada novo nesse intervalo — tudo já importado ou só transferências (ignoradas).</p>}
+        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          <MiniStat label="A receber (pendentes)" value={brl(prev.aReceber ?? 0)} hint="cobranças em aberto" accent="#F59F00" />
+          <MiniStat label="Recebido" value={brl(prev.recebido ?? 0)} hint="pagamentos quitados" accent="#2F9E44" />
+          <MiniStat label="Despesas (taxas/cartão)" value={brl(prev.despesas ?? 0)} hint="últimos 120 dias" accent="#E03131" />
+          <MiniStat label="Lançamentos" value={`${prev.novos ?? 0} novo(s)`} hint={`${prev.atualizados ?? 0} atualizado(s)${(prev.removidos ?? 0) ? ` · ${prev.removidos} removido(s)` : ''}`} accent="#0052FF" />
         </div>
       )}
     </Card>

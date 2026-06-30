@@ -275,12 +275,12 @@ export const financeiroService = {
     const { data } = await api.get('/financeiro/integracao/asaas/status');
     return data.data ?? data;
   },
-  async asaasPreview(desde?: string, ate?: string): Promise<AsaasPreview> {
-    const { data } = await api.get('/financeiro/integracao/asaas/preview', { params: { desde, ate } });
+  async asaasPreview(): Promise<AsaasPreview> {
+    const { data } = await api.get('/financeiro/integracao/asaas/preview');
     return data.data ?? data;
   },
-  async asaasImportar(desde?: string, ate?: string): Promise<{ configurado: boolean; importados: number; total?: number }> {
-    const { data } = await api.post('/financeiro/integracao/asaas/importar', { desde, ate });
+  async asaasImportar(): Promise<AsaasPreview> {
+    const { data } = await api.post('/financeiro/integracao/asaas/importar', {});
     return data.data ?? data;
   },
   // ── Importar extrato (PDF/CSV/OFX) como lançamentos, com dedup ──
@@ -304,10 +304,8 @@ export interface ExtratoConferencia { conferido: boolean; total: number; novos: 
 
 export interface AsaasPreview {
   configurado: boolean;
-  total?: number; novos?: number; jaImportados?: number; ignorados?: number;
-  receitas?: number; despesas?: number; saldo?: number | null;
-  porTipo?: Record<string, number>;
-  amostra?: { data: string; tipo: 'receita' | 'despesa'; categoria: string; valor: number; party: string | null }[];
+  total?: number; novos?: number; atualizados?: number; removidos?: number;
+  aReceber?: number; recebido?: number; despesas?: number; saldo?: number | null;
   forbidden?: boolean;
 }
 
