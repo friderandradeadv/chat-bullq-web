@@ -1676,7 +1676,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
       if (t.valor >= 0) { if (st === 'recebido') mov += t.valor; else aReceber += t.valor; }
       else { if (st === 'pago') mov += t.valor; else aPagar += -t.valor; }
     }
-    return { saldo: ini + mov, aReceber, aPagar, n };
+    // saldo REAL da API (ASAAS) vence o somatório do ledger (que ignora transferências de saída)
+    const real = data.saldosReais?.[id];
+    return { saldo: real != null ? real : ini + mov, aReceber, aPagar, n, real: real != null };
   };
   const semConta = data.transacoes.filter((t) => !t.conta).length;
   const total = contas.reduce((s, c) => s + saldoConta(c.id).saldo, 0);
@@ -1815,7 +1817,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
                 </span>
               </div>
               <p className={`mt-2 text-2xl font-bold tabular-nums ${s.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(s.saldo)}</p>
-              <p className="text-[11px] text-zinc-400">{s.n} lançamento(s) nesta conta</p>
+              <p className="text-[11px] text-zinc-400">{s.real ? 'saldo real (API) · ' : ''}{s.n} lançamento(s) nesta conta</p>
               {(s.aReceber > 0 || s.aPagar > 0) && (
                 <div className="mt-2 flex gap-3 text-[11px]">
                   {s.aReceber > 0 && <span className="text-amber-600">a receber {brl(s.aReceber)}</span>}

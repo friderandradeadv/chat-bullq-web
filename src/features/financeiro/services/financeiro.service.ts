@@ -73,6 +73,7 @@ export interface FinDashboard {
   resumoLancamentos?: { total: number; receitas: number; despesas: number; saldo: number };
   categoriasConhecidas?: string[];
   contas?: Conta[];
+  saldosReais?: Record<string, number>; // saldo real por conta (ASAAS via API)
   acessoMembros?: Record<string, AcessoNivel>;
   // controle de acesso por membro
   nivel?: AcessoNivel;
