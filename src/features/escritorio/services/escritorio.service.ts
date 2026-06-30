@@ -58,4 +58,9 @@ export const escritorioService = {
     const { data } = await api.patch('/organizations/escritorio', input);
     return data.data ?? data;
   },
+  // Cada pessoa edita o próprio perfil (foto, frase, bio, OAB) — não precisa ser sócio.
+  async saveMeuPerfil(patch: Partial<PessoaInfo>): Promise<{ ok: boolean }> {
+    const { data } = await api.patch('/organizations/escritorio/meu-perfil', patch);
+    return data.data ?? data;
+  },
 };

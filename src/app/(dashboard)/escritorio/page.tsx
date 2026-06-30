@@ -66,6 +66,12 @@ export default function EscritorioPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['escritorio'] }); toast.success('Escritório atualizado'); setEditing(false); setEditCargoId(null); setPerfilUserId(null); },
     onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao salvar'),
   });
+  // Auto-edição: a própria pessoa salva campos pontuais do seu perfil (sem ser sócio).
+  const saveMeuM = useMutation({
+    mutationFn: (patch: Partial<PessoaInfo>) => escritorioService.saveMeuPerfil(patch),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['escritorio'] }); toast.success('Perfil atualizado'); setPerfilUserId(null); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao salvar'),
+  });
 
   // Aplica o acesso aos módulos do Hub a cada pessoa a partir do cargo dela
   // (só cargos COM módulos definidos; sócios o backend sempre libera tudo).
@@ -409,9 +415,11 @@ export default function EscritorioPage() {
           avatarUrl={memberByUser[perfilUserId]?.user.avatarUrl ?? null}
           data={data}
           cargoById={cargoById}
-          saving={saveM.isPending}
+          saving={saveM.isPending || saveMeuM.isPending}
+          selfMode={!data.canEdit && perfilUserId === user?.id}
           onClose={() => setPerfilUserId(null)}
           onSave={patchEscritorio}
+          onSaveSelf={(patch) => saveMeuM.mutate(patch)}
         />
       )}
     </div>
@@ -765,7 +773,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
             {cargo?.vertical && <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 shrink-0 text-[#15AABF]" /> Vertical: {cargo.vertical}</span>}
           </div>
         </div>
-        {canEdit && onEdit && (
+        {onEdit && (
           <button onClick={onEdit} className="inline-flex shrink-0 items-center gap-1 self-start rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"><Pencil className="h-4 w-4" /> Editar meu perfil</button>
         )}
       </div>
@@ -829,7 +837,7 @@ const SAVE_BTN = 'inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-3.5 
 const GHOST_BTN = 'inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800';
 
 // Modal de edição de perfil de uma pessoa (própria ou de outro, pelo sócio).
-function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose, onSave }: { userId: string; nome: string; avatarUrl: string | null; data: Escritorio; cargoById: Record<string, Cargo>; saving: boolean; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void }) {
+function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMode, onClose, onSave, onSaveSelf }: { userId: string; nome: string; avatarUrl: string | null; data: Escritorio; cargoById: Record<string, Cargo>; saving: boolean; selfMode?: boolean; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void; onSaveSelf?: (patch: Partial<PessoaInfo>) => void }) {
   const atual = data.pessoas?.[userId];
   const [f, setF] = useState<PessoaInfo>({ ...(atual ?? {}) });
   const set = (p: Partial<PessoaInfo>) => setF((x) => ({ ...x, ...p }));
@@ -843,10 +851,13 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose
   };
   const cargo = cargoById[f.cargoId ?? atual?.cargoId ?? ''];
   const foto = f.fotoUrl || avatarUrl;
-  const salvar = () => onSave((d) => ({ ...d, pessoas: { ...(d.pessoas ?? {}), [userId]: { ...(d.pessoas?.[userId] ?? {}), ...f } } }));
+  const salvar = () => {
+    if (selfMode && onSaveSelf) onSaveSelf({ fotoUrl: f.fotoUrl ?? '', frase: f.frase ?? '', bio: f.bio ?? '', oab: f.oab ?? '' });
+    else onSave((d) => ({ ...d, pessoas: { ...(d.pessoas ?? {}), [userId]: { ...(d.pessoas?.[userId] ?? {}), ...f } } }));
+  };
   return (
     <ModalShell
-      title={`Perfil — ${nome}`}
+      title={selfMode ? 'Editar meu perfil' : `Perfil — ${nome}`}
       onClose={onClose}
       footer={<div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Cancelar</button><button onClick={salvar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button></div>}
     >
@@ -863,19 +874,20 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose
         </div>
         <input value={f.fotoUrl?.startsWith('data:') ? '' : (f.fotoUrl ?? '')} onChange={(e) => set({ fotoUrl: e.target.value })} placeholder="ou cole uma URL: https://…/foto.jpg" className={`${INPUT} mt-1.5`} />
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div><p className={LABEL}>Conosco desde</p><input value={f.conoscoDesde ?? ''} onChange={(e) => set({ conoscoDesde: e.target.value })} placeholder="ex.: março de 2024" className={`${INPUT} mt-1`} /></div>
-        <div><p className={LABEL}>Contratada desde</p><input value={f.contratadaDesde ?? ''} onChange={(e) => set({ contratadaDesde: e.target.value })} placeholder="ex.: 01/03/2024" className={`${INPUT} mt-1`} /></div>
-        <div><p className={LABEL}>OAB</p><input value={f.oab ?? ''} onChange={(e) => set({ oab: e.target.value })} placeholder="ex.: SP 123.456" className={`${INPUT} mt-1`} /></div>
+      <div><p className={LABEL}>OAB</p><input value={f.oab ?? ''} onChange={(e) => set({ oab: e.target.value })} placeholder="ex.: PR 123.456 · SP 654.321" className={`${INPUT} mt-1`} /></div>
+      {!selfMode && (
         <div className="grid grid-cols-2 gap-2">
+          <div><p className={LABEL}>Conosco desde</p><input value={f.conoscoDesde ?? ''} onChange={(e) => set({ conoscoDesde: e.target.value })} placeholder="ex.: março de 2024" className={`${INPUT} mt-1`} /></div>
+          <div><p className={LABEL}>Contratada desde</p><input value={f.contratadaDesde ?? ''} onChange={(e) => set({ contratadaDesde: e.target.value })} placeholder="ex.: 01/03/2024" className={`${INPUT} mt-1`} /></div>
           <div><p className={LABEL}>Casos</p><input type="number" min={0} value={f.casos ?? ''} onChange={(e) => set({ casos: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
           <div><p className={LABEL}>Vidas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
         </div>
-      </div>
-      <div><p className={LABEL}>Seu financeiro (do contrato) — um item por linha</p><textarea value={(f.financeiro ?? []).join('\n')} onChange={(e) => set({ financeiro: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} placeholder={'70% dos honorários de clientes que você capta e atende\n30% quando é nomeada para atuar\nPagamento até dia 5 do mês seguinte'} className={`${INPUT} mt-1`} /></div>
-      <div><p className={LABEL}>Reconhecimento / motivação (aparece em destaque)</p><input value={f.destaque ?? ''} onChange={(e) => set({ destaque: e.target.value })} placeholder="ex.: Referência em RMC, cuida de cada cliente com carinho." className={`${INPUT} mt-1`} /></div>
+      )}
+      {!selfMode && <div><p className={LABEL}>Financeiro (do contrato) — um item por linha</p><textarea value={(f.financeiro ?? []).join('\n')} onChange={(e) => set({ financeiro: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} placeholder={'70% dos honorários de clientes que capta e atende\n30% quando é nomeada para atuar'} className={`${INPUT} mt-1`} /></div>}
+      {!selfMode && <div><p className={LABEL}>Reconhecimento / motivação (em destaque)</p><input value={f.destaque ?? ''} onChange={(e) => set({ destaque: e.target.value })} placeholder="ex.: Referência em RMC, cuida de cada cliente com carinho." className={`${INPUT} mt-1`} /></div>}
       <div><p className={LABEL}>Frase / lema pessoal</p><input value={f.frase ?? ''} onChange={(e) => set({ frase: e.target.value })} placeholder="ex.: Justiça com gente de verdade." className={`${INPUT} mt-1`} /></div>
       <div><p className={LABEL}>Perfil pessoal</p><textarea value={f.bio ?? ''} onChange={(e) => set({ bio: e.target.value })} rows={3} placeholder="Conte um pouco sobre você, sua trajetória, o que te move…" className={`${INPUT} mt-1`} /></div>
+      {selfMode && <p className="text-[11px] text-zinc-400">Você edita foto, OAB, frase e perfil pessoal. Cargo, datas e financeiro são definidos por um sócio.</p>}
     </ModalShell>
   );
 }
