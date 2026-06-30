@@ -309,8 +309,9 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       if (aba === 'receitas' && t.valor < 0) return false;
       if (aba === 'despesas' && t.valor >= 0) return false;
       const st = txStatus(t);
-      // por padrão esconde parcelas a receber/pagar de meses FUTUROS (só aparecem com o toggle)
-      if (!mostrarFuturas && !ehLiquidado(st) && mesKey(t) > mesHoje) return false;
+      // só no modo "Todos os meses" escondemos as parcelas a receber/pagar FUTURAS (toggle).
+      // Se você seleciona um mês específico (inclusive futuro), mostra tudo dele.
+      if (!mesSel && !mostrarFuturas && !ehLiquidado(st) && mesKey(t) > mesHoje) return false;
       if (stFiltro === 'a_receber' && ehLiquidado(st)) return false;
       if (stFiltro === 'liquidado' && !ehLiquidado(st)) return false;
       if (respFiltro && (t.responsavelId ?? '') !== respFiltro) return false;
