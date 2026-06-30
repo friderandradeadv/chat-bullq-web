@@ -34,8 +34,13 @@ import {
   X,
   CalendarPlus,
   ListChecks,
+  Wallet,
+  TrendingUp,
+  CircleDollarSign,
+  HandCoins,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
+import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { tasksService } from '@/features/tasks/services/tasks.service';
 import { deadlinesService } from '@/features/deadlines/services/deadlines.service';
 import { calendarService } from '@/features/calendar/services/calendar.service';
@@ -567,6 +572,89 @@ function StatCard({ href, icon: Icon, color, value, label, on }: { href: string;
   );
 }
 
+const brlInt = (n: number) => 'R$ ' + Math.round(n || 0).toLocaleString('pt-BR');
+const mesLabel = (ym: string) => {
+  const [y, m] = (ym || '').split('-').map(Number);
+  if (!y || !m) return ym || '';
+  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+};
+
+function MoneyStat({ icon: Icon, color, value, label, on }: { icon: React.ElementType; color: string; value: number; label: string; on: boolean }) {
+  const n = useCountUp(Math.round(value || 0), on);
+  return (
+    <Link href="/financeiro" className="group flex flex-col items-center rounded-xl border border-zinc-200/70 bg-white/70 p-3 backdrop-blur transition hover:-translate-y-0.5 hover:border-[#228BE6]/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/60">
+      <Icon className="h-5 w-5" style={{ color }} />
+      <span className="mt-1 text-lg font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{on ? 'R$ ' + n.toLocaleString('pt-BR') : '·'}</span>
+      <span className="text-center text-[11px] leading-tight text-zinc-400">{label}</span>
+    </Link>
+  );
+}
+
+// Visão financeira pessoal do advogado (sócio e associado), no hub. Reusa GET
+// /financeiro/meu (dashboardLimitado): recebido, sua parte, a receber e o
+// provável dos casos em andamento + mini-histórico e melhor mês.
+function MeuFinanceiro({ on, enabled }: { on: boolean; enabled: boolean }) {
+  const finQ = useQuery({
+    queryKey: ['hub', 'meu-financeiro'],
+    queryFn: () => financeiroService.meuFinanceiro(),
+    enabled,
+    staleTime: 300_000,
+    retry: 1,
+  });
+  const d = finQ.data;
+  // Sem acesso / sem dado / vazio → não renderiza (mantém o hub limpo).
+  if (!d || d.semAcesso || d.vazio || !d.resumo) return null;
+  const r = d.resumo;
+  const provavel = d.projecaoCasos?.liquidoProvavel ?? 0;
+  // Nada relevante ainda (tudo zero) → também esconde.
+  if ((r.recebido || 0) + (r.aReceber || 0) + (r.minhaParte || 0) + provavel + (r.nCasos || 0) === 0) return null;
+  const serie = (d.serie ?? []).slice(-8);
+  const maxSerie = Math.max(1, ...serie.map((s) => s.valor));
+  const melhor = d.melhorMes;
+  return (
+    <div className="welcome-pop mt-3 w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-4 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.205s' }}>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <Wallet className="h-4 w-4 text-[#02883C]" /> Seu financeiro
+        </p>
+        <Link href="/financeiro" className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline">
+          Ver tudo <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <MoneyStat icon={CircleDollarSign} color="#02883C" value={r.recebido} label="recebido" on={on} />
+        <MoneyStat icon={HandCoins} color="#228BE6" value={r.minhaParte} label="sua parte" on={on} />
+        <MoneyStat icon={Clock} color="#F08C00" value={r.aReceber} label="a receber" on={on} />
+        <MoneyStat icon={TrendingUp} color="#7048E8" value={provavel} label="provável (em processo)" on={on} />
+      </div>
+      {(serie.length > 0 || melhor) && (
+        <div className="mt-3 flex items-end justify-between gap-4">
+          {serie.length > 0 && (
+            <div className="flex flex-1 items-end gap-1" style={{ height: 52 }}>
+              {serie.map((s) => (
+                <div key={s.mes} className="flex flex-1 flex-col items-center justify-end" title={`${s.mes}: ${brlInt(s.valor)}`}>
+                  <div className="w-full rounded-t bg-[#02883C]/70" style={{ height: `${Math.max(3, (s.valor / maxSerie) * 40)}px` }} />
+                  <span className="mt-1 text-[9px] text-zinc-400">{mesLabel(s.mes)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {melhor && (
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] uppercase tracking-wide text-zinc-400">Melhor mês</p>
+              <p className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{brlInt(melhor.valor)}</p>
+              <p className="text-[10px] text-zinc-400">{mesLabel(melhor.mes)}</p>
+            </div>
+          )}
+        </div>
+      )}
+      <p className="mt-2 text-[11px] text-zinc-400">
+        {r.nClientes} cliente(s) · {r.nCasos ?? 0} caso(s){d.projecaoCasos?.isSocio ? ' · sócio' : ''}
+      </p>
+    </div>
+  );
+}
+
 const KIND_META: Record<string, { icon: React.ElementType; color: string }> = {
   tarefa: { icon: ClipboardList, color: '#23CBFF' },
   prazo: { icon: Clock, color: '#F59F00' },
@@ -940,6 +1028,9 @@ export default function InicioPage() {
             <StatCard href="/processos" icon={Briefcase} color="#7048E8" value={stats.processos} label="processos seus" on={statOn} />
           </div>
         )}
+
+        {/* Seu financeiro (visão pessoal do advogado — sócio e associado) */}
+        {mounted && <MeuFinanceiro on={statOn} enabled={!!user?.id} />}
 
         {/* Painel — 2 colunas em telas largas: mensagens | agenda + compromissos */}
         {mounted && (

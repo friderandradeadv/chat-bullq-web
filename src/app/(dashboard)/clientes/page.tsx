@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Users, Search, MessageSquare, Scale, Phone, Tag as TagIcon, Check, Plus, X, ChevronDown, CircleDot,
+  Users, Search, MessageSquare, Scale, Phone, Tag as TagIcon, Check, Plus, X, ChevronDown, CircleDot, Trash2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { clientsService, type ClientRow } from '@/features/legal-cases/services/clients.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
@@ -33,6 +34,7 @@ export default function ClientesPage() {
   const [sort, setSort] = useState<SortKey>('name');
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: clientes = [], isLoading } = useQuery({ queryKey: ['legal-clients'], queryFn: () => clientsService.list() });
   const { data: allTags = [] } = useQuery({ queryKey: ['tags'], queryFn: () => tagsService.list() });
@@ -64,6 +66,39 @@ export default function ClientesPage() {
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   }, [clientes]);
   const vinculados = clientes.filter((c) => c.contact).length;
+
+  // ── Seleção + ações em massa ──
+  const selectedClients = clientes.filter((c) => selected.has(c.partyId));
+  const withContact = selectedClients.filter((c) => c.contact).length;
+  const toggle = (id: string) =>
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allOnPage = paginated.length > 0 && paginated.every((c) => selected.has(c.partyId));
+  const toggleAll = () =>
+    setSelected((s) => {
+      if (paginated.every((c) => s.has(c.partyId))) { const n = new Set(s); paginated.forEach((c) => n.delete(c.partyId)); return n; }
+      return new Set([...s, ...paginated.map((c) => c.partyId)]);
+    });
+
+  const archive = useMutation({
+    mutationFn: () => clientsService.archive(selectedClients.flatMap((c) => c.partyIds ?? [c.partyId])),
+    onSuccess: (r) => { toast.success(`${r.count} processo(s) arquivado(s).`); setSelected(new Set()); refresh(); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao excluir'),
+  });
+  const onDelete = () => {
+    if (!selectedClients.length) return;
+    if (!confirm(`Excluir ${selectedClients.length} cliente(s)? Os processos deles vão para a lixeira (Arquivados) e podem ser recuperados.`)) return;
+    archive.mutate();
+  };
+  const bulkTag = useMutation({
+    mutationFn: (tagId: string) => Promise.all(selectedClients.filter((c) => c.contact).map((c) => tagsService.addToContact(c.contact!.id, tagId))),
+    onSuccess: () => { toast.success('Etiqueta aplicada.'); refresh(); },
+    onError: (e: any) => toast.error(e?.message || 'Erro'),
+  });
+  const bulkStatus = useMutation({
+    mutationFn: (statusId: string | null) => Promise.all(selectedClients.filter((c) => c.contact).map((c) => contactStatusesService.setContactStatus(c.contact!.id, statusId))),
+    onSuccess: () => { toast.success('Status atualizado.'); refresh(); },
+    onError: (e: any) => toast.error(e?.message || 'Erro'),
+  });
 
   return (
     <div className="flex h-full flex-col bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
@@ -124,8 +159,50 @@ export default function ClientesPage() {
         </Filter>
       </div>
 
-      <div className="flex items-center justify-between px-8 pt-3 text-sm text-zinc-500">
-        <span>{filtered.length} cliente(s) · {vinculados} com ficha do Comercial</span>
+      <div className="flex min-h-[36px] flex-wrap items-center justify-between gap-2 px-8 pt-3 text-sm text-zinc-500">
+        {selected.size > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-[#228BE6]">{selected.size} selecionado(s)</span>
+            <span className="text-zinc-300 dark:text-zinc-600">·</span>
+            <Filter label="Etiqueta" active={false} icon={<TagIcon className="h-4 w-4" />}>
+              {(close) => (
+                <>
+                  {allTags.length === 0 && <div className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta.</div>}
+                  {allTags.map((t) => (
+                    <FilterItem key={t.id} onClick={() => { bulkTag.mutate(t.id); close(); }}>
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: t.color }} />{t.name}</span>
+                    </FilterItem>
+                  ))}
+                </>
+              )}
+            </Filter>
+            <Filter label="Status" active={false}>
+              {(close) => (
+                <>
+                  <FilterItem onClick={() => { bulkStatus.mutate(null); close(); }}>Sem status</FilterItem>
+                  {statuses.map((s) => (
+                    <FilterItem key={s.id} onClick={() => { bulkStatus.mutate(s.id); close(); }}>
+                      <span className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />{s.name}</span>
+                    </FilterItem>
+                  ))}
+                </>
+              )}
+            </Filter>
+            <button
+              onClick={onDelete}
+              disabled={archive.isPending}
+              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-red-200 px-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
+            >
+              <Trash2 className="h-4 w-4" /> Excluir
+            </button>
+            {withContact < selected.size && (
+              <span className="text-xs text-zinc-400">Etiqueta/Status só nos {withContact} com ficha</span>
+            )}
+            <button onClick={() => setSelected(new Set())} className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Limpar seleção</button>
+          </div>
+        ) : (
+          <span>{filtered.length} cliente(s) · {vinculados} com ficha do Comercial</span>
+        )}
         <PageSizeSelect value={pageSize} onChange={setPageSize} />
       </div>
 
@@ -135,6 +212,7 @@ export default function ClientesPage() {
           <table className="w-full min-w-[860px] text-left">
             <thead>
               <tr className="border-b border-[#DEE2E6] text-xs font-bold uppercase tracking-wide text-[#6C757D] dark:border-zinc-800">
+                <th className="w-10 px-3 py-4"><input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-4 w-4 accent-[#228BE6]" title="Selecionar todos" /></th>
                 <th className="px-4 py-4">Cliente</th>
                 <th className="px-4 py-4">Status</th>
                 <th className="px-4 py-4">Etiquetas</th>
@@ -143,10 +221,10 @@ export default function ClientesPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading && <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-400">Carregando…</td></tr>}
-              {!isLoading && paginated.length === 0 && <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-400">Nenhum cliente encontrado.</td></tr>}
+              {isLoading && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-400">Carregando…</td></tr>}
+              {!isLoading && paginated.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-400">Nenhum cliente encontrado.</td></tr>}
               {paginated.map((c) => (
-                <ClienteRow key={c.partyId} c={c} statuses={statuses} allTags={allTags} onChanged={refresh} />
+                <ClienteRow key={c.partyId} c={c} statuses={statuses} allTags={allTags} onChanged={refresh} selected={selected.has(c.partyId)} onToggle={() => toggle(c.partyId)} />
               ))}
             </tbody>
           </table>
@@ -167,14 +245,20 @@ export default function ClientesPage() {
   );
 }
 
-function ClienteRow({ c, statuses, allTags, onChanged }: {
+function ClienteRow({ c, statuses, allTags, onChanged, selected, onToggle }: {
   c: ClientRow;
   statuses: { id: string; name: string; color: string }[];
   allTags: { id: string; name: string; color: string }[];
   onChanged: () => void;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <tr className="group border-b border-[#DEE2E6] last:border-0 align-top hover:bg-[#f0f7fd] dark:border-zinc-800 dark:hover:bg-zinc-800/40">
+    <tr className={`group border-b border-[#DEE2E6] last:border-0 align-top hover:bg-[#f0f7fd] dark:border-zinc-800 dark:hover:bg-zinc-800/40 ${selected ? 'bg-[#e7f1fb] dark:bg-zinc-800/60' : ''}`}>
+      {/* Seleção */}
+      <td className="w-10 px-3 py-3">
+        <input type="checkbox" checked={selected} onChange={onToggle} className="mt-0.5 h-4 w-4 accent-[#228BE6]" />
+      </td>
       {/* Cliente */}
       <td className="px-4 py-3">
         <Link href={`/clientes/${c.partyId}`} className="flex items-center gap-2.5">

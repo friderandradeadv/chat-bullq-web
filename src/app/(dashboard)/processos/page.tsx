@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   Search,
@@ -16,6 +16,12 @@ import {
   Check,
   Tag,
   Pencil,
+  Trash2,
+  UserCog,
+  ChevronDown,
+  Ban,
+  CheckCircle2,
+  PauseCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -23,8 +29,10 @@ import {
   type CaseListItem,
   type CaseStatus,
   type CreateCaseInput,
+  type UserRef,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { activitiesService } from '@/features/activities/services/activities.service';
+import { membersService, type Member } from '@/features/settings/services/members.service';
 
 // ─── Estilo "cara do Astrea" (tema claro, azul Astrea) ───────────────
 // Componentes próprios; replica o look (não os ativos da Aurum).
@@ -177,11 +185,14 @@ export default function ProcessosPage() {
   const [page, setPage] = useState(1);
 
   const { data: cases = [], isLoading } = useQuery({
-    queryKey: ['legal-cases', { search, status: statusFilter }],
+    // hasCnj:true → a aba "Processos e casos" mostra só processos ajuizados (com CNJ).
+    // Leads/pré-judiciais (contrato assinado, intake) ficam só no kanban pré-processual.
+    queryKey: ['legal-cases', { search, status: statusFilter, judicial: true }],
     queryFn: () =>
       legalCasesService.list({
         search: search || undefined,
         status: statusFilter || undefined,
+        hasCnj: true,
       }),
   });
   // Filtros client-side (etiqueta + grau) sobre o resultado já carregado.
@@ -204,6 +215,63 @@ export default function ProcessosPage() {
       if (paginated.every((c) => s.has(c.id))) { const n = new Set(s); paginated.forEach((c) => n.delete(c.id)); return n; }
       return new Set([...s, ...paginated.map((c) => c.id)]);
     });
+
+  // Membros (para "mudar responsável" — exclui perfis não-atribuíveis: admin, login duplicado).
+  const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
+  const assignableMembers = members.filter((m) => m.user.isActive && m.assignable !== false);
+  // Etiquetas jurídicas disponíveis (para aplicar/remover em massa).
+  const { data: availTags = [] } = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+
+  const reload = () => qc.invalidateQueries({ queryKey: ['legal-cases'] });
+  const bulk = useMutation({
+    mutationFn: (p: { ids: string[]; action: 'delete' | 'status' | 'responsible'; status?: CaseStatus; responsibleId?: string }) =>
+      legalCasesService.bulk(p),
+    onSuccess: (r) => {
+      toast.success(`${r.count} processo(s) atualizado(s).`);
+      setSelected(new Set());
+      reload();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao aplicar a ação'),
+  });
+  const runBulk = (action: 'delete' | 'status' | 'responsible', extra?: { status?: CaseStatus; responsibleId?: string }) => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    if (action === 'delete' && !confirm(`Arquivar ${ids.length} processo(s)? Eles vão para a lixeira (status Arquivado) e podem ser recuperados.`)) return;
+    bulk.mutate({ ids, action, ...extra });
+  };
+  // Atualização otimista dos chips: mexe direto no cache das listas ['legal-cases']
+  // pros processos selecionados, p/ o chip aparecer/sumir na hora (a lista é pesada;
+  // o refetch reconcilia o id real do vínculo depois).
+  const optimisticTag = (tagId: string, mode: 'add' | 'remove') => {
+    const tag = availTags.find((t) => t.id === tagId);
+    qc.setQueriesData<CaseListItem[]>({ queryKey: ['legal-cases'] }, (old) => {
+      if (!Array.isArray(old)) return old;
+      return old.map((c) => {
+        if (!selected.has(c.id)) return c;
+        if (mode === 'add') {
+          if (!tag || c.legalTags.some((l) => l.tagId === tagId)) return c;
+          return { ...c, legalTags: [...c.legalTags, { id: `tmp-${tagId}`, tagId, tag }] };
+        }
+        return { ...c, legalTags: c.legalTags.filter((l) => l.tagId !== tagId) };
+      });
+    });
+  };
+  // Etiquetas em massa: usa o vínculo já carregado (c.legalTags) p/ não duplicar (add) e p/ achar o EntityTag (remove).
+  const bulkTag = useMutation({
+    mutationFn: async ({ tagId, mode }: { tagId: string; mode: 'add' | 'remove' }) => {
+      const cs = cases.filter((c) => selected.has(c.id));
+      await Promise.all(
+        cs.map(async (c) => {
+          const existing = c.legalTags.find((l) => l.tagId === tagId);
+          if (mode === 'add') { if (!existing) await activitiesService.attachTag('case', c.id, tagId); }
+          else { if (existing) await activitiesService.detachTag(existing.id); }
+        }),
+      );
+    },
+    onMutate: (v) => optimisticTag(v.tagId, v.mode),
+    onSuccess: (_d, v) => { toast.success(v.mode === 'add' ? 'Etiqueta adicionada.' : 'Etiqueta removida.'); reload(); },
+    onError: (e: any) => { toast.error(e?.response?.data?.message || e?.message || 'Erro'); reload(); },
+  });
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
@@ -269,10 +337,17 @@ export default function ProcessosPage() {
 
       <div className="flex items-center gap-3 px-8 pt-3 text-sm">
         {selected.size > 0 ? (
-          <>
-            <span className="font-medium text-[#228BE6]">{selected.size} selecionado(s)</span>
-            <button onClick={() => setSelected(new Set())} className="text-zinc-500 hover:text-zinc-700">Limpar seleção</button>
-          </>
+          <BulkBar
+            count={selected.size}
+            members={assignableMembers}
+            tags={availTags}
+            busy={bulk.isPending || bulkTag.isPending}
+            onResp={(id) => runBulk('responsible', { responsibleId: id })}
+            onStatus={(s) => runBulk('status', { status: s })}
+            onTag={(tagId, mode) => bulkTag.mutate({ tagId, mode })}
+            onDelete={() => runBulk('delete')}
+            onClear={() => setSelected(new Set())}
+          />
         ) : (
           <div className="flex w-full items-center justify-between">
             <span className="text-zinc-500">{filtered.length} processo(s) e caso(s)</span>
@@ -302,6 +377,7 @@ export default function ProcessosPage() {
                 <th className="px-3 py-4">Título</th>
                 <th className="px-3 py-4">Cliente / Pasta</th>
                 <th className="px-3 py-4">Ação / Foro</th>
+                <th className="px-3 py-4">Responsável</th>
                 <th className="px-3 py-4 whitespace-nowrap">Últ. mov.</th>
                 <th className="w-20 px-2 py-4"></th>
               </tr>
@@ -309,20 +385,20 @@ export default function ProcessosPage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-zinc-400">
                     Carregando…
                   </td>
                 </tr>
               )}
               {!isLoading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-zinc-400">
                     Nenhum processo encontrado
                   </td>
                 </tr>
               )}
               {paginated.map((c) => (
-                <CaseRow key={c.id} c={c} selected={selected.has(c.id)} onToggle={() => toggle(c.id)} onChange={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                <CaseRow key={c.id} c={c} members={assignableMembers} selected={selected.has(c.id)} onToggle={() => toggle(c.id)} onChange={reload} />
               ))}
             </tbody>
           </table>
@@ -362,7 +438,7 @@ export default function ProcessosPage() {
   );
 }
 
-function CaseRow({ c, selected, onToggle, onChange }: { c: CaseListItem; selected: boolean; onToggle: () => void; onChange: () => void }) {
+function CaseRow({ c, members, selected, onToggle, onChange }: { c: CaseListItem; members: Member[]; selected: boolean; onToggle: () => void; onChange: () => void }) {
   const client = c.parties[0];
   // Barrinha verde = monitorado via DJEN (tem nº CNJ → o monitor por OAB captura as publicações).
   const monitorado = !!c.cnjNumber;
@@ -422,6 +498,9 @@ function CaseRow({ c, selected, onToggle, onChange }: { c: CaseListItem; selecte
         <p className="text-sm text-zinc-700 dark:text-zinc-300">{c.area ?? '—'}</p>
         {c.court && <p className="text-xs text-zinc-400">{c.court}</p>}
       </td>
+      <td className="px-3 py-4 align-top">
+        <RespCell caseId={c.id} current={c.responsible} members={members} onChange={onChange} />
+      </td>
       <td className="px-3 py-4 align-top whitespace-nowrap text-sm text-zinc-500">
         {fmtDate(c.updatedAt)}
       </td>
@@ -442,6 +521,171 @@ function CaseRow({ c, selected, onToggle, onChange }: { c: CaseListItem; selecte
 }
 
 // Botão de etiquetas no card (hover): adiciona/remove etiquetas do processo direto na lista.
+// ─── Barra de ações em massa (aparece ao selecionar processos) ────────────
+function BulkBar({ count, members, tags, busy, onResp, onStatus, onTag, onDelete, onClear }: {
+  count: number;
+  members: Member[];
+  tags: { id: string; name: string; color: string }[];
+  busy: boolean;
+  onResp: (userId: string) => void;
+  onStatus: (s: CaseStatus) => void;
+  onTag: (tagId: string, mode: 'add' | 'remove') => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="font-medium text-[#228BE6]">{count} selecionado(s)</span>
+      <span className="text-zinc-300 dark:text-zinc-600">·</span>
+
+      <BulkMenu label="Responsável" icon={<UserCog className="h-4 w-4" />} disabled={busy}>
+        {(close) => (
+          <>
+            <BulkMenuItem onClick={() => { onResp(''); close(); }}>
+              <span className="text-zinc-500">Sem responsável</span>
+            </BulkMenuItem>
+            {members.length === 0 && <div className="px-3 py-2 text-xs text-zinc-400">Nenhum membro.</div>}
+            {members.map((m) => (
+              <BulkMenuItem key={m.userId} onClick={() => { onResp(m.userId); close(); }}>{m.user.name}</BulkMenuItem>
+            ))}
+          </>
+        )}
+      </BulkMenu>
+
+      <BulkMenu label="Status" icon={<CheckCircle2 className="h-4 w-4" />} disabled={busy}>
+        {(close) => (
+          <>
+            <BulkMenuItem onClick={() => { onStatus('ACTIVE'); close(); }}>
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Ativo
+            </BulkMenuItem>
+            <BulkMenuItem onClick={() => { onStatus('SUSPENDED'); close(); }}>
+              <PauseCircle className="h-4 w-4 text-amber-500" /> Suspenso
+            </BulkMenuItem>
+            <BulkMenuItem onClick={() => { onStatus('CLOSED'); close(); }}>
+              <Ban className="h-4 w-4 text-zinc-500" /> Encerrado
+            </BulkMenuItem>
+          </>
+        )}
+      </BulkMenu>
+
+      <BulkMenu label="Etiquetas" icon={<Tag className="h-4 w-4" />} disabled={busy}>
+        {(close) => (
+          <>
+            <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">Adicionar a todos</p>
+            {tags.length === 0 && <div className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta.</div>}
+            {tags.map((t) => (
+              <BulkMenuItem key={`add-${t.id}`} onClick={() => { onTag(t.id, 'add'); close(); }}>
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400"><Plus className="h-3 w-3" />{t.name}</span>
+              </BulkMenuItem>
+            ))}
+            {tags.length > 0 && (
+              <>
+                <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-red-600">Remover de todos</p>
+                {tags.map((t) => (
+                  <BulkMenuItem key={`rm-${t.id}`} onClick={() => { onTag(t.id, 'remove'); close(); }}>
+                    <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
+                    <span className="flex items-center gap-1 text-red-600 dark:text-red-400"><X className="h-3 w-3" />{t.name}</span>
+                  </BulkMenuItem>
+                ))}
+              </>
+            )}
+          </>
+        )}
+      </BulkMenu>
+
+      <button
+        onClick={onDelete}
+        disabled={busy}
+        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-red-200 px-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
+      >
+        <Trash2 className="h-4 w-4" /> Arquivar
+      </button>
+
+      <button onClick={onClear} className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Limpar seleção</button>
+    </div>
+  );
+}
+
+function BulkMenu({ label, icon, disabled, children }: {
+  label: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+  children: (close: () => void) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 px-3 text-sm font-medium text-zinc-600 hover:border-zinc-300 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+      >
+        {icon}{label}<ChevronDown className="h-4 w-4 opacity-60" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 z-20 mt-1 max-h-72 w-56 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            {children(() => setOpen(false))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BulkMenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
+      {children}
+    </button>
+  );
+}
+
+// ─── Responsável editável inline na lista ─────────────────────────────────
+function RespCell({ caseId, current, members, onChange }: {
+  caseId: string;
+  current: UserRef | null;
+  members: Member[];
+  onChange: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const set = useMutation({
+    mutationFn: (userId: string) => legalCasesService.update(caseId, { responsibleId: userId || undefined }),
+    onSuccess: () => { setOpen(false); onChange(); toast.success('Responsável atualizado.'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro'),
+  });
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex max-w-[160px] items-center gap-1.5 rounded-md px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      >
+        <span className="truncate">{current?.name ?? <span className="text-zinc-400">Atribuir</span>}</span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <button onClick={() => set.mutate('')} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+              Sem responsável {!current && <Check className="h-3.5 w-3.5 text-[#228BE6]" />}
+            </button>
+            {members.map((m) => (
+              <button key={m.userId} onClick={() => set.mutate(m.userId)} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                <span className="truncate">{m.user.name}</span>
+                {current?.id === m.userId && <Check className="h-3.5 w-3.5 text-[#228BE6]" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function CaseTagButton({ caseId, attached, onChange }: { caseId: string; attached: { tagId: string }[]; onChange: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);

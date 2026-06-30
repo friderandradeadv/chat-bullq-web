@@ -16,6 +16,8 @@ export interface ClientRow {
   name: string;
   /** party representativa → /clientes/[partyId] */
   partyId: string;
+  /** todas as parties CLIENT do cliente (a ficha resolve por qualquer uma — o link da aba Processos usa o partyId daquele processo) */
+  partyIds: string[];
   document: string | null;
   cases: number;
   /** processos com nº CNJ (monitorados no DJEN) */
@@ -27,6 +29,11 @@ export interface ClientRow {
 export const clientsService = {
   async list(): Promise<ClientRow[]> {
     const { data } = await api.get('/legal-cases/clients');
+    return data.data ?? data;
+  },
+  /** "Excluir cliente" = arquivar os processos das parties informadas (lixeira). */
+  async archive(partyIds: string[]): Promise<{ ok: boolean; count: number }> {
+    const { data } = await api.post('/legal-cases/clients/archive', { partyIds });
     return data.data ?? data;
   },
 };

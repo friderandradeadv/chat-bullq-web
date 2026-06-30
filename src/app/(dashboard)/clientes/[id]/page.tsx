@@ -50,13 +50,17 @@ export default function ClienteDetailPage() {
     queryFn: () => clientsService.list(),
   });
   const { data: cases = [] } = useQuery({
-    queryKey: ['legal-cases', 'all'],
-    queryFn: () => legalCasesService.list({}),
+    queryKey: ['legal-cases', 'judicial'],
+    queryFn: () => legalCasesService.list({ hasCnj: true }),
   });
 
-  // O id da URL é a party representativa; aceita também o id do contato (links antigos).
+  // O id da URL pode ser QUALQUER party CLIENT do cliente (o link da aba Processos usa
+  // o partyId daquele processo, não o representativo) ou o id do contato (links antigos).
   const cliente =
-    clientes.find((c) => c.partyId === id) ?? clientes.find((c) => c.contact?.id === id) ?? null;
+    clientes.find((c) => c.partyIds?.includes(id ?? '')) ??
+    clientes.find((c) => c.partyId === id) ??
+    clientes.find((c) => c.contact?.id === id) ??
+    null;
   const contact = cliente?.contact ?? null;
 
   const meusCasos = useMemo(() => {
