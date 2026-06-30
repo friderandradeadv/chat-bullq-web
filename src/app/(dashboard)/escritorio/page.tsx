@@ -9,7 +9,7 @@ import {
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
   Award, Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
-  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet,
+  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move,
 } from 'lucide-react';
 import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
@@ -245,27 +245,28 @@ export default function EscritorioPage() {
 
         {/* Cargos & descrições */}
         <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Briefcase className="h-4 w-4 text-[#f08c00]" /> Cargos &amp; descrições</h2>
-        <div className="mt-2 space-y-3">
-          {(cur.cargos ?? []).map((cg, i) => (
-            <div key={cg.id} className={CARD}>
-              {editing ? (
+        {!editing ? (
+          <CargosPorVertical cargos={cur.cargos ?? []} grupos={grupos} onOpen={(id) => setViewCargoId(id)} />
+        ) : (
+          <div className="mt-2 space-y-3">
+            <p className="text-xs text-zinc-400">Dica: o jeito mais rápido de editar um cargo (com seleção, atribuições, financeiro e responsáveis) é pelo lápis no próprio organograma. Abaixo fica a edição simples da lista.</p>
+            {(cur.cargos ?? []).map((cg, i) => (
+              <div key={cg.id} className={CARD}>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <input value={cg.nome} onChange={(e) => updateCargo(setDraft, i, { nome: e.target.value })} placeholder="Nome do cargo" className={`${INPUT} font-semibold`} />
                     <button onClick={() => removeCargo(setDraft, i)} title="Remover cargo" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
                   </div>
-                  <textarea value={cg.descricao} onChange={(e) => updateCargo(setDraft, i, { descricao: e.target.value })} rows={3} placeholder="O que essa pessoa faz aqui? Responsabilidades, entregas, do que ela cuida…" className={INPUT} />
-                  <div>
-                    <p className={LABEL}>Reporta a (cargo acima na árvore)</p>
-                    <select value={cg.parentId ?? ''} onChange={(e) => updateCargo(setDraft, i, { parentId: e.target.value || null })} className={`${INPUT} mt-1`}>
-                      <option value="">— topo (sem chefia) —</option>
-                      {(draft.cargos ?? []).filter((x) => x.id !== cg.id).map((x) => <option key={x.id} value={x.id}>{x.nome || '(sem nome)'}</option>)}
-                    </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><p className={LABEL}>Vertical</p><input value={cg.vertical ?? ''} onChange={(e) => updateCargo(setDraft, i, { vertical: e.target.value })} placeholder="ex.: Advocacia" className={`${INPUT} mt-1`} /></div>
+                    <div><p className={LABEL}>Reporta a</p>
+                      <select value={cg.parentId ?? ''} onChange={(e) => updateCargo(setDraft, i, { parentId: e.target.value || null })} className={`${INPUT} mt-1`}>
+                        <option value="">— topo —</option>
+                        {(draft.cargos ?? []).filter((x) => x.id !== cg.id).map((x) => <option key={x.id} value={x.id}>{x.nome || '(sem nome)'}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <p className={LABEL}>Divisão de honorários (só sócios veem)</p>
-                    <input value={cg.divisaoHonorarios ?? ''} onChange={(e) => updateCargo(setDraft, i, { divisaoHonorarios: e.target.value })} placeholder="ex.: 10% do êxito dos casos que atua" className={`${INPUT} mt-1`} />
-                  </div>
+                  <textarea value={cg.resumo ?? ''} onChange={(e) => updateCargo(setDraft, i, { resumo: e.target.value })} rows={2} placeholder="Resumo de 1 linha do cargo" className={INPUT} />
                   <div>
                     <p className={LABEL}>Acesso aos módulos do Hub</p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -278,25 +279,13 @@ export default function EscritorioPage() {
                         );
                       })}
                     </div>
-                    <p className="mt-1 text-[11px] text-zinc-400">Início e Escritório aparecem para todos. Marque o que este cargo deve acessar — depois clique em “Aplicar acessos pelos cargos”. Sócios sempre veem tudo.</p>
                   </div>
                 </div>
-              ) : (
-                <>
-                  <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{cg.nome}</p>
-                  {cg.descricao && <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">{cg.descricao}</p>}
-                  {cg.divisaoHonorarios && <p className="mt-1.5 inline-block rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">💰 {cg.divisaoHonorarios}</p>}
-                  {cg.modulos && cg.modulos.length < HUB_MODULE_KEYS.length && (
-                    <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-zinc-400">Acessa: {cg.modulos.length === 0 ? <span className="italic">só Início e Escritório</span> : HUB_MODULES.filter((mod) => cg.modulos!.includes(mod.key)).map((mod) => <span key={mod.key} className="rounded bg-zinc-100 px-1.5 py-0.5 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{mod.label}</span>)}</p>
-                  )}
-                </>
-              )}
-            </div>
-          ))}
-          {editing && (
+              </div>
+            ))}
             <button onClick={() => setDraft((d) => ({ ...d, cargos: [...(d.cargos ?? []), { id: rid(), nome: '', descricao: '' }] }))} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-medium text-[#228BE6] hover:bg-[#228BE6]/5 dark:border-zinc-700"><Plus className="h-4 w-4" /> Adicionar cargo</button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Aplicar acesso aos módulos a partir do cargo de cada pessoa */}
         {data.canEdit && !editing && (cur.cargos ?? []).some((c) => Array.isArray(c.modulos)) && (
@@ -514,24 +503,52 @@ type OrgShared = { cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: 
 function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onOpenNode, onExpandAll, onCollapseAll, onAddRoot }: OrgShared & { onExpandAll: () => void; onCollapseAll: () => void; onAddRoot?: () => void }) {
   const byId = useMemo(() => Object.fromEntries(cargos.map((c) => [c.id, c])), [cargos]);
   const roots = useMemo(() => cargos.filter((c) => !c.parentId || !byId[c.parentId]), [cargos, byId]);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const z = (v: number) => setZoom(Math.min(1.3, Math.max(0.4, +v.toFixed(2))));
+  const clamp = (v: number) => Math.min(1.5, Math.max(0.3, +v.toFixed(2)));
+  const z = (v: number) => setZoom(clamp(v));
+  // "Ajustar à tela": encolhe/aumenta para a árvore caber na largura visível.
+  const fit = () => {
+    const vp = viewportRef.current; if (!vp) return;
+    const ratio = (vp.clientWidth - 16) / Math.max(1, vp.scrollWidth);
+    setZoom((z0) => clamp(z0 * ratio));
+  };
+  const fittedRef = useRef(false);
+  useEffect(() => { if (!fittedRef.current) { fittedRef.current = true; const id = setTimeout(fit, 80); return () => clearTimeout(id); } });
+  // Arrastar para navegar (pan), sem atrapalhar o clique nos cards.
+  const pan = useRef<{ x: number; y: number; l: number; t: number } | null>(null);
+  const down = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('[data-orgcard],button')) return;
+    const vp = viewportRef.current; if (!vp) return;
+    pan.current = { x: e.clientX, y: e.clientY, l: vp.scrollLeft, t: vp.scrollTop };
+    try { vp.setPointerCapture(e.pointerId); } catch { /* ok */ }
+  };
+  const move = (e: React.PointerEvent) => {
+    const vp = viewportRef.current; if (!vp || !pan.current) return;
+    vp.scrollLeft = pan.current.l - (e.clientX - pan.current.x);
+    vp.scrollTop = pan.current.t - (e.clientY - pan.current.y);
+  };
+  const up = () => { pan.current = null; };
   const btn = 'flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300';
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-        <span className="text-zinc-400">Clique num cargo para abrir/recolher o ramo{canEdit ? '; passe o mouse e toque no lápis para editar cargo e responsáveis' : ''}.</span>
+        <span className="flex items-center gap-1 text-zinc-400"><Move className="h-3.5 w-3.5" /> Arraste para mover · clique num cargo para ver os detalhes{canEdit ? ' · lápis para editar' : ''}.</span>
         <div className="flex shrink-0 items-center gap-1.5">
           <button onClick={() => z(zoom - 0.1)} className={btn} title="Diminuir"><ZoomOut className="h-3.5 w-3.5" /></button>
-          <button onClick={() => setZoom(1)} className="min-w-11 rounded-lg border border-zinc-200 bg-white px-1.5 py-1 text-center font-semibold text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300" title="Voltar a 100%">{Math.round(zoom * 100)}%</button>
           <button onClick={() => z(zoom + 0.1)} className={btn} title="Aumentar"><ZoomIn className="h-3.5 w-3.5" /></button>
-          <span className="mx-1 text-zinc-300">·</span>
+          <button onClick={fit} className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-2 py-1 font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300" title="Ajustar à tela"><Maximize2 className="h-3.5 w-3.5" /> Ajustar</button>
+          <span className="mx-0.5 text-zinc-300">·</span>
           <button onClick={onExpandAll} className="font-medium text-[#228BE6] hover:underline">Expandir</button>
           <span className="text-zinc-300">·</span>
           <button onClick={onCollapseAll} className="font-medium text-zinc-500 hover:underline">Recolher</button>
         </div>
       </div>
-      <div className="max-h-[72vh] overflow-auto rounded-xl border border-zinc-100 bg-zinc-50/40 dark:border-zinc-800 dark:bg-zinc-950/40">
+      <div
+        ref={viewportRef}
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}
+        className="max-h-[78vh] cursor-grab select-none overflow-auto rounded-xl border border-zinc-100 bg-zinc-50/40 active:cursor-grabbing dark:border-zinc-800 dark:bg-zinc-950/40"
+      >
         <style>{ORG_CSS}</style>
         <div className="flex min-w-max flex-col items-center gap-10 px-8 py-7" style={{ zoom } as React.CSSProperties}>
           {roots.map((r) => (
@@ -579,6 +596,7 @@ function OrgNodeTop({ cargo, depth, color, shared }: { cargo: Cargo; depth: numb
     <li style={{ color }}>
       <div className="group relative z-[1]">
         <div
+          data-orgcard
           onClick={() => onOpenNode?.(cargo.id)}
           title={tip || 'Ver detalhes do cargo'}
           className={`flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 font-semibold shadow-sm transition hover:-translate-y-px hover:shadow-md ${depth === 0 ? 'text-base' : 'text-[13px]'} ${cardCls} ${isMine ? 'ring-2 ring-offset-2 ring-[#7048E8] dark:ring-offset-zinc-900' : ''}`}
@@ -620,9 +638,9 @@ function PerfilHero({ nome, avatarUrl, info, cargo, canEdit, onEdit }: { nome: s
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
         <div className="shrink-0">
           {foto ? (
-            <img src={foto} alt={nome} className="h-20 w-20 rounded-2xl object-cover shadow-md ring-2 ring-white dark:ring-zinc-800" />
+            <img src={foto} alt={nome} className="h-28 w-28 rounded-full object-cover shadow-md ring-4 ring-white dark:ring-zinc-800" />
           ) : (
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#7048E8] text-2xl font-bold text-white shadow-md">{iniciaisDe(nome)}</div>
+            <div className="flex h-28 w-28 items-center justify-center rounded-full bg-[#7048E8] text-3xl font-bold text-white shadow-md ring-4 ring-white dark:ring-zinc-800">{iniciaisDe(nome)}</div>
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -658,14 +676,14 @@ function PerfilHero({ nome, avatarUrl, info, cargo, canEdit, onEdit }: { nome: s
             ))}
           </div>
         )}
-        {(cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios || cargo?.custoFirma) && (
+        {(info?.financeiro?.length || cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios || cargo?.custoFirma) && (
           <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3.5 dark:bg-[#02883C]/10">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> Como você é remunerado</p>
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> Seu financeiro</p>
             <div className="mt-2 space-y-2.5">
-              <SecaoLista icon={Wallet} titulo="Salário / bolsa & benefícios" itens={cargo?.remuneracao} cor="#02883C" />
-              <SecaoLista icon={CircleDollarSign} titulo="Honorários" itens={cargo?.honorarios} cor="#02883C" />
-              {cargo?.divisaoHonorarios && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Divisão:</span> {cargo.divisaoHonorarios}</p>}
-              {cargo?.custoFirma && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Custo da firma:</span> {cargo.custoFirma}</p>}
+              <SecaoLista icon={Wallet} titulo="Pelo seu contrato" itens={info?.financeiro} cor="#02883C" />
+              {!info?.financeiro?.length && <SecaoLista icon={Wallet} titulo="Salário / bolsa & benefícios" itens={cargo?.remuneracao} cor="#02883C" />}
+              {!info?.financeiro?.length && <SecaoLista icon={CircleDollarSign} titulo="Honorários (modelo do cargo)" itens={cargo?.honorarios} cor="#02883C" />}
+              {cargo?.divisaoHonorarios && !info?.financeiro?.length && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Divisão:</span> {cargo.divisaoHonorarios}</p>}
             </div>
           </div>
         )}
@@ -716,7 +734,7 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose
       footer={<div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Cancelar</button><button onClick={salvar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button></div>}
     >
       <div className="flex items-center gap-3">
-        {foto ? <img src={foto} alt={nome} className="h-16 w-16 rounded-2xl object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#7048E8] text-xl font-bold text-white">{iniciaisDe(nome)}</div>}
+        {foto ? <img src={foto} alt={nome} className="h-20 w-20 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7048E8] text-2xl font-bold text-white">{iniciaisDe(nome)}</div>}
         <div className="min-w-0 flex-1"><p className="font-semibold text-zinc-800 dark:text-zinc-100">{nome}</p>{cargo && <p className="text-xs text-zinc-400">{cargo.nome}</p>}</div>
       </div>
       <div><p className={LABEL}>Foto (URL)</p><input value={f.fotoUrl ?? ''} onChange={(e) => set({ fotoUrl: e.target.value })} placeholder="https://…/foto.jpg" className={`${INPUT} mt-1`} /></div>
@@ -729,6 +747,7 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose
           <div><p className={LABEL}>Vidas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
         </div>
       </div>
+      <div><p className={LABEL}>Seu financeiro (do contrato) — um item por linha</p><textarea value={(f.financeiro ?? []).join('\n')} onChange={(e) => set({ financeiro: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} placeholder={'70% dos honorários de clientes que você capta e atende\n30% quando é nomeada para atuar\nPagamento até dia 5 do mês seguinte'} className={`${INPUT} mt-1`} /></div>
       <div><p className={LABEL}>Reconhecimento / motivação (aparece em destaque)</p><input value={f.destaque ?? ''} onChange={(e) => set({ destaque: e.target.value })} placeholder="ex.: Referência em RMC, cuida de cada cliente com carinho." className={`${INPUT} mt-1`} /></div>
       <div><p className={LABEL}>Frase / lema pessoal</p><input value={f.frase ?? ''} onChange={(e) => set({ frase: e.target.value })} placeholder="ex.: Justiça com gente de verdade." className={`${INPUT} mt-1`} /></div>
       <div><p className={LABEL}>Perfil pessoal</p><textarea value={f.bio ?? ''} onChange={(e) => set({ bio: e.target.value })} rows={3} placeholder="Conte um pouco sobre você, sua trajetória, o que te move…" className={`${INPUT} mt-1`} /></div>
@@ -802,6 +821,50 @@ function CargoDetalhe({ cargo, pessoas, onVerPerfil }: { cargo: Cargo; pessoas: 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Lista de cargos agrupada por vertical, compacta e clicável (abre o detalhe).
+function CargosPorVertical({ cargos, grupos, onOpen }: { cargos: Cargo[]; grupos: Map<string, Member[]>; onOpen: (id: string) => void }) {
+  const verticais: string[] = [];
+  for (const c of cargos) if (c.vertical && !verticais.includes(c.vertical)) verticais.push(c.vertical);
+  if (verticais.length === 0) {
+    return <p className="mt-2 text-sm text-zinc-400">Nenhum cargo cadastrado. Use o organograma acima para montar a estrutura.</p>;
+  }
+  return (
+    <div className="mt-2 space-y-5">
+      {verticais.map((v, vi) => {
+        const cor = BRANCH_COLORS[vi % BRANCH_COLORS.length];
+        const itens = cargos.filter((c) => c.vertical === v && c.nome !== v);
+        if (itens.length === 0) return null;
+        return (
+          <div key={v}>
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: cor }}><span className="h-2 w-2 rounded-full" style={{ background: cor }} /> {v}</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {itens.map((c) => {
+                const ppl = grupos.get(c.id) ?? [];
+                const fin = c.honorarios?.[0] || c.remuneracao?.[0] || c.divisaoHonorarios;
+                return (
+                  <button key={c.id} onClick={() => onOpen(c.id)} className="group flex flex-col rounded-xl border border-zinc-200/80 bg-white p-3 text-left transition hover:-translate-y-px hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900" style={{ borderLeftColor: cor, borderLeftWidth: 3 }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-zinc-800 dark:text-zinc-100">{c.nome}</span>
+                      {ppl.length > 0 && (
+                        <span className="flex shrink-0 items-center -space-x-1.5">
+                          {ppl.slice(0, 3).map((m) => <span key={m.user.id} title={m.user.name ?? ''} className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white ring-2 ring-white dark:ring-zinc-900" style={{ background: cor }}>{iniciaisDe(m.user.name)}</span>)}
+                        </span>
+                      )}
+                    </div>
+                    {c.resumo && <span className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{c.resumo}</span>}
+                    {fin && <span className="mt-1.5 inline-flex w-fit items-center gap-1 rounded bg-[#02883C]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#02883C]"><CircleDollarSign className="h-3 w-3" /> {fin}</span>}
+                    <span className="mt-1 text-[10px] font-semibold text-[#228BE6] opacity-0 transition group-hover:opacity-100">Ver detalhes →</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

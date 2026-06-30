@@ -33,6 +33,7 @@ export interface PessoaInfo {
   casos?: number;          // casos que cuida
   vidas?: number;          // vidas que muda
   destaque?: string;       // reconhecimento/motivação (o sócio escreve)
+  financeiro?: string[];   // condições financeiras pessoais (do contrato): percentuais, custos…
 }
 
 export interface Escritorio {
