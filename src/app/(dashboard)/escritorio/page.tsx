@@ -5,7 +5,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Building2, Target, Eye, Heart, Users, Briefcase, BookOpen, ListChecks,
-  Pencil, Plus, Trash2, Save, X, Loader2, User as UserIcon,
+  Pencil, Plus, Trash2, Save, X, Loader2, User as UserIcon, ChevronDown,
 } from 'lucide-react';
 import { escritorioService, type Escritorio, type Cargo } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
@@ -125,24 +125,21 @@ export default function EscritorioPage() {
           </div>
         )}
 
-        {/* Organograma: pessoas por cargo */}
+        {/* Organograma — árvore interativa (clica num cargo pra ver o que se espera + as pessoas) */}
         <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Users className="h-4 w-4 text-[#228BE6]" /> Organograma</h2>
-        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(cur.cargos ?? []).map((cg) => (
-            <div key={cg.id} className={CARD}>
-              <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{cg.nome}</p>
-              <ul className="mt-2 space-y-1.5">
-                {(grupos.get(cg.id) ?? []).map((m) => (
-                  <li key={m.user.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{(m.user.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}</span>
-                    {m.user.name}
-                  </li>
+        <div className={`${CARD} mt-2`}>
+          {(cur.cargos ?? []).length === 0 ? (
+            <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — adicione abaixo.' : '.'}</p>
+          ) : (
+            <>
+              <div className="space-y-1">
+                {(cur.cargos ?? []).filter((c) => !c.parentId || !cargoById[c.parentId]).map((c) => (
+                  <OrgNode key={c.id} cargo={c} cargos={cur.cargos ?? []} grupos={grupos} depth={0} meuCargoId={meuCargo?.id} />
                 ))}
-                {(grupos.get(cg.id) ?? []).length === 0 && <li className="text-xs text-zinc-400">Ninguém neste cargo ainda</li>}
-              </ul>
-            </div>
-          ))}
-          {(cur.cargos ?? []).length === 0 && <p className="col-span-full text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — adicione abaixo.' : '.'}</p>}
+              </div>
+              <p className="mt-2.5 text-[11px] text-zinc-400">Clique num cargo para ver o que se espera dele e quem está nele. O seu cargo aparece destacado.</p>
+            </>
+          )}
         </div>
 
         {/* Atribuir cargo a cada pessoa (edição) */}
@@ -179,6 +176,13 @@ export default function EscritorioPage() {
                     <button onClick={() => removeCargo(setDraft, i)} title="Remover cargo" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
                   </div>
                   <textarea value={cg.descricao} onChange={(e) => updateCargo(setDraft, i, { descricao: e.target.value })} rows={3} placeholder="O que essa pessoa faz aqui? Responsabilidades, entregas, do que ela cuida…" className={INPUT} />
+                  <div>
+                    <p className={LABEL}>Reporta a (cargo acima na árvore)</p>
+                    <select value={cg.parentId ?? ''} onChange={(e) => updateCargo(setDraft, i, { parentId: e.target.value || null })} className={`${INPUT} mt-1`}>
+                      <option value="">— topo (sem chefia) —</option>
+                      {(draft.cargos ?? []).filter((x) => x.id !== cg.id).map((x) => <option key={x.id} value={x.id}>{x.nome || '(sem nome)'}</option>)}
+                    </select>
+                  </div>
                   <div>
                     <p className={LABEL}>Divisão de honorários (só sócios veem)</p>
                     <input value={cg.divisaoHonorarios ?? ''} onChange={(e) => updateCargo(setDraft, i, { divisaoHonorarios: e.target.value })} placeholder="ex.: 10% do êxito dos casos que atua" className={`${INPUT} mt-1`} />
@@ -248,6 +252,54 @@ export default function EscritorioPage() {
 
         <div className="h-10" />
       </div>
+    </div>
+  );
+}
+
+// Nó do organograma (árvore): cargo + chevron, expande pra mostrar "o que se
+// espera / o que faz" + as pessoas, e os cargos-filho recursivamente.
+function OrgNode({ cargo, cargos, grupos, depth, meuCargoId }: { cargo: Cargo; cargos: Cargo[]; grupos: Map<string, Member[]>; depth: number; meuCargoId?: string }) {
+  const children = useMemo(() => cargos.filter((c) => c.parentId === cargo.id), [cargos, cargo.id]);
+  const people = grupos.get(cargo.id) ?? [];
+  const isMine = cargo.id === meuCargoId;
+  const [open, setOpen] = useState(depth < 1 || isMine);
+  const iniciais = (n?: string | null) => (n ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <div className={depth > 0 ? 'ml-3 border-l border-zinc-200 pl-3 dark:border-zinc-700' : ''}>
+      <button onClick={() => setOpen((o) => !o)} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60 ${isMine ? 'bg-[#7048E8]/5 ring-1 ring-[#7048E8]/40' : ''}`}>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+        <Briefcase className="h-4 w-4 shrink-0 text-[#f08c00]" />
+        <span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{cargo.nome || 'Cargo sem nome'}</span>
+        {isMine && <span className="rounded-full bg-[#7048E8] px-1.5 py-0.5 text-[10px] font-bold text-white">você</span>}
+        <span className="ml-auto flex items-center -space-x-1.5">
+          {people.slice(0, 5).map((m) => <span key={m.user.id} title={m.user.name ?? ''} className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-600 ring-2 ring-white dark:bg-zinc-700 dark:text-zinc-300 dark:ring-zinc-900">{iniciais(m.user.name)}</span>)}
+          {people.length === 0 && <span className="text-[11px] text-zinc-400">vazio</span>}
+          {people.length > 5 && <span className="pl-2.5 text-[11px] text-zinc-400">+{people.length - 5}</span>}
+        </span>
+      </button>
+      {open && (
+        <div className="mb-1 ml-6 mt-0.5">
+          {cargo.descricao && (
+            <div className="rounded-lg border border-zinc-200/70 bg-zinc-50/70 p-2.5 text-xs leading-relaxed text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/30 dark:text-zinc-300">
+              <span className="font-semibold text-zinc-700 dark:text-zinc-200">O que esperamos / o que faz:</span> {cargo.descricao}
+            </div>
+          )}
+          {cargo.divisaoHonorarios && (
+            <p className="mt-1.5 inline-block rounded bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">💰 {cargo.divisaoHonorarios}</p>
+          )}
+          {people.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {people.map((m) => (
+                <span key={m.user.id} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-zinc-300 text-[8px] font-bold text-zinc-600 dark:bg-zinc-600 dark:text-zinc-200">{iniciais(m.user.name)}</span>
+                  {m.user.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {children.length > 0 && <div className="mt-1.5 space-y-1">{children.map((ch) => <OrgNode key={ch.id} cargo={ch} cargos={cargos} grupos={grupos} depth={depth + 1} meuCargoId={meuCargoId} />)}</div>}
+        </div>
+      )}
     </div>
   );
 }
