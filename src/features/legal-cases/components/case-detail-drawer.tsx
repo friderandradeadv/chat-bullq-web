@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles,
+  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -12,7 +12,9 @@ import {
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 import { membersService } from '@/features/settings/services/members.service';
+import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
+import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
@@ -227,6 +229,7 @@ export function CaseDetailDrawer({
                           </ul>
                         )}
                       </article>
+                      <ClienteFinanceiro nome={cliente.name} />
                     </div>
                   );
                 })()}
@@ -394,6 +397,35 @@ function EditField({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+// Cruza o financeiro com o cliente: recebido, a receber e parcelamentos (inclui ASAAS).
+function ClienteFinanceiro({ nome }: { nome: string }) {
+  const { data } = useQuery({ queryKey: ['financeiro', 'cliente', nome], queryFn: () => financeiroService.clienteResumo(nome), enabled: !!nome, staleTime: 60_000 });
+  if (!data) return null;
+  const brl = (n: number) => 'R$ ' + Math.round(n).toLocaleString('pt-BR');
+  if (!data.recebido && !data.aReceber && !data.cobrancas.length) return null;
+  return (
+    <article className="mt-2 rounded-xl border border-[#cfe0ed] bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Financeiro do cliente</p>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+        <div><p className="text-[10px] uppercase text-[#48626f]">Recebido</p><p className="text-sm font-bold text-emerald-600">{brl(data.recebido)}</p></div>
+        <div><p className="text-[10px] uppercase text-[#48626f]">A receber</p><p className="text-sm font-bold text-amber-600">{brl(data.aReceber)}</p></div>
+        <div><p className="text-[10px] uppercase text-[#48626f]">Lançamentos</p><p className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{data.nLancamentos}</p></div>
+      </div>
+      {data.ultimoPagamento && <p className="mt-1.5 text-[11px] text-[#48626f]">Último pagamento: {data.ultimoPagamento}</p>}
+      {data.cobrancas.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {data.cobrancas.map((c) => (
+            <li key={c.id} className="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-2 py-1.5 text-xs dark:bg-zinc-800/50">
+              <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">{c.descricao || 'Parcelamento'} · {c.pagas}/{c.nParcelas}{c.fonte === 'asaas' ? ' · ASAAS' : ''}{c.proximaParcela ? ` · próx. ${c.proximaParcela.vencimento}` : ''}</span>
+              <span className={`shrink-0 font-semibold ${c.saldoDevedor > 0.01 ? 'text-amber-600' : 'text-emerald-600'}`}>{c.saldoDevedor > 0.01 ? `${brl(c.saldoDevedor)} aberto` : 'quitado'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
+
 // Cadastro/edição da parte adversa (cria/edita/remove a party role=OPPONENT).
 function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa: PartyDetail | null; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
@@ -423,7 +455,14 @@ function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cadastro da parte adversa</p>
       {editing ? (
         <div className="mt-1.5 space-y-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome (ex.: BANCO BMG S/A)" className={INPUT} autoFocus />
+          <OpponentCombobox
+            value={name}
+            onSelect={(s) => {
+              setName(s.name);
+              if (s.document) setDoc(maskCpfCnpj(s.document));
+            }}
+            placeholder="Nome (ex.: BANCO BMG S/A)"
+          />
           <input value={doc} onChange={(e) => setDoc(maskCpfCnpj(e.target.value))} placeholder="CPF/CNPJ (opcional)" className={INPUT} inputMode="numeric" />
           <div className="flex justify-end gap-2">
             <button onClick={() => { setEditing(false); setName(adversa?.name ?? ''); setDoc(maskCpfCnpj(adversa?.document ?? '')); }} className="rounded px-2.5 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
@@ -470,6 +509,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
   const [sug, setSug] = useState(false);
   const [gen, setGen] = useState(false);
   const [sav, setSav] = useState(false);
+  const [hiscon, setHiscon] = useState(false);
   const [done, setDone] = useState<number | null>(null);
 
   const setRow = (id: string, patch: Partial<CRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -489,6 +529,44 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
       setRows((contratos ?? []).map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })));
       toast.success(contratos?.length ? `${contratos.length} sugestão(ões) da IA — confira e salve` : 'A IA não achou bancos/produtos claros na conversa');
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao sugerir'); } finally { setSug(false); }
+  };
+  // Upload do HISCON (PDF) → IA extrai os contratos RMC/RCC ativos. Ao confirmar,
+  // JÁ cria 1 card filho por contrato (RMC/RCC × banco réu) e arquiva o intake
+  // (pai). Se cancelar, só popula as linhas pra revisão manual.
+  const onHiscon = async (file?: File | null) => {
+    if (!file) return;
+    setHiscon(true);
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+        fr.readAsDataURL(file);
+      });
+      const { contratos } = await legalCasesService.uploadHiscon(caseId, b64);
+      if (!contratos?.length) { toast.info('Nenhum contrato RMC/RCC ativo encontrado no HISCON'); return; }
+      const lista = contratos.map((c) => `• ${c.produto} – ${c.reu}`).join('\n');
+      const popular = () => setRows((r) => [
+        ...r,
+        ...contratos.map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })),
+      ]);
+      if (!confirm(`HISCON lido — ${contratos.length} contrato(s) ativo(s):\n\n${lista}\n\nCriar ${contratos.length} card(s) (1 por banco/produto) e arquivar este intake?`)) {
+        popular();
+        toast.info('Contratos carregados — confira e gere quando quiser');
+        return;
+      }
+      setGen(true);
+      await legalCasesService.saveContratos(
+        caseId,
+        contratos.map((c) => ({ id: c.id, reu: c.reu, produto: c.produto, valor: c.valor ?? undefined })),
+      );
+      const res = await legalCasesService.gerarIniciais(caseId);
+      setDone(res.criados);
+      toast.success(`${res.criados} card(s) criado(s) a partir do HISCON — intake arquivado`);
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao processar o HISCON');
+    } finally { setHiscon(false); setGen(false); }
   };
   const gerar = async () => {
     const n = payload().length;
@@ -516,11 +594,18 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
   const nValid = payload().length;
   return (
     <div className="mt-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Contratos a impugnar</p>
-        <button onClick={sugerir} disabled={sug} className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
-          <Sparkles className="h-3.5 w-3.5" /> {sug ? 'Lendo a conversa…' : 'Sugerir com IA'}
-        </button>
+        <div className="flex items-center gap-3">
+          <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${hiscon ? 'opacity-50' : 'cursor-pointer'}`} title="Lê o HISCON e JÁ cria os cards RMC/RCC por banco (arquiva este intake). Cancelar = só carrega pra revisar.">
+            <Upload className="h-3.5 w-3.5" /> {hiscon ? 'Lendo HISCON…' : 'Upar HISCON'}
+            <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscon}
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscon(f); }} />
+          </label>
+          <button onClick={sugerir} disabled={sug} className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
+            <Sparkles className="h-3.5 w-3.5" /> {sug ? 'Lendo a conversa…' : 'Sugerir com IA'}
+          </button>
+        </div>
       </div>
       <div className="mt-1.5 space-y-2">
         {rows.length === 0 && <p className="text-xs italic text-zinc-400">Liste cada banco × produto (RMC/RCC). A IA pode sugerir a partir da conversa do cliente.</p>}

@@ -297,7 +297,19 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/integracao/asaas/cobrancas', { commit });
     return data.data ?? data;
   },
+  // ── Resumo financeiro de um cliente (ficha em Processos) ──
+  async clienteResumo(nome: string): Promise<ClienteResumo> {
+    const { data } = await api.get('/financeiro/cliente', { params: { nome } });
+    return data.data ?? data;
+  },
 };
+
+export interface ClienteResumo {
+  nome: string;
+  recebido: number; aReceber: number; ultimoPagamento: string | null;
+  nLancamentos: number; saldoCobrancas: number;
+  cobrancas: { id: string; descricao?: string; valorTotal: number; saldoDevedor: number; pagas: number; nParcelas: number; statusCalc: string; proximaParcela: { num: number; vencimento: string; valor: number } | null; fonte?: string | null }[];
+}
 
 export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; motivo: string | null }
 export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; linhas: ExtratoLinhaConf[] }
