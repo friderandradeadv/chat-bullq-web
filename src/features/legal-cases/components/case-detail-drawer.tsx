@@ -258,6 +258,7 @@ export function CaseDetailDrawer({
                     caseId={c.id}
                     phaseKey={phaseKey}
                     initial={((c.metadata as any)?.contratos ?? []) as any[]}
+                    docs={(c.metadata as any)?.docs}
                     onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
                   />
                 )}
@@ -558,7 +559,7 @@ const parseValorBR = (s: string): number | null => {
   return isFinite(v) ? v : null;
 };
 
-function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: string; phaseKey: string | undefined; initial: any[]; onChanged: () => void }) {
+function ContratosImpugnar({ caseId, phaseKey, initial, docs, onChanged }: { caseId: string; phaseKey: string | undefined; initial: any[]; docs?: { hiscon?: string; hiscre?: string; jg?: string }; onChanged: () => void }) {
   const [rows, setRows] = useState<CRow[]>(() =>
     (initial ?? []).map((c: any) => ({ id: c.id || rowId(), reu: c.reu ?? '', produto: c.produto ?? 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })),
   );
@@ -639,13 +640,13 @@ function ContratosImpugnar({ caseId, phaseKey, initial, onChanged }: { caseId: s
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Contratos a impugnar</p>
         <div className="flex items-center gap-3">
-          <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${hiscon ? 'opacity-50' : 'cursor-pointer'}`} title="Lê o HISCON e POPULA os contratos RMC/RCC nas linhas (deduplicando). Não cria card nenhum — é só a lista de contratos do cliente.">
-            <Upload className="h-3.5 w-3.5" /> {hiscon ? 'Lendo HISCON…' : 'Upar HISCON'}
+          <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${hiscon ? 'opacity-50' : 'cursor-pointer'} ${docs?.hiscon ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={docs?.hiscon ? 'HISCON já enviado e guardado no processo — clique para substituir.' : 'Lê o HISCON e POPULA os contratos RMC/RCC nas linhas (deduplicando).'}>
+            <Upload className="h-3.5 w-3.5" /> {hiscon ? 'Lendo HISCON…' : docs?.hiscon ? 'HISCON ✓' : 'Upar HISCON'}
             <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscon}
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscon(f); }} />
           </label>
-          <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${hiscre ? 'opacity-50' : 'cursor-pointer'}`} title="HISCRE (complementar): lê e ADICIONA as consignações nas linhas (deduplicando) — não cria card.">
-            <Upload className="h-3.5 w-3.5" /> {hiscre ? 'Lendo HISCRE…' : 'Upar HISCRE'}
+          <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${hiscre ? 'opacity-50' : 'cursor-pointer'} ${docs?.hiscre ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={docs?.hiscre ? 'HISCRE já enviado e guardado no processo — clique para substituir.' : 'HISCRE (complementar): lê e ADICIONA as consignações nas linhas (deduplicando).'}>
+            <Upload className="h-3.5 w-3.5" /> {hiscre ? 'Lendo HISCRE…' : docs?.hiscre ? 'HISCRE ✓' : 'Upar HISCRE'}
             <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscre}
               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscre(f); }} />
           </label>
@@ -717,8 +718,8 @@ function InicialActions({ caseId, jg, onChanged }: { caseId: string; jg: any; on
         <span className="text-[11px] text-[#48626f] dark:text-zinc-400">
           {jg?.liquido != null ? <>Justiça gratuita: líquido <b>{fmtBRL(jg.liquido)}</b>{jg.anual != null ? <> · anual {fmtBRL(jg.anual)}</> : ''}</> : 'JG: upe o Histórico de Créditos / IR para a renda'}
         </span>
-        <label className={`inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'}`} title="Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a seção de justiça gratuita.">
-          <Upload className="h-3.5 w-3.5" /> {jgBusy ? 'Lendo JG…' : 'Upar JG'}
+        <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'} ${jg?.liquido != null ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={jg?.liquido != null ? 'JG já enviado e guardado no processo — clique para substituir.' : 'Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a justiça gratuita.'}>
+          <Upload className="h-3.5 w-3.5" /> {jgBusy ? 'Lendo JG…' : jg?.liquido != null ? 'JG ✓' : 'Upar JG'}
           <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={jgBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onJg(f); }} />
         </label>
       </div>
