@@ -11,7 +11,18 @@ export interface Cargo {
 export interface Cultura { missao: string; visao: string; valores: string[]; cultura: string }
 export interface Manual { id: string; titulo: string; conteudo: string }
 export interface OnboardingItem { id: string; texto: string }
-export interface PessoaInfo { cargoId?: string; bio?: string }
+export interface PessoaInfo {
+  cargoId?: string;
+  bio?: string;            // perfil pessoal (a própria pessoa escreve)
+  fotoUrl?: string;        // foto de perfil (URL); fallback = avatar/iniciais
+  frase?: string;          // lema / frase pessoal
+  contratadaDesde?: string; // data de contratação (texto livre)
+  conoscoDesde?: string;   // "está conosco desde" (texto livre)
+  oab?: string;            // nº da OAB (se advogado)
+  casos?: number;          // casos que cuida
+  vidas?: number;          // vidas que muda
+  destaque?: string;       // reconhecimento/motivação (o sócio escreve)
+}
 
 export interface Escritorio {
   cultura: Cultura;

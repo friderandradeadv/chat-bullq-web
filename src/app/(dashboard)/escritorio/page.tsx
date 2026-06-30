@@ -8,8 +8,9 @@ import {
   Pencil, Plus, Trash2, Save, X, Loader2, ChevronDown, Lock,
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
+  Award, Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
 } from 'lucide-react';
-import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem } from '@/features/escritorio/services/escritorio.service';
+import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -52,9 +53,11 @@ export default function EscritorioPage() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
   const [treeSig, setTreeSig] = useState({ n: 0, open: true });
+  const [editCargoId, setEditCargoId] = useState<string | null>(null); // modal de cargo (org chart)
+  const [perfilUserId, setPerfilUserId] = useState<string | null>(null); // modal de perfil de uma pessoa
   const saveM = useMutation({
     mutationFn: (d: Escritorio) => escritorioService.save(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['escritorio'] }); toast.success('Escritório atualizado'); setEditing(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['escritorio'] }); toast.success('Escritório atualizado'); setEditing(false); setEditCargoId(null); setPerfilUserId(null); },
     onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao salvar'),
   });
 
@@ -87,8 +90,12 @@ export default function EscritorioPage() {
   const setCultura = (patch: Partial<Escritorio['cultura']>) => setDraft((d) => ({ ...d, cultura: { ...d.cultura, ...patch } }));
 
   const cargoById = useMemo(() => Object.fromEntries((cur.cargos ?? []).map((c) => [c.id, c])), [cur.cargos]);
-  const meuCargo = user?.id ? cargoById[cur.pessoas?.[user.id]?.cargoId ?? ''] : undefined;
-  const meuBio = user?.id ? cur.pessoas?.[user.id]?.bio : undefined;
+  const memberByUser = useMemo(() => Object.fromEntries(members.map((m) => [m.user.id, m])), [members]);
+  const meuInfo = user?.id ? cur.pessoas?.[user.id] : undefined;
+  const meuCargo = cargoById[meuInfo?.cargoId ?? ''];
+
+  // Salva uma alteração pontual (modais do organograma/perfil) mesclando em cima do salvo.
+  const patchEscritorio = (mut: (d: Escritorio) => Escritorio) => saveM.mutate(mut(JSON.parse(JSON.stringify(data))));
 
   // Organograma: pessoas agrupadas por cargo (+ "sem cargo")
   const grupos = useMemo(() => {
@@ -135,41 +142,41 @@ export default function EscritorioPage() {
           ))}
         </div>
 
-        {/* Minha área */}
-        <div className="mt-5 rounded-2xl border border-[#7048E8]/30 bg-[#7048E8]/5 p-5 dark:border-[#7048E8]/30 dark:bg-[#7048E8]/10">
-          <p className={LABEL}>Sua área</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span className="text-lg font-bold text-zinc-800 dark:text-zinc-100">{user?.name ?? 'Você'}</span>
-            {meuCargo && <span className="rounded-full bg-[#7048E8] px-2 py-0.5 text-xs font-semibold text-white">{meuCargo.nome}</span>}
-          </div>
-          {meuCargo?.descricao && <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">{meuCargo.descricao}</p>}
-          {meuBio && <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">{meuBio}</p>}
-          {!meuCargo && <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Seu cargo ainda não foi definido. {data.canEdit ? 'Defina abaixo no organograma.' : 'Peça a um sócio para definir.'}</p>}
-        </div>
+        {/* Perfil do profissional (área do usuário logado) */}
+        <PerfilHero
+          nome={user?.name ?? 'Você'}
+          avatarUrl={user?.id ? memberByUser[user.id]?.user.avatarUrl ?? null : null}
+          info={meuInfo}
+          cargo={meuCargo}
+          canEdit={data.canEdit}
+          onEdit={user?.id ? () => setPerfilUserId(user.id!) : undefined}
+        />
 
         {/* Cultura: missão / visão / valores */}
         <h2 id="sec-cultura" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Cultura</h2>
-        <div className="mt-2 grid gap-3 sm:grid-cols-3">
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {([['missao', 'Missão', Target, '#228BE6'], ['visao', 'Visão', Eye, '#7048E8']] as const).map(([k, label, Icon, cor]) => (
-            <div key={k} className={CARD}>
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider" style={{ color: cor }}><Icon className="h-3.5 w-3.5" /> {label}</p>
+            <div key={k} className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+              <span className="absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-10" style={{ background: cor }} />
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: `${cor}1A`, color: cor }}><Icon className="h-5 w-5" /></span>
+              <p className="mt-3 text-xs font-bold uppercase tracking-wider" style={{ color: cor }}>{label}</p>
               {editing ? (
                 <textarea value={cur.cultura[k]} onChange={(e) => setCultura({ [k]: e.target.value })} rows={3} className={`${INPUT} mt-2`} placeholder={`Nossa ${label.toLowerCase()}…`} />
               ) : (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">{cur.cultura[k] || <span className="text-zinc-400">—</span>}</p>
+                <p className="mt-1 whitespace-pre-wrap text-[15px] font-medium leading-relaxed text-zinc-700 dark:text-zinc-200">{cur.cultura[k] || <span className="text-zinc-400">—</span>}</p>
               )}
             </div>
           ))}
-          <div className={CARD}>
-            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#02883C]"><Heart className="h-3.5 w-3.5" /> Valores</p>
+          <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 sm:col-span-2 dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><Sparkles className="h-3.5 w-3.5" /> Nossos valores</p>
             {editing ? (
-              <textarea value={(cur.cultura.valores ?? []).join('\n')} onChange={(e) => setCultura({ valores: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} className={`${INPUT} mt-2`} placeholder={'Um valor por linha\nÉtica\nExcelência'} />
+              <textarea value={(cur.cultura.valores ?? []).join('\n')} onChange={(e) => setCultura({ valores: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={4} className={`${INPUT} mt-2`} placeholder={'Um valor por linha\nÉtica\nExcelência'} />
             ) : (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-3 flex flex-wrap gap-2">
                 {(cur.cultura.valores ?? []).length === 0 && <span className="text-sm text-zinc-400">—</span>}
                 {(cur.cultura.valores ?? []).map((v, i) => {
                   const c = VALOR_CORES[i % VALOR_CORES.length];
-                  return <span key={i} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${c}14`, color: c }}><Heart className="h-3 w-3" /> {v}</span>;
+                  return <span key={i} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold shadow-sm" style={{ background: `${c}14`, color: c }}><Heart className="h-4 w-4" /> {v}</span>;
                 })}
               </div>
             )}
@@ -193,15 +200,20 @@ export default function EscritorioPage() {
             <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — adicione abaixo.' : '.'}</p>
           ) : (
             <>
-              <div className="mb-2 flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-zinc-400">Clique num cargo para recolher/abrir o ramo. Arraste para o lado se a árvore for larga.</span>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button onClick={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))} className="font-medium text-[#228BE6] hover:underline">Expandir tudo</button>
-                  <span className="text-zinc-300">·</span>
-                  <button onClick={() => setTreeSig((s) => ({ n: s.n + 1, open: false }))} className="font-medium text-zinc-500 hover:underline">Recolher tudo</button>
-                </div>
-              </div>
-              <OrgChart cargos={cur.cargos ?? []} grupos={grupos} meuCargoId={meuCargo?.id} sig={treeSig} />
+              <OrgChart
+                cargos={cur.cargos ?? []}
+                grupos={grupos}
+                meuCargoId={meuCargo?.id}
+                sig={treeSig}
+                canEdit={data.canEdit}
+                onExpandAll={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))}
+                onCollapseAll={() => setTreeSig((s) => ({ n: s.n + 1, open: false }))}
+                onEditNode={data.canEdit ? (id) => setEditCargoId(id) : undefined}
+                onAddRoot={data.canEdit ? () => {
+                  const id = rid();
+                  patchEscritorio((d) => ({ ...d, cargos: [...(d.cargos ?? []), { id, nome: 'Novo cargo', descricao: '' }] }));
+                } : undefined}
+              />
             </>
           )}
         </div>
@@ -335,6 +347,33 @@ export default function EscritorioPage() {
 
         <div className="h-10" />
       </div>
+
+      {/* Modal: editar cargo + responsáveis (a partir do organograma) */}
+      {editCargoId && (
+        <CargoModal
+          cargoId={editCargoId}
+          data={data}
+          members={members}
+          saving={saveM.isPending}
+          onClose={() => setEditCargoId(null)}
+          onSave={patchEscritorio}
+          onEditPerfil={(uid) => { setEditCargoId(null); setPerfilUserId(uid); }}
+        />
+      )}
+
+      {/* Modal: editar perfil de uma pessoa */}
+      {perfilUserId && (
+        <PerfilModal
+          userId={perfilUserId}
+          nome={memberByUser[perfilUserId]?.user.name ?? 'Pessoa'}
+          avatarUrl={memberByUser[perfilUserId]?.user.avatarUrl ?? null}
+          data={data}
+          cargoById={cargoById}
+          saving={saveM.isPending}
+          onClose={() => setPerfilUserId(null)}
+          onSave={patchEscritorio}
+        />
+      )}
     </div>
   );
 }
@@ -449,25 +488,48 @@ const ORG_CSS = `
 .org-tree li > ul::before { content:''; position:absolute; top:0; left:50%; width:0; height:24px; border-left:2px solid currentColor; }
 `;
 
+type OrgShared = { cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; sig: { n: number; open: boolean }; canEdit?: boolean; onEditNode?: (id: string) => void };
+
 // Organograma top-down: raiz no topo, ramifica pra baixo com conectores coloridos por ramo.
-function OrgChart({ cargos, grupos, meuCargoId, sig }: { cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; sig: { n: number; open: boolean } }) {
+function OrgChart({ cargos, grupos, meuCargoId, sig, canEdit, onEditNode, onExpandAll, onCollapseAll, onAddRoot }: OrgShared & { onExpandAll: () => void; onCollapseAll: () => void; onAddRoot?: () => void }) {
   const byId = useMemo(() => Object.fromEntries(cargos.map((c) => [c.id, c])), [cargos]);
   const roots = useMemo(() => cargos.filter((c) => !c.parentId || !byId[c.parentId]), [cargos, byId]);
+  const [zoom, setZoom] = useState(1);
+  const z = (v: number) => setZoom(Math.min(1.3, Math.max(0.4, +v.toFixed(2))));
+  const btn = 'flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300';
   return (
-    <div className="overflow-x-auto pb-3">
-      <style>{ORG_CSS}</style>
-      <div className="flex min-w-max flex-col items-center gap-10 px-4 pt-1">
-        {roots.map((r) => (
-          <ul key={r.id} className="org-tree" style={{ color: ROOT_COLOR }}>
-            <OrgNodeTop cargo={r} cargos={cargos} grupos={grupos} meuCargoId={meuCargoId} depth={0} color={ROOT_COLOR} sig={sig} />
-          </ul>
-        ))}
+    <div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <span className="text-zinc-400">Clique num cargo para abrir/recolher o ramo{canEdit ? '; passe o mouse e toque no lápis para editar cargo e responsáveis' : ''}.</span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button onClick={() => z(zoom - 0.1)} className={btn} title="Diminuir"><ZoomOut className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setZoom(1)} className="min-w-11 rounded-lg border border-zinc-200 bg-white px-1.5 py-1 text-center font-semibold text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300" title="Voltar a 100%">{Math.round(zoom * 100)}%</button>
+          <button onClick={() => z(zoom + 0.1)} className={btn} title="Aumentar"><ZoomIn className="h-3.5 w-3.5" /></button>
+          <span className="mx-1 text-zinc-300">·</span>
+          <button onClick={onExpandAll} className="font-medium text-[#228BE6] hover:underline">Expandir</button>
+          <span className="text-zinc-300">·</span>
+          <button onClick={onCollapseAll} className="font-medium text-zinc-500 hover:underline">Recolher</button>
+        </div>
       </div>
+      <div className="max-h-[72vh] overflow-auto rounded-xl border border-zinc-100 bg-zinc-50/40 dark:border-zinc-800 dark:bg-zinc-950/40">
+        <style>{ORG_CSS}</style>
+        <div className="flex min-w-max flex-col items-center gap-10 px-8 py-7" style={{ zoom } as React.CSSProperties}>
+          {roots.map((r) => (
+            <ul key={r.id} className="org-tree" style={{ color: ROOT_COLOR }}>
+              <OrgNodeTop cargo={r} depth={0} color={ROOT_COLOR} shared={{ cargos, grupos, meuCargoId, sig, canEdit, onEditNode }} />
+            </ul>
+          ))}
+        </div>
+      </div>
+      {canEdit && onAddRoot && (
+        <button onClick={onAddRoot} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-1.5 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/5 dark:border-zinc-700"><Plus className="h-3.5 w-3.5" /> Adicionar cargo no topo</button>
+      )}
     </div>
   );
 }
 
-function OrgNodeTop({ cargo, cargos, grupos, meuCargoId, depth, color, sig }: { cargo: Cargo; cargos: Cargo[]; grupos: Map<string, Member[]>; meuCargoId?: string; depth: number; color: string; sig: { n: number; open: boolean } }) {
+function OrgNodeTop({ cargo, depth, color, shared }: { cargo: Cargo; depth: number; color: string; shared: OrgShared }) {
+  const { cargos, grupos, meuCargoId, sig, canEdit, onEditNode } = shared;
   const children = useMemo(() => cargos.filter((c) => c.parentId === cargo.id), [cargos, cargo.id]);
   const people = grupos.get(cargo.id) ?? [];
   const isMine = cargo.id === meuCargoId;
@@ -495,26 +557,219 @@ function OrgNodeTop({ cargo, cargos, grupos, meuCargoId, depth, color, sig }: { 
 
   return (
     <li style={{ color }}>
-      <button
-        onClick={() => hasChildren && setCollapsed((c) => !c)}
-        title={tip || undefined}
-        className={`relative z-[1] flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 font-semibold shadow-sm transition ${hasChildren ? 'cursor-pointer hover:-translate-y-px hover:shadow-md' : 'cursor-default'} ${depth === 0 ? 'text-base' : 'text-[13px]'} ${cardCls} ${isMine ? 'ring-2 ring-offset-2 ring-[#7048E8] dark:ring-offset-zinc-900' : ''}`}
-        style={cardStyle}
-      >
-        {depth >= 2 && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />}
-        <span>{cargo.nome || 'Cargo'}</span>
-        {isMine && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${depth === 1 ? 'bg-white/25 text-white' : 'bg-[#7048E8] text-white'}`}>você</span>}
-        {people.length > 0 && <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold ${countCls}`}>{people.length}</span>}
-        {hasChildren && <ChevronDown className={`h-3.5 w-3.5 shrink-0 opacity-50 transition-transform ${collapsed ? '-rotate-90' : ''}`} />}
-      </button>
+      <div className="group relative z-[1]">
+        <button
+          onClick={() => hasChildren && setCollapsed((c) => !c)}
+          title={tip || undefined}
+          className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 font-semibold shadow-sm transition ${hasChildren ? 'cursor-pointer hover:-translate-y-px hover:shadow-md' : 'cursor-default'} ${depth === 0 ? 'text-base' : 'text-[13px]'} ${cardCls} ${isMine ? 'ring-2 ring-offset-2 ring-[#7048E8] dark:ring-offset-zinc-900' : ''}`}
+          style={cardStyle}
+        >
+          {depth >= 2 && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />}
+          <span>{cargo.nome || 'Cargo'}</span>
+          {isMine && <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${depth === 1 ? 'bg-white/25 text-white' : 'bg-[#7048E8] text-white'}`}>você</span>}
+          {people.length > 0 && <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold ${countCls}`}>{people.length}</span>}
+          {hasChildren && <ChevronDown className={`h-3.5 w-3.5 shrink-0 opacity-50 transition-transform ${collapsed ? '-rotate-90' : ''}`} />}
+        </button>
+        {canEdit && onEditNode && (
+          <button onClick={(e) => { e.stopPropagation(); onEditNode(cargo.id); }} title="Editar cargo e responsáveis" className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 opacity-0 shadow-sm transition group-hover:opacity-100 hover:text-[#228BE6] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"><Pencil className="h-3 w-3" /></button>
+        )}
+      </div>
       {hasChildren && !collapsed && (
         <ul style={{ color }}>
           {children.map((ch, i) => (
-            <OrgNodeTop key={ch.id} cargo={ch} cargos={cargos} grupos={grupos} meuCargoId={meuCargoId} depth={depth + 1} color={depth === 0 ? BRANCH_COLORS[i % BRANCH_COLORS.length] : color} sig={sig} />
+            <OrgNodeTop key={ch.id} cargo={ch} depth={depth + 1} color={depth === 0 ? BRANCH_COLORS[i % BRANCH_COLORS.length] : color} shared={shared} />
           ))}
         </ul>
       )}
     </li>
+  );
+}
+
+function iniciaisDe(n?: string | null) { return (n ?? '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); }
+
+// Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, motivação).
+function PerfilHero({ nome, avatarUrl, info, cargo, canEdit, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; canEdit?: boolean; onEdit?: () => void }) {
+  const foto = info?.fotoUrl || avatarUrl;
+  const stats = ([[Scale, 'Casos que você cuida', info?.casos], [Heart, 'Vidas que você muda', info?.vidas]] as const).filter(([, , v]) => typeof v === 'number');
+  return (
+    <div className="mt-5 overflow-hidden rounded-2xl border border-[#7048E8]/25 bg-gradient-to-br from-[#7048E8]/10 via-white to-[#228BE6]/5 dark:border-[#7048E8]/30 dark:from-[#7048E8]/15 dark:via-zinc-900 dark:to-zinc-900">
+      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+        <div className="shrink-0">
+          {foto ? (
+            <img src={foto} alt={nome} className="h-20 w-20 rounded-2xl object-cover shadow-md ring-2 ring-white dark:ring-zinc-800" />
+          ) : (
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-[#7048E8] text-2xl font-bold text-white shadow-md">{iniciaisDe(nome)}</div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">Seu espaço</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{nome}</h2>
+            {cargo && <span className="rounded-full bg-[#7048E8] px-2.5 py-0.5 text-xs font-semibold text-white">{cargo.nome}</span>}
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {info?.oab && <span className="inline-flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> OAB {info.oab}</span>}
+            {info?.conoscoDesde && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> Conosco desde {info.conoscoDesde}</span>}
+            {info?.contratadaDesde && <span className="inline-flex items-center gap-1"><Award className="h-3.5 w-3.5" /> Contratada desde {info.contratadaDesde}</span>}
+          </div>
+        </div>
+        {canEdit && onEdit && (
+          <button onClick={onEdit} className="inline-flex shrink-0 items-center gap-1 self-start rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"><Pencil className="h-4 w-4" /> Editar meu perfil</button>
+        )}
+      </div>
+      <div className="space-y-3 px-5 pb-5">
+        {cargo?.descricao && (
+          <div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#228BE6]"><Target className="h-3.5 w-3.5" /> O que esperamos de você</p>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{cargo.descricao}</p>
+          </div>
+        )}
+        {stats.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {stats.map(([Icon, label, valor]) => (
+              <div key={label} className="flex items-center gap-3 rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e64980]/10 text-[#e64980]"><Icon className="h-5 w-5" /></span>
+                <div><p className="text-2xl font-extrabold text-zinc-800 dark:text-zinc-100">{valor}</p><p className="text-[11px] font-medium text-zinc-500">{label}</p></div>
+              </div>
+            ))}
+          </div>
+        )}
+        {info?.destaque && (
+          <div className="flex items-start gap-2 rounded-xl border border-[#F08C00]/30 bg-[#F08C00]/10 p-3.5 text-sm text-[#9a5b00] dark:text-[#F0B860]"><Trophy className="mt-0.5 h-4 w-4 shrink-0" /> <p className="font-medium">{info.destaque}</p></div>
+        )}
+        {info?.frase && <p className="flex items-start gap-2 text-sm italic text-zinc-500 dark:text-zinc-400"><Quote className="mt-0.5 h-4 w-4 shrink-0 text-zinc-300" /> {info.frase}</p>}
+        {info?.bio && <p className="whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">{info.bio}</p>}
+        <p className="flex items-center gap-1.5 text-sm font-medium text-[#7048E8]"><Sparkles className="h-4 w-4 shrink-0" /> Cada processo que passa por você é uma história que muda. Capricha — tem gente contando com isso. 💜</p>
+        {!cargo && <p className="text-sm text-zinc-500">Seu cargo ainda não foi definido. {canEdit ? 'Defina no organograma.' : 'Peça a um sócio.'}</p>}
+      </div>
+    </div>
+  );
+}
+
+// Overlay base dos modais.
+function ModalShell({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-100 bg-white px-5 py-3.5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">{title}</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-3 p-5">{children}</div>
+        {footer && <div className="sticky bottom-0 flex items-center gap-2 border-t border-zinc-100 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+const SAVE_BTN = 'inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#1c7ed6] disabled:opacity-50';
+const GHOST_BTN = 'inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800';
+
+// Modal de edição de perfil de uma pessoa (própria ou de outro, pelo sócio).
+function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, onClose, onSave }: { userId: string; nome: string; avatarUrl: string | null; data: Escritorio; cargoById: Record<string, Cargo>; saving: boolean; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void }) {
+  const atual = data.pessoas?.[userId];
+  const [f, setF] = useState<PessoaInfo>({ ...(atual ?? {}) });
+  const set = (p: Partial<PessoaInfo>) => setF((x) => ({ ...x, ...p }));
+  const num = (s: string) => (s === '' ? undefined : Math.max(0, parseInt(s, 10) || 0));
+  const cargo = cargoById[f.cargoId ?? atual?.cargoId ?? ''];
+  const foto = f.fotoUrl || avatarUrl;
+  const salvar = () => onSave((d) => ({ ...d, pessoas: { ...(d.pessoas ?? {}), [userId]: { ...(d.pessoas?.[userId] ?? {}), ...f } } }));
+  return (
+    <ModalShell
+      title={`Perfil — ${nome}`}
+      onClose={onClose}
+      footer={<div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Cancelar</button><button onClick={salvar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button></div>}
+    >
+      <div className="flex items-center gap-3">
+        {foto ? <img src={foto} alt={nome} className="h-16 w-16 rounded-2xl object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#7048E8] text-xl font-bold text-white">{iniciaisDe(nome)}</div>}
+        <div className="min-w-0 flex-1"><p className="font-semibold text-zinc-800 dark:text-zinc-100">{nome}</p>{cargo && <p className="text-xs text-zinc-400">{cargo.nome}</p>}</div>
+      </div>
+      <div><p className={LABEL}>Foto (URL)</p><input value={f.fotoUrl ?? ''} onChange={(e) => set({ fotoUrl: e.target.value })} placeholder="https://…/foto.jpg" className={`${INPUT} mt-1`} /></div>
+      <div className="grid grid-cols-2 gap-2">
+        <div><p className={LABEL}>Conosco desde</p><input value={f.conoscoDesde ?? ''} onChange={(e) => set({ conoscoDesde: e.target.value })} placeholder="ex.: março de 2024" className={`${INPUT} mt-1`} /></div>
+        <div><p className={LABEL}>Contratada desde</p><input value={f.contratadaDesde ?? ''} onChange={(e) => set({ contratadaDesde: e.target.value })} placeholder="ex.: 01/03/2024" className={`${INPUT} mt-1`} /></div>
+        <div><p className={LABEL}>OAB</p><input value={f.oab ?? ''} onChange={(e) => set({ oab: e.target.value })} placeholder="ex.: SP 123.456" className={`${INPUT} mt-1`} /></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><p className={LABEL}>Casos</p><input type="number" min={0} value={f.casos ?? ''} onChange={(e) => set({ casos: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
+          <div><p className={LABEL}>Vidas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
+        </div>
+      </div>
+      <div><p className={LABEL}>Reconhecimento / motivação (aparece em destaque)</p><input value={f.destaque ?? ''} onChange={(e) => set({ destaque: e.target.value })} placeholder="ex.: Referência em RMC, cuida de cada cliente com carinho." className={`${INPUT} mt-1`} /></div>
+      <div><p className={LABEL}>Frase / lema pessoal</p><input value={f.frase ?? ''} onChange={(e) => set({ frase: e.target.value })} placeholder="ex.: Justiça com gente de verdade." className={`${INPUT} mt-1`} /></div>
+      <div><p className={LABEL}>Perfil pessoal</p><textarea value={f.bio ?? ''} onChange={(e) => set({ bio: e.target.value })} rows={3} placeholder="Conte um pouco sobre você, sua trajetória, o que te move…" className={`${INPUT} mt-1`} /></div>
+    </ModalShell>
+  );
+}
+
+// Modal de edição de cargo + responsáveis (aberto pelo lápis no organograma).
+function CargoModal({ cargoId, data, members, saving, onClose, onSave, onEditPerfil }: { cargoId: string; data: Escritorio; members: Member[]; saving: boolean; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void; onEditPerfil: (uid: string) => void }) {
+  const cargo = (data.cargos ?? []).find((c) => c.id === cargoId);
+  const [nome, setNome] = useState(cargo?.nome ?? '');
+  const [descricao, setDescricao] = useState(cargo?.descricao ?? '');
+  const [parentId, setParentId] = useState(cargo?.parentId ?? '');
+  const [divisao, setDivisao] = useState(cargo?.divisaoHonorarios ?? '');
+  const [assigned, setAssigned] = useState<Set<string>>(() => new Set(members.filter((m) => data.pessoas?.[m.user.id]?.cargoId === cargoId).map((m) => m.user.id)));
+  if (!cargo) return null;
+  const outros = (data.cargos ?? []).filter((c) => c.id !== cargoId);
+  const toggle = (uid: string) => setAssigned((s) => { const n = new Set(s); if (n.has(uid)) n.delete(uid); else n.add(uid); return n; });
+  const salvar = () => onSave((d) => {
+    const cargos = (d.cargos ?? []).map((c) => (c.id === cargoId ? { ...c, nome, descricao, parentId: parentId || null, divisaoHonorarios: divisao } : c));
+    const pessoas = { ...(d.pessoas ?? {}) };
+    for (const m of members) {
+      const uid = m.user.id;
+      if (assigned.has(uid)) pessoas[uid] = { ...(pessoas[uid] ?? {}), cargoId };
+      else if (pessoas[uid]?.cargoId === cargoId) pessoas[uid] = { ...pessoas[uid], cargoId: undefined };
+    }
+    return { ...d, cargos, pessoas };
+  });
+  const addSub = () => onSave((d) => ({ ...d, cargos: [...(d.cargos ?? []), { id: rid(), nome: 'Novo cargo', descricao: '', parentId: cargoId }] }));
+  const remover = () => {
+    if (typeof window !== 'undefined' && !window.confirm('Remover este cargo? As pessoas ficam sem cargo e os subordinados sobem um nível.')) return;
+    onSave((d) => {
+      const cargos = (d.cargos ?? []).filter((c) => c.id !== cargoId).map((c) => (c.parentId === cargoId ? { ...c, parentId: cargo.parentId ?? null } : c));
+      const pessoas = { ...(d.pessoas ?? {}) };
+      for (const uid of Object.keys(pessoas)) if (pessoas[uid]?.cargoId === cargoId) pessoas[uid] = { ...pessoas[uid], cargoId: undefined };
+      return { ...d, cargos, pessoas };
+    });
+  };
+  return (
+    <ModalShell
+      title="Editar cargo"
+      onClose={onClose}
+      footer={<><button onClick={remover} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"><Trash2 className="h-4 w-4" /> Remover</button><div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Cancelar</button><button onClick={salvar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button></div></>}
+    >
+      <div><p className={LABEL}>Nome do cargo</p><input value={nome} onChange={(e) => setNome(e.target.value)} className={`${INPUT} mt-1 font-semibold`} /></div>
+      <div><p className={LABEL}>O que esperamos / o que faz</p><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} placeholder="Responsabilidades, entregas, do que cuida…" className={`${INPUT} mt-1`} /></div>
+      <div className="grid grid-cols-2 gap-2">
+        <div><p className={LABEL}>Reporta a</p>
+          <select value={parentId ?? ''} onChange={(e) => setParentId(e.target.value)} className={`${INPUT} mt-1`}>
+            <option value="">— topo —</option>
+            {outros.map((c) => <option key={c.id} value={c.id}>{c.nome || '(sem nome)'}</option>)}
+          </select>
+        </div>
+        <div><p className={LABEL}>Divisão de honorários</p><input value={divisao} onChange={(e) => setDivisao(e.target.value)} placeholder="ex.: 10% do êxito" className={`${INPUT} mt-1`} /></div>
+      </div>
+      <div>
+        <p className={LABEL}>Responsáveis neste cargo</p>
+        <div className="mt-1.5 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-1.5 dark:border-zinc-700">
+          {members.length === 0 && <p className="px-2 py-1 text-sm text-zinc-400">Sem pessoas na equipe.</p>}
+          {members.map((m) => {
+            const on = assigned.has(m.user.id);
+            return (
+              <div key={m.user.id} className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                <button onClick={() => toggle(m.user.id)} className="flex flex-1 items-center gap-2 text-left">
+                  {on ? <CheckCircle2 className="h-5 w-5 shrink-0 text-[#228BE6]" /> : <Circle className="h-5 w-5 shrink-0 text-zinc-300 dark:text-zinc-600" />}
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{iniciaisDe(m.user.name)}</span>
+                  <span className={`text-sm ${on ? 'font-medium text-zinc-800 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-300'}`}>{m.user.name}</span>
+                </button>
+                <button onClick={() => onEditPerfil(m.user.id)} title="Editar perfil desta pessoa" className="rounded p-1 text-zinc-400 hover:text-[#7048E8]"><UserPlus className="h-4 w-4" /></button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <button onClick={addSub} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-1.5 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/5 dark:border-zinc-700"><Plus className="h-3.5 w-3.5" /> Adicionar subordinado a este cargo</button>
+    </ModalShell>
   );
 }
 
