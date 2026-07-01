@@ -46,7 +46,8 @@ export default function RecursosPage() {
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [selected, setSelected] = useState<Recurso | null>(null);
 
-  const { data: rows = [], isLoading } = useQuery({ queryKey: ['recursos', 'all'], queryFn: () => recursosService.list() });
+  // Tempo real: revalida a cada 20s (o DJEN cria/atualiza recursos em background).
+  const { data: rows = [], isLoading } = useQuery({ queryKey: ['recursos', 'all'], queryFn: () => recursosService.list(), refetchInterval: 20_000, refetchOnWindowFocus: true });
 
   const especies = useMemo(() => Array.from(new Set(rows.map((r) => r.especie).filter(Boolean))).sort() as string[], [rows]);
 

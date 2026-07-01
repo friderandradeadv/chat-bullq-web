@@ -128,7 +128,7 @@ function GargalosView({ g }: { g: RecursoStats['gargalos'] }) {
 
 export function RecursosInsightsPanel() {
   const [tab, setTab] = useState<'geral' | 'especies' | 'teses' | 'gargalos'>('geral');
-  const { data: stats, isLoading } = useQuery({ queryKey: ['recursos-stats'], queryFn: () => recursosService.stats() });
+  const { data: stats, isLoading } = useQuery({ queryKey: ['recursos-stats'], queryFn: () => recursosService.stats(), refetchInterval: 20_000, refetchOnWindowFocus: true });
   if (isLoading) return <Panel><Hint>Carregando métricas do escritório…</Hint></Panel>;
   if (!stats || stats.total === 0) return null;
   const exito = Math.round(stats.taxaExito * 100);
