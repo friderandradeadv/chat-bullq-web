@@ -499,4 +499,12 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/drive/organizar-inicial`);
     return data.data ?? data;
   },
+  async sugerirCadastroCliente(id: string): Promise<{
+    ok: boolean;
+    cadastro: Record<string, string>;
+    preenchidos: string[];
+  }> {
+    const { data } = await api.post(`/legal-cases/${id}/cadastro/sugerir`);
+    return data.data ?? data;
+  },
 };

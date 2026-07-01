@@ -963,6 +963,20 @@ function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: a
     } finally { setOrgBusy(false); }
   };
 
+  const [cadBusy, setCadBusy] = useState(false);
+  const preencherCadastro = async () => {
+    setCadBusy(true);
+    try {
+      const r = await legalCasesService.sugerirCadastroCliente(caseId);
+      toast.success(r.preenchidos.length
+        ? `Cadastro preenchido pela IA: ${r.preenchidos.join(', ')}. Confira e gere a inicial.`
+        : 'A IA não achou dados de cadastro na conversa — preencha à mão.');
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao preencher o cadastro');
+    } finally { setCadBusy(false); }
+  };
+
   // Escolha SEMPRE disponível: gerar a inicial só de RMC ou só de RCC,
   // independente de quantos contratos o HISCON trouxe. Cada botão gera a peça
   // daquele produto (usa o contrato do produto se houver; senão o réu do card).
@@ -980,6 +994,14 @@ function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: a
           </label>
         </DropZone>
       </div>
+      <button
+        onClick={preencherCadastro}
+        disabled={cadBusy}
+        title="A IA lê a conversa do cliente + o RG/CPF/comprovante enviados e preenche a qualificação (CPF, endereço, estado civil, profissão, RG) — usada na inicial e no tribunal."
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#7048e8] px-3 py-2 text-xs font-semibold text-[#7048e8] hover:bg-[#7048e8]/5 disabled:opacity-50"
+      >
+        <Sparkles className="h-3.5 w-3.5" /> {cadBusy ? 'Preenchendo cadastro…' : 'Preencher cadastro do cliente (IA)'}
+      </button>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Gerar petição inicial — escolha o produto</p>
       <div className="flex gap-1.5">
         {OPCOES.map((p) => (
