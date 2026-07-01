@@ -20,8 +20,8 @@ const roleLabel = (r?: string) => (r === 'OWNER' ? 'Proprietário' : r === 'ADMI
 export default function RhPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<'membros' | 'selecao'>('membros');
-  const { data: rh, isLoading } = useQuery({ queryKey: ['rh'], queryFn: () => rhService.get(), staleTime: 30_000 });
-  const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
+  const { data: rh } = useQuery({ queryKey: ['rh'], queryFn: () => rhService.get(), staleTime: 30_000, retry: false });
+  const { data: members = [], isLoading } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
   const { data: esc } = useQuery({ queryKey: ['escritorio'], queryFn: () => escritorioService.get(), staleTime: 60_000 });
 
   const cargoById = useMemo(() => Object.fromEntries((esc?.cargos ?? []).map((c) => [c.id, c])), [esc]);
@@ -58,7 +58,9 @@ export default function RhPage() {
         </div>
 
         {tab === 'membros' && <MembrosView team={team} pessoas={esc?.pessoas ?? {}} cargoById={cargoById} />}
-        {tab === 'selecao' && rh && <ProcessoSeletivo rh={rh} canEdit={canEdit} patch={patch} saving={saveM.isPending} />}
+        {tab === 'selecao' && (rh
+          ? <ProcessoSeletivo rh={rh} canEdit={canEdit} patch={patch} saving={saveM.isPending} />
+          : <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-400">O processo seletivo precisa da atualização do servidor (rode o deploy da API). Assim que subir, ele aparece aqui.</div>)}
       </div>
     </div>
   );
