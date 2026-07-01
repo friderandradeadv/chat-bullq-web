@@ -82,9 +82,14 @@ const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido',
 export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
   const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nCasos: 0, nLancamentos: 0 };
   const clientes = data.clientes ?? [];
-  const serie = data.serie ?? [];
+  // Quando o backend manda o bloco da ÁREA (vertical do advogado), a visão reflete
+  // a vertical inteira (ex.: Previdenciário): lançamentos, CS e série da área toda.
+  const deArea = !!data.area;
+  const areaNome = data.area?.nome ?? '';
+  const serie = (data.area?.serie?.length ? data.area.serie : data.serie) ?? [];
   const casos = data.casos ?? [];
-  const cs = data.cs ?? { prestacao: 0, cumprimento: 0, cumprimentoNosso: 0, itens: [] as { caseId: string; cliente: string; tipo: string; valor: number; nosso?: number }[] };
+  const cs = data.area?.cs ?? data.cs ?? { prestacao: 0, cumprimento: 0, cumprimentoNosso: 0, itens: [] as { caseId: string; cliente: string; tipo: string; valor: number; nosso?: number }[] };
+  const lancFonte = data.area?.lancamentos ?? data.transacoes ?? [];
   // parte do escritório no cumprimento (bruto × % do contrato). Usa o valor do
   // backend (por caso); se vier de uma API antiga, cai na % padrão do escritório.
   const csCumprimentoNosso = cs.cumprimentoNosso ?? Math.round(cs.cumprimento * (data.projecaoCasos?.escritorioPadrao ?? 40)) / 100;
@@ -102,15 +107,15 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
   const [stf, setStf] = useState<'todos' | 'recebido' | 'a_receber'>('todos');
   const [busca, setBusca] = useState('');
 
-  const mesesDisp = useMemo(() => Array.from(new Set((data.transacoes ?? []).map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
-  const txs = useMemo(() => (data.transacoes ?? []).filter((t) => {
+  const mesesDisp = useMemo(() => Array.from(new Set(lancFonte.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [lancFonte]);
+  const txs = useMemo(() => lancFonte.filter((t) => {
     if (mesSel && mesKey(t) !== mesSel) return false;
     const st = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
     if (stf === 'recebido' && !(st === 'recebido' || st === 'pago')) return false;
     if (stf === 'a_receber' && (st === 'recebido' || st === 'pago')) return false;
     if (busca && !`${t.pagador ?? t.party ?? ''} ${t.categoria}`.toLowerCase().includes(busca.toLowerCase())) return false;
     return true;
-  }), [data.transacoes, mesSel, stf, busca]);
+  }), [lancFonte, mesSel, stf, busca]);
   const chartData = serie.map((s) => ({ nome: mesCurtoKey(s.mes), valor: s.valor }));
 
   return (
@@ -120,7 +125,7 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-[#228BE6] text-base font-bold text-white">{iniciais}</span>
           <div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{saud}, {primeiro}! 👋</h1>
-            <p className="text-sm text-zinc-500">Seu financeiro — <strong>{r.nCasos ?? casos.length} processo(s)</strong> seus · <strong>{r.nClientes} cliente(s)</strong> que já te renderam honorários.</p>
+            <p className="text-sm text-zinc-500">{deArea ? <>Financeiro da vertical <strong>{areaNome}</strong> — <strong>{data.area?.nCasos ?? r.nCasos} processo(s)</strong> na área.</> : <>Seu financeiro — <strong>{r.nCasos ?? casos.length} processo(s)</strong> seus · <strong>{r.nClientes} cliente(s)</strong> que já te renderam honorários.</>}</p>
           </div>
         </div>
 
@@ -160,24 +165,33 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           </Card>
         )}
 
-        {/* A receber dos seus casos (CS) */}
-        {(cs.prestacao > 0 || cs.cumprimento > 0) && (
-          <Card title={<span className="flex items-center gap-2"><Gavel className="h-4 w-4 text-emerald-600" /> A receber dos seus casos (Cumprimento de Sentença)</span>} sub="valores que você preencheu no card dos processos.">
-            <div className="mb-2 flex flex-wrap gap-4 text-sm">
-              {cs.prestacao > 0 && <span className="text-emerald-600">Prestação (nosso): <strong>{brl(cs.prestacao)}</strong></span>}
-              {cs.cumprimento > 0 && <span className="text-[#228BE6]">Em cumprimento (bruto): <strong>{brl(cs.cumprimento)}</strong></span>}
-              {csCumprimentoNosso > 0 && <span className="text-[#7048E8]">Cumprimento (nosso ~%): <strong>{brl(csCumprimentoNosso)}</strong></span>}
+        {/* A receber (CS) — completo, escopado à área (prestação + cumprimento) */}
+        {(cs.prestacao > 0 || cs.cumprimento > 0) ? (
+          <Card title={<span className="flex items-center gap-2"><Gavel className="h-4 w-4 text-emerald-600" /> A receber · Cumprimento de Sentença{deArea ? ` — ${areaNome}` : ''}</span>}
+            sub={`o que os processos ${deArea ? 'da vertical' : 'seus'} devem trazer (preenchido no card de cada processo) — ${cs.itens.length} caso(s).`}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Prestação (certo)</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl(cs.prestacao)}</p><p className="text-[11px] text-zinc-400">honorário + sucumbência apurados</p></div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900/40 dark:bg-blue-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Cumprimento (nosso)</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#228BE6]">{brl(csCumprimentoNosso)}</p><p className="text-[11px] text-zinc-400">parte do escritório · bruto {brl(cs.cumprimento)}</p></div>
+              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Total a receber</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(cs.prestacao + csCumprimentoNosso)}</p><p className="text-[11px] text-zinc-400">certo + provável (nosso)</p></div>
             </div>
-            <div className="max-h-56 space-y-0.5 overflow-y-auto scrollbar-thin">
+            <div className="mt-3 max-h-64 space-y-0.5 overflow-y-auto scrollbar-thin">
               {cs.itens.map((x, i) => (
-                <div key={i} className="flex items-center justify-between border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
+                <div key={i} className="flex items-center justify-between gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
                   <VerProcesso id={x.caseId}>{x.cliente}</VerProcesso>
-                  <span className="flex items-center gap-2"><span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">{x.tipo === 'prestacao' ? 'prestação' : 'cumprimento'}</span><span className="w-24 text-right font-semibold tabular-nums text-emerald-600">{brl2(x.valor)}</span></span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">{x.tipo === 'prestacao' ? 'prestação' : 'cumprimento'}</span>
+                    {x.tipo === 'cumprimento' && x.nosso != null && <span className="hidden w-20 text-right text-[11px] text-zinc-400 sm:inline">bruto {brl(x.valor)}</span>}
+                    <span className="w-24 text-right font-semibold tabular-nums text-emerald-600">{brl2(x.tipo === 'cumprimento' && x.nosso != null ? x.nosso : x.valor)}</span>
+                  </span>
                 </div>
               ))}
             </div>
           </Card>
-        )}
+        ) : deArea ? (
+          <Card title={<span className="flex items-center gap-2"><Gavel className="h-4 w-4 text-emerald-600" /> A receber · Cumprimento de Sentença — {areaNome}</span>}>
+            <p className="py-6 text-center text-sm text-zinc-400">Ainda não há valores em prestação de contas ou cumprimento nos casos da vertical. Assim que um processo chegar nessas fases e o valor for preenchido no card do processo, aparece aqui.</p>
+          </Card>
+        ) : null}
 
         {/* Seus clientes */}
         {clientes.length > 0 && (
@@ -315,6 +329,19 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           </Card>
         )}
 
+        {/* ── MOTIVAÇÃO — o que está a caminho (CS a receber + sua parte na carteira) ── */}
+        {(cs.prestacao + csCumprimentoNosso > 0 || (data.projecaoCasos?.liquidoProvavel ?? 0) > 0) && (
+          <Card title={<span className="flex items-center gap-2"><Flame className="h-4 w-4 text-amber-500" /> Motivação{deArea ? ` · ${areaNome}` : ''}</span>}
+            sub="o retorno que o seu trabalho está construindo — mesmo o que ainda não virou caixa.">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">A receber (CS)</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl(cs.prestacao + csCumprimentoNosso)}</p><p className="text-[11px] text-zinc-400">prestação + cumprimento (nosso)</p></div>
+              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte na carteira</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos?.liquidoProvavel ?? 0)}</p><p className="text-[11px] text-zinc-400">honorários prováveis dos processos</p></div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Total a caminho</p><p className="mt-0.5 text-xl font-bold tabular-nums text-amber-600">{brl(cs.prestacao + csCumprimentoNosso + (data.projecaoCasos?.liquidoProvavel ?? 0))}</p><p className="text-[11px] text-zinc-400">o que o seu esforço deve trazer</p></div>
+            </div>
+            <p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">🔥 Tem <strong className="text-amber-600">{brl(cs.prestacao + csCumprimentoNosso + (data.projecaoCasos?.liquidoProvavel ?? 0))}</strong> a caminho pelos seus processos. Cada prazo cumprido e cada audiência aproxima esse valor de virar caixa — e uma vida resolvida.</p>
+          </Card>
+        )}
+
         {/* Seus processos — autor × réu, etiquetas, o que o cliente busca, sua parte */}
         {casos.length > 0 && (
           <Card title={<>Seus processos <span className="font-normal text-zinc-400">· {casos.length}</span></>} sub="cada linha é uma pessoa que confia no seu trabalho.">
@@ -345,8 +372,8 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           </Card>
         )}
 
-        {/* Seus lançamentos — filtrável */}
-        <Card title={<>Seus lançamentos <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub="movimentações dos seus casos.">
+        {/* Lançamentos — filtrável (da área quando escopado à vertical) */}
+        <Card title={<>{deArea ? <>Lançamentos da área · {areaNome}</> : 'Seus lançamentos'} <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub={deArea ? `entradas e saídas ligadas aos clientes da vertical ${areaNome}.` : 'movimentações dos seus casos.'}>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
               <Calendar className="h-3.5 w-3.5 text-zinc-400" />
@@ -373,7 +400,7 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           </div>
         </Card>
 
-        <p className="mt-4 pb-2 text-center text-xs text-zinc-400">Esta visão mostra apenas os seus processos — em que você é o responsável.</p>
+        <p className="mt-4 pb-2 text-center text-xs text-zinc-400">{deArea ? <>Esta visão reflete a vertical <strong>{areaNome}</strong> — sua área de atuação.</> : 'Esta visão mostra apenas os seus processos — em que você é o responsável.'}</p>
     </>
   );
 }
