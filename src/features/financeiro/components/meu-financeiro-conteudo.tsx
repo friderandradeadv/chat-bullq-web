@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -11,6 +11,8 @@ import {
   TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
+import { contactsService } from '@/features/contacts/services/contacts.service';
+import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { mesKey, mesLabel, mesCurtoKey } from '@/features/financeiro/lib/clientes';
 
 /** Contexto de criação de lançamento (quando o advogado pode lançar na vertical dele). */
@@ -435,6 +437,9 @@ function NovoLancamentoModal({ criar, onClose }: { criar: CriarCtx; onClose: () 
   const [categoria, setCategoria] = useState('Honorários');
   const [valor, setValor] = useState('');
   const [pessoa, setPessoa] = useState('');
+  const [contactId, setContactId] = useState<string | undefined>();
+  const [caseId, setCaseId] = useState<string | undefined>();
+  const [procLabel, setProcLabel] = useState('');
   const [data, setData] = useState(hoje);
   const [status, setStatus] = useState<TxStatus>('recebido');
   const CATS_REC = ['Honorários', 'Outros'];
@@ -444,9 +449,9 @@ function NovoLancamentoModal({ criar, onClose }: { criar: CriarCtx; onClose: () 
     mutationFn: () => financeiroService.addTransacao({
       data, tipo, categoria, valor: Math.abs(Number(String(valor).replace(',', '.')) || 0),
       pagador: tipo === 'receita' ? (pessoa || undefined) : undefined, recebedor: tipo === 'despesa' ? (pessoa || undefined) : undefined,
-      status, area: criar.area, responsavelId: criar.userId,
+      status, area: criar.area, responsavelId: criar.userId, contactId, caseId,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success('Lançamento adicionado'); onClose(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro'] }); qc.invalidateQueries({ queryKey: ['contact'] }); toast.success('Lançamento adicionado'); onClose(); },
     onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao lançar'),
   });
   const podeSalvar = Number(String(valor).replace(',', '.')) > 0;
@@ -471,9 +476,25 @@ function NovoLancamentoModal({ criar, onClose }: { criar: CriarCtx; onClose: () 
               <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-950" />
             </label>
           </div>
-          <label className="block text-xs font-medium text-zinc-500">{tipo === 'receita' ? 'Cliente / pagador' : 'Fornecedor / descrição'}
-            <input value={pessoa} onChange={(e) => setPessoa(e.target.value)} placeholder={tipo === 'receita' ? 'nome do cliente' : 'ex.: Meta Ads, agência…'} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
-          </label>
+          {tipo === 'receita' ? (
+            <div className="text-xs font-medium text-zinc-500">Cliente <span className="font-normal text-zinc-400">(busca o cadastro — o lançamento entra na ficha dele)</span>
+              <BuscaCliente value={pessoa} onPick={(c) => { setPessoa(c?.nome ?? ''); setContactId(c?.id); }} onText={(t) => { setPessoa(t); setContactId(undefined); }} />
+            </div>
+          ) : (
+            <label className="block text-xs font-medium text-zinc-500">Fornecedor / descrição
+              <input value={pessoa} onChange={(e) => setPessoa(e.target.value)} placeholder="ex.: Meta Ads, agência…" className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
+            </label>
+          )}
+          <div className="text-xs font-medium text-zinc-500">Vincular a um processo <span className="font-normal text-zinc-400">(opcional — pra quitar/registrar no processo)</span>
+            {caseId ? (
+              <div className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-[#228BE6]/40 bg-[#228BE6]/5 px-2 py-1.5 text-sm">
+                <span className="flex min-w-0 items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><Gavel className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /><span className="truncate">{procLabel}</span></span>
+                <button onClick={() => { setCaseId(undefined); setProcLabel(''); }} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+              </div>
+            ) : (
+              <BuscaProcesso onPick={(c) => { setCaseId(c.id); setProcLabel(c.label); }} />
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs font-medium text-zinc-500">Data
               <input value={data} onChange={(e) => setData(e.target.value)} placeholder="DD/MM/AAAA" className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
@@ -490,6 +511,55 @@ function NovoLancamentoModal({ criar, onClose }: { criar: CriarCtx; onClose: () 
           <button onClick={() => save.mutate()} disabled={!podeSalvar || save.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Lançar</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Busca de cliente (cadastro) — autocomplete. onPick=selecionou contato; onText=digitou livre. */
+function BuscaCliente({ value, onPick, onText }: { value: string; onPick: (c: { id: string; nome: string } | null) => void; onText: (t: string) => void }) {
+  const [q, setQ] = useState(value);
+  const [open, setOpen] = useState(false);
+  const { data, isFetching } = useQuery({ queryKey: ['fin-busca-cli', q], queryFn: () => contactsService.list({ search: q, limit: '8' }), enabled: open && q.trim().length >= 2, staleTime: 30_000 });
+  const opts = data?.contacts ?? [];
+  return (
+    <div className="relative mt-1">
+      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+      <input value={q} onChange={(e) => { setQ(e.target.value); onText(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} placeholder="buscar cliente pelo nome…" className="w-full rounded-lg border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
+      {open && q.trim().length >= 2 && (
+        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          {isFetching && opts.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">buscando…</p>}
+          {!isFetching && opts.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">nenhum cliente — o nome digitado será usado assim mesmo.</p>}
+          {opts.map((c) => (
+            <button key={c.id} onMouseDown={(e) => e.preventDefault()} onClick={() => { onPick({ id: c.id, nome: c.name ?? '' }); setQ(c.name ?? ''); setOpen(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><UserCircle2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" /><span className="truncate">{c.name}</span></button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Busca de processo — autocomplete (pra quitar/vincular). */
+function BuscaProcesso({ onPick }: { onPick: (c: { id: string; label: string }) => void }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const { data, isFetching } = useQuery({ queryKey: ['fin-busca-proc', q], queryFn: () => legalCasesService.list({ search: q }), enabled: open && q.trim().length >= 2, staleTime: 30_000 });
+  const opts = (data ?? []).slice(0, 8);
+  return (
+    <div className="relative mt-1">
+      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+      <input value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} placeholder="buscar processo (cliente, nº, título)…" className="w-full rounded-lg border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
+      {open && q.trim().length >= 2 && (
+        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          {isFetching && opts.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">buscando…</p>}
+          {!isFetching && opts.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">nenhum processo encontrado.</p>}
+          {opts.map((c) => (
+            <button key={c.id} onMouseDown={(e) => e.preventDefault()} onClick={() => { onPick({ id: c.id, label: `${c.title}${c.cnjNumber ? ` · ${c.cnjNumber}` : ''}` }); setOpen(false); }} className="flex w-full flex-col px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">
+              <span className="truncate text-zinc-700 dark:text-zinc-200">{c.title}</span>
+              <span className="truncate text-[11px] text-zinc-400">{c.cnjNumber || 'sem nº'}{c.area ? ` · ${c.area}` : ''}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
