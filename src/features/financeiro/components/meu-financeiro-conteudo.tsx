@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import {
   ArrowUpCircle, ArrowDownCircle, Sparkles, Search, HeartHandshake, Flame, Calendar, Gavel, ExternalLink, UserCircle2,
+  TrendingUp, Target, ChevronRight,
 } from 'lucide-react';
 import { type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
 import { mesKey, mesLabel, mesCurtoKey } from '@/features/financeiro/lib/clientes';
@@ -222,6 +223,71 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
               <p className="mt-2 inline-flex items-start gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-400">≈ Estimativa: {data.projecaoCasos.nEstimados} caso{data.projecaoCasos.nEstimados === 1 ? '' : 's'} usa{data.projecaoCasos.nEstimados === 1 ? '' : 'm'} valor da causa estimado (12× salário mínimo — art. 292 §1º CPC), porque o Astrea trouxe o valor zerado. Ajusta assim que o valor real for lançado.</p>
             )}
             <p className="mt-1.5 text-[11px] text-zinc-400">Estimativa: a condenação real costuma sair diferente do valor da causa (pra mais ou pra menos) — {data.projecaoCasos.isSocio ? 'sua parte de sócio sai dos honorários do escritório, conforme a divisão acima.' : 'sua parte já é calculada pela média de êxito de cada caso.'}</p>
+          </Card>
+        )}
+
+        {/* ── PROJEÇÕES da sua carteira — o caminho causa→sua parte + cenários ── */}
+        {data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
+          <Card title={<span className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#7048E8]" /> Projeções da sua carteira</span>}
+            sub="o caminho do valor até a sua parte, e três cenários conforme os casos evoluem.">
+            <div className="grid gap-2 sm:grid-cols-4">
+              {[
+                { label: 'Valor em causa', v: data.projecaoCasos.brutoEmProcesso, cor: '#E64980' },
+                { label: 'Condenação estimada', v: data.projecaoCasos.condenacaoEstimada, cor: '#228BE6' },
+                { label: 'Honorários do escritório', v: data.projecaoCasos.escritorioEmProcesso, cor: '#15AABF' },
+                { label: 'Sua parte provável', v: data.projecaoCasos.liquidoProvavel, cor: '#7048E8' },
+              ].map((s, i, arr) => (
+                <div key={i} className="relative rounded-xl border border-zinc-200/70 p-3 dark:border-zinc-800">
+                  <p className="text-[11px] uppercase tracking-wide text-zinc-400">{s.label}</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums" style={{ color: s.cor }}>{brl(s.v)}</p>
+                  {i < arr.length - 1 && <ChevronRight className="absolute -right-2 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-zinc-300 sm:block" />}
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {[
+                { label: 'Conservador', hint: 'se boa parte não vingar', fator: 0.6, cor: '#F59F00' },
+                { label: 'Provável', hint: 'no ritmo de êxito atual', fator: 1, cor: '#7048E8' },
+                { label: 'Otimista', hint: 'se a maioria for favorável', fator: 1.35, cor: '#2F9E44' },
+              ].map((c) => (
+                <div key={c.label} className="rounded-xl border border-zinc-200/70 p-3.5 dark:border-zinc-800">
+                  <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: c.cor }} /><p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{c.label}</p></div>
+                  <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color: c.cor }}>{brl(Math.min(data.projecaoCasos!.brutoEmProcesso, data.projecaoCasos!.liquidoProvavel * c.fator))}</p>
+                  <p className="text-[11px] text-zinc-400">{c.hint}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-zinc-400">Projeção da carteira, não caixa realizado. Em previdenciário o retorno chega quando o benefício é concedido (sucumbência/destaque) — por isso o valor mora no futuro que você está construindo.</p>
+          </Card>
+        )}
+
+        {/* ── MOTIVAÇÃO & metas — alvo da carteira + impacto (sem depender de caixa) ── */}
+        {data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
+          <Card title={<span className="flex items-center gap-2"><Target className="h-4 w-4 text-emerald-600" /> Suas metas</span>}
+            sub="o alvo que a sua carteira aponta — e o quanto você já percorreu.">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Já realizado</p><p className="text-2xl font-bold tabular-nums text-emerald-600">{brl(r.recebido)}</p></div>
+              <ChevronRight className="h-5 w-5 text-zinc-300" />
+              <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Meta da carteira (sua parte)</p><p className="text-2xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos.liquidoProvavel)}</p></div>
+              <div className="ml-auto max-w-xs text-right text-sm text-zinc-500">São <strong className="text-zinc-700 dark:text-zinc-200">{data.projecaoCasos.nComValor} casos</strong> trabalhando por você — cada decisão favorável aproxima essa meta.</div>
+            </div>
+            {data.projecaoCasos.liquidoProvavel > 0 && (
+              <div className="mt-3">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-[#7048E8]" style={{ width: `${Math.min(100, Math.round((r.recebido / data.projecaoCasos.liquidoProvavel) * 100))}%` }} /></div>
+                <p className="mt-1 text-[11px] text-zinc-400">{Math.min(100, Math.round((r.recebido / data.projecaoCasos.liquidoProvavel) * 100))}% da sua carteira já virou caixa.</p>
+              </div>
+            )}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                { icon: Gavel, cor: '#228BE6', titulo: 'Acompanhe os casos em fase decisiva', texto: 'Sentença e cumprimento são onde a carteira vira caixa. Manter esses prazos em dia acelera o que já está a caminho.' },
+                { icon: HeartHandshake, cor: '#E64980', titulo: `${data.projecaoCasos.nComValor} vidas contam com você`, texto: 'Cada processo é alguém aguardando um direito. O impacto do seu trabalho se mede em pessoas, não só em números.' },
+              ].map((s, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-xl border border-zinc-200/70 p-3.5 dark:border-zinc-800">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg" style={{ backgroundColor: `${s.cor}1A`, color: s.cor }}><s.icon className="h-4 w-4" /></span>
+                  <div className="min-w-0"><p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{s.titulo}</p><p className="mt-0.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">{s.texto}</p></div>
+                </div>
+              ))}
+            </div>
           </Card>
         )}
 
