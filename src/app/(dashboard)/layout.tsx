@@ -20,7 +20,8 @@ function moduleForPath(p: string): string | null {
   if (/^\/juridico\/calculos/.test(p)) return 'calculos';
   if (/^\/(juridico|processos|agenda|caixa-djen|clientes)/.test(p)) return 'juridico';
   if (/^\/(ai-agents|follow-ups|base-conhecimento|vozes|automations)/.test(p)) return 'automacoes';
-  if (/^\/(financeiro|contabilidade)/.test(p)) return 'financeiro';
+  if (/^\/contabilidade/.test(p)) return 'contabilidade';
+  if (/^\/financeiro/.test(p)) return 'financeiro';
   if (/^\/tarefas/.test(p)) return 'tarefas';
   if (/^\/escritorio/.test(p)) return 'meu_espaco';
   if (/^\/(dashboard|inbox|contacts|kanban|conexoes)/.test(p)) return 'atendimento';
@@ -46,9 +47,12 @@ export default function DashboardLayout({
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
   useEffect(() => {
     if (isLoading || !activeOrg) return;
+    const isAdmin = activeOrg.role === 'OWNER' || activeOrg.role === 'ADMIN';
+    const mod = moduleForPath(pathname);
+    // Contabilidade é exclusiva de administradores (associados não têm acesso).
+    if (mod === 'contabilidade' && !isAdmin) { router.replace('/financeiro'); return; }
     const restricted = activeOrg.restrictedModules ?? [];
     if (restricted.length === 0) return;
-    const mod = moduleForPath(pathname);
     if (mod && (restricted.includes(mod) || (MODULE_PARENT[mod] && restricted.includes(MODULE_PARENT[mod])))) {
       router.replace(restricted.includes('atendimento') ? '/settings/perfil' : '/dashboard');
     }

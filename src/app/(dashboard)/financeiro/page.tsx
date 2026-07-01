@@ -452,7 +452,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
           <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-          <select value={mesSel} onChange={(e) => { setMesSel(e.target.value); if (e.target.value) { setDeISO(''); setAteISO(''); } }} className="bg-transparent text-sm font-medium capitalize outline-none">
+          <select value={mesSel} onChange={(e) => { setMesSel(e.target.value); if (e.target.value) { setDeISO(''); setAteISO(''); } }} className="bg-transparent text-sm font-medium outline-none">
             <option value="">Todos os meses</option>
             {mesesOpcoes.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
           </select>
@@ -509,7 +509,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
               {!mesSel && (
                 <button onClick={() => toggle(g.key)} className="flex w-full items-center gap-2 bg-zinc-50/80 px-3 py-2 text-left transition hover:bg-zinc-100/80 dark:bg-zinc-800/40 dark:hover:bg-zinc-800/70">
                   {aberto ? <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />}
-                  <span className="text-sm font-semibold capitalize text-zinc-700 dark:text-zinc-200">{mesLabel(g.key)}</span>
+                  <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{mesLabel(g.key)}</span>
                   <span className="rounded-full bg-zinc-200/70 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-700/70">{g.items.length}</span>
                   <div className="ml-auto flex items-center gap-2.5 text-xs tabular-nums sm:gap-3.5">
                     <span className="hidden text-emerald-600 sm:inline">+{brl(g.rec)}</span>

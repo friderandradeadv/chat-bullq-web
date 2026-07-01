@@ -398,7 +398,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
               <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-              <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="bg-transparent text-sm font-medium capitalize outline-none"><option value="">Todos os meses</option>{mesesDisp.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}</select>
+              <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="bg-transparent text-sm font-medium outline-none"><option value="">Todos os meses</option>{mesesDisp.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}</select>
             </div>
             <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">{STATUS_FILTROS_ADV.map((a) => <button key={a.key} onClick={() => setStf(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${stf === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}</div>
             <div className="relative ml-auto"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="w-40 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>

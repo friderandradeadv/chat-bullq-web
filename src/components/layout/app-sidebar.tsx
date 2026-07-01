@@ -280,7 +280,7 @@ export function AppSidebar() {
             <NavSection label="Administrativo" defaultOpen={false}>
               <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
               {isAdmin && <NavItem href="/rh" icon={Users} label="RH & Seleção" />}
-              <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
+              {isAdmin && <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />}
             </NavSection>
           </div>
 
