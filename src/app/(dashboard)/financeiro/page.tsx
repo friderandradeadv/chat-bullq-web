@@ -2601,15 +2601,11 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
   return (
     <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       <div className="mx-auto w-full max-w-5xl p-6">
+        {/* Visão pessoal escopada aos casos do próprio advogado — lançamentos,
+            projeção e "o que você está construindo" com a sua parte por área.
+            Sócio de vertical (ex.: Previdenciário) vê só a SUA carteira; o caixa
+            e a carteira do escritório inteiro ficam restritos aos administradores. */}
         <MeuFinanceiroConteudo data={data} />
-        {/* Sócio (mesmo limitado) também vê as previsões da carteira do escritório */}
-        {data.projecaoCasos?.isSocio && (
-          <div className="mt-8">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-zinc-900 dark:text-zinc-100"><Sparkles className="h-5 w-5 text-[#7048E8]" /> Previsões da carteira do escritório</h2>
-            <p className="mt-0.5 text-sm text-zinc-500">Visão de sócio — valor em causa e recuperação provável de toda a carteira.</p>
-            <PrevisoesCarteira />
-          </div>
-        )}
       </div>
     </div>
   );
