@@ -14,6 +14,7 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
+import { CardTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 import { DropZone } from '@/components/drop-zone';
@@ -170,7 +171,11 @@ export function CaseDetailDrawer({
         {/* ── PAINEL ESQUERDO ── */}
         <div className="flex min-w-0 flex-1 flex-col border-r border-[#cfe0ed] dark:border-zinc-800">
           <div className="px-8 pt-6">
-            <h2 className="truncate pr-12 text-[20px] font-bold uppercase leading-6 text-black dark:text-zinc-100">{(cliente?.name ?? c?.title ?? '…').toUpperCase()}</h2>
+            {c ? (
+              <EditableName caseId={c.id} cliente={cliente} title={c.title} onSaved={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+            ) : (
+              <h2 className="truncate pr-12 text-[20px] font-bold uppercase leading-6 text-black dark:text-zinc-100">…</h2>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-[#cfe0ed] pb-3 dark:border-zinc-800">
               {c?.responsible && (c.responsible.avatarUrl
                 ? // eslint-disable-next-line @next/next/no-img-element
@@ -178,6 +183,8 @@ export function CaseDetailDrawer({
                 : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{(c.responsible.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>)}
               {c?.area && (() => { const col = produtoColor(c.area); return <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: col.bg, color: col.fg }}>{cleanArea(c.area)}</span>; })()}
               {adversa && <span className="inline-flex items-center gap-1 rounded-full bg-[#f1f3f4] px-2 py-1 text-[10px] font-semibold text-[#48626f] dark:bg-zinc-800 dark:text-zinc-300">× {adversa.name}</span>}
+              {/* Etiquetas jurídicas — Astrea: chip com ✕ pra remover + adicionar */}
+              {c && <CardTags caseId={c.id} tags={c.legalTags.map((lt) => lt.tag)} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
             </div>
             {/* abas (pills) */}
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -619,6 +626,49 @@ function AnexosTab({ caseId, documents, onChanged }: { caseId: string; documents
             </li>
           ))}</ul>}
     </div>
+  );
+}
+
+// Nome do processo na ficha (cabeçalho): clica → edita. Se há cliente, renomeia a
+// parte CLIENTE (o que aparece no card); senão, o título do processo.
+function EditableName({ caseId, cliente, title, onSaved }: { caseId: string; cliente: PartyDetail | null; title: string | null; onSaved: () => void }) {
+  const shown = cliente?.name ?? title ?? '…';
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(shown);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setText(cliente?.name ?? title ?? ''), [cliente?.name, title]);
+
+  const save = async () => {
+    const t = text.trim();
+    if (!t || t === (cliente?.name ?? title)) { setEditing(false); setText(shown); return; }
+    setSaving(true);
+    try {
+      if (cliente) await legalCasesService.updateParty(cliente.id, { name: t, role: cliente.role });
+      else await legalCasesService.update(caseId, { title: t });
+      toast.success('Nome atualizado');
+      setEditing(false);
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao renomear');
+    } finally { setSaving(false); }
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus value={text} disabled={saving}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void save(); } else if (e.key === 'Escape') { setEditing(false); setText(shown); } }}
+        className="w-full rounded border border-[#4a90e2] bg-white px-1 py-0.5 pr-12 text-[20px] font-bold uppercase leading-6 text-black outline-none dark:bg-zinc-900 dark:text-zinc-100"
+      />
+    );
+  }
+  return (
+    <h2 onClick={() => setEditing(true)} title="Clique pra renomear"
+      className="cursor-text truncate pr-12 text-[20px] font-bold uppercase leading-6 text-black hover:underline dark:text-zinc-100">
+      {shown.toUpperCase()}
+    </h2>
   );
 }
 

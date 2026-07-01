@@ -14,7 +14,7 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
-import { CardTags, InlineCardTitle } from '@/features/legal-cases/components/kanban-card-bits';
+import { tagTextColor } from '@/features/legal-cases/components/kanban-card-bits';
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -522,24 +522,19 @@ function Card({
         })()}
       </div>
 
-      {/* Etiquetas gerenciáveis (adicionar/remover, igual à fase processual) */}
-      {!overlay && onChanged && (
-        <div className="mt-1.5">
-          <CardTags caseId={c.id} tags={c.tags ?? []} onChanged={onChanged} />
+      {/* Etiquetas (só exibição no card — a edição é dentro da ficha, ao abrir) */}
+      {(c.tags?.length ?? 0) > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {c.tags.map((t) => (
+            <span key={t.id} className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight" style={{ backgroundColor: t.color, color: tagTextColor(t.color) }}>
+              {t.name}
+            </span>
+          ))}
         </div>
       )}
 
-      {/* Título do card (CAPS, editável ao clicar) × parte adversa */}
-      {overlay || !onChanged ? (
-        <p className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.title || c.client)?.toUpperCase()}</p>
-      ) : (
-        <InlineCardTitle
-          caseId={c.id}
-          value={c.title || c.client || ''}
-          onSaved={onChanged}
-          className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] hover:underline dark:text-zinc-100"
-        />
-      )}
+      {/* Cliente (título, CAPS) × parte adversa */}
+      <p className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
       {c.opponent && <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
 
       {/* Nº processo (copiável) */}
