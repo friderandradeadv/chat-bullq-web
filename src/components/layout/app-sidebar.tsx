@@ -181,8 +181,13 @@ export function AppSidebar() {
 
           {/* COMERCIAL — BullQ / WhatsApp (Cadastros/Ajustes/Automações em subabas) */}
           <NavSection label="Comercial">
-            <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-            <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
+            {/* Geral — subaba (fluxo do dia a dia) */}
+            <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
+              <NavSection label="Geral" storageKey="Geral-comercial" defaultOpen>
+                <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+                <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
+              </NavSection>
+            </div>
 
             {/* Cadastros — subaba (base do comercial) */}
             <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
@@ -218,11 +223,15 @@ export function AppSidebar() {
           {/* JURÍDICO — fluxo do dia no topo; Kanbans/Análise/Cadastros em subabas */}
           <div className="mt-3">
             <NavSection label="Jurídico">
-              {/* Fluxo do dia a dia — sempre à vista */}
-              <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
-              <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
-              <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
-              <NavItem href="/processos" icon={Folder} label="Processos" />
+              {/* Geral — subaba (fluxo do dia a dia) */}
+              <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
+                <NavSection label="Geral" storageKey="Geral-juridico" defaultOpen>
+                  <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
+                  <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
+                  <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
+                  <NavItem href="/processos" icon={Folder} label="Processos" />
+                </NavSection>
+              </div>
 
               {/* Kanbans — subaba (fluxos por fase) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
