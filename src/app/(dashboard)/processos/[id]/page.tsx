@@ -1534,7 +1534,7 @@ function RecursosTab({ caseId }: { caseId: string }) {
         {isLoading ? (
           <EmptyState>Carregando…</EmptyState>
         ) : recursos.length === 0 ? (
-          <EmptyState>Nenhum recurso neste processo. O DJEN cria automaticamente ao detectar interposição/julgamento.</EmptyState>
+          <EmptyState>Nenhum recurso neste processo. É criado automaticamente ao mover o card para a fase de Recurso, ou quando o DJEN detecta interposição/julgamento.</EmptyState>
         ) : (
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {recursos.map((r) => (
