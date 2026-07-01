@@ -17,11 +17,11 @@ export function gerarPdfCs(res: ResultadoCs) {
   if (t.multa > 0) tot.push(`<tr><td>Multa (${esc(String(cfg.multaPct).replace('.', ','))}%)</td><td>${brl(t.multa)}</td></tr>`);
   if (t.honorarios > 0)
     tot.push(
-      `<tr><td>Honorários sucumbenciais (${esc(String(cfg.honorarios?.percentual ?? 0).replace('.', ','))}%${cfg.honorarios?.base === 'fixa' ? ` sobre valor da causa ${brl(res.honorariosBase)}` : ''})</td><td>${brl(t.honorarios)}</td></tr>`,
+      `<tr><td>Honorários sucumbenciais (${esc(String(cfg.honorarios?.percentual ?? 0).replace('.', ','))}%)</td><td>${brl(t.honorarios)}</td></tr>`,
     );
   if (t.multa523Moratoria > 0) tot.push(`<tr><td>Multa moratória 10% (art. 523, CPC)</td><td>${brl(t.multa523Moratoria)}</td></tr>`);
   if (t.multa523Honorarios > 0) tot.push(`<tr><td>Honorários 10% (art. 523, CPC)</td><td>${brl(t.multa523Honorarios)}</td></tr>`);
-  tot.push(`<tr class="total"><td>TOTAL GERAL</td><td>${brl(t.totalGeral)}</td></tr>`);
+  tot.push(`<tr class="total"><td>TOTAL</td><td>${brl(t.totalGeral)}</td></tr>`);
 
   const corpo = `
     <h1>Cumprimento de Sentença — Atualização de Débitos</h1>
