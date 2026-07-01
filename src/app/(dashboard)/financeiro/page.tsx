@@ -9,11 +9,11 @@ import {
 } from 'recharts';
 import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
-  CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt,
+  CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt, Save,
   ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem,
 } from 'lucide-react';
-import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
@@ -1522,10 +1522,67 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
               </tr>
             ))}
           </CsTabela>
-          <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">Estrutura = aluguel, contador, OAB, suprimentos e demais custos compartilhados, rateados por nº de casos ativos. Custos diretos = honorário repassado ao cliente da área + pró-labore do advogado da vertical. Resultado negativo = a área ainda investe mais do que recebe (ex.: previdenciário de gratuidade, com retorno futuro em <strong>A caminho</strong>).</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">Estrutura = aluguel, contador, OAB, suprimentos e demais custos compartilhados, rateados por nº de casos ativos. Custos diretos = honorário repassado ao cliente da área + pró-labore do advogado da vertical + os custos fixos que você lançar abaixo. Resultado negativo = a área ainda investe mais do que recebe (ex.: previdenciário de gratuidade, com retorno futuro em <strong>A caminho</strong>).</p>
         </Card>
       )}
+
+      <VerticalCustosEditor data={data} />
     </>
+  );
+}
+
+/** Custos DIRETOS fixos por vertical (agência, anúncios…) — entram nas "Diretas" do P&L. */
+function VerticalCustosEditor({ data }: { data: FinDashboard }) {
+  const qc = useQueryClient();
+  const verticais = data.verticalPnL?.verticais ?? [];
+  const [draft, setDraft] = useState<Record<string, VerticalCusto[]>>(() => {
+    const o: Record<string, VerticalCusto[]> = {};
+    for (const v of verticais) if ((v.custos?.length ?? 0) > 0) o[v.area] = (v.custos ?? []).map((c) => ({ ...c }));
+    return o;
+  });
+  const save = useMutation({
+    mutationFn: () => financeiroService.setVerticalCustos(draft),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success('Custos diretos da vertical salvos'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao salvar'),
+  });
+  const linhas = (area: string) => draft[area] ?? [];
+  const setLinha = (area: string, i: number, patch: Partial<VerticalCusto>) => setDraft((d) => ({ ...d, [area]: (d[area] ?? []).map((l, j) => (j === i ? { ...l, ...patch } : l)) }));
+  const addLinha = (area: string) => setDraft((d) => ({ ...d, [area]: [...(d[area] ?? []), { label: '', valor: 0 }] }));
+  const rmLinha = (area: string, i: number) => setDraft((d) => ({ ...d, [area]: (d[area] ?? []).filter((_, j) => j !== i) }));
+  const areasOrdenadas = verticais.map((v) => v.area);
+
+  return (
+    <Card title={<span className="flex items-center gap-2"><Receipt className="h-4 w-4 text-[#E64980]" /> Custos diretos por vertical</span>}
+      sub="custos fixos que pertencem a uma área específica (ex.: agência 1/3, anúncios). Entram direto nas 'Diretas' daquela vertical — não são rateados."
+      action={<button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar</button>}>
+      <div className="space-y-4">
+        {areasOrdenadas.map((area) => (
+          <div key={area} className="rounded-xl border border-zinc-200/70 p-3 dark:border-zinc-800">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(area) }} />{area}</span>
+              <button onClick={() => addLinha(area)} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar custo</button>
+            </div>
+            {linhas(area).length === 0 ? (
+              <p className="text-[11px] text-zinc-400">Nenhum custo direto — a área carrega só a fatia rateada da estrutura.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {linhas(area).map((l, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input value={l.label} onChange={(e) => setLinha(area, i, { label: e.target.value })} placeholder="Ex.: Agência (1/3), Anúncios…" className="flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                    <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+                      <span className="text-xs text-zinc-400">R$</span>
+                      <input type="number" min={0} step="0.01" value={l.valor || ''} onChange={(e) => setLinha(area, i, { valor: Number(e.target.value) || 0 })} placeholder="0,00" className="w-24 bg-transparent text-right text-sm tabular-nums outline-none" />
+                    </div>
+                    <button onClick={() => rmLinha(area, i)} title="Remover" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+                <p className="pt-0.5 text-right text-[11px] text-zinc-400">soma: <strong className="tabular-nums text-rose-500">{brl2(linhas(area).reduce((s, l) => s + (l.valor || 0), 0))}</strong>/mês</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 

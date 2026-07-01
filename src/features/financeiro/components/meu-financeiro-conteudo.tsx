@@ -271,6 +271,14 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
               <div className={`rounded-xl border p-3 ${data.resultadoVertical.resultado >= 0 ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-900/10' : 'border-amber-200 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-900/10'}`}><p className="text-[11px] uppercase tracking-wide text-zinc-400">Resultado hoje</p><p className={`mt-0.5 text-xl font-bold tabular-nums ${data.resultadoVertical.resultado >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>{brl(data.resultadoVertical.resultado)}</p><p className="text-[11px] text-zinc-400">{data.resultadoVertical.resultado >= 0 ? 'a vertical se paga' : 'ainda em investimento'}</p></div>
               <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">A caminho (carteira)</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.resultadoVertical.projetado)}</p><p className="text-[11px] text-zinc-400">honorários prováveis da área</p></div>
             </div>
+            {data.resultadoVertical.custos && data.resultadoVertical.custos.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] uppercase tracking-wide text-zinc-400">Custos diretos:</span>
+                {data.resultadoVertical.custos.map((c, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-600 dark:bg-rose-900/15 dark:text-rose-300">{c.label}: {brl(c.valor)}</span>
+                ))}
+              </div>
+            )}
             <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">{data.resultadoVertical.resultado < 0
               ? <>Hoje a vertical <strong>investe mais do que recebe</strong> — natural em previdenciário de gratuidade: o retorno chega quando os benefícios são concedidos (sucumbência/destaque). Há <strong className="text-[#7048E8]">{brl(data.resultadoVertical.projetado)}</strong> em honorários prováveis a caminho.</>
               : <>A vertical já <strong>se paga</strong>: as entradas cobrem os custos diretos e a fatia da estrutura do escritório.</>}</p>

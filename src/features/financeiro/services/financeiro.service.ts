@@ -95,7 +95,8 @@ export interface FinDashboard {
   overheadCriterio?: string;
 }
 
-export interface VerticalPnL { area: string; nCasos: number; entradas: number; diretas: number; overhead: number; saidas: number; resultado: number; projetado: number; margem: number | null }
+export interface VerticalCusto { label: string; valor: number }
+export interface VerticalPnL { area: string; nCasos: number; entradas: number; diretas: number; custos?: VerticalCusto[]; overhead: number; saidas: number; resultado: number; projetado: number; margem: number | null }
 export interface FinVerticalPnL { verticais: VerticalPnL[]; overheadTotal: number; nCasosTotal: number; criterio: string }
 export interface FinVerticalArea { area: string; receita: number; despesa: number; resultado: number }
 export interface FinCrescimento {
@@ -275,6 +276,15 @@ export const financeiroService = {
   },
   async setSocioConfig(payload: Partial<SocioConfig>): Promise<{ ok: boolean } & SocioConfig> {
     const { data } = await api.patch('/financeiro/socio-config', payload);
+    return data.data ?? data;
+  },
+  // ── Custos diretos por vertical (agência, anúncios…) ──
+  async getVerticalCustos(): Promise<{ verticalCustos: Record<string, VerticalCusto[]> }> {
+    const { data } = await api.get('/financeiro/vertical-custos');
+    return data.data ?? data;
+  },
+  async setVerticalCustos(verticalCustos: Record<string, VerticalCusto[]>): Promise<{ ok: boolean; verticalCustos: Record<string, VerticalCusto[]> }> {
+    const { data } = await api.patch('/financeiro/vertical-custos', { verticalCustos });
     return data.data ?? data;
   },
   // ── Integração ASAAS (extrato → caixa) ──
