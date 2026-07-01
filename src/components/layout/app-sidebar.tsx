@@ -246,7 +246,7 @@ export function AppSidebar() {
                   <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
                   <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
                   <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
-                  <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
+                  <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária" />
                 </NavSection>
               </div>
 

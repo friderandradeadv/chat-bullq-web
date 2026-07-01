@@ -3,19 +3,29 @@
 import { Landmark } from 'lucide-react';
 import { AdminBoard } from '@/features/legal-cases/components/admin-board';
 
-// Fase Bancária Investigativa — etapa pré-judicial dos casos bancários (RMC/RCC ×
-// bancos): descobrir quais ações cabem e contra quais bancos, antes de protocolar.
-// Mostra os cases de área Bancário que ainda estão na lane pré-processual,
-// agrupados por produto (RMC, RCC, revisional, portabilidade…).
+// Fase Bancária (pré-judicial) — réplica FIEL do pipe "02. PRÉ-JUDICIAL" do Pipefy:
+// as 8 fases como colunas, os cards nas fases reais. Investigação RMC/RCC × bancos
+// (BACEN/consumidor.gov, coleta de contratos) antes do ajuizamento.
+const COLUNAS = [
+  { key: 'banco_novo_cliente', label: '01. Novo cliente' },
+  { key: 'banco_investigativa', label: '02. Fase bancária investigativa' },
+  { key: 'banco_acao_judicial', label: '02.1 Ação judicial' },
+  { key: 'banco_conferir_doc', label: '03. Conferir documentação' },
+  { key: 'banco_provisionamento', label: 'Em provisionamento' },
+  { key: 'banco_analise_final', label: '04. Análise final' },
+  { key: 'banco_concluido', label: 'Concluído' },
+  { key: 'banco_inviavel', label: 'Inviável' },
+];
+
 export default function FaseBancariaPage() {
   return (
     <AdminBoard
-      title="Fase Bancária Investigativa"
-      subtitle="Investigação pré-judicial: descobrir quais ações (RMC/RCC) cabem e contra quais bancos."
+      title="Fase Bancária (pré-judicial)"
+      subtitle="Réplica do pipe 02. Pré-Judicial do Pipefy — investigação RMC/RCC × bancos antes do protocolo."
       icon={Landmark}
       accent="#228BE6"
-      filter={(c, preKeys) => c.areaJuridica === 'Bancário' && preKeys.has(c.phase)}
-      emptyHint="Nenhum caso bancário na fase pré-judicial no momento. Cards de RMC/RCC criados no intake (contrato → card) aparecem aqui enquanto estiverem na investigação, antes do protocolo."
+      filter={(c) => c.phase.startsWith('banco_')}
+      columns={COLUNAS}
     />
   );
 }

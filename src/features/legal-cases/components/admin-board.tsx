@@ -42,6 +42,8 @@ export interface AdminBoardProps {
   filter: (c: KanbanCard, preKeys: Set<string>) => boolean;
   /** texto quando não há nenhum card. */
   emptyHint?: string;
+  /** colunas fixas por FASE (ex.: as 8 fases do pipe bancário). Sem isto, agrupa por produto. */
+  columns?: { key: string; label: string }[];
 }
 
 /**
@@ -49,7 +51,7 @@ export interface AdminBoardProps {
  * os cards do kanban jurídico, filtra pela trilha e agrupa por PRODUTO em colunas.
  * Cards clicáveis abrem a ficha (sem drag — a trilha não é uma fase movível).
  */
-export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint }: AdminBoardProps) {
+export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs }: AdminBoardProps) {
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const dragScroll = useDragScroll();
@@ -72,13 +74,16 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   }, [data, search, filter, preKeys]);
 
   const columns = useMemo(() => {
+    // Colunas fixas por FASE (pipe fiel): mantém a ordem e mostra até as vazias.
+    if (colDefs) return colDefs.map((cd) => ({ nome: cd.label, cards: filtered.filter((c) => c.phase === cd.key) }));
+    // Senão, agrupa por produto (INSS, bancária por área).
     const map = new Map<string, KanbanCard[]>();
     for (const c of filtered) {
       const k = colProduto(c.produto);
       (map.get(k) ?? map.set(k, []).get(k)!).push(c);
     }
     return Array.from(map, ([nome, cards]) => ({ nome, cards })).sort((a, b) => b.cards.length - a.cards.length);
-  }, [filtered]);
+  }, [filtered, colDefs]);
 
   return (
     <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200">
@@ -101,7 +106,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
 
       {isLoading ? (
         <p className="px-6 py-6 text-sm text-zinc-400">Carregando…</p>
-      ) : filtered.length === 0 ? (
+      ) : !colDefs && filtered.length === 0 ? (
         <div className="px-6 py-10">
           <div className="rounded-2xl border border-amber-300/50 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
             {emptyHint ?? 'Nenhum card nesta trilha ainda.'}
@@ -116,6 +121,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                 <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border border-[#dcdfe5] bg-[#f2f2f2] px-1.5 pb-2 pt-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+                {col.cards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
                 {col.cards.map((c) => <AdminCard key={c.id} c={c} onOpen={setOpenCaseId} />)}
               </div>
             </div>
