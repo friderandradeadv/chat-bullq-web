@@ -54,9 +54,8 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-type View = 'meu' | 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao' | 'previsoes' | 'verticais';
+type View = 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao' | 'previsoes' | 'verticais';
 const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }[] = [
-  { key: 'meu', label: 'Meu financeiro', icon: UserCircle2, grupo: 'Pessoal' },
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt, grupo: 'Caixa' },
   { key: 'honorarios', label: 'Honorários', icon: Users, grupo: 'Caixa' },
   { key: 'cobrancas', label: 'Cobranças', icon: CreditCard, grupo: 'Caixa' },
@@ -67,7 +66,7 @@ const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }
   { key: 'projecoes', label: 'Projeções e crescimento', icon: Rocket, grupo: 'Análise & futuro' },
   { key: 'motivacao', label: 'Motivação', icon: HeartHandshake, grupo: 'Análise & futuro' },
 ];
-const GRUPOS = ['Pessoal', 'Caixa', 'Processos', 'Análise & futuro'];
+const GRUPOS = ['Caixa', 'Processos', 'Análise & futuro'];
 
 // Produto cru do card (RMC, RCC, "CS - RMC", Contribuições, 7780-Indenização…)
 // → Área jurídica (Bancário/Previdenciário/Trabalhista/Consumidor/Cível).
@@ -144,7 +143,6 @@ export default function FinanceiroPage() {
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
 
-        {view === 'meu' && <MeuTab />}
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
         {view === 'cobrancas' && <CobrancasTab data={data} />}
@@ -302,6 +300,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   // Garante o mês corrente na lista do seletor mesmo sem lançamentos ainda (senão o value fica órfão).
   const mesesOpcoes = useMemo(() => (mesesDisp.includes(mesHoje) ? mesesDisp : [mesHoje, ...mesesDisp]), [mesesDisp, mesHoje]);
   const [mostrarFuturas, setMostrarFuturas] = useState(false); // parcelas a receber/pagar de meses futuros só sob demanda
+  const [deISO, setDeISO] = useState(''); // período por calendário (vence o filtro de mês)
+  const [ateISO, setAteISO] = useState('');
   const [aba, setAba] = useState<'todos' | 'receitas' | 'despesas'>('todos');
   const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('todos');
   const [respFiltro, setRespFiltro] = useState('');
@@ -335,16 +335,18 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const updM = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpdateTransacaoInput }) => financeiroService.updateTransacao(id, input), onSuccess: () => { invalidate(); toast.success('Lançamento atualizado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar') });
   const delM = useMutation({ mutationFn: ({ id, escopo }: { id: string; escopo: 'uma' | 'proximas' }) => financeiroService.removeTransacao(id, escopo), onSuccess: (r) => { invalidate(); toast.success(`${r.removidos} lançamento(s) removido(s)`); setSerieDel(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
 
+  const temPeriodo = !!(deISO || ateISO); // período por calendário vence o filtro de mês
   const txs = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return data.transacoes.filter((t) => {
-      if (mesSel && mesKey(t) !== mesSel) return false;
+      const iso = toISOInput(t.data);
+      if (temPeriodo) { if (deISO && iso < deISO) return false; if (ateISO && iso > ateISO) return false; }
+      else if (mesSel && mesKey(t) !== mesSel) return false;
       if (aba === 'receitas' && t.valor < 0) return false;
       if (aba === 'despesas' && t.valor >= 0) return false;
       const st = txStatus(t);
-      // só no modo "Todos os meses" escondemos as parcelas a receber/pagar FUTURAS (toggle).
-      // Se você seleciona um mês específico (inclusive futuro), mostra tudo dele.
-      if (!mesSel && !mostrarFuturas && !ehLiquidado(st) && mesKey(t) > mesHoje) return false;
+      // só no modo "Todos os meses" (sem período/mês) escondemos as parcelas FUTURAS (toggle).
+      if (!temPeriodo && !mesSel && !mostrarFuturas && !ehLiquidado(st) && mesKey(t) > mesHoje) return false;
       if (stFiltro === 'a_receber' && ehLiquidado(st)) return false;
       if (stFiltro === 'liquidado' && !ehLiquidado(st)) return false;
       if (respFiltro && (t.responsavelId ?? '') !== respFiltro) return false;
@@ -352,7 +354,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       if (q && !`${t.pagador ?? t.party ?? ''} ${t.recebedor ?? ''} ${t.responsavel ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data.transacoes, mesSel, aba, stFiltro, respFiltro, contaFiltro, busca, mostrarFuturas, mesHoje]);
+  }, [data.transacoes, mesSel, aba, stFiltro, respFiltro, contaFiltro, busca, mostrarFuturas, mesHoje, temPeriodo, deISO, ateISO]);
   const nFuturas = useMemo(() => data.transacoes.filter((t) => !ehLiquidado(txStatus(t)) && mesKey(t) > mesHoje).length, [data.transacoes, mesHoje]);
 
   const grupos = useMemo(() => {
@@ -424,10 +426,17 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
           <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-          <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="bg-transparent text-sm font-medium capitalize outline-none">
+          <select value={mesSel} onChange={(e) => { setMesSel(e.target.value); if (e.target.value) { setDeISO(''); setAteISO(''); } }} className="bg-transparent text-sm font-medium capitalize outline-none">
             <option value="">Todos os meses</option>
             {mesesOpcoes.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
           </select>
+        </div>
+        <div className={`inline-flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1.5 text-sm dark:bg-zinc-900 ${temPeriodo ? 'border-[#228BE6]' : 'border-zinc-300 dark:border-zinc-700'}`} title="Período por calendário">
+          <CalendarClock className={`h-3.5 w-3.5 ${temPeriodo ? 'text-[#228BE6]' : 'text-zinc-400'}`} />
+          <input type="date" value={deISO} onChange={(e) => { setDeISO(e.target.value); if (e.target.value) setMesSel(''); }} className="bg-transparent text-sm outline-none" />
+          <span className="text-zinc-400">→</span>
+          <input type="date" value={ateISO} onChange={(e) => { setAteISO(e.target.value); if (e.target.value) setMesSel(''); }} className="bg-transparent text-sm outline-none" />
+          {temPeriodo && <button onClick={() => { setDeISO(''); setAteISO(''); }} className="rounded p-0.5 text-zinc-400 hover:text-rose-600" title="Limpar período"><X className="h-3.5 w-3.5" /></button>}
         </div>
         <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
           {ABAS.map((a) => <button key={a.key} onClick={() => setAba(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${aba === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}
@@ -464,7 +473,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo realizado</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
       </div>
 
-      <p className="mt-2 text-xs text-zinc-400">{txs.length} lançamento(s){mesSel ? ` em ${mesLabel(mesSel)}` : ` · ${grupos.length} ${grupos.length === 1 ? 'mês' : 'meses'}`}</p>
+      <p className="mt-2 text-xs text-zinc-400">{txs.length} lançamento(s){temPeriodo ? ` no período${deISO ? ` de ${toBR(deISO)}` : ''}${ateISO ? ` até ${toBR(ateISO)}` : ''}` : mesSel ? ` em ${mesLabel(mesSel)}` : ` · ${grupos.length} ${grupos.length === 1 ? 'mês' : 'meses'}`}</p>
 
       <div className="mt-2 space-y-2">
         {grupos.map((g) => {
