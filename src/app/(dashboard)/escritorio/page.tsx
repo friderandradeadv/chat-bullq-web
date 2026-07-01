@@ -57,6 +57,7 @@ export default function EscritorioPage() {
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
+  const [tab, setTab] = useState<string>('perfil'); // aba ativa (só a ativa é renderizada)
   const [treeSig, setTreeSig] = useState({ n: 0, open: true });
   const [viewCargoId, setViewCargoId] = useState<string | null>(null); // detalhe do cargo (leitura)
   const [editCargoId, setEditCargoId] = useState<string | null>(null); // modal de cargo (org chart)
@@ -155,16 +156,17 @@ export default function EscritorioPage() {
           )}
         </div>
 
-        {/* Navegação rápida entre seções */}
-        <div className="sticky top-0 z-10 -mx-6 mb-1 mt-4 flex flex-wrap gap-2 border-b border-zinc-200/70 bg-[#fafafa]/90 px-6 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
-          {([['sec-financeiro', 'Financeiro', CircleDollarSign, '#02883C'], ['sec-organograma', 'Organograma', Users, '#228BE6'], ['sec-verticais', 'Verticais', Layers, '#F08C00'], ['sec-cultura', 'Cultura', Heart, '#e64980'], ['sec-manuais', 'Manuais', BookOpen, '#15AABF'], ['sec-onboarding', 'Onboarding', ListChecks, '#02883C']] as const).map(([id, label, Icon, cor]) => (
-            <a key={id} href={`#${id}`} className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">
-              <Icon className="h-3.5 w-3.5" style={{ color: cor }} /> {label}
-            </a>
+        {/* Abas — só a ativa é renderizada */}
+        <div className="sticky top-0 z-10 -mx-6 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa]/95 px-6 py-2 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+          {([['perfil', 'Meu Perfil', UserCircle], ['financeiro', 'Financeiro', CircleDollarSign], ['organograma', 'Organograma', Users], ['cargos', 'Cargos', Briefcase], ['verticais', 'Verticais', Layers], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
+            <button key={key} onClick={() => setTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
+              <Icon className="h-4 w-4" /> {label}
+            </button>
           ))}
         </div>
 
-        {/* Perfil do profissional (área do usuário logado) */}
+        {/* ─────────── ABA: MEU PERFIL (advogado + cargo + o que esperamos + escritório) ─────────── */}
+        {tab === 'perfil' && (<>
         <PerfilHero
           nome={user?.name ?? 'Você'}
           avatarUrl={user?.id ? memberByUser[user.id]?.user.avatarUrl ?? null : null}
@@ -175,18 +177,8 @@ export default function EscritorioPage() {
           onEdit={user?.id ? () => setPerfilUserId(user.id!) : undefined}
         />
 
-        {/* Financeiro — visão pessoal completa (idêntica ao módulo Financeiro) */}
-        <h2 id="sec-financeiro" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><CircleDollarSign className="h-4 w-4 text-[#02883C]" /> Seu financeiro</h2>
-        <div className="mt-2">
-          {meuFin && !meuFin.vazio ? (
-            <MeuFinanceiroConteudo data={meuFin} />
-          ) : (
-            <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>
-          )}
-        </div>
-
-        {/* Cultura: missão / visão / valores */}
-        <h2 id="sec-cultura" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Cultura</h2>
+        {/* Cultura: missão / visão / valores (informações básicas do escritório) */}
+        <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Sobre a Frider Andrade</h2>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {([['missao', 'Missão', Target, '#228BE6'], ['visao', 'Visão', Eye, '#7048E8']] as const).map(([k, label, Icon, cor]) => (
             <div key={k} className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
@@ -225,9 +217,18 @@ export default function EscritorioPage() {
             )}
           </div>
         )}
+        </>)}
 
-        {/* Organograma — árvore top-down (igual a um organograma de verdade) */}
-        <h2 id="sec-organograma" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Users className="h-4 w-4 text-[#228BE6]" /> Organograma</h2>
+        {/* ─────────── ABA: FINANCEIRO (só renderiza ao clicar) ─────────── */}
+        {tab === 'financeiro' && (
+          meuFin && !meuFin.vazio
+            ? <MeuFinanceiroConteudo data={meuFin} />
+            : <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>
+        )}
+
+        {/* ─────────── ABA: ORGANOGRAMA ─────────── */}
+        {tab === 'organograma' && (<>
+        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Users className="h-4 w-4 text-[#228BE6]" /> Organograma</h2>
         <div className={`${CARD} mt-2`}>
           {(cur.cargos ?? []).length === 0 ? (
             <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — adicione abaixo.' : '.'}</p>
@@ -274,9 +275,11 @@ export default function EscritorioPage() {
             </div>
           </div>
         )}
+        </>)}
 
-        {/* Cargos & descrições */}
-        <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Briefcase className="h-4 w-4 text-[#f08c00]" /> Cargos &amp; descrições</h2>
+        {/* ─────────── ABA: CARGOS ─────────── */}
+        {tab === 'cargos' && (<>
+        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Briefcase className="h-4 w-4 text-[#f08c00]" /> Cargos &amp; descrições</h2>
         {!editing ? (
           <CargosPorVertical cargos={cur.cargos ?? []} grupos={grupos} onOpen={(id) => setViewCargoId(id)} />
         ) : (
@@ -331,14 +334,18 @@ export default function EscritorioPage() {
             </button>
           </div>
         )}
+        </>)}
 
-        {/* Verticais (áreas de atuação) */}
-        <h2 id="sec-verticais" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Layers className="h-4 w-4 text-[#F08C00]" /> Verticais (áreas de atuação)</h2>
+        {/* ─────────── ABA: VERTICAIS ─────────── */}
+        {tab === 'verticais' && (<>
+        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Layers className="h-4 w-4 text-[#F08C00]" /> Verticais (áreas de atuação)</h2>
         <p className="mt-1 text-xs text-zinc-400">O escritório se organiza por <strong>verticais</strong> — cada área tem um titular e regras próprias de honorários. É assim que cada um sabe onde atua e como é remunerado por área.</p>
         <VerticaisSection verticais={cur.verticais ?? []} pessoas={cur.pessoas ?? {}} team={team} editing={editing} setDraft={setDraft} onVerPerfil={(uid) => setPerfilUserId(uid)} />
+        </>)}
 
-        {/* Manuais */}
-        <h2 id="sec-manuais" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><BookOpen className="h-4 w-4 text-[#15AABF]" /> Manuais &amp; procedimentos</h2>
+        {/* ─────────── ABA: MANUAIS ─────────── */}
+        {tab === 'manuais' && (<>
+        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><BookOpen className="h-4 w-4 text-[#15AABF]" /> Manuais &amp; procedimentos</h2>
         {!editing && (cur.manuais ?? []).length > 0 && <p className="mt-1 text-xs text-zinc-400">Toque num manual para abrir.</p>}
         <div className="mt-2 space-y-2">
           {editing ? (cur.manuais ?? []).map((mn, i) => (
@@ -357,9 +364,11 @@ export default function EscritorioPage() {
             <button onClick={() => setDraft((d) => ({ ...d, manuais: [...(d.manuais ?? []), { id: rid(), titulo: '', conteudo: '' }] }))} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-medium text-[#228BE6] hover:bg-[#228BE6]/5 dark:border-zinc-700"><Plus className="h-4 w-4" /> Adicionar manual</button>
           )}
         </div>
+        </>)}
 
-        {/* Onboarding */}
-        <h2 id="sec-onboarding" className="mt-7 flex scroll-mt-16 items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><ListChecks className="h-4 w-4 text-[#02883C]" /> Onboarding do novo integrante</h2>
+        {/* ─────────── ABA: ONBOARDING ─────────── */}
+        {tab === 'onboarding' && (<>
+        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><ListChecks className="h-4 w-4 text-[#02883C]" /> Onboarding do novo integrante</h2>
         <div className={`${CARD} mt-2`}>
           {editing ? (
             <textarea
@@ -373,6 +382,7 @@ export default function EscritorioPage() {
             <OnboardingChecklist itens={cur.onboarding ?? []} userId={user?.id} />
           )}
         </div>
+        </>)}
 
         <div className="h-10" />
       </div>
