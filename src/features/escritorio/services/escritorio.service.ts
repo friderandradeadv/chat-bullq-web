@@ -37,6 +37,7 @@ export interface PessoaInfo {
   destaque?: string;       // reconhecimento/motivação (o sócio escreve)
   financeiro?: string[];   // condições financeiras pessoais (do contrato): percentuais, custos…
   atuacao?: string[];      // verticais/áreas em que a pessoa atua (nomes)
+  sexo?: 'F' | 'M';        // para flexionar cargo/textos no feminino/masculino
 }
 
 export interface Escritorio {
@@ -61,6 +62,11 @@ export const escritorioService = {
   // Cada pessoa edita o próprio perfil (foto, frase, bio, OAB) — não precisa ser sócio.
   async saveMeuPerfil(patch: Partial<PessoaInfo>): Promise<{ ok: boolean }> {
     const { data } = await api.patch('/organizations/escritorio/meu-perfil', patch);
+    return data.data ?? data;
+  },
+  // Extrai dados de um advogado de um documento (PDF/imagem/Word) com IA.
+  async extrairPerfil(input: { base64: string; mime: string; nomeArquivo: string }): Promise<Partial<PessoaInfo> & { nome?: string; resumo?: string }> {
+    const { data } = await api.post('/organizations/escritorio/extrair-perfil', input);
     return data.data ?? data;
   },
 };

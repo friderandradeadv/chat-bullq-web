@@ -59,6 +59,7 @@ export default function EscritorioPage() {
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
   const [tab, setTab] = useState<string>('perfil'); // aba ativa (só a ativa é renderizada)
   const [treeSig, setTreeSig] = useState({ n: 0, open: true });
+  const [convite, setConvite] = useState(false); // modal "adicionar advogado"
   const [viewCargoId, setViewCargoId] = useState<string | null>(null); // detalhe do cargo (leitura)
   const [editCargoId, setEditCargoId] = useState<string | null>(null); // modal de cargo (org chart)
   const [perfilUserId, setPerfilUserId] = useState<string | null>(null); // modal de perfil de uma pessoa
@@ -151,7 +152,10 @@ export default function EscritorioPage() {
                 <button onClick={() => saveM.mutate(draft)} disabled={saveM.isPending} className="inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{saveM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button>
               </div>
             ) : (
-              <button onClick={startEdit} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"><Pencil className="h-4 w-4" /> Editar</button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setConvite(true)} className="inline-flex items-center gap-1 rounded-lg bg-[#7048E8] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#5f3dd0]"><UserPlus className="h-4 w-4" /> Adicionar advogado</button>
+                <button onClick={startEdit} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"><Pencil className="h-4 w-4" /> Editar</button>
+              </div>
             )
           )}
         </div>
@@ -432,7 +436,39 @@ export default function EscritorioPage() {
           onSaveSelf={(patch) => saveMeuM.mutate(patch)}
         />
       )}
+
+      {/* Modal: adicionar advogado (convite) */}
+      {convite && <AdicionarAdvogadoModal onClose={() => setConvite(false)} onDone={() => { setConvite(false); qc.invalidateQueries({ queryKey: ['org-members'] }); }} />}
     </div>
+  );
+}
+
+// Convida um novo advogado por e-mail (vira membro na hora se já tiver conta).
+function AdicionarAdvogadoModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('AGENT');
+  const [saving, setSaving] = useState(false);
+  const convidar = async () => {
+    if (!email.trim()) { toast.error('Informe o e-mail'); return; }
+    setSaving(true);
+    try {
+      const r: any = await membersService.invite({ email: email.trim(), role });
+      toast.success(r?.autoAccepted ? 'Advogado adicionado! Agora clique no perfil dele e importe o contrato.' : 'Convite enviado — ele aparece aqui quando aceitar.');
+      onDone();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Não consegui convidar'); }
+    finally { setSaving(false); }
+  };
+  return (
+    <ModalShell title="Adicionar advogado" onClose={onClose} footer={<div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Cancelar</button><button onClick={convidar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Adicionar</button></div>}>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">Convide pelo e-mail. Se já tiver conta, entra na hora; senão, recebe um convite. Depois é só clicar no perfil dele e <strong className="text-zinc-700 dark:text-zinc-200">importar o contrato</strong> — a IA preenche OAB, datas, financeiro e áreas.</p>
+      <div><p className={LABEL}>E-mail</p><input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="advogado@exemplo.com" className={`${INPUT} mt-1`} /></div>
+      <div><p className={LABEL}>Perfil de acesso</p>
+        <select value={role} onChange={(e) => setRole(e.target.value)} className={`${INPUT} mt-1`}>
+          <option value="AGENT">Associado (acesso comum)</option>
+          <option value="ADMIN">Sócio / Admin (acesso total)</option>
+        </select>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -763,10 +799,36 @@ function VerticaisSection({ verticais, pessoas, team, editing, setDraft, onVerPe
 
 function iniciaisDe(n?: string | null) { return (n ?? '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); }
 
+// Flexiona termos no feminino (cargo/descrição) quando a pessoa é mulher.
+function feminizar(s: string): string {
+  return s
+    .replace(/Advogados/g, 'Advogadas').replace(/advogados/g, 'advogadas')
+    .replace(/Advogado/g, 'Advogada').replace(/advogado/g, 'advogada')
+    .replace(/Sócios/g, 'Sócias').replace(/sócios/g, 'sócias')
+    .replace(/Sócio/g, 'Sócia').replace(/sócio/g, 'sócia')
+    .replace(/Associados/g, 'Associadas').replace(/associados/g, 'associadas')
+    .replace(/Associado/g, 'Associada').replace(/associado/g, 'associada')
+    .replace(/Estagiários/g, 'Estagiárias').replace(/estagiários/g, 'estagiárias')
+    .replace(/Estagiário/g, 'Estagiária').replace(/estagiário/g, 'estagiária')
+    .replace(/\bDonos\b/g, 'Donas').replace(/\bdonos\b/g, 'donas').replace(/\bDono\b/g, 'Dona').replace(/\bdono\b/g, 'dona')
+    .replace(/contratado/g, 'contratada').replace(/fundador\b/g, 'fundadora').replace(/administrador\b/g, 'administradora')
+    .replace(/bem-vindo/g, 'bem-vinda').replace(/Bem-vindo/g, 'Bem-vinda');
+}
+const gen = (s: string | undefined, sexo?: 'F' | 'M') => (sexo === 'F' && s ? feminizar(s) : s);
+
 const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(new Error('read'));
+    r.readAsDataURL(file);
+  });
+}
 
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
 function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; onEdit?: () => void }) {
+  const sexo = info?.sexo;
   const foto = info?.fotoUrl || avatarUrl;
   const r = fin && !fin.vazio ? fin.resumo : undefined;
   const proj = fin && !fin.vazio ? fin.projecaoCasos : undefined;
@@ -795,7 +857,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">Seu espaço</p>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{nome}</h2>
-            {cargo && <span className="rounded-full bg-[#7048E8] px-2.5 py-0.5 text-xs font-semibold text-white">{cargo.nome}</span>}
+            {cargo && <span className="rounded-full bg-[#7048E8] px-2.5 py-0.5 text-xs font-semibold text-white">{gen(cargo.nome, sexo)}</span>}
           </div>
           <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
             {info?.oab && <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 shrink-0 text-[#7048E8]" /> OAB {info.oab}</span>}
@@ -811,7 +873,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
         {cargo?.descricao && (
           <div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
             <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#228BE6]"><Target className="h-3.5 w-3.5" /> O que esperamos de você</p>
-            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{cargo.descricao}</p>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{gen(cargo.descricao, sexo)}</p>
           </div>
         )}
         {metricas.length > 0 && (
@@ -875,15 +937,18 @@ const GHOST_BTN = 'inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm f
 function PhotoCropper({ file, onCancel, onDone }: { file: File; onCancel: () => void; onDone: (dataUrl: string) => void }) {
   const SIZE = 256;
   const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [url, setUrl] = useState('');
   const [zoom, setZoom] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   useEffect(() => {
-    const url = URL.createObjectURL(file);
+    const u = URL.createObjectURL(file);
+    setUrl(u);
     const im = new Image();
-    im.onload = () => { setImg(im); URL.revokeObjectURL(url); };
+    im.onload = () => setImg(im);
     im.onerror = () => { toast.error('Não consegui ler essa imagem'); onCancel(); };
-    im.src = url;
+    im.src = u;
+    return () => URL.revokeObjectURL(u); // revoga só ao fechar (prévia continua visível)
   }, [file]);
   const base = img ? Math.max(SIZE / img.width, SIZE / img.height) : 1;
   const scale = base * zoom;
@@ -907,7 +972,7 @@ function PhotoCropper({ file, onCancel, onDone }: { file: File; onCancel: () => 
       <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
         <p className="mb-3 text-center text-sm font-bold text-zinc-800 dark:text-zinc-100">Ajuste a foto</p>
         <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} className="relative mx-auto h-64 w-64 cursor-grab touch-none select-none overflow-hidden rounded-full bg-zinc-100 ring-2 ring-zinc-200 active:cursor-grabbing dark:bg-zinc-800 dark:ring-zinc-700" style={{ width: SIZE, height: SIZE }}>
-          {img && <img src={img.src} alt="" draggable={false} style={{ position: 'absolute', width: imgW, height: imgH, left, top, maxWidth: 'none' }} />}
+          {img && url && <img src={url} alt="" draggable={false} style={{ position: 'absolute', width: imgW, height: imgH, left, top, maxWidth: 'none' }} />}
         </div>
         <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} className="mt-4 w-full accent-[#7048E8]" />
         <p className="mt-1 text-center text-[11px] text-zinc-400">Arraste para posicionar · use a barra para dar zoom</p>
@@ -928,6 +993,27 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
   const fileRef = useRef<HTMLInputElement>(null);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const escolherFoto = (file?: File) => { if (file) setCropFile(file); if (fileRef.current) fileRef.current.value = ''; };
+  const docRef = useRef<HTMLInputElement>(null);
+  const [imp, setImp] = useState(false);
+  const importarDoc = async (file?: File) => {
+    if (!file) return;
+    setImp(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const p = await escritorioService.extrairPerfil({ base64, mime: file.type, nomeArquivo: file.name });
+      setF((x) => ({
+        ...x,
+        oab: p.oab || x.oab,
+        conoscoDesde: p.conoscoDesde || x.conoscoDesde,
+        sexo: (p.sexo as 'F' | 'M' | undefined) || x.sexo,
+        atuacao: p.atuacao?.length ? p.atuacao : x.atuacao,
+        financeiro: p.financeiro?.length ? p.financeiro : x.financeiro,
+        destaque: x.destaque || p.resumo,
+      }));
+      toast.success('Dados importados do documento — confira e salve.');
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Não consegui importar do documento'); }
+    finally { setImp(false); if (docRef.current) docRef.current.value = ''; }
+  };
   const cargo = cargoById[f.cargoId ?? atual?.cargoId ?? ''];
   const foto = f.fotoUrl || avatarUrl;
   const salvar = () => {
@@ -940,6 +1026,13 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
       onClose={onClose}
       footer={<div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Cancelar</button><button onClick={salvar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button></div>}
     >
+      {!selfMode && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#7048E8]/25 bg-[#7048E8]/5 p-3 dark:bg-[#7048E8]/10">
+          <p className="text-xs text-zinc-600 dark:text-zinc-300">Tem o contrato/currículo? <strong>Importe e a IA preenche</strong> OAB, datas, financeiro e áreas.</p>
+          <input ref={docRef} type="file" accept=".pdf,.docx,image/*" className="hidden" onChange={(e) => importarDoc(e.target.files?.[0])} />
+          <button type="button" onClick={() => docRef.current?.click()} disabled={imp} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-60">{imp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Importar de documento</button>
+        </div>
+      )}
       <div className="flex items-center gap-3">
         {foto ? <img src={foto} alt={nome} className="h-20 w-20 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7048E8] text-2xl font-bold text-white">{iniciaisDe(nome)}</div>}
         <div className="min-w-0 flex-1"><p className="font-semibold text-zinc-800 dark:text-zinc-100">{nome}</p>{cargo && <p className="text-xs text-zinc-400">{cargo.nome}</p>}</div>
@@ -956,7 +1049,14 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
       <div><p className={LABEL}>OAB</p><input value={f.oab ?? ''} onChange={(e) => set({ oab: e.target.value })} placeholder="ex.: PR 123.456 · SP 654.321" className={`${INPUT} mt-1`} /></div>
       {!selfMode && (
         <div className="grid grid-cols-2 gap-2">
-          <div className="col-span-2"><p className={LABEL}>Conosco desde</p><input value={f.conoscoDesde ?? ''} onChange={(e) => set({ conoscoDesde: e.target.value })} placeholder="ex.: 01/03/2024 ou março de 2024" className={`${INPUT} mt-1`} /></div>
+          <div><p className={LABEL}>Conosco desde</p><input value={f.conoscoDesde ?? ''} onChange={(e) => set({ conoscoDesde: e.target.value })} placeholder="ex.: 01/03/2024" className={`${INPUT} mt-1`} /></div>
+          <div><p className={LABEL}>Trata por</p>
+            <select value={f.sexo ?? ''} onChange={(e) => set({ sexo: (e.target.value || undefined) as 'F' | 'M' | undefined })} className={`${INPUT} mt-1`}>
+              <option value="">— não definir —</option>
+              <option value="F">Ela (advogada, sócia…)</option>
+              <option value="M">Ele (advogado, sócio…)</option>
+            </select>
+          </div>
           <div><p className={LABEL}>Casos (deixe vazio p/ usar o real)</p><input type="number" min={0} value={f.casos ?? ''} onChange={(e) => set({ casos: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
           <div><p className={LABEL}>Vidas impactadas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
         </div>
