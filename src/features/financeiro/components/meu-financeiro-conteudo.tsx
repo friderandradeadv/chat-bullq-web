@@ -1,15 +1,20 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import {
   ArrowUpCircle, ArrowDownCircle, Sparkles, Search, HeartHandshake, Flame, Calendar, Gavel, ExternalLink, UserCircle2,
-  TrendingUp, Target, ChevronRight, Scale,
+  TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt,
 } from 'lucide-react';
-import { type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
 import { mesKey, mesLabel, mesCurtoKey } from '@/features/financeiro/lib/clientes';
+
+/** Contexto de criação de lançamento (quando o advogado pode lançar na vertical dele). */
+export type CriarCtx = { userId: string; area: string; nome?: string };
 
 const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(Math.round(n)).toLocaleString('pt-BR');
 const brl2 = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -79,7 +84,9 @@ const FRASES_ADV = [
 ];
 const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido', label: 'Recebidos' }, { key: 'a_receber', label: 'A receber' }] as const;
 
-export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
+export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; criar?: CriarCtx }) {
+  const [subtab, setSubtab] = useState<'resumo' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>('resumo');
+  const [novo, setNovo] = useState(false);
   const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nCasos: 0, nLancamentos: 0 };
   const clientes = data.clientes ?? [];
   // Quando o backend manda o bloco da ÁREA (vertical do advogado), a visão reflete
@@ -129,7 +136,17 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           </div>
         </div>
 
-        {/* Banner motivacional */}
+        {/* Subabas da visão escopada — organiza como o dashboard, mas na vertical */}
+        <div className="mt-4 flex flex-wrap items-center gap-1.5 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
+          {([['resumo', 'Visão geral', Scale], ['lancamentos', 'Lançamentos', Receipt], ['receber', 'A receber', Gavel], ['projecoes', 'Projeções', TrendingUp], ['motivacao', 'Motivação', Flame]] as const).map(([k, label, Icon]) => (
+            <button key={k} onClick={() => setSubtab(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${subtab === k ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}><Icon className="h-4 w-4" /> {label}</button>
+          ))}
+          {criar && <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"><Plus className="h-4 w-4" /> Novo lançamento</button>}
+        </div>
+        {novo && criar && <NovoLancamentoModal criar={criar} onClose={() => setNovo(false)} />}
+
+        {/* Banner motivacional (Visão geral) */}
+        {subtab === 'resumo' && (
         <div className="mt-4 overflow-hidden rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 dark:border-zinc-800 dark:from-amber-900/15 dark:via-zinc-900 dark:to-emerald-900/15">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-400/20 text-amber-600"><Flame className="h-5 w-5" /></span>
@@ -141,17 +158,20 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Stats */}
+        {/* Stats (Visão geral) */}
+        {subtab === 'resumo' && (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MiniStat label="Recebido (seus casos)" value={brl(r.recebido)} hint={melhorMes ? `melhor mês: ${mesLabel(melhorMes.mes).replace(' de ', '/')}` : `${r.nClientes} cliente(s)`} accent="#2F9E44" />
           <MiniStat label="A receber" value={brl(r.aReceber)} hint="lançamentos pendentes" accent="#F59F00" />
           <MiniStat label="Sua parte (rateio)" value={brl(r.minhaParte)} hint="honorários divididos com você" accent="#7048E8" />
           <MiniStat label="Total a entrar" value={brl(aReceberTotal)} hint="a receber + sua parte + CS" accent="#228BE6" />
         </div>
+        )}
 
-        {/* Gráfico: recebido mês a mês */}
-        {serie.length > 1 && (
+        {/* Gráfico: recebido mês a mês (Visão geral) */}
+        {subtab === 'resumo' && serie.length > 1 && (
           <Card title="Seu recebido mês a mês" sub="a evolução dos honorários que você trouxe.">
             <ResponsiveContainer width="100%" height={200}>
               <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
@@ -166,7 +186,7 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
         )}
 
         {/* A receber (CS) — completo, escopado à área (prestação + cumprimento) */}
-        {(cs.prestacao > 0 || cs.cumprimento > 0) ? (
+        {subtab === 'receber' && ((cs.prestacao > 0 || cs.cumprimento > 0) ? (
           <Card title={<span className="flex items-center gap-2"><Gavel className="h-4 w-4 text-emerald-600" /> A receber · Cumprimento de Sentença{deArea ? ` — ${areaNome}` : ''}</span>}
             sub={`o que os processos ${deArea ? 'da vertical' : 'seus'} devem trazer (preenchido no card de cada processo) — ${cs.itens.length} caso(s).`}>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -191,10 +211,10 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           <Card title={<span className="flex items-center gap-2"><Gavel className="h-4 w-4 text-emerald-600" /> A receber · Cumprimento de Sentença — {areaNome}</span>}>
             <p className="py-6 text-center text-sm text-zinc-400">Ainda não há valores em prestação de contas ou cumprimento nos casos da vertical. Assim que um processo chegar nessas fases e o valor for preenchido no card do processo, aparece aqui.</p>
           </Card>
-        ) : null}
+        ) : null)}
 
-        {/* Seus clientes */}
-        {clientes.length > 0 && (
+        {/* Seus clientes (Visão geral) */}
+        {subtab === 'resumo' && clientes.length > 0 && (
           <Card title={<>Seus clientes <span className="font-normal text-zinc-400">· {clientes.length}</span></>} sub="quem mais te rendeu honorários.">
             <div className="max-h-72 overflow-y-auto scrollbar-thin">
               {clientes.map((c, i) => (
@@ -209,8 +229,8 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           </Card>
         )}
 
-        {/* O que você está construindo — impacto + sua parte (sem expor o caixa do escritório) */}
-        {data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
+        {/* O que você está construindo — impacto + sua parte (Projeções) */}
+        {subtab === 'projecoes' && data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
           <Card title={<span className="flex items-center gap-2"><HeartHandshake className="h-4 w-4 text-[#E64980]" /> O que você está construindo</span>}
             sub={data.projecaoCasos.isSocio ? 'o escritório recebe os honorários do contrato; a sua parte de sócio é a sua fatia desses honorários por área de atuação.' : 'da condenação estimada, o escritório recebe os honorários do contrato; a sua parte é o seu % sobre esses honorários.'}>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -241,7 +261,7 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
         )}
 
         {/* ── PROJEÇÕES da sua carteira — o caminho causa→sua parte + cenários ── */}
-        {data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
+        {subtab === 'projecoes' && data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
           <Card title={<span className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#7048E8]" /> Projeções da sua carteira</span>}
             sub="o caminho do valor até a sua parte, e três cenários conforme os casos evoluem.">
             <div className="grid gap-2 sm:grid-cols-4">
@@ -276,7 +296,7 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
         )}
 
         {/* ── CUSTO DA SUA VERTICAL — entradas × saídas, overhead rateado por casos ── */}
-        {data.resultadoVertical && (
+        {subtab === 'resumo' && data.resultadoVertical && (
           <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-[#15AABF]" /> Custo da sua vertical{data.minhaArea ? ` · ${data.minhaArea}` : ''}</span>}
             sub={`quanto a sua área rende e custa hoje — a estrutura compartilhada do escritório entra rateada por nº de casos (${data.resultadoVertical.nCasos} da sua vertical).`}>
             <div className="grid gap-3 sm:grid-cols-4">
@@ -300,7 +320,7 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
         )}
 
         {/* ── MOTIVAÇÃO & metas — alvo da carteira + impacto (sem depender de caixa) ── */}
-        {data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
+        {subtab === 'motivacao' && data.projecaoCasos && data.projecaoCasos.nComValor > 0 && (
           <Card title={<span className="flex items-center gap-2"><Target className="h-4 w-4 text-emerald-600" /> Suas metas</span>}
             sub="o alvo que a sua carteira aponta — e o quanto você já percorreu.">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -330,7 +350,7 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
         )}
 
         {/* ── MOTIVAÇÃO — o que está a caminho (CS a receber + sua parte na carteira) ── */}
-        {(cs.prestacao + csCumprimentoNosso > 0 || (data.projecaoCasos?.liquidoProvavel ?? 0) > 0) && (
+        {subtab === 'motivacao' && (cs.prestacao + csCumprimentoNosso > 0 || (data.projecaoCasos?.liquidoProvavel ?? 0) > 0) && (
           <Card title={<span className="flex items-center gap-2"><Flame className="h-4 w-4 text-amber-500" /> Motivação{deArea ? ` · ${areaNome}` : ''}</span>}
             sub="o retorno que o seu trabalho está construindo — mesmo o que ainda não virou caixa.">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -342,8 +362,8 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           </Card>
         )}
 
-        {/* Seus processos — autor × réu, etiquetas, o que o cliente busca, sua parte */}
-        {casos.length > 0 && (
+        {/* Seus processos — autor × réu, etiquetas, o que o cliente busca, sua parte (Visão geral) */}
+        {subtab === 'resumo' && casos.length > 0 && (
           <Card title={<>Seus processos <span className="font-normal text-zinc-400">· {casos.length}</span></>} sub="cada linha é uma pessoa que confia no seu trabalho.">
             <div className="max-h-[32rem] overflow-auto scrollbar-thin">
               <table className="w-full text-sm">
@@ -372,8 +392,9 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
           </Card>
         )}
 
-        {/* Lançamentos — filtrável (da área quando escopado à vertical) */}
-        <Card title={<>{deArea ? <>Lançamentos da área · {areaNome}</> : 'Seus lançamentos'} <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub={deArea ? `entradas e saídas ligadas aos clientes da vertical ${areaNome}.` : 'movimentações dos seus casos.'}>
+        {/* Lançamentos — filtrável (aba Lançamentos) */}
+        {subtab === 'lancamentos' && (
+        <Card title={<>{deArea ? <>Lançamentos da área · {areaNome}</> : 'Seus lançamentos'} <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub={deArea ? `entradas e saídas ligadas à vertical ${areaNome} (inclui o que você lançar).` : 'movimentações dos seus casos.'} action={criar && <button onClick={() => setNovo(true)} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo</button>}>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
               <Calendar className="h-3.5 w-3.5 text-zinc-400" />
@@ -399,8 +420,76 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
             })}
           </div>
         </Card>
+        )}
 
         <p className="mt-4 pb-2 text-center text-xs text-zinc-400">{deArea ? <>Esta visão reflete a vertical <strong>{areaNome}</strong> — sua área de atuação.</> : 'Esta visão mostra apenas os seus processos — em que você é o responsável.'}</p>
     </>
+  );
+}
+
+/** Modal compacto de novo lançamento (honorário/despesa) tagueado à vertical do advogado. */
+function NovoLancamentoModal({ criar, onClose }: { criar: CriarCtx; onClose: () => void }) {
+  const qc = useQueryClient();
+  const hoje = (() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })();
+  const [tipo, setTipo] = useState<'receita' | 'despesa'>('receita');
+  const [categoria, setCategoria] = useState('Honorários');
+  const [valor, setValor] = useState('');
+  const [pessoa, setPessoa] = useState('');
+  const [data, setData] = useState(hoje);
+  const [status, setStatus] = useState<TxStatus>('recebido');
+  const CATS_REC = ['Honorários', 'Outros'];
+  const CATS_DESP = ['Anúncios', 'Agência', 'Suprimentos escritório', 'Aluguel', 'Contador', 'Outros'];
+  const cats = tipo === 'receita' ? CATS_REC : CATS_DESP;
+  const save = useMutation({
+    mutationFn: () => financeiroService.addTransacao({
+      data, tipo, categoria, valor: Math.abs(Number(String(valor).replace(',', '.')) || 0),
+      pagador: tipo === 'receita' ? (pessoa || undefined) : undefined, recebedor: tipo === 'despesa' ? (pessoa || undefined) : undefined,
+      status, area: criar.area, responsavelId: criar.userId,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success('Lançamento adicionado'); onClose(); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao lançar'),
+  });
+  const podeSalvar = Number(String(valor).replace(',', '.')) > 0;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-[#DEE2E6] bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Receipt className="h-4 w-4 text-[#02883C]" /> Novo lançamento · {criar.area}</h3>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+            {(['receita', 'despesa'] as const).map((t) => (
+              <button key={t} onClick={() => { setTipo(t); setCategoria(t === 'receita' ? 'Honorários' : 'Anúncios'); setStatus(t === 'receita' ? 'recebido' : 'pago'); }} className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${tipo === t ? (t === 'receita' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : 'text-zinc-500'}`}>{t === 'receita' ? 'Entrada' : 'Saída'}</button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs font-medium text-zinc-500">Categoria
+              <select value={categoria} onChange={(e) => setCategoria(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950">{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+            </label>
+            <label className="text-xs font-medium text-zinc-500">Valor (R$)
+              <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-950" />
+            </label>
+          </div>
+          <label className="block text-xs font-medium text-zinc-500">{tipo === 'receita' ? 'Cliente / pagador' : 'Fornecedor / descrição'}
+            <input value={pessoa} onChange={(e) => setPessoa(e.target.value)} placeholder={tipo === 'receita' ? 'nome do cliente' : 'ex.: Meta Ads, agência…'} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs font-medium text-zinc-500">Data
+              <input value={data} onChange={(e) => setData(e.target.value)} placeholder="DD/MM/AAAA" className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
+            </label>
+            <label className="text-xs font-medium text-zinc-500">Situação
+              <select value={status} onChange={(e) => setStatus(e.target.value as TxStatus)} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950">
+                {tipo === 'receita' ? <><option value="recebido">Recebido</option><option value="a_receber">A receber</option></> : <><option value="pago">Pago</option><option value="a_pagar">A pagar</option></>}
+              </select>
+            </label>
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+          <button onClick={() => save.mutate()} disabled={!podeSalvar || save.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Lançar</button>
+        </div>
+      </div>
+    </div>
   );
 }

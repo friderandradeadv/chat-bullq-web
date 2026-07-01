@@ -263,7 +263,7 @@ export default function EscritorioPage() {
             </div>
           )}
           {meuFin && !meuFin.vazio
-            ? <MeuFinanceiroConteudo data={meuFin} />
+            ? <MeuFinanceiroConteudo data={meuFin} criar={alvoUserId && meuFin.minhaArea ? { userId: alvoUserId, area: meuFin.minhaArea } : undefined} />
             : <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>}
         </>)}
 

@@ -151,7 +151,7 @@ export interface AddTransacaoInput {
   vencimento?: string; dataPagamento?: string;
   status?: TxStatus; parcelas?: number; intervalo?: 'mensal' | 'anual'; split?: SplitItem[];
   rateio?: RateioExito | null;
-  responsavelId?: string; responsavel?: string; conta?: string;
+  responsavelId?: string; responsavel?: string; conta?: string; area?: string;
 }
 export interface UpdateTransacaoInput {
   data?: string; vencimento?: string; dataPagamento?: string;

@@ -2482,14 +2482,16 @@ function MotivacaoTab({ data }: { data: FinDashboard }) {
 
 /** Página standalone (advogado com acesso limitado) — embrulha o conteúdo pessoal. */
 function FinanceiroLimitado({ data }: { data: FinDashboard }) {
+  const { user } = useAuthStore();
+  // o próprio advogado pode lançar honorários/despesas na vertical dele
+  const criar = user?.id && data.minhaArea ? { userId: user.id, area: data.minhaArea } : undefined;
   return (
     <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       <div className="mx-auto w-full max-w-5xl p-6">
-        {/* Visão pessoal escopada aos casos do próprio advogado — lançamentos,
-            projeção e "o que você está construindo" com a sua parte por área.
-            Sócio de vertical (ex.: Previdenciário) vê só a SUA carteira; o caixa
-            e a carteira do escritório inteiro ficam restritos aos administradores. */}
-        <MeuFinanceiroConteudo data={data} />
+        {/* Visão pessoal escopada à vertical do advogado — lançamentos (pode criar),
+            CS, projeção e motivação. O caixa e a carteira do escritório inteiro
+            ficam restritos aos administradores. */}
+        <MeuFinanceiroConteudo data={data} criar={criar} />
       </div>
     </div>
   );
@@ -2501,10 +2503,11 @@ function AdvogadoFinanceiro({ userId }: { userId: string }) {
   const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'meu', userId], queryFn: () => financeiroService.meuFinanceiro(userId), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
   if (!data) return <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar o financeiro deste advogado.</p></Card>;
+  const criar = data.minhaArea ? { userId, area: data.minhaArea } : undefined;
   return (
     <div className="mt-4 rounded-2xl border border-[#7048E8]/25 bg-[#7048E8]/[0.03] p-4 dark:border-[#7048E8]/30 dark:bg-[#7048E8]/[0.06]">
-      <p className="mb-3 inline-flex items-center gap-1 rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-xs font-medium text-[#7048E8]"><UserCircle2 className="h-3.5 w-3.5" /> é exatamente isto que ele(a) vê no login — escopado à vertical de atuação</p>
-      <MeuFinanceiroConteudo data={data} />
+      <p className="mb-3 inline-flex items-center gap-1 rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-xs font-medium text-[#7048E8]"><UserCircle2 className="h-3.5 w-3.5" /> é exatamente isto que ele(a) vê no login — escopado à vertical de atuação · você pode lançar por ele(a)</p>
+      <MeuFinanceiroConteudo data={data} criar={criar} />
     </div>
   );
 }
