@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/settings',
-        destination: '/settings/channels',
+        destination: '/settings/general',
         permanent: false,
       },
     ];

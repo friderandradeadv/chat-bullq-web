@@ -19,7 +19,9 @@ import {
   Scale,
 } from 'lucide-react';
 
-// Menu lateral agrupado — estilo LíderHub (Configurações > CONTA / EMPRESA / CLASSES / DESENVOLVEDOR)
+// Menu lateral agrupado POR SETOR — Conta / Geral (organização) / Comercial
+// (atendimento) / Jurídico / Desenvolvedor. Cada item mora no setor a que
+// pertence no dia a dia; o que é do escritório inteiro fica em "Geral".
 const groups = [
   {
     label: 'Conta',
@@ -28,23 +30,24 @@ const groups = [
     ],
   },
   {
-    label: 'Empresa',
+    label: 'Geral',
     items: [
-      { href: '/settings/general', label: 'Geral', icon: Building2 },
-      { href: '/settings/channels', label: 'Canais', icon: Radio },
-      { href: '/settings/ai', label: 'IA', icon: Sparkles },
-      { href: '/settings/usage', label: 'Uso da IA', icon: Coins },
-      { href: '/settings/members', label: 'Membros', icon: Users },
-      { href: '/settings/quick-replies', label: 'Mensagens rápidas', icon: Zap },
+      { href: '/settings/general', label: 'Escritório', icon: Building2 },
+      { href: '/settings/members', label: 'Membros e acessos', icon: Users },
       { href: '/settings/notifications', label: 'Notificações', icon: Bell },
     ],
   },
   {
-    label: 'Classes',
+    label: 'Comercial',
     items: [
+      { href: '/settings/channels', label: 'Canais', icon: Radio },
+      { href: '/settings/ai', label: 'IA', icon: Sparkles },
+      { href: '/settings/usage', label: 'Uso da IA', icon: Coins },
+      { href: '/settings/quick-replies', label: 'Mensagens rápidas', icon: Zap },
       { href: '/settings/statuses', label: 'Status', icon: CircleDot },
       { href: '/settings/tags', label: 'Etiquetas', icon: Tags },
       { href: '/settings/departments', label: 'Departamento', icon: Network },
+      { href: '/settings/integrations', label: 'Integrações', icon: Plug },
     ],
   },
   {
@@ -57,7 +60,6 @@ const groups = [
     label: 'Desenvolvedor',
     items: [
       { href: '/settings/api-keys', label: 'Credenciais API', icon: KeyRound },
-      { href: '/settings/integrations', label: 'Integrações', icon: Plug },
     ],
   },
 ];

@@ -63,14 +63,11 @@ const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }
   { key: 'contas', label: 'Contas', icon: Banknote, grupo: 'Caixa' },
   { key: 'retiradas', label: 'Retiradas', icon: Wallet, grupo: 'Caixa' },
   { key: 'cumprimento', label: 'CS — recebíveis dos processos', icon: Gavel, grupo: 'Processos' },
-  { key: 'previsoes', label: 'Previsões da carteira', icon: Sparkles, grupo: 'Sócios' },
   { key: 'verticais', label: 'Verticais (por área)', icon: Layers, grupo: 'Análise & futuro' },
-  { key: 'fluxo', label: 'Fluxo de caixa', icon: Table2, grupo: 'Análise & futuro' },
-  { key: 'crescimento', label: 'Crescimento', icon: TrendingUp, grupo: 'Análise & futuro' },
-  { key: 'projecoes', label: 'Projeções', icon: Rocket, grupo: 'Análise & futuro' },
+  { key: 'projecoes', label: 'Projeções e crescimento', icon: Rocket, grupo: 'Análise & futuro' },
   { key: 'motivacao', label: 'Motivação', icon: HeartHandshake, grupo: 'Análise & futuro' },
 ];
-const GRUPOS = ['Pessoal', 'Caixa', 'Processos', 'Sócios', 'Análise & futuro'];
+const GRUPOS = ['Pessoal', 'Caixa', 'Processos', 'Análise & futuro'];
 
 // Produto cru do card (RMC, RCC, "CS - RMC", Contribuições, 7780-Indenização…)
 // → Área jurídica (Bancário/Previdenciário/Trabalhista/Consumidor/Cível).
@@ -89,7 +86,8 @@ function areaJuridica(produto?: string | null): string {
 export default function FinanceiroPage() {
   // Organismo vivo: refaz sozinho a cada 60s e ao voltar pra aba — reflete movimentação dos processos/recebimentos.
   const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
-  const [view, setView] = useState<View>('meu');
+  // Abre em "Lançamentos" por padrão (livro-razão do mês corrente) — é a tela de trabalho do dia a dia.
+  const [view, setView] = useState<View>('lancamentos');
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
 
@@ -147,7 +145,6 @@ export default function FinanceiroPage() {
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
 
         {view === 'meu' && <MeuTab />}
-        {view === 'previsoes' && <PrevisoesTab />}
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
         {view === 'cobrancas' && <CobrancasTab data={data} />}
@@ -155,9 +152,15 @@ export default function FinanceiroPage() {
         {view === 'retiradas' && <RetiradasTab data={data} />}
         {view === 'contas' && <ContasTab data={data} />}
         {view === 'verticais' && <VerticaisTab data={data} />}
-        {view === 'fluxo' && <FluxoTab data={data} />}
-        {view === 'crescimento' && <CrescimentoTab data={data} />}
-        {view === 'projecoes' && <ProjecoesTab data={data} />}
+        {/* "Projeções e crescimento" reúne as antigas abas Projeções + Crescimento +
+            Previsões da carteira (sócios) numa só — o painel do futuro num lugar. */}
+        {view === 'projecoes' && (
+          <>
+            <ProjecoesTab data={data} />
+            <CrescimentoTab data={data} />
+            <PrevisoesTab />
+          </>
+        )}
         {view === 'motivacao' && <MotivacaoTab data={data} />}
 
         <p className="mt-6 flex items-center justify-center gap-1.5 pb-2 text-xs text-zinc-400">
@@ -294,7 +297,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
   const mesHoje = useMemo(() => { const p = hojeBR().split('/'); return `${p[2]}-${p[1]}`; }, []);
-  const [mesSel, setMesSel] = useState<string>(''); // "" = Todos os meses (livro-razão inteiro por padrão)
+  // Abre já filtrado pelo mês corrente (é o que a equipe olha no dia a dia). "" = Todos os meses.
+  const [mesSel, setMesSel] = useState<string>(mesHoje);
+  // Garante o mês corrente na lista do seletor mesmo sem lançamentos ainda (senão o value fica órfão).
+  const mesesOpcoes = useMemo(() => (mesesDisp.includes(mesHoje) ? mesesDisp : [mesHoje, ...mesesDisp]), [mesesDisp, mesHoje]);
   const [mostrarFuturas, setMostrarFuturas] = useState(false); // parcelas a receber/pagar de meses futuros só sob demanda
   const [aba, setAba] = useState<'todos' | 'receitas' | 'despesas'>('todos');
   const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('todos');
@@ -420,7 +426,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
           <Calendar className="h-3.5 w-3.5 text-zinc-400" />
           <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="bg-transparent text-sm font-medium capitalize outline-none">
             <option value="">Todos os meses</option>
-            {mesesDisp.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
+            {mesesOpcoes.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
           </select>
         </div>
         <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
