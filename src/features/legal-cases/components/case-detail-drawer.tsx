@@ -14,6 +14,7 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
+import { CardTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 import { DropZone } from '@/components/drop-zone';
@@ -182,6 +183,9 @@ export function CaseDetailDrawer({
                 : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{(c.responsible.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>)}
               {c?.area && (() => { const col = produtoColor(c.area); return <span className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: col.bg, color: col.fg }}>{cleanArea(c.area)}</span>; })()}
               {adversa && <span className="inline-flex items-center gap-1 rounded-full bg-[#f1f3f4] px-2 py-1 text-[10px] font-semibold text-[#48626f] dark:bg-zinc-800 dark:text-zinc-300">× {adversa.name}</span>}
+              {/* Etiquetas jurídicas — editáveis (✕ pra remover, + pra adicionar). Vale
+                  em TODOS os kanbans (a ficha é a mesma). */}
+              {c && <CardTags caseId={c.id} tags={c.legalTags.map((lt) => lt.tag)} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
             </div>
             {/* abas (pills) */}
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
