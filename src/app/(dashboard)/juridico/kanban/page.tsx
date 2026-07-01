@@ -14,6 +14,7 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
+import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits';
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -399,7 +400,7 @@ function Column({
     <div className="flex min-h-0 w-[280px] shrink-0 flex-col">
       {/* Header da fase (40px) — nome magenta (editável p/ OWNER) + badge */}
       <div className="flex h-10 items-center gap-2 px-1">
-        <PhaseTitle phase={phase} canRename={canRename} onRename={onRename} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
           {items.length}
         </span>
@@ -418,51 +419,6 @@ function Column({
         {items.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} onOpen={onOpen} onChanged={onChanged} />)}
       </div>
     </div>
-  );
-}
-
-// Nome da fase no header. Só o OWNER edita (clique → input). Salva no Enter/blur.
-function PhaseTitle({
-  phase, canRename, onRename,
-}: {
-  phase: KanbanPhase; canRename: boolean; onRename: (key: string, label: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(phase.label);
-  useEffect(() => setText(phase.label), [phase.label]);
-
-  if (!canRename) {
-    return <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">{phase.label}</h2>;
-  }
-  const commit = () => {
-    const t = text.trim();
-    setEditing(false);
-    if (t && t !== phase.label) onRename(phase.key, t);
-    else setText(phase.label);
-  };
-  if (editing) {
-    return (
-      <input
-        autoFocus
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.preventDefault(); commit(); }
-          else if (e.key === 'Escape') { setEditing(false); setText(phase.label); }
-        }}
-        className="w-full rounded border border-[#e11970] bg-white px-1 py-0.5 text-sm font-medium text-[#101820] outline-none dark:bg-zinc-800 dark:text-zinc-100"
-      />
-    );
-  }
-  return (
-    <h2
-      onClick={() => setEditing(true)}
-      title="Clique pra renomear a fase (só o dono do escritório)"
-      className="cursor-text truncate text-sm font-medium text-[#e11970] hover:underline dark:text-[#f06595]"
-    >
-      {phase.label}
-    </h2>
   );
 }
 

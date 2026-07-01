@@ -14,6 +14,8 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
+import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits';
+import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
 const KEY = ['legal-cases', 'kanban'];
@@ -89,6 +91,22 @@ export default function PreProcessualPage() {
 
   const active = cards.find((c) => c.id === activeId) ?? null;
 
+  // Só sócios (OWNER/ADMIN) renomeiam as fases — igual à Fase Judicial.
+  const activeOrg = useAuthStore((s) => s.organizations.find((o) => o.id === s.activeOrgId));
+  const canRename = activeOrg?.role === 'OWNER' || activeOrg?.role === 'ADMIN';
+  const renamePhase = async (key: string, label: string) => {
+    qc.setQueryData<KanbanData>(KEY, (old) =>
+      old ? { ...old, phases: old.phases.map((p) => (p.key === key ? { ...p, label } : p)) } : old,
+    );
+    try {
+      await legalCasesService.renamePhaseLabel(key, label);
+      toast.success('Fase renomeada');
+    } catch (err: any) {
+      qc.invalidateQueries({ queryKey: KEY });
+      toast.error(err?.response?.data?.message || 'Só sócios podem renomear fases');
+    }
+  };
+
   const move = async (card: KanbanCard, to: string) => {
     if (card.phase === to) return;
     qc.setQueryData<KanbanData>(KEY, (old) => old ? { ...old, cards: old.cards.map((x) => x.id === card.id ? { ...x, phase: to } : x) } : old);
@@ -140,7 +158,7 @@ export default function PreProcessualPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} />
             ))}
           </div>
           <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
@@ -154,13 +172,13 @@ export default function PreProcessualPage() {
   );
 }
 
-function Column({ phase, items, onOpen, onProtocolar, onChanged }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void }) {
+function Column({ phase, items, onOpen, onProtocolar, onChanged, canRename, onRename }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
   return (
     <div className="flex min-h-0 w-[280px] shrink-0 flex-col">
       <div className="flex h-10 items-center gap-2 px-1">
-        <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">{phase.label}</h2>
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
       <div ref={setNodeRef} className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border px-1.5 pb-2 pt-3 transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
