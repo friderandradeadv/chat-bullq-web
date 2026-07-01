@@ -13,11 +13,27 @@ export interface Candidato {
   nota?: number;       // 0-10 (prova/entrevista)
   criadoEm?: string;
 }
+export interface Documento { id: string; nome: string; url?: string }
+// Ficha de RH (dados sensíveis do colaborador — só sócios veem/editam).
+export interface Ficha {
+  telefone?: string;
+  endereco?: string;
+  cpf?: string;
+  rg?: string;
+  nascimento?: string;    // data de nascimento
+  estadoCivil?: string;
+  admissao?: string;      // data de admissão/associação
+  contrato?: string;      // tipo de contrato + link/obs
+  documentos?: Documento[]; // RG, CPF, contrato, comprovantes… (links do Drive)
+  obs?: string;           // observações internas de RH
+}
 export interface Rh {
   etapas: Etapa[];
   candidatos: Candidato[];
+  fichas?: Record<string, Ficha>; // por userId
   vaga: string;        // descrição/formulário da vaga aberta
   canEdit: boolean;
+  restrito?: boolean;  // true = usuário não é sócio (sem acesso ao RH)
 }
 
 export const rhService = {

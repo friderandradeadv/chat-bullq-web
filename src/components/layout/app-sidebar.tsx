@@ -262,7 +262,7 @@ export function AppSidebar() {
           <div className="mt-3">
             <NavSection label="Administrativo" defaultOpen={false}>
               <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
-              <NavItem href="/rh" icon={Users} label="RH & Seleção" />
+              {isAdmin && <NavItem href="/rh" icon={Users} label="RH & Seleção" />}
               <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
             </NavSection>
           </div>
