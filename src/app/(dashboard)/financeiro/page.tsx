@@ -10,7 +10,7 @@ import {
 import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt, Save,
-  ChevronDown, ChevronRight, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
+  ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto } from '@/features/financeiro/services/financeiro.service';
@@ -318,6 +318,76 @@ function FichaDrawerMount({ ficha }: { ficha: Ficha }) {
   return ficha.openCaseId ? <CaseDetailDrawer caseId={ficha.openCaseId} phases={ficha.phases} onClose={() => ficha.setOpenCaseId(null)} /> : null;
 }
 
+/** Mini-calendário (estilo Astrea): navega/seleciona mês OU clica dia/período. */
+function CalendarioFiltro({ mesSel, deISO, ateISO, onMes, onPeriodo, onLimpar }: {
+  mesSel: string; deISO: string; ateISO: string;
+  onMes: (ym: string) => void; onPeriodo: (de: string, ate: string) => void; onLimpar: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [modo, setModo] = useState<'dias' | 'meses'>('dias');
+  const [selDe, setSelDe] = useState('');
+  const [selAte, setSelAte] = useState('');
+  const [ver, setVer] = useState<{ y: number; m: number }>(() => {
+    const now = new Date();
+    if (mesSel) { const [y, m] = mesSel.split('-').map(Number); return { y, m: m - 1 }; }
+    if (deISO) { const d = new Date(deISO + 'T00:00'); return { y: d.getFullYear(), m: d.getMonth() }; }
+    return { y: now.getFullYear(), m: now.getMonth() };
+  });
+  const label = mesSel ? mesLabel(mesSel) : (deISO && ateISO ? (deISO === ateISO ? toBR(deISO) : `${toBR(deISO)} – ${toBR(ateISO)}`) : deISO ? `a partir de ${toBR(deISO)}` : 'Todos os meses');
+  const ativo = !!(mesSel || deISO || ateISO);
+  const diasNoMes = new Date(ver.y, ver.m + 1, 0).getDate();
+  const primeiroDiaSemana = new Date(ver.y, ver.m, 1).getDay();
+  const iso = (d: number) => `${ver.y}-${String(ver.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const navMes = (delta: number) => setVer((v) => { const nm = v.m + delta; return { y: v.y + Math.floor(nm / 12), m: ((nm % 12) + 12) % 12 }; });
+  const clicaDia = (d: number) => {
+    const dISO = iso(d);
+    if (!selDe || (selDe && selAte)) { setSelDe(dISO); setSelAte(''); }
+    else { const [a, b] = dISO < selDe ? [dISO, selDe] : [selDe, dISO]; setSelDe(a); setSelAte(b); onPeriodo(a, b); setOpen(false); }
+  };
+  const marcado = (d: number) => { const x = iso(d); return !!selDe && (x === selDe || (!!selAte && x >= selDe && x <= selAte)); };
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} className={`inline-flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1.5 text-sm dark:bg-zinc-900 ${ativo ? 'border-[#228BE6] text-[#228BE6]' : 'border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300'}`}>
+        <Calendar className="h-3.5 w-3.5" /> <span className="font-medium">{label}</span> <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 z-20 mt-1 w-72 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mb-2 flex items-center justify-between">
+              <button onClick={() => (modo === 'dias' ? navMes(-1) : setVer((v) => ({ ...v, y: v.y - 1 })))} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ChevronLeft className="h-4 w-4" /></button>
+              <button onClick={() => setModo((m) => (m === 'dias' ? 'meses' : 'dias'))} className="rounded-lg px-2 py-1 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800">{modo === 'dias' ? `${MESES_PT[ver.m]} de ${ver.y}` : ver.y}</button>
+              <button onClick={() => (modo === 'dias' ? navMes(1) : setVer((v) => ({ ...v, y: v.y + 1 })))} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ChevronRight className="h-4 w-4" /></button>
+            </div>
+            {modo === 'dias' ? (
+              <>
+                <div className="grid grid-cols-7 text-center text-[10px] font-medium uppercase text-zinc-400">{['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((w, i) => <div key={i} className="py-1">{w}</div>)}</div>
+                <div className="grid grid-cols-7 gap-0.5">
+                  {Array.from({ length: primeiroDiaSemana }).map((_, i) => <div key={`b${i}`} />)}
+                  {Array.from({ length: diasNoMes }, (_, i) => i + 1).map((d) => (
+                    <button key={d} onClick={() => clicaDia(d)} className={`grid h-8 place-items-center rounded-lg text-sm tabular-nums transition ${marcado(d) ? 'bg-[#228BE6] font-semibold text-white' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800'}`}>{d}</button>
+                  ))}
+                </div>
+                <p className="mt-2 text-center text-[10px] text-zinc-400">{selDe && !selAte ? 'clique no fim do período (ou no mesmo dia)' : 'clique num dia (ou 2 pra um período)'}</p>
+                <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                  <button onClick={() => { onMes(`${ver.y}-${String(ver.m + 1).padStart(2, '0')}`); setSelDe(''); setSelAte(''); setOpen(false); }} className="text-xs font-semibold text-[#7048E8] hover:underline">Mês inteiro</button>
+                  <button onClick={() => { onLimpar(); setSelDe(''); setSelAte(''); setOpen(false); }} className="text-xs text-zinc-400 hover:text-rose-600">Limpar</button>
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-3 gap-1">
+                {MESES_PT.map((mn, i) => (
+                  <button key={i} onClick={() => { onMes(`${ver.y}-${String(i + 1).padStart(2, '0')}`); setModo('dias'); setSelDe(''); setSelAte(''); setOpen(false); }} className={`rounded-lg px-2 py-2.5 text-sm transition ${mesSel === `${ver.y}-${String(i + 1).padStart(2, '0')}` ? 'bg-[#228BE6] font-semibold text-white' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800'}`}>{mn.slice(0, 3)}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
@@ -451,20 +521,12 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-          <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-          <select value={mesSel} onChange={(e) => { setMesSel(e.target.value); if (e.target.value) { setDeISO(''); setAteISO(''); } }} className="bg-transparent text-sm font-medium outline-none">
-            <option value="">Todos os meses</option>
-            {mesesOpcoes.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}
-          </select>
-        </div>
-        <div className={`inline-flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1.5 text-sm dark:bg-zinc-900 ${temPeriodo ? 'border-[#228BE6]' : 'border-zinc-300 dark:border-zinc-700'}`} title="Período por calendário">
-          <CalendarClock className={`h-3.5 w-3.5 ${temPeriodo ? 'text-[#228BE6]' : 'text-zinc-400'}`} />
-          <input type="date" value={deISO} onChange={(e) => { setDeISO(e.target.value); if (e.target.value) setMesSel(''); }} className="bg-transparent text-sm outline-none" />
-          <span className="text-zinc-400">→</span>
-          <input type="date" value={ateISO} onChange={(e) => { setAteISO(e.target.value); if (e.target.value) setMesSel(''); }} className="bg-transparent text-sm outline-none" />
-          {temPeriodo && <button onClick={() => { setDeISO(''); setAteISO(''); }} className="rounded p-0.5 text-zinc-400 hover:text-rose-600" title="Limpar período"><X className="h-3.5 w-3.5" /></button>}
-        </div>
+        <CalendarioFiltro
+          mesSel={mesSel} deISO={deISO} ateISO={ateISO}
+          onMes={(ym) => { setMesSel(ym); setDeISO(''); setAteISO(''); }}
+          onPeriodo={(de, ate) => { setDeISO(de); setAteISO(ate); setMesSel(''); }}
+          onLimpar={() => { setMesSel(''); setDeISO(''); setAteISO(''); }}
+        />
         <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
           {ABAS.map((a) => <button key={a.key} onClick={() => setAba(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${aba === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}
         </div>
