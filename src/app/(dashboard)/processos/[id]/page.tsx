@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Star,
@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   Gavel,
   Columns3,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -42,6 +43,7 @@ import {
   type Deadline,
 } from '@/features/deadlines/services/deadlines.service';
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
+import { membersService, type Member } from '@/features/settings/services/members.service';
 import {
   recursosService,
   type Recurso,
@@ -217,7 +219,9 @@ export default function ProcessoDetailPage() {
               <DjenBadge monitorado={monitorado} />
             </span>
           </MetaRow>
-          <MetaRow label="Responsável">{c.responsible?.name ?? '—'}</MetaRow>
+          <MetaRow label="Responsável">
+            <ResponsibleEditor caseId={id} current={c.responsible} onChange={refetch} />
+          </MetaRow>
         </dl>
 
         {/* Abas */}
@@ -1296,8 +1300,10 @@ function EditCaseDialog({
     distributedAt: c.distributedAt ? c.distributedAt.slice(0, 10) : '',
     value: c.value ?? '',
     status: c.status,
+    responsibleId: c.responsible?.id ?? '',
   });
   const [saving, setSaving] = useState(false);
+  const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
   const submit = async () => {
     if (!form.title.trim()) return toast.error('Informe o título');
@@ -1313,6 +1319,7 @@ function EditCaseDialog({
         distributedAt: form.distributedAt || undefined,
         value: form.value === '' ? undefined : Number(form.value),
         status: form.status,
+        responsibleId: form.responsibleId || undefined,
       });
       toast.success('Processo atualizado');
       onClose();
@@ -1371,6 +1378,14 @@ function EditCaseDialog({
             </select>
           </Field>
         </div>
+        <Field label="Responsável">
+          <select value={form.responsibleId} onChange={set('responsibleId')} className={inputCls}>
+            <option value="">Sem responsável</option>
+            {members.map((m: Member) => (
+              <option key={m.userId} value={m.userId}>{m.user.name}</option>
+            ))}
+          </select>
+        </Field>
       </div>
       <ModalActions saving={saving} onClose={onClose} onSave={submit} saveLabel="Salvar" />
     </Modal>
@@ -1765,6 +1780,41 @@ function MetaRow({ label, children }: { label: string; children: React.ReactNode
     <div className="flex gap-2">
       <dt className="w-28 shrink-0 text-[#6C757D]">{label}:</dt>
       <dd className="text-[#202124] dark:text-zinc-200">{children}</dd>
+    </div>
+  );
+}
+
+/** Troca o responsável do processo inline (dropdown de membros). */
+function ResponsibleEditor({ caseId, current, onChange }: { caseId: string; current: { id: string; name: string } | null; onChange: () => void }) {
+  const [open, setOpen] = useState(false);
+  const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
+  const set = useMutation({
+    mutationFn: (userId: string) => legalCasesService.update(caseId, { responsibleId: userId || undefined }),
+    onSuccess: () => { setOpen(false); onChange(); toast.success('Responsável atualizado'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao atribuir'),
+  });
+  return (
+    <div className="relative inline-block">
+      <button onClick={() => setOpen((v) => !v)} className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md px-1.5 py-0.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">
+        <span className="truncate">{current?.name ?? <span className="text-zinc-400">Atribuir responsável</span>}</span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <button onClick={() => set.mutate('')} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+              Sem responsável {!current && <Check className="h-3.5 w-3.5 text-[#228BE6]" />}
+            </button>
+            {members.map((m: Member) => (
+              <button key={m.userId} onClick={() => set.mutate(m.userId)} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                <span className="truncate">{m.user.name}</span>
+                {current?.id === m.userId && <Check className="h-3.5 w-3.5 text-[#228BE6]" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
