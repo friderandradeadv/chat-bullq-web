@@ -9,7 +9,7 @@ import {
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
   Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
-  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera, Layers,
+  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera, Layers, ArrowLeft,
 } from 'lucide-react';
 import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo, type Vertical } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
@@ -179,17 +179,25 @@ export default function EscritorioPage() {
           ))}
         </div>
 
-        {/* ─────────── ABA: MEU PERFIL (advogado + cargo + o que esperamos + escritório) ─────────── */}
-        {tab === 'perfil' && (<>
+        {/* Ver o espaço de outra pessoa — controle FIXO (vale em TODAS as abas: perfil
+            e financeiro passam a mostrar exatamente o que ela vê no login dela). */}
         {data.canEdit && team.length > 1 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <div className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm ${vendoOutro ? 'border-[#7048E8]/40 bg-[#7048E8]/5 dark:bg-[#7048E8]/10' : 'border-zinc-200/70 bg-white dark:border-zinc-800 dark:bg-zinc-900'}`}>
             <span className="inline-flex items-center gap-1 text-zinc-500"><Eye className="h-4 w-4" /> Ver o espaço de:</span>
-            <select value={verComo ?? user?.id ?? ''} onChange={(e) => setVerComo(e.target.value === user?.id ? null : e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
-              {team.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.id === user?.id ? 'Você' : m.user.name}</option>)}
+            <select value={verComo ?? user?.id ?? ''} onChange={(e) => setVerComo(e.target.value === user?.id ? null : e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
+              {team.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.id === user?.id ? `Você (${user?.name?.split(' ')[0] ?? 'meu espaço'})` : m.user.name}</option>)}
             </select>
-            {vendoOutro && <span className="rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-xs font-medium text-[#7048E8]">monitorando · você vê e edita o espaço dele(a)</span>}
+            {vendoOutro ? (<>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-xs font-medium text-[#7048E8]"><Eye className="h-3.5 w-3.5" /> é exatamente isto que {alvoMember?.user.name?.split(' ')[0] ?? 'ela'} vê no login dela</span>
+              <button onClick={() => setVerComo(null)} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"><ArrowLeft className="h-3.5 w-3.5" /> Voltar ao meu espaço</button>
+            </>) : (
+              <span className="text-xs text-zinc-400">escolha uma pessoa para ver o perfil e o financeiro como ela vê</span>
+            )}
           </div>
         )}
+
+        {/* ─────────── ABA: MEU PERFIL (advogado + cargo + o que esperamos + escritório) ─────────── */}
+        {tab === 'perfil' && (<>
         <PerfilHero
           nome={alvoMember?.user.name ?? user?.name ?? 'Você'}
           avatarUrl={alvoMember?.user.avatarUrl ?? null}
