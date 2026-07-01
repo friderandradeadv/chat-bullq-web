@@ -37,9 +37,18 @@ function fmtToken(word: string, isFirst: boolean): string {
   return low.replace(/(^|[-'])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
 }
 
-/** "EULER FRANCA CAMPOS" → "Euler Franca Campos"; "BANCO BMG S/A" → "Banco BMG S/A". */
+/**
+ * "EULER FRANCA CAMPOS" → "Euler Franca Campos"; "BANCO BMG S/A" → "Banco BMG S/A";
+ * "ASBAPI – ASSOCIAÇÃO…" → "ASBAPI – Associação…". A sigla à frente de um travessão
+ * que expande o nome (padrão "SIGLA – Nome por extenso") fica em MAIÚSCULO mesmo
+ * tendo vogal — só quando é UM único token curto (evita mexer em "Master Prev – …").
+ */
 export function titleCaseName(raw?: string | null): string {
   const s = (raw ?? '').trim();
   if (!s) return '';
-  return s.split(/\s+/).map((w, i) => fmtToken(w, i === 0)).join(' ');
+  const tokens = s.split(/\s+/);
+  const dashNext = tokens.length >= 3 && /^[–—-]$/.test(tokens[1]);
+  const lead = tokens[0].replace(/[^\p{L}0-9]/gu, '');
+  const leadAcr = dashNext && lead.length >= 2 && lead.length <= 7 && !NAME_MINOR.has(tokens[0].toLowerCase());
+  return tokens.map((w, i) => (i === 0 && leadAcr ? w.toUpperCase() : fmtToken(w, i === 0))).join(' ');
 }
