@@ -843,6 +843,15 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+const FRASES_ORGULHO = [
+  'Orgulhe-se: cada caso seu é uma vida que muda — e um pedaço da história que a gente constrói juntos. 💜',
+  'Você não faz "mais um processo". Você devolve sono, dignidade e esperança. Isso é grande.',
+  'O que você constrói aqui leva o seu nome. Faça com alma — dá pra ter orgulho todo dia.',
+  'A gente cresce junto: quando você entrega o seu melhor, o time inteiro sobe com você.',
+  'Alguém vai dormir tranquilo hoje por causa do seu trabalho. Isso é motivo de orgulho.',
+  'Aqui ninguém te segura: entregou, cresce. O seu futuro tem o tamanho da sua vontade.',
+];
+
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
 function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; proprio?: boolean; onEdit?: () => void }) {
   const sexo = info?.sexo;
@@ -923,7 +932,10 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
         )}
         {info?.frase && <p className="flex items-start gap-2 text-sm italic text-zinc-500 dark:text-zinc-400"><Quote className="mt-0.5 h-4 w-4 shrink-0 text-zinc-300" /> {info.frase}</p>}
         {info?.bio && <p className="whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">{info.bio}</p>}
-        <p className="flex items-center gap-1.5 text-sm font-medium text-[#7048E8]"><Sparkles className="h-4 w-4 shrink-0" /> Cada processo que passa por você é uma história que muda. Capricha — tem gente contando com isso. 💜</p>
+        <div className="flex items-start gap-2 rounded-xl bg-gradient-to-r from-[#7048E8]/12 to-[#228BE6]/10 p-3.5 dark:from-[#7048E8]/20 dark:to-[#228BE6]/10">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#7048E8]" />
+          <p className="text-sm font-semibold leading-relaxed text-[#5f3dd0] dark:text-[#b9a3f5]">{FRASES_ORGULHO[new Date().getDate() % FRASES_ORGULHO.length]}</p>
+        </div>
         {!cargo && <p className="text-sm text-zinc-500">Seu cargo ainda não foi definido. {canEdit ? 'Defina no organograma.' : 'Peça a um sócio.'}</p>}
       </div>
     </div>
