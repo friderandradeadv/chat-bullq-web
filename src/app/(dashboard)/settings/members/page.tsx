@@ -12,13 +12,17 @@ import { MemberChannelsDrawer } from '@/features/settings/components/member-chan
 import { Avatar } from '@/components/ui/avatar';
 
 // Módulos que dá pra liberar/bloquear por usuário (espelha APP_MODULES da API).
-const APP_MODULES: { key: string; label: string }[] = [
-  { key: 'atendimento', label: 'Atendimento' },
-  { key: 'automacoes', label: 'Automações' },
-  { key: 'juridico', label: 'Jurídico' },
-  { key: 'financeiro', label: 'Financeiro' },
-  { key: 'tarefas', label: 'Tarefas' },
-  { key: 'configuracoes', label: 'Configurações' },
+// `parent` = bloquear o pai também bloqueia o filho (ex.: sem Jurídico → sem Análise/Cálculos).
+const APP_MODULES: { key: string; label: string; desc: string; parent?: string }[] = [
+  { key: 'atendimento', label: 'Comercial', desc: 'Dashboard, conversas, kanban e contatos' },
+  { key: 'automacoes', label: 'Automações', desc: 'Agentes, follow-ups, base de conhecimento, vozes' },
+  { key: 'juridico', label: 'Jurídico', desc: 'Casos, agenda, publicações, processos e kanbans' },
+  { key: 'analise', label: 'Análise jurídica', desc: 'Recursos e jurimetria', parent: 'juridico' },
+  { key: 'calculos', label: 'Calculadoras', desc: 'RMC/RCC e cumprimento de sentença', parent: 'juridico' },
+  { key: 'financeiro', label: 'Financeiro', desc: 'Lançamentos, honorários e contabilidade' },
+  { key: 'tarefas', label: 'Tarefas', desc: 'Sua lista de tarefas' },
+  { key: 'meu_espaco', label: 'Meu Espaço', desc: 'Perfil, organograma e cultura' },
+  { key: 'configuracoes', label: 'Configurações', desc: 'Ajustes da conta e do escritório' },
 ];
 
 const roleLabels: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -552,6 +556,8 @@ function ModulesModal({
       return next;
     });
   };
+  const liberarTudo = () => setRestricted(new Set());
+  const bloquearTudo = () => setRestricted(new Set(APP_MODULES.map((m) => m.key)));
 
   const save = async () => {
     setSaving(true);
@@ -579,7 +585,7 @@ function ModulesModal({
               Acesso aos módulos
             </h3>
             <p className="mt-0.5 text-sm text-zinc-500">
-              {member.user.name} — ligue só as áreas que este atendente pode acessar.
+              {member.user.name} — ligue só as áreas que esta pessoa pode acessar.
             </p>
           </div>
           <button onClick={onClose} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
@@ -587,17 +593,30 @@ function ModulesModal({
           </button>
         </div>
 
-        <div className="mt-4 divide-y divide-zinc-100 dark:divide-zinc-800">
+        <div className="mt-3 flex items-center gap-3 text-xs">
+          <span className="font-medium text-zinc-500">{APP_MODULES.length - restricted.size}/{APP_MODULES.length} liberados</span>
+          <span className="text-zinc-300">·</span>
+          <button onClick={liberarTudo} className="font-medium text-emerald-600 hover:underline">Liberar tudo</button>
+          <span className="text-zinc-300">·</span>
+          <button onClick={bloquearTudo} className="font-medium text-zinc-500 hover:underline">Bloquear tudo</button>
+        </div>
+
+        <div className="mt-2 divide-y divide-zinc-100 dark:divide-zinc-800">
           {APP_MODULES.map((mod) => {
-            const allowed = !restricted.has(mod.key);
+            const paiBloqueado = mod.parent ? restricted.has(mod.parent) : false;
+            const allowed = !restricted.has(mod.key) && !paiBloqueado;
             return (
-              <div key={mod.key} className="flex items-center justify-between py-2.5">
-                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{mod.label}</span>
+              <div key={mod.key} className={`flex items-center justify-between gap-3 py-2.5 ${mod.parent ? 'pl-4' : ''}`}>
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-zinc-800 dark:text-zinc-100">{mod.parent && <span className="text-zinc-300">↳</span>}{mod.label}</p>
+                  <p className="text-[11px] text-zinc-400">{paiBloqueado ? `Depende de "${APP_MODULES.find((x) => x.key === mod.parent)?.label}"` : mod.desc}</p>
+                </div>
                 <button
                   onClick={() => toggle(mod.key)}
+                  disabled={paiBloqueado}
                   role="switch"
                   aria-checked={allowed}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${allowed ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-40 ${allowed ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'}`}
                 >
                   <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${allowed ? 'translate-x-5' : 'translate-x-0.5'}`} />
                 </button>

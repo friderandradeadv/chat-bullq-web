@@ -11,12 +11,18 @@ import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sy
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
 import { GlobalSearch } from '@/components/layout/global-search';
 
-/** Mapeia a rota atual para o módulo gateável (ou null = sempre liberado). */
+// Bloquear o pai também bloqueia o filho (ex.: sem "Jurídico" → sem Análise/Cálculos).
+const MODULE_PARENT: Record<string, string> = { analise: 'juridico', calculos: 'juridico' };
+
+/** Mapeia a rota atual para o módulo gateável (ou null = sempre liberado). Do mais específico p/ o geral. */
 function moduleForPath(p: string): string | null {
-  if (/^\/(juridico|processos|agenda|caixa-djen)/.test(p)) return 'juridico';
+  if (/^\/juridico\/(recursos|jurimetria)/.test(p)) return 'analise';
+  if (/^\/juridico\/calculos/.test(p)) return 'calculos';
+  if (/^\/(juridico|processos|agenda|caixa-djen|clientes)/.test(p)) return 'juridico';
   if (/^\/(ai-agents|follow-ups|base-conhecimento|vozes|automations)/.test(p)) return 'automacoes';
   if (/^\/(financeiro|contabilidade)/.test(p)) return 'financeiro';
   if (/^\/tarefas/.test(p)) return 'tarefas';
+  if (/^\/escritorio/.test(p)) return 'meu_espaco';
   if (/^\/(dashboard|inbox|contacts|kanban|conexoes)/.test(p)) return 'atendimento';
   if (/^\/settings\/perfil/.test(p)) return null; // perfil é sempre acessível
   if (/^\/settings/.test(p)) return 'configuracoes';
@@ -43,7 +49,7 @@ export default function DashboardLayout({
     const restricted = activeOrg.restrictedModules ?? [];
     if (restricted.length === 0) return;
     const mod = moduleForPath(pathname);
-    if (mod && restricted.includes(mod)) {
+    if (mod && (restricted.includes(mod) || (MODULE_PARENT[mod] && restricted.includes(MODULE_PARENT[mod])))) {
       router.replace(restricted.includes('atendimento') ? '/settings/perfil' : '/dashboard');
     }
   }, [pathname, activeOrg, isLoading, router]);

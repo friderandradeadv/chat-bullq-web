@@ -24,9 +24,11 @@ const EMPTY: Escritorio = { cultura: { missao: '', visao: '', valores: [], cultu
 // Módulos do Hub que dá pra liberar/bloquear por cargo (espelha APP_MODULES da API).
 // Início e Escritório aparecem pra todos — não entram aqui.
 const HUB_MODULES: { key: string; label: string }[] = [
-  { key: 'atendimento', label: 'Atendimento' },
+  { key: 'atendimento', label: 'Comercial' },
   { key: 'automacoes', label: 'Automações' },
   { key: 'juridico', label: 'Jurídico' },
+  { key: 'analise', label: 'Análise jurídica' },
+  { key: 'calculos', label: 'Calculadoras' },
   { key: 'financeiro', label: 'Financeiro' },
   { key: 'tarefas', label: 'Tarefas' },
   { key: 'configuracoes', label: 'Configurações' },
