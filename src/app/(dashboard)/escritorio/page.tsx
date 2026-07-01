@@ -52,12 +52,14 @@ export default function EscritorioPage() {
   const { user } = useAuthStore();
   const { data = EMPTY, isLoading } = useQuery({ queryKey: ['escritorio'], queryFn: () => escritorioService.get(), staleTime: 60_000 });
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
-  // Financeiro pessoal do usuário logado (a mesma fonte do "Meu financeiro"), trazido pro perfil.
-  const { data: meuFin } = useQuery({ queryKey: ['meu-financeiro-perfil'], queryFn: () => financeiroService.meuFinanceiro(), retry: false, staleTime: 60_000 });
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
   const [tab, setTab] = useState<string>('perfil'); // aba ativa (só a ativa é renderizada)
+  const [verComo, setVerComo] = useState<string | null>(null); // sócio monitorando o espaço de outra pessoa
+  const alvoUserId = (verComo && data.canEdit) ? verComo : user?.id;
+  // Financeiro pessoal (do usuário logado, ou de quem o sócio está monitorando).
+  const { data: meuFin } = useQuery({ queryKey: ['meu-financeiro-perfil', alvoUserId], queryFn: () => financeiroService.meuFinanceiro(alvoUserId && alvoUserId !== user?.id ? alvoUserId : undefined), retry: false, staleTime: 60_000 });
   const [treeSig, setTreeSig] = useState({ n: 0, open: true });
   const [convite, setConvite] = useState(false); // modal "adicionar advogado"
   const [viewCargoId, setViewCargoId] = useState<string | null>(null); // detalhe do cargo (leitura)
@@ -107,6 +109,11 @@ export default function EscritorioPage() {
   const memberByUser = useMemo(() => Object.fromEntries(members.map((m) => [m.user.id, m])), [members]);
   const meuInfo = user?.id ? cur.pessoas?.[user.id] : undefined;
   const meuCargo = cargoById[meuInfo?.cargoId ?? ''];
+  // Alvo do card "Meu Perfil": o próprio, ou quem o sócio está monitorando.
+  const alvoInfo = alvoUserId ? cur.pessoas?.[alvoUserId] : undefined;
+  const alvoCargo = cargoById[alvoInfo?.cargoId ?? ''];
+  const alvoMember = alvoUserId ? memberByUser[alvoUserId] : undefined;
+  const vendoOutro = !!(verComo && data.canEdit && verComo !== user?.id);
   // Caminho (ids dos ancestrais) até o meu cargo — o organograma já abre por aqui.
   const meuCaminho = useMemo(() => {
     const ids = new Set<string>();
@@ -171,14 +178,24 @@ export default function EscritorioPage() {
 
         {/* ─────────── ABA: MEU PERFIL (advogado + cargo + o que esperamos + escritório) ─────────── */}
         {tab === 'perfil' && (<>
+        {data.canEdit && team.length > 1 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="inline-flex items-center gap-1 text-zinc-500"><Eye className="h-4 w-4" /> Ver o espaço de:</span>
+            <select value={verComo ?? user?.id ?? ''} onChange={(e) => setVerComo(e.target.value === user?.id ? null : e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+              {team.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.id === user?.id ? 'Você' : m.user.name}</option>)}
+            </select>
+            {vendoOutro && <span className="rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-xs font-medium text-[#7048E8]">monitorando · você vê e edita o espaço dele(a)</span>}
+          </div>
+        )}
         <PerfilHero
-          nome={user?.name ?? 'Você'}
-          avatarUrl={user?.id ? memberByUser[user.id]?.user.avatarUrl ?? null : null}
-          info={meuInfo}
-          cargo={meuCargo}
+          nome={alvoMember?.user.name ?? user?.name ?? 'Você'}
+          avatarUrl={alvoMember?.user.avatarUrl ?? null}
+          info={alvoInfo}
+          cargo={alvoCargo}
           fin={meuFin}
           canEdit={data.canEdit}
-          onEdit={user?.id ? () => setPerfilUserId(user.id!) : undefined}
+          proprio={!vendoOutro}
+          onEdit={alvoUserId ? () => setPerfilUserId(alvoUserId) : undefined}
         />
 
         {/* Cultura: missão / visão / valores (informações básicas do escritório) */}
@@ -827,7 +844,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
-function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; onEdit?: () => void }) {
+function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; proprio?: boolean; onEdit?: () => void }) {
   const sexo = info?.sexo;
   const foto = info?.fotoUrl || avatarUrl;
   const r = fin && !fin.vazio ? fin.resumo : undefined;
@@ -854,7 +871,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">Seu espaço</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">{proprio ? 'Seu espaço' : 'Espaço do time'}</p>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{nome}</h2>
             {cargo && <span className="rounded-full bg-[#7048E8] px-2.5 py-0.5 text-xs font-semibold text-white">{gen(cargo.nome, sexo)}</span>}
@@ -866,7 +883,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
           </div>
         </div>
         {onEdit && (
-          <button onClick={onEdit} className="inline-flex shrink-0 items-center gap-1 self-start rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"><Pencil className="h-4 w-4" /> Editar meu perfil</button>
+          <button onClick={onEdit} className="inline-flex shrink-0 items-center gap-1 self-start rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"><Pencil className="h-4 w-4" /> {proprio ? 'Editar meu perfil' : 'Editar perfil'}</button>
         )}
       </div>
       <div className="space-y-3 px-5 pb-5">
