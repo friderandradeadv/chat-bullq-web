@@ -244,11 +244,20 @@ export default function EscritorioPage() {
         </>)}
 
         {/* ─────────── ABA: FINANCEIRO (só renderiza ao clicar) ─────────── */}
-        {tab === 'financeiro' && (
-          meuFin && !meuFin.vazio
+        {tab === 'financeiro' && (<>
+          {alvoInfo?.financeiro?.some((x) => x.includes('%')) && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3 dark:bg-[#02883C]/10">
+              <CircleDollarSign className="mt-0.5 h-4 w-4 shrink-0 text-[#02883C]" />
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                {alvoInfo?.atuacao?.length ? <>Financeiro da vertical <strong className="text-[#02883C]">{alvoInfo.atuacao.join(' · ')}</strong>. </> : null}
+                {alvoInfo.financeiro.find((x) => x.includes('%'))}
+              </p>
+            </div>
+          )}
+          {meuFin && !meuFin.vazio
             ? <MeuFinanceiroConteudo data={meuFin} />
-            : <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>
-        )}
+            : <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>}
+        </>)}
 
         {/* ─────────── ABA: ORGANOGRAMA ─────────── */}
         {tab === 'organograma' && (<>
