@@ -66,7 +66,6 @@ const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }
   { key: 'verticais', label: 'Verticais (por área)', icon: Layers, grupo: 'Análise & futuro' },
   { key: 'projecoes', label: 'Projeções e crescimento', icon: Rocket, grupo: 'Análise & futuro' },
   { key: 'motivacao', label: 'Motivação', icon: HeartHandshake, grupo: 'Análise & futuro' },
-  { key: 'advogado', label: 'Financeiro por advogado', icon: UserCircle2, grupo: 'Análise & futuro' },
 ];
 const GRUPOS = ['Caixa', 'Processos', 'Análise & futuro'];
 
@@ -89,6 +88,14 @@ export default function FinanceiroPage() {
   const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   // Abre em "Lançamentos" por padrão (livro-razão do mês corrente) — é a tela de trabalho do dia a dia.
   const [view, setView] = useState<View>('lancamentos');
+  // Toggle "ver o financeiro de um advogado" (escopado à vertical dele) — só admin.
+  const { user } = useAuthStore();
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
+  const meuMembro = members.find((m) => m.user.id === user?.id);
+  const isAdmin = meuMembro?.role === 'OWNER' || meuMembro?.role === 'ADMIN';
+  const advs = useMemo(() => members.filter((m) => m.user.isActive && m.user.id !== user?.id).map((m) => ({ id: m.user.id, name: m.user.name })), [members, user?.id]);
+  const [verAdv, setVerAdv] = useState('');
+  const advNome = advs.find((a) => a.id === verAdv)?.name;
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
 
@@ -127,13 +134,28 @@ export default function FinanceiroPage() {
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600"><CircleDollarSign className="h-5 w-5" /></span>
-              Financeiro
+              Financeiro{verAdv && advNome ? <span className="text-lg font-semibold text-[#7048E8]"> · {advNome.split(' ')[0]}</span> : null}
             </h1>
-            <p className="mt-1 text-sm text-zinc-500">Lançamentos, honorários, fluxo de caixa, crescimento e projeções do escritório.</p>
+            <p className="mt-1 text-sm text-zinc-500">{verAdv ? 'financeiro do advogado, escopado à vertical de atuação dele(a).' : 'Lançamentos, honorários, fluxo de caixa, crescimento e projeções do escritório.'}</p>
           </div>
-          {data.geradoEm && <p className="text-xs text-zinc-400">atualizado em {new Date(data.geradoEm).toLocaleDateString('pt-BR')}</p>}
+          <div className="flex items-center gap-3">
+            {isAdmin && advs.length > 0 && (
+              <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+                <UserCircle2 className="h-4 w-4 text-zinc-400" />
+                <select value={verAdv} onChange={(e) => setVerAdv(e.target.value)} className="bg-transparent text-sm font-medium outline-none dark:text-zinc-100">
+                  <option value="">Escritório (tudo)</option>
+                  {advs.map((a) => <option key={a.id} value={a.id}>{a.name} — financeiro dele(a)</option>)}
+                </select>
+              </div>
+            )}
+            {!verAdv && data.geradoEm && <p className="text-xs text-zinc-400">atualizado em {new Date(data.geradoEm).toLocaleDateString('pt-BR')}</p>}
+          </div>
         </div>
 
+        {verAdv ? (
+          <AdvogadoFinanceiro userId={verAdv} />
+        ) : (
+        <>
         {/* KPIs — pulso financeiro sempre visível */}
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Kpi icon={Scale} accent={k.saldoAtual < 0 ? '#E03131' : '#2F9E44'} label={`Saldo acumulado · ${k.mesAtualLabel}`} value={brl(k.saldoAtual)} hint={k.saldoAtual < 0 ? 'caixa no vermelho' : 'caixa positivo'} />
@@ -162,7 +184,8 @@ export default function FinanceiroPage() {
           </>
         )}
         {view === 'motivacao' && <MotivacaoTab data={data} />}
-        {view === 'advogado' && <MeuTab />}
+        </>
+        )}
 
         <p className="mt-6 flex items-center justify-center gap-1.5 pb-2 text-xs text-zinc-400">
           <Sparkles className="h-3.5 w-3.5" /> Reimporte a planilha do Astrea quando quiser atualizar os números — seus lançamentos manuais ficam preservados.
@@ -2472,37 +2495,16 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
   );
 }
 
-/** Aba "Meu financeiro" dentro do dashboard completo (admin/sócio/membro com acesso). */
-function MeuTab() {
-  const { user } = useAuthStore();
-  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
-  const meuMembro = members.find((m) => m.user.id === user?.id);
-  const isAdmin = meuMembro?.role === 'OWNER' || meuMembro?.role === 'ADMIN';
-  const advs = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
-  const [alvo, setAlvo] = useState('');
-  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'meu', alvo], queryFn: () => financeiroService.meuFinanceiro(alvo || undefined), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
-
-  const alvoNome = advs.find((a) => a.id === alvo)?.name?.split(' ')[0];
+/** Financeiro de UM advogado (escopado à vertical dele) — acionado pelo toggle
+ * "ver o financeiro de" no topo do dashboard. Mostra exatamente o que ele vê. */
+function AdvogadoFinanceiro({ userId }: { userId: string }) {
+  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'meu', userId], queryFn: () => financeiroService.meuFinanceiro(userId), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
+  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
+  if (!data) return <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar o financeiro deste advogado.</p></Card>;
   return (
-    <div className="mt-2">
-      <div className="mb-3 rounded-2xl border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100"><UserCircle2 className="h-4 w-4 text-[#7048E8]" /> Financeiro por advogado</h2>
-            <p className="mt-0.5 text-xs text-zinc-400">veja exatamente o financeiro que cada advogado vê no login dele — escopado à vertical de atuação.</p>
-          </div>
-          {isAdmin && advs.length > 1 && (
-            <select value={alvo} onChange={(e) => setAlvo(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm font-medium dark:border-zinc-700 dark:bg-zinc-950">
-              <option value="">Eu ({user?.name?.split(' ')[0] || 'minha conta'})</option>
-              {advs.filter((a) => a.id !== user?.id).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          )}
-        </div>
-        {alvo && <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-xs font-medium text-[#7048E8]"><UserCircle2 className="h-3.5 w-3.5" /> é exatamente isto que {alvoNome ?? 'ela'} vê no login dela</p>}
-      </div>
-      {isLoading ? <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>
-        : !data ? <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os dados.</p></Card>
-        : <MeuFinanceiroConteudo data={data} />}
+    <div className="mt-4 rounded-2xl border border-[#7048E8]/25 bg-[#7048E8]/[0.03] p-4 dark:border-[#7048E8]/30 dark:bg-[#7048E8]/[0.06]">
+      <p className="mb-3 inline-flex items-center gap-1 rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-xs font-medium text-[#7048E8]"><UserCircle2 className="h-3.5 w-3.5" /> é exatamente isto que ele(a) vê no login — escopado à vertical de atuação</p>
+      <MeuFinanceiroConteudo data={data} />
     </div>
   );
 }
