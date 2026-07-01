@@ -16,6 +16,7 @@ import {
   Check,
   Tag,
   Pencil,
+  Columns3,
   Trash2,
   UserCog,
   ChevronDown,
@@ -507,6 +508,13 @@ function CaseRow({ c, members, selected, onToggle, onChange }: { c: CaseListItem
       <td className="w-20 px-2 py-4 align-top">
         <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <CaseTagButton caseId={c.id} attached={c.legalTags} onChange={onChange} />
+          <Link
+            href={`/juridico/kanban?case=${c.id}`}
+            title="Abrir o card no Kanban"
+            className="rounded p-1.5 text-zinc-400 hover:bg-zinc-200/70 hover:text-[#228BE6] dark:hover:bg-zinc-700"
+          >
+            <Columns3 className="h-4 w-4" />
+          </Link>
           <Link
             href={`/processos/${c.id}`}
             title="Abrir / editar processo"

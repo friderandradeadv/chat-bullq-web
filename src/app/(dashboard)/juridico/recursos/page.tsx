@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Gavel, Search, Scale, LayoutGrid, List, Clock, Award, ThumbsDown } from 'lucide-react';
+import { Gavel, Search, Scale, LayoutGrid, List, Clock, Award, ThumbsDown, X, ExternalLink } from 'lucide-react';
 import {
   recursosService,
   type Recurso,
@@ -11,6 +12,11 @@ import {
   PARTE_RECORRENTE_LABEL,
 } from '@/features/recursos/services/recursos.service';
 import { RecursosInsightsPanel } from '@/features/recursos/components/recursos-insights-panel';
+import { titleCaseName } from '@/lib/names';
+
+type SortKey = 'recente' | 'antigo' | 'cliente';
+const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
+const nom = (s?: string | null) => (s ? titleCaseName(s) : '—');
 
 const JULG_BADGE: Record<JulgamentoRecurso, string> = {
   AGUARDANDO: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
@@ -36,7 +42,9 @@ export default function RecursosPage() {
   const [search, setSearch] = useState('');
   const [especie, setEspecie] = useState('');
   const [julg, setJulg] = useState('');
+  const [sort, setSort] = useState<SortKey>('recente');
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
+  const [selected, setSelected] = useState<Recurso | null>(null);
 
   const { data: rows = [], isLoading } = useQuery({ queryKey: ['recursos', 'all'], queryFn: () => recursosService.list() });
 
@@ -44,13 +52,17 @@ export default function RecursosPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter((r) => {
+    const list = rows.filter((r) => {
       if (especie && r.especie !== especie) return false;
       if (julg && r.julgamento !== julg) return false;
       if (q && !`${r.clienteNome ?? ''} ${r.parteAdversa ?? ''} ${r.cnjNumber ?? ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [rows, search, especie, julg]);
+    return list.sort((a, b) =>
+      sort === 'antigo' ? +new Date(a.createdAt) - +new Date(b.createdAt)
+        : sort === 'cliente' ? (a.clienteNome ?? '').localeCompare(b.clienteNome ?? '', 'pt-BR')
+          : +new Date(b.createdAt) - +new Date(a.createdAt));
+  }, [rows, search, especie, julg, sort]);
 
   const byCol = useMemo(() => {
     const m: Record<ColKey, Recurso[]> = { aguardando: [], fav: [], desfav: [] };
@@ -85,6 +97,11 @@ export default function RecursosPage() {
           <option value="">Todos os julgamentos</option>
           {(['AGUARDANDO', 'PROVIDO', 'PARCIAL', 'NAO_PROVIDO'] as JulgamentoRecurso[]).map((j) => <option key={j} value={j}>{JULGAMENTO_LABEL[j]}</option>)}
         </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-9 rounded-lg border border-[#DEE2E6] bg-white px-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          <option value="recente">Mais recentes primeiro</option>
+          <option value="antigo">Mais antigos primeiro</option>
+          <option value="cliente">Cliente (A→Z)</option>
+        </select>
         <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-[#DEE2E6] dark:border-zinc-700">
           <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#228BE6] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
           <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#228BE6] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
@@ -105,7 +122,7 @@ export default function RecursosPage() {
               </div>
               <div className="flex-1 space-y-2 overflow-y-auto p-2">
                 {byCol[c.key].length === 0 && <p className="px-2 py-6 text-center text-xs text-zinc-400">Vazio</p>}
-                {byCol[c.key].map((r) => <RecursoCard key={r.id} r={r} ring={c.ring} />)}
+                {byCol[c.key].map((r) => <RecursoCard key={r.id} r={r} ring={c.ring} onOpen={() => setSelected(r)} />)}
               </div>
             </div>
           ))}
@@ -114,64 +131,125 @@ export default function RecursosPage() {
         <div className="mt-4 rounded-xl border border-[#DEE2E6] dark:border-zinc-800">
           {filtered.length === 0 && <p className="p-6 text-sm text-zinc-400">Nenhum recurso.</p>}
           <ul className="divide-y divide-[#eef2f8] dark:divide-zinc-800">
-            {filtered.map((r) => <RecursoListItem key={r.id} r={r} />)}
+            {filtered.map((r) => <RecursoListItem key={r.id} r={r} onOpen={() => setSelected(r)} />)}
           </ul>
         </div>
       )}
+
+      {selected && <RecursoDrawer r={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
 
-function RecursoCard({ r, ring }: { r: Recurso; ring: string }) {
-  const [open, setOpen] = useState(false);
+function RecursoCard({ r, ring, onOpen }: { r: Recurso; ring: string; onOpen: () => void }) {
   return (
-    <div className={`rounded-lg border border-l-4 border-zinc-200 bg-white p-2.5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 ${ring}`}>
+    <button onClick={onOpen} className={`block w-full rounded-lg border border-l-4 border-zinc-200 bg-white p-2.5 text-left shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 ${ring}`}>
       <div className="flex items-start justify-between gap-2">
         {r.especie && <span className="rounded bg-[#228BE6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#1971c2] dark:text-[#74c0fc]">{r.especie}</span>}
         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${JULG_BADGE[r.julgamento]}`}>{JULGAMENTO_LABEL[r.julgamento]}</span>
       </div>
       <p className="mt-1.5 text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-100">
-        {r.clienteNome ?? '—'} <span className="font-normal text-zinc-400">×</span> {r.parteAdversa ?? '—'}
+        {nom(r.clienteNome)} <span className="font-normal text-zinc-400">×</span> {nom(r.parteAdversa)}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500">
         {r.cnjNumber && <span className="inline-flex items-center gap-1"><Scale className="h-3 w-3" /> {r.cnjNumber}</span>}
         {r.parteRecorrente && <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">recorreu: {PARTE_RECORRENTE_LABEL[r.parteRecorrente]}</span>}
       </div>
       {r.motivo && (
-        <p className="mt-1.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300"><span className="font-medium text-zinc-400">Motivo:</span> {r.motivo}</p>
+        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300"><span className="font-medium text-zinc-400">Motivo:</span> {r.motivo}</p>
       )}
-      {r.ementa && (
-        <>
-          <button onClick={() => setOpen((v) => !v)} className="mt-1.5 text-[11px] font-medium text-[#228BE6] hover:underline">{open ? 'ocultar tese' : 'ver tese de julgamento'}</button>
-          {open && <p className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-2 text-[11px] leading-relaxed text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-300">{r.ementa}</p>}
-        </>
-      )}
-    </div>
+      <div className="mt-1.5 flex items-center justify-between text-[10px] text-zinc-400">
+        <span>{fmtDate(r.createdAt)}</span>
+        {r.ementa && <span className="font-medium text-[#228BE6]">ver detalhes →</span>}
+      </div>
+    </button>
   );
 }
 
-function RecursoListItem({ r }: { r: Recurso }) {
-  const [open, setOpen] = useState(false);
+function RecursoListItem({ r, onOpen }: { r: Recurso; onOpen: () => void }) {
   return (
     <li>
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
+      <button onClick={onOpen} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/40">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{r.clienteNome ?? '—'} <span className="font-normal text-zinc-400">×</span> {r.parteAdversa ?? '—'}</p>
+          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{nom(r.clienteNome)} <span className="font-normal text-zinc-400">×</span> {nom(r.parteAdversa)}</p>
           <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
             {r.cnjNumber && <span className="inline-flex items-center gap-1"><Scale className="h-3 w-3" /> {r.cnjNumber}</span>}
             {r.parteRecorrente && <span>Recorrente: {PARTE_RECORRENTE_LABEL[r.parteRecorrente]}</span>}
+            <span className="text-zinc-400">{fmtDate(r.createdAt)}</span>
           </div>
-          {r.motivo && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400"><span className="font-medium text-zinc-400">Motivo:</span> {r.motivo}</p>}
+          {r.motivo && <p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-400"><span className="font-medium text-zinc-400">Motivo:</span> {r.motivo}</p>}
         </div>
         {r.especie && <span className="shrink-0 rounded bg-[#228BE6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#1971c2] dark:text-[#74c0fc]">{r.especie}</span>}
         <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${JULG_BADGE[r.julgamento]}`}>{JULGAMENTO_LABEL[r.julgamento]}</span>
       </button>
-      {open && r.ementa && (
-        <div className="bg-zinc-50/60 px-4 pb-3 dark:bg-zinc-900/30">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Tese de julgamento</p>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400" style={{ textAlign: 'justify' }}>{r.ementa}</p>
-        </div>
-      )}
     </li>
+  );
+}
+
+function DField({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
+      <p className="mt-0.5 break-words text-sm text-zinc-800 dark:text-zinc-200">{value || '—'}</p>
+    </div>
+  );
+}
+
+function RecursoDrawer({ r, onClose }: { r: Recurso; onClose: () => void }) {
+  const processoId = r.case?.id ?? (r.caseId || null);
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
+      <div className="flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-[#DEE2E6] px-5 py-3 dark:border-zinc-800">
+          <div className="flex items-center gap-2">
+            <Gavel className="h-4 w-4 text-[#228BE6]" />
+            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Detalhe do recurso</span>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="flex-1 space-y-4 p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            {r.especie && <span className="rounded bg-[#228BE6]/10 px-2 py-0.5 text-[11px] font-semibold uppercase text-[#1971c2] dark:text-[#74c0fc]">{r.especie}</span>}
+            <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${JULG_BADGE[r.julgamento]}`}>{JULGAMENTO_LABEL[r.julgamento]}</span>
+          </div>
+
+          <p className="text-base font-semibold leading-snug text-zinc-900 dark:text-zinc-100">
+            {nom(r.clienteNome)} <span className="font-normal text-zinc-400">×</span> {nom(r.parteAdversa)}
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <DField label="Quem recorreu" value={r.parteRecorrente ? PARTE_RECORRENTE_LABEL[r.parteRecorrente] : null} />
+            <DField label="Espécie" value={r.especie} />
+            <DField label="Grau / instância" value={r.grau} />
+            <DField label="Nº do recurso" value={r.numeroRecurso} />
+            <DField label="CNJ" value={r.cnjNumber} />
+            <DField label="Resultado" value={JULGAMENTO_LABEL[r.julgamento]} />
+            <DField label="Criado em" value={fmtDate(r.createdAt)} />
+            <DField label="Atualizado em" value={fmtDate(r.updatedAt)} />
+          </div>
+
+          {r.motivo && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Motivo do recurso</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-700 dark:text-zinc-300" style={{ textAlign: 'justify' }}>{r.motivo}</p>
+            </div>
+          )}
+
+          {r.ementa && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Tese / ementa de julgamento</p>
+              <p className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-sm leading-relaxed text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300" style={{ textAlign: 'justify' }}>{r.ementa}</p>
+            </div>
+          )}
+
+          {processoId && (
+            <Link href={`/processos/${processoId}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[#228BE6] px-3 py-1.5 text-sm font-medium text-[#1971c2] hover:bg-[#228BE6]/10 dark:text-[#74c0fc]">
+              <ExternalLink className="h-4 w-4" /> Abrir processo
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

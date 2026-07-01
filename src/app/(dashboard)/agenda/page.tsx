@@ -67,6 +67,19 @@ interface Activity {
   faseMovida: { de: string; para: string } | null; dispositivo: string | null;
 }
 
+// Extrai a EMENTA do acórdão (do marcador "EMENTA" em diante, ~3000 chars) —
+// espelha extractEmenta() do backend p/ exibir a tese quando a decisão é de 2º grau.
+function extractEmentaClient(texto?: string | null): string | null {
+  const t = (texto || '').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  const m = t.match(/\bement[ao]\b\s*[:\-–]?/i);
+  if (!m || m.index == null) return null;
+  return t.slice(m.index).trim().slice(0, 3000);
+}
+// Sinais de que a decisão é um ACÓRDÃO / decisão de 2º grau (recursos diferentes
+// da sentença: REsp/RE, Embargos de Declaração, Agravo Interno).
+const ACORDAO_MARKER = /ac[óo]rd[ãa]o|acordam|c[âa]mara|desembargador|turma recursal|negaram provimento|deram (parcial )?provimento|rela(tor|tora)|2º grau|2o grau|segundo grau|segunda inst[âa]ncia/i;
+
 // Desenha a barra colorida no topo do evento (estilo Astrea): 1 segmento por
 // ETIQUETA, dividido igualmente; sem etiqueta usa a cor do TIPO; cumprido fica
 // cinza. Idempotente (remove a barra anterior) — assim dá pra repintar quando as
@@ -731,11 +744,12 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
   const d = new Date(dateISO);
 
-  // Atividade de ANÁLISE DE SENTENÇA → oferece criar o prazo do recurso
-  // (apelação 15 dias úteis / embargos 5) já contado da disponibilização.
-  const isSentencaAnalise = !!activity.caseId
-    && (activity.source === 'prazo' || activity.source === 'tarefa')
-    && /senten[çc]a/i.test(activity.title);
+  // Atividade de ANÁLISE DE DECISÃO (sentença OU acórdão) → oferece criar o prazo
+  // do recurso já contado da disponibilização. Sentença (1º grau) → Apelação/ED;
+  // acórdão (2º grau) → REsp/RE, Embargos de Declaração, Agravo Interno.
+  const isDecisaoBase = !!activity.caseId
+    && (activity.source === 'prazo' || activity.source === 'tarefa');
+  const isDecisaoTitulo = /senten[çc]a|ac[óo]rd[ãa]o|decis[ãa]o/i.test(activity.title);
 
   const assignResp = async (userId: string | null) => {
     setRespMenu(false);
@@ -767,6 +781,13 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const grade = inst ? `${String(inst).replace(/\D/g, '')}º Grau` : null;
   const procSuffix = [grade, caseQ.data?.area].filter(Boolean).join(' - ');
   const clientConv = caseQ.data?.parties?.find((p) => p.role === 'CLIENT' && p.contact?.conversations?.length)?.contact?.conversations?.[0];
+
+  // 2º grau (acórdão) vs 1º grau (sentença): pela instância do processo OU por
+  // marcadores no título/dispositivo/recorte. Define quais recursos oferecer.
+  const decisaoTxt = `${activity.title} ${activity.dispositivo ?? ''} ${activity.recorte ?? ''}`;
+  const isAcordao = isDecisaoBase && (grade === '2º Grau' || ACORDAO_MARKER.test(decisaoTxt) || /ac[óo]rd[ãa]o/i.test(activity.title));
+  const isDecisaoAnalise = isDecisaoBase && (isDecisaoTitulo || isAcordao);
+  const ementaAcordao = isAcordao ? extractEmentaClient(activity.recorte ?? activity.dispositivo) : null;
 
   // ── Comentários + etiquetas + editar (backend novo) ──
   const entityType = ENTITY_TYPE[activity.source];
@@ -851,12 +872,18 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // Cria o prazo do recurso a partir da sentença. O backend conta os dias úteis
   // (CPC 219/224/220, feriados + recesso) a partir da disponibilização e leva
   // TODAS as infos da publicação (recorte, dispositivo, fase) pro prazo.
-  const criarPrazoRecurso = async (tipo: 'apelacao' | 'embargos') => {
+  const criarPrazoRecurso = async (tipo: 'apelacao' | 'embargos' | 'resp' | 'agravo_interno') => {
     if (!activity.caseId) { toast.error('Sem processo vinculado'); return; }
     setPrazoBusy(true);
     try {
-      const dias = tipo === 'apelacao' ? 15 : 5;
-      const titulo = tipo === 'apelacao' ? 'Apelação' : 'Embargos de declaração';
+      // ED: 5 dias úteis (CPC 1.023). Demais recursos: 15 dias úteis (CPC 1.003 §5).
+      const RECURSO: Record<typeof tipo, { dias: number; titulo: string }> = {
+        apelacao: { dias: 15, titulo: 'Apelação' },
+        resp: { dias: 15, titulo: 'Recurso Especial/Extraordinário (REsp/RE)' },
+        agravo_interno: { dias: 15, titulo: 'Agravo Interno' },
+        embargos: { dias: 5, titulo: 'Embargos de declaração' },
+      };
+      const { dias, titulo } = RECURSO[tipo];
       // Base de contagem: disponibilização da sentença (triggerDate). Sem ela
       // (raro — só prazos não-DJEN), conta a partir da data da própria atividade.
       const base = activity.triggerDate
@@ -871,13 +898,13 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         assignedToId: activity.responsibleId ?? undefined,
         metadata: {
           djen: {
-            descricao: `Prazo de ${titulo.toLowerCase()} a partir da sentença`,
+            descricao: `Prazo de ${titulo.toLowerCase()} a partir da ${isAcordao ? 'acórdão' : 'sentença'}`,
             tipoPublicacao: activity.tipoPublicacao ?? undefined,
             recorte: activity.recorte ?? undefined,
             dispositivo: activity.dispositivo ?? undefined,
             faseMovida: activity.faseMovida ?? undefined,
           },
-          origem: 'analise-sentenca',
+          origem: isAcordao ? 'analise-acordao' : 'analise-sentenca',
           sentencaTaskId: activity.rawId,
         },
       });
@@ -1066,9 +1093,15 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
               </dd>
             </div>
           )}
+          {(activity.source === 'tarefa' || activity.source === 'prazo') && ementaAcordao && (
+            <div className="flex flex-col gap-1">
+              <dt className="font-medium text-[#6C757D]">Ementa do acórdão:</dt>
+              <dd className="m-0 whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-2 text-justify font-normal leading-relaxed text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">{ementaAcordao}</dd>
+            </div>
+          )}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.dispositivo && (
             <div className="flex flex-col gap-1">
-              <dt className="font-medium text-[#6C757D]">Dispositivo da sentença:</dt>
+              <dt className="font-medium text-[#6C757D]">{isAcordao ? 'Dispositivo do acórdão:' : 'Dispositivo da sentença:'}</dt>
               <dd className="m-0 whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-2 font-normal leading-relaxed text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">{activity.dispositivo}</dd>
             </div>
           )}
@@ -1080,20 +1113,38 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           )}
         </dl>
 
-        {/* Criar prazo de recurso — só quando a atividade é a análise da sentença */}
-        {isSentencaAnalise && (
+        {/* Criar prazo de recurso — quando a atividade é a análise de uma decisão.
+            Acórdão (2º grau): REsp/RE, Embargos de Declaração, Agravo Interno.
+            Sentença (1º grau): Apelação, Embargos de Declaração. */}
+        {isDecisaoAnalise && (
           <div className="mt-5 rounded-lg border border-[#DEE2E6] bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Criar prazo de recurso</p>
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Criar prazo de recurso {isAcordao && <span className="ml-1 rounded bg-[#7048E8]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#7048E8] dark:text-[#b197fc]">acórdão · 2º grau</span>}</p>
             <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-              Contado da {activity.triggerDate ? 'disponibilização' : 'data'} desta sentença — dias úteis, feriados e recesso já calculados (CPC 219/224). Leva a publicação, o dispositivo e o recorte pro prazo.
+              Contado da {activity.triggerDate ? 'disponibilização' : 'data'} {isAcordao ? 'deste acórdão' : 'desta sentença'} — dias úteis, feriados e recesso já calculados (CPC 219/224). Leva a publicação, o dispositivo{isAcordao ? '/ementa' : ''} e o recorte pro prazo.
             </p>
             <div className="flex flex-wrap gap-2">
-              <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('apelacao')} className="inline-flex items-center gap-1.5 rounded-md bg-[#CE0000] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-                <CalendarClock className="h-4 w-4" /> {prazoBusy ? 'Criando…' : 'Apelação (15 dias úteis)'}
-              </button>
-              <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('embargos')} className="inline-flex items-center gap-1.5 rounded-md border border-[#CE0000] px-3 py-2 text-sm font-medium text-[#CE0000] hover:bg-[#CE0000]/5 disabled:opacity-50 dark:hover:bg-[#CE0000]/10">
-                <CalendarClock className="h-4 w-4" /> Embargos (5 dias úteis)
-              </button>
+              {isAcordao ? (
+                <>
+                  <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('resp')} className="inline-flex items-center gap-1.5 rounded-md bg-[#CE0000] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+                    <CalendarClock className="h-4 w-4" /> {prazoBusy ? 'Criando…' : 'REsp / RE (15 dias úteis)'}
+                  </button>
+                  <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('agravo_interno')} className="inline-flex items-center gap-1.5 rounded-md border border-[#CE0000] px-3 py-2 text-sm font-medium text-[#CE0000] hover:bg-[#CE0000]/5 disabled:opacity-50 dark:hover:bg-[#CE0000]/10">
+                    <CalendarClock className="h-4 w-4" /> Agravo Interno (15 dias úteis)
+                  </button>
+                  <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('embargos')} className="inline-flex items-center gap-1.5 rounded-md border border-[#CE0000] px-3 py-2 text-sm font-medium text-[#CE0000] hover:bg-[#CE0000]/5 disabled:opacity-50 dark:hover:bg-[#CE0000]/10">
+                    <CalendarClock className="h-4 w-4" /> Embargos de Declaração (5 dias úteis)
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('apelacao')} className="inline-flex items-center gap-1.5 rounded-md bg-[#CE0000] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+                    <CalendarClock className="h-4 w-4" /> {prazoBusy ? 'Criando…' : 'Apelação (15 dias úteis)'}
+                  </button>
+                  <button disabled={prazoBusy} onClick={() => criarPrazoRecurso('embargos')} className="inline-flex items-center gap-1.5 rounded-md border border-[#CE0000] px-3 py-2 text-sm font-medium text-[#CE0000] hover:bg-[#CE0000]/5 disabled:opacity-50 dark:hover:bg-[#CE0000]/10">
+                    <CalendarClock className="h-4 w-4" /> Embargos (5 dias úteis)
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

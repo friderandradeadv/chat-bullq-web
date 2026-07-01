@@ -931,10 +931,12 @@ export default function InicioPage() {
     const dls = dlQ.data ?? [];
     const evs = evQ.data ?? [];
     const dlsOpen = dls.filter((d) => d.status === 'OPEN');
+    // Eventos concluídos (metadata.completedAt) não são "pendentes" — mesma regra da Agenda.
+    const evsOpen = evs.filter((e) => !e.metadata?.completedAt);
     const hoje =
       tasks.filter((t) => t.status === 'TODO' && same(t.dueAt)).length +
       dlsOpen.filter((d) => same(d.safeDate) || same(d.dueDate)).length +
-      evs.filter((e) => same(e.startsAt)).length;
+      evsOpen.filter((e) => same(e.startsAt)).length;
     const concluidas = tasks.filter((t) => t.status === 'DONE' && same(t.completedAt)).length;
     const daysTo = (iso: string) => Math.ceil((new Date(iso.slice(0, 10) + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86_400_000);
     const fatais = dlsOpen.filter((d) => d.type === 'FATAL' && daysTo(d.dueDate) >= 0 && daysTo(d.dueDate) <= 7).length;
@@ -943,7 +945,7 @@ export default function InicioPage() {
     const list: Up[] = [];
     tasks.filter((t) => t.status === 'TODO' && t.dueAt).forEach((t) => list.push({ id: 't' + t.id, date: t.dueAt!, title: t.title, kind: 'tarefa', hasTime: false, caso: t.case?.title }));
     dlsOpen.forEach((d) => list.push({ id: 'd' + d.id, date: d.safeDate || d.dueDate, title: d.title, kind: d.type === 'FATAL' ? 'fatal' : 'prazo', hasTime: false, caso: d.case?.title }));
-    evs.forEach((e) => list.push({ id: 'e' + e.id, date: e.startsAt, title: e.title, kind: 'audiencia', hasTime: true, caso: e.case?.title }));
+    evsOpen.forEach((e) => list.push({ id: 'e' + e.id, date: e.startsAt, title: e.title, kind: 'audiencia', hasTime: true, caso: e.case?.title }));
     const upcoming = today
       ? list.filter((i) => i.date.slice(0, 10) >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4)
       : [];

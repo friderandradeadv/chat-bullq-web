@@ -9,6 +9,7 @@ import {
   Gavel, Search, Scale, ChevronDown, ChevronRight, Building2, Users, Wallet, Trophy, Layers,
 } from 'lucide-react';
 import { legalCasesService, type OpponentRow } from '@/features/legal-cases/services/legal-cases.service';
+import { titleCaseName } from '@/lib/names';
 
 const COLORS = ['#228BE6', '#7C3AED', '#0D9488', '#E11970', '#F59E0B', '#10B981', '#EF4444', '#6366F1'];
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -47,7 +48,7 @@ export default function PartesAdversasPage() {
     for (const a of r.areas) { const b = bucket(a); if (!counts.has(b)) counts.set(b, 1); }
     const buckets = [...counts.keys()];
     const principal = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'Outros';
-    return { ...r, buckets, principal };
+    return { ...r, name: titleCaseName(r.name), buckets, principal };
   }), [rows]);
 
   const areasDisponiveis = useMemo(() => {
@@ -218,7 +219,7 @@ function OpponentItem({ r, rank, open, onToggle }: { r: Enriched; rank: number; 
             <li key={p.id} className="flex items-center gap-2 rounded-lg border border-[#DEE2E6] bg-white px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-900">
               <Scale className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
               <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">
-                {p.cliente ?? '—'} {p.cnj && <span className="text-zinc-400">· {p.cnj}</span>}
+                {p.cliente ? titleCaseName(p.cliente) : '—'} {p.cnj && <span className="text-zinc-400">· {p.cnj}</span>}
               </span>
               {p.area && <span className="shrink-0 text-[10px] font-semibold uppercase text-zinc-400">{bucket(p.area)}</span>}
               {p.value > 0 && <span className="shrink-0 font-medium text-emerald-600 dark:text-emerald-400">{fmtMoney(p.value)}</span>}

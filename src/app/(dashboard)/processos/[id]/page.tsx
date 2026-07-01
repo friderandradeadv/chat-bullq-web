@@ -28,6 +28,7 @@ import {
   CalendarClock,
   AlertTriangle,
   Gavel,
+  Columns3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -94,6 +95,14 @@ const getInstancia = (c: CaseDetail): string | null => {
   return labelInstancia(a?.instanciaAtual ?? a?.raw?.['Instância Atual']);
 };
 
+// Raia do card no kanban: fases pré-judiciais vivem no quadro Pré-Processual;
+// o resto no quadro Fase Judicial. Ambos abrem a ficha via ?case=<id>.
+const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
+const kanbanHref = (c: CaseDetail): string => {
+  const base = c.legalPhase && PRE_PHASES.has(c.legalPhase) ? '/juridico/pre-processual' : '/juridico/kanban';
+  return `${base}?case=${c.id}`;
+};
+
 type Tab = 'resumo' | 'atividades' | 'recursos' | 'historico';
 
 export default function ProcessoDetailPage() {
@@ -158,6 +167,13 @@ export default function ProcessoDetailPage() {
             <IconBtn title="Voltar" onClick={() => router.push('/processos')}>
               <ArrowLeft className="h-4 w-4" />
             </IconBtn>
+            <Link
+              href={kanbanHref(c)}
+              title="Abrir este processo no Kanban"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#DEE2E6] px-2.5 py-1.5 text-sm font-medium text-[#495057] hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <Columns3 className="h-4 w-4" /> Kanban
+            </Link>
             <IconBtn title="Favoritar">
               <Star className="h-4 w-4" />
             </IconBtn>
