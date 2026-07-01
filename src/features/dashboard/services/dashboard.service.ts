@@ -193,8 +193,8 @@ export const dashboardService = {
     const { data } = await api.get('/dashboard/top-tags', { params });
     return data.data;
   },
-  async hubNews(): Promise<HubNews> {
-    const { data } = await api.get('/dashboard/news');
+  async hubNews(force = false): Promise<HubNews> {
+    const { data } = await api.get(`/dashboard/news${force ? '?force=1' : ''}`);
     return data.data ?? data;
   },
 };

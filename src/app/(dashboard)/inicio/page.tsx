@@ -31,6 +31,7 @@ import {
   Loader2,
   ExternalLink,
   ChevronDown,
+  RefreshCw,
   X,
   CalendarPlus,
   ListChecks,
@@ -849,6 +850,7 @@ function NewsCol({ titulo, emoji, cor, itens, loading }: { titulo: string; emoji
 }
 
 function HojeNoMundo() {
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ['hub', 'news'],
     queryFn: () => dashboardService.hubNews(),
@@ -861,15 +863,31 @@ function HojeNoMundo() {
   const mundo = q.data?.mundo ?? [];
   const juridico = q.data?.juridico ?? [];
   const loading = q.isLoading || !!q.data?.generating;
+  // Atualizar em tempo real: força nova busca (ignora o cache do dia) e volta a
+  // fazer polling até as notícias novas chegarem.
+  const atualizar = async () => {
+    if (loading) return;
+    try {
+      await dashboardService.hubNews(true);
+      await qc.invalidateQueries({ queryKey: ['hub', 'news'] });
+    } catch { /* silencioso — o polling segue */ }
+  };
   // Esconde só quando realmente não há nada e não está gerando.
   if (!loading && !mundo.length && !juridico.length) return null;
   return (
     <div className="welcome-pop mt-9 w-full text-left" style={{ animationDelay: '0.235s' }}>
-      <button onClick={() => setOpen((o) => !o)} className="mb-2 flex w-full items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-zinc-400 transition hover:text-zinc-600 dark:hover:text-zinc-200">
-        <Newspaper className="h-3.5 w-3.5" /> Notícias do dia
-        {loading && <Loader2 className="h-3 w-3 animate-spin" />}
-        <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
-      </button>
+      <div className="mb-2 flex w-full items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+        <button onClick={() => setOpen((o) => !o)} className="flex flex-1 items-center gap-1.5 transition hover:text-zinc-600 dark:hover:text-zinc-200">
+          <Newspaper className="h-3.5 w-3.5" /> Notícias do dia
+          {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+        </button>
+        <button onClick={atualizar} disabled={loading} title="Buscar notícias novas agora" className="rounded p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-[#228BE6] disabled:opacity-40 dark:hover:bg-zinc-800">
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+        <button onClick={() => setOpen((o) => !o)} className="rounded p-1 transition hover:text-zinc-600 dark:hover:text-zinc-200">
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+        </button>
+      </div>
       {open && (
         <div className="grid w-full items-start gap-4 lg:grid-cols-2">
           <NewsCol titulo="Hoje no mundo" emoji="🌎" cor="#228BE6" itens={mundo} loading={loading && !mundo.length} />
