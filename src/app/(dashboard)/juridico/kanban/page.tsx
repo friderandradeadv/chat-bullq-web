@@ -182,9 +182,9 @@ export default function FaseJudicialKanbanPage() {
 
   const active = cards.find((c) => c.id === activeId) ?? null;
 
-  // Só o dono do escritório (OWNER) renomeia as fases.
+  // Só sócios (dono/OWNER ou ADMIN) renomeiam as fases.
   const activeOrg = useAuthStore((s) => s.organizations.find((o) => o.id === s.activeOrgId));
-  const isOwner = activeOrg?.role === 'OWNER';
+  const isOwner = activeOrg?.role === 'OWNER' || activeOrg?.role === 'ADMIN';
   const onChanged = () => qc.invalidateQueries({ queryKey: KEY });
 
   const renamePhase = async (key: string, label: string) => {
