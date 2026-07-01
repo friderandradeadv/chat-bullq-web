@@ -155,7 +155,9 @@ function NavItem({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function AppSidebar() {
-  const { user, logout } = useAuthStore();
+  const { user, organizations, activeOrgId, logout } = useAuthStore();
+  const orgRole = organizations.find((o) => o.id === activeOrgId)?.role;
+  const isAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -280,6 +282,12 @@ export function AppSidebar() {
           {isDark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
           <span className="flex-1 text-left">{isDark ? 'Modo claro' : 'Modo escuro'}</span>
         </button>
+        {/* Copiloto — assistente admin, só sócio/admin */}
+        {isAdmin && (
+          <div className="mb-1">
+            <NavItem href="/copiloto" icon={Bot} label="Copiloto" />
+          </div>
+        )}
         {/* Meu Espaço — fixa, acima de Configurações (perfil, organograma, cargos, cultura, manuais) */}
         <div className="mb-1">
           <NavItem href="/escritorio" icon={UserCircle} label="Meu Espaço" />
