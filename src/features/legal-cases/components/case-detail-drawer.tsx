@@ -953,6 +953,19 @@ function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: a
     } finally { setBusy(null); }
   };
 
+  const [orgBusy, setOrgBusy] = useState(false);
+  const organizarPasta = async () => {
+    setOrgBusy(true);
+    try {
+      const r = await legalCasesService.organizarPastaInicial(caseId);
+      toast.success(`Pasta "${r.pastaBanco}" pronta: ${r.copiados.length} doc(s) assinados + ${r.enviados.length} do caso${r.incluirRenuncia ? ' (com renúncia — hipossuficiente)' : ''}.`);
+      if (r.webViewLink) window.open(r.webViewLink, '_blank', 'noopener');
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao organizar a pasta no Drive');
+    } finally { setOrgBusy(false); }
+  };
+
   // Escolha SEMPRE disponível: gerar a inicial só de RMC ou só de RCC,
   // independente de quantos contratos o HISCON trouxe. Cada botão gera a peça
   // daquele produto (usa o contrato do produto se houver; senão o réu do card).
@@ -978,6 +991,14 @@ function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: a
           </button>
         ))}
       </div>
+      <button
+        onClick={organizarPasta}
+        disabled={orgBusy}
+        title="Renomeia a pasta com o banco réu e junta na pasta da inicial: procuração, declarações (renúncia só se hipossuficiente), HISCON, HISCRE, JG e cálculos — sem o contrato de honorários."
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#7048e8] px-3 py-2 text-xs font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-50"
+      >
+        <Upload className="h-3.5 w-3.5" /> {orgBusy ? 'Organizando no Drive…' : 'Organizar pasta da inicial (Drive)'}
+      </button>
     </div>
   );
 }

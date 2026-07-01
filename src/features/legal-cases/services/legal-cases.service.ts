@@ -488,4 +488,15 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/drive/upload`);
     return data.data ?? data;
   },
+  async organizarPastaInicial(id: string): Promise<{
+    ok: boolean;
+    pastaBanco: string;
+    webViewLink: string;
+    copiados: string[];
+    enviados: string[];
+    incluirRenuncia: boolean;
+  }> {
+    const { data } = await api.post(`/legal-cases/${id}/drive/organizar-inicial`);
+    return data.data ?? data;
+  },
 };
