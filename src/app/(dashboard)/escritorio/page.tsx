@@ -486,43 +486,73 @@ function ManualCard({ manual, index, defaultOpen }: { manual: Manual; index: num
 }
 
 // Checklist de onboarding interativo: marca/desmarca + barra de progresso (salva por pessoa no navegador).
+const CONFETE_CSS = `@keyframes bullq-confete { 0% { transform: translateY(-12px) rotate(0deg); opacity: 1; } 100% { transform: translateY(360px) rotate(560deg); opacity: 0; } }`;
+const CONFETE_CORES = ['#7048E8', '#228BE6', '#E64980', '#15AABF', '#F08C00', '#02883C'];
+// Chuva de confete (sem lib): pedaços coloridos caindo, ~4s.
+function Confete() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-2xl">
+      <style>{CONFETE_CSS}</style>
+      {Array.from({ length: 70 }, (_, i) => {
+        const left = Math.random() * 100;
+        const delay = Math.random() * 0.7;
+        const dur = 1.8 + Math.random() * 1.6;
+        const size = 6 + Math.round(Math.random() * 6);
+        return <span key={i} style={{ position: 'absolute', top: 0, left: `${left}%`, width: size, height: Math.round(size * 0.55), background: CONFETE_CORES[i % CONFETE_CORES.length], borderRadius: 2, animation: `bullq-confete ${dur}s ${delay}s ease-in forwards` }} />;
+      })}
+    </div>
+  );
+}
+
 function OnboardingChecklist({ itens, userId }: { itens: OnboardingItem[]; userId?: string }) {
   const key = `bullq:onboarding:${userId ?? 'anon'}`;
   const [done, setDone] = useState<Set<string>>(new Set());
+  const [confete, setConfete] = useState(false);
+  const [min, setMin] = useState(false);
   useEffect(() => {
     try { const raw = localStorage.getItem(key); if (raw) setDone(new Set(JSON.parse(raw))); } catch { /* ignora */ }
   }, [key]);
-  const toggle = (id: string) => setDone((prev) => {
-    const next = new Set(prev);
+  const toggle = (id: string) => {
+    const next = new Set(done);
     if (next.has(id)) next.delete(id); else next.add(id);
+    setDone(next);
     try { localStorage.setItem(key, JSON.stringify([...next])); } catch { /* ignora */ }
-    return next;
-  });
+    // Só festeja quando ESTE toque completa a lista (não no load).
+    if (itens.length > 0 && next.size === itens.length && done.size === itens.length - 1) {
+      setConfete(true);
+      setTimeout(() => { setConfete(false); setMin(true); }, 4200);
+    }
+  };
   if (itens.length === 0) return <p className="text-sm text-zinc-400">Sem checklist de onboarding ainda.</p>;
   const feitos = itens.filter((o) => done.has(o.id)).length;
   const pct = Math.round((feitos / itens.length) * 100);
+  const completo = feitos === itens.length;
   return (
-    <div>
+    <div className="relative">
+      {confete && <Confete />}
       <div className="mb-3 flex items-center gap-3">
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <div className="h-full rounded-full bg-[#02883C] transition-all" style={{ width: `${pct}%` }} />
         </div>
         <span className="shrink-0 text-xs font-semibold text-zinc-500">{feitos}/{itens.length}</span>
+        {completo && <button onClick={() => setMin((m) => !m)} className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">{min ? 'mostrar' : 'minimizar'}</button>}
       </div>
-      {feitos === itens.length && <p className="mb-3 flex items-center gap-1.5 rounded-lg bg-[#02883C]/10 px-3 py-2 text-sm font-medium text-[#02883C]"><Sparkles className="h-4 w-4" /> Onboarding completo! Bem-vindo(a) ao time. 🎉</p>}
-      <ul className="space-y-0.5">
-        {itens.map((o) => {
-          const ok = done.has(o.id);
-          return (
-            <li key={o.id}>
-              <button onClick={() => toggle(o.id)} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
-                {ok ? <CheckCircle2 className="h-5 w-5 shrink-0 text-[#02883C]" /> : <Circle className="h-5 w-5 shrink-0 text-zinc-300 dark:text-zinc-600" />}
-                <span className={`text-sm ${ok ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-200'}`}>{o.texto}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {completo && <p className="mb-3 flex items-center gap-1.5 rounded-lg bg-[#02883C]/10 px-3 py-2 text-sm font-medium text-[#02883C]"><Sparkles className="h-4 w-4" /> Onboarding completo! Bem-vindo(a) ao time. 🎉</p>}
+      {!min && (
+        <ul className="space-y-0.5">
+          {itens.map((o) => {
+            const ok = done.has(o.id);
+            return (
+              <li key={o.id}>
+                <button onClick={() => toggle(o.id)} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                  {ok ? <CheckCircle2 className="h-5 w-5 shrink-0 text-[#02883C]" /> : <Circle className="h-5 w-5 shrink-0 text-zinc-300 dark:text-zinc-600" />}
+                  <span className={`text-sm ${ok ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-200'}`}>{o.texto}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -733,28 +763,6 @@ function VerticaisSection({ verticais, pessoas, team, editing, setDraft, onVerPe
 
 function iniciaisDe(n?: string | null) { return (n ?? '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); }
 
-// Redimensiona uma imagem escolhida para até `max`px e devolve um data-URL JPEG leve (upload sem backend).
-function resizeToDataUrl(file: File, max = 320): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('Canvas indisponível')); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.82));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Imagem inválida')); };
-    img.src = url;
-  });
-}
-
 const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
@@ -863,18 +871,63 @@ const SAVE_BTN = 'inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-3.5 
 const GHOST_BTN = 'inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800';
 
 // Modal de edição de perfil de uma pessoa (própria ou de outro, pelo sócio).
+// Cortador de foto: arrasta pra posicionar, zoom, e corta em círculo (320px JPEG).
+function PhotoCropper({ file, onCancel, onDone }: { file: File; onCancel: () => void; onDone: (dataUrl: string) => void }) {
+  const SIZE = 256;
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => { setImg(im); URL.revokeObjectURL(url); };
+    im.onerror = () => { toast.error('Não consegui ler essa imagem'); onCancel(); };
+    im.src = url;
+  }, [file]);
+  const base = img ? Math.max(SIZE / img.width, SIZE / img.height) : 1;
+  const scale = base * zoom;
+  const imgW = img ? img.width * scale : 0;
+  const imgH = img ? img.height * scale : 0;
+  const left = (SIZE - imgW) / 2 + pos.x;
+  const top = (SIZE - imgH) / 2 + pos.y;
+  const onDown = (e: React.PointerEvent) => { drag.current = { x: e.clientX, y: e.clientY, px: pos.x, py: pos.y }; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); };
+  const onMove = (e: React.PointerEvent) => { if (!drag.current) return; setPos({ x: drag.current.px + (e.clientX - drag.current.x), y: drag.current.py + (e.clientY - drag.current.y) }); };
+  const onUp = () => { drag.current = null; };
+  const cortar = () => {
+    if (!img) return;
+    const OUT = 320, k = OUT / SIZE;
+    const canvas = document.createElement('canvas'); canvas.width = OUT; canvas.height = OUT;
+    const ctx = canvas.getContext('2d'); if (!ctx) return;
+    ctx.drawImage(img, left * k, top * k, imgW * k, imgH * k);
+    onDone(canvas.toDataURL('image/jpeg', 0.85));
+  };
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
+      <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <p className="mb-3 text-center text-sm font-bold text-zinc-800 dark:text-zinc-100">Ajuste a foto</p>
+        <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp} className="relative mx-auto h-64 w-64 cursor-grab touch-none select-none overflow-hidden rounded-full bg-zinc-100 ring-2 ring-zinc-200 active:cursor-grabbing dark:bg-zinc-800 dark:ring-zinc-700" style={{ width: SIZE, height: SIZE }}>
+          {img && <img src={img.src} alt="" draggable={false} style={{ position: 'absolute', width: imgW, height: imgH, left, top, maxWidth: 'none' }} />}
+        </div>
+        <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} className="mt-4 w-full accent-[#7048E8]" />
+        <p className="mt-1 text-center text-[11px] text-zinc-400">Arraste para posicionar · use a barra para dar zoom</p>
+        <div className="mt-4 flex gap-2">
+          <button onClick={onCancel} className="flex-1 rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+          <button onClick={cortar} disabled={!img} className="flex-1 rounded-lg bg-[#7048E8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-50">Cortar e usar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMode, onClose, onSave, onSaveSelf }: { userId: string; nome: string; avatarUrl: string | null; data: Escritorio; cargoById: Record<string, Cargo>; saving: boolean; selfMode?: boolean; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void; onSaveSelf?: (patch: Partial<PessoaInfo>) => void }) {
   const atual = data.pessoas?.[userId];
   const [f, setF] = useState<PessoaInfo>({ ...(atual ?? {}) });
   const set = (p: Partial<PessoaInfo>) => setF((x) => ({ ...x, ...p }));
   const num = (s: string) => (s === '' ? undefined : Math.max(0, parseInt(s, 10) || 0));
   const fileRef = useRef<HTMLInputElement>(null);
-  const [up, setUp] = useState(false);
-  const enviarFoto = async (file?: File) => {
-    if (!file) return;
-    setUp(true);
-    try { set({ fotoUrl: await resizeToDataUrl(file) }); } catch { toast.error('Não consegui ler essa imagem'); } finally { setUp(false); if (fileRef.current) fileRef.current.value = ''; }
-  };
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const escolherFoto = (file?: File) => { if (file) setCropFile(file); if (fileRef.current) fileRef.current.value = ''; };
   const cargo = cargoById[f.cargoId ?? atual?.cargoId ?? ''];
   const foto = f.fotoUrl || avatarUrl;
   const salvar = () => {
@@ -894,8 +947,8 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
       <div>
         <p className={LABEL}>Foto</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => enviarFoto(e.target.files?.[0])} />
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={up} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">{up ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />} Enviar foto do computador</button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => escolherFoto(e.target.files?.[0])} />
+          <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"><Camera className="h-4 w-4" /> Enviar e cortar foto</button>
           {f.fotoUrl && <button type="button" onClick={() => set({ fotoUrl: '' })} className="text-xs font-medium text-rose-500 hover:underline">remover</button>}
         </div>
         <input value={f.fotoUrl?.startsWith('data:') ? '' : (f.fotoUrl ?? '')} onChange={(e) => set({ fotoUrl: e.target.value })} placeholder="ou cole uma URL: https://…/foto.jpg" className={`${INPUT} mt-1.5`} />
@@ -913,6 +966,7 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
       <div><p className={LABEL}>Frase / lema pessoal</p><input value={f.frase ?? ''} onChange={(e) => set({ frase: e.target.value })} placeholder="ex.: Justiça com gente de verdade." className={`${INPUT} mt-1`} /></div>
       <div><p className={LABEL}>Perfil pessoal</p><textarea value={f.bio ?? ''} onChange={(e) => set({ bio: e.target.value })} rows={3} placeholder="Conte um pouco sobre você, sua trajetória, o que te move…" className={`${INPUT} mt-1`} /></div>
       {selfMode && <p className="text-[11px] text-zinc-400">Você edita foto, OAB, frase e perfil pessoal. Cargo, datas e financeiro são definidos por um sócio.</p>}
+      {cropFile && <PhotoCropper file={cropFile} onCancel={() => setCropFile(null)} onDone={(url) => { set({ fotoUrl: url }); setCropFile(null); }} />}
     </ModalShell>
   );
 }
