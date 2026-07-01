@@ -1,6 +1,6 @@
 import { api } from '@/lib/api';
 
-export type IndiceCorrecao = 'INPC' | 'IPCA-E' | 'IPCA' | 'IGP-M';
+export type IndiceCorrecao = 'INPC' | 'IPCA-E' | 'IPCA' | 'IGP-M' | 'SELIC';
 export type HonorariosBase = 'debitos' | 'diferenca' | 'fixa';
 
 export interface ItemCsInput {

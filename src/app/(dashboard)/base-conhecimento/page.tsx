@@ -24,6 +24,7 @@ import {
   type DocStatus,
   type KnowledgeDocSummary,
 } from '@/features/knowledge/services/knowledge.service';
+import { DropZone } from '@/components/drop-zone';
 import { extractTextFromFile } from '@/features/knowledge/lib/extract-text';
 import { aiAgentsService } from '@/features/ai-agents/services/ai-agents.service';
 
@@ -306,10 +307,12 @@ function AddDocModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       {mode === 'file' && (
         <div className="mb-2">
           <input ref={fileRef} type="file" accept=".pdf,.txt,.md,.csv,text/*,application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
-          <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
-            {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {fileName || 'Escolher arquivo'}
-          </button>
+          <DropZone accept=".pdf,.txt,.md,.csv,text/*,application/pdf" multiple={false} onFiles={(fs) => onFile(fs[0])} className="inline-block">
+            <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+              {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {fileName || 'Escolher ou arrastar arquivo'}
+            </button>
+          </DropZone>
         </div>
       )}
 

@@ -10,6 +10,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Coins,
+  FileDown,
   FileSearch,
   FileText,
   Info,
@@ -38,6 +39,9 @@ import {
   type IndiceCorrecao,
   type ParcelaInput,
 } from '@/features/calculadora-rmc/services/calculadora-rmc.service';
+import { calculadoraCsService } from '@/features/calculadora-cs/services/calculadora-cs.service';
+import { gerarPdfRmc } from '@/features/calculadora-rmc/lib/pdf';
+import { DropZone } from '@/components/drop-zone';
 
 const brl = (n: number | undefined) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n ?? 0);
@@ -115,7 +119,7 @@ export default function CalculadoraRmcPage() {
     dataContratacao: '',
     modalidadeConsignado: 'INSS' as 'INSS' | 'PUBLICO',
     taxaConversao: '2.50',
-    jurosMora: '1,00',
+    jurosMora: '0',
     dobro: true,
     modulacaoStj: false,
     indiceCorrecao: 'INPC' as IndiceCorrecao,
@@ -161,6 +165,36 @@ export default function CalculadoraRmcPage() {
   });
   const setCsField = <K extends keyof typeof cs>(k: K, v: (typeof cs)[K]) =>
     setCs((c) => ({ ...c, [k]: v }));
+
+  // Importar sentença (IA) dentro da seção de CS — preenche valor da causa + honorários.
+  const csSentRef = useRef<HTMLInputElement>(null);
+  const [csSentAviso, setCsSentAviso] = useState<string | null>(null);
+  const csSentMut = useMutation({
+    mutationFn: (files: File[]) => calculadoraCsService.extrairSentenca(files),
+    onSuccess: (r) => {
+      const e = r.extracao;
+      if (e) {
+        setCs((c) => ({
+          ...c,
+          sucBase: 'valorCausa',
+          valorCausa: e.valorCausa != null ? String(e.valorCausa).replace('.', ',') : c.valorCausa,
+          sucPercentual: e.honorarios ? String(e.honorarios.percentual).replace('.', ',') : c.sucPercentual,
+          multaMoratoria: e.aplicarMulta523 ?? c.multaMoratoria,
+          multaHonorarios: e.aplicarMulta523 ?? c.multaHonorarios,
+        }));
+      }
+      setCsSentAviso(e?.observacoes ? `IA: ${e.observacoes}` : (r.aviso ?? 'Sentença lida.'));
+    },
+    onError: (err) => setCsSentAviso((err as Error)?.message ?? 'Erro ao ler a sentença.'),
+  });
+  const onPickCsSent = (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const fs = ev.target.files ? Array.from(ev.target.files) : [];
+    ev.target.value = '';
+    if (fs.length) {
+      setCsSentAviso(null);
+      csSentMut.mutate(fs);
+    }
+  };
 
   const [parcelasTexto, setParcelasTexto] = useState('');
   const [ger, setGer] = useState({ dataInicial: '', valor: '', meses: '12' });
@@ -584,18 +618,20 @@ export default function CalculadoraRmcPage() {
 
               {/* Upload HISCON */}
               <input ref={hisconRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickHiscon} />
-              <button
-                type="button"
-                onClick={() => hisconRef.current?.click()}
-                disabled={hisconMut.isPending}
-                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 py-2.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/15"
-              >
-                {hisconMut.isPending ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o HISCON…</>
-                ) : (
-                  <><Building2 className="h-4 w-4" /> 1. Importar contrato (HISCON)</>
-                )}
-              </button>
+              <DropZone accept="application/pdf,.pdf" multiple={false} disabled={hisconMut.isPending} onFiles={(fs) => { setHisconAviso(null); hisconMut.mutate(fs[0]); }} className="mb-2">
+                <button
+                  type="button"
+                  onClick={() => hisconRef.current?.click()}
+                  disabled={hisconMut.isPending}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 py-2.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/15"
+                >
+                  {hisconMut.isPending ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o HISCON…</>
+                  ) : (
+                    <><Building2 className="h-4 w-4" /> 1. Importar contrato (HISCON)</>
+                  )}
+                </button>
+              </DropZone>
               {hisconAviso && <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">{hisconAviso}</p>}
               {hisconContratos && hisconContratos.length > 1 && (
                 <div className="mb-2 space-y-1.5">
@@ -630,18 +666,20 @@ export default function CalculadoraRmcPage() {
 
               {/* Upload HISCRE */}
               <input ref={hiscreRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickHiscre} />
-              <button
-                type="button"
-                onClick={() => hiscreRef.current?.click()}
-                disabled={hiscreMut.isPending}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 py-2.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-60 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/15"
-              >
-                {hiscreMut.isPending ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o HISCRE…</>
-                ) : (
-                  <><Upload className="h-4 w-4" /> 2. Importar descontos (HISCRE)</>
-                )}
-              </button>
+              <DropZone accept="application/pdf,.pdf" multiple={false} disabled={hiscreMut.isPending} onFiles={(fs) => { setHiscreAviso(null); hiscreMut.mutate(fs[0]); }}>
+                <button
+                  type="button"
+                  onClick={() => hiscreRef.current?.click()}
+                  disabled={hiscreMut.isPending}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 py-2.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-60 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/15"
+                >
+                  {hiscreMut.isPending ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o HISCRE…</>
+                  ) : (
+                    <><Upload className="h-4 w-4" /> 2. Importar descontos (HISCRE)</>
+                  )}
+                </button>
+              </DropZone>
               {hiscreAviso && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{hiscreAviso}</p>}
               {hiscreContratos && hiscreContratos.length > 1 && (
                 <div className="mt-2 space-y-1.5">
@@ -927,6 +965,24 @@ export default function CalculadoraRmcPage() {
 
               {cs.ativar && (
                 <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                  {/* Importar sentença (IA) — preenche valor da causa + honorários */}
+                  <input ref={csSentRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={onPickCsSent} />
+                  <DropZone accept="application/pdf,.pdf" disabled={csSentMut.isPending} onFiles={(fs) => { setCsSentAviso(null); csSentMut.mutate(fs); }}>
+                    <button
+                      type="button"
+                      onClick={() => csSentRef.current?.click()}
+                      disabled={csSentMut.isPending}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 py-2.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-60 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+                    >
+                      {csSentMut.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Lendo a sentença…</>
+                      ) : (
+                        <><Sparkles className="h-4 w-4" /> Importar sentença (IA) — valor da causa + honorários</>
+                      )}
+                    </button>
+                  </DropZone>
+                  {csSentAviso && <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">{csSentAviso}</p>}
+
                   <div>
                     <label className={labelCls}>Principal = restituição do cenário</label>
                     <select
@@ -1058,6 +1114,17 @@ export default function CalculadoraRmcPage() {
 
             {res && cenarioView && (
               <>
+                {/* Ações do resultado */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => gerarPdfRmc(res, { tipo: form.tipo, banco: form.banco, numeroContrato: form.numeroContrato, nomeCalculo: form.nomeCalculo })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <FileDown className="h-3.5 w-3.5" /> Baixar PDF (simples + dobro)
+                  </button>
+                </div>
+
                 {/* Comparação dos 3 cenários */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {cenarios.map((c) => (

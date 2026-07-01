@@ -15,6 +15,7 @@ import { escritorioService, type Escritorio, type Cargo, type Manual, type Onboa
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { MeuFinanceiroConteudo } from '@/features/financeiro/components/meu-financeiro-conteudo';
+import { DropZone } from '@/components/drop-zone';
 import { useAuthStore } from '@/stores/auth-store';
 
 const rid = () => `c_${Math.round(Math.random() * 1e9)}`;
@@ -1059,7 +1060,9 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#7048E8]/25 bg-[#7048E8]/5 p-3 dark:bg-[#7048E8]/10">
           <p className="text-xs text-zinc-600 dark:text-zinc-300">Tem o contrato/currículo? <strong>Importe e a IA preenche</strong> OAB, datas, financeiro e áreas.</p>
           <input ref={docRef} type="file" accept=".pdf,.docx,image/*" className="hidden" onChange={(e) => importarDoc(e.target.files?.[0])} />
-          <button type="button" onClick={() => docRef.current?.click()} disabled={imp} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-60">{imp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Importar de documento</button>
+          <DropZone accept=".pdf,.docx,image/*" multiple={false} disabled={imp} onFiles={(fs) => importarDoc(fs[0])} className="inline-block shrink-0" overlayLabel="Soltar documento">
+            <button type="button" onClick={() => docRef.current?.click()} disabled={imp} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-60">{imp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Importar de documento</button>
+          </DropZone>
         </div>
       )}
       <div className="flex items-center gap-3">

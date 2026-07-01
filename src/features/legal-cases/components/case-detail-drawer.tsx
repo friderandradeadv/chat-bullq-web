@@ -16,6 +16,7 @@ import { financeiroService } from '@/features/financeiro/services/financeiro.ser
 import { FaseFields } from './fase-fields';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
+import { DropZone } from '@/components/drop-zone';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
@@ -721,16 +722,20 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Contratos a impugnar</p>
         <div className="flex items-center gap-3">
-          <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${hiscon ? 'opacity-50' : 'cursor-pointer'} ${docs?.hiscon ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={docs?.hiscon ? 'HISCON já enviado e guardado no processo — clique para substituir.' : 'Lê o HISCON e POPULA os contratos RMC/RCC nas linhas (deduplicando).'}>
-            <Upload className="h-3.5 w-3.5" /> {hiscon ? 'Lendo HISCON…' : docs?.hiscon ? 'HISCON ✓' : 'Upar HISCON'}
-            <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscon}
-              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscon(f); }} />
-          </label>
-          <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${hiscre ? 'opacity-50' : 'cursor-pointer'} ${docs?.hiscre ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={docs?.hiscre ? 'HISCRE já enviado e guardado no processo — clique para substituir.' : 'HISCRE (complementar): lê e ADICIONA as consignações nas linhas (deduplicando).'}>
-            <Upload className="h-3.5 w-3.5" /> {hiscre ? 'Lendo HISCRE…' : docs?.hiscre ? 'HISCRE ✓' : 'Upar HISCRE'}
-            <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscre}
-              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscre(f); }} />
-          </label>
+          <DropZone accept="application/pdf,.pdf" multiple={false} disabled={hiscon} onFiles={(fs) => void onHiscon(fs[0])} className="inline-block" overlayLabel="Soltar HISCON">
+            <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${hiscon ? 'opacity-50' : 'cursor-pointer'} ${docs?.hiscon ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={docs?.hiscon ? 'HISCON já enviado e guardado no processo — clique para substituir. Também aceita arrastar o PDF.' : 'Lê o HISCON e POPULA os contratos RMC/RCC nas linhas (deduplicando). Também aceita arrastar o PDF.'}>
+              <Upload className="h-3.5 w-3.5" /> {hiscon ? 'Lendo HISCON…' : docs?.hiscon ? 'HISCON ✓' : 'Upar HISCON'}
+              <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscon}
+                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscon(f); }} />
+            </label>
+          </DropZone>
+          <DropZone accept="application/pdf,.pdf" multiple={false} disabled={hiscre} onFiles={(fs) => void onHiscre(fs[0])} className="inline-block" overlayLabel="Soltar HISCRE">
+            <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${hiscre ? 'opacity-50' : 'cursor-pointer'} ${docs?.hiscre ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={docs?.hiscre ? 'HISCRE já enviado e guardado no processo — clique para substituir. Também aceita arrastar o PDF.' : 'HISCRE (complementar): lê e ADICIONA as consignações nas linhas (deduplicando). Também aceita arrastar o PDF.'}>
+              <Upload className="h-3.5 w-3.5" /> {hiscre ? 'Lendo HISCRE…' : docs?.hiscre ? 'HISCRE ✓' : 'Upar HISCRE'}
+              <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={hiscre}
+                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onHiscre(f); }} />
+            </label>
+          </DropZone>
           <button onClick={sugerir} disabled={sug} className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
             <Sparkles className="h-3.5 w-3.5" /> {sug ? 'Lendo a conversa…' : 'Sugerir com IA'}
           </button>
@@ -818,10 +823,12 @@ function InicialActions({ caseId, jg, onChanged }: { caseId: string; jg: any; on
         <span className="text-[11px] text-[#48626f] dark:text-zinc-400">
           {jg?.liquido != null ? <>Justiça gratuita: líquido <b>{fmtBRL(jg.liquido)}</b>{jg.anual != null ? <> · anual {fmtBRL(jg.anual)}</> : ''}</> : 'JG: upe o Histórico de Créditos / IR para a renda'}
         </span>
-        <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'} ${jg?.liquido != null ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={jg?.liquido != null ? 'JG já enviado e guardado no processo — clique para substituir.' : 'Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a justiça gratuita.'}>
-          <Upload className="h-3.5 w-3.5" /> {jgBusy ? 'Lendo JG…' : jg?.liquido != null ? 'JG ✓' : 'Upar JG'}
-          <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={jgBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onJg(f); }} />
-        </label>
+        <DropZone accept="application/pdf,.pdf" multiple={false} disabled={jgBusy} onFiles={(fs) => void onJg(fs[0])} className="inline-block" overlayLabel="Soltar JG">
+          <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'} ${jg?.liquido != null ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={jg?.liquido != null ? 'JG já enviado — clique ou arraste o PDF para substituir.' : 'Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a justiça gratuita. Também aceita arrastar o PDF.'}>
+            <Upload className="h-3.5 w-3.5" /> {jgBusy ? 'Lendo JG…' : jg?.liquido != null ? 'JG ✓' : 'Upar JG'}
+            <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={jgBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onJg(f); }} />
+          </label>
+        </DropZone>
       </div>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Gerar petição inicial — escolha o produto</p>
       <div className="flex gap-1.5">

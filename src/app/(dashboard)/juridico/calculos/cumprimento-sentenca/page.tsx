@@ -5,6 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Calculator,
+  FileDown,
   FileText,
   Gavel,
   Info,
@@ -21,6 +22,8 @@ import {
   type HonorariosBase,
   type IndiceCorrecao,
 } from '@/features/calculadora-cs/services/calculadora-cs.service';
+import { gerarPdfCs } from '@/features/calculadora-cs/lib/pdf';
+import { DropZone } from '@/components/drop-zone';
 
 const brl = (n: number | undefined) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n ?? 0);
@@ -204,18 +207,20 @@ export default function CumprimentoSentencaPage() {
                 preenche a condenação, índice, juros e honorários.
               </p>
               <input ref={fileRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={onPick} />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={iaMut.isPending}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 py-2.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-60 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
-              >
-                {iaMut.isPending ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Lendo os documentos…</>
-                ) : (
-                  <><Upload className="h-4 w-4" /> Enviar PDF(s) da sentença / inicial</>
-                )}
-              </button>
+              <DropZone accept="application/pdf,.pdf" disabled={iaMut.isPending} onFiles={(fs) => { setIaAviso(null); iaMut.mutate(fs); }} overlayLabel="Solte a sentença / inicial aqui">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={iaMut.isPending}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 py-2.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-60 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+                >
+                  {iaMut.isPending ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Lendo os documentos…</>
+                  ) : (
+                    <><Upload className="h-4 w-4" /> Enviar ou arrastar PDF(s) da sentença / inicial</>
+                  )}
+                </button>
+              </DropZone>
               {iaAviso && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{iaAviso}</p>}
               {obsIA && (
                 <div className="mt-2 flex items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] leading-relaxed text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300">
@@ -251,6 +256,7 @@ export default function CumprimentoSentencaPage() {
                       <option value="IPCA-E">IPCA-E</option>
                       <option value="IPCA">IPCA</option>
                       <option value="IGP-M">IGP-M</option>
+                      <option value="SELIC">SELIC (Fazenda · Tema 905)</option>
                     </select>
                   </div>
                   <div>
@@ -261,7 +267,10 @@ export default function CumprimentoSentencaPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Juros de mora (% a.m.)</label>
-                    <input className={inputCls} inputMode="decimal" placeholder="1,00" value={form.jurosMora} onChange={(e) => set('jurosMora', e.target.value)} />
+                    <input className={`${inputCls} disabled:opacity-50`} inputMode="decimal" placeholder="1,00" value={form.indiceCorrecao === 'SELIC' ? '0' : form.jurosMora} disabled={form.indiceCorrecao === 'SELIC'} onChange={(e) => set('jurosMora', e.target.value)} />
+                    {form.indiceCorrecao === 'SELIC' && (
+                      <p className="mt-1 text-[10px] leading-tight text-zinc-400">A SELIC já embute os juros (Tema 905/STJ).</p>
+                    )}
                   </div>
                   <div>
                     <label className={labelCls}>Multa (% sobre principal)</label>
@@ -372,6 +381,15 @@ export default function CumprimentoSentencaPage() {
             )}
             {res && (
               <>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => gerarPdfCs(res)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <FileDown className="h-3.5 w-3.5" /> Baixar PDF
+                  </button>
+                </div>
                 <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                   <div className="border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
                     <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Resultado</h2>
