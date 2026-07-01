@@ -8,7 +8,7 @@ import {
   Pencil, Plus, Trash2, Save, X, Loader2, ChevronDown, Lock,
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
-  Award, Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
+  Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
   CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera, Layers,
 } from 'lucide-react';
 import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo, type Vertical } from '@/features/escritorio/services/escritorio.service';
@@ -755,11 +755,24 @@ function resizeToDataUrl(file: File, max = 320): Promise<string> {
   });
 }
 
+const brl = (n: number) => (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
 function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; onEdit?: () => void }) {
   const foto = info?.fotoUrl || avatarUrl;
-  const casosN = fin && !fin.vazio ? fin.resumo?.nCasos : info?.casos;
-  const stats = ([[Scale, 'Casos que você cuida', casosN], [Heart, 'Vidas que você muda', info?.vidas]] as const).filter(([, , v]) => typeof v === 'number');
+  const r = fin && !fin.vazio ? fin.resumo : undefined;
+  const proj = fin && !fin.vazio ? fin.projecaoCasos : undefined;
+  const cs = fin && !fin.vazio ? fin.cs : undefined;
+  const totalAEntrar = r ? (r.aReceber || 0) + (r.minhaParte || 0) + (cs?.prestacao || 0) + (cs?.cumprimentoNosso || 0) : 0;
+  const carteira = proj?.brutoEmProcesso ?? 0; // valor bruto em processo = tamanho da carteira
+  const casosN = r?.nCasos ?? info?.casos;
+  const vidasN = info?.vidas ?? r?.nClientes;
+  const metricas = ([
+    { icon: Scale, label: 'Casos que você cuida', valor: casosN, money: false, cor: '#7048E8' },
+    { icon: Heart, label: 'Vidas impactadas', valor: vidasN, money: false, cor: '#E64980' },
+    { icon: Briefcase, label: 'Valor da carteira', valor: carteira, money: true, cor: '#F08C00' },
+    { icon: CircleDollarSign, label: 'A entrar', valor: totalAEntrar, money: true, cor: '#02883C' },
+  ] as const).filter((m) => (m.money ? (m.valor as number) > 0 : typeof m.valor === 'number'));
   return (
     <div className="mt-5 overflow-hidden rounded-2xl border border-[#7048E8]/25 bg-gradient-to-br from-[#7048E8]/10 via-white to-[#228BE6]/5 dark:border-[#7048E8]/30 dark:from-[#7048E8]/15 dark:via-zinc-900 dark:to-zinc-900">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
@@ -779,7 +792,6 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
           <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
             {info?.oab && <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 shrink-0 text-[#7048E8]" /> OAB {info.oab}</span>}
             {info?.conoscoDesde && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> Conosco desde {info.conoscoDesde}</span>}
-            {info?.contratadaDesde && <span className="inline-flex items-center gap-1.5"><Award className="h-3.5 w-3.5 shrink-0 text-[#F08C00]" /> Contratada desde {info.contratadaDesde}</span>}
             {cargo?.vertical && <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 shrink-0 text-[#15AABF]" /> Vertical: {cargo.vertical}</span>}
           </div>
         </div>
@@ -794,15 +806,19 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, onEdit }: { no
             <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{cargo.descricao}</p>
           </div>
         )}
-        {stats.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {stats.map(([Icon, label, valor]) => (
-              <div key={label} className="flex items-center gap-3 rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e64980]/10 text-[#e64980]"><Icon className="h-5 w-5" /></span>
-                <div><p className="text-2xl font-extrabold text-zinc-800 dark:text-zinc-100">{valor}</p><p className="text-[11px] font-medium text-zinc-500">{label}</p></div>
+        {metricas.length > 0 && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {metricas.map((m) => (
+              <div key={m.label} className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: `${m.cor}1A`, color: m.cor }}><m.icon className="h-4 w-4" /></span>
+                <p className="mt-2 text-xl font-extrabold text-zinc-800 dark:text-zinc-100">{m.money ? brl(m.valor as number) : m.valor}</p>
+                <p className="text-[11px] font-medium leading-tight text-zinc-500">{m.label}</p>
               </div>
             ))}
           </div>
+        )}
+        {r && (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Já recebido <strong className="text-zinc-700 dark:text-zinc-200">{brl(r.recebido)}</strong>{typeof proj?.liquidoProvavel === 'number' && proj.liquidoProvavel > 0 ? <> · sua parte provável na carteira <strong className="text-zinc-700 dark:text-zinc-200">{brl(proj.liquidoProvavel)}</strong></> : null} · veja tudo na aba <strong className="text-[#02883C]">Financeiro</strong>.</p>
         )}
         {(info?.financeiro?.length || cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios) && (
           <div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
@@ -887,10 +903,9 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
       <div><p className={LABEL}>OAB</p><input value={f.oab ?? ''} onChange={(e) => set({ oab: e.target.value })} placeholder="ex.: PR 123.456 · SP 654.321" className={`${INPUT} mt-1`} /></div>
       {!selfMode && (
         <div className="grid grid-cols-2 gap-2">
-          <div><p className={LABEL}>Conosco desde</p><input value={f.conoscoDesde ?? ''} onChange={(e) => set({ conoscoDesde: e.target.value })} placeholder="ex.: março de 2024" className={`${INPUT} mt-1`} /></div>
-          <div><p className={LABEL}>Contratada desde</p><input value={f.contratadaDesde ?? ''} onChange={(e) => set({ contratadaDesde: e.target.value })} placeholder="ex.: 01/03/2024" className={`${INPUT} mt-1`} /></div>
-          <div><p className={LABEL}>Casos</p><input type="number" min={0} value={f.casos ?? ''} onChange={(e) => set({ casos: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
-          <div><p className={LABEL}>Vidas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
+          <div className="col-span-2"><p className={LABEL}>Conosco desde</p><input value={f.conoscoDesde ?? ''} onChange={(e) => set({ conoscoDesde: e.target.value })} placeholder="ex.: 01/03/2024 ou março de 2024" className={`${INPUT} mt-1`} /></div>
+          <div><p className={LABEL}>Casos (deixe vazio p/ usar o real)</p><input type="number" min={0} value={f.casos ?? ''} onChange={(e) => set({ casos: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
+          <div><p className={LABEL}>Vidas impactadas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
         </div>
       )}
       {!selfMode && <div><p className={LABEL}>Financeiro (do contrato) — um item por linha</p><textarea value={(f.financeiro ?? []).join('\n')} onChange={(e) => set({ financeiro: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} placeholder={'70% dos honorários de clientes que capta e atende\n30% quando é nomeada para atuar'} className={`${INPUT} mt-1`} /></div>}
