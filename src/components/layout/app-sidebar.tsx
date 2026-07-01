@@ -199,9 +199,6 @@ export function AppSidebar() {
                 <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
                 <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
                 <NavItem href="/conexoes" icon={Cable} label="Conexões" />
-                {isAdmin && (
-                  <NavItem href="/copiloto" icon={Bot} label="Copiloto" />
-                )}
               </NavSection>
             </div>
 
@@ -286,6 +283,12 @@ export function AppSidebar() {
           {isDark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
           <span className="flex-1 text-left">{isDark ? 'Modo claro' : 'Modo escuro'}</span>
         </button>
+        {/* Copiloto — assistente admin, sempre à vista no rodapé (só sócio/admin) */}
+        {isAdmin && (
+          <div className="mb-1">
+            <NavItem href="/copiloto" icon={Bot} label="Copiloto" />
+          </div>
+        )}
         {/* Meu Espaço — fixa, acima de Configurações (perfil, organograma, cargos, cultura, manuais) */}
         <div className="mb-1">
           <NavItem href="/escritorio" icon={UserCircle} label="Meu Espaço" />
