@@ -14,7 +14,9 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
+import { CardTags, InlineCardTitle } from '@/features/legal-cases/components/kanban-card-bits';
 import { membersService } from '@/features/settings/services/members.service';
+import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
 const KEY = ['legal-cases', 'kanban'];
@@ -181,6 +183,25 @@ export default function FaseJudicialKanbanPage() {
 
   const active = cards.find((c) => c.id === activeId) ?? null;
 
+  // Só o dono do escritório (OWNER) renomeia as fases.
+  const activeOrg = useAuthStore((s) => s.organizations.find((o) => o.id === s.activeOrgId));
+  const isOwner = activeOrg?.role === 'OWNER';
+  const onChanged = () => qc.invalidateQueries({ queryKey: KEY });
+
+  const renamePhase = async (key: string, label: string) => {
+    // Otimista: atualiza o label no cache do board na hora.
+    qc.setQueryData<KanbanData>(KEY, (old) =>
+      old ? { ...old, phases: old.phases.map((p) => (p.key === key ? { ...p, label } : p)) } : old,
+    );
+    try {
+      await legalCasesService.renamePhaseLabel(key, label);
+      toast.success('Fase renomeada');
+    } catch (err: any) {
+      qc.invalidateQueries({ queryKey: KEY });
+      toast.error(err?.response?.data?.message || 'Só o dono do escritório pode renomear fases');
+    }
+  };
+
   const move = async (card: KanbanCard, toPhase: string) => {
     if (card.phase === toPhase) return;
     qc.setQueryData<KanbanData>(KEY, (old) =>
@@ -294,7 +315,7 @@ export default function FaseJudicialKanbanPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} />
             ))}
           </div>
           <DragOverlay>{active ? <Card c={active} phases={phases} onMove={move} overlay /> : null}</DragOverlay>
@@ -368,17 +389,18 @@ function MultiSelect({
 }
 
 function Column({
-  phase, items, phases, onMove, onOpen,
+  phase, items, phases, onMove, onOpen, onChanged, canRename, onRename,
 }: {
   phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[];
   onMove: (c: KanbanCard, to: string) => void; onOpen: (id: string) => void;
+  onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   return (
     <div className="flex min-h-0 w-[280px] shrink-0 flex-col">
-      {/* Header da fase (40px) — nome magenta + badge de contagem */}
+      {/* Header da fase (40px) — nome magenta (editável p/ OWNER) + badge */}
       <div className="flex h-10 items-center gap-2 px-1">
-        <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">{phase.label}</h2>
+        <PhaseTitle phase={phase} canRename={canRename} onRename={onRename} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
           {items.length}
         </span>
@@ -394,16 +416,61 @@ function Column({
             Vazio
           </p>
         )}
-        {items.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} onOpen={onOpen} />)}
+        {items.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} onOpen={onOpen} onChanged={onChanged} />)}
       </div>
     </div>
   );
 }
 
-function Card({
-  c, phases, onMove, onOpen, overlay,
+// Nome da fase no header. Só o OWNER edita (clique → input). Salva no Enter/blur.
+function PhaseTitle({
+  phase, canRename, onRename,
 }: {
-  c: KanbanCard; phases: KanbanPhase[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; overlay?: boolean;
+  phase: KanbanPhase; canRename: boolean; onRename: (key: string, label: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(phase.label);
+  useEffect(() => setText(phase.label), [phase.label]);
+
+  if (!canRename) {
+    return <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">{phase.label}</h2>;
+  }
+  const commit = () => {
+    const t = text.trim();
+    setEditing(false);
+    if (t && t !== phase.label) onRename(phase.key, t);
+    else setText(phase.label);
+  };
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { setEditing(false); setText(phase.label); }
+        }}
+        className="w-full rounded border border-[#e11970] bg-white px-1 py-0.5 text-sm font-medium text-[#101820] outline-none dark:bg-zinc-800 dark:text-zinc-100"
+      />
+    );
+  }
+  return (
+    <h2
+      onClick={() => setEditing(true)}
+      title="Clique pra renomear a fase (só o dono do escritório)"
+      className="cursor-text truncate text-sm font-medium text-[#e11970] hover:underline dark:text-[#f06595]"
+    >
+      {phase.label}
+    </h2>
+  );
+}
+
+function Card({
+  c, phases, onMove, onOpen, onChanged, overlay,
+}: {
+  c: KanbanCard; phases: KanbanPhase[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onChanged?: () => void; overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const down = useRef<{ x: number; y: number } | null>(null);
@@ -455,8 +522,24 @@ function Card({
         })()}
       </div>
 
-      {/* Cliente (título, CAPS, clicável) × parte adversa */}
-      <p className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] hover:underline dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      {/* Etiquetas gerenciáveis (adicionar/remover, igual à fase processual) */}
+      {!overlay && onChanged && (
+        <div className="mt-1.5">
+          <CardTags caseId={c.id} tags={c.tags ?? []} onChanged={onChanged} />
+        </div>
+      )}
+
+      {/* Título do card (CAPS, editável ao clicar) × parte adversa */}
+      {overlay || !onChanged ? (
+        <p className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.title || c.client)?.toUpperCase()}</p>
+      ) : (
+        <InlineCardTitle
+          caseId={c.id}
+          value={c.title || c.client || ''}
+          onSaved={onChanged}
+          className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] hover:underline dark:text-zinc-100"
+        />
+      )}
       {c.opponent && <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
 
       {/* Nº processo (copiável) */}

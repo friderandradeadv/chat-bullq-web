@@ -133,6 +133,10 @@ export function CaseDetailDrawer({
   const isFilhote = !!(c?.metadata as any)?.desmembradoDe;
   const inIntake = phaseKey ? INTAKE_PHASES.has(phaseKey) : false;
   const inMontar = phaseKey ? MONTAR_PHASES.has(phaseKey) : false;
+  // "Contratos a impugnar" + cálculo + gerar iniciais são específicos de RMC/RCC
+  // (bancário). Para as demais áreas o intake usa o acelerador genérico de IA.
+  const isRmc = /RMC|RCC|CONSIGN|REVISIONAL|PORTABIL/i.test(String(c?.area ?? ''));
+  const inPre = phaseKey ? PRE_PHASES.has(phaseKey) : false;
   const showJuizo = pf.juizo && String(pf.juizo).trim().toLowerCase() !== String(c?.court ?? '').trim().toLowerCase();
 
   const onMove = async (phase: string) => {
@@ -262,7 +266,7 @@ export function CaseDetailDrawer({
                 {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
                     doc. faltantes) mostra o desmembramento em cards por banco réu; nas
                     fases de MONTAR fica só como lista de referência que alimenta a inicial. */}
-                {phaseKey && PRE_PHASES.has(phaseKey) && (
+                {inPre && isRmc && (
                   <ContratosImpugnar
                     caseId={c.id}
                     phaseKey={phaseKey}
@@ -271,6 +275,16 @@ export function CaseDetailDrawer({
                     showDesmembrar={inIntake && !isFilhote}
                     onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
                     onDesmembrado={() => { qc.invalidateQueries({ queryKey: ['legal-cases'] }); onClose(); }}
+                  />
+                )}
+
+                {/* Acelerador genérico (não-RMC): IA lê a conversa e sugere o polo
+                    passivo, produto, área e valor — o advogado aplica no card. */}
+                {inPre && !isRmc && (
+                  <SugerirDadosIA
+                    caseId={c.id}
+                    temAdversa={!!adversa}
+                    onApplied={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
                   />
                 )}
 
@@ -295,7 +309,7 @@ export function CaseDetailDrawer({
                 {/* Cálculo RMC/RCC + gerar inicial: SÓ na fase Montar inicial em diante
                     (com o card certo — polo passivo/produto). Na fase de intake essa etapa
                     não aparece: primeiro cria-se os cards dos bancos réus. */}
-                {inMontar && (
+                {inMontar && isRmc && (
                   <div className="mt-4">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cálculo RMC/RCC</p>
@@ -324,7 +338,7 @@ export function CaseDetailDrawer({
                         </div>
                       );
                     })()}
-                    <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                    <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                   </div>
                 )}
 
@@ -608,6 +622,78 @@ function AnexosTab({ caseId, documents, onChanged }: { caseId: string; documents
   );
 }
 
+// Acelerador de intake GENÉRICO (não-RMC): a IA lê a conversa do cliente e sugere
+// o polo passivo (réu), produto, área jurídica e valor da causa. O advogado revisa
+// e aplica no card (cria a parte adversa + preenche área/valor).
+type SugestaoCaso = {
+  reu: string | null; documentoReu: string | null; produto: string | null;
+  area: string | null; valorCausa: number | null; resumo: string | null;
+};
+function SugerirDadosIA({ caseId, temAdversa, onApplied }: { caseId: string; temAdversa: boolean; onApplied: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [sug, setSug] = useState<SugestaoCaso | null>(null);
+
+  const gerar = async () => {
+    setLoading(true);
+    try {
+      const r = await legalCasesService.sugerirDadosCaso(caseId);
+      setSug(r);
+      if (!r.reu && !r.produto && !r.valorCausa) toast.message('A IA não achou dados claros na conversa.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao sugerir dados');
+    } finally { setLoading(false); }
+  };
+
+  const aplicar = async () => {
+    if (!sug) return;
+    setApplying(true);
+    try {
+      if (sug.reu && !temAdversa) {
+        await legalCasesService.addParty(caseId, { name: sug.reu, role: 'OPPONENT', document: sug.documentoReu || undefined });
+      }
+      const patch: Record<string, unknown> = {};
+      if (sug.produto) patch.area = sug.produto;
+      if (sug.valorCausa != null) patch.value = sug.valorCausa;
+      if (Object.keys(patch).length) await legalCasesService.update(caseId, patch as any);
+      toast.success('Dados aplicados no card');
+      setSug(null);
+      onApplied();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao aplicar');
+    } finally { setApplying(false); }
+  };
+
+  const fmtV = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+
+  return (
+    <div className="mt-4 rounded-lg border border-[#e6d9fb] bg-[#faf7ff] p-3 dark:border-violet-900/40 dark:bg-violet-950/20">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7048e8]">Preencher com IA (conversa)</p>
+        <button onClick={gerar} disabled={loading}
+          className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
+          <Sparkles className="h-3.5 w-3.5" /> {loading ? 'Lendo a conversa…' : sug ? 'Gerar de novo' : 'Sugerir dados'}
+        </button>
+      </div>
+      {!sug && <p className="mt-1 text-xs italic text-zinc-400">A IA lê a conversa do cliente e sugere o polo passivo, produto, área e valor da causa pra você conferir e aplicar.</p>}
+      {sug && (
+        <div className="mt-2 space-y-1.5 text-xs text-[#101820] dark:text-zinc-200">
+          <p><span className="text-zinc-500">Polo passivo (réu):</span> <strong>{sug.reu ?? '—'}</strong>{sug.documentoReu ? ` · ${sug.documentoReu}` : ''}{temAdversa && sug.reu ? <span className="ml-1 text-amber-600">(já há parte adversa — não sobrescreve)</span> : null}</p>
+          <p><span className="text-zinc-500">Produto:</span> <strong>{sug.produto ?? '—'}</strong> · <span className="text-zinc-500">Área:</span> {sug.area ?? '—'}</p>
+          <p><span className="text-zinc-500">Valor da causa:</span> {fmtV(sug.valorCausa)}</p>
+          {sug.resumo && <p className="text-zinc-500">{sug.resumo}</p>}
+          <div className="flex justify-end pt-1">
+            <button onClick={aplicar} disabled={applying}
+              className="inline-flex items-center gap-1 rounded-lg bg-[#7048e8] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
+              <Check className="h-3.5 w-3.5" /> {applying ? 'Aplicando…' : 'Aplicar no card'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Contratos a impugnar (intake pré-judicial bancário): cada linha = banco × produto
 // × valor. "Sugerir com IA" lê a conversa; "Gerar iniciais" desmembra em 1 card por
 // linha (na fase Montar inicial) e arquiva o intake.
@@ -786,10 +872,14 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
 // Ações da inicial: upar o JG (justiça gratuita → renda) e GERAR a petição inicial
 // (base no timbrado preenchida com cliente/réu/contrato/cálculo/JG; baixa o .docx).
 // A base (QUITADO/EM ABERTO) é escolhida pelo cálculo.
-function InicialActions({ caseId, jg, onChanged }: { caseId: string; jg: any; onChanged: () => void }) {
+function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: any; docs?: { jg?: string }; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [jgBusy, setJgBusy] = useState(false);
   const fmtBRL = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+  // Verde = documento SALVO (igual HISCON/HISCRE), tenha ou não conseguido ler a renda.
+  const jgSalvo = !!docs?.jg;
+  const temRenda = jg?.liquido != null;
+  const jgVerde = jgSalvo || temRenda;
 
   const onJg = async (file?: File | null) => {
     if (!file) return;
@@ -821,11 +911,11 @@ function InicialActions({ caseId, jg, onChanged }: { caseId: string; jg: any; on
     <div className="mt-2 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-[#48626f] dark:text-zinc-400">
-          {jg?.liquido != null ? <>Justiça gratuita: líquido <b>{fmtBRL(jg.liquido)}</b>{jg.anual != null ? <> · anual {fmtBRL(jg.anual)}</> : ''}</> : 'JG: upe o Histórico de Créditos / IR para a renda'}
+          {temRenda ? <>Justiça gratuita: líquido <b>{fmtBRL(jg.liquido)}</b>{jg.anual != null ? <> · anual {fmtBRL(jg.anual)}</> : ''}</> : jgSalvo ? 'JG salvo — renda não lida automaticamente (preencha à mão na inicial)' : 'JG: upe o Histórico de Créditos / IR para a renda'}
         </span>
         <DropZone accept="application/pdf,.pdf" multiple={false} disabled={jgBusy} onFiles={(fs) => void onJg(fs[0])} className="inline-block" overlayLabel="Soltar JG">
-          <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'} ${jg?.liquido != null ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={jg?.liquido != null ? 'JG já enviado — clique ou arraste o PDF para substituir.' : 'Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a justiça gratuita. Também aceita arrastar o PDF.'}>
-            <Upload className="h-3.5 w-3.5" /> {jgBusy ? 'Lendo JG…' : jg?.liquido != null ? 'JG ✓' : 'Upar JG'}
+          <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'} ${jgVerde ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={jgVerde ? 'JG já enviado — clique ou arraste o PDF para substituir.' : 'Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a justiça gratuita. Também aceita arrastar o PDF.'}>
+            <Upload className="h-3.5 w-3.5" /> {jgBusy ? 'Lendo JG…' : jgVerde ? 'JG ✓' : 'Upar JG'}
             <input type="file" accept="application/pdf,.pdf" className="hidden" disabled={jgBusy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onJg(f); }} />
           </label>
         </DropZone>

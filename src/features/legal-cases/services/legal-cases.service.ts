@@ -351,8 +351,13 @@ export const legalCasesService = {
   async protocolar(
     id: string,
     input: { cnj?: string; value?: number; dataProtocolo?: string; court?: string; jurisdiction?: string },
-  ): Promise<{ ok: boolean; phase: string }> {
+  ): Promise<{ ok: boolean; phase: string; aviso?: { enviado: boolean; motivo?: string } }> {
     const { data } = await api.patch(`/legal-cases/${id}/protocolar`, input);
+    return data.data ?? data;
+  },
+  // Renomeia uma fase do kanban (só OWNER — o backend valida o papel).
+  async renamePhaseLabel(key: string, label: string): Promise<{ key: string; label: string }> {
+    const { data } = await api.patch(`/legal-cases/phases/${key}/label`, { label });
     return data.data ?? data;
   },
   async get(id: string): Promise<CaseDetail> {
@@ -411,6 +416,18 @@ export const legalCasesService = {
   },
   async sugerirContratos(id: string): Promise<{ contratos: ContratoImpugnar[] }> {
     const { data } = await api.post(`/legal-cases/${id}/contratos/sugerir`);
+    return data.data ?? data;
+  },
+  /** IA sugere polo passivo/produto/área/valor da conversa (intake genérico, não-RMC). */
+  async sugerirDadosCaso(id: string): Promise<{
+    reu: string | null;
+    documentoReu: string | null;
+    produto: string | null;
+    area: string | null;
+    valorCausa: number | null;
+    resumo: string | null;
+  }> {
+    const { data } = await api.post(`/legal-cases/${id}/sugerir-dados`);
     return data.data ?? data;
   },
   /** Upload de HISCON (PDF base64) → IA extrai os contratos RMC/RCC ativos. */

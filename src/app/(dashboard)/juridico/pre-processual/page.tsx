@@ -14,6 +14,7 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
+import { CardTags, InlineCardTitle } from '@/features/legal-cases/components/kanban-card-bits';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
 const KEY = ['legal-cases', 'kanban'];
@@ -140,7 +141,7 @@ export default function PreProcessualPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} />
             ))}
           </div>
           <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
@@ -154,7 +155,7 @@ export default function PreProcessualPage() {
   );
 }
 
-function Column({ phase, items, onOpen, onProtocolar }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onProtocolar: (id: string) => void }) {
+function Column({ phase, items, onOpen, onProtocolar, onChanged }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
   return (
@@ -165,13 +166,13 @@ function Column({ phase, items, onOpen, onProtocolar }: { phase: KanbanPhase; it
       </div>
       <div ref={setNodeRef} className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border px-1.5 pb-2 pt-3 transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {items.map((c) => <Card key={c.id} c={c} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} />)}
+        {items.map((c) => <Card key={c.id} c={c} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, onOpen, onProtocolar }: { c: KanbanCard; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void }) {
+function Card({ c, onOpen, onProtocolar, onChanged }: { c: KanbanCard; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const down = useRef<{ x: number; y: number } | null>(null);
   const prod = produtoColor(c.produto);
@@ -188,8 +189,23 @@ function Card({ c, onOpen, onProtocolar }: { c: KanbanCard; onOpen?: (id: string
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
       </div>
-      {/* Partes: cliente × parte adversa (banco) */}
-      <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] hover:underline dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      {/* Etiquetas gerenciáveis (adicionar/remover) */}
+      {onChanged && (
+        <div className="mt-1.5">
+          <CardTags caseId={c.id} tags={c.tags ?? []} onChanged={onChanged} />
+        </div>
+      )}
+      {/* Título do card (editável) × parte adversa (banco) */}
+      {onChanged ? (
+        <InlineCardTitle
+          caseId={c.id}
+          value={c.title || c.client || ''}
+          onSaved={onChanged}
+          className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] hover:underline dark:text-zinc-100"
+        />
+      ) : (
+        <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.title || c.client)?.toUpperCase()}</p>
+      )}
       {c.opponent && <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
       {/* Nº processo (copiável) */}
       {c.cnj && (
@@ -232,12 +248,17 @@ function ProtocolarDialog({ caseId, onClose, onDone }: { caseId: string; onClose
   const submit = async () => {
     setSaving(true);
     try {
-      await legalCasesService.protocolar(caseId, {
+      const res = await legalCasesService.protocolar(caseId, {
         cnj: cnj.trim() || undefined,
         value: valor ? Number(valor.replace(/\./g, '').replace(',', '.')) : undefined,
         dataProtocolo: data || undefined,
       });
       toast.success('Protocolado — movido para Admissão da inicial');
+      if (res.aviso?.enviado) {
+        toast.success(res.aviso.motivo || 'Cliente avisado no WhatsApp (nº do processo + áudio /protocolo2)');
+      } else if (res.aviso) {
+        toast.warning(`Aviso ao cliente não enviado: ${res.aviso.motivo ?? 'motivo desconhecido'}`);
+      }
       onDone();
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao protocolar'); setSaving(false); }
   };
