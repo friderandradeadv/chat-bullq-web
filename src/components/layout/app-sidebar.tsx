@@ -69,11 +69,13 @@ function NavSection({
   label,
   defaultOpen = true,
   storageKey: storageKeyProp,
+  variant = 'section',
   children,
 }: {
   label: string;
   defaultOpen?: boolean;
   storageKey?: string;
+  variant?: 'section' | 'sub';
   children: React.ReactNode;
 }) {
   const storageKey = `nav-section:${storageKeyProp ?? label}`;
@@ -102,7 +104,11 @@ function NavSection({
     <div className="flex flex-col gap-0.5">
       <button
         onClick={toggle}
-        className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+        className={
+          variant === 'section'
+            ? 'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors'
+            : 'flex w-full items-center justify-between rounded-md px-2 py-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors'
+        }
       >
         {label}
         {open ? (
@@ -183,7 +189,7 @@ export function AppSidebar() {
           <NavSection label="Comercial">
             {/* Geral — subaba (fluxo do dia a dia) */}
             <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-              <NavSection label="Geral" storageKey="Geral-comercial" defaultOpen>
+              <NavSection label="Geral" storageKey="Geral-comercial" variant="sub" defaultOpen>
                 <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
                 <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
               </NavSection>
@@ -191,7 +197,7 @@ export function AppSidebar() {
 
             {/* Cadastros — subaba (base do comercial) */}
             <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-              <NavSection label="Cadastros" storageKey="Cadastros-comercial" defaultOpen={false}>
+              <NavSection label="Cadastros" storageKey="Cadastros-comercial" variant="sub" defaultOpen={false}>
                 <NavItem href="/kanban" icon={KanbanSquare} label="Kanban" />
                 <NavItem href="/contacts" icon={BookUser} label="Contatos" />
               </NavSection>
@@ -199,7 +205,7 @@ export function AppSidebar() {
 
             {/* Ajustes — subaba dentro de Comercial (config do atendimento) */}
             <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-              <NavSection label="Ajustes" defaultOpen={false}>
+              <NavSection label="Ajustes" variant="sub" defaultOpen={false}>
                 <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
                 <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
                 <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
@@ -209,7 +215,7 @@ export function AppSidebar() {
 
             {/* Automações — subaba dentro de Comercial */}
             <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-              <NavSection label="Automações" defaultOpen={false}>
+              <NavSection label="Automações" variant="sub" defaultOpen={false}>
                 <NavItem href="/ai-agents" icon={Bot} label="Agentes" />
                 <NavItem href="/follow-ups" icon={MessageCircleHeart} label="Follow-ups" />
                 <NavItem href="/base-conhecimento" icon={BookOpen} label="Base de Conhecimento" />
@@ -225,7 +231,7 @@ export function AppSidebar() {
             <NavSection label="Jurídico">
               {/* Geral — subaba (fluxo do dia a dia) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-                <NavSection label="Geral" storageKey="Geral-juridico" defaultOpen>
+                <NavSection label="Geral" storageKey="Geral-juridico" variant="sub" defaultOpen>
                   <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
                   <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
                   <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
@@ -235,7 +241,7 @@ export function AppSidebar() {
 
               {/* Kanbans — subaba (fluxos por fase) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-                <NavSection label="Kanbans" defaultOpen={false}>
+                <NavSection label="Kanbans" variant="sub" defaultOpen={false}>
                   <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
                   <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
                   <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
@@ -244,7 +250,7 @@ export function AppSidebar() {
 
               {/* Análise — subaba (consulta / inteligência) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-                <NavSection label="Análise" defaultOpen={false}>
+                <NavSection label="Análise" variant="sub" defaultOpen={false}>
                   <NavItem href="/juridico/recursos" icon={Scale} label="Recursos" />
                   <NavItem href="/juridico/jurimetria" icon={BarChart3} label="Jurimetria" />
                 </NavSection>
@@ -252,14 +258,14 @@ export function AppSidebar() {
 
               {/* Cálculos — subaba (calculadoras jurídicas) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-                <NavSection label="Cálculos" defaultOpen={false}>
+                <NavSection label="Cálculos" variant="sub" defaultOpen={false}>
                   <NavItem href="/juridico/calculos" icon={Calculator} label="Calculadoras" />
                 </NavSection>
               </div>
 
               {/* Cadastros — subaba (base) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-                <NavSection label="Cadastros" storageKey="Cadastros-juridico" defaultOpen={false}>
+                <NavSection label="Cadastros" storageKey="Cadastros-juridico" variant="sub" defaultOpen={false}>
                   <NavItem href="/clientes" icon={Users} label="Clientes" />
                   <NavItem href="/juridico/partes-adversas" icon={Gavel} label="Parte Adversa" />
                 </NavSection>
