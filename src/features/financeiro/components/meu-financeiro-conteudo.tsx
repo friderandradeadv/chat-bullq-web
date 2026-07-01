@@ -218,6 +218,9 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
               </div>
             )}
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">💜 Você não move só números — move <strong>vidas</strong>. São <strong>{r.nCasos ?? casos.length} histórias</strong> que passam pelas suas mãos.</p>
+            {(data.projecaoCasos.nEstimados ?? 0) > 0 && (
+              <p className="mt-2 inline-flex items-start gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-400">≈ Estimativa: {data.projecaoCasos.nEstimados} caso{data.projecaoCasos.nEstimados === 1 ? '' : 's'} usa{data.projecaoCasos.nEstimados === 1 ? '' : 'm'} valor da causa estimado (12× salário mínimo — art. 292 §1º CPC), porque o Astrea trouxe o valor zerado. Ajusta assim que o valor real for lançado.</p>
+            )}
             <p className="mt-1.5 text-[11px] text-zinc-400">Estimativa: a condenação real costuma sair diferente do valor da causa (pra mais ou pra menos) — {data.projecaoCasos.isSocio ? 'sua parte de sócio sai dos honorários do escritório, conforme a divisão acima.' : 'sua parte já é calculada pela média de êxito de cada caso.'}</p>
           </Card>
         )}
