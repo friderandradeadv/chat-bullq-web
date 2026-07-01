@@ -1365,6 +1365,8 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                               : 'rounded-bl-md bg-white text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100'
                           }`}
                         >
+                          <div className={msg.type === 'TEXT' && !(editing && editing.id === msg.id) ? 'flex flex-wrap items-end justify-end gap-x-2 gap-y-0.5' : ''}>
+                          <div className={msg.type === 'TEXT' && !(editing && editing.id === msg.id) ? 'min-w-0' : 'contents'}>
                           {msg.type === 'TEXT' ? (
                             editing && editing.id === msg.id ? (
                               <div className="flex flex-col gap-1.5">
@@ -1412,8 +1414,11 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                           ) : (
                             <p className="text-sm italic opacity-70">Mensagem não suportada</p>
                           )}
+                          </div>
                           <div
-                            className={`mt-1 flex items-center gap-1 text-[10px] ${
+                            className={`flex items-center gap-1 text-[10px] ${
+                              msg.type === 'TEXT' && !(editing && editing.id === msg.id) ? 'self-end' : 'mt-1'
+                            } ${
                               isOutbound ? 'justify-end opacity-70' : 'text-zinc-400'
                             }`}
                           >
@@ -1432,6 +1437,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                                 />
                               </span>
                             )}
+                          </div>
                           </div>
                         </div>
                       )}
