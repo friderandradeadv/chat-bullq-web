@@ -466,26 +466,41 @@ function AdicionarAdvogadoModal({ onClose, onDone }: { onClose: () => void; onDo
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('AGENT');
   const [saving, setSaving] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
   const convidar = async () => {
     if (!email.trim()) { toast.error('Informe o e-mail'); return; }
     setSaving(true);
     try {
       const r: any = await membersService.invite({ email: email.trim(), role });
-      toast.success(r?.autoAccepted ? 'Advogado adicionado! Agora clique no perfil dele e importe o contrato.' : 'Convite enviado — ele aparece aqui quando aceitar.');
-      onDone();
+      onDone(); // já atualiza a lista de membros (o espaço aparece sozinho)
+      if (r?.autoAccepted) { toast.success('Advogado adicionado! Agora abra o perfil dele e importe o contrato.'); onClose(); }
+      else if (r?.token) { setLink(`${window.location.origin}/register?invite=${r.token}`); toast.success('Convite criado — mande o link pra ele.'); }
+      else { toast.success('Convite enviado.'); onClose(); }
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Não consegui convidar'); }
     finally { setSaving(false); }
   };
   return (
-    <ModalShell title="Adicionar advogado" onClose={onClose} footer={<div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Cancelar</button><button onClick={convidar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Adicionar</button></div>}>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">Convide pelo e-mail. Se já tiver conta, entra na hora; senão, recebe um convite. Depois é só clicar no perfil dele e <strong className="text-zinc-700 dark:text-zinc-200">importar o contrato</strong> — a IA preenche OAB, datas, financeiro e áreas.</p>
-      <div><p className={LABEL}>E-mail</p><input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="advogado@exemplo.com" className={`${INPUT} mt-1`} /></div>
-      <div><p className={LABEL}>Perfil de acesso</p>
-        <select value={role} onChange={(e) => setRole(e.target.value)} className={`${INPUT} mt-1`}>
-          <option value="AGENT">Associado (acesso comum)</option>
-          <option value="ADMIN">Sócio / Admin (acesso total)</option>
-        </select>
-      </div>
+    <ModalShell title="Adicionar advogado" onClose={onClose} footer={<div className="ml-auto flex gap-2"><button onClick={onClose} className={GHOST_BTN}>Fechar</button>{!link && <button onClick={convidar} disabled={saving} className={SAVE_BTN}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Adicionar</button>}</div>}>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">É o mesmo cadastro de <strong className="text-zinc-700 dark:text-zinc-200">Configurações › Membros</strong> — não precisa cadastrar duas vezes. Ao adicionar, o <strong className="text-zinc-700 dark:text-zinc-200">espaço dele já aparece</strong> aqui e no RH. Depois é só abrir o perfil e <strong className="text-zinc-700 dark:text-zinc-200">importar o contrato</strong> (a IA preenche OAB, datas, financeiro e áreas).</p>
+      {!link ? (
+        <>
+          <div><p className={LABEL}>E-mail</p><input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="advogado@exemplo.com" className={`${INPUT} mt-1`} /></div>
+          <div><p className={LABEL}>Perfil de acesso</p>
+            <select value={role} onChange={(e) => setRole(e.target.value)} className={`${INPUT} mt-1`}>
+              <option value="AGENT">Associado (acesso comum)</option>
+              <option value="ADMIN">Sócio / Admin (acesso total)</option>
+            </select>
+          </div>
+        </>
+      ) : (
+        <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3 dark:bg-[#02883C]/10">
+          <p className="text-xs font-semibold text-[#02883C]">Convite criado! Mande este link para {email}:</p>
+          <div className="mt-1.5 flex items-center gap-2">
+            <input readOnly value={link} className={`${INPUT} text-xs`} onFocus={(e) => e.target.select()} />
+            <button onClick={() => { navigator.clipboard?.writeText(link); toast.success('Link copiado'); }} className="shrink-0 rounded-lg bg-[#228BE6] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1c7ed6]">Copiar</button>
+          </div>
+        </div>
+      )}
     </ModalShell>
   );
 }
