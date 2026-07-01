@@ -244,9 +244,9 @@ export function AppSidebar() {
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
                 <NavSection label="Kanbans" variant="sub" defaultOpen={false}>
                   <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
+                  <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
                   <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
                   <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
-                  <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária" />
                 </NavSection>
               </div>
 
