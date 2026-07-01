@@ -516,7 +516,7 @@ function NovoLancamentoModal({ criar, onClose }: { criar: CriarCtx; onClose: () 
 }
 
 /** Busca de cliente (cadastro) — autocomplete. onPick=selecionou contato; onText=digitou livre. */
-function BuscaCliente({ value, onPick, onText }: { value: string; onPick: (c: { id: string; nome: string } | null) => void; onText: (t: string) => void }) {
+export function BuscaCliente({ value, onPick, onText }: { value: string; onPick: (c: { id: string; nome: string } | null) => void; onText: (t: string) => void }) {
   const [q, setQ] = useState(value);
   const [open, setOpen] = useState(false);
   const { data, isFetching } = useQuery({ queryKey: ['fin-busca-cli', q], queryFn: () => contactsService.list({ search: q, limit: '8' }), enabled: open && q.trim().length >= 2, staleTime: 30_000 });
@@ -539,7 +539,7 @@ function BuscaCliente({ value, onPick, onText }: { value: string; onPick: (c: { 
 }
 
 /** Busca de processo — autocomplete (pra quitar/vincular). */
-function BuscaProcesso({ onPick }: { onPick: (c: { id: string; label: string }) => void }) {
+export function BuscaProcesso({ onPick }: { onPick: (c: { id: string; label: string }) => void }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const { data, isFetching } = useQuery({ queryKey: ['fin-busca-proc', q], queryFn: () => legalCasesService.list({ search: q }), enabled: open && q.trim().length >= 2, staleTime: 30_000 });

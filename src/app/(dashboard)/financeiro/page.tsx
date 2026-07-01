@@ -17,7 +17,7 @@ import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus,
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
-import { MeuFinanceiroConteudo } from '@/features/financeiro/components/meu-financeiro-conteudo';
+import { MeuFinanceiroConteudo, BuscaCliente, BuscaProcesso } from '@/features/financeiro/components/meu-financeiro-conteudo';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
@@ -289,6 +289,7 @@ interface Editor {
   categoria: string; subtipo: 'inicial' | 'exito'; pagador: string; recebedor: string; valor: string;
   status: TxStatus; parcelas: string; repetir: 'nao' | 'mensal' | 'anual'; escopo: 'uma' | 'proximas'; split: SplitRow[];
   rateio: RateioForm; responsavelId: string; conta: string;
+  contactId?: string; caseId?: string; procLabel?: string;
 }
 const RATEIO_VAZIO: RateioForm = { bruto: '', cliente: '', sucumbencia: '', honorarios: '' };
 
@@ -408,7 +409,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const [importing, setImporting] = useState(false);
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '' });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', contactId: '', caseId: '', procLabel: '' });
   const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })), rateio: t.rateio ? { bruto: String(t.rateio.bruto).replace('.', ','), cliente: String(t.rateio.cliente).replace('.', ','), sucumbencia: String(t.rateio.sucumbencia).replace('.', ','), honorarios: String(t.rateio.honorarios).replace('.', ',') } : { ...RATEIO_VAZIO } });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
@@ -430,7 +431,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined });
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined, contactId: editor.contactId || undefined, caseId: editor.caseId || undefined });
     } else {
       updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
     }
@@ -633,9 +634,20 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Pagador (cliente/origem)"><input value={editor.pagador} onChange={(e) => onPagador(e.target.value)} placeholder="quem paga" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Pagador (cliente/origem)"><BuscaCliente value={editor.pagador} onPick={(c) => setEditor((ed) => ed ? { ...ed, pagador: c?.nome ?? '', contactId: c?.id, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(c?.nome ?? '') : '') } : ed)} onText={(t) => setEditor((ed) => ed ? { ...ed, pagador: t, contactId: undefined, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(t) : '') } : ed)} /></Field>
                 <Field label="Recebedor (destino)"><input value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="quem recebe (escritório, advogado…)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
               </div>
+
+              <Field label="Vincular a um processo (opcional — pra quitar/registrar no processo)">
+                {editor.caseId ? (
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-[#228BE6]/40 bg-[#228BE6]/5 px-2 py-1.5 text-sm">
+                    <span className="flex min-w-0 items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><Gavel className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /><span className="truncate">{editor.procLabel}</span></span>
+                    <button type="button" onClick={() => setEditor((ed) => ed ? { ...ed, caseId: '', procLabel: '' } : ed)} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                ) : (
+                  <BuscaProcesso onPick={(c) => setEditor((ed) => ed ? { ...ed, caseId: c.id, procLabel: c.label } : ed)} />
+                )}
+              </Field>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Responsável (advogado)">
