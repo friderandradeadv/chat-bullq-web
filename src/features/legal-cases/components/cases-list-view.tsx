@@ -73,7 +73,10 @@ export function CasesListView({
                 <td className={`${td} whitespace-nowrap`}>
                   {c.responsible ? (
                     <span className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>
+                      {c.responsible.avatarUrl
+                        ? // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
+                        : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>}
                       {c.responsible.name}
                     </span>
                   ) : <span className="text-zinc-300 dark:text-zinc-600">—</span>}

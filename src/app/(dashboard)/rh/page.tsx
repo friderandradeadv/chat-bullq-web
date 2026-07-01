@@ -1,16 +1,27 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Users, UserPlus, KanbanSquare, Loader2, Plus, Trash2, X, Save, GripVertical,
   Mail, Phone, Star, Lock, MapPin, IdCard, FileText, ExternalLink,
+  Network, LayoutGrid, Sparkles,
 } from 'lucide-react';
 import { rhService, type Rh, type Candidato, type Etapa, type Ficha } from '@/features/rh/services/rh.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
-import { escritorioService } from '@/features/escritorio/services/escritorio.service';
+import { escritorioService, type Cargo } from '@/features/escritorio/services/escritorio.service';
+import { DropZone } from '@/components/drop-zone';
 import { useAuthStore } from '@/stores/auth-store';
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(new Error('read'));
+    r.readAsDataURL(file);
+  });
+}
 
 const rid = () => `x_${Math.round(Math.random() * 1e9)}`;
 const INPUT = 'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100';
@@ -69,7 +80,7 @@ export default function RhPage() {
           ))}
         </div>
 
-        {tab === 'membros' && <MembrosView team={team} pessoas={esc?.pessoas ?? {}} cargoById={cargoById} fichas={rh?.fichas ?? {}} canEdit={canEdit} patch={patch} />}
+        {tab === 'membros' && <MembrosView team={team} pessoas={esc?.pessoas ?? {}} cargos={esc?.cargos ?? []} cargoById={cargoById} fichas={rh?.fichas ?? {}} canEdit={canEdit} patch={patch} />}
         {tab === 'selecao' && (rh
           ? <ProcessoSeletivo rh={rh} canEdit={canEdit} patch={patch} saving={saveM.isPending} />
           : <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-400">O processo seletivo precisa da atualização do servidor (rode o deploy da API). Assim que subir, ele aparece aqui.</div>)}
@@ -79,17 +90,32 @@ export default function RhPage() {
 }
 
 // ─────────────────────────── Membros ───────────────────────────
-function MembrosView({ team, pessoas, cargoById, fichas, canEdit, patch }: { team: Member[]; pessoas: Record<string, any>; cargoById: Record<string, any>; fichas: Record<string, Ficha>; canEdit: boolean; patch: (mut: (r: Rh) => Partial<Rh>) => void }) {
+function MembrosView({ team, pessoas, cargos, cargoById, fichas, canEdit, patch }: { team: Member[]; pessoas: Record<string, any>; cargos: Cargo[]; cargoById: Record<string, any>; fichas: Record<string, Ficha>; canEdit: boolean; patch: (mut: (r: Rh) => Partial<Rh>) => void }) {
   const [fichaId, setFichaId] = useState<string | null>(null);
+  const [view, setView] = useState<'cards' | 'org'>('cards');
   const membro = team.find((m) => m.user.id === fichaId);
   return (
     <div className="mt-5">
-      <p className="mb-3 text-sm text-zinc-500">{team.length} {team.length === 1 ? 'pessoa' : 'pessoas'} no escritório · clique num colaborador para abrir a ficha completa.</p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-zinc-500">{team.length} {team.length === 1 ? 'pessoa' : 'pessoas'} no escritório · clique num colaborador para abrir a ficha completa.</p>
+        {/* Alternar entre cartões e organograma (hierarquia por cargo). */}
+        <div className="inline-flex shrink-0 rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
+          {([['cards', 'Cartões', LayoutGrid], ['org', 'Organograma', Network]] as const).map(([k, label, Icon]) => (
+            <button key={k} onClick={() => setView(k)} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition ${view === k ? 'bg-[#7048E8] text-white' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
+              <Icon className="h-3.5 w-3.5" /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === 'org' && <Organograma team={team} pessoas={pessoas} cargos={cargos} cargoById={cargoById} fichas={fichas} onOpen={setFichaId} />}
+
+      {view === 'cards' && (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {team.map((m) => {
           const info = pessoas[m.user.id] ?? {};
           const cargo = cargoById[info.cargoId ?? ''];
-          const foto = info.fotoUrl || m.user.avatarUrl;
+          const foto = m.user.avatarUrl || info.fotoUrl;
           const ficha = fichas[m.user.id] ?? {};
           return (
             <button key={m.user.id} onClick={() => setFichaId(m.user.id)} className="group rounded-2xl border border-zinc-200/80 bg-white p-4 text-left transition hover:-translate-y-px hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
@@ -115,7 +141,8 @@ function MembrosView({ team, pessoas, cargoById, fichas, canEdit, patch }: { tea
           );
         })}
       </div>
-      <p className="mt-4 text-xs text-zinc-400">Para adicionar ou remover membros, use <strong>Configurações › Membros</strong> (ou o botão em Meu Espaço).</p>
+      )}
+      <p className="mt-4 text-xs text-zinc-400">Para adicionar ou remover membros, use <strong>Configurações › Membros</strong> (ou o botão em Meu Espaço). As fotos aparecem no organograma, nos kanbans e onde mais o nome da pessoa aparecer.</p>
       {membro && (
         <FichaModal
           membro={membro}
@@ -131,14 +158,153 @@ function MembrosView({ team, pessoas, cargoById, fichas, canEdit, patch }: { tea
   );
 }
 
+// ─────────────────────────── Organograma (pessoas por cargo) ───────────────────────────
+// CSS de árvore top-down (conectores via pseudo-elementos) — igual ao de Meu Espaço.
+const ORG_CSS = `
+.rh-tree, .rh-tree ul { list-style:none; margin:0; padding:0; }
+.rh-tree ul { display:flex; justify-content:center; padding-top:24px; position:relative; }
+.rh-tree li { display:flex; flex-direction:column; align-items:center; position:relative; padding:24px 12px 0; }
+.rh-tree li::before, .rh-tree li::after { content:''; position:absolute; top:0; width:50%; height:24px; border-top:2px solid #cbd5e1; }
+.rh-tree li::before { right:50%; }
+.rh-tree li::after { left:50%; border-left:2px solid #cbd5e1; }
+.rh-tree li:only-child::before, .rh-tree li:only-child::after { display:none; }
+.rh-tree li:only-child { padding-top:0; }
+.rh-tree li:first-child::before, .rh-tree li:last-child::after { border:0 none; }
+.rh-tree li:last-child::before { border-right:2px solid #cbd5e1; border-radius:0 8px 0 0; }
+.rh-tree li:first-child::after { border-radius:8px 0 0 0; }
+.rh-tree li > ul::before { content:''; position:absolute; top:0; left:50%; width:0; height:24px; border-left:2px solid #cbd5e1; }
+`;
+
+function Organograma({ team, pessoas, cargos, cargoById, fichas, onOpen }: { team: Member[]; pessoas: Record<string, any>; cargos: Cargo[]; cargoById: Record<string, any>; fichas: Record<string, Ficha>; onOpen: (uid: string) => void }) {
+  // Pessoas agrupadas por cargo; quem não tem cargo (ou cargo removido) fica à parte.
+  const porCargo = useMemo(() => {
+    const map = new Map<string, Member[]>();
+    for (const m of team) {
+      const cid = pessoas[m.user.id]?.cargoId;
+      if (cid && cargoById[cid]) map.set(cid, [...(map.get(cid) ?? []), m]);
+    }
+    return map;
+  }, [team, pessoas, cargoById]);
+  const semCargo = useMemo(() => team.filter((m) => { const cid = pessoas[m.user.id]?.cargoId; return !cid || !cargoById[cid]; }), [team, pessoas, cargoById]);
+  const byId = useMemo(() => Object.fromEntries(cargos.map((c) => [c.id, c])), [cargos]);
+  const roots = useMemo(() => cargos.filter((c) => !c.parentId || !byId[c.parentId]), [cargos, byId]);
+
+  if (cargos.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+        Ainda não há cargos cadastrados. Monte a estrutura em <strong>Meu Espaço › Organograma</strong> e defina o cargo de cada pessoa — aqui ela aparece na hierarquia.
+        {semCargo.length > 0 && <SemCargo lista={semCargo} pessoas={pessoas} fichas={fichas} onOpen={onOpen} />}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <style>{ORG_CSS}</style>
+      <div className="overflow-auto rounded-2xl border border-zinc-100 bg-zinc-50/40 p-4 dark:border-zinc-800 dark:bg-zinc-950/40">
+        <div className="flex min-w-max flex-col items-center gap-8">
+          {roots.map((r) => (
+            <ul key={r.id} className="rh-tree">
+              <OrgNode cargo={r} cargos={cargos} porCargo={porCargo} pessoas={pessoas} fichas={fichas} onOpen={onOpen} />
+            </ul>
+          ))}
+        </div>
+      </div>
+      {semCargo.length > 0 && <SemCargo lista={semCargo} pessoas={pessoas} fichas={fichas} onOpen={onOpen} />}
+    </div>
+  );
+}
+
+function OrgNode({ cargo, cargos, porCargo, pessoas, fichas, onOpen }: { cargo: Cargo; cargos: Cargo[]; porCargo: Map<string, Member[]>; pessoas: Record<string, any>; fichas: Record<string, Ficha>; onOpen: (uid: string) => void }) {
+  const children = cargos.filter((c) => c.parentId === cargo.id);
+  const pessoasCargo = porCargo.get(cargo.id) ?? [];
+  return (
+    <li>
+      <div className="z-[1] w-52 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+        <p className="truncate text-center text-[13px] font-bold text-zinc-800 dark:text-zinc-100">{cargo.nome || 'Cargo'}</p>
+        {pessoasCargo.length === 0 ? (
+          <p className="mt-1.5 text-center text-[11px] text-zinc-300 dark:text-zinc-600">— vago —</p>
+        ) : (
+          <div className="mt-2 space-y-1">
+            {pessoasCargo.map((m) => {
+              const foto = m.user.avatarUrl || pessoas[m.user.id]?.fotoUrl;
+              const nDoc = fichas[m.user.id]?.documentos?.length ?? 0;
+              return (
+                <button key={m.user.id} onClick={() => onOpen(m.user.id)} title="Abrir ficha" className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left transition hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                  {foto ? <img src={foto} alt={m.user.name} className="h-7 w-7 shrink-0 rounded-full object-cover" /> : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7048E8] text-[10px] font-bold text-white">{ini(m.user.name)}</span>}
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">{m.user.name}</span>
+                  {nDoc > 0 && <FileText className="h-3 w-3 shrink-0 text-zinc-400" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {children.length > 0 && (
+        <ul>
+          {children.map((ch) => (
+            <OrgNode key={ch.id} cargo={ch} cargos={cargos} porCargo={porCargo} pessoas={pessoas} fichas={fichas} onOpen={onOpen} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function SemCargo({ lista, pessoas, fichas, onOpen }: { lista: Member[]; pessoas: Record<string, any>; fichas: Record<string, Ficha>; onOpen: (uid: string) => void }) {
+  return (
+    <div className="mt-4">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Sem cargo definido</p>
+      <div className="flex flex-wrap gap-2">
+        {lista.map((m) => {
+          const foto = m.user.avatarUrl || pessoas[m.user.id]?.fotoUrl;
+          return (
+            <button key={m.user.id} onClick={() => onOpen(m.user.id)} title="Abrir ficha" className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white py-1 pl-1 pr-3 transition hover:shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+              {foto ? <img src={foto} alt={m.user.name} className="h-6 w-6 shrink-0 rounded-full object-cover" /> : <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#7048E8] text-[9px] font-bold text-white">{ini(m.user.name)}</span>}
+              <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">{m.user.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Ficha completa de RH de um colaborador (dados sensíveis — só sócios).
 function FichaModal({ membro, info, cargo, ficha, canEdit, onClose, onSave }: { membro: Member; info: any; cargo?: any; ficha: Ficha; canEdit: boolean; onClose: () => void; onSave: (f: Ficha) => void }) {
   const [f, setF] = useState<Ficha>({ ...ficha, documentos: ficha.documentos ?? [] });
   const set = (p: Partial<Ficha>) => setF((x) => ({ ...x, ...p }));
-  const foto = info.fotoUrl || membro.user.avatarUrl;
+  const foto = membro.user.avatarUrl || info.fotoUrl;
   const addDoc = () => set({ documentos: [...(f.documentos ?? []), { id: rid(), nome: '', url: '' }] });
   const updDoc = (id: string, p: Partial<{ nome: string; url: string }>) => set({ documentos: (f.documentos ?? []).map((d) => (d.id === id ? { ...d, ...p } : d)) });
   const delDoc = (id: string) => set({ documentos: (f.documentos ?? []).filter((d) => d.id !== id) });
+
+  // Importa um documento (RG/CPF/CNH/comprovante/contrato) e a IA preenche a ficha.
+  const docRef = useRef<HTMLInputElement>(null);
+  const [imp, setImp] = useState(false);
+  const importarFicha = async (file?: File) => {
+    if (!file) return;
+    setImp(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const p = await rhService.extrairFicha({ base64, mime: file.type, nomeArquivo: file.name });
+      // Só preenche o que veio do documento; não apaga o que já estava.
+      set({
+        cpf: p.cpf || f.cpf,
+        rg: p.rg || f.rg,
+        nascimento: p.nascimento || f.nascimento,
+        estadoCivil: p.estadoCivil || f.estadoCivil,
+        endereco: p.endereco || f.endereco,
+        telefone: p.telefone || f.telefone,
+      });
+      toast.success('Dados preenchidos do documento — confira e salve.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui extrair os dados do documento.');
+    } finally {
+      setImp(false);
+      if (docRef.current) docRef.current.value = '';
+    }
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
@@ -155,6 +321,15 @@ function FichaModal({ membro, info, cargo, ficha, canEdit, onClose, onSave }: { 
               {info.oab && <p className="text-xs text-zinc-400">OAB {info.oab}</p>}
             </div>
           </div>
+          {canEdit && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#7048E8]/25 bg-[#7048E8]/5 p-3 dark:bg-[#7048E8]/10">
+              <p className="text-xs text-zinc-600 dark:text-zinc-300">Tem RG, CPF, CNH, comprovante ou contrato? <strong>Importe e a IA preenche</strong> telefone, CPF, RG, nascimento, estado civil e endereço.</p>
+              <input ref={docRef} type="file" accept=".pdf,.docx,image/*" className="hidden" onChange={(e) => importarFicha(e.target.files?.[0])} />
+              <DropZone accept=".pdf,.docx,image/*" multiple={false} disabled={imp} onFiles={(fs) => importarFicha(fs[0])} className="inline-block shrink-0" overlayLabel="Soltar documento">
+                <button type="button" onClick={() => docRef.current?.click()} disabled={imp} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-60">{imp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Importar de documento</button>
+              </DropZone>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div><p className={LABEL}>Telefone</p><input value={f.telefone ?? ''} onChange={(e) => set({ telefone: e.target.value })} disabled={!canEdit} placeholder="(44) 99999-9999" className={`${INPUT} mt-1`} /></div>
             <div><p className={LABEL}>Nascimento</p><input value={f.nascimento ?? ''} onChange={(e) => set({ nascimento: e.target.value })} disabled={!canEdit} placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /></div>

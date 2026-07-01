@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   Radio,
   Users,
@@ -22,6 +23,8 @@ import {
 // Menu lateral agrupado POR SETOR — Conta / Geral (organização) / Comercial
 // (atendimento) / Jurídico / Desenvolvedor. Cada item mora no setor a que
 // pertence no dia a dia; o que é do escritório inteiro fica em "Geral".
+// `adminOnly` esconde o grupo dos associados (AGENT). "Conta" é de todo mundo —
+// cada pessoa gerencia o próprio perfil (nome, foto, e-mail, senha).
 const groups = [
   {
     label: 'Conta',
@@ -31,6 +34,7 @@ const groups = [
   },
   {
     label: 'Geral',
+    adminOnly: true,
     items: [
       { href: '/settings/general', label: 'Escritório', icon: Building2 },
       { href: '/settings/members', label: 'Membros e acessos', icon: Users },
@@ -39,6 +43,7 @@ const groups = [
   },
   {
     label: 'Comercial',
+    adminOnly: true,
     items: [
       { href: '/settings/channels', label: 'Canais', icon: Radio },
       { href: '/settings/ai', label: 'IA', icon: Sparkles },
@@ -52,12 +57,14 @@ const groups = [
   },
   {
     label: 'Jurídico',
+    adminOnly: true,
     items: [
       { href: '/settings/juridico', label: 'Visão geral', icon: Scale },
     ],
   },
   {
     label: 'Desenvolvedor',
+    adminOnly: true,
     items: [
       { href: '/settings/api-keys', label: 'Credenciais API', icon: KeyRound },
     ],
@@ -66,6 +73,11 @@ const groups = [
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { organizations, activeOrgId } = useAuthStore();
+  const role = organizations.find((o) => o.id === activeOrgId)?.role;
+  const isAdmin = role === 'OWNER' || role === 'ADMIN';
+  // Associados (AGENT) só veem "Conta" (o próprio perfil); o resto é do escritório.
+  const visibleGroups = groups.filter((g) => isAdmin || !g.adminOnly);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -79,7 +91,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           {/* Menu lateral — estilo LíderHub */}
           <aside className="w-full shrink-0 md:w-52">
             <nav className="flex flex-col gap-6">
-              {groups.map((group) => (
+              {visibleGroups.map((group) => (
                 <div key={group.label}>
                   <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                     {group.label}

@@ -890,7 +890,7 @@ const FRASES_ORGULHO = [
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
 function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; proprio?: boolean; onEdit?: () => void }) {
   const sexo = info?.sexo;
-  const foto = info?.fotoUrl || avatarUrl;
+  const foto = avatarUrl || info?.fotoUrl;
   const r = fin && !fin.vazio ? fin.resumo : undefined;
   const proj = fin && !fin.vazio ? fin.projecaoCasos : undefined;
   const cs = fin && !fin.vazio ? fin.cs : undefined;

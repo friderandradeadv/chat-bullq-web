@@ -36,6 +36,9 @@ export interface Rh {
   restrito?: boolean;  // true = usuário não é sócio (sem acesso ao RH)
 }
 
+// Campos que a IA consegue preencher a partir de um documento cadastral.
+export type FichaExtraida = Pick<Ficha, 'cpf' | 'rg' | 'nascimento' | 'estadoCivil' | 'endereco' | 'telefone'> & { nome?: string };
+
 export const rhService = {
   async get(): Promise<Rh> {
     const { data } = await api.get('/organizations/rh');
@@ -43,6 +46,11 @@ export const rhService = {
   },
   async save(input: Partial<Rh>): Promise<Rh> {
     const { data } = await api.patch('/organizations/rh', input);
+    return data.data ?? data;
+  },
+  // Extrai dados cadastrais de um documento (PDF/imagem/Word) com IA.
+  async extrairFicha(input: { base64: string; mime: string; nomeArquivo: string }): Promise<FichaExtraida> {
+    const { data } = await api.post('/organizations/rh/extrair-ficha', input);
     return data.data ?? data;
   },
 };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   Settings,
@@ -66,6 +66,13 @@ import { cn } from '@/lib/utils';
 
 // ─── Collapsible section header ───────────────────────────────────────────────
 
+// Ponte pai→filhos: uma seção principal registra suas subabas e, ao minimizar,
+// recolhe (e persiste fechadas) todas as que ficaram abertas.
+type CollapseChild = () => void;
+const SectionCollapseContext = createContext<{
+  register: (fn: CollapseChild) => () => void;
+} | null>(null);
+
 function NavSection({
   label,
   defaultOpen = true,
@@ -91,17 +98,43 @@ function NavSection({
       /* localStorage indisponível — mantém o default */
     }
   }, [storageKey]);
-  const toggle = () =>
-    setOpen((p) => {
-      const next = !p;
-      try {
-        localStorage.setItem(storageKey, next ? '1' : '0');
-      } catch {
-        /* ignora */
-      }
-      return next;
-    });
-  return (
+
+  const setOpenPersist = (next: boolean) => {
+    setOpen(next);
+    try {
+      localStorage.setItem(storageKey, next ? '1' : '0');
+    } catch {
+      /* ignora */
+    }
+  };
+
+  // Registro das subabas-filhas (só usado quando esta é uma seção principal).
+  const childrenRegistry = useRef(new Set<CollapseChild>());
+  const ctxRef = useRef({
+    register: (fn: CollapseChild) => {
+      childrenRegistry.current.add(fn);
+      return () => childrenRegistry.current.delete(fn);
+    },
+  });
+  const parentCtx = useContext(SectionCollapseContext);
+
+  // Sub: registra-se no pai para ser recolhida quando o pai minimizar.
+  useEffect(() => {
+    if (variant !== 'sub' || !parentCtx) return;
+    return parentCtx.register(() => setOpenPersist(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant, parentCtx, storageKey]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpenPersist(next);
+    // Ao fechar uma seção principal, recolhe as subabas que ficaram abertas.
+    if (!next && variant === 'section') {
+      childrenRegistry.current.forEach((fn) => fn());
+    }
+  };
+
+  const body = (
     <div className="flex flex-col gap-0.5">
       <button
         onClick={toggle}
@@ -121,6 +154,12 @@ function NavSection({
       {open && <div className="flex flex-col gap-0.5">{children}</div>}
     </div>
   );
+
+  // Seção principal: expõe o registro para as subabas se auto-recolherem.
+  if (variant === 'section') {
+    return <SectionCollapseContext.Provider value={ctxRef.current}>{body}</SectionCollapseContext.Provider>;
+  }
+  return body;
 }
 
 // ─── Simple nav link ──────────────────────────────────────────────────────────
