@@ -18,6 +18,13 @@ import {
   Tag as TagIcon,
   FileText,
   CircleDollarSign,
+  Copy,
+  Eye,
+  EyeOff,
+  Fingerprint,
+  MapPin,
+  KeyRound,
+  IdCard,
 } from 'lucide-react';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
@@ -38,6 +45,14 @@ const STATUS_LABEL: Record<string, string> = {
 
 const norm = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+// Cadastro migrado do Pipefy (gravado em contact.metadata.cadastro). O tipo do
+// service só declara alguns campos; login/senha (gov.br/Meu INSS) vêm no runtime.
+type Cadastro = {
+  cpf?: string | null; cnpj?: string | null; rg?: string | null;
+  estadoCivil?: string | null; profissao?: string | null; endereco?: string | null;
+  login?: string | null; senha?: string | null;
+};
 
 export default function ClienteDetailPage() {
   const params = useParams<{ id: string }>();
@@ -68,6 +83,22 @@ export default function ClienteDetailPage() {
     const key = norm(cliente.name);
     return cases.filter((c) => c.parties.some((p) => norm(p.name) === key));
   }, [cases, cliente]);
+
+  // Cadastro migrado do Pipefy (CPF/RG/endereço/login/senha gov) vive na party do
+  // detalhe do caso — puxa o 1º processo do cliente e extrai a party CLIENT dele.
+  const repCaseId = meusCasos[0]?.id;
+  const { data: caseDetail } = useQuery({
+    queryKey: ['legal-case', repCaseId],
+    queryFn: () => legalCasesService.get(repCaseId!),
+    enabled: !!repCaseId,
+  });
+  const cadastro: Cadastro | null = useMemo(() => {
+    if (!caseDetail || !cliente) return null;
+    const key = norm(cliente.name);
+    const party = caseDetail.parties.find((p) => p.role === 'CLIENT' && norm(p.name) === key)
+      ?? caseDetail.parties.find((p) => p.role === 'CLIENT');
+    return (party?.contact?.metadata?.cadastro as Cadastro | undefined) ?? null;
+  }, [caseDetail, cliente]);
 
   if (!id) return null;
   if (isLoading)
@@ -129,6 +160,22 @@ export default function ClienteDetailPage() {
             )}
           </Card>
 
+          {/* Dados cadastrais migrados do Pipefy — CPF/senha copiáveis */}
+          {cadastro && (cadastro.cpf || cadastro.cnpj || cadastro.rg || cadastro.endereco || cadastro.login || cadastro.senha || cadastro.estadoCivil || cadastro.profissao) && (
+            <Card title="Dados cadastrais" icon={IdCard}>
+              <dl className="space-y-3 text-sm">
+                <DataRow icon={Fingerprint} label="CPF" value={cadastro.cpf} copyable />
+                <DataRow icon={IdCard} label="CNPJ" value={cadastro.cnpj} copyable />
+                <DataRow icon={IdCard} label="RG" value={cadastro.rg} copyable />
+                <DataRow icon={User} label="Estado civil" value={cadastro.estadoCivil} />
+                <DataRow icon={User} label="Profissão" value={cadastro.profissao} />
+                <DataRow icon={MapPin} label="Endereço" value={cadastro.endereco} copyable />
+                <DataRow icon={KeyRound} label="Login gov.br / Meu INSS" value={cadastro.login} copyable />
+                <DataRow icon={KeyRound} label="Senha gov.br / Meu INSS" value={cadastro.senha} copyable secret />
+              </dl>
+            </Card>
+          )}
+
           {/* Etiquetas interativas (iguais ao Comercial) */}
           <Card title="Etiquetas" icon={TagIcon}>
             {contact ? (
@@ -178,9 +225,9 @@ export default function ClienteDetailPage() {
             <ClienteFinanceiroCard nome={cliente.name} />
           </div>
 
-          {/* Pipefy: Fase 3 */}
+          {/* Pipefy: Fase 3 — falta o valor da causa por processo */}
           <div className="mt-5 rounded-lg border border-dashed border-[#DEE2E6] bg-white p-4 text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
-            Cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong> (cards, status do funil, valor da causa) — em breve.
+            Valor da causa por processo (cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong>) — em breve.
           </div>
         </div>
       </div>
@@ -362,6 +409,47 @@ function Row({ icon: Icon, label, value }: { icon?: React.ElementType; label: st
       <div>
         <dt className="text-xs text-zinc-400">{label}</dt>
         <dd className="text-zinc-700 dark:text-zinc-300">{value}</dd>
+      </div>
+    </div>
+  );
+}
+
+/** Botão de copiar com feedback de check. */
+function CopyBtn({ value }: { value: string }) {
+  const [ok, setOk] = useState(false);
+  return (
+    <button
+      type="button"
+      title="Copiar"
+      onClick={async () => {
+        try { await navigator.clipboard.writeText(value); setOk(true); setTimeout(() => setOk(false), 1200); } catch { /* clipboard bloqueado */ }
+      }}
+      className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"
+    >
+      {ok ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
+
+/** Linha de dado cadastral com copiar e, p/ senha, mostrar/ocultar. */
+function DataRow({ icon: Icon, label, value, copyable, secret }: { icon?: React.ElementType; label: string; value?: string | null; copyable?: boolean; secret?: boolean }) {
+  const [show, setShow] = useState(false);
+  if (!value) return null;
+  const masked = secret && !show ? '•'.repeat(Math.min(value.length, 12)) : value;
+  return (
+    <div className="flex items-start gap-2">
+      {Icon && <Icon className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />}
+      <div className="min-w-0 flex-1">
+        <dt className="text-xs text-zinc-400">{label}</dt>
+        <dd className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
+          <span className="min-w-0 break-all">{masked}</span>
+          {secret && (
+            <button type="button" onClick={() => setShow((v) => !v)} title={show ? 'Ocultar' : 'Mostrar'} className="shrink-0 rounded p-1 text-zinc-400 hover:text-[#228BE6]">
+              {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          {copyable && <CopyBtn value={value} />}
+        </dd>
       </div>
     </div>
   );
