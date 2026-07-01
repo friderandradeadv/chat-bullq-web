@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BarChart3, FolderOpen, CalendarDays, Mail, Scale, ChevronRight, UserCog } from 'lucide-react';
+import { BarChart3, FolderOpen, CalendarDays, Mail, Scale, ChevronRight, UserCog, Columns3 } from 'lucide-react';
 import { membersService } from '@/features/settings/services/members.service';
 import { areaAssignmentService, LEGAL_AREAS, type AreaAssignment } from '@/features/settings/services/area-assignment.service';
 
@@ -41,6 +41,13 @@ const AREAS = [
     title: 'Publicações',
     desc: 'Publicações do Diário (DJEN), classificação e vínculo ao processo.',
     accent: '#d97706',
+  },
+  {
+    href: '/settings/juridico/fases',
+    icon: Columns3,
+    title: 'Fases dos Kanbans',
+    desc: 'Renomear, reordenar, esconder e criar fases dos kanbans (sócios).',
+    accent: '#228BE6',
   },
 ];
 

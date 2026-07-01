@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock } from 'lucide-react';
 import { toast } from 'sonner';
-import { legalCasesService, type KanbanCard } from '@/features/legal-cases/services/legal-cases.service';
+import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
@@ -44,6 +44,8 @@ export interface AdminBoardProps {
   emptyHint?: string;
   /** colunas fixas por FASE (ex.: as 8 fases do pipe bancário). Sem isto, agrupa por produto. */
   columns?: { key: string; label: string }[];
+  /** colunas derivadas das fases do endpoint (respeita rename/ordem/esconder/custom das Configurações). */
+  columnsFromPhases?: (p: KanbanPhase) => boolean;
 }
 
 /**
@@ -51,7 +53,7 @@ export interface AdminBoardProps {
  * os cards do kanban jurídico, filtra pela trilha e agrupa por PRODUTO em colunas.
  * Cards clicáveis abrem a ficha (sem drag — a trilha não é uma fase movível).
  */
-export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs }: AdminBoardProps) {
+export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases }: AdminBoardProps) {
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const dragScroll = useDragScroll();
@@ -74,6 +76,12 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   }, [data, search, filter, preKeys]);
 
   const columns = useMemo(() => {
+    // Colunas derivadas das fases do endpoint (respeita Configurações › Fases).
+    if (columnsFromPhases) {
+      const phs = (data?.phases ?? []).filter(columnsFromPhases).sort((a, b) => a.order - b.order);
+      if (phs.length) return phs.map((p) => ({ nome: p.label, cards: filtered.filter((c) => c.phase === p.key) }));
+      // fallback (API ainda sem as fases): usa as colunas estáticas se houver.
+    }
     // Colunas fixas por FASE (pipe fiel): mantém a ordem e mostra até as vazias.
     if (colDefs) return colDefs.map((cd) => ({ nome: cd.label, cards: filtered.filter((c) => c.phase === cd.key) }));
     // Senão, agrupa por produto (INSS, bancária por área).
@@ -83,7 +91,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
       (map.get(k) ?? map.set(k, []).get(k)!).push(c);
     }
     return Array.from(map, ([nome, cards]) => ({ nome, cards })).sort((a, b) => b.cards.length - a.cards.length);
-  }, [filtered, colDefs]);
+  }, [filtered, colDefs, columnsFromPhases, data]);
 
   return (
     <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200">
@@ -106,7 +114,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
 
       {isLoading ? (
         <p className="px-6 py-6 text-sm text-zinc-400">Carregando…</p>
-      ) : !colDefs && filtered.length === 0 ? (
+      ) : !colDefs && !columnsFromPhases && filtered.length === 0 ? (
         <div className="px-6 py-10">
           <div className="rounded-2xl border border-amber-300/50 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
             {emptyHint ?? 'Nenhum card nesta trilha ainda.'}

@@ -179,7 +179,18 @@ export interface KanbanPhase {
   slaDias: number;
   fluxo: boolean;
   lane: 'pre' | 'judicial';
+  custom?: boolean;
   count: number;
+}
+
+// Personalização de fases (org.settings.kanbanPhases).
+export interface PhaseCustom { key: string; label: string; lane: 'pre' | 'judicial'; status?: string; slaDias?: number }
+export interface PhaseConfig { labels?: Record<string, string>; order?: Record<string, number>; hidden?: string[]; custom?: PhaseCustom[] }
+export interface PhaseDefault { key: string; label: string; order: number; lane: 'pre' | 'judicial'; status: string }
+export interface PhaseConfigResponse {
+  defaults: PhaseDefault[];
+  config: PhaseConfig;
+  resolved: { key: string; label: string; lane: 'pre' | 'judicial'; order: number; custom: boolean }[];
 }
 export interface KanbanCard {
   id: string;
@@ -358,6 +369,15 @@ export const legalCasesService = {
   // Renomeia uma fase do kanban (só OWNER — o backend valida o papel).
   async renamePhaseLabel(key: string, label: string): Promise<{ key: string; label: string }> {
     const { data } = await api.patch(`/legal-cases/phases/${key}/label`, { label });
+    return data.data ?? data;
+  },
+  // Personalização de fases (renomear/reordenar/esconder/adicionar).
+  async getPhaseConfig(): Promise<PhaseConfigResponse> {
+    const { data } = await api.get('/legal-cases/phases/config');
+    return data.data ?? data;
+  },
+  async savePhaseConfig(config: PhaseConfig): Promise<PhaseConfigResponse> {
+    const { data } = await api.patch('/legal-cases/phases/config', config);
     return data.data ?? data;
   },
   async get(id: string): Promise<CaseDetail> {
