@@ -1505,6 +1505,26 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
           </CsTabela>
         </Card>
       )}
+
+      {data.verticalPnL && data.verticalPnL.verticais.length > 0 && (
+        <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-[#15AABF]" /> Custo real por vertical</span>}
+          sub={`entradas × saídas com a estrutura compartilhada do escritório (${brl(data.verticalPnL.overheadTotal)}) rateada por nº de casos — mostra se cada área se paga.`}>
+          <CsTabela cols={['Área', 'Casos', 'Entradas', 'Diretas', 'Estrutura', 'Resultado', 'A caminho']} w0="22%">
+            {data.verticalPnL.verticais.map((v) => (
+              <tr key={v.area} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span></td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{v.nCasos}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{v.entradas ? brl2(v.entradas) : '—'}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-rose-500">{v.diretas ? brl2(v.diretas) : '—'}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-rose-400">{v.overhead ? brl2(v.overhead) : '—'}</td>
+                <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${v.resultado >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>{brl2(v.resultado)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-violet-600">{v.projetado ? brl2(v.projetado) : '—'}</td>
+              </tr>
+            ))}
+          </CsTabela>
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">Estrutura = aluguel, contador, OAB, suprimentos e demais custos compartilhados, rateados por nº de casos ativos. Custos diretos = honorário repassado ao cliente da área + pró-labore do advogado da vertical. Resultado negativo = a área ainda investe mais do que recebe (ex.: previdenciário de gratuidade, com retorno futuro em <strong>A caminho</strong>).</p>
+        </Card>
+      )}
     </>
   );
 }

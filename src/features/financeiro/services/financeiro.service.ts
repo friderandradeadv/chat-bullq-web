@@ -89,8 +89,14 @@ export interface FinDashboard {
   projecaoCasos?: { pctExito: number; escritorioPadrao: number; fatorRealizacao: number; isSocio?: boolean; brutoEmProcesso: number; condenacaoEstimada: number; escritorioEmProcesso: number; liquidoProvavel: number; nComValor: number; nEstimados?: number; estimado?: boolean; divisao?: { quem: string; eu: boolean; escritorio: boolean; valor: number; pct: number }[] };
   cs?: { prestacao: number; cumprimento: number; cumprimentoNosso?: number; itens: { caseId: string; cliente: string; tipo: string; valor: number; nosso?: number }[] };
   crescimento?: FinCrescimento;
+  verticalPnL?: FinVerticalPnL;                 // P&L por vertical (admin/full)
+  resultadoVertical?: VerticalPnL | null;       // P&L da vertical do advogado (visão limitada)
+  minhaArea?: string | null;
+  overheadCriterio?: string;
 }
 
+export interface VerticalPnL { area: string; nCasos: number; entradas: number; diretas: number; overhead: number; saidas: number; resultado: number; projetado: number; margem: number | null }
+export interface FinVerticalPnL { verticais: VerticalPnL[]; overheadTotal: number; nCasosTotal: number; criterio: string }
 export interface FinVerticalArea { area: string; receita: number; despesa: number; resultado: number }
 export interface FinCrescimento {
   carteira: { brutoCausas: number; condenacaoEstimada: number; honorariosEscritorio: number; nComValor: number; nCasos: number; porArea: { area: string; valor: number }[] };

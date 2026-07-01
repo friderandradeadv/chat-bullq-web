@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   ArrowUpCircle, ArrowDownCircle, Sparkles, Search, HeartHandshake, Flame, Calendar, Gavel, ExternalLink, UserCircle2,
-  TrendingUp, Target, ChevronRight,
+  TrendingUp, Target, ChevronRight, Scale,
 } from 'lucide-react';
 import { type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
 import { mesKey, mesLabel, mesCurtoKey } from '@/features/financeiro/lib/clientes';
@@ -258,6 +258,22 @@ export function MeuFinanceiroConteudo({ data }: { data: FinDashboard }) {
               ))}
             </div>
             <p className="mt-3 text-[11px] text-zinc-400">Projeção da carteira, não caixa realizado. Em previdenciário o retorno chega quando o benefício é concedido (sucumbência/destaque) — por isso o valor mora no futuro que você está construindo.</p>
+          </Card>
+        )}
+
+        {/* ── CUSTO DA SUA VERTICAL — entradas × saídas, overhead rateado por casos ── */}
+        {data.resultadoVertical && (
+          <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-[#15AABF]" /> Custo da sua vertical{data.minhaArea ? ` · ${data.minhaArea}` : ''}</span>}
+            sub={`quanto a sua área rende e custa hoje — a estrutura compartilhada do escritório entra rateada por nº de casos (${data.resultadoVertical.nCasos} da sua vertical).`}>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Entradas</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl(data.resultadoVertical.entradas)}</p><p className="text-[11px] text-zinc-400">honorários recebidos</p></div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3 dark:border-rose-900/40 dark:bg-rose-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Saídas</p><p className="mt-0.5 text-xl font-bold tabular-nums text-rose-600">{brl(data.resultadoVertical.saidas)}</p><p className="text-[11px] text-zinc-400">diretas {brl(data.resultadoVertical.diretas)} + estrutura {brl(data.resultadoVertical.overhead)}</p></div>
+              <div className={`rounded-xl border p-3 ${data.resultadoVertical.resultado >= 0 ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-900/10' : 'border-amber-200 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-900/10'}`}><p className="text-[11px] uppercase tracking-wide text-zinc-400">Resultado hoje</p><p className={`mt-0.5 text-xl font-bold tabular-nums ${data.resultadoVertical.resultado >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>{brl(data.resultadoVertical.resultado)}</p><p className="text-[11px] text-zinc-400">{data.resultadoVertical.resultado >= 0 ? 'a vertical se paga' : 'ainda em investimento'}</p></div>
+              <div className="rounded-xl border border-violet-300 bg-violet-50/60 p-3 dark:border-violet-900/50 dark:bg-violet-900/15"><p className="text-[11px] uppercase tracking-wide text-zinc-400">A caminho (carteira)</p><p className="mt-0.5 text-xl font-bold tabular-nums text-[#7048E8]">{brl(data.resultadoVertical.projetado)}</p><p className="text-[11px] text-zinc-400">honorários prováveis da área</p></div>
+            </div>
+            <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">{data.resultadoVertical.resultado < 0
+              ? <>Hoje a vertical <strong>investe mais do que recebe</strong> — natural em previdenciário de gratuidade: o retorno chega quando os benefícios são concedidos (sucumbência/destaque). Há <strong className="text-[#7048E8]">{brl(data.resultadoVertical.projetado)}</strong> em honorários prováveis a caminho.</>
+              : <>A vertical já <strong>se paga</strong>: as entradas cobrem os custos diretos e a fatia da estrutura do escritório.</>}</p>
           </Card>
         )}
 
