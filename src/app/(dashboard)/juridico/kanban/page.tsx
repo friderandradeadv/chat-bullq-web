@@ -462,7 +462,7 @@ function Card({
             {cleanProduto(c.produto)}
           </span>
         )}
-        {c.areaJuridica && (
+        {c.areaJuridica && (cleanProduto(c.produto) ?? '').toLowerCase().trim() !== c.areaJuridica.toLowerCase().trim() && (
           <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>
             {c.areaJuridica}
           </span>
