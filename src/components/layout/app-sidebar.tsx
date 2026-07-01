@@ -37,6 +37,7 @@ import {
   Users,
   BarChart3,
   Landmark,
+  Stethoscope,
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -244,6 +245,7 @@ export function AppSidebar() {
                 <NavSection label="Kanbans" variant="sub" defaultOpen={false}>
                   <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
                   <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
+                  <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
                   <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
                 </NavSection>
               </div>
