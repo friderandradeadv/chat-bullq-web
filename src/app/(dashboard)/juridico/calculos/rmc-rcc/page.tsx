@@ -1095,13 +1095,16 @@ export default function CalculadoraRmcPage() {
                               cenarioTitulo: cenarioView.titulo,
                               total: cenarioView.resumo.total,
                               resumo: cenarioView.resumo,
+                              metodoLabel: METODO_LABEL[cenarioView.id],
+                              // Linhas da evolução do saldo devedor → memorial DETALHADO nos anexos.
+                              linhas: cenarioView.linhas,
                               config: {
+                                ...(res?.config ?? {}),
                                 banco: form.banco,
                                 tipo: form.tipo,
-                                valorEmprestimo: parseValor(form.valorEmprestimo),
-                                indiceCorrecao: form.indiceCorrecao,
-                                dataBase: form.dataBase,
-                                taxaConversao: parseValor(form.taxaConversao),
+                                numeroContrato: form.numeroContrato,
+                                dataContratacao: form.dataContratacao,
+                                nomeCalculo: form.nomeCalculo,
                               },
                             });
                             // Avisa a aba do card (BroadcastChannel) p/ ele recarregar

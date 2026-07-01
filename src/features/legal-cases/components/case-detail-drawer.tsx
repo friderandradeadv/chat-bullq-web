@@ -45,6 +45,11 @@ const fmtSize = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math
 // Fases da raia pré-judicial e detecção de produto bancário (RMC/RCC) — gate da
 // seção "Contratos a impugnar".
 const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
+// INTAKE (novos clientes → doc. faltantes): importar HISCON, listar bancos réus e
+// DESMEMBRAR em 1 card por banco. MONTAR (montar inicial em diante): cálculo +
+// gerar a petição. São etapas diferentes — a inicial só se faz no card certo.
+const INTAKE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes']);
+const MONTAR_PHASES = new Set(['montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo']);
 // Cor da etiqueta por produto (igual ao card do kanban).
 const produtoColor = (p: string | null): { bg: string; fg: string } => {
   const s = (cleanArea(p) ?? '').toUpperCase();
@@ -124,6 +129,9 @@ export function CaseDetailDrawer({
   const phaseKey = (c as any)?.legalPhase as string | undefined;
   const fase = phases.find((p) => p.key === phaseKey);
   const faseData = (c?.metadata as any)?.faseData?.[phaseKey ?? ''] ?? {};
+  const isFilhote = !!(c?.metadata as any)?.desmembradoDe;
+  const inIntake = phaseKey ? INTAKE_PHASES.has(phaseKey) : false;
+  const inMontar = phaseKey ? MONTAR_PHASES.has(phaseKey) : false;
   const showJuizo = pf.juizo && String(pf.juizo).trim().toLowerCase() !== String(c?.court ?? '').trim().toLowerCase();
 
   const onMove = async (phase: string) => {
@@ -250,22 +258,43 @@ export function CaseDetailDrawer({
                 {/* Parte adversa (editável) */}
                 <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
 
-                {/* Contratos a impugnar + gerar iniciais (intake pré-judicial). Disponível
-                    em TODA fase pré (HISCON/HISCRE são opcionais) — não fica escondido só
-                    porque o card veio com etiqueta genérica/sem produto. */}
+                {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
+                    doc. faltantes) mostra o desmembramento em cards por banco réu; nas
+                    fases de MONTAR fica só como lista de referência que alimenta a inicial. */}
                 {phaseKey && PRE_PHASES.has(phaseKey) && (
                   <ContratosImpugnar
                     caseId={c.id}
                     phaseKey={phaseKey}
                     initial={((c.metadata as any)?.contratos ?? []) as any[]}
                     docs={(c.metadata as any)?.docs}
+                    showDesmembrar={inIntake && !isFilhote}
                     onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
+                    onDesmembrado={() => { qc.invalidateQueries({ queryKey: ['legal-cases'] }); onClose(); }}
                   />
                 )}
 
-                {/* Cálculo RMC/RCC: abre a calculadora nativa pré-preenchida (HISCON/
-                    HISCRE → conversão + restituição) e salva o total como valor da causa. */}
-                {phaseKey && PRE_PHASES.has(phaseKey) && (
+                {/* Direcionar ESTE card (útil p/ um filhote ou p/ um card de banco único):
+                    atalho rápido p/ Documentos faltantes ou Montar inicial. */}
+                {inIntake && (
+                  <div className="mt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Direcionar este card</p>
+                    <div className="mt-1.5 flex gap-1.5">
+                      <button onClick={() => onMove('info_faltantes')} disabled={phaseKey === 'info_faltantes'}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-400 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40 dark:text-amber-400 dark:hover:bg-amber-900/20">
+                        <ArrowRight className="h-3.5 w-3.5" /> Documentos faltantes
+                      </button>
+                      <button onClick={() => onMove('montar_inicial')}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#005efc] px-3 py-2 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5">
+                        <ArrowRight className="h-3.5 w-3.5" /> Montar inicial
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cálculo RMC/RCC + gerar inicial: SÓ na fase Montar inicial em diante
+                    (com o card certo — polo passivo/produto). Na fase de intake essa etapa
+                    não aparece: primeiro cria-se os cards dos bancos réus. */}
+                {inMontar && (
                   <div className="mt-4">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cálculo RMC/RCC</p>
@@ -316,16 +345,7 @@ export function CaseDetailDrawer({
               : <ul className="space-y-2">{c.publications.map((p) => <PubItem key={p.id} p={p} />)}</ul>
             )}
             {c && tab === 'anexos' && (
-              c.documents.length === 0 ? <Empty t="Nenhum anexo" />
-              : <ul className="space-y-2">{c.documents.map((d) => (
-                  <li key={d.id} className="flex items-center gap-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
-                    <Paperclip className="h-4 w-4 shrink-0 text-[#48626f]" />
-                    {d.url
-                      ? <a href={d.url} target="_blank" rel="noreferrer" download={d.name} className="flex-1 truncate text-sm font-medium text-[#005efc] hover:underline">{d.name}</a>
-                      : <span className="flex-1 truncate text-sm text-black dark:text-zinc-100">{d.name}</span>}
-                    <span className="shrink-0 text-xs text-zinc-400">{fmtSize(d.sizeBytes)}</span>
-                  </li>
-                ))}</ul>
+              <AnexosTab caseId={c.id} documents={c.documents} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
             )}
           </div>
         </div>
@@ -542,6 +562,51 @@ function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa
   );
 }
 
+// Aba Anexos: lista os documentos do card (baixáveis), permite APAGAR cada um
+// (soft-delete) e SUBIR todos para a pasta do cliente no Google Drive.
+function AnexosTab({ caseId, documents, onChanged }: { caseId: string; documents: CaseDetail['documents']; onChanged: () => void }) {
+  const [drive, setDrive] = useState(false);
+  const [del, setDel] = useState<string | null>(null);
+
+  const subirDrive = async () => {
+    setDrive(true);
+    try {
+      const r = await legalCasesService.uploadDocsToDrive(caseId);
+      toast.success(`${r.uploaded} anexo(s) enviados para o Drive do cliente.`);
+      if (r.webViewLink) window.open(r.webViewLink, '_blank');
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao subir para o Drive'); } finally { setDrive(false); }
+  };
+  const apagar = async (docId: string, name: string) => {
+    if (!confirm(`Apagar o anexo "${name}"? Ele some da lista (o histórico é preservado).`)) return;
+    setDel(docId);
+    try { await legalCasesService.removeDocument(caseId, docId); toast.success('Anexo removido'); onChanged(); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao remover'); } finally { setDel(null); }
+  };
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-end">
+        <button onClick={subirDrive} disabled={drive || documents.length === 0}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 dark:text-emerald-400 dark:hover:bg-emerald-900/20">
+          <Upload className="h-3.5 w-3.5" /> {drive ? 'Enviando…' : 'Subir para o Drive do cliente'}
+        </button>
+      </div>
+      {documents.length === 0 ? <Empty t="Nenhum anexo" />
+        : <ul className="space-y-2">{documents.map((d) => (
+            <li key={d.id} className="flex items-center gap-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
+              <Paperclip className="h-4 w-4 shrink-0 text-[#48626f]" />
+              {d.url
+                ? <a href={d.url} target="_blank" rel="noreferrer" download={d.name} className="flex-1 truncate text-sm font-medium text-[#005efc] hover:underline">{d.name}</a>
+                : <span className="flex-1 truncate text-sm text-black dark:text-zinc-100">{d.name}</span>}
+              <span className="shrink-0 text-xs text-zinc-400">{fmtSize(d.sizeBytes)}</span>
+              <button onClick={() => apagar(d.id, d.name)} disabled={del === d.id} title="Apagar anexo"
+                className="shrink-0 rounded p-1 text-zinc-400 hover:text-rose-500 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /></button>
+            </li>
+          ))}</ul>}
+    </div>
+  );
+}
+
 // Contratos a impugnar (intake pré-judicial bancário): cada linha = banco × produto
 // × valor. "Sugerir com IA" lê a conversa; "Gerar iniciais" desmembra em 1 card por
 // linha (na fase Montar inicial) e arquiva o intake.
@@ -559,7 +624,7 @@ const parseValorBR = (s: string): number | null => {
   return isFinite(v) ? v : null;
 };
 
-function ContratosImpugnar({ caseId, phaseKey, initial, docs, onChanged }: { caseId: string; phaseKey: string | undefined; initial: any[]; docs?: { hiscon?: string; hiscre?: string; jg?: string }; onChanged: () => void }) {
+function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, onChanged, onDesmembrado }: { caseId: string; phaseKey: string | undefined; initial: any[]; docs?: { hiscon?: string; hiscre?: string; jg?: string }; showDesmembrar?: boolean; onChanged: () => void; onDesmembrado?: () => void }) {
   const [rows, setRows] = useState<CRow[]>(() =>
     (initial ?? []).map((c: any) => ({ id: c.id || rowId(), reu: c.reu ?? '', produto: c.produto ?? 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })),
   );
@@ -567,6 +632,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, onChanged }: { cas
   const [sav, setSav] = useState(false);
   const [hiscon, setHiscon] = useState(false);
   const [hiscre, setHiscre] = useState(false);
+  const [desm, setDesm] = useState<string | null>(null);
 
   const setRow = (id: string, patch: Partial<CRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const addRow = () => setRows((r) => [...r, { id: rowId(), reu: '', produto: 'RMC', valor: '' }]);
@@ -592,6 +658,21 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, onChanged }: { cas
     setSav(true);
     try { await legalCasesService.saveContratos(caseId, payload()); toast.success('Contratos salvos'); onChanged(); }
     catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao salvar'); } finally { setSav(false); }
+  };
+  // Desmembra: cria 1 card por banco réu na fase-destino escolhida (Documentos
+  // faltantes ou Montar inicial) e arquiva este card de intake.
+  const desmembrar = async (destino: 'info_faltantes' | 'montar_inicial') => {
+    const banks = payload();
+    if (!banks.length) { toast.error('Liste ao menos um banco réu (ou upe o HISCON) antes de criar os cards.'); return; }
+    const destLabel = destino === 'info_faltantes' ? 'Documentos faltantes' : 'Montar inicial';
+    if (!confirm(`Criar ${banks.length} card(s) — 1 por banco réu — na fase "${destLabel}"?\nEste card de intake será arquivado.`)) return;
+    setDesm(destino);
+    try {
+      await legalCasesService.saveContratos(caseId, banks); // garante a lista persistida
+      const r = await legalCasesService.gerarIniciais(caseId, destino);
+      toast.success(`${r.criados} card(s) criado(s) → ${destLabel}.`);
+      onDesmembrado?.();
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao criar os cards'); } finally { setDesm(null); }
   };
   const sugerir = async () => {
     setSug(true);
@@ -672,8 +753,27 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, onChanged }: { cas
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button onClick={addRow} className="inline-flex items-center gap-1 rounded border border-dashed border-[#cfe0ed] px-2.5 py-1 text-xs font-medium text-[#005efc] hover:bg-[#005efc]/5 dark:border-zinc-700"><Plus className="h-3.5 w-3.5" /> Adicionar</button>
         <button onClick={salvar} disabled={sav} className="rounded px-2.5 py-1 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">{sav ? 'Salvando…' : 'Salvar'}</button>
-        <span className="ml-auto text-[11px] text-zinc-400">A petição inicial é gerada no bloco “Cálculo RMC/RCC” abaixo.</span>
+        {!showDesmembrar && <span className="ml-auto text-[11px] text-zinc-400">A petição inicial é gerada no bloco “Cálculo RMC/RCC”.</span>}
       </div>
+
+      {/* Intake: criar 1 card por banco réu e direcioná-los. Só depois, no card
+          certo (polo passivo correto), é que se faz a inicial. */}
+      {showDesmembrar && (
+        <div className="mt-3 rounded-lg border border-dashed border-[#cfe0ed] bg-[#f8fbff] p-3 dark:border-zinc-700 dark:bg-zinc-900/40">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Criar cards dos bancos réus →</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Desmembra a lista acima em 1 card por banco. Escolha para onde vão os filhotes:</p>
+          <div className="mt-2 flex gap-1.5">
+            <button onClick={() => desmembrar('info_faltantes')} disabled={!!desm}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-400 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-400 dark:hover:bg-amber-900/20">
+              <ArrowRight className="h-3.5 w-3.5" /> {desm === 'info_faltantes' ? 'Criando…' : 'Documentos faltantes'}
+            </button>
+            <button onClick={() => desmembrar('montar_inicial')} disabled={!!desm}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#005efc] px-3 py-2 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">
+              <ArrowRight className="h-3.5 w-3.5" /> {desm === 'montar_inicial' ? 'Criando…' : 'Montar inicial'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

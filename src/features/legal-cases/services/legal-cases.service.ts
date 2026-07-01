@@ -423,10 +423,12 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/contratos/hiscre`, { pdfBase64 });
     return data.data ?? data;
   },
+  /** Desmembra o intake em N cards (1 por banco réu) → fase-destino escolhida. */
   async gerarIniciais(
     id: string,
+    destino?: 'info_faltantes' | 'montar_inicial',
   ): Promise<{ ok: boolean; criados: number; filhos: { id: string; title: string; reu: string; produto: string }[] }> {
-    const { data } = await api.post(`/legal-cases/${id}/gerar-iniciais`);
+    const { data } = await api.post(`/legal-cases/${id}/gerar-iniciais`, destino ? { destino } : {});
     return data.data ?? data;
   },
   /** Upload do JG (PDF base64) → IA extrai líquido/anual para a justiça gratuita. */
@@ -451,10 +453,22 @@ export const legalCasesService = {
       total: number;
       resumo?: Record<string, any>;
       config?: Record<string, any>;
+      metodoLabel?: string;
+      linhas?: any[];
       definirValorCausa?: boolean;
     },
   ): Promise<{ ok: boolean; calculo: any }> {
     const { data } = await api.post(`/legal-cases/${id}/calculo`, payload);
+    return data.data ?? data;
+  },
+  /** Remove (soft-delete) um anexo do card. */
+  async removeDocument(id: string, docId: string): Promise<{ ok: boolean }> {
+    const { data } = await api.delete(`/legal-cases/${id}/documents/${docId}`);
+    return data.data ?? data;
+  },
+  /** Sobe os anexos do card para a pasta do cliente no Google Drive. */
+  async uploadDocsToDrive(id: string): Promise<{ ok: boolean; uploaded: number; webViewLink: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/drive/upload`);
     return data.data ?? data;
   },
 };
