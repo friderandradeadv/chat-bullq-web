@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { FileText, Loader2, Sparkles, Upload, X } from 'lucide-react';
+import { FileText, Loader2, Sparkles, Upload, X, File as FileIcon } from 'lucide-react';
 import { legalCasesService } from '../services/legal-cases.service';
 import { DropZone } from '@/components/drop-zone';
 
@@ -61,28 +61,42 @@ export function GerarPecaDialog({
   onGenerated?: () => void;
 }) {
   const meta = META[tipo];
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [produto, setProduto] = useState<string | null>(null);
   const [instrucoes, setInstrucoes] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const addFiles = (fs: File[]) => {
+    if (!fs.length) return;
+    setFiles((prev) => {
+      const chave = (f: File) => `${f.name}:${f.size}`;
+      const vistos = new Set(prev.map(chave));
+      return [...prev, ...fs.filter((f) => !vistos.has(chave(f)))];
+    });
+  };
+  const removeFile = (i: number) => setFiles((prev) => prev.filter((_, j) => j !== i));
+
   const gerar = async () => {
     setBusy(true);
     try {
-      let docBase64: string | undefined;
-      if (file) {
-        docBase64 = await new Promise<string>((res, rej) => {
-          const fr = new FileReader();
-          fr.onload = () => res(String(fr.result));
-          fr.onerror = () => rej(new Error('falha ao ler o arquivo'));
-          fr.readAsDataURL(file);
-        });
-      }
+      const b64s = await Promise.all(
+        files.map(
+          (f) =>
+            new Promise<string>((res, rej) => {
+              const fr = new FileReader();
+              fr.onload = () => res(String(fr.result));
+              fr.onerror = () => rej(new Error('falha ao ler o arquivo'));
+              fr.readAsDataURL(f);
+            }),
+        ),
+      );
       const r = await legalCasesService.gerarPeca(caseId, {
         tipo,
         produto: produto || undefined,
-        docBase64,
-        docNome: file?.name,
+        docBase64: b64s[0],
+        docNome: files[0]?.name,
+        docsBase64: b64s.slice(1),
+        docsNomes: files.slice(1).map((f) => f.name),
         instrucoes: instrucoes.trim() || undefined,
       });
       baixarDocx(r.docxBase64, r.fileName);
@@ -115,31 +129,47 @@ export function GerarPecaDialog({
           </button>
         </div>
 
-        {/* Upload do documento-base */}
+        {/* Upload dos documentos-base (um ou vários) */}
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#48626f] dark:text-zinc-400">
-          Documento-base — suba {meta.doc}
+          Documentos-base — suba {meta.doc}{' '}
+          <span className="font-normal normal-case text-zinc-400">(pode subir mais de um)</span>
         </p>
         <DropZone
           accept="application/pdf,.pdf"
-          multiple={false}
+          multiple
           disabled={busy}
-          onFiles={(fs) => setFile(fs[0] ?? null)}
-          overlayLabel={`Soltar ${meta.doc}`}
-          className="mb-3 block"
+          onFiles={(fs) => addFiles(fs)}
+          overlayLabel={`Soltar os documentos`}
+          className="block"
         >
-          <label className={`flex cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm ${file ? 'border-emerald-400 text-emerald-700 dark:text-emerald-400' : 'border-[#cfe0ed] text-[#005efc] dark:border-zinc-700'} ${busy ? 'opacity-50' : 'hover:bg-[#005efc]/5'}`}>
+          <label className={`flex cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm ${files.length ? 'border-emerald-400 text-emerald-700 dark:text-emerald-400' : 'border-[#cfe0ed] text-[#005efc] dark:border-zinc-700'} ${busy ? 'opacity-50' : 'hover:bg-[#005efc]/5'}`}>
             <Upload className="h-4 w-4 shrink-0" />
-            <span className="truncate">{file ? file.name : `Clique ou arraste o PDF de ${meta.doc}`}</span>
+            <span className="truncate">{files.length ? `Adicionar mais PDFs (${files.length} anexado${files.length > 1 ? 's' : ''})` : `Clique ou arraste ${meta.doc} — e outros documentos, se quiser`}</span>
             <input
               type="file"
               accept="application/pdf,.pdf"
+              multiple
               className="hidden"
               disabled={busy}
-              onChange={(e) => { const f = e.target.files?.[0] ?? null; e.target.value = ''; setFile(f); }}
+              onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; addFiles(fs); }}
             />
           </label>
         </DropZone>
-        <p className="mb-3 -mt-2 text-[11px] text-zinc-400">Opcional, mas recomendado — sem o documento a IA trabalha só com os dados do processo e deixa mais lacunas.</p>
+        {files.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {files.map((f, i) => (
+              <li key={`${f.name}:${f.size}`} className="flex items-center gap-2 rounded-md bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+                <FileIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                <span className="flex-1 truncate">{f.name}</span>
+                {i === 0 && <span className="shrink-0 rounded bg-[#005efc]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#005efc]">principal</span>}
+                <button onClick={() => removeFile(i)} disabled={busy} className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 disabled:opacity-50 dark:hover:bg-zinc-700" title="Remover">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mb-3 mt-2 text-[11px] text-zinc-400">Opcional, mas recomendado — o 1º é o principal ({meta.doc}); os demais entram como apoio. Sem documento, a IA usa só os dados do processo e deixa mais lacunas.</p>
 
         {/* Produto */}
         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#48626f] dark:text-zinc-400">Produto (opcional)</p>

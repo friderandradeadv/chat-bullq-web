@@ -490,6 +490,8 @@ export const legalCasesService = {
       produto?: string;
       docBase64?: string;
       docNome?: string;
+      docsBase64?: string[];
+      docsNomes?: string[];
       instrucoes?: string;
     },
   ): Promise<{ tipo: string; label: string; fileName: string; documentId: string; docxBase64: string }> {

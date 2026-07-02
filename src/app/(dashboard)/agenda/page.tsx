@@ -81,6 +81,28 @@ function extractEmentaClient(texto?: string | null): string | null {
 // da sentença: REsp/RE, Embargos de Declaração, Agravo Interno).
 const ACORDAO_MARKER = /ac[óo]rd[ãa]o|acordam|c[âa]mara|desembargador|turma recursal|negaram provimento|deram (parcial )?provimento|rela(tor|tora)|2º grau|2o grau|segundo grau|segunda inst[âa]ncia/i;
 
+// Texto longo (recorte da publicação, dispositivo) com "ver mais/ver menos":
+// mostra só um trecho por padrão e expande sob demanda.
+function ExpandableText({ text, limit = 480 }: { text: string; limit?: number }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > limit;
+  const shown = open || !long ? text : `${text.slice(0, limit).trimEnd()}…`;
+  return (
+    <>
+      {shown}
+      {long && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="ml-1 whitespace-nowrap font-medium text-[#005efc] hover:underline dark:text-[#4a90e2]"
+        >
+          {open ? 'ver menos' : 'ver mais'}
+        </button>
+      )}
+    </>
+  );
+}
+
 // Desenha a barra colorida no topo do evento (estilo Astrea): 1 segmento por
 // ETIQUETA, dividido igualmente; sem etiqueta usa a cor do TIPO; cumprido fica
 // cinza. Idempotente (remove a barra anterior) — assim dá pra repintar quando as
@@ -787,7 +809,12 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // 2º grau (acórdão) vs 1º grau (sentença): pela instância do processo OU por
   // marcadores no título/dispositivo/recorte. Define quais recursos oferecer.
   const decisaoTxt = `${activity.title} ${activity.dispositivo ?? ''} ${activity.recorte ?? ''}`;
-  const isAcordao = isDecisaoBase && (grade === '2º Grau' || ACORDAO_MARKER.test(decisaoTxt) || /ac[óo]rd[ãa]o/i.test(activity.title));
+  // A INSTÂNCIA do processo manda: 1º Grau só tem sentença (nunca acórdão), então
+  // quando ela é conhecida ('1º Grau') nunca é acórdão — evita o falso-positivo do
+  // ACORDAO_MARKER casar algo no recorte. Só usa o heurístico de texto quando a
+  // instância é desconhecida.
+  const isAcordao = isDecisaoBase && grade !== '1º Grau'
+    && (grade === '2º Grau' || ACORDAO_MARKER.test(decisaoTxt) || /ac[óo]rd[ãa]o/i.test(activity.title));
   const isDecisaoAnalise = isDecisaoBase && (isDecisaoTitulo || isAcordao);
   const ementaAcordao = isAcordao ? extractEmentaClient(activity.recorte ?? activity.dispositivo) : null;
 
@@ -1104,13 +1131,13 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.dispositivo && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">{isAcordao ? 'Dispositivo do acórdão:' : 'Dispositivo da sentença:'}</dt>
-              <dd className="m-0 whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-2 font-normal leading-relaxed text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300">{activity.dispositivo}</dd>
+              <dd className="m-0 whitespace-pre-wrap break-words rounded-md border border-zinc-200 bg-zinc-50 p-2 font-normal leading-relaxed text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300"><ExpandableText text={activity.dispositivo} /></dd>
             </div>
           )}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.recorte && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Recorte da publicação:</dt>
-              <dd className="m-0 whitespace-pre-wrap break-words text-justify font-normal leading-relaxed text-zinc-400 dark:text-zinc-500">{activity.recorte}</dd>
+              <dd className="m-0 whitespace-pre-wrap break-words text-justify font-normal leading-relaxed text-zinc-400 dark:text-zinc-500"><ExpandableText text={activity.recorte} /></dd>
             </div>
           )}
         </dl>
