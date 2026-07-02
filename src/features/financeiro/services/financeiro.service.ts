@@ -309,11 +309,12 @@ export const financeiroService = {
     return data.data ?? data;
   },
   async asaasPreview(): Promise<AsaasPreview> {
-    const { data } = await api.get('/financeiro/integracao/asaas/preview');
+    // Sincronização do ASAAS é pesada (busca muitos pagamentos na API deles). Timeout amplo.
+    const { data } = await api.get('/financeiro/integracao/asaas/preview', { timeout: 180000 });
     return data.data ?? data;
   },
   async asaasImportar(): Promise<AsaasPreview> {
-    const { data } = await api.post('/financeiro/integracao/asaas/importar', {});
+    const { data } = await api.post('/financeiro/integracao/asaas/importar', {}, { timeout: 180000 });
     return data.data ?? data;
   },
   // ── Importar extrato (PDF/CSV/OFX) como lançamentos, com dedup ──
@@ -327,7 +328,7 @@ export const financeiroService = {
   },
   // ── Cobranças (vendas a prazo) do ASAAS ──
   async asaasCobrancas(commit: boolean): Promise<{ configurado: boolean; novas: number; atualizadas: number; total?: number; forbidden?: boolean }> {
-    const { data } = await api.post('/financeiro/integracao/asaas/cobrancas', { commit });
+    const { data } = await api.post('/financeiro/integracao/asaas/cobrancas', { commit }, { timeout: 180000 });
     return data.data ?? data;
   },
   // ── Resumo financeiro de um cliente (ficha em Processos) ──

@@ -63,7 +63,7 @@ const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }
   { key: 'contas', label: 'Contas', icon: Banknote, grupo: 'Caixa' },
   { key: 'retiradas', label: 'Retiradas', icon: Wallet, grupo: 'Caixa' },
   { key: 'cumprimento', label: 'CS — recebíveis dos processos', icon: Gavel, grupo: 'Processos' },
-  { key: 'verticais', label: 'Verticais (por área)', icon: Layers, grupo: 'Análise & futuro' },
+  { key: 'verticais', label: 'Verticais', icon: Layers, grupo: 'Análise & futuro' },
   { key: 'projecoes', label: 'Projeções e crescimento', icon: Rocket, grupo: 'Análise & futuro' },
   { key: 'motivacao', label: 'Motivação', icon: HeartHandshake, grupo: 'Análise & futuro' },
 ];
@@ -158,12 +158,7 @@ export default function FinanceiroPage() {
                 <UserCircle2 className="h-4 w-4 text-zinc-400" />
                 <select value={sel} onChange={(e) => setSel(e.target.value)} className="bg-transparent text-sm font-medium outline-none dark:text-zinc-100">
                   <option value="">Escritório (tudo)</option>
-                  {/* Só o dono (OWNER) escolhe a vertical inteira que quer enxergar. */}
-                  {isOwner && (
-                    <optgroup label="Por vertical (toda a área)">
-                      {VERTICAIS.map((v) => <option key={v} value={`v:${v}`}>{v} — vertical inteira</option>)}
-                    </optgroup>
-                  )}
+                  {/* Verticais foram unificadas na aba "Verticais" (visão geral + entrar na área). */}
                   <optgroup label="Por advogado">
                     {advs.map((a) => <option key={a.id} value={a.id}>{a.eu ? `Você (${a.name.split(' ')[0]}) — meu financeiro` : `${a.name} — financeiro dele(a)`}</option>)}
                   </optgroup>
@@ -290,7 +285,7 @@ function Card({ title, sub, action, children, className }: { title?: React.React
 // ═══════════════════════════ ABA · LANÇAMENTOS (filtrado por mês) ═══════════════
 
 const ABAS = [{ key: 'todos', label: 'Todos' }, { key: 'receitas', label: 'Receitas' }, { key: 'despesas', label: 'Despesas' }] as const;
-const ST_FILTROS = [{ key: 'todos', label: 'Todos' }, { key: 'a_receber', label: 'A receber/pagar' }, { key: 'liquidado', label: 'Liquidados' }] as const;
+const ST_FILTROS = [{ key: 'liquidado', label: 'Liquidados (caixa)' }, { key: 'a_receber', label: 'A receber / a pagar' }, { key: 'todos', label: 'Todos' }] as const;
 const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
 const toBR = (iso: string) => { const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };
 const toISOInput = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
@@ -436,7 +431,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const [deISO, setDeISO] = useState(''); // período por calendário (vence o filtro de mês)
   const [ateISO, setAteISO] = useState('');
   const [aba, setAba] = useState<'todos' | 'receitas' | 'despesas'>('todos');
-  const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('todos');
+  const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('liquidado');
   const [respFiltro, setRespFiltro] = useState('');
   const [contaFiltro, setContaFiltro] = useState('');
   const [busca, setBusca] = useState('');
@@ -1812,6 +1807,7 @@ const CORES_AREA: Record<string, string> = {
 const corArea = (a: string) => CORES_AREA[a] ?? '#15AABF';
 
 function VerticaisTab({ data }: { data: FinDashboard }) {
+  const [sel, setSel] = useState('');
   const verticais = data.crescimento?.verticalArea ?? [];
   const carteira = data.crescimento?.carteira.porArea ?? [];
   const totRec = verticais.reduce((s, v) => s + v.receita, 0);
@@ -1819,6 +1815,14 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
   const recVerticais = verticais.filter((v) => v.receita > 0).sort((a, b) => b.receita - a.receita);
   const naoId = verticais.find((v) => v.area === 'Não identificada')?.receita ?? 0;
   const chart = recVerticais.map((v) => ({ area: v.area, receita: v.receita }));
+
+  // Unificado: entrar numa vertical mostra o financeiro completo da área aqui mesmo.
+  if (sel && sel !== 'Não identificada') return (
+    <div className="mt-4">
+      <button onClick={() => setSel('')} className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-[#228BE6] hover:underline"><ChevronLeft className="h-4 w-4" /> Todas as verticais</button>
+      <VerticalFinanceiro area={sel} />
+    </div>
+  );
 
   return (
     <>
@@ -1856,11 +1860,11 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
         <Card title="Receita recebida por área"><p className="py-8 text-center text-sm text-zinc-400">Ainda não há honorários recebidos casados a um cliente com processo. Lance honorários com o nome do cliente igual ao do processo para verticalizar.</p></Card>
       )}
 
-      <Card title="Resumo por área" sub="receita recebida, despesa atribuída e resultado.">
+      <Card title="Resumo por área" sub="clique numa área para ver o financeiro completo dela.">
         <CsTabela cols={['Área', 'Receita', 'Despesa', 'Resultado', '% receita']} w0="34%">
           {verticais.map((v) => (
-            <tr key={v.area} className="border-t border-zinc-100 dark:border-zinc-800">
-              <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span></td>
+            <tr key={v.area} className={`border-t border-zinc-100 dark:border-zinc-800 ${v.area !== 'Não identificada' ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/40' : ''}`} onClick={() => v.area !== 'Não identificada' && setSel(v.area)}>
+              <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}{v.area !== 'Não identificada' && <ChevronRight className="h-3.5 w-3.5 text-zinc-300" />}</span></td>
               <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{v.receita ? brl2(v.receita) : '—'}</td>
               <td className="px-2 py-1.5 text-right tabular-nums text-rose-600">{v.despesa ? brl2(v.despesa) : '—'}</td>
               <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${v.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(v.resultado)}</td>
