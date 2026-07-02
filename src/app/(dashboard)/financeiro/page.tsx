@@ -14,7 +14,7 @@ import {
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes } from '@/features/financeiro/services/financeiro.service';
-import { ASTREA_DESPESAS } from '@/features/financeiro/data/astrea-despesas';
+import { ASTREA_DESPESAS, APORTES } from '@/features/financeiro/data/astrea-despesas';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
@@ -271,9 +271,10 @@ function Kpi({ icon: Icon, accent, label, value, hint, onClick }: { icon: React.
 // Detalhe do saldo acumulado: saldo inicial das contas + soma dos resultados mês a mês.
 function SaldoDetalheModal({ meses, saldoAtual, onClose }: { meses: FinMes[]; saldoAtual: number; onClose: () => void }) {
   const realizados = meses.filter((m) => !m.projecao);
-  const saldoInicial = realizados.length ? realizados[0].acumulado - realizados[0].resultado : 0;
+  const saldoInicial = realizados.length ? realizados[0].acumulado - realizados[0].resultado - (realizados[0].aporte ?? 0) : 0;
   const totalReceita = realizados.reduce((s, m) => s + m.receita, 0);
   const totalDespesa = realizados.reduce((s, m) => s + m.despesaTotal, 0);
+  const totalAporte = realizados.reduce((s, m) => s + (m.aporte ?? 0), 0);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl scrollbar-thin dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
@@ -281,7 +282,7 @@ function SaldoDetalheModal({ meses, saldoAtual, onClose }: { meses: FinMes[]; sa
           <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">De onde vem o saldo acumulado</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
         </div>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">É o <strong>saldo inicial</strong> das contas mais a <strong>soma dos resultados</strong> (receita − despesa <strong>liquidadas</strong>) de cada mês. Gastos de fatura do cartão não entram até serem pagos.</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400"><strong>Saldo inicial</strong> + <strong>resultados</strong> (receita − despesa <strong>liquidadas</strong>) de cada mês{totalAporte > 0 ? <> + <strong className="text-sky-600">aportes</strong> (capital que Você/Pai colocou — não é faturamento)</> : null}. Fatura de cartão só entra quando paga.</p>
 
         <div className="mt-3 flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800/40">
           <span className="text-zinc-500">Saldo inicial das contas</span>
@@ -294,7 +295,7 @@ function SaldoDetalheModal({ meses, saldoAtual, onClose }: { meses: FinMes[]; sa
           </div>
           {realizados.map((m) => (
             <div key={m.key} className="grid grid-cols-[1fr_5rem_5rem_5.5rem] items-center gap-1 border-t border-zinc-100 px-3 py-1.5 text-xs dark:border-zinc-800/70">
-              <span className="truncate text-zinc-600 dark:text-zinc-300">{m.label}</span>
+              <span className="flex min-w-0 items-center gap-1 truncate text-zinc-600 dark:text-zinc-300">{m.label}{(m.aporte ?? 0) > 0 && <span className="shrink-0 rounded bg-sky-100 px-1 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300" title="aporte Você + Pai">+aporte {brl2(m.aporte!)}</span>}</span>
               <span className="text-right tabular-nums text-emerald-600">{m.receita ? brl2(m.receita) : '—'}</span>
               <span className="text-right tabular-nums text-rose-600">{m.despesaTotal ? brl2(m.despesaTotal) : '—'}</span>
               <span className={`text-right font-semibold tabular-nums ${m.acumulado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brl2(m.acumulado)}</span>
@@ -306,6 +307,7 @@ function SaldoDetalheModal({ meses, saldoAtual, onClose }: { meses: FinMes[]; sa
         <div className="mt-3 space-y-1 text-sm">
           <div className="flex items-center justify-between text-zinc-500"><span>Total de receitas</span><span className="tabular-nums text-emerald-600">{brl2(totalReceita)}</span></div>
           <div className="flex items-center justify-between text-zinc-500"><span>Total de despesas</span><span className="tabular-nums text-rose-600">− {brl2(totalDespesa)}</span></div>
+          {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Aportes (Você + Pai)</span><span className="tabular-nums text-sky-600">+ {brl2(totalAporte)}</span></div>}
           <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Saldo acumulado</span><span className={`tabular-nums ${saldoAtual >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoAtual)}</span></div>
         </div>
         <p className="mt-3 text-[11px] text-zinc-400">Dica: para ver os lançamentos de um mês, use o filtro de mês no livro-razão abaixo.</p>
@@ -2293,6 +2295,25 @@ function ContasTab({ data }: { data: FinDashboard }) {
     setRetro(null);
   };
 
+  // ── Fechar o caixa com aportes (Você + Pai) — idempotente ──
+  const [aporteRun, setAporteRun] = useState(false);
+  const lancarAportes = async () => {
+    const existentes = data.transacoes.filter((t) => t.valor > 0 && /aporte/i.test(t.categoria || ''));
+    const jaTem = (a: { data: string; valor: number }) => existentes.some((e) => centsOf(e.valor) === centsOf(a.valor) && ymOf(e.data) === ymOf(a.data));
+    const todo = APORTES.filter((a) => !jaTem(a));
+    if (!todo.length) { toast.success('Aportes já lançados — caixa já fechado.'); return; }
+    const totalAporte = todo.reduce((s, a) => s + a.valor, 0);
+    if (!confirm(`Registrar ${brl(totalAporte)} em aportes (Você + Pai) para fechar o caixa?\n\nDistribuído nos meses de aperto (ago–dez/2025, jan e jun/2026). Marcado como "Aporte" — não conta como faturamento. Pode editar depois pra separar quanto foi do seu pai.`)) return;
+    setAporteRun(true);
+    let done = 0;
+    for (const a of todo) {
+      try { await financeiroService.addTransacao({ data: a.data, tipo: 'receita', categoria: 'Aporte', valor: a.valor, pagador: 'Aporte (Você + Pai)', dataPagamento: a.data, status: 'recebido' }); done++; } catch { /* re-rodar pega o resto */ }
+    }
+    qc.invalidateQueries({ queryKey: ['financeiro'] });
+    toast.success(`${done} aporte(s) lançado(s) · caixa fechado`);
+    setAporteRun(false);
+  };
+
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
     const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial), cartao: !!form.cartao, fechamento: form.cartao && form.fechamento ? Number(form.fechamento) : undefined, vencimento: form.cartao && form.vencimento ? Number(form.vencimento) : undefined };
@@ -2378,6 +2399,16 @@ function ContasTab({ data }: { data: FinDashboard }) {
           </button>
         </div>
         {retro && <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full rounded-full bg-[#820AD1] transition-all" style={{ width: `${Math.round((retro.done / Math.max(1, retro.total)) * 100)}%` }} /></div>}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+          <div>
+            <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-4 w-4 text-[#2F9E44]" /> Fechar o caixa com aportes (Você + Pai)</h4>
+            <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">O escritório teve <strong>{brl(APORTES.reduce((s, a) => s + a.valor, 0))}</strong> de déficit no período, coberto por você + seu pai. Isso lança esse total como <strong>Aporte</strong> (capital, não faturamento) nos meses de aperto — o saldo para de mostrar negativo fantasma. Edite depois pra separar quanto foi do seu pai.</p>
+          </div>
+          <button onClick={lancarAportes} disabled={aporteRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#2F9E44] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+            {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Lançando…</> : <><Scale className="h-3.5 w-3.5" /> Fechar caixa com aportes</>}
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

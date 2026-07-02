@@ -1,6 +1,20 @@
 // Gerado do export do Astrea (FINANCEIRO.pdf, mai/2025->jun/2026). 157 saidas, total R$ 114.936,68.
 // Cada linha bate com o "Total de saidas" mensal do Astrea. Usado no botao "Lancar gastos retroativos".
 export interface AstreaDespesa { data: string; valor: number; categoria: string; party: string }
+
+// Aportes que cobriram o déficit do escritório (Você + Pai), distribuídos pelos meses de aperto.
+// Total = R$ 29.826,10 = déficit acumulado do Astrea (receitas 85.110,58 − despesas 114.936,68).
+// Divisão você×pai desconhecida → tudo como "Aporte (Você + Pai)", editável depois.
+export interface Aporte { data: string; valor: number }
+export const APORTES: Aporte[] = [
+  { data: '30/08/2025', valor: 126.23 },
+  { data: '30/09/2025', valor: 8968.97 },
+  { data: '30/11/2025', valor: 6923.86 },
+  { data: '30/12/2025', valor: 10961.57 },
+  { data: '30/01/2026', valor: 1710.47 },
+  { data: '30/06/2026', valor: 1135.00 },
+];
+
 export const ASTREA_DESPESAS: AstreaDespesa[] = [
   {
     "data": "20/06/2025",

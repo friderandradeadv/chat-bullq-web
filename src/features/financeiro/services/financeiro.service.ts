@@ -8,6 +8,7 @@ export interface FinMes {
   despesaTotal: number;
   resultado: number;
   acumulado: number;
+  aporte?: number; // capital (Você/Pai) — entra no saldo, não no faturamento
   projecao: boolean;
 }
 export interface FinCategoria { nome: string; total: number; cor: string }
