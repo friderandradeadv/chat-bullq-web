@@ -18,7 +18,6 @@ import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits'
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
-import { chipTextColor } from '@/lib/avatar';
 
 const KEY = ['legal-cases', 'kanban'];
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif";
@@ -476,12 +475,10 @@ function Card({
             </span>
           ) : null;
         })()}
-        {/* Etiquetas jurídicas (tags) do processo */}
-        {(c.tags ?? []).map((t) => (
-          <span key={t.id} className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: t.color, color: chipTextColor(t.color) }}>
-            {t.name}
-          </span>
-        ))}
+        {/* Etiquetas jurídicas (EntityTag, incl. migradas do Astrea) NÃO vão na face
+            do card — enchiam demais e misturavam com produto/área (fix 406b46f, que
+            regrediu). Ficam só produto + área aqui; a edição/visão das etiquetas é na
+            ficha (drawer). O filtro/export por etiqueta continua funcionando. */}
       </div>
 
       {/* Cliente (título, CAPS) × parte adversa */}
