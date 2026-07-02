@@ -2319,6 +2319,29 @@ function ContasTab({ data }: { data: FinDashboard }) {
     else { setRetroMsg(`✅ ${ok} aporte(s) lançado(s) · caixa fechado. Recarregue pra ver.`); toast.success(`${ok} aporte(s) lançado(s)`); }
   };
 
+  // ── Separar Nubank em conta bancária + cartão (os gastos de fatura vão pro cartão) ──
+  const [sepRun, setSepRun] = useState(false);
+  const nubankCartao = contas.find((c) => c.cartao && /nubank/i.test(c.nome));
+  const separarNubank = async () => {
+    const nb = nubankCartao;
+    if (!nb) { toast.error('Não achei um "Nubank" marcado como cartão.'); return; }
+    const faturaTx = data.transacoes.filter((t) => t.conta === nb.id && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar'));
+    if (!confirm(`Separar "${nb.nome}" em conta + cartão?\n\n• Crio "Nubank cartão" e movo ${faturaTx.length} gasto(s) de fatura pra lá.\n• "${nb.nome}" vira conta bancária (deixa de ser cartão).\n\nRecebimentos, retiradas e pagamentos de fatura CONTINUAM na conta. Depois é só informar o saldo real da conta.`)) return;
+    setSepRun(true);
+    try {
+      const novo = await financeiroService.addConta({ nome: 'Nubank cartão', banco: nb.banco, cor: nb.cor, cartao: true, fechamento: nb.fechamento, vencimento: nb.vencimento, saldoInicial: 0 });
+      const cartaoId = novo?.id;
+      if (!cartaoId) throw new Error('não recebi o id da nova conta-cartão');
+      let movidos = 0;
+      for (const t of faturaTx) { if (t.id) { await financeiroService.updateTransacao(t.id, { conta: cartaoId }); movidos++; } }
+      await financeiroService.updateConta(nb.id, { nome: nb.nome, banco: nb.banco, cor: nb.cor, saldoInicial: nb.saldoInicial ?? 0, cartao: false });
+      qc.invalidateQueries({ queryKey: ['financeiro'] });
+      setRetroMsg(`✅ Nubank separado: ${movidos} gasto(s) de fatura foram pra "Nubank cartão". Agora edite o "Nubank" (lápis no card) e informe o saldo real da conta bancária.`);
+      toast.success('Nubank separado em conta + cartão.');
+    } catch (e: any) { const m = e?.response?.data?.message || e?.message || 'erro'; setRetroMsg(`⚠️ Falha ao separar Nubank: ${m}`); toast.error(m); }
+    setSepRun(false);
+  };
+
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
     const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial), cartao: !!form.cartao, fechamento: form.cartao && form.fechamento ? Number(form.fechamento) : undefined, vencimento: form.cartao && form.vencimento ? Number(form.vencimento) : undefined };
@@ -2414,6 +2437,17 @@ function ContasTab({ data }: { data: FinDashboard }) {
             {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Lançando…</> : <><Scale className="h-3.5 w-3.5" /> Fechar caixa com aportes</>}
           </button>
         </div>
+        {nubankCartao && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div>
+              <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><CreditCard className="h-4 w-4 text-[#820AD1]" /> Separar Nubank em conta + cartão</h4>
+              <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">O "{nubankCartao.nome}" está como <strong>cartão</strong>, mas você tem <strong>conta E cartão</strong>. Isso cria uma conta <strong>"Nubank cartão"</strong> só pra fatura, move os gastos de cartão pra lá, e deixa o <strong>"{nubankCartao.nome}" como conta bancária</strong> (com os recebimentos, retiradas e pagamentos de fatura). Depois você informa o saldo real da conta.</p>
+            </div>
+            <button onClick={separarNubank} disabled={sepRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+              {sepRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Separando…</> : <><CreditCard className="h-3.5 w-3.5" /> Separar conta e cartão</>}
+            </button>
+          </div>
+        )}
         {retroMsg && <p className={`mt-3 rounded-lg border px-3 py-2 text-[13px] ${retroMsg.startsWith('⚠️') ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>{retroMsg}</p>}
       </div>
 
