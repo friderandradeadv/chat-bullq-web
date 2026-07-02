@@ -13,7 +13,7 @@ import {
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw,
 } from 'lucide-react';
-import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
@@ -86,6 +86,7 @@ export default function FinanceiroPage() {
   const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   // Abre em "Lançamentos" por padrão (livro-razão do mês corrente) — é a tela de trabalho do dia a dia.
   const [view, setView] = useState<View>('lancamentos');
+  const [showSaldo, setShowSaldo] = useState(false);
   // Seletor "ver o financeiro de" — por advogado (escopado à vertical dele) ou,
   // para o dono (OWNER), por vertical inteira. Só admin/sócio.
   const { user } = useAuthStore();
@@ -175,11 +176,13 @@ export default function FinanceiroPage() {
         <>
         {/* KPIs — pulso financeiro sempre visível */}
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Kpi icon={Scale} accent={k.saldoAtual < 0 ? '#E03131' : '#2F9E44'} label={`Saldo acumulado · ${k.mesAtualLabel}`} value={brl(k.saldoAtual)} hint={k.saldoAtual < 0 ? 'caixa no vermelho' : 'caixa positivo'} />
+          <Kpi icon={Scale} accent={k.saldoAtual < 0 ? '#E03131' : '#2F9E44'} label={`Saldo acumulado · ${k.mesAtualLabel}`} value={brl(k.saldoAtual)} hint={k.saldoAtual < 0 ? 'caixa no vermelho' : 'caixa positivo'} onClick={() => setShowSaldo(true)} />
           <Kpi icon={k.resultadoMes >= 0 ? TrendingUp : TrendingDown} accent={k.resultadoMes >= 0 ? '#2F9E44' : '#E03131'} label="Resultado do mês" value={brl(k.resultadoMes)} hint={`receita ${brl(k.receitaMes)} · despesa ${brl(k.despesaMes)}`} />
           <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(k.receita12m)} hint={`média ${brl(k.receitaMedia)}/mês`} />
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
+
+        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
@@ -249,15 +252,63 @@ function TabsMenu({ view, setView, lancCount }: { view: View; setView: (v: View)
   );
 }
 
-function Kpi({ icon: Icon, accent, label, value, hint }: { icon: React.ElementType; accent: string; label: string; value: string; hint?: string }) {
+function Kpi({ icon: Icon, accent, label, value, hint, onClick }: { icon: React.ElementType; accent: string; label: string; value: string; hint?: string; onClick?: () => void }) {
+  const Cmp: any = onClick ? 'button' : 'div';
   return (
-    <div className="rounded-2xl border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <Cmp onClick={onClick} className={`w-full rounded-2xl border border-[#DEE2E6] bg-white p-4 text-left dark:border-zinc-800 dark:bg-zinc-900 ${onClick ? 'cursor-pointer transition hover:-translate-y-0.5 hover:border-[#228BE6]/50 hover:shadow-md' : ''}`}>
       <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
         <span className="grid h-7 w-7 place-items-center rounded-lg" style={{ backgroundColor: `${accent}1A`, color: accent }}><Icon className="h-4 w-4" /></span>
         <span className="truncate">{label}</span>
+        {onClick && <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-zinc-300" />}
       </div>
       <p className="mt-2 text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{value}</p>
       {hint && <p className="mt-0.5 truncate text-[11px] text-zinc-400">{hint}</p>}
+    </Cmp>
+  );
+}
+
+// Detalhe do saldo acumulado: saldo inicial das contas + soma dos resultados mês a mês.
+function SaldoDetalheModal({ meses, saldoAtual, onClose }: { meses: FinMes[]; saldoAtual: number; onClose: () => void }) {
+  const realizados = meses.filter((m) => !m.projecao);
+  const saldoInicial = realizados.length ? realizados[0].acumulado - realizados[0].resultado : 0;
+  const totalReceita = realizados.reduce((s, m) => s + m.receita, 0);
+  const totalDespesa = realizados.reduce((s, m) => s + m.despesaTotal, 0);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl scrollbar-thin dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">De onde vem o saldo acumulado</h3>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
+        </div>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">É o <strong>saldo inicial</strong> das contas mais a <strong>soma dos resultados</strong> (receita − despesa <strong>liquidadas</strong>) de cada mês. Gastos de fatura do cartão não entram até serem pagos.</p>
+
+        <div className="mt-3 flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800/40">
+          <span className="text-zinc-500">Saldo inicial das contas</span>
+          <span className={`font-semibold tabular-nums ${saldoInicial >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brl2(saldoInicial)}</span>
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+          <div className="grid grid-cols-[1fr_5rem_5rem_5.5rem] gap-1 bg-zinc-50/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:bg-zinc-800/40">
+            <span>Mês</span><span className="text-right">Receita</span><span className="text-right">Despesa</span><span className="text-right">Acumulado</span>
+          </div>
+          {realizados.map((m) => (
+            <div key={m.key} className="grid grid-cols-[1fr_5rem_5rem_5.5rem] items-center gap-1 border-t border-zinc-100 px-3 py-1.5 text-xs dark:border-zinc-800/70">
+              <span className="truncate text-zinc-600 dark:text-zinc-300">{m.label}</span>
+              <span className="text-right tabular-nums text-emerald-600">{m.receita ? brl2(m.receita) : '—'}</span>
+              <span className="text-right tabular-nums text-rose-600">{m.despesaTotal ? brl2(m.despesaTotal) : '—'}</span>
+              <span className={`text-right font-semibold tabular-nums ${m.acumulado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brl2(m.acumulado)}</span>
+            </div>
+          ))}
+          {realizados.length === 0 && <p className="border-t border-zinc-100 py-6 text-center text-xs text-zinc-400 dark:border-zinc-800">Sem meses realizados ainda.</p>}
+        </div>
+
+        <div className="mt-3 space-y-1 text-sm">
+          <div className="flex items-center justify-between text-zinc-500"><span>Total de receitas</span><span className="tabular-nums text-emerald-600">{brl2(totalReceita)}</span></div>
+          <div className="flex items-center justify-between text-zinc-500"><span>Total de despesas</span><span className="tabular-nums text-rose-600">− {brl2(totalDespesa)}</span></div>
+          <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Saldo acumulado</span><span className={`tabular-nums ${saldoAtual >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoAtual)}</span></div>
+        </div>
+        <p className="mt-3 text-[11px] text-zinc-400">Dica: para ver os lançamentos de um mês, use o filtro de mês no livro-razão abaixo.</p>
+      </div>
     </div>
   );
 }
