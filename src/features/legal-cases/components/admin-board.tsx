@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { useDragScroll } from '@/lib/use-drag-scroll';
-import { chipTextColor } from '@/lib/avatar';
 
 const KEY = ['legal-cases', 'kanban'];
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -153,7 +152,7 @@ function AdminCard({ c, onOpen }: { c: KanbanCard; onOpen: (id: string) => void 
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
-        {(c.tags ?? []).map((t) => <span key={t.id} className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: t.color, color: chipTextColor(t.color) }}>{t.name}</span>)}
+        {/* Etiquetas (EntityTag/Astrea) NÃO vão na face do card — só na ficha (fix 406b46f). */}
       </div>
       <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
       {c.opponent && <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}

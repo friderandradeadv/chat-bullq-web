@@ -12,7 +12,6 @@ import { legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase }
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { useDragScroll } from '@/lib/use-drag-scroll';
-import { chipTextColor } from '@/lib/avatar';
 
 const KEY = ['legal-cases', 'kanban'];
 const ACCENT = '#7048e8';
@@ -248,7 +247,7 @@ function InssCard({
     >
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
-        {(c.tags ?? []).map((t) => <span key={t.id} className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: t.color, color: chipTextColor(t.color) }}>{t.name}</span>)}
+        {/* Etiquetas (EntityTag/Astrea) NÃO vão na face do card — só na ficha (fix 406b46f). */}
       </div>
 
       <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
