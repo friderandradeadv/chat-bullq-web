@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -929,7 +930,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
               <span className="flex flex-wrap items-center gap-1.5">
                 <Layers className="h-3.5 w-3.5 shrink-0 text-[#02883C]" /> Verticais:
                 {info!.atuacao!.map((v) => (
-                  <span key={v} className="rounded-full bg-[#02883C]/10 px-2 py-0.5 text-[11px] font-medium text-[#0b7a37] dark:bg-[#02883C]/20 dark:text-[#69db7c]">{v}</span>
+                  <Link key={v} href={`/financeiro?vertical=${encodeURIComponent(v)}`} title={`Ver o financeiro da vertical ${v}`} className="rounded-full bg-[#02883C]/10 px-2 py-0.5 text-[11px] font-medium text-[#0b7a37] transition hover:bg-[#02883C]/20 dark:bg-[#02883C]/20 dark:text-[#69db7c]">{v}</Link>
                 ))}
               </span>
             )}
@@ -1058,6 +1059,37 @@ function PhotoCropper({ file, onCancel, onDone }: { file: File; onCancel: () => 
   );
 }
 
+// Editor de verticais (áreas de atuação) por chips — adiciona/remove e sugere as
+// verticais já cadastradas no escritório. Usado no perfil de cada pessoa.
+function VerticaisEditor({ value, onChange, sugestoes }: { value: string[]; onChange: (v: string[]) => void; sugestoes: string[] }) {
+  const [txt, setTxt] = useState('');
+  const add = (v: string) => { const t = v.trim(); if (t && !value.includes(t)) onChange([...value, t]); setTxt(''); };
+  const rem = (v: string) => onChange(value.filter((x) => x !== v));
+  const livres = sugestoes.filter((s) => !value.includes(s));
+  return (
+    <div className="mt-1">
+      <div className="flex flex-wrap gap-1.5">
+        {value.length === 0 && <span className="text-xs text-zinc-400">Nenhuma vertical ainda.</span>}
+        {value.map((v) => (
+          <span key={v} className="inline-flex items-center gap-1 rounded-full bg-[#02883C]/10 py-0.5 pl-2.5 pr-1 text-[11px] font-medium text-[#0b7a37] dark:bg-[#02883C]/20 dark:text-[#69db7c]">
+            {v}
+            <button type="button" onClick={() => rem(v)} title="Remover" className="rounded-full p-0.5 hover:bg-[#02883C]/25"><X className="h-3 w-3" /></button>
+          </span>
+        ))}
+      </div>
+      <div className="mt-1.5 flex gap-1.5">
+        <input value={txt} onChange={(e) => setTxt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(txt); } }} placeholder="digite e Enter (ex.: Bancário)" className={INPUT} />
+        <button type="button" onClick={() => add(txt)} className="shrink-0 rounded-lg border border-zinc-300 px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300">Adicionar</button>
+      </div>
+      {livres.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {livres.map((s) => <button key={s} type="button" onClick={() => add(s)} className="rounded-full border border-dashed border-[#02883C]/40 px-2 py-0.5 text-[11px] text-[#0b7a37] hover:bg-[#02883C]/5 dark:text-[#69db7c]">+ {s}</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMode, onClose, onSave, onSaveSelf }: { userId: string; nome: string; avatarUrl: string | null; data: Escritorio; cargoById: Record<string, Cargo>; saving: boolean; selfMode?: boolean; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void; onSaveSelf?: (patch: Partial<PessoaInfo>) => void }) {
   const atual = data.pessoas?.[userId];
   const [f, setF] = useState<PessoaInfo>({ ...(atual ?? {}) });
@@ -1136,7 +1168,7 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
           <div><p className={LABEL}>Vidas impactadas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
         </div>
       )}
-      {!selfMode && <div><p className={LABEL}>Verticais / áreas de atuação (separe por vírgula)</p><input value={(f.atuacao ?? []).join(', ')} onChange={(e) => set({ atuacao: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="ex.: Bancário, Previdenciário, Consumidor" className={`${INPUT} mt-1`} /><p className="mt-1 text-[11px] text-zinc-400">Aparecem abaixo do cargo no perfil.</p></div>}
+      {!selfMode && <div><p className={LABEL}>Verticais / áreas de atuação</p><VerticaisEditor value={f.atuacao ?? []} onChange={(v) => set({ atuacao: v })} sugestoes={(data.verticais ?? []).map((x) => x.nome).filter(Boolean)} /><p className="mt-1 text-[11px] text-zinc-400">Aparecem (clicáveis, levam ao financeiro da área) abaixo do cargo no perfil.</p></div>}
       {!selfMode && <div><p className={LABEL}>Financeiro (do contrato) — um item por linha</p><textarea value={(f.financeiro ?? []).join('\n')} onChange={(e) => set({ financeiro: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} placeholder={'70% dos honorários de clientes que capta e atende\n30% quando é nomeada para atuar'} className={`${INPUT} mt-1`} /></div>}
       {!selfMode && <div><p className={LABEL}>Reconhecimento / motivação (em destaque)</p><input value={f.destaque ?? ''} onChange={(e) => set({ destaque: e.target.value })} placeholder="ex.: Referência em RMC, cuida de cada cliente com carinho." className={`${INPUT} mt-1`} /></div>}
       <div><p className={LABEL}>Frase / lema pessoal</p><input value={f.frase ?? ''} onChange={(e) => set({ frase: e.target.value })} placeholder="ex.: Justiça com gente de verdade." className={`${INPUT} mt-1`} /></div>

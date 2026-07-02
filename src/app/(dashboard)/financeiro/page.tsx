@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -101,6 +101,11 @@ export default function FinanceiroPage() {
   const VERTICAIS = ['Bancário', 'Previdenciário', 'Consumidor', 'Cível'];
   // sel: '' = escritório · 'v:Área' = vertical inteira · userId = visão pessoal do advogado
   const [sel, setSel] = useState('');
+  // Vem de um link "?vertical=Bancário" (chips do perfil em Meu Espaço) → já abre a vertical.
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('vertical');
+    if (v) setSel(`v:${v}`);
+  }, []);
   const verVert = sel.startsWith('v:') ? sel.slice(2) : '';
   const verAdv = sel.startsWith('v:') ? '' : sel;
   const advNome = advs.find((a) => a.id === verAdv)?.name;
