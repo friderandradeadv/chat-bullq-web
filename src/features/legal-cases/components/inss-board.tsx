@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock, Stethoscope, Scale as ScaleIcon, Loader2 } from 'lucide-react';
+import {
+  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
+  useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
+} from '@dnd-kit/core';
+import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock, Stethoscope, Scale as ScaleIcon, Loader2, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
-import { legalCasesService, type KanbanCard, type KanbanData } from '@/features/legal-cases/services/legal-cases.service';
+import { legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
+import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { chipTextColor } from '@/lib/avatar';
 
@@ -33,9 +38,9 @@ function produtoColor(p: string | null): { bg: string; fg: string } {
   if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
   return { bg: 'rgb(209,209,209)', fg: '#101820' };
 }
-const colProduto = (p: string | null): string => cleanProduto(p) || 'Sem produto';
 
-// Abas do requerimento administrativo (metadata.faseData.inss_admin.resultado).
+// Situações do requerimento — colunas do kanban. `key` vazio = "Em análise"
+// (metadata.faseData.inss_admin.resultado ausente).
 type Resultado = '' | 'deferido' | 'recurso' | 'indeferido';
 const norm = (v: string | null): Resultado => {
   const s = (v ?? '').toLowerCase();
@@ -44,24 +49,28 @@ const norm = (v: string | null): Resultado => {
   if (s.includes('indefer')) return 'indeferido';
   return '';
 };
-const TABS: { key: Resultado; label: string; color: string }[] = [
-  { key: '', label: 'Em análise', color: '#868e96' },
-  { key: 'deferido', label: 'Deferido', color: '#2f9e44' },
-  { key: 'recurso', label: 'Em recurso', color: '#f59f00' },
-  { key: 'indeferido', label: 'Indeferido', color: '#e03131' },
+const COLS: { key: Resultado; dropId: string; label: string; color: string }[] = [
+  { key: '', dropId: 'res:analise', label: 'Em análise', color: '#868e96' },
+  { key: 'deferido', dropId: 'res:deferido', label: 'Deferido', color: '#2f9e44' },
+  { key: 'recurso', dropId: 'res:recurso', label: 'Em recurso', color: '#f59f00' },
+  { key: 'indeferido', dropId: 'res:indeferido', label: 'Indeferido', color: '#e03131' },
 ];
+const DROP_TO_RES: Record<string, Resultado> = Object.fromEntries(COLS.map((c) => [c.dropId, c.key]));
 
 /**
- * Board do INSS administrativo com abas por resultado do requerimento (em
- * análise / deferido / em recurso / indeferido). No indeferido, o card ganha o
- * botão "Entrar com o judicial", que move o próprio processo para a Fase Judicial.
+ * Board do INSS administrativo — kanban com as mesmas regras dos outros: colunas
+ * arrastáveis (aqui = situação do requerimento), toggle Kanban|Lista, drag-scroll
+ * e card padrão. Arrastar um card entre colunas grava o resultado; no indeferido,
+ * o card ganha "Entrar com o judicial" (move o processo para a Fase Judicial).
  */
 export function InssBoard() {
   const qc = useQueryClient();
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<Resultado>('');
+  const [view, setView] = useState<'kanban' | 'lista'>('kanban');
+  const [activeId, setActiveId] = useState<string | null>(null);
   const dragScroll = useDragScroll();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   useEffect(() => {
     const cid = new URLSearchParams(window.location.search).get('case');
@@ -79,30 +88,21 @@ export function InssBoard() {
     });
   }, [data, search]);
 
-  const counts = useMemo(() => {
-    const m: Record<Resultado, number> = { '': 0, deferido: 0, recurso: 0, indeferido: 0 };
-    for (const c of inss) m[norm(c.inssResultado)]++;
+  const byRes = useMemo(() => {
+    const m: Record<Resultado, KanbanCard[]> = { '': [], deferido: [], recurso: [], indeferido: [] };
+    for (const c of inss) m[norm(c.inssResultado)].push(c);
     return m;
   }, [inss]);
 
-  const shown = useMemo(() => inss.filter((c) => norm(c.inssResultado) === tab), [inss, tab]);
-
-  const columns = useMemo(() => {
-    const map = new Map<string, KanbanCard[]>();
-    for (const c of shown) {
-      const k = colProduto(c.produto);
-      (map.get(k) ?? map.set(k, []).get(k)!).push(c);
-    }
-    return Array.from(map, ([nome, cards]) => ({ nome, cards })).sort((a, b) => b.cards.length - a.cards.length);
-  }, [shown]);
-
   const setResultado = async (id: string, value: Resultado) => {
+    const card = inss.find((c) => c.id === id);
+    if (card && norm(card.inssResultado) === value) return;
     qc.setQueryData<KanbanData>(KEY, (old) =>
       old ? { ...old, cards: old.cards.map((x) => (x.id === id ? { ...x, inssResultado: value || null } : x)) } : old,
     );
     try {
       await legalCasesService.saveFaseField(id, 'inss_admin', 'resultado', value || null);
-      const lbl = TABS.find((t) => t.key === value)?.label ?? 'Em análise';
+      const lbl = COLS.find((c) => c.key === value)?.label ?? 'Em análise';
       toast.success(`Marcado como "${lbl}"`);
     } catch (e: any) {
       qc.invalidateQueries({ queryKey: KEY });
@@ -125,6 +125,18 @@ export function InssBoard() {
     }
   };
 
+  const onDragEnd = (e: DragEndEvent) => {
+    setActiveId(null);
+    const to = e.over?.id as string | undefined;
+    if (to && to in DROP_TO_RES) setResultado(e.active.id as string, DROP_TO_RES[to]);
+  };
+
+  // Lista (mesma tabela dos outros kanbans): situações viram "fases".
+  const listaPhases = COLS.map((c) => ({ key: c.dropId, label: c.label } as unknown as KanbanPhase));
+  const listaByPhase = Object.fromEntries(COLS.map((c) => [c.dropId, byRes[c.key]])) as Record<string, KanbanCard[]>;
+
+  const active = inss.find((c) => c.id === activeId) ?? null;
+
   return (
     <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200">
       <div className="shrink-0 border-b border-[#dbeaf5] px-6 pb-3 pt-6 dark:border-zinc-800">
@@ -134,7 +146,7 @@ export function InssBoard() {
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{inss.length}</span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
         </div>
-        <p className="mt-0.5 text-sm text-zinc-500">Requerimentos e recursos na esfera administrativa do INSS. No indeferimento, você entra com a ação judicial em um clique.</p>
+        <p className="mt-0.5 text-sm text-zinc-500">Arraste os cards entre as situações. No indeferimento, você entra com a ação judicial em um clique.</p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="relative">
@@ -142,49 +154,32 @@ export function InssBoard() {
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
               className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
-        </div>
-
-        {/* Abas por resultado */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {TABS.map((t) => {
-            const active = tab === t.key;
-            return (
-              <button key={t.key || 'analise'} onClick={() => setTab(t.key)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${active ? 'text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}
-                style={active ? { background: t.color } : { border: '1px solid #cfe0ed' }}>
-                <span className="h-2 w-2 rounded-full" style={{ background: active ? '#fff' : t.color }} />
-                {t.label}
-                <span className={`rounded-full px-1.5 text-xs ${active ? 'bg-white/25' : 'bg-[#edeff3] dark:bg-zinc-800'}`}>{counts[t.key]}</span>
-              </button>
-            );
-          })}
+          <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
+            <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#7048e8] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
+            <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#7048e8] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
+          </div>
         </div>
       </div>
 
       {isLoading ? (
         <p className="px-6 py-6 text-sm text-zinc-400">Carregando…</p>
-      ) : shown.length === 0 ? (
+      ) : inss.length === 0 ? (
         <div className="px-6 py-10">
           <div className="rounded-2xl border border-amber-300/50 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-            Nenhum processo nesta aba. {tab === '' ? 'Quando um card entrar na fase administrativa do INSS, ele aparece aqui.' : 'Marque o resultado no rodapé de cada card para movê-lo para esta aba.'}
+            Nenhum processo na fase administrativa do INSS. Quando um card entrar na etapa PROCESSO ADMINISTRATIVO - INSS, ele aparece aqui.
           </div>
         </div>
+      ) : view === 'lista' ? (
+        <CasesListView byPhase={listaByPhase} phases={listaPhases} onOpen={setOpenCaseId} accent={ACCENT} />
       ) : (
-        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
-          {columns.map((col) => (
-            <div key={col.nome} className="flex min-h-0 w-[300px] shrink-0 flex-col">
-              <div className="flex h-10 items-center gap-2 px-1">
-                <h2 className="truncate text-sm font-medium" style={{ color: ACCENT }}>{col.nome}</h2>
-                <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border border-[#dcdfe5] bg-[#f2f2f2] px-1.5 pb-2 pt-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-                {col.cards.map((c) => (
-                  <InssCard key={c.id} c={c} onOpen={setOpenCaseId} onSetResultado={setResultado} onEntrarJudicial={entrarJudicial} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
+            {COLS.map((col) => (
+              <Column key={col.dropId} col={col} items={byRes[col.key]} onOpen={setOpenCaseId} onEntrarJudicial={entrarJudicial} />
+            ))}
+          </div>
+          <DragOverlay>{active ? <InssCard c={active} onEntrarJudicial={entrarJudicial} overlay /> : null}</DragOverlay>
+        </DndContext>
       )}
 
       {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={data?.phases ?? []} onClose={() => setOpenCaseId(null)} />}
@@ -192,41 +187,86 @@ export function InssBoard() {
   );
 }
 
-function InssCard({
-  c, onOpen, onSetResultado, onEntrarJudicial,
+function Column({
+  col, items, onOpen, onEntrarJudicial,
 }: {
-  c: KanbanCard;
+  col: { key: Resultado; dropId: string; label: string; color: string };
+  items: KanbanCard[];
   onOpen: (id: string) => void;
-  onSetResultado: (id: string, v: Resultado) => void;
   onEntrarJudicial: (c: KanbanCard) => void;
 }) {
+  const { setNodeRef, isOver } = useDroppable({ id: col.dropId });
+  return (
+    <div className="flex min-h-0 w-[300px] shrink-0 flex-col">
+      <div className="flex h-10 items-center gap-2 px-1">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} />
+        <h2 className="truncate text-sm font-medium" style={{ color: col.color }}>{col.label}</h2>
+        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+      </div>
+      <div ref={setNodeRef}
+        className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border px-1.5 pb-2 pt-3 transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
+        {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
+        {items.map((c) => <InssCard key={c.id} c={c} onOpen={onOpen} onEntrarJudicial={onEntrarJudicial} />)}
+      </div>
+    </div>
+  );
+}
+
+function InssCard({
+  c, onOpen, onEntrarJudicial, overlay,
+}: {
+  c: KanbanCard;
+  onOpen?: (id: string) => void;
+  onEntrarJudicial: (c: KanbanCard) => void;
+  overlay?: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
+  const down = useRef<{ x: number; y: number } | null>(null);
   const prod = produtoColor(c.produto);
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
-  const res = norm(c.inssResultado);
+  const indeferido = norm(c.inssResultado) === 'indeferido';
   const [busy, setBusy] = useState(false);
+  const style: React.CSSProperties = {
+    borderLeftWidth: 4, borderLeftColor: ACCENT,
+    ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
+  };
 
   return (
-    <div className="w-full rounded border border-[#cfe0ed] bg-white py-2.5 pl-2 pr-3 text-left shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-      <button onClick={() => onOpen(c.id)} className="block w-full text-left">
-        <div className="-ml-1 flex flex-wrap items-center gap-1">
-          {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
-          {(c.tags ?? []).map((t) => <span key={t.id} className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: t.color, color: chipTextColor(t.color) }}>{t.name}</span>)}
-        </div>
-        <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
-        {c.cnj && (
-          <span className="mt-2 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500">
-            <Scale className="h-3 w-3 shrink-0" /><span className="truncate">{c.cnj}</span>
-            <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(c.cnj!); toast.success('Nº copiado'); }} title="Copiar nº" className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"><Copy className="h-3 w-3" /></span>
-          </span>
-        )}
-        {c.value != null && c.value > 0 && <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</p>}
-        {c.proximoPrazo && (
-          <span className={`mt-2 inline-flex items-center gap-1 rounded px-1.5 text-[11px] ${overdue ? 'h-5 bg-[#c22e00] text-white' : 'text-[#48626f] dark:text-zinc-400'}`}>
-            <CalendarClock className="h-3.5 w-3.5" /> {overdue ? 'Venc' : 'Vence'} {fmtDate(c.proximoPrazo.dueDate)}{c.proximoPrazo.type === 'FATAL' && <span className="font-semibold">· fatal</span>}
-          </span>
-        )}
-      </button>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
+      onClick={(e) => {
+        if (overlay || !onOpen) return;
+        const d = down.current;
+        if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
+      }}
+      className={`cursor-pointer touch-none rounded border border-[#cfe0ed] bg-white py-3 pl-2 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${isDragging && !overlay ? 'opacity-40' : ''} ${overlay ? 'rotate-2 shadow-lg' : ''}`}
+    >
+      <div className="-ml-1 flex flex-wrap items-center gap-1">
+        {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
+        {(c.tags ?? []).map((t) => <span key={t.id} className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: t.color, color: chipTextColor(t.color) }}>{t.name}</span>)}
+      </div>
+
+      <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      {c.opponent && <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
+
+      {c.cnj && (
+        <p className="mt-2 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500">
+          <Scale className="h-3 w-3 shrink-0" /><span className="truncate">{c.cnj}</span>
+          <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(c.cnj!); toast.success('Nº copiado'); }} onPointerDown={(e) => e.stopPropagation()} title="Copiar nº" className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"><Copy className="h-3 w-3" /></button>
+        </p>
+      )}
+
+      {c.value != null && c.value > 0 && <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</p>}
+      {c.proximoPrazo && (
+        <span className={`mt-2 inline-flex items-center gap-1 rounded px-1.5 text-[11px] ${overdue ? 'h-5 bg-[#c22e00] text-white' : 'text-[#48626f] dark:text-zinc-400'}`}>
+          <CalendarClock className="h-3.5 w-3.5" /> {overdue ? 'Venc' : 'Vence'} {fmtDate(c.proximoPrazo.dueDate)}{c.proximoPrazo.type === 'FATAL' && <span className="font-semibold">· fatal</span>}
+        </span>
+      )}
 
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#eef2f8] pt-1.5 dark:border-zinc-800">
         <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4b5863] dark:text-zinc-400" title="Tempo na fase"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNaFase)}</span>
@@ -236,25 +276,12 @@ function InssCard({
           : <span title={c.responsible.name} className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>)}
       </div>
 
-      {/* Resultado do requerimento (define a aba) */}
-      <div className="mt-2 flex items-center gap-1.5">
-        <select
-          value={res}
-          onChange={(e) => onSetResultado(c.id, e.target.value as Resultado)}
-          className="h-7 flex-1 rounded-md border border-[#cfe0ed] bg-white px-1.5 text-[11px] text-[#101820] focus:border-[#7048e8] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-        >
-          <option value="">Em análise</option>
-          <option value="deferido">Deferido</option>
-          <option value="recurso">Em recurso</option>
-          <option value="indeferido">Indeferido</option>
-        </select>
-      </div>
-
-      {res === 'indeferido' && (
+      {indeferido && !overlay && (
         <button
           disabled={busy}
-          onClick={async () => { setBusy(true); try { await onEntrarJudicial(c); } finally { setBusy(false); } }}
-          className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[#7048e8] px-2 py-1.5 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-60"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={async (e) => { e.stopPropagation(); setBusy(true); try { await onEntrarJudicial(c); } finally { setBusy(false); } }}
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[#7048e8] px-2 py-1.5 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-60"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScaleIcon className="h-3.5 w-3.5" />} Entrar com o judicial
         </button>
