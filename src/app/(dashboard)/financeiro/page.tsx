@@ -478,7 +478,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const txs = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return data.transacoes.filter((t) => {
-      if (isCard(t)) return false; // gastos de cartão vivem na visão "Cartão de crédito"
+      if (isCard(t) && t.valor < 0) return false; // GASTOS do cartão vivem na fatura (fora do caixa); ENTRADAS na conta continuam no livro-razão
       const iso = toISOInput(t.data);
       if (temPeriodo) { if (deISO && iso < deISO) return false; if (ateISO && iso > ateISO) return false; }
       else if (mesSel && mesKey(t) !== mesSel) return false;
@@ -915,21 +915,55 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   const contasPagam = useMemo(() => contas.filter((c) => !c.cartao), [contas]);
   const [cardId, setCardId] = useState<string>(cartoes[0]?.id ?? '');
   const cartao = cartoes.find((c) => c.id === cardId) ?? cartoes[0];
-  const [pagando, setPagando] = useState(false);
   const [contaPg, setContaPg] = useState<string>(contasPagam[0]?.id ?? '');
   const [dataPg, setDataPg] = useState<string>(toISOInput(hojeBR()));
+  // Fatura selecionada para pagar (mês/ciclo).
+  const [pgFatura, setPgFatura] = useState<{ key: string; label: string; venc: string; txIds: string[]; total: number } | null>(null);
   const qc = useQueryClient();
 
+  const fechamento = cartao?.fechamento ?? 0;
+  const vencDia = cartao?.vencimento ?? 0;
   const gastos = useMemo(() => data.transacoes.filter((t) => t.conta === cartao?.id && t.valor < 0), [data.transacoes, cartao?.id]);
-  const emAberto = useMemo(() => gastos.filter((t) => txStatus(t) === 'a_pagar'), [gastos]);
-  const pagos = useMemo(() => gastos.filter((t) => txStatus(t) === 'pago'), [gastos]);
-  const abertoTotal = useMemo(() => emAberto.reduce((s, t) => s + Math.abs(t.valor), 0), [emAberto]);
 
-  const pagar = useMutation({
-    mutationFn: () => financeiroService.pagarFatura({ cartaoId: cartao!.id, contaPagamentoId: contaPg, data: toBR(dataPg) }),
-    onSuccess: (r) => { toast.success(`Fatura paga: ${brl2(r.pago)} · ${r.baixados} gasto(s) baixado(s)`); setPagando(false); onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] }); },
+  // A qual fatura (mês/ciclo) um gasto pertence: se o dia > fechamento, cai na fatura do mês seguinte.
+  const faturaInfo = (dataBR: string) => {
+    const m = (dataBR || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (!m) return { key: '0000-00', label: 'Sem data', fecha: '', venc: '' };
+    const dia = +m[1]; let mes = +m[2]; let ano = +m[3];
+    if (fechamento > 0 && dia > fechamento) { mes += 1; if (mes > 12) { mes = 1; ano += 1; } }
+    const key = `${ano}-${String(mes).padStart(2, '0')}`;
+    const fecha = fechamento > 0 ? `${String(fechamento).padStart(2, '0')}/${String(mes).padStart(2, '0')}/${ano}` : '';
+    let vm = mes + 1, va = ano; if (vm > 12) { vm = 1; va += 1; }
+    const venc = vencDia > 0 ? `${String(vencDia).padStart(2, '0')}/${String(vm).padStart(2, '0')}/${va}` : '';
+    return { key, label: mesLabel(key), fecha, venc };
+  };
+
+  // Agrupa por fatura (mês do ciclo). Em aberto = gastos a_pagar; pagas = já baixadas.
+  const faturas = useMemo(() => {
+    const map = new Map<string, { info: ReturnType<typeof faturaInfo>; abertos: FinTransacao[]; pagos: FinTransacao[] }>();
+    for (const t of gastos) {
+      const info = faturaInfo(t.data);
+      if (!map.has(info.key)) map.set(info.key, { info, abertos: [], pagos: [] });
+      const g = map.get(info.key)!;
+      if (txStatus(t) === 'a_pagar') g.abertos.push(t); else g.pagos.push(t);
+    }
+    return [...map.values()].sort((a, b) => b.info.key.localeCompare(a.info.key));
+  }, [gastos, fechamento, vencDia]);
+
+  const abertoTotal = faturas.reduce((s, f) => s + f.abertos.reduce((x, t) => x + Math.abs(t.valor), 0), 0);
+
+  const pagarM = useMutation({
+    mutationFn: () => financeiroService.pagarFatura({ cartaoId: cartao!.id, contaPagamentoId: contaPg, data: toBR(dataPg), txIds: pgFatura!.txIds }),
+    onSuccess: (r) => { toast.success(`Fatura ${pgFatura?.label} paga: ${brl2(r.pago)} · ${r.baixados} gasto(s)`); setPgFatura(null); onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] }); },
     onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pagar fatura'),
   });
+
+  const abrirPagar = (f: (typeof faturas)[number]) => {
+    const total = f.abertos.reduce((s, t) => s + Math.abs(t.valor), 0);
+    setContaPg(contasPagam[0]?.id ?? '');
+    setDataPg(f.info.venc ? toISOInput(f.info.venc) : toISOInput(hojeBR()));
+    setPgFatura({ key: f.info.key, label: f.info.label, venc: f.info.venc, txIds: f.abertos.map((t) => t.id!).filter(Boolean), total });
+  };
 
   const linha = (t: FinTransacao) => (
     <div key={t.id} className="flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-sm dark:border-zinc-800/70">
@@ -942,6 +976,7 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   );
 
   if (!cartao) return null;
+  const semCiclo = !(fechamento > 0);
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -952,29 +987,42 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
         ) : (
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200"><CreditCard className="h-4 w-4" style={{ color: cartao.cor ?? '#820AD1' }} /> {cartao.nome}</span>
         )}
-        <button onClick={() => { setContaPg(contasPagam[0]?.id ?? ''); setDataPg(toISOInput(hojeBR())); setPagando(true); }} disabled={abertoTotal <= 0 || contasPagam.length === 0} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"><Banknote className="h-3.5 w-3.5" /> Pagar fatura</button>
+        <span className="text-xs text-zinc-400">{fechamento > 0 ? `fecha dia ${fechamento}` : 'sem dia de fechamento'}{vencDia > 0 ? ` · vence dia ${vencDia}` : ''} · em aberto <strong className="text-rose-600">{brl2(abertoTotal)}</strong></span>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="rounded-lg bg-rose-50 py-2 text-center dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Fatura em aberto</p><p className="text-lg font-bold tabular-nums text-rose-600">{brl2(abertoTotal)}</p></div>
-        <div className="rounded-lg bg-zinc-50 py-2 text-center dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Gastos em aberto</p><p className="text-lg font-bold tabular-nums text-zinc-600 dark:text-zinc-300">{emAberto.length}</p></div>
-        <div className="rounded-lg bg-emerald-50 py-2 text-center dark:bg-emerald-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Já pago (histórico)</p><p className="text-lg font-bold tabular-nums text-emerald-600">{brl2(pagos.reduce((s, t) => s + Math.abs(t.valor), 0))}</p></div>
+      {semCiclo && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-400">Defina o <strong>dia de fechamento e vencimento</strong> deste cartão em <strong>Contas</strong> para separar as faturas por mês (ex.: fecha 26, vence 3).</p>}
+      <p className="mt-2 text-xs text-zinc-400">Os gastos do cartão ficam <strong>fora do caixa</strong> até a fatura ser paga. Ao pagar, entra <strong>uma saída</strong> no livro-razão (na conta escolhida) — aí sim conta no saldo real.</p>
+
+      <div className="mt-3 space-y-3">
+        {faturas.map((f) => {
+          const totalAberto = f.abertos.reduce((s, t) => s + Math.abs(t.valor), 0);
+          const totalPago = f.pagos.reduce((s, t) => s + Math.abs(t.valor), 0);
+          const paga = f.abertos.length === 0 && f.pagos.length > 0;
+          return (
+            <div key={f.info.key} className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+              <div className="flex flex-wrap items-center gap-2 bg-zinc-50/70 px-3 py-2 dark:bg-zinc-800/30">
+                <CreditCard className="h-4 w-4 shrink-0" style={{ color: cartao.cor ?? '#820AD1' }} />
+                <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Fatura {f.info.label}</span>
+                {(f.info.fecha || f.info.venc) && <span className="text-[11px] text-zinc-400">{f.info.fecha ? `fecha ${f.info.fecha.slice(0, 5)}` : ''}{f.info.venc ? ` · vence ${f.info.venc.slice(0, 5)}` : ''}</span>}
+                {paga ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">paga</span> : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">em aberto</span>}
+                <span className="ml-auto text-sm font-bold tabular-nums text-rose-600">{brl2(totalAberto || totalPago)}</span>
+                {f.abertos.length > 0 && contasPagam.length > 0 && (
+                  <button onClick={() => abrirPagar(f)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-2.5 py-1 text-xs font-semibold text-white transition hover:opacity-90"><Banknote className="h-3.5 w-3.5" /> Pagar fatura</button>
+                )}
+              </div>
+              {f.abertos.map(linha)}
+              {f.pagos.length > 0 && <><div className="border-t border-zinc-100 bg-zinc-50/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#02883C] dark:border-zinc-800/70 dark:bg-zinc-800/20">Pago ({f.pagos.length})</div>{f.pagos.map(linha)}</>}
+            </div>
+          );
+        })}
+        {faturas.length === 0 && <p className="rounded-xl border border-zinc-200/70 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhum gasto no cartão. Suba o extrato do cartão em <strong>Importar extrato</strong> (escolha a conta do cartão).</p>}
       </div>
 
-      <p className="mt-3 text-xs text-zinc-400">Os gastos do cartão ficam <strong>fora do caixa</strong> até a fatura ser paga. Ao pagar, entra <strong>uma saída</strong> na conta escolhida (aí sim conta no saldo real).</p>
-
-      <div className="mt-2 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
-        <div className="flex items-center gap-1.5 bg-zinc-50/50 px-3 py-1 dark:bg-zinc-800/20"><span className="text-[10px] font-bold uppercase tracking-wide text-[#F08C00]">Em aberto (fatura atual)</span><span className="text-[10px] text-zinc-400">({emAberto.length})</span></div>
-        {emAberto.map(linha)}
-        {emAberto.length === 0 && <p className="border-t border-zinc-100 py-6 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum gasto em aberto. Suba o extrato do cartão em <strong>Importar extrato</strong> (escolha a conta do cartão).</p>}
-        {pagos.length > 0 && <><div className="flex items-center gap-1.5 border-t border-zinc-100 bg-zinc-50/50 px-3 py-1 dark:border-zinc-800/70 dark:bg-zinc-800/20"><span className="text-[10px] font-bold uppercase tracking-wide text-[#02883C]">Faturas pagas (histórico)</span><span className="text-[10px] text-zinc-400">({pagos.length})</span></div>{pagos.slice(0, 40).map(linha)}</>}
-      </div>
-
-      {pagando && (
+      {pgFatura && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="mb-3 flex items-center justify-between"><h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Pagar fatura · {cartao.nome}</h3><button onClick={() => setPagando(false)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button></div>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Vai baixar <strong>{emAberto.length}</strong> gasto(s) em aberto (<strong className="text-rose-600">{brl2(abertoTotal)}</strong>) e lançar uma saída na conta escolhida.</p>
+            <div className="mb-3 flex items-center justify-between"><h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Pagar fatura {pgFatura.label}</h3><button onClick={() => setPgFatura(null)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button></div>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Baixa <strong>{pgFatura.txIds.length}</strong> gasto(s) desta fatura (<strong className="text-rose-600">{brl2(pgFatura.total)}</strong>) e lança uma saída no livro-razão.</p>
             <div className="mt-3 space-y-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Pagar com a conta</p>
@@ -983,13 +1031,13 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
                 </select>
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Data do pagamento</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Data do pagamento{pgFatura.venc ? ` (vence ${pgFatura.venc.slice(0, 5)})` : ''}</p>
                 <input type="date" value={dataPg} onChange={(e) => setDataPg(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
               </div>
             </div>
             <div className="mt-4 flex items-center justify-end gap-2">
-              <button onClick={() => setPagando(false)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
-              <button onClick={() => pagar.mutate()} disabled={pagar.isPending || !contaPg || abertoTotal <= 0} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{pagar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} Pagar {brl2(abertoTotal)}</button>
+              <button onClick={() => setPgFatura(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              <button onClick={() => pagarM.mutate()} disabled={pagarM.isPending || !contaPg} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{pagarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} Pagar {brl2(pgFatura.total)}</button>
             </div>
           </div>
         </div>
@@ -2071,9 +2119,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
       else toast.success(`${linhas.length} lançamento(s) lido(s) do extrato`);
     } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setUpLoading(false); }
   };
-  const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string; cartao?: boolean } | null>(null);
+  const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string; cartao?: boolean; fechamento?: string; vencimento?: string } | null>(null);
   const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
-  const addM = useMutation({ mutationFn: (i: { nome: string; banco: string; saldoInicial: number; cartao?: boolean }) => financeiroService.addConta(i), onSuccess: () => { inval(); toast.success('Conta adicionada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+  const addM = useMutation({ mutationFn: (i: { nome: string; banco: string; saldoInicial: number; cartao?: boolean; fechamento?: number; vencimento?: number }) => financeiroService.addConta(i), onSuccess: () => { inval(); toast.success('Conta adicionada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
   const updM = useMutation({ mutationFn: ({ id, i }: { id: string; i: any }) => financeiroService.updateConta(id, i), onSuccess: () => { inval(); toast.success('Conta atualizada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
   const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeConta(id), onSuccess: () => { inval(); toast.success('Conta removida'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
 
@@ -2095,7 +2143,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
 
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
-    const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial), cartao: !!form.cartao };
+    const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial), cartao: !!form.cartao, fechamento: form.cartao && form.fechamento ? Number(form.fechamento) : undefined, vencimento: form.cartao && form.vencimento ? Number(form.vencimento) : undefined };
     if (form.id) updM.mutate({ id: form.id, i }); else addM.mutate(i);
   };
 
@@ -2161,7 +2209,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Saldo somado das contas" value={brl(total)} hint={`${contas.length} conta(s)`} accent={total >= 0 ? '#2F9E44' : '#E03131'} />
         <MiniStat label="Lançamentos sem conta" value={String(semConta)} hint="marque a conta neles para conciliar" accent="#F59F00" />
         <div className="rounded-2xl border border-dashed border-[#DEE2E6] bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-900">
-          <button onClick={() => setForm({ nome: '', banco: 'nubank', saldoInicial: '', cartao: false })} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Nova conta</button>
+          <button onClick={() => setForm({ nome: '', banco: 'nubank', saldoInicial: '', cartao: false, fechamento: '', vencimento: '' })} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Nova conta</button>
         </div>
       </div>
 
@@ -2222,7 +2270,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100"><span className="h-3 w-3 rounded-full" style={{ background: c.cor ?? '#868E96' }} />{c.nome}</span>
                 <span className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                  <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ','), cartao: !!c.cartao })} className="rounded p-1 text-zinc-300 hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ','), cartao: !!c.cartao, fechamento: c.fechamento ? String(c.fechamento) : '', vencimento: c.vencimento ? String(c.vencimento) : '' })} className="rounded p-1 text-zinc-300 hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                   <button onClick={() => { if (confirm(`Remover a conta "${c.nome}"?`)) delM.mutate(c.id); }} className="rounded p-1 text-zinc-300 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                 </span>
               </div>
@@ -2255,8 +2303,14 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <Field label="Saldo inicial (opcional)"><input value={form.saldoInicial} onChange={(e) => setForm({ ...form, saldoInicial: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
               <label className="flex items-start gap-2 rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
                 <input type="checkbox" checked={!!form.cartao} onChange={(e) => setForm({ ...form, cartao: e.target.checked })} className="mt-0.5 h-4 w-4 accent-[#820AD1]" />
-                <span className="text-sm text-zinc-600 dark:text-zinc-300">É <strong>cartão de crédito</strong><span className="mt-0.5 block text-[11px] text-zinc-400">Os gastos ficam na fatura (fora do caixa) até você pagar a fatura. Use a visão “Cartão de crédito” em Lançamentos.</span></span>
+                <span className="text-sm text-zinc-600 dark:text-zinc-300">É <strong>cartão de crédito</strong><span className="mt-0.5 block text-[11px] text-zinc-400">Os <strong>gastos</strong> (despesas) ficam na fatura, fora do caixa, até você pagar. As entradas continuam no livro-razão. Dica: se o banco tem conta E cartão (ex.: Nubank), crie <strong>duas contas separadas</strong> — uma conta e uma cartão.</span></span>
               </label>
+              {form.cartao && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Fecha no dia"><input value={form.fechamento ?? ''} onChange={(e) => setForm({ ...form, fechamento: e.target.value.replace(/\D/g, '').slice(0, 2) })} inputMode="numeric" placeholder="ex.: 26" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                  <Field label="Vence no dia"><input value={form.vencimento ?? ''} onChange={(e) => setForm({ ...form, vencimento: e.target.value.replace(/\D/g, '').slice(0, 2) })} inputMode="numeric" placeholder="ex.: 3" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                </div>
+              )}
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setForm(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>

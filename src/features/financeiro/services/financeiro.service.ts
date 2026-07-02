@@ -15,7 +15,7 @@ export interface FinCliente { cliente: string; recebido: number; parcelas: numbe
 
 export type TxStatus = 'a_receber' | 'recebido' | 'a_pagar' | 'pago';
 export type AcessoNivel = 'full' | 'cases' | 'none';
-export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean; cartao?: boolean }
+export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean; cartao?: boolean; fechamento?: number; vencimento?: number }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
 export interface RateioExito { bruto: number; cliente: number; sucumbencia: number; honorarios: number }
 export interface FinTransacao {
@@ -193,7 +193,7 @@ export const financeiroService = {
     const { data } = await api.get('/financeiro/contas');
     return data.data ?? data;
   },
-  async addConta(input: { nome: string; banco?: string; cor?: string; saldoInicial?: number; cartao?: boolean }): Promise<Conta> {
+  async addConta(input: { nome: string; banco?: string; cor?: string; saldoInicial?: number; cartao?: boolean; fechamento?: number; vencimento?: number }): Promise<Conta> {
     const { data } = await api.post('/financeiro/contas', input);
     return data.data ?? data;
   },
