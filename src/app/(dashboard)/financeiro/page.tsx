@@ -295,6 +295,18 @@ const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padSt
 const toBR = (iso: string) => { const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };
 const toISOInput = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
 const parseValor = (s: string) => Number(String(s).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0;
+// Moeda: máscara enquanto digita (só dígitos → centavos → "1.234,56") + número → texto.
+const maskBRL = (raw: string) => { const d = String(raw).replace(/\D/g, ''); if (!d) return ''; return (Number(d) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+const fmtMoney = (n: number) => (Math.abs(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Input de dinheiro: mostra "R$" fixo e formata em moeda conforme o usuário digita.
+function MoneyInput({ value, onChange, placeholder = '0,00', readOnly = false, autoFocus = false }: { value: string; onChange?: (v: string) => void; placeholder?: string; readOnly?: boolean; autoFocus?: boolean }) {
+  return (
+    <div className={`flex items-center rounded-md border px-2 ${readOnly ? 'border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50' : 'border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900'}`}>
+      <span className="mr-1 shrink-0 text-xs text-zinc-400">R$</span>
+      <input value={value} onChange={(e) => onChange?.(maskBRL(e.target.value))} readOnly={readOnly} autoFocus={autoFocus} inputMode="numeric" placeholder={placeholder} className={`w-full bg-transparent py-1.5 text-right text-sm tabular-nums outline-none ${readOnly ? 'text-zinc-600 dark:text-zinc-300' : ''}`} />
+    </div>
+  );
+}
 
 const STATUS_TX: Record<TxStatus, { label: string; badge: string; cor: string }> = {
   a_receber: { label: 'A receber', badge: 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300', cor: '#F59F00' },
@@ -305,7 +317,7 @@ const STATUS_TX: Record<TxStatus, { label: string; badge: string; cor: string }>
 const txStatus = (t: FinTransacao): TxStatus => t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
 const ehLiquidado = (s: TxStatus) => s === 'recebido' || s === 'pago';
 
-interface SplitRow { tipo: 'socio' | 'associado'; userId: string; valor: string }
+interface SplitRow { tipo: 'socio' | 'associado'; userId: string; valor: string; modo: 'valor' | 'pct'; pct: string }
 interface RateioForm { bruto: string; cliente: string; sucumbencia: string; honorarios: string }
 interface Editor {
   id: string | null; serieId: string | null; tipo: 'receita' | 'despesa';
@@ -437,6 +449,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const contaNome = (id?: string | null) => contas.find((c) => c.id === id)?.nome ?? null;
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+  const { organizations, activeOrgId } = useAuthStore();
+  const orgName = organizations.find((o) => o.id === activeOrgId)?.name ?? 'Escritório';
   // cliente → responsável (do processo) para sugestão automática nos honorários
   const { data: juri } = useQuery({ queryKey: ['jurimetria'], queryFn: () => legalCasesService.jurimetria(), staleTime: 300_000 });
   const clienteResp = useMemo(() => {
@@ -503,12 +517,16 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const [importing, setImporting] = useState(false);
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: '', valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', contactId: '', caseId: '', procLabel: '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: String(Math.abs(t.valor)).replace('.', ','), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: String(s.valor).replace('.', ',') })), rateio: t.rateio ? { bruto: String(t.rateio.bruto).replace('.', ','), cliente: String(t.rateio.cliente).replace('.', ','), sucumbencia: String(t.rateio.sucumbencia).replace('.', ','), honorarios: String(t.rateio.honorarios).replace('.', ',') } : { ...RATEIO_VAZIO } });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: orgName, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', contactId: '', caseId: '', procLabel: '' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO } });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
-  const buildSplit = (ed: Editor) => ed.split.filter((r) => r.userId && parseValor(r.valor) > 0).map((r) => ({ tipo: r.tipo, userId: r.userId, nome: advogados.find((a) => a.id === r.userId)?.name ?? '', valor: parseValor(r.valor) }));
+  // Base do rateio entre advogados: no êxito é honorário+sucumbência; senão, o valor.
+  const splitBase = (ed: Editor) => (ehExito(ed) && parseValor(ed.rateio.bruto) > 0) ? parseValor(ed.rateio.honorarios) + parseValor(ed.rateio.sucumbencia) : parseValor(ed.valor);
+  // Valor efetivo de uma linha do rateio: em % vira R$ sobre a base (auto-calculado).
+  const rowValor = (r: SplitRow, base: number) => r.modo === 'pct' ? Math.round(base * (parseValor(r.pct) / 100) * 100) / 100 : parseValor(r.valor);
+  const buildSplit = (ed: Editor) => { const base = splitBase(ed); return ed.split.filter((r) => r.userId && rowValor(r, base) > 0).map((r) => ({ tipo: r.tipo, userId: r.userId, nome: advogados.find((a) => a.id === r.userId)?.name ?? '', valor: rowValor(r, base) })); };
   // rateio (prestação de contas) só faz sentido em honorário de êxito com bruto preenchido
   const ehExito = (ed: Editor) => /honor/i.test(ed.categoria) && ed.subtipo === 'exito';
   const rateioNosso = (r: RateioForm) => parseValor(r.honorarios) + parseValor(r.sucumbencia);
@@ -641,8 +659,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
       {/* Modal de edição / novo lançamento */}
       {editor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditor(null)}>
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 scrollbar-thin" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 scrollbar-thin">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">{editor.id ? 'Editar lançamento' : 'Novo lançamento'}{editor.parcelas && +editor.parcelas > 1 && !editor.id ? ` · ${editor.parcelas}×` : ''}</h3>
               <button onClick={() => setEditor(null)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
@@ -663,7 +681,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                   <div className="grid gap-3 sm:grid-cols-2">
                     {exitoRateio
                       ? <Field label="Valor (entra no caixa = honorário + sucumbência)"><input value={brl2(nosso)} readOnly className="w-full cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-right text-sm font-semibold tabular-nums text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-300" /></Field>
-                      : <Field label="Valor (cada parcela)"><input value={editor.valor} onChange={(e) => setEditor({ ...editor, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>}
+                      : <Field label="Valor (cada parcela)"><MoneyInput value={editor.valor} onChange={(v) => setEditor({ ...editor, valor: v })} /></Field>}
                     <Field label="Fonte"><select value={editor.categoria} onChange={(e) => setEditor({ ...editor, categoria: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{cats.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
                   </div>
                 );
@@ -685,10 +703,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                   <div className="space-y-2.5 rounded-lg border border-violet-200/70 bg-violet-50/40 p-3 dark:border-violet-900/40 dark:bg-violet-900/10">
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Do <strong>bruto</strong> recebido, separe o que volta ao <strong>cliente</strong> e o que fica para o escritório (<strong>honorário contratual</strong> + <strong>sucumbência</strong>). O que fica é o que entra no caixa e depois se divide entre os advogados (abaixo).</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <Field label="Bruto recebido"><input value={editor.rateio.bruto} onChange={(e) => setEditor({ ...editor, rateio: { ...editor.rateio, bruto: e.target.value } })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-                      <Field label="Cliente recebe"><input value={editor.rateio.cliente} onChange={(e) => setEditor({ ...editor, rateio: { ...editor.rateio, cliente: e.target.value } })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-                      <Field label="Honorário (escritório)"><input value={editor.rateio.honorarios} onChange={(e) => setEditor({ ...editor, rateio: { ...editor.rateio, honorarios: e.target.value } })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-                      <Field label="Sucumbência (escritório)"><input value={editor.rateio.sucumbencia} onChange={(e) => setEditor({ ...editor, rateio: { ...editor.rateio, sucumbencia: e.target.value } })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                      <Field label="Bruto recebido"><MoneyInput value={editor.rateio.bruto} onChange={(v) => setEditor({ ...editor, rateio: { ...editor.rateio, bruto: v } })} /></Field>
+                      <Field label="Cliente recebe"><MoneyInput value={editor.rateio.cliente} onChange={(v) => setEditor({ ...editor, rateio: { ...editor.rateio, cliente: v } })} /></Field>
+                      <Field label="Honorário (escritório)"><MoneyInput value={editor.rateio.honorarios} onChange={(v) => setEditor({ ...editor, rateio: { ...editor.rateio, honorarios: v } })} /></Field>
+                      <Field label="Sucumbência (escritório)"><MoneyInput value={editor.rateio.sucumbencia} onChange={(v) => setEditor({ ...editor, rateio: { ...editor.rateio, sucumbencia: v } })} /></Field>
                     </div>
                     {(() => {
                       const bruto = parseValor(editor.rateio.bruto);
@@ -713,15 +731,25 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 </div>
               </Field>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label={editor.tipo === 'receita' ? 'Competência' : 'Data'}><input type="date" value={editor.dataISO} onChange={(e) => setEditor({ ...editor, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-                <Field label="Vencimento"><input type="date" value={editor.vencISO} onChange={(e) => setEditor({ ...editor, vencISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-                {ehLiquidado(editor.status) && <Field label="Pagamento"><input type="date" value={editor.pagtoISO} onChange={(e) => setEditor({ ...editor, pagtoISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>}
+              {/* Datas: sempre a competência (mês de referência) + UMA data conforme a situação —
+                  se já caiu (recebido/pago) mostra quando entrou/saiu; se está a receber/pagar, o vencimento. */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Competência (mês de referência)"><input type="date" value={editor.dataISO} onChange={(e) => setEditor({ ...editor, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                {ehLiquidado(editor.status)
+                  ? <Field label={editor.tipo === 'receita' ? 'Recebido em' : 'Pago em'}><input type="date" value={editor.pagtoISO} onChange={(e) => setEditor({ ...editor, pagtoISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                  : <Field label="Vence em"><input type="date" value={editor.vencISO} onChange={(e) => setEditor({ ...editor, vencISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Pagador (cliente/origem)"><BuscaCliente value={editor.pagador} onPick={(c) => setEditor((ed) => ed ? { ...ed, pagador: c?.nome ?? '', contactId: c?.id, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(c?.nome ?? '') : '') } : ed)} onText={(t) => setEditor((ed) => ed ? { ...ed, pagador: t, contactId: undefined, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(t) : '') } : ed)} /></Field>
-                <Field label="Recebedor (destino)"><input value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="quem recebe (escritório, advogado…)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Recebedor (destino)">
+                  <input list="fin-recebedores" value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="quem recebe (escritório, advogado…)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                  <datalist id="fin-recebedores">
+                    <option value={orgName} />
+                    {advogados.map((a) => <option key={a.id} value={a.name} />)}
+                  </datalist>
+                  {editor.recebedor !== orgName && <button type="button" onClick={() => setEditor({ ...editor, recebedor: orgName })} className="mt-1 text-[11px] font-medium text-[#228BE6] hover:underline">usar o escritório ({orgName})</button>}
+                </Field>
               </div>
 
               <Field label="Vincular a um processo (opcional — pra quitar/registrar no processo)">
@@ -750,31 +778,45 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 </Field>
               </div>
 
-              {/* Rateio (split) — só para honorários */}
-              {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && (
+              {/* Rateio (split) — só para honorários. Cada advogado por R$ ou % (auto-calcula). */}
+              {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && (() => {
+                const base = splitBase(editor);
+                return (
                 <Field label="Rateio de honorários (sócio / associado · o resto fica com o escritório)">
                   <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
-                    {editor.split.map((r, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <select value={r.userId} onChange={(e) => setEditor({ ...editor, split: editor.split.map((x, j) => j === i ? { ...x, userId: e.target.value } : x) })} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                    {base > 0 && <p className="text-[11px] text-zinc-400">Base do rateio: <strong className="text-zinc-600 dark:text-zinc-300">{brl2(base)}</strong> — informe em R$ ou % de cada advogado.</p>}
+                    {editor.split.map((r, i) => {
+                      const upd = (patch: Partial<SplitRow>) => setEditor({ ...editor, split: editor.split.map((x, j) => j === i ? { ...x, ...patch } : x) });
+                      const efetivo = rowValor(r, base);
+                      return (
+                      <div key={i} className="flex flex-wrap items-center gap-1.5">
+                        <select value={r.userId} onChange={(e) => upd({ userId: e.target.value })} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
                           <option value="">advogado…</option>
                           {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                         </select>
-                        <select value={r.tipo} onChange={(e) => setEditor({ ...editor, split: editor.split.map((x, j) => j === i ? { ...x, tipo: e.target.value as 'socio' | 'associado' } : x) })} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                        <select value={r.tipo} onChange={(e) => upd({ tipo: e.target.value as 'socio' | 'associado' })} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
                           <option value="socio">Sócio</option>
                           <option value="associado">Associado</option>
                         </select>
-                        <input value={r.valor} onChange={(e) => setEditor({ ...editor, split: editor.split.map((x, j) => j === i ? { ...x, valor: e.target.value } : x) })} inputMode="decimal" placeholder="R$" className="w-24 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+                        <div className="inline-flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700">
+                          {(['valor', 'pct'] as const).map((m) => <button key={m} type="button" onClick={() => upd({ modo: m })} className={`px-2 py-1.5 text-xs font-semibold ${r.modo === m ? 'bg-[#228BE6] text-white' : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{m === 'valor' ? 'R$' : '%'}</button>)}
+                        </div>
+                        {r.modo === 'pct'
+                          ? <input value={r.pct} onChange={(e) => upd({ pct: e.target.value.replace(/[^\d.,]/g, '') })} inputMode="decimal" placeholder="%" className="w-16 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+                          : <div className="w-28"><MoneyInput value={r.valor} onChange={(v) => upd({ valor: v })} /></div>}
                         <button onClick={() => setEditor({ ...editor, split: editor.split.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                        {r.modo === 'pct' && <span className="w-full pl-1 text-right text-[11px] text-zinc-400 sm:w-auto">= <strong className="text-zinc-600 dark:text-zinc-300">{brl2(efetivo)}</strong></span>}
                       </div>
-                    ))}
+                      );
+                    })}
                     <div className="flex items-center justify-between">
-                      <button onClick={() => setEditor({ ...editor, split: [...editor.split, { tipo: 'socio', userId: '', valor: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar advogado</button>
-                      {(() => { const exitoR = editor.subtipo === 'exito' && parseValor(editor.rateio.bruto) > 0; const v = exitoR ? parseValor(editor.rateio.honorarios) + parseValor(editor.rateio.sucumbencia) : parseValor(editor.valor); const assigned = editor.split.reduce((s, r) => s + parseValor(r.valor), 0); const sobra = v - assigned; return <span className={`text-[11px] ${sobra < -0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório: <strong className="text-zinc-600 dark:text-zinc-300">{brl2(Math.max(0, sobra))}</strong>{sobra < -0.01 ? ' · rateio excede o valor!' : ''}</span>; })()}
+                      <button onClick={() => setEditor({ ...editor, split: [...editor.split, { tipo: 'socio', userId: '', valor: '', modo: 'valor', pct: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar advogado</button>
+                      {(() => { const assigned = editor.split.reduce((s, r) => s + rowValor(r, base), 0); const sobra = base - assigned; return <span className={`text-[11px] ${sobra < -0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório: <strong className="text-zinc-600 dark:text-zinc-300">{brl2(Math.max(0, sobra))}</strong>{sobra < -0.01 ? ' · rateio excede o valor!' : ''}</span>; })()}
                     </div>
                   </div>
                 </Field>
-              )}
+                );
+              })()}
 
               {!editor.id && (
                 <Field label="Repetir lançamento">

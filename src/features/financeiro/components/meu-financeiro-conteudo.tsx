@@ -13,6 +13,7 @@ import {
 import { financeiroService, type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
 import { contactsService } from '@/features/contacts/services/contacts.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { clientsService } from '@/features/legal-cases/services/clients.service';
 import { mesKey, mesLabel, mesCurtoKey } from '@/features/financeiro/lib/clientes';
 
 /** Contexto de criação de lançamento (quando o advogado pode lançar na vertical dele). */
@@ -519,18 +520,43 @@ function NovoLancamentoModal({ criar, onClose }: { criar: CriarCtx; onClose: () 
 export function BuscaCliente({ value, onPick, onText }: { value: string; onPick: (c: { id: string; nome: string } | null) => void; onText: (t: string) => void }) {
   const [q, setQ] = useState(value);
   const [open, setOpen] = useState(false);
-  const { data, isFetching } = useQuery({ queryKey: ['fin-busca-cli', q], queryFn: () => contactsService.list({ search: q, limit: '8' }), enabled: open && q.trim().length >= 2, staleTime: 30_000 });
-  const opts = data?.contacts ?? [];
+  const ql = q.trim().toLowerCase();
+  // Contatos do Comercial + clientes do Jurídico (parties dos processos, ex.: Lubrimarques).
+  const { data, isFetching } = useQuery({ queryKey: ['fin-busca-cli', q], queryFn: () => contactsService.list({ search: q, limit: '8' }), enabled: open && ql.length >= 2, staleTime: 30_000 });
+  const { data: legais = [] } = useQuery({ queryKey: ['fin-busca-cli-legais'], queryFn: () => clientsService.list(), enabled: open, staleTime: 300_000 });
+  const contatos = data?.contacts ?? [];
+  // Monta a lista: clientes do Jurídico que casam com a busca + contatos ainda não listados (por nome).
+  const opts = useMemo(() => {
+    if (ql.length < 2) return [] as { id: string; nome: string; fonte: 'juridico' | 'contato' }[];
+    const vistos = new Set<string>();
+    const out: { id: string; nome: string; fonte: 'juridico' | 'contato' }[] = [];
+    for (const c of legais) {
+      const nome = c.name ?? '';
+      if (!nome.toLowerCase().includes(ql)) continue;
+      const k = nome.toLowerCase();
+      if (vistos.has(k)) continue;
+      vistos.add(k);
+      out.push({ id: c.contact?.id ?? c.partyId, nome, fonte: 'juridico' });
+    }
+    for (const c of contatos) {
+      const nome = c.name ?? '';
+      const k = nome.toLowerCase();
+      if (!nome || vistos.has(k)) continue;
+      vistos.add(k);
+      out.push({ id: c.id, nome, fonte: 'contato' });
+    }
+    return out.slice(0, 12);
+  }, [legais, contatos, ql]);
   return (
     <div className="relative mt-1">
       <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
       <input value={q} onChange={(e) => { setQ(e.target.value); onText(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} placeholder="buscar cliente pelo nome…" className="w-full rounded-lg border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
-      {open && q.trim().length >= 2 && (
+      {open && ql.length >= 2 && (
         <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
           {isFetching && opts.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">buscando…</p>}
           {!isFetching && opts.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">nenhum cliente — o nome digitado será usado assim mesmo.</p>}
           {opts.map((c) => (
-            <button key={c.id} onMouseDown={(e) => e.preventDefault()} onClick={() => { onPick({ id: c.id, nome: c.name ?? '' }); setQ(c.name ?? ''); setOpen(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><UserCircle2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" /><span className="truncate">{c.name}</span></button>
+            <button key={`${c.fonte}-${c.id}`} onMouseDown={(e) => e.preventDefault()} onClick={() => { onPick({ id: c.id, nome: c.nome }); setQ(c.nome); setOpen(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><UserCircle2 className="h-3.5 w-3.5 shrink-0 text-zinc-400" /><span className="truncate">{c.nome}</span>{c.fonte === 'juridico' && <span className="ml-auto shrink-0 rounded bg-[#228BE6]/10 px-1.5 text-[10px] font-semibold text-[#228BE6]">processo</span>}</button>
           ))}
         </div>
       )}
