@@ -14,6 +14,7 @@ import {
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes } from '@/features/financeiro/services/financeiro.service';
+import { ASTREA_DESPESAS } from '@/features/financeiro/data/astrea-despesas';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
@@ -2223,6 +2224,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const [iaLoading, setIaLoading] = useState(false);
   const [upLoading, setUpLoading] = useState(false);
   const [upNome, setUpNome] = useState('');
+  const [retro, setRetro] = useState<{ done: number; total: number; pulados: number } | null>(null);
   const onArquivo = async (f: File) => {
     setUpNome(f.name); setUpLoading(true); setConcResult(null); setConcLinhas([]);
     try {
@@ -2264,6 +2266,32 @@ function ContasTab({ data }: { data: FinDashboard }) {
   };
   const semConta = data.transacoes.filter((t) => !t.conta).length;
   const total = contas.reduce((s, c) => s + saldoConta(c.id).saldo, 0);
+
+  // ── Lançar gastos retroativos do Astrea (idempotente: pula o que já existe) ──
+  const norm = (s?: string | null) => (s || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
+  const centsOf = (v: number) => Math.round(Math.abs(v) * 100);
+  const ymOf = (d: string) => `${d.slice(6, 10)}-${d.slice(3, 5)}`; // DD/MM/YYYY → YYYY-MM
+  const lancarRetro = async () => {
+    const existentes = data.transacoes.filter((t) => t.valor < 0).map((t) => ({ c: centsOf(t.valor), ym: ymOf(t.data), p: norm(t.recebedor || t.party || t.pagador) }));
+    const jaTem = (o: { data: string; valor: number; party: string }) => {
+      const c = centsOf(o.valor), ym = ymOf(o.data), p = norm(o.party);
+      return existentes.some((e) => e.c === c && e.ym === ym && (e.p === p || (!!e.p && !!p && (e.p.includes(p) || p.includes(e.p)))));
+    };
+    const todo = ASTREA_DESPESAS.filter((o) => !jaTem(o));
+    const pulados = ASTREA_DESPESAS.length - todo.length;
+    if (!todo.length) { toast.success('Tudo já lançado — nada novo do Astrea.'); return; }
+    if (!confirm(`Lançar ${todo.length} gasto(s) retroativo(s) do Astrea?${pulados ? ` (${pulados} já existem e serão pulados)` : ''}\n\nTotal: ${brl(todo.reduce((s, o) => s + o.valor, 0))}. Pode rodar de novo sem duplicar.`)) return;
+    setRetro({ done: 0, total: todo.length, pulados });
+    let done = 0;
+    for (const o of todo) {
+      try { await financeiroService.addTransacao({ data: o.data, tipo: 'despesa', categoria: o.categoria, valor: o.valor, recebedor: o.party, dataPagamento: o.data, status: 'pago' }); }
+      catch { /* segue; re-rodar pega os que faltaram */ }
+      done++; setRetro({ done, total: todo.length, pulados });
+    }
+    qc.invalidateQueries({ queryKey: ['financeiro'] });
+    toast.success(`${done} gasto(s) retroativo(s) lançado(s)${pulados ? ` · ${pulados} pulado(s)` : ''}`);
+    setRetro(null);
+  };
 
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
@@ -2337,6 +2365,20 @@ function ContasTab({ data }: { data: FinDashboard }) {
       </div>
 
       <AsaasImport />
+
+      {/* Gastos retroativos do Astrea */}
+      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><ArrowDownCircle className="h-4 w-4 text-[#820AD1]" /> Gastos retroativos (Astrea)</h3>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">Lança de uma vez as <strong>{ASTREA_DESPESAS.length} saídas</strong> do Astrea (mai/2025 → jun/2026, {brl(ASTREA_DESPESAS.reduce((s, o) => s + o.valor, 0))}), com categoria e data corretas. <strong>Pula o que já existe</strong> — pode rodar quantas vezes quiser sem duplicar.</p>
+          </div>
+          <button onClick={lancarRetro} disabled={!!retro} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+            {retro ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Lançando {retro.done}/{retro.total}…</> : <><ArrowDownCircle className="h-3.5 w-3.5" /> Lançar gastos retroativos</>}
+          </button>
+        </div>
+        {retro && <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full rounded-full bg-[#820AD1] transition-all" style={{ width: `${Math.round((retro.done / Math.max(1, retro.total)) * 100)}%` }} /></div>}
+      </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <MiniStat label="Saldo somado das contas" value={brl(total)} hint={`${contas.length} conta(s)`} accent={total >= 0 ? '#2F9E44' : '#E03131'} />
