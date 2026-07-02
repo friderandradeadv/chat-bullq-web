@@ -13,6 +13,7 @@ import { contactStatusesService } from '@/features/settings/services/contact-sta
 import { formatPhone } from '@/lib/brazil-states';
 import { titleCaseName } from '@/lib/names';
 import { PageSizeSelect } from '@/components/ui/page-size-select';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // Aba Clientes (jurídico) — tão rica quanto Contatos do Comercial: busca por
 // nome, filtros (status/etiqueta), ordenação, paginação e EDIÇÃO INLINE de
@@ -28,6 +29,7 @@ const SORT_LABEL: Record<SortKey, string> = {
 
 export default function ClientesPage() {
   const qc = useQueryClient();
+  const { canDeleteCases } = usePermissions();
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState(''); // '' | statusId | 'sem'
@@ -188,13 +190,15 @@ export default function ClientesPage() {
                 </>
               )}
             </Filter>
-            <button
-              onClick={onDelete}
-              disabled={archive.isPending}
-              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-red-200 px-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
-            >
-              <Trash2 className="h-4 w-4" /> Excluir
-            </button>
+            {canDeleteCases && (
+              <button
+                onClick={onDelete}
+                disabled={archive.isPending}
+                className="inline-flex h-10 items-center gap-1.5 rounded-md border border-red-200 px-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                <Trash2 className="h-4 w-4" /> Excluir
+              </button>
+            )}
             {withContact < selected.size && (
               <span className="text-xs text-zinc-400">Etiqueta/Status só nos {withContact} com ficha</span>
             )}

@@ -839,7 +839,7 @@ function VerticaisSection({ verticais, pessoas, team, editing, setDraft, onVerPe
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {gente.map((m) => (
                   <button key={m.user.id} onClick={() => onVerPerfil(m.user.id)} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ background: cor }}>{iniciaisDe(m.user.name)}</span>{m.user.name}
+                    <PessoaAvatar nome={m.user.name} foto={m.user.avatarUrl || pessoas?.[m.user.id]?.fotoUrl} size={20} bg={cor} className="text-[8px]" />{m.user.name}
                   </button>
                 ))}
               </div>
@@ -852,6 +852,14 @@ function VerticaisSection({ verticais, pessoas, team, editing, setDraft, onVerPe
 }
 
 function iniciaisDe(n?: string | null) { return (n ?? '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase(); }
+
+// Avatar da pessoa: foto se houver, senão o círculo com iniciais (fallback).
+// `size` em px; `bg` é a cor do círculo de iniciais; `className` preserva rings/etc do local.
+function PessoaAvatar({ nome, foto, size, bg, className = '', title }: { nome?: string | null; foto?: string | null; size: number; bg?: string; className?: string; title?: string }) {
+  const dim = { width: size, height: size };
+  if (foto) return <img src={foto} alt={nome ?? ''} title={title} style={dim} className={`shrink-0 rounded-full object-cover ${className}`} />;
+  return <span title={title} style={{ ...dim, background: bg }} className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${className}`}>{iniciaisDe(nome)}</span>;
+}
 
 // Flexiona termos no feminino (cargo/descrição) quando a pessoa é mulher.
 function feminizar(s: string): string {
@@ -1216,7 +1224,7 @@ function CargoDetalhe({ cargo, pessoas, onVerPerfil }: { cargo: Cargo; pessoas: 
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {pessoas.map((m) => (
               <button key={m.user.id} onClick={() => onVerPerfil?.(m.user.id)} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#7048E8] text-[8px] font-bold text-white">{iniciaisDe(m.user.name)}</span>{m.user.name}
+                <PessoaAvatar nome={m.user.name} foto={m.user.avatarUrl} size={20} bg="#7048E8" className="text-[8px]" />{m.user.name}
               </button>
             ))}
           </div>
@@ -1284,7 +1292,7 @@ function CargosPorVertical({ cargos, grupos, onOpen }: { cargos: Cargo[]; grupos
                       <span className="font-bold text-zinc-800 dark:text-zinc-100">{c.nome}</span>
                       {ppl.length > 0 && (
                         <span className="flex shrink-0 items-center -space-x-1.5">
-                          {ppl.slice(0, 3).map((m) => <span key={m.user.id} title={m.user.name ?? ''} className="flex h-5 w-5 items-center justify-center rounded-full text-[8px] font-bold text-white ring-2 ring-white dark:ring-zinc-900" style={{ background: cor }}>{iniciaisDe(m.user.name)}</span>)}
+                          {ppl.slice(0, 3).map((m) => <PessoaAvatar key={m.user.id} title={m.user.name ?? ''} nome={m.user.name} foto={m.user.avatarUrl} size={20} bg={cor} className="text-[8px] ring-2 ring-white dark:ring-zinc-900" />)}
                         </span>
                       )}
                     </div>

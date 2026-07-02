@@ -34,6 +34,7 @@ import {
 } from '@/features/legal-cases/services/legal-cases.service';
 import { activitiesService } from '@/features/activities/services/activities.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // ─── Estilo "cara do Astrea" (tema claro, azul Astrea) ───────────────
 // Componentes próprios; replica o look (não os ativos da Aurum).
@@ -176,6 +177,7 @@ function grauOf(c: CaseListItem): '1' | '2' | null {
 
 export default function ProcessosPage() {
   const qc = useQueryClient();
+  const { canDeleteCases } = usePermissions();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<CaseStatus | ''>('');
   const [grauFilter, setGrauFilter] = useState<'' | '1' | '2'>('');
@@ -337,7 +339,7 @@ export default function ProcessosPage() {
       </div>
 
       <div className="flex items-center gap-3 px-8 pt-3 text-sm">
-        {selected.size > 0 ? (
+        {canDeleteCases && selected.size > 0 ? (
           <BulkBar
             count={selected.size}
             members={assignableMembers}
@@ -374,7 +376,7 @@ export default function ProcessosPage() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-zinc-100 text-xs font-bold uppercase tracking-wide text-[#6C757D] dark:border-zinc-800">
-                <th className="w-10 px-3 py-4"><input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-4 w-4 accent-[#228BE6]" title="Selecionar todos" /></th>
+                {canDeleteCases && <th className="w-10 px-3 py-4"><input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-4 w-4 accent-[#228BE6]" title="Selecionar todos" /></th>}
                 <th className="px-3 py-4">Título</th>
                 <th className="px-3 py-4">Cliente / Pasta</th>
                 <th className="px-3 py-4">Ação / Foro</th>
@@ -440,6 +442,7 @@ export default function ProcessosPage() {
 }
 
 function CaseRow({ c, members, selected, onToggle, onChange }: { c: CaseListItem; members: Member[]; selected: boolean; onToggle: () => void; onChange: () => void }) {
+  const { canDeleteCases } = usePermissions();
   const client = c.parties[0];
   // Barrinha verde = monitorado via DJEN (tem nº CNJ → o monitor por OAB captura as publicações).
   const monitorado = !!c.cnjNumber;
@@ -448,9 +451,11 @@ function CaseRow({ c, members, selected, onToggle, onChange }: { c: CaseListItem
   };
   return (
     <tr className={`group border-b border-zinc-100 last:border-0 hover:bg-[#f0f7fd] dark:border-zinc-800/70 dark:hover:bg-zinc-800/40 ${selected ? 'bg-[#e7f1fb] dark:bg-zinc-800/60' : ''}`}>
-      <td className="w-10 px-3 py-4 align-top">
-        <input type="checkbox" checked={selected} onChange={onToggle} className="mt-0.5 h-4 w-4 accent-[#228BE6]" />
-      </td>
+      {canDeleteCases && (
+        <td className="w-10 px-3 py-4 align-top">
+          <input type="checkbox" checked={selected} onChange={onToggle} className="mt-0.5 h-4 w-4 accent-[#228BE6]" />
+        </td>
+      )}
       <td className="px-3 py-4 align-top">
         <div className="flex items-start gap-2">
           <div className="flex shrink-0 items-center gap-1.5 pt-0.5">

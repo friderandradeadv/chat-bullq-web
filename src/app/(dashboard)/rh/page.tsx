@@ -1,18 +1,24 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Users, UserPlus, KanbanSquare, Loader2, Plus, Trash2, X, Save, GripVertical,
   Mail, Phone, Star, Lock, MapPin, IdCard, FileText, ExternalLink,
-  Network, LayoutGrid, Sparkles,
+  Network, LayoutGrid, Sparkles, SlidersHorizontal, HandCoins, TrendingUp,
 } from 'lucide-react';
+import { SociosSection } from '@/features/financeiro/components/socios-divisao';
 import { rhService, type Rh, type Candidato, type Etapa, type Ficha } from '@/features/rh/services/rh.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
-import { escritorioService, type Cargo } from '@/features/escritorio/services/escritorio.service';
+import { escritorioService, type Cargo, type Vertical, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
+import { financeiroService, type AcessoNivel } from '@/features/financeiro/services/financeiro.service';
 import { DropZone } from '@/components/drop-zone';
 import { useAuthStore } from '@/stores/auth-store';
+
+// Dados financeiros do colaborador editáveis no RH (refletem no módulo Financeiro).
+export type FinColaborador = { honorariosPct?: number | null; acesso?: AcessoNivel };
+const ACESSO_LABEL: Record<AcessoNivel, string> = { full: 'Total', cases: 'Só os processos dele', none: 'Sem acesso' };
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -34,10 +40,13 @@ export default function RhPage() {
   const { organizations, activeOrgId } = useAuthStore();
   const orgRole = organizations.find((o) => o.id === activeOrgId)?.role;
   const isSocio = orgRole === 'OWNER' || orgRole === 'ADMIN';
-  const [tab, setTab] = useState<'membros' | 'selecao'>('membros');
+  const [tab, setTab] = useState<'membros' | 'config' | 'selecao'>('membros');
   const { data: rh } = useQuery({ queryKey: ['rh'], queryFn: () => rhService.get(), staleTime: 30_000, retry: false, enabled: isSocio });
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list(), enabled: isSocio });
   const { data: esc } = useQuery({ queryKey: ['escritorio'], queryFn: () => escritorioService.get(), staleTime: 60_000, enabled: isSocio });
+  // Dados financeiros por colaborador + config global (mesmos endpoints do módulo Financeiro → reverbera lá).
+  const { data: honorariosPct = {} } = useQuery({ queryKey: ['financeiro', 'honorarios-pct'], queryFn: () => financeiroService.getHonorariosPct(), enabled: isSocio });
+  const { data: acessoFin = {} } = useQuery({ queryKey: ['financeiro', 'acesso'], queryFn: () => financeiroService.getAcesso(), enabled: isSocio });
 
   const cargoById = useMemo(() => Object.fromEntries((esc?.cargos ?? []).map((c) => [c.id, c])), [esc]);
   const team = useMemo(() => members.filter((m) => m.assignable !== false), [members]);
@@ -50,6 +59,50 @@ export default function RhPage() {
   });
   // salva mesclando por cima do atual
   const patch = (mut: (r: Rh) => Partial<Rh>) => { if (rh) saveM.mutate(mut(rh)); };
+
+  // Salva a ficha completa do colaborador: dados cadastrais (RH) + dados funcionais (escritório),
+  // em dois PATCHs distintos, preservando os demais campos de cada storage.
+  const saveFichaCompleta = async (
+    userId: string,
+    ficha: Ficha,
+    funcionais: Pick<PessoaInfo, 'cargoId' | 'atuacao' | 'conoscoDesde' | 'contratadaDesde'>,
+    financeiro?: FinColaborador,
+  ) => {
+    try {
+      // a) dados cadastrais de RH (rh.fichas[userId])
+      await rhService.save({ fichas: { ...(rh?.fichas ?? {}), [userId]: ficha } });
+      // b) dados funcionais no MESMO storage do escritório (escritorio.pessoas[userId]),
+      //    preservando bio/fotoUrl/oab/etc.
+      const pessoasAtuais = esc?.pessoas ?? {};
+      await escritorioService.save({
+        pessoas: { ...pessoasAtuais, [userId]: { ...(pessoasAtuais[userId] ?? {}), ...funcionais } },
+      });
+      // c) financeiro do colaborador (mesmos endpoints do módulo Financeiro → global).
+      //    Só grava o que mudou, p/ não escrever à toa.
+      let tocouFin = false;
+      if (financeiro) {
+        const pctAtual = (honorariosPct as Record<string, number>)[userId];
+        if (financeiro.honorariosPct != null && financeiro.honorariosPct !== pctAtual) {
+          await financeiroService.setHonorariosPct(userId, financeiro.honorariosPct);
+          tocouFin = true;
+        }
+        const acAtual = (acessoFin as Record<string, AcessoNivel>)[userId] ?? 'none';
+        if (financeiro.acesso && financeiro.acesso !== acAtual) {
+          await financeiroService.setAcesso(userId, financeiro.acesso);
+          tocouFin = true;
+        }
+      }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['rh'] }),
+        qc.invalidateQueries({ queryKey: ['escritorio'] }),
+        ...(tocouFin ? [qc.invalidateQueries({ queryKey: ['financeiro'] })] : []),
+      ]);
+      toast.success('Ficha salva.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao salvar ficha');
+      throw e;
+    }
+  };
 
   if (!isSocio || rh?.restrito) {
     return (
@@ -73,14 +126,15 @@ export default function RhPage() {
         </div>
 
         <div className="mt-4 flex gap-1 border-b border-zinc-200/70 dark:border-zinc-800">
-          {([['membros', 'Membros', Users], ['selecao', 'Processo Seletivo', KanbanSquare]] as const).map(([k, label, Icon]) => (
+          {([['membros', 'Membros', Users], ['config', 'Configurações', SlidersHorizontal], ['selecao', 'Processo Seletivo', KanbanSquare]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setTab(k)} className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${tab === k ? 'border-[#7048E8] text-[#7048E8]' : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
           ))}
         </div>
 
-        {tab === 'membros' && <MembrosView team={team} pessoas={esc?.pessoas ?? {}} cargos={esc?.cargos ?? []} cargoById={cargoById} fichas={rh?.fichas ?? {}} canEdit={canEdit} patch={patch} />}
+        {tab === 'membros' && <MembrosView team={team} pessoas={esc?.pessoas ?? {}} cargos={esc?.cargos ?? []} verticais={esc?.verticais ?? []} cargoById={cargoById} fichas={rh?.fichas ?? {}} honorariosPct={honorariosPct as Record<string, number>} acessoFin={acessoFin as Record<string, AcessoNivel>} canEdit={canEdit} onSaveFicha={saveFichaCompleta} />}
+        {tab === 'config' && <ConfiguracoesView team={team} members={members} honorariosPct={honorariosPct as Record<string, number>} acessoFin={acessoFin as Record<string, AcessoNivel>} pessoas={esc?.pessoas ?? {}} cargoById={cargoById} canEdit={canEdit} />}
         {tab === 'selecao' && (rh
           ? <ProcessoSeletivo rh={rh} canEdit={canEdit} patch={patch} saving={saveM.isPending} />
           : <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/10 dark:text-amber-400">O processo seletivo precisa da atualização do servidor (rode o deploy da API). Assim que subir, ele aparece aqui.</div>)}
@@ -89,8 +143,124 @@ export default function RhPage() {
   );
 }
 
+// ─────────────────────────── Configurações (RH) ───────────────────────────
+// Casa única e organizada das configurações do escritório. Tudo grava nos mesmos
+// endpoints do módulo Financeiro — mudar aqui reflete lá (e vice-versa).
+function ConfiguracoesView({ team, members, honorariosPct, acessoFin, pessoas, cargoById, canEdit }: { team: Member[]; members: Member[]; honorariosPct: Record<string, number>; acessoFin: Record<string, AcessoNivel>; pessoas: Record<string, any>; cargoById: Record<string, any>; canEdit: boolean }) {
+  return (
+    <div className="mt-5 space-y-6">
+      <p className="text-sm text-zinc-500">Honorários, divisão dos sócios e acessos do escritório — tudo num lugar só. Vale para a plataforma inteira e reflete no Financeiro na hora.</p>
+      <HonorariosEscritorioCard canEdit={canEdit} />
+      <AcessosHonorariosTable team={team} honorariosPct={honorariosPct} acessoFin={acessoFin} pessoas={pessoas} cargoById={cargoById} canEdit={canEdit} />
+      <SociosSection members={members} />
+    </div>
+  );
+}
+
+// Honorários do escritório: % padrão + fator de realização (globais).
+function HonorariosEscritorioCard({ canEdit }: { canEdit: boolean }) {
+  const qc = useQueryClient();
+  const { data: escPct } = useQuery({ queryKey: ['financeiro', 'escritorio-pct'], queryFn: () => financeiroService.getEscritorioPct() });
+  const { data: fator } = useQuery({ queryKey: ['financeiro', 'fator'], queryFn: () => financeiroService.getFatorRealizacao() });
+  const [padrao, setPadrao] = useState('');
+  const [fat, setFat] = useState('');
+  useEffect(() => { if (escPct) setPadrao(String(escPct.padrao ?? '')); }, [escPct]);
+  useEffect(() => { if (fator) setFat(String(fator.fator ?? '')); }, [fator]);
+  const [saving, setSaving] = useState(false);
+  const salvar = async () => {
+    setSaving(true);
+    try {
+      const p = padrao.trim() === '' ? undefined : Math.max(0, Math.min(100, Number(padrao.replace(',', '.'))));
+      const g = fat.trim() === '' ? undefined : Math.max(0, Math.min(200, Number(fat.replace(',', '.'))));
+      if (p != null && p !== escPct?.padrao) await financeiroService.setEscritorioPct(p);
+      if (g != null && g !== fator?.fator) await financeiroService.setFatorRealizacao(g);
+      await qc.invalidateQueries({ queryKey: ['financeiro'] });
+      toast.success('Configurações salvas.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao salvar configurações');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><HandCoins className="h-4 w-4 text-[#02883C]" /> Honorários do escritório</h3>
+          <p className="mt-0.5 text-sm text-zinc-500">Percentual padrão do escritório e fator de realização — usados nas projeções e na divisão quando o caso não tem regra própria.</p>
+        </div>
+        {canEdit && <button onClick={salvar} disabled={saving} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#02883C] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#026e30] disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button>}
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <p className={LABEL}>% do escritório (padrão)</p>
+          <input value={padrao} onChange={(e) => setPadrao(e.target.value)} disabled={!canEdit} inputMode="decimal" placeholder="ex.: 50" className={`${INPUT} mt-1`} />
+          <p className="mt-1 text-[10px] text-zinc-400">Fatia padrão do escritório nos honorários de êxito (quando o caso não tem divisão própria).</p>
+        </div>
+        <div>
+          <p className={LABEL}>Fator de realização (%)</p>
+          <input value={fat} onChange={(e) => setFat(e.target.value)} disabled={!canEdit} inputMode="decimal" placeholder="ex.: 70" className={`${INPUT} mt-1`} />
+          <p className="mt-1 text-[10px] text-zinc-400">Chance média de êxito usada na projeção da carteira (valor provável).</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Acessos ao Financeiro + % de honorários por colaborador, numa tabela única.
+function AcessosHonorariosTable({ team, honorariosPct, acessoFin, pessoas, cargoById, canEdit }: { team: Member[]; honorariosPct: Record<string, number>; acessoFin: Record<string, AcessoNivel>; pessoas: Record<string, any>; cargoById: Record<string, any>; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const setAcesso = async (uid: string, nivel: AcessoNivel) => {
+    try { await financeiroService.setAcesso(uid, nivel); await qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success('Acesso atualizado'); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Erro'); }
+  };
+  const setHonor = async (uid: string, valor: string) => {
+    const pct = valor.trim() === '' ? 0 : Math.max(0, Math.min(100, Number(valor.replace(',', '.'))));
+    try { await financeiroService.setHonorariosPct(uid, pct); await qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success('Honorários atualizados'); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Erro'); }
+  };
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <h3 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><TrendingUp className="h-4 w-4 text-[#228BE6]" /> Acessos & honorários por colaborador</h3>
+      <p className="mt-0.5 text-sm text-zinc-500">Quanto cada um recebe de honorários de êxito e o que enxerga no módulo Financeiro. É o mesmo que aparece na ficha de cada pessoa.</p>
+      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+        <div className="hidden grid-cols-[1fr_8rem_14rem] gap-2 bg-zinc-50/80 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:bg-zinc-800/40 sm:grid">
+          <span>Colaborador</span><span className="text-center">Honorários %</span><span className="text-center">Acesso ao Financeiro</span>
+        </div>
+        {team.map((m) => {
+          const info = pessoas[m.user.id] ?? {};
+          const foto = m.user.avatarUrl || info.fotoUrl;
+          const cargo = cargoById[info.cargoId ?? ''];
+          return (
+            <div key={m.user.id} className="grid grid-cols-1 items-center gap-2 border-t border-zinc-100 px-3 py-2 dark:border-zinc-800/70 sm:grid-cols-[1fr_8rem_14rem]">
+              <div className="flex min-w-0 items-center gap-2">
+                {foto ? <img src={foto} alt={m.user.name} className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#7048E8] text-[10px] font-bold text-white">{ini(m.user.name)}</span>}
+                <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{m.user.name}</p><p className="truncate text-[11px] text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p></div>
+              </div>
+              <div className="sm:text-center">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950">
+                  <input defaultValue={honorariosPct[m.user.id] != null ? String(honorariosPct[m.user.id]) : ''} onBlur={(e) => { const v = e.target.value; const cur = honorariosPct[m.user.id] ?? 0; const nv = v.trim() === '' ? 0 : Number(v.replace(',', '.')); if (nv !== cur) setHonor(m.user.id, v); }} disabled={!canEdit} inputMode="decimal" placeholder="—" className="w-14 bg-transparent text-right text-sm tabular-nums outline-none" />
+                  <span className="text-xs text-zinc-400">%</span>
+                </div>
+              </div>
+              <div className="sm:text-center">
+                <select value={acessoFin[m.user.id] ?? 'none'} onChange={(e) => setAcesso(m.user.id, e.target.value as AcessoNivel)} disabled={!canEdit} className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 sm:w-52">
+                  <option value="none">Sem acesso</option>
+                  <option value="cases">Só os processos dele</option>
+                  <option value="full">Total (visão do escritório)</option>
+                </select>
+              </div>
+            </div>
+          );
+        })}
+        {team.length === 0 && <p className="border-t border-zinc-100 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhum colaborador.</p>}
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────── Membros ───────────────────────────
-function MembrosView({ team, pessoas, cargos, cargoById, fichas, canEdit, patch }: { team: Member[]; pessoas: Record<string, any>; cargos: Cargo[]; cargoById: Record<string, any>; fichas: Record<string, Ficha>; canEdit: boolean; patch: (mut: (r: Rh) => Partial<Rh>) => void }) {
+function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, honorariosPct, acessoFin, canEdit, onSaveFicha }: { team: Member[]; pessoas: Record<string, any>; cargos: Cargo[]; verticais: Vertical[]; cargoById: Record<string, any>; fichas: Record<string, Ficha>; honorariosPct: Record<string, number>; acessoFin: Record<string, AcessoNivel>; canEdit: boolean; onSaveFicha: (userId: string, ficha: Ficha, funcionais: Pick<PessoaInfo, 'cargoId' | 'atuacao' | 'conoscoDesde' | 'contratadaDesde'>, financeiro?: FinColaborador) => Promise<void> }) {
   const [fichaId, setFichaId] = useState<string | null>(null);
   const [view, setView] = useState<'cards' | 'org'>('cards');
   const membro = team.find((m) => m.user.id === fichaId);
@@ -132,8 +302,17 @@ function MembrosView({ team, pessoas, cargos, cargoById, fichas, canEdit, patch 
                 {ficha.endereco && <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#E64980]" /> <span className="truncate">{ficha.endereco}</span></p>}
                 {ficha.cpf && <p className="flex items-center gap-1.5"><IdCard className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> CPF {ficha.cpf}</p>}
               </div>
-              <div className="mt-2 flex items-center gap-2">
+              {(info.atuacao?.length ?? 0) > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {(info.atuacao as string[]).map((a) => (
+                    <span key={a} className="rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-[10px] font-semibold text-[#7048E8] dark:bg-[#7048E8]/20">{a}</span>
+                  ))}
+                </div>
+              )}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${m.role === 'AGENT' ? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'}`}>{roleLabel(m.role)}</span>
+                {typeof honorariosPct[m.user.id] === 'number' && <span className="inline-flex items-center gap-1 rounded-full bg-[#02883C]/10 px-2 py-0.5 text-[10px] font-semibold text-[#02883C] dark:bg-[#02883C]/20 dark:text-emerald-400" title="Percentual de honorários do colaborador">{honorariosPct[m.user.id]}% honor.</span>}
+                {acessoFin[m.user.id] && acessoFin[m.user.id] !== 'none' && <span className="inline-flex items-center gap-1 rounded-full bg-[#228BE6]/10 px-2 py-0.5 text-[10px] font-semibold text-[#228BE6] dark:bg-[#228BE6]/20" title="Acesso ao Financeiro">fin.: {ACESSO_LABEL[acessoFin[m.user.id]]}</span>}
                 {(ficha.documentos?.length ?? 0) > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"><FileText className="h-3 w-3" /> {ficha.documentos!.length} doc</span>}
                 <span className="ml-auto text-[11px] font-semibold text-[#7048E8] opacity-0 transition group-hover:opacity-100">Abrir ficha →</span>
               </div>
@@ -148,10 +327,14 @@ function MembrosView({ team, pessoas, cargos, cargoById, fichas, canEdit, patch 
           membro={membro}
           info={pessoas[membro.user.id] ?? {}}
           cargo={cargoById[(pessoas[membro.user.id] ?? {}).cargoId ?? '']}
+          cargos={cargos}
+          verticais={verticais}
           ficha={fichas[membro.user.id] ?? {}}
+          honorariosPct={honorariosPct[membro.user.id]}
+          acesso={acessoFin[membro.user.id] ?? 'none'}
           canEdit={canEdit}
           onClose={() => setFichaId(null)}
-          onSave={(f) => { patch((r) => ({ fichas: { ...(r.fichas ?? {}), [membro.user.id]: f } })); setFichaId(null); }}
+          onSave={async (f, funcionais, financeiro) => { await onSaveFicha(membro.user.id, f, funcionais, financeiro); setFichaId(null); }}
         />
       )}
     </div>
@@ -271,9 +454,32 @@ function SemCargo({ lista, pessoas, fichas, onOpen }: { lista: Member[]; pessoas
 }
 
 // Ficha completa de RH de um colaborador (dados sensíveis — só sócios).
-function FichaModal({ membro, info, cargo, ficha, canEdit, onClose, onSave }: { membro: Member; info: any; cargo?: any; ficha: Ficha; canEdit: boolean; onClose: () => void; onSave: (f: Ficha) => void }) {
+function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosPct, acesso, canEdit, onClose, onSave }: { membro: Member; info: any; cargo?: any; cargos: Cargo[]; verticais: Vertical[]; ficha: Ficha; honorariosPct?: number; acesso: AcessoNivel; canEdit: boolean; onClose: () => void; onSave: (f: Ficha, funcionais: Pick<PessoaInfo, 'cargoId' | 'atuacao' | 'conoscoDesde' | 'contratadaDesde'>, financeiro: FinColaborador) => void | Promise<void> }) {
   const [f, setF] = useState<Ficha>({ ...ficha, documentos: ficha.documentos ?? [] });
   const set = (p: Partial<Ficha>) => setF((x) => ({ ...x, ...p }));
+  // Dados funcionais (vivem em escritorio.pessoas[userId]) — editáveis aqui, gravados no mesmo storage do organograma.
+  const [cargoId, setCargoId] = useState<string>(info.cargoId ?? '');
+  const [atuacao, setAtuacao] = useState<string[]>(Array.isArray(info.atuacao) ? info.atuacao : []);
+  const [conoscoDesde, setConoscoDesde] = useState<string>(info.conoscoDesde ?? '');
+  const [contratadaDesde, setContratadaDesde] = useState<string>(info.contratadaDesde ?? '');
+  // Financeiro do colaborador (grava no módulo Financeiro).
+  const [honor, setHonor] = useState<string>(honorariosPct != null ? String(honorariosPct) : '');
+  const [nivelFin, setNivelFin] = useState<AcessoNivel>(acesso ?? 'none');
+  const [saving, setSaving] = useState(false);
+  const toggleVertical = (nome: string) => setAtuacao((xs) => (xs.includes(nome) ? xs.filter((x) => x !== nome) : [...xs, nome]));
+  const salvar = async () => {
+    setSaving(true);
+    try {
+      const pct = honor.trim() === '' ? undefined : Math.max(0, Math.min(100, Number(honor.replace(',', '.'))));
+      await onSave(
+        f,
+        { cargoId: cargoId || undefined, atuacao, conoscoDesde: conoscoDesde || undefined, contratadaDesde: contratadaDesde || undefined },
+        { honorariosPct: pct, acesso: nivelFin },
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
   const foto = membro.user.avatarUrl || info.fotoUrl;
   const addDoc = () => set({ documentos: [...(f.documentos ?? []), { id: rid(), nome: '', url: '' }] });
   const updDoc = (id: string, p: Partial<{ nome: string; url: string }>) => set({ documentos: (f.documentos ?? []).map((d) => (d.id === id ? { ...d, ...p } : d)) });
@@ -340,6 +546,67 @@ function FichaModal({ membro, info, cargo, ficha, canEdit, onClose, onSave }: { 
           </div>
           <div><p className={LABEL}>Endereço completo</p><input value={f.endereco ?? ''} onChange={(e) => set({ endereco: e.target.value })} disabled={!canEdit} placeholder="Rua, nº, bairro, cidade/UF, CEP" className={`${INPUT} mt-1`} /></div>
           <div><p className={LABEL}>Contrato / cargo</p><input value={f.contrato ?? ''} onChange={(e) => set({ contrato: e.target.value })} disabled={!canEdit} placeholder="ex.: Advogado Associado (contrato de associação) — link do Drive" className={`${INPUT} mt-1`} /></div>
+
+          {/* Dados funcionais — mesmos que vivem no organograma (escritorio.pessoas). Editar aqui mantém tudo sincronizado. */}
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">Dados funcionais (RH)</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className={LABEL}>Cargo</p>
+                <select value={cargoId} onChange={(e) => setCargoId(e.target.value)} disabled={!canEdit} className={`${INPUT} mt-1`}>
+                  <option value="">— sem cargo —</option>
+                  {cargos.map((c) => <option key={c.id} value={c.id}>{c.nome || 'Cargo'}</option>)}
+                </select>
+              </div>
+              <div><p className={LABEL}>Conosco desde</p><input value={conoscoDesde} onChange={(e) => setConoscoDesde(e.target.value)} disabled={!canEdit} placeholder="ex.: 2021 / mar/2021" className={`${INPUT} mt-1`} /></div>
+              <div><p className={LABEL}>Contratada(o) desde</p><input value={contratadaDesde} onChange={(e) => setContratadaDesde(e.target.value)} disabled={!canEdit} placeholder="ex.: 01/03/2021" className={`${INPUT} mt-1`} /></div>
+            </div>
+            <div className="mt-2">
+              <p className={LABEL}>Áreas de atuação (verticais)</p>
+              {verticais.length === 0 ? (
+                <p className="mt-1 text-xs text-zinc-400">Nenhuma vertical cadastrada. Cadastre as áreas em <strong>Meu Espaço › Organograma</strong>.</p>
+              ) : (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {verticais.map((v) => {
+                    const on = atuacao.includes(v.nome);
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => canEdit && toggleVertical(v.nome)}
+                        disabled={!canEdit}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${on ? 'border-[#7048E8] bg-[#7048E8] text-white' : 'border-zinc-300 bg-white text-zinc-600 hover:border-[#7048E8] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'} ${!canEdit ? 'cursor-default opacity-70' : ''}`}
+                      >
+                        {v.nome}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Financeiro do colaborador — grava nos endpoints do módulo Financeiro (reflete lá na hora). */}
+          <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3 dark:bg-[#02883C]/10">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#02883C]">Financeiro do colaborador</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className={LABEL}>Honorários (%)</p>
+                <input value={honor} onChange={(e) => setHonor(e.target.value)} disabled={!canEdit} inputMode="decimal" placeholder="ex.: 30" className={`${INPUT} mt-1`} />
+                <p className="mt-1 text-[10px] text-zinc-400">Fatia do colaborador nos honorários de êxito dos casos dele.</p>
+              </div>
+              <div>
+                <p className={LABEL}>Acesso ao Financeiro</p>
+                <select value={nivelFin} onChange={(e) => setNivelFin(e.target.value as AcessoNivel)} disabled={!canEdit} className={`${INPUT} mt-1`}>
+                  <option value="none">Sem acesso</option>
+                  <option value="cases">Só os processos dele</option>
+                  <option value="full">Total (visão do escritório)</option>
+                </select>
+                <p className="mt-1 text-[10px] text-zinc-400">Define o que ele vê na aba Financeiro.</p>
+              </div>
+            </div>
+          </div>
+
           <div>
             <div className="flex items-center justify-between"><p className={LABEL}>Documentos</p>{canEdit && <button onClick={addDoc} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar</button>}</div>
             <div className="mt-1 space-y-1.5">
@@ -359,7 +626,7 @@ function FichaModal({ membro, info, cargo, ficha, canEdit, onClose, onSave }: { 
         {canEdit && (
           <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-zinc-100 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900">
             <button onClick={onClose} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
-            <button onClick={() => onSave(f)} className="inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#1c7ed6]"><Save className="h-4 w-4" /> Salvar ficha</button>
+            <button onClick={salvar} disabled={saving} className="inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#1c7ed6] disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar ficha</button>
           </div>
         )}
       </div>

@@ -613,8 +613,8 @@ function MeuFinanceiro({ on, enabled }: { on: boolean; enabled: boolean }) {
   const maxSerie = Math.max(1, ...serie.map((s) => s.valor));
   const melhor = d.melhorMes;
   return (
-    <div className="welcome-pop mt-3 w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-4 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.205s' }}>
-      <div className="mb-3 flex items-center justify-between">
+    <div className="welcome-pop mt-3 w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-5 text-left backdrop-blur sm:p-6 dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.205s' }}>
+      <div className="mb-4 flex items-center justify-between">
         <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
           <Wallet className="h-4 w-4 text-[#02883C]" /> Seu financeiro
         </p>
@@ -622,34 +622,37 @@ function MeuFinanceiro({ on, enabled }: { on: boolean; enabled: boolean }) {
           Ver tudo <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <MoneyStat icon={CircleDollarSign} color="#02883C" value={r.recebido} label="recebido" on={on} />
         <MoneyStat icon={HandCoins} color="#228BE6" value={r.minhaParte} label="sua parte" on={on} />
         <MoneyStat icon={Clock} color="#F08C00" value={r.aReceber} label="a receber" on={on} />
         <MoneyStat icon={TrendingUp} color="#7048E8" value={provavel} label="provável (em processo)" on={on} />
       </div>
       {(serie.length > 0 || melhor) && (
-        <div className="mt-3 flex items-end justify-between gap-4">
-          {serie.length > 0 && (
-            <div className="flex flex-1 items-end gap-1" style={{ height: 52 }}>
-              {serie.map((s) => (
-                <div key={s.mes} className="flex flex-1 flex-col items-center justify-end" title={`${s.mes}: ${brlInt(s.valor)}`}>
-                  <div className="w-full rounded-t bg-[#02883C]/70" style={{ height: `${Math.max(3, (s.valor / maxSerie) * 40)}px` }} />
-                  <span className="mt-1 text-[9px] text-zinc-400">{mesLabel(s.mes)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {melhor && (
-            <div className="shrink-0 text-right">
-              <p className="text-[10px] uppercase tracking-wide text-zinc-400">Melhor mês</p>
-              <p className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{brlInt(melhor.valor)}</p>
-              <p className="text-[10px] text-zinc-400">{mesLabel(melhor.mes)}</p>
-            </div>
-          )}
+        <div className="mt-6 border-t border-zinc-200/70 pt-5 dark:border-zinc-800">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Últimos meses</p>
+          <div className="flex items-end justify-between gap-6">
+            {serie.length > 0 && (
+              <div className="flex flex-1 items-end gap-2" style={{ height: 84 }}>
+                {serie.map((s) => (
+                  <div key={s.mes} className="flex flex-1 flex-col items-center justify-end" title={`${s.mes}: ${brlInt(s.valor)}`}>
+                    <div className="w-full rounded-t bg-[#02883C]/70 transition-all hover:bg-[#02883C]" style={{ height: `${Math.max(4, (s.valor / maxSerie) * 64)}px` }} />
+                    <span className="mt-1.5 text-[9px] text-zinc-400">{mesLabel(s.mes)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {melhor && (
+              <div className="shrink-0 self-center text-right">
+                <p className="text-[10px] uppercase tracking-wide text-zinc-400">Melhor mês</p>
+                <p className="text-base font-bold text-zinc-700 dark:text-zinc-200">{brlInt(melhor.valor)}</p>
+                <p className="text-[10px] text-zinc-400">{mesLabel(melhor.mes)}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
-      <p className="mt-2 text-[11px] text-zinc-400">
+      <p className="mt-4 text-[11px] text-zinc-400">
         {r.nClientes} cliente(s) · {r.nCasos ?? 0} caso(s){d.projecaoCasos?.isSocio ? ' · sócio' : ''}
       </p>
     </div>
