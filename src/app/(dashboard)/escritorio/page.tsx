@@ -256,10 +256,15 @@ export default function EscritorioPage() {
           {alvoInfo?.financeiro?.some((x) => x.includes('%')) && (
             <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3 dark:bg-[#02883C]/10">
               <CircleDollarSign className="mt-0.5 h-4 w-4 shrink-0 text-[#02883C]" />
-              <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                {alvoInfo?.atuacao?.length ? <>Financeiro da vertical <strong className="text-[#02883C]">{alvoInfo.atuacao.join(' · ')}</strong>. </> : null}
-                {alvoInfo.financeiro.find((x) => x.includes('%'))}
-              </p>
+              <div className="text-sm text-zinc-600 dark:text-zinc-300">
+                {alvoInfo?.atuacao?.length ? <p>Você atua em <strong className="text-[#02883C]">{alvoInfo.atuacao.join(' · ')}</strong>.</p> : null}
+                {/* Todas as regras de rateio (uma por vertical), não só a primeira. */}
+                <ul className={alvoInfo?.atuacao?.length ? 'mt-1 space-y-0.5' : 'space-y-0.5'}>
+                  {alvoInfo.financeiro.filter((x) => x.includes('%')).map((regra, i) => (
+                    <li key={i} className="flex items-start gap-1.5"><span className="mt-0.5 text-[#02883C]">•</span><span>{regra}</span></li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
           {meuFin && !meuFin.vazio
