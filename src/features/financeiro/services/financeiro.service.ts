@@ -201,6 +201,10 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/fatura/pagar', input);
     return data.data ?? data;
   },
+  async reabrirFatura(input: { cartaoId: string; txIds?: string[] }): Promise<{ reabertos: number }> {
+    const { data } = await api.post('/financeiro/fatura/reabrir', input);
+    return data.data ?? data;
+  },
   async updateConta(id: string, input: Partial<Conta>): Promise<{ ok: boolean }> {
     const { data } = await api.patch(`/financeiro/contas/${id}`, input);
     return data.data ?? data;

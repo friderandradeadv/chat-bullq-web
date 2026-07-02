@@ -11,7 +11,7 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt, Save,
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
@@ -958,6 +958,12 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
     onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pagar fatura'),
   });
 
+  const reabrirM = useMutation({
+    mutationFn: (txIds: string[]) => financeiroService.reabrirFatura({ cartaoId: cartao!.id, txIds }),
+    onSuccess: (r) => { toast.success(`${r.reabertos} gasto(s) reabertos (voltaram para "a pagar")`); onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] }); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao reabrir'),
+  });
+
   const abrirPagar = (f: (typeof faturas)[number]) => {
     const total = f.abertos.reduce((s, t) => s + Math.abs(t.valor), 0);
     setContaPg(contasPagam[0]?.id ?? '');
@@ -1008,6 +1014,9 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
                 <span className="ml-auto text-sm font-bold tabular-nums text-rose-600">{brl2(totalAberto || totalPago)}</span>
                 {f.abertos.length > 0 && contasPagam.length > 0 && (
                   <button onClick={() => abrirPagar(f)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-2.5 py-1 text-xs font-semibold text-white transition hover:opacity-90"><Banknote className="h-3.5 w-3.5" /> Pagar fatura</button>
+                )}
+                {paga && (
+                  <button onClick={() => { if (confirm(`Reabrir a fatura ${f.info.label}? Os ${f.pagos.length} gasto(s) voltam para "a pagar".`)) reabrirM.mutate(f.pagos.map((t) => t.id!).filter(Boolean)); }} disabled={reabrirM.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-600 transition hover:border-amber-500 hover:text-amber-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"><RefreshCw className="h-3.5 w-3.5" /> Reabrir</button>
                 )}
               </div>
               {f.abertos.map(linha)}
