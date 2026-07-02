@@ -931,7 +931,9 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             tipoPublicacao: activity.tipoPublicacao ?? undefined,
             recorte: activity.recorte ?? undefined,
             dispositivo: activity.dispositivo ?? undefined,
-            faseMovida: activity.faseMovida ?? undefined,
+            // NÃO copia faseMovida: um prazo de recurso criado na mão não move
+            // fase nenhuma — copiar isso mostrava uma "Movimentação de fase" estale
+            // (ex.: "→ SUSPENSO") no modal, confundindo com a posição real do card.
           },
           origem: isAcordao ? 'analise-acordao' : 'analise-sentenca',
           sentencaTaskId: activity.rawId,
