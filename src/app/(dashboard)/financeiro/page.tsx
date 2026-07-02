@@ -990,6 +990,11 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
 
   const abertoTotal = faturas.reduce((s, f) => s + f.abertos.reduce((x, t) => x + Math.abs(t.valor), 0), 0);
 
+  // Seletor de mês (fatura) — igual ao livro-razão. '' = todas as faturas.
+  const [mesFat, setMesFat] = useState<string>(() => faturaInfo(hojeBR()).key);
+  const mesesFat = useMemo(() => [...new Set([mesFat, ...faturas.map((f) => f.info.key)])].filter((k) => /^\d{4}-\d{2}$/.test(k)).sort((a, b) => b.localeCompare(a)), [faturas, mesFat]);
+  const faturasVis = mesFat ? faturas.filter((f) => f.info.key === mesFat) : faturas;
+
   const pagarM = useMutation({
     mutationFn: () => financeiroService.pagarFatura({ cartaoId: cartao!.id, contaPagamentoId: contaPg, data: toBR(dataPg), txIds: pgFatura!.txIds }),
     onSuccess: (r) => { toast.success(`Fatura ${pgFatura?.label} paga: ${brl2(r.pago)} · ${r.baixados} gasto(s)`); setPgFatura(null); onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] }); },
@@ -1031,14 +1036,23 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
         ) : (
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200"><CreditCard className="h-4 w-4" style={{ color: cartao.cor ?? '#820AD1' }} /> {cartao.nome}</span>
         )}
-        <span className="text-xs text-zinc-400">{fechamento > 0 ? `fecha dia ${fechamento}` : 'sem dia de fechamento'}{vencDia > 0 ? ` · vence dia ${vencDia}` : ''} · em aberto <strong className="text-rose-600">{brl2(abertoTotal)}</strong></span>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+            <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+            <select value={mesFat} onChange={(e) => setMesFat(e.target.value)} className="bg-transparent text-sm outline-none dark:text-zinc-100">
+              <option value="">Todas as faturas</option>
+              {mesesFat.map((k) => <option key={k} value={k}>{mesLabel(k)}</option>)}
+            </select>
+          </span>
+          <span className="text-xs text-zinc-400">{fechamento > 0 ? `fecha dia ${fechamento}` : 'sem dia de fechamento'}{vencDia > 0 ? ` · vence dia ${vencDia}` : ''} · em aberto <strong className="text-rose-600">{brl2(abertoTotal)}</strong></span>
+        </div>
       </div>
 
       {semCiclo && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-400">Defina o <strong>dia de fechamento e vencimento</strong> deste cartão em <strong>Contas</strong> para separar as faturas por mês (ex.: fecha 26, vence 3).</p>}
       <p className="mt-2 text-xs text-zinc-400">Os gastos do cartão ficam <strong>fora do caixa</strong> até a fatura ser paga. Ao pagar, entra <strong>uma saída</strong> no livro-razão (na conta escolhida) — aí sim conta no saldo real.</p>
 
       <div className="mt-3 space-y-3">
-        {faturas.map((f) => {
+        {faturasVis.map((f) => {
           const totalAberto = f.abertos.reduce((s, t) => s + Math.abs(t.valor), 0);
           const totalPago = f.pagos.reduce((s, t) => s + Math.abs(t.valor), 0);
           const paga = f.abertos.length === 0 && f.pagos.length > 0;
@@ -1063,6 +1077,7 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
           );
         })}
         {faturas.length === 0 && <p className="rounded-xl border border-zinc-200/70 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhum gasto no cartão. Suba o extrato do cartão em <strong>Importar extrato</strong> (escolha a conta do cartão).</p>}
+        {faturas.length > 0 && faturasVis.length === 0 && <p className="rounded-xl border border-zinc-200/70 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhuma fatura em <strong>{mesLabel(mesFat)}</strong>. Escolha outro mês ou <button onClick={() => setMesFat('')} className="font-medium text-[#228BE6] hover:underline">ver todas</button>.</p>}
       </div>
 
       {pgFatura && (
