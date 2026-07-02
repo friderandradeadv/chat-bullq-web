@@ -1018,8 +1018,9 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   const vencDia = cartao?.vencimento ?? 0;
   // Gastos da fatura: despesas do cartão vindas do extrato (fonteImport) ou em aberto.
   // Despesa lançada à mão (ex.: repasse) NÃO entra na fatura — fica no livro-razão.
-  // Gastos da fatura: os que estão no cartão (a_pagar) + os já pagos que migraram pra conta (faturaDe = este cartão).
-  const gastos = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && ((t.conta === cartao?.id && (!!t.fonteImport || txStatus(t) === 'a_pagar')) || t.faturaDe === cartao?.id)), [data.transacoes, cartao?.id]);
+  // Gastos da fatura: TUDO que é despesa no cartão (a_pagar ou já pago) + os que migraram
+  // pra conta ao pagar (faturaDe = este cartão). Assim nenhuma fatura "some" do histórico.
+  const gastos = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && (t.conta === cartao?.id || t.faturaDe === cartao?.id)), [data.transacoes, cartao?.id]);
 
   // A qual fatura (mês/ciclo) um gasto pertence: se o dia > fechamento, cai na fatura do mês seguinte.
   const faturaInfo = (dataBR: string) => {
@@ -1094,14 +1095,13 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
         ) : (
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200"><CreditCard className="h-4 w-4" style={{ color: cartao.cor ?? '#820AD1' }} /> {cartao.nome}</span>
         )}
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
-            <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-            <select value={mesFat} onChange={(e) => setMesFat(e.target.value)} className="bg-transparent text-sm outline-none dark:text-zinc-100">
-              <option value="">Todas as faturas</option>
-              {mesesFat.map((k) => <option key={k} value={k}>{mesLabel(k)}</option>)}
-            </select>
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <CalendarioFiltro
+            mesSel={mesFat} deISO="" ateISO=""
+            onMes={(ym) => setMesFat(ym)}
+            onPeriodo={() => setMesFat('')}
+            onLimpar={() => setMesFat('')}
+          />
           <span className="text-xs text-zinc-400">{fechamento > 0 ? `fecha dia ${fechamento}` : 'sem dia de fechamento'}{vencDia > 0 ? ` · vence dia ${vencDia}` : ''} · em aberto <strong className="text-rose-600">{brl2(abertoTotal)}</strong></span>
         </div>
       </div>
