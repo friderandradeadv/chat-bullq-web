@@ -319,19 +319,15 @@ export function AppSidebar() {
             </NavSection>
           </div>
 
-          {/* ADMINISTRATIVO — só administradores. Associados NÃO veem a seção;
-              recebem apenas o Financeiro (avulso), escopado aos casos deles. */}
-          {isAdmin ? (
+          {/* ADMINISTRATIVO — só administradores/sócios. Associados NÃO veem
+              nada aqui (Financeiro saiu da sidebar deles a pedido do Matheus). */}
+          {isAdmin && (
             <div className="mt-3">
               <NavSection label="Administrativo" defaultOpen={false}>
                 <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
                 <NavItem href="/rh" icon={Users} label="RH & Seleção" />
                 <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
               </NavSection>
-            </div>
-          ) : (
-            <div className="mt-3 border-t border-zinc-200/70 pt-2 dark:border-zinc-800">
-              <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
             </div>
           )}
 

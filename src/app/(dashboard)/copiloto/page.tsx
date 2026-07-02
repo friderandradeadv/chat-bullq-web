@@ -10,9 +10,10 @@ import {
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 const SUGGESTIONS = [
-  'Por que a Camila parou de responder a conversa do [nome do cliente]?',
-  'Religa a IA da conversa do [nome ou telefone].',
-  'A conversa do [nome] está com a IA ligada ou pausada?',
+  'Como está o escritório hoje? Tem prazo vencendo?',
+  'Quais agentes de IA estão ligados?',
+  'Quantos processos ativos temos e o valor em causa?',
+  'Por que a Camila parou de responder a conversa do [cliente]?',
 ];
 
 export default function CopilotoPage() {
@@ -82,8 +83,9 @@ export default function CopilotoPage() {
               <Bot className="h-7 w-7" />
             </div>
             <p className="max-w-sm text-sm text-zinc-500 dark:text-zinc-400">
-              Pergunte em português. Ex: por que a IA parou numa conversa, ou
-              peça pra religar a IA de um lead.
+              Pergunte em português sobre qualquer área — comercial, jurídico,
+              financeiro, agentes de IA, prazos, configurações. Tiro dúvidas,
+              investigo e ajudo a resolver.
             </p>
             <div className="flex w-full max-w-md flex-col gap-2">
               {SUGGESTIONS.map((s) => (
