@@ -26,6 +26,7 @@ function moduleForPath(p: string): string | null {
   if (/^\/escritorio/.test(p)) return 'meu_espaco';
   if (/^\/(dashboard|inbox|contacts|kanban|conexoes)/.test(p)) return 'atendimento';
   if (/^\/settings\/perfil/.test(p)) return null; // perfil é sempre acessível
+  if (/^\/settings\/?$/.test(p)) return null; // índice /settings: a página resolve por papel (associado → perfil). Sem isto o guard bloqueava o associado ANTES do redirect e jogava pra /dashboard.
   if (/^\/settings/.test(p)) return 'configuracoes';
   return null;
 }
