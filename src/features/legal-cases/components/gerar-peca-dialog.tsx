@@ -206,7 +206,7 @@ export function GerarPecaDialog({
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-            {busy ? 'Gerando… (uns 20s)' : `Gerar ${meta.label}`}
+            {busy ? 'Gerando… (pode levar 1–2 min)' : `Gerar ${meta.label}`}
           </button>
         </div>
       </div>

@@ -495,7 +495,11 @@ export const legalCasesService = {
       instrucoes?: string;
     },
   ): Promise<{ tipo: string; label: string; fileName: string; documentId: string; docxBase64: string }> {
-    const { data } = await api.post(`/legal-cases/${id}/peca/gerar`, payload);
+    // A IA lê os documentos (podem ser vários/grandes) e redige a peça inteira —
+    // leva 1–2 min. O `api` tem timeout GLOBAL de 15s (curto demais): sem
+    // sobrescrever, o navegador abortava e mostrava "Erro" mesmo com a peça já
+    // gerada e anexada no backend. 240s cobre com folga.
+    const { data } = await api.post(`/legal-cases/${id}/peca/gerar`, payload, { timeout: 240_000 });
     return data.data ?? data;
   },
   /** Salva no processo o cálculo de RMC/RCC escolhido (e define o valor da causa). */
