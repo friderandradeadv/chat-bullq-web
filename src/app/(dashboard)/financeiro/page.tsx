@@ -2346,6 +2346,23 @@ function ContasTab({ data }: { data: FinDashboard }) {
     setSepRun(false);
   };
 
+  // ── Desfazer: extrato de cartão que caiu no caixa (liquidado) por engano ──
+  const [limpaRun, setLimpaRun] = useState(false);
+  const gastosCartaoNoCaixa = data.transacoes.filter((t) => t.fonteImport === 'extrato' && (txStatus(t) === 'pago' || txStatus(t) === 'recebido'));
+  const limparCartaoCaixa = async () => {
+    const alvo = gastosCartaoNoCaixa;
+    if (!alvo.length) { toast.success('Nada de extrato importado no caixa.'); return; }
+    const soma = alvo.reduce((s, t) => s + Math.abs(t.valor), 0);
+    if (!confirm(`Remover ${alvo.length} lançamento(s) que vieram de extrato importado e caíram no caixa (soma ${brl(soma)})?\n\n⚠️ Confira o total: deve ser o extrato do CARTÃO (valores pequenos + o pagamento). Se aparecer um honorário grande, cancele.\n\nDepois reimporte o extrato na conta "Nubank cartão" → vira fatura (a pagar), não caixa.`)) return;
+    setLimpaRun(true);
+    let ok = 0, fail = 0;
+    for (const t of alvo) { if (t.id) { try { await financeiroService.removeTransacao(t.id, 'uma'); ok++; } catch { fail++; } } }
+    qc.invalidateQueries({ queryKey: ['financeiro'] });
+    setRetroMsg(fail ? `⚠️ Removidos ${ok}, ${fail} falharam.` : `✅ ${ok} lançamento(s) de extrato removidos do caixa. Agora reimporte o extrato na conta "Nubank cartão" (Importar extrato → conta Nubank cartão).`);
+    toast.success(`${ok} removido(s)`);
+    setLimpaRun(false);
+  };
+
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
     const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial), cartao: !!form.cartao, fechamento: form.cartao && form.fechamento ? Number(form.fechamento) : undefined, vencimento: form.cartao && form.vencimento ? Number(form.vencimento) : undefined };
@@ -2454,6 +2471,17 @@ function ContasTab({ data }: { data: FinDashboard }) {
             </div>
             <button onClick={separarNubank} disabled={sepRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
               {sepRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Separando…</> : <><CreditCard className="h-3.5 w-3.5" /> Separar conta e cartão</>}
+            </button>
+          </div>
+        )}
+        {gastosCartaoNoCaixa.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div>
+              <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><Trash2 className="h-4 w-4 text-rose-500" /> Desfazer extrato de cartão no caixa</h4>
+              <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">Há <strong>{gastosCartaoNoCaixa.length} lançamento(s)</strong> de extrato importado que caíram no <strong>caixa como liquidados</strong> (soma {brl(gastosCartaoNoCaixa.reduce((s, t) => s + Math.abs(t.valor), 0))}). Isso remove eles. Depois <strong>reimporte na conta "Nubank cartão"</strong> — aí viram <strong>fatura (a pagar)</strong> e só entram no caixa quando você clicar em <strong>Pagar fatura</strong>.</p>
+            </div>
+            <button onClick={limparCartaoCaixa} disabled={limpaRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+              {limpaRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Removendo…</> : <><Trash2 className="h-3.5 w-3.5" /> Remover do caixa</>}
             </button>
           </div>
         )}
