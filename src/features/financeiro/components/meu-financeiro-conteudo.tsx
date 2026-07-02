@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   ArrowUpCircle, ArrowDownCircle, Sparkles, Search, HeartHandshake, Flame, Calendar, Gavel, ExternalLink, UserCircle2,
-  TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt,
+  TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt, Wallet,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
 import { contactsService } from '@/features/contacts/services/contacts.service';
@@ -88,7 +88,8 @@ const FRASES_ADV = [
 const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido', label: 'Recebidos' }, { key: 'a_receber', label: 'A receber' }] as const;
 
 export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; criar?: CriarCtx }) {
-  const [subtab, setSubtab] = useState<'resumo' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>('resumo');
+  const [subtab, setSubtab] = useState<'resumo' | 'holerite' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>('resumo');
+  const [holMesSel, setHolMesSel] = useState('');
   const [novo, setNovo] = useState(false);
   const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nCasos: 0, nLancamentos: 0 };
   const clientes = data.clientes ?? [];
@@ -141,12 +142,64 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Subabas da visão escopada — organiza como o dashboard, mas na vertical */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
-          {([['resumo', 'Visão geral', Scale], ['lancamentos', 'Lançamentos', Receipt], ['receber', 'A receber', Gavel], ['projecoes', 'Projeções', TrendingUp], ['motivacao', 'Motivação', Flame]] as const).map(([k, label, Icon]) => (
+          {([['resumo', 'Visão geral', Scale], ['holerite', 'Holerite', Wallet], ['lancamentos', 'Lançamentos', Receipt], ['receber', 'A receber', Gavel], ['projecoes', 'Projeções', TrendingUp], ['motivacao', 'Motivação', Flame]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setSubtab(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${subtab === k ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}><Icon className="h-4 w-4" /> {label}</button>
           ))}
           {criar && <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"><Plus className="h-4 w-4" /> Novo lançamento</button>}
         </div>
         {novo && criar && <NovoLancamentoModal criar={criar} onClose={() => setNovo(false)} />}
+
+        {/* HOLERITE — folha do mês (entradas = sua parte dos honorários recebidos; retiradas; líquido) */}
+        {subtab === 'holerite' && (() => {
+          const hol = data.holerite ?? [];
+          if (hol.length === 0) return <p className="mt-6 text-center text-sm text-zinc-400">Ainda não há holerite. Quando você receber honorários com <strong>rateio</strong> (sua parte) ou tiver <strong>retiradas</strong>, sua folha do mês aparece aqui.</p>;
+          const mes = hol.some((x) => x.mes === holMesSel) ? holMesSel : hol[0].mes;
+          const h = hol.find((x) => x.mes === mes) ?? hol[0];
+          const custos = 0; // rateio de custos (agência/anúncios) entra quando configurado
+          const liquido = h.entradaTot - custos;
+          return (
+            <div className="mt-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-zinc-400" />
+                <select value={h.mes} onChange={(e) => setHolMesSel(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                  {hol.map((x) => <option key={x.mes} value={x.mes}>{mesLabel(x.mes)}</option>)}
+                </select>
+              </div>
+              <div className="mx-auto max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex items-center justify-between gap-2 bg-gradient-to-br from-emerald-500 to-[#228BE6] px-5 py-4 text-white">
+                  <div><p className="text-[11px] uppercase tracking-wider opacity-80">Folha do mês</p><p className="text-lg font-bold">{mesLabel(h.mes)}</p></div>
+                  <div className="text-right"><p className="text-[11px] uppercase tracking-wider opacity-80">{data.meuNome || ''}</p><p className="inline-flex items-center gap-1 text-sm font-semibold"><Wallet className="h-4 w-4" /> holerite</p></div>
+                </div>
+                <div className="px-5 py-4">
+                  {/* Entradas */}
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600"><ArrowUpCircle className="h-3.5 w-3.5" /> Entradas (sua parte nos honorários)</p>
+                  {h.entradas.length === 0 ? <p className="pb-1 text-xs text-zinc-400">Sem entradas neste mês.</p> : (
+                    <div className="space-y-0.5">
+                      {h.entradas.map((e, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="flex min-w-0 items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><span className="w-9 shrink-0 text-[11px] tabular-nums text-zinc-400">{(e.data || '').slice(0, 5)}</span><span className="truncate">{e.cliente}</span></span>
+                          <span className="shrink-0 font-medium tabular-nums text-emerald-600">{brl2(e.valor)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-1 text-sm font-semibold dark:border-zinc-800"><span className="text-zinc-500">Total de entradas</span><span className="tabular-nums text-emerald-600">{brl2(h.entradaTot)}</span></div>
+
+                  {/* Saídas (custos rateados) — placeholder até configurar rateio/anúncios */}
+                  <p className="mb-1.5 mt-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-rose-600"><ArrowDownCircle className="h-3.5 w-3.5" /> Saídas (custos rateados)</p>
+                  <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-400 dark:bg-zinc-800/40">Rateio de custos (ex.: 1/3 da agência, saldo de anúncios) entra aqui quando você configurar em <strong>Verticais</strong>. Por enquanto: R$ 0,00.</p>
+
+                  {/* Líquido */}
+                  <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-zinc-200 pt-3 dark:border-zinc-700">
+                    <span className="text-sm font-bold uppercase tracking-wide text-zinc-500">Líquido do mês</span>
+                    <span className={`text-xl font-bold tabular-nums ${liquido >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(liquido)}</span>
+                  </div>
+                  {h.retiradaTot > 0 && <p className="mt-2 text-right text-[11px] text-zinc-400">Já retirado neste mês: <strong className="text-zinc-500 dark:text-zinc-300">{brl2(h.retiradaTot)}</strong></p>}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Banner motivacional (Visão geral) */}
         {subtab === 'resumo' && (

@@ -95,6 +95,15 @@ export interface FinDashboard {
   resultadoVertical?: VerticalPnL | null;       // P&L da vertical do advogado (visão limitada)
   minhaArea?: string | null;
   overheadCriterio?: string;
+  holerite?: HoleriteMes[];                     // folha do mês (Meu Espaço)
+}
+
+export interface HoleriteMes {
+  mes: string;
+  entradas: { cliente: string; valor: number; data: string }[];
+  entradaTot: number;
+  retiradas: { desc: string; valor: number; data: string }[];
+  retiradaTot: number;
 }
 
 export interface VerticalCusto { label: string; valor: number }
