@@ -59,15 +59,13 @@ type View = 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retira
 const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }[] = [
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt, grupo: 'Caixa' },
   { key: 'honorarios', label: 'Honorários', icon: Users, grupo: 'Caixa' },
-  { key: 'cobrancas', label: 'Cobranças', icon: CreditCard, grupo: 'Caixa' },
-  { key: 'contas', label: 'Contas', icon: Banknote, grupo: 'Caixa' },
+  { key: 'cobrancas', label: 'A receber', icon: CreditCard, grupo: 'Caixa' }, // cobranças (parcelas/ASAAS) + recebíveis dos processos (CS)
   { key: 'retiradas', label: 'Retiradas', icon: Wallet, grupo: 'Caixa' },
-  { key: 'cumprimento', label: 'CS — recebíveis dos processos', icon: Gavel, grupo: 'Processos' },
-  { key: 'verticais', label: 'Verticais', icon: Layers, grupo: 'Análise & futuro' },
-  { key: 'projecoes', label: 'Projeções e crescimento', icon: Rocket, grupo: 'Análise & futuro' },
-  { key: 'motivacao', label: 'Motivação', icon: HeartHandshake, grupo: 'Análise & futuro' },
+  { key: 'contas', label: 'Contas', icon: Banknote, grupo: 'Caixa' },
+  { key: 'verticais', label: 'Verticais', icon: Layers, grupo: 'Análise' },
+  { key: 'projecoes', label: 'Projeções e crescimento', icon: Rocket, grupo: 'Análise' },
 ];
-const GRUPOS = ['Caixa', 'Processos', 'Análise & futuro'];
+const GRUPOS = ['Caixa', 'Análise'];
 
 // Produto cru do card (RMC, RCC, "CS - RMC", Contribuições, 7780-Indenização…)
 // → Área jurídica (Bancário/Previdenciário/Trabalhista/Consumidor/Cível).
@@ -188,8 +186,8 @@ export default function FinanceiroPage() {
 
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
-        {view === 'cobrancas' && <CobrancasTab data={data} />}
-        {view === 'cumprimento' && <CumprimentoTab />}
+        {/* "A receber" reúne Cobranças (parcelas/ASAAS) + CS (recebíveis dos processos) num lugar só. */}
+        {view === 'cobrancas' && (<><CobrancasTab data={data} /><CumprimentoTab /></>)}
         {view === 'retiradas' && <RetiradasTab data={data} />}
         {view === 'contas' && <ContasTab data={data} />}
         {view === 'verticais' && <VerticaisTab data={data} />}
@@ -202,7 +200,6 @@ export default function FinanceiroPage() {
             <PrevisoesTab />
           </>
         )}
-        {view === 'motivacao' && <MotivacaoTab data={data} />}
         </>
         )}
 
