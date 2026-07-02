@@ -537,7 +537,9 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const txs = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return data.transacoes.filter((t) => {
-      if (isFaturaCartao(t)) return false; // gastos de FATURA do cartão vivem fora do caixa; entradas e repasses manuais ficam no livro-razão
+      // Débitos de cartão A PAGAR APARECEM no livro-razão (seção "a pagar") — são a despesa.
+      // Ao pagar a fatura eles migram pra conta e viram liquidados. Só escondo pago-no-cartão (legado).
+      if (isFaturaCartao(t) && txStatus(t) !== 'a_pagar') return false;
       const iso = toISOInput(t.data);
       if (temPeriodo) { if (deISO && iso < deISO) return false; if (ateISO && iso > ateISO) return false; }
       else if (mesSel && mesKey(t) !== mesSel) return false;
@@ -1016,7 +1018,8 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   const vencDia = cartao?.vencimento ?? 0;
   // Gastos da fatura: despesas do cartão vindas do extrato (fonteImport) ou em aberto.
   // Despesa lançada à mão (ex.: repasse) NÃO entra na fatura — fica no livro-razão.
-  const gastos = useMemo(() => data.transacoes.filter((t) => t.conta === cartao?.id && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar')), [data.transacoes, cartao?.id]);
+  // Gastos da fatura: os que estão no cartão (a_pagar) + os já pagos que migraram pra conta (faturaDe = este cartão).
+  const gastos = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && ((t.conta === cartao?.id && (!!t.fonteImport || txStatus(t) === 'a_pagar')) || t.faturaDe === cartao?.id)), [data.transacoes, cartao?.id]);
 
   // A qual fatura (mês/ciclo) um gasto pertence: se o dia > fechamento, cai na fatura do mês seguinte.
   const faturaInfo = (dataBR: string) => {

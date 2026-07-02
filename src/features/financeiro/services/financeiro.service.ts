@@ -44,6 +44,7 @@ export interface FinTransacao {
   parcela?: string | null;
   manual?: boolean;
   fonteImport?: string | null; // 'extrato' | 'asaas' | 'mercadopago' — veio de import (não é lançamento manual)
+  faturaDe?: string | null; // id do cartão de origem (débito que migrou pra conta ao pagar a fatura)
   rateioVerticais?: { area: string; valor: number }[] | null; // rateio de despesa entre verticais
 }
 export interface FinInsight { nivel: 'critico' | 'alerta' | 'ok' | 'info'; titulo: string; texto: string }
