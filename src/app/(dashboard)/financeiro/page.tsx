@@ -1164,7 +1164,7 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
 }
 
 // ── Modal: importar extrato (PDF/CSV/OFX) → lançamentos, com dedup server-side ──
-function ImportExtratoModal({ contas, onClose }: { contas: { id: string; nome: string }[]; onClose: () => void }) {
+function ImportExtratoModal({ contas, onClose }: { contas: { id: string; nome: string; cartao?: boolean }[]; onClose: () => void }) {
   const qc = useQueryClient();
   const [conta, setConta] = useState(contas[0]?.id ?? '');
   const [nome, setNome] = useState('');
@@ -1172,10 +1172,10 @@ function ImportExtratoModal({ contas, onClose }: { contas: { id: string; nome: s
   const [conf, setConf] = useState<import('@/features/financeiro/services/financeiro.service').ExtratoConferencia | null>(null);
   const [sel, setSel] = useState<Set<number>>(new Set());
 
-  const conferir = async (linhas: { data: string; valor: number; descricao: string }[]) => {
+  const conferir = async (linhas: { data: string; valor: number; descricao: string }[], contaArg?: string) => {
     if (!linhas.length) { toast.error('Não consegui ler lançamentos desse arquivo. Tente OFX/CSV ou cole o texto.'); return; }
     try {
-      const r = await financeiroService.conferirExtrato(conta || null, linhas);
+      const r = await financeiroService.conferirExtrato((contaArg ?? conta) || null, linhas);
       setConf(r);
       setSel(new Set(r.linhas.map((l, i) => (!l.duplicado ? i : -1)).filter((i) => i >= 0))); // novos marcados
       if (r.novos === 0) toast('Tudo nesse extrato já está lançado — nada novo.', { icon: '✅' });
@@ -1191,7 +1191,14 @@ function ImportExtratoModal({ contas, onClose }: { contas: { id: string; nome: s
       else texto = await f.text();
       let linhas = lerExtrato(texto);
       if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
-      await conferir(linhas);
+      // Detecta extrato de CARTÃO (tem pagamento de fatura ou compras típicas) e
+      // direciona sozinho pra conta-cartão — senão cairia no caixa por engano.
+      const pareceCartao = linhas.some((l) => /pagamento\s*(de\s*)?(fatura|recebid)|iof de compra|anthropic|assinatura|parcela\s*\d+\/\d+/i.test(l.descricao || ''));
+      const cardAcc = contas.find((c) => c.cartao);
+      const contaAtualEhCartao = !!contas.find((c) => c.id === conta)?.cartao;
+      let alvo = conta;
+      if (pareceCartao && cardAcc && !contaAtualEhCartao) { alvo = cardAcc.id; setConta(cardAcc.id); toast(`Detectei extrato de cartão → conta "${cardAcc.nome}" (vai pra fatura, não pro caixa)`, { icon: '💳', duration: 5000 }); }
+      await conferir(linhas, alvo);
     } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setParsing(false); }
   };
 
@@ -1222,6 +1229,9 @@ function ImportExtratoModal({ contas, onClose }: { contas: { id: string; nome: s
           {nome && <span className="text-xs text-zinc-400">{nome}</span>}
         </div>
         <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, classifica e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (por valor+data) e contra reenvio do mesmo arquivo.</p>
+        {contas.find((c) => c.id === conta)?.cartao
+          ? <p className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] text-violet-700 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-300">💳 <strong>Fatura de cartão:</strong> as compras entram como <strong>"a pagar"</strong> (fora do caixa) e a linha de <strong>pagamento de fatura é ignorada</strong>. Só entram no caixa quando você clicar em <strong>Pagar fatura</strong>.</p>
+          : <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Importando pra uma <strong>conta bancária</strong> (vira caixa). Se este for o <strong>extrato do cartão</strong>, troque a conta acima pra <strong>"Nubank cartão"</strong>.</p>}
 
         {conf && (
           <div className="mt-4">
@@ -2408,11 +2418,14 @@ function ContasTab({ data }: { data: FinDashboard }) {
     const ehCartao = !!contas.find((c) => c.id === conc.conta)?.cartao; // cartão → gasto vira fatura (a_pagar), fora do caixa
     setIaLoading(true);
     try {
+      const ehPagamentoFatura = (d: string) => /pagamento\s*(de\s*)?(fatura|recebid|efetuad)/i.test(d || '');
       const sug = await financeiroService.classificarExtrato(escolhidos.map((l) => ({ descricao: l.descricao, valor: l.valor })));
       for (let i = 0; i < escolhidos.length; i++) {
         const l = escolhidos[i]; const s = sug.find((x) => x.i === i);
-        const tipo: 'receita' | 'despesa' = (s?.tipo as 'receita' | 'despesa') ?? (l.valor >= 0 ? 'receita' : 'despesa');
-        await financeiroService.addTransacao({ data: l.data, tipo, categoria: s?.categoria ?? (l.valor >= 0 ? 'Honorários' : 'Outros'), valor: Math.abs(l.valor), pagador: s?.party || l.descricao.slice(0, 60), conta: conc.conta, status: tipo === 'receita' ? 'recebido' : (ehCartao ? 'a_pagar' : 'pago') });
+        if (ehCartao && ehPagamentoFatura(l.descricao)) continue; // no cartão, o pagamento de fatura não vira lançamento (baixa ao Pagar fatura)
+        // No cartão TODO lançamento é gasto (a_pagar), independe do sinal; na conta vale o sinal/classificador.
+        const tipo: 'receita' | 'despesa' = ehCartao ? 'despesa' : ((s?.tipo as 'receita' | 'despesa') ?? (l.valor >= 0 ? 'receita' : 'despesa'));
+        await financeiroService.addTransacao({ data: l.data, tipo, categoria: s?.categoria ?? (ehCartao ? 'Cartão' : (l.valor >= 0 ? 'Honorários' : 'Outros')), valor: Math.abs(l.valor), pagador: s?.party || l.descricao.slice(0, 60), conta: conc.conta, status: ehCartao ? 'a_pagar' : (tipo === 'receita' ? 'recebido' : 'pago') });
       }
       qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
       toast.success(`${escolhidos.length} lançamento(s) criado(s) e conciliado(s)`);
