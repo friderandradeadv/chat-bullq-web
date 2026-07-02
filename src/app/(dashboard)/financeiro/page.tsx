@@ -2227,6 +2227,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const [upLoading, setUpLoading] = useState(false);
   const [upNome, setUpNome] = useState('');
   const [retro, setRetro] = useState<{ done: number; total: number; pulados: number } | null>(null);
+  const [retroMsg, setRetroMsg] = useState<string>('');
   const onArquivo = async (f: File) => {
     setUpNome(f.name); setUpLoading(true); setConcResult(null); setConcLinhas([]);
     try {
@@ -2281,18 +2282,20 @@ function ContasTab({ data }: { data: FinDashboard }) {
     };
     const todo = ASTREA_DESPESAS.filter((o) => !jaTem(o));
     const pulados = ASTREA_DESPESAS.length - todo.length;
-    if (!todo.length) { toast.success('Tudo já lançado — nada novo do Astrea.'); return; }
+    setRetroMsg('');
+    if (!todo.length) { setRetroMsg(`✅ Tudo já lançado — as ${ASTREA_DESPESAS.length} saídas do Astrea já constam.`); toast.success('Tudo já lançado.'); return; }
     if (!confirm(`Lançar ${todo.length} gasto(s) retroativo(s) do Astrea?${pulados ? ` (${pulados} já existem e serão pulados)` : ''}\n\nTotal: ${brl(todo.reduce((s, o) => s + o.valor, 0))}. Pode rodar de novo sem duplicar.`)) return;
     setRetro({ done: 0, total: todo.length, pulados });
-    let done = 0;
+    let ok = 0, fail = 0, firstErr = '';
     for (const o of todo) {
-      try { await financeiroService.addTransacao({ data: o.data, tipo: 'despesa', categoria: o.categoria, valor: o.valor, recebedor: o.party, dataPagamento: o.data, status: 'pago' }); }
-      catch { /* segue; re-rodar pega os que faltaram */ }
-      done++; setRetro({ done, total: todo.length, pulados });
+      try { await financeiroService.addTransacao({ data: o.data, tipo: 'despesa', categoria: o.categoria, valor: o.valor, recebedor: o.party, dataPagamento: o.data, status: 'pago' }); ok++; }
+      catch (e: any) { fail++; if (!firstErr) firstErr = e?.response?.data?.message || e?.message || 'erro desconhecido'; }
+      setRetro({ done: ok + fail, total: todo.length, pulados });
     }
     qc.invalidateQueries({ queryKey: ['financeiro'] });
-    toast.success(`${done} gasto(s) retroativo(s) lançado(s)${pulados ? ` · ${pulados} pulado(s)` : ''}`);
     setRetro(null);
+    if (fail) { setRetroMsg(`⚠️ ${ok} lançado(s), ${fail} falharam. Erro: ${firstErr}`); toast.error(`${fail} falharam: ${firstErr}`); }
+    else { setRetroMsg(`✅ ${ok} gasto(s) lançado(s)${pulados ? ` · ${pulados} já existiam` : ''}. Recarregue pra ver os KPIs.`); toast.success(`${ok} gasto(s) lançado(s)`); }
   };
 
   // ── Fechar o caixa com aportes (Você + Pai) — idempotente ──
@@ -2305,13 +2308,15 @@ function ContasTab({ data }: { data: FinDashboard }) {
     const totalAporte = todo.reduce((s, a) => s + a.valor, 0);
     if (!confirm(`Registrar ${brl(totalAporte)} em aportes (Você + Pai) para fechar o caixa?\n\nDistribuído nos meses de aperto (ago–dez/2025, jan e jun/2026). Marcado como "Aporte" — não conta como faturamento. Pode editar depois pra separar quanto foi do seu pai.`)) return;
     setAporteRun(true);
-    let done = 0;
+    let ok = 0, fail = 0, firstErr = '';
     for (const a of todo) {
-      try { await financeiroService.addTransacao({ data: a.data, tipo: 'receita', categoria: 'Aporte', valor: a.valor, pagador: 'Aporte (Você + Pai)', dataPagamento: a.data, status: 'recebido' }); done++; } catch { /* re-rodar pega o resto */ }
+      try { await financeiroService.addTransacao({ data: a.data, tipo: 'receita', categoria: 'Aporte', valor: a.valor, pagador: 'Aporte (Você + Pai)', dataPagamento: a.data, status: 'recebido' }); ok++; }
+      catch (e: any) { fail++; if (!firstErr) firstErr = e?.response?.data?.message || e?.message || 'erro desconhecido'; }
     }
     qc.invalidateQueries({ queryKey: ['financeiro'] });
-    toast.success(`${done} aporte(s) lançado(s) · caixa fechado`);
     setAporteRun(false);
+    if (fail) { setRetroMsg(`⚠️ Aportes: ${ok} ok, ${fail} falharam. Erro: ${firstErr}`); toast.error(`${fail} falharam: ${firstErr}`); }
+    else { setRetroMsg(`✅ ${ok} aporte(s) lançado(s) · caixa fechado. Recarregue pra ver.`); toast.success(`${ok} aporte(s) lançado(s)`); }
   };
 
   const salvar = () => {
@@ -2409,6 +2414,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
             {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Lançando…</> : <><Scale className="h-3.5 w-3.5" /> Fechar caixa com aportes</>}
           </button>
         </div>
+        {retroMsg && <p className={`mt-3 rounded-lg border px-3 py-2 text-[13px] ${retroMsg.startsWith('⚠️') ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>{retroMsg}</p>}
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
