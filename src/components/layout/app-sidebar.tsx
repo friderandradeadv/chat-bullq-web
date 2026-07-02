@@ -39,6 +39,7 @@ import {
   Landmark,
   Stethoscope,
   Sparkles,
+  HelpCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -233,7 +234,7 @@ export function AppSidebar() {
           <NavSection label="Comercial">
             {/* Geral — subaba (fluxo do dia a dia) */}
             <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-              <NavSection label="Geral" storageKey="Geral-comercial" variant="sub" defaultOpen>
+              <NavSection label="Geral" storageKey="Geral-comercial" variant="sub" defaultOpen={false}>
                 <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
                 <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
               </NavSection>
@@ -275,7 +276,7 @@ export function AppSidebar() {
             <NavSection label="Jurídico">
               {/* Geral — subaba (fluxo do dia a dia) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-                <NavSection label="Geral" storageKey="Geral-juridico" variant="sub" defaultOpen>
+                <NavSection label="Geral" storageKey="Geral-juridico" variant="sub" defaultOpen={false}>
                   <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
                   <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
                   <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
@@ -356,6 +357,10 @@ export function AppSidebar() {
             <NavItem href="/copiloto" icon={Bot} label="Copiloto" />
           </div>
         )}
+        {/* Ajuda — assistente que ensina a usar o BullQ, aberto a todos os usuários */}
+        <div className="mb-1">
+          <NavItem href="/ajuda" icon={HelpCircle} label="Ajuda" />
+        </div>
         {/* Meu Espaço — fixa, acima de Configurações (perfil, organograma, cargos, cultura, manuais) */}
         <div className="mb-1">
           <NavItem href="/escritorio" icon={UserCircle} label="Meu Espaço" />
