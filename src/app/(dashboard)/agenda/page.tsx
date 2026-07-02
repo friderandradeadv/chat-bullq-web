@@ -14,7 +14,7 @@ import type { DateClickArg } from '@fullcalendar/interaction';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Plus, X, MapPin, RefreshCw,
   MoreVertical, Search, Tag, Check, CalendarClock, ExternalLink, CalendarDays,
-  ClipboardList, Pencil, MessageSquare, Paperclip, List, MessageCircle,
+  ClipboardList, Pencil, MessageSquare, Paperclip, List, MessageCircle, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { calendarService, type CalendarEvent, type EventKind } from '@/features/calendar/services/calendar.service';
@@ -22,6 +22,7 @@ import { deadlinesService, type Deadline } from '@/features/deadlines/services/d
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { GerarPecaDialog, type TipoPeca } from '@/features/legal-cases/components/gerar-peca-dialog';
 import { useAuthStore } from '@/stores/auth-store';
 import { inputCls, Field, ASTREA_BLUE, CnjNumber } from '../processos/page';
 
@@ -739,6 +740,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [respId, setRespId] = useState(activity.responsibleId);
   const [respName, setRespName] = useState(activity.responsibleName);
   const [prazoBusy, setPrazoBusy] = useState(false);
+  const [pecaTipo, setPecaTipo] = useState<TipoPeca | null>(null);
   const [coIds, setCoIds] = useState<string[]>(activity.coResponsibleIds ?? []);
   const [coMenu, setCoMenu] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
@@ -1147,6 +1149,34 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
               )}
             </div>
           </div>
+        )}
+
+        {/* Gerar peça por IA — quando o item está vinculado a um processo. */}
+        {activity.caseId && (
+          <div className="mt-5 rounded-lg border border-[#7048E8]/30 bg-[#7048E8]/5 p-3 dark:border-[#7048E8]/40 dark:bg-[#7048E8]/10">
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#7048E8] dark:text-[#b197fc]">Gerar peça (IA)</p>
+            <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+              Sobe o documento-base (contestação, réplica ou sentença) e a IA redige a peça sobre o timbrado — anexa no processo. Confira as teses e as lacunas “[ • ]” antes do protocolo.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { tipo: 'replica' as TipoPeca, label: 'Réplica' },
+                { tipo: 'especificacao' as TipoPeca, label: 'Especificação de provas' },
+                { tipo: 'recurso' as TipoPeca, label: 'Recurso (apelação)' },
+              ]).map((b) => (
+                <button
+                  key={b.tipo}
+                  onClick={() => setPecaTipo(b.tipo)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[#7048E8] px-3 py-2 text-sm font-medium text-[#7048E8] hover:bg-[#7048E8]/10"
+                >
+                  <Sparkles className="h-4 w-4" /> {b.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {pecaTipo && activity.caseId && (
+          <GerarPecaDialog caseId={activity.caseId} tipo={pecaTipo} onClose={() => setPecaTipo(null)} onGenerated={onRefetch} />
         )}
 
         {/* Comentários */}

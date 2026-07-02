@@ -199,6 +199,7 @@ export interface KanbanCard {
   produto: string | null; // 1ª etiqueta (RMC/BPC-LOAS…)
   areaJuridica: string | null; // 2ª etiqueta (Bancário/Previdenciário…)
   vencemos: string | null; // 'Sim' | 'Não' | 'Parcial' | resultado da sentença → badge
+  inssResultado: string | null; // 'deferido' | 'recurso' | 'indeferido' — abas do board do INSS
   tags: { id: string; name: string; color: string }[];
   court: string | null;
   value: number | null;
@@ -479,6 +480,20 @@ export const legalCasesService = {
     produto?: string,
   ): Promise<{ base: string; fileName: string; valorCausa: number; documentId: string; docxBase64: string }> {
     const { data } = await api.post(`/legal-cases/${id}/inicial/gerar${produto ? `?produto=${encodeURIComponent(produto)}` : ''}`);
+    return data.data ?? data;
+  },
+  /** Gera por IA uma peça (réplica/especificação de provas/recurso) sobre o timbrado → .docx base64. */
+  async gerarPeca(
+    id: string,
+    payload: {
+      tipo: 'replica' | 'especificacao' | 'recurso';
+      produto?: string;
+      docBase64?: string;
+      docNome?: string;
+      instrucoes?: string;
+    },
+  ): Promise<{ tipo: string; label: string; fileName: string; documentId: string; docxBase64: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/peca/gerar`, payload);
     return data.data ?? data;
   },
   /** Salva no processo o cálculo de RMC/RCC escolhido (e define o valor da causa). */
