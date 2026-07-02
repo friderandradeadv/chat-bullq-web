@@ -313,7 +313,7 @@ export default function EscritorioPage() {
                     <button onClick={() => removeCargo(setDraft, i)} title="Remover cargo" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div><p className={LABEL}>Trilha</p><input value={cg.vertical ?? ''} onChange={(e) => updateCargo(setDraft, i, { vertical: e.target.value })} placeholder="ex.: Advocacia, Sociedade, Back Office" className={`${INPUT} mt-1`} /></div>
+                    <div><p className={LABEL}>Cargo</p><input value={cg.vertical ?? ''} onChange={(e) => updateCargo(setDraft, i, { vertical: e.target.value })} placeholder="ex.: Advocacia, Sociedade, Back Office" className={`${INPUT} mt-1`} /></div>
                     <div><p className={LABEL}>Reporta a</p>
                       <select value={cg.parentId ?? ''} onChange={(e) => updateCargo(setDraft, i, { parentId: e.target.value || null })} className={`${INPUT} mt-1`}>
                         <option value="">— topo —</option>
@@ -924,7 +924,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
           <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
             {info?.oab && <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 shrink-0 text-[#7048E8]" /> OAB {info.oab}</span>}
             {info?.conoscoDesde && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> Conosco desde {info.conoscoDesde}</span>}
-            {cargo?.vertical && <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 shrink-0 text-[#15AABF]" /> Trilha: {cargo.vertical}</span>}
+            {cargo?.vertical && <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 shrink-0 text-[#15AABF]" /> Cargo: {cargo.vertical}</span>}
           </div>
         </div>
         {onEdit && (
@@ -1324,7 +1324,7 @@ function CargoModal({ cargoId, data, members, saving, onClose, onSave, onEditPer
     >
       <div className="grid grid-cols-2 gap-2">
         <div><p className={LABEL}>Nome do cargo</p><input value={nome} onChange={(e) => setNome(e.target.value)} className={`${INPUT} mt-1 font-semibold`} /></div>
-        <div><p className={LABEL}>Trilha (carreira)</p><input value={vertical} onChange={(e) => setVertical(e.target.value)} placeholder="ex.: Advocacia, Sociedade, Back Office" className={`${INPUT} mt-1`} /></div>
+        <div><p className={LABEL}>Cargo (carreira)</p><input value={vertical} onChange={(e) => setVertical(e.target.value)} placeholder="ex.: Advocacia, Sociedade, Back Office" className={`${INPUT} mt-1`} /></div>
       </div>
       <div><p className={LABEL}>Resumo (1 linha)</p><input value={resumo} onChange={(e) => setResumo(e.target.value)} placeholder="ex.: Advogado em início de carreira, atua sob revisão de um sócio." className={`${INPUT} mt-1`} /></div>
       <div><p className={LABEL}>O que esperamos / o que faz</p><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} placeholder="Resumo das responsabilidades…" className={`${INPUT} mt-1`} /></div>
