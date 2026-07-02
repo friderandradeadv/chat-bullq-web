@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  UserCircle, Target, Eye, Heart, Users, Briefcase, BookOpen, ListChecks,
+  UserCircle, Target, Eye, Heart, Briefcase, BookOpen, ListChecks,
   Pencil, Plus, Trash2, Save, X, Loader2, ChevronDown, Lock,
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
@@ -172,7 +172,7 @@ export default function EscritorioPage() {
 
         {/* Abas — só a ativa é renderizada */}
         <div className="sticky top-0 z-10 -mx-6 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa]/95 px-6 py-2 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-          {([['perfil', 'Meu Perfil', UserCircle], ['financeiro', 'Financeiro', CircleDollarSign], ['organograma', 'Organograma', Users], ['cargos', 'Cargos', Briefcase], ['verticais', 'Verticais', Layers], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
+          {([['perfil', 'Meu Perfil', UserCircle], ['financeiro', 'Financeiro', CircleDollarSign], ['cargos', 'Cargos', Briefcase], ['verticais', 'Verticais', Layers], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
@@ -273,61 +273,35 @@ export default function EscritorioPage() {
         </>)}
 
         {/* ─────────── ABA: ORGANOGRAMA ─────────── */}
-        {tab === 'organograma' && (<>
-        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Users className="h-4 w-4 text-[#228BE6]" /> Organograma</h2>
-        <div className={`${CARD} mt-2`}>
-          {(cur.cargos ?? []).length === 0 ? (
-            <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — adicione abaixo.' : '.'}</p>
-          ) : (
-            <>
-              <OrgChart
-                cargos={cur.cargos ?? []}
-                grupos={grupos}
-                meuCargoId={meuCargo?.id}
-                abertos={meuCaminho}
-                sig={treeSig}
-                canEdit={data.canEdit}
-                onExpandAll={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))}
-                onCollapseAll={() => setTreeSig((s) => ({ n: s.n + 1, open: false }))}
-                onOpenNode={(id) => setViewCargoId(id)}
-                onEditNode={data.canEdit ? (id) => setEditCargoId(id) : undefined}
-                onAddRoot={data.canEdit ? () => {
-                  const id = rid();
-                  patchEscritorio((d) => ({ ...d, cargos: [...(d.cargos ?? []), { id, nome: 'Novo cargo', descricao: '' }] }));
-                } : undefined}
-              />
-            </>
-          )}
-        </div>
-
-        {/* Atribuir cargo a cada pessoa (edição) */}
-        {editing && (
-          <div className={`${CARD} mt-3`}>
-            <p className={LABEL}>Definir o cargo de cada pessoa</p>
-            <div className="mt-2 space-y-2">
-              {team.map((m) => (
-                <div key={m.user.id} className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-zinc-700 dark:text-zinc-200">{m.user.name} <span className="text-xs text-zinc-400">· {m.role === 'AGENT' ? 'associado' : 'sócio'}</span></span>
-                  <select
-                    value={draft.pessoas?.[m.user.id]?.cargoId ?? ''}
-                    onChange={(e) => setDraft((d) => ({ ...d, pessoas: { ...d.pessoas, [m.user.id]: { ...d.pessoas?.[m.user.id], cargoId: e.target.value || undefined } } }))}
-                    className={`${INPUT} max-w-[200px]`}
-                  >
-                    <option value="">— sem cargo —</option>
-                    {(draft.cargos ?? []).map((cg) => <option key={cg.id} value={cg.id}>{cg.nome}</option>)}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        </>)}
-
-        {/* ─────────── ABA: CARGOS ─────────── */}
+        {/* ─────────── ABA: CARGOS (organograma) ─────────── */}
         {tab === 'cargos' && (<>
-        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Briefcase className="h-4 w-4 text-[#f08c00]" /> Cargos &amp; descrições</h2>
+        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Briefcase className="h-4 w-4 text-[#f08c00]" /> Cargos &amp; organograma</h2>
         {!editing ? (
-          <CargosPorVertical cargos={cur.cargos ?? []} grupos={grupos} onOpen={(id) => setViewCargoId(id)} />
+          <>
+            <div className={`${CARD} mt-2`}>
+              {(cur.cargos ?? []).length === 0 ? (
+                <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — entre em Editar para montar a estrutura.' : '.'}</p>
+              ) : (
+                <OrgChart
+                  cargos={cur.cargos ?? []}
+                  grupos={grupos}
+                  meuCargoId={meuCargo?.id}
+                  abertos={meuCaminho}
+                  sig={treeSig}
+                  canEdit={data.canEdit}
+                  onExpandAll={() => setTreeSig((s) => ({ n: s.n + 1, open: true }))}
+                  onCollapseAll={() => setTreeSig((s) => ({ n: s.n + 1, open: false }))}
+                  onOpenNode={(id) => setViewCargoId(id)}
+                  onEditNode={data.canEdit ? (id) => setEditCargoId(id) : undefined}
+                  onAddRoot={data.canEdit ? () => {
+                    const id = rid();
+                    patchEscritorio((d) => ({ ...d, cargos: [...(d.cargos ?? []), { id, nome: 'Novo cargo', descricao: '' }] }));
+                  } : undefined}
+                />
+              )}
+            </div>
+            <CargosPorVertical cargos={cur.cargos ?? []} grupos={grupos} onOpen={(id) => setViewCargoId(id)} />
+          </>
         ) : (
           <div className="mt-2 space-y-3">
             <p className="text-xs text-zinc-400">Dica: o jeito mais rápido de editar um cargo (com seleção, atribuições, financeiro e responsáveis) é pelo lápis no próprio organograma. Abaixo fica a edição simples da lista.</p>
@@ -339,7 +313,7 @@ export default function EscritorioPage() {
                     <button onClick={() => removeCargo(setDraft, i)} title="Remover cargo" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div><p className={LABEL}>Vertical</p><input value={cg.vertical ?? ''} onChange={(e) => updateCargo(setDraft, i, { vertical: e.target.value })} placeholder="ex.: Advocacia" className={`${INPUT} mt-1`} /></div>
+                    <div><p className={LABEL}>Trilha</p><input value={cg.vertical ?? ''} onChange={(e) => updateCargo(setDraft, i, { vertical: e.target.value })} placeholder="ex.: Advocacia, Sociedade, Back Office" className={`${INPUT} mt-1`} /></div>
                     <div><p className={LABEL}>Reporta a</p>
                       <select value={cg.parentId ?? ''} onChange={(e) => updateCargo(setDraft, i, { parentId: e.target.value || null })} className={`${INPUT} mt-1`}>
                         <option value="">— topo —</option>
@@ -365,6 +339,28 @@ export default function EscritorioPage() {
               </div>
             ))}
             <button onClick={() => setDraft((d) => ({ ...d, cargos: [...(d.cargos ?? []), { id: rid(), nome: '', descricao: '' }] }))} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm font-medium text-[#228BE6] hover:bg-[#228BE6]/5 dark:border-zinc-700"><Plus className="h-4 w-4" /> Adicionar cargo</button>
+          </div>
+        )}
+
+        {/* Atribuir cargo a cada pessoa (edição) — define quem entra em cada caixa do organograma */}
+        {editing && (
+          <div className={`${CARD} mt-3`}>
+            <p className={LABEL}>Definir o cargo de cada pessoa</p>
+            <div className="mt-2 space-y-2">
+              {team.map((m) => (
+                <div key={m.user.id} className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-zinc-700 dark:text-zinc-200">{m.user.name} <span className="text-xs text-zinc-400">· {m.role === 'AGENT' ? 'associado' : 'sócio'}</span></span>
+                  <select
+                    value={draft.pessoas?.[m.user.id]?.cargoId ?? ''}
+                    onChange={(e) => setDraft((d) => ({ ...d, pessoas: { ...d.pessoas, [m.user.id]: { ...d.pessoas?.[m.user.id], cargoId: e.target.value || undefined } } }))}
+                    className={`${INPUT} max-w-[200px]`}
+                  >
+                    <option value="">— sem cargo —</option>
+                    {(draft.cargos ?? []).map((cg) => <option key={cg.id} value={cg.id}>{cg.nome}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -928,7 +924,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
           <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
             {info?.oab && <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 shrink-0 text-[#7048E8]" /> OAB {info.oab}</span>}
             {info?.conoscoDesde && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> Conosco desde {info.conoscoDesde}</span>}
-            {cargo?.vertical && <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 shrink-0 text-[#15AABF]" /> Vertical: {cargo.vertical}</span>}
+            {cargo?.vertical && <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 shrink-0 text-[#15AABF]" /> Trilha: {cargo.vertical}</span>}
           </div>
         </div>
         {onEdit && (
@@ -1328,7 +1324,7 @@ function CargoModal({ cargoId, data, members, saving, onClose, onSave, onEditPer
     >
       <div className="grid grid-cols-2 gap-2">
         <div><p className={LABEL}>Nome do cargo</p><input value={nome} onChange={(e) => setNome(e.target.value)} className={`${INPUT} mt-1 font-semibold`} /></div>
-        <div><p className={LABEL}>Vertical / trilha</p><input value={vertical} onChange={(e) => setVertical(e.target.value)} placeholder="ex.: Advocacia, Sociedade, Back Office" className={`${INPUT} mt-1`} /></div>
+        <div><p className={LABEL}>Trilha (carreira)</p><input value={vertical} onChange={(e) => setVertical(e.target.value)} placeholder="ex.: Advocacia, Sociedade, Back Office" className={`${INPUT} mt-1`} /></div>
       </div>
       <div><p className={LABEL}>Resumo (1 linha)</p><input value={resumo} onChange={(e) => setResumo(e.target.value)} placeholder="ex.: Advogado em início de carreira, atua sob revisão de um sócio." className={`${INPUT} mt-1`} /></div>
       <div><p className={LABEL}>O que esperamos / o que faz</p><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} placeholder="Resumo das responsabilidades…" className={`${INPUT} mt-1`} /></div>

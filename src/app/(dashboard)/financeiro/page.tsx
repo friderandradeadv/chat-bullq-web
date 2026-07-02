@@ -88,13 +88,21 @@ export default function FinanceiroPage() {
   const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'dashboard'], queryFn: () => financeiroService.dashboard(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   // Abre em "Lançamentos" por padrão (livro-razão do mês corrente) — é a tela de trabalho do dia a dia.
   const [view, setView] = useState<View>('lancamentos');
-  // Toggle "ver o financeiro de um advogado" (escopado à vertical dele) — só admin.
+  // Seletor "ver o financeiro de" — por advogado (escopado à vertical dele) ou,
+  // para o dono (OWNER), por vertical inteira. Só admin/sócio.
   const { user } = useAuthStore();
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const meuMembro = members.find((m) => m.user.id === user?.id);
   const isAdmin = meuMembro?.role === 'OWNER' || meuMembro?.role === 'ADMIN';
-  const advs = useMemo(() => members.filter((m) => m.user.isActive && m.user.id !== user?.id).map((m) => ({ id: m.user.id, name: m.user.name })), [members, user?.id]);
-  const [verAdv, setVerAdv] = useState('');
+  const isOwner = meuMembro?.role === 'OWNER';
+  // inclui você mesmo ("meu financeiro") e esconde logins não-atribuíveis (Admin duplicado).
+  const advs = useMemo(() => members.filter((m) => m.user.isActive && m.assignable !== false).map((m) => ({ id: m.user.id, name: m.user.name, eu: m.user.id === user?.id })), [members, user?.id]);
+  // Verticais que o dono pode ver inteiras.
+  const VERTICAIS = ['Bancário', 'Previdenciário', 'Consumidor', 'Cível'];
+  // sel: '' = escritório · 'v:Área' = vertical inteira · userId = visão pessoal do advogado
+  const [sel, setSel] = useState('');
+  const verVert = sel.startsWith('v:') ? sel.slice(2) : '';
+  const verAdv = sel.startsWith('v:') ? '' : sel;
   const advNome = advs.find((a) => a.id === verAdv)?.name;
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
@@ -134,25 +142,36 @@ export default function FinanceiroPage() {
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600"><CircleDollarSign className="h-5 w-5" /></span>
-              Financeiro{verAdv && advNome ? <span className="text-lg font-semibold text-[#7048E8]"> · {advNome.split(' ')[0]}</span> : null}
+              Financeiro
+              {verVert ? <span className="text-lg font-semibold text-[#15AABF]"> · {verVert}</span> : verAdv && advNome ? <span className="text-lg font-semibold text-[#7048E8]"> · {advNome.split(' ')[0]}</span> : null}
             </h1>
-            <p className="mt-1 text-sm text-zinc-500">{verAdv ? 'financeiro do advogado, escopado à vertical de atuação dele(a).' : 'Lançamentos, honorários, fluxo de caixa, crescimento e projeções do escritório.'}</p>
+            <p className="mt-1 text-sm text-zinc-500">{verVert ? 'financeiro de toda a vertical — todos os casos e advogados da área.' : verAdv ? 'financeiro do advogado, escopado à vertical de atuação dele(a).' : 'Lançamentos, honorários, fluxo de caixa, crescimento e projeções do escritório.'}</p>
           </div>
           <div className="flex items-center gap-3">
             {isAdmin && advs.length > 0 && (
               <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
                 <UserCircle2 className="h-4 w-4 text-zinc-400" />
-                <select value={verAdv} onChange={(e) => setVerAdv(e.target.value)} className="bg-transparent text-sm font-medium outline-none dark:text-zinc-100">
+                <select value={sel} onChange={(e) => setSel(e.target.value)} className="bg-transparent text-sm font-medium outline-none dark:text-zinc-100">
                   <option value="">Escritório (tudo)</option>
-                  {advs.map((a) => <option key={a.id} value={a.id}>{a.name} — financeiro dele(a)</option>)}
+                  {/* Só o dono (OWNER) escolhe a vertical inteira que quer enxergar. */}
+                  {isOwner && (
+                    <optgroup label="Por vertical (toda a área)">
+                      {VERTICAIS.map((v) => <option key={v} value={`v:${v}`}>{v} — vertical inteira</option>)}
+                    </optgroup>
+                  )}
+                  <optgroup label="Por advogado">
+                    {advs.map((a) => <option key={a.id} value={a.id}>{a.eu ? `Você (${a.name.split(' ')[0]}) — meu financeiro` : `${a.name} — financeiro dele(a)`}</option>)}
+                  </optgroup>
                 </select>
               </div>
             )}
-            {!verAdv && data.geradoEm && <p className="text-xs text-zinc-400">atualizado em {new Date(data.geradoEm).toLocaleDateString('pt-BR')}</p>}
+            {!sel && data.geradoEm && <p className="text-xs text-zinc-400">atualizado em {new Date(data.geradoEm).toLocaleDateString('pt-BR')}</p>}
           </div>
         </div>
 
-        {verAdv ? (
+        {verVert ? (
+          <VerticalFinanceiro area={verVert} />
+        ) : verAdv ? (
           <AdvogadoFinanceiro userId={verAdv} />
         ) : (
         <>
@@ -2581,6 +2600,23 @@ function AdvogadoFinanceiro({ userId }: { userId: string }) {
   return (
     <div className="mt-4 rounded-2xl border border-[#7048E8]/25 bg-[#7048E8]/[0.03] p-4 dark:border-[#7048E8]/30 dark:bg-[#7048E8]/[0.06]">
       <p className="mb-3 inline-flex items-center gap-1 rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-xs font-medium text-[#7048E8]"><UserCircle2 className="h-3.5 w-3.5" /> é exatamente isto que ele(a) vê no login — escopado à vertical de atuação · você pode lançar por ele(a)</p>
+      <MeuFinanceiroConteudo data={data} criar={criar} />
+    </div>
+  );
+}
+
+/** Financeiro de uma VERTICAL inteira (todos os casos/advogados da área) — visão
+ * do dono. Reusa o layout da visão pessoal (bloco de área), escopado à vertical. */
+function VerticalFinanceiro({ area }: { area: string }) {
+  const { user } = useAuthStore();
+  const { data, isLoading } = useQuery({ queryKey: ['financeiro', 'vertical', area], queryFn: () => financeiroService.vertical(area), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
+  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
+  if (!data || data.semAcesso) return <Card><p className="py-8 text-center text-sm text-zinc-400">A visão por vertical é exclusiva do dono do escritório.</p></Card>;
+  // O dono pode lançar honorários/despesas direto na vertical escolhida.
+  const criar = user?.id ? { userId: user.id, area } : undefined;
+  return (
+    <div className="mt-4 rounded-2xl border border-[#15AABF]/25 bg-[#15AABF]/[0.04] p-4 dark:border-[#15AABF]/30 dark:bg-[#15AABF]/[0.07]">
+      <p className="mb-3 inline-flex items-center gap-1 rounded-full bg-[#15AABF]/10 px-2 py-0.5 text-xs font-medium text-[#0c8599]"><Scale className="h-3.5 w-3.5" /> vertical inteira · {area} — todos os casos e advogados da área · você pode lançar aqui</p>
       <MeuFinanceiroConteudo data={data} criar={criar} />
     </div>
   );

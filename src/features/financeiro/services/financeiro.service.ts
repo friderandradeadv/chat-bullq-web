@@ -172,6 +172,11 @@ export const financeiroService = {
     const { data } = await api.get('/financeiro/meu', { params: alvoUserId ? { userId: alvoUserId } : undefined });
     return data.data ?? data;
   },
+  // Financeiro de uma vertical inteira (todos os casos da área) — visão do dono.
+  async vertical(area: string): Promise<FinDashboard> {
+    const { data } = await api.get('/financeiro/vertical', { params: { area } });
+    return data.data ?? data;
+  },
   async addTransacao(input: AddTransacaoInput): Promise<{ criados: number; transacoes: FinTransacao[] }> {
     const { data } = await api.post('/financeiro/transacoes', input);
     return data.data ?? data;
