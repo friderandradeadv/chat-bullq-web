@@ -607,7 +607,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
       addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, rateioVerticais: rvArr.length ? rvArr : undefined, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined, contactId: editor.contactId || undefined, caseId: editor.caseId || undefined });
     } else {
-      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, rateioVerticais: rvArr.length ? rvArr : null, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, ...(rvArr.length ? { rateioVerticais: rvArr } : {}), responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
     }
   };
   const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
@@ -2217,7 +2217,8 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const contas = data.contas ?? [];
   const [conc, setConc] = useState<{ conta: string; texto: string } | null>(null);
-  const [concResult, setConcResult] = useState<{ conciliados: number; semPar: { data: string; valor: number; descricao: string }[] } | null>(null);
+  const [concResult, setConcResult] = useState<{ conciliados: number; semPar: { data: string; valor: number; descricao: string; dup: boolean }[] } | null>(null);
+  const [concSel, setConcSel] = useState<Set<number>>(new Set());
   const [concLinhas, setConcLinhas] = useState<ExtratoLinha[]>([]);
   const [iaLoading, setIaLoading] = useState(false);
   const [upLoading, setUpLoading] = useState(false);
@@ -2283,32 +2284,41 @@ function ContasTab({ data }: { data: FinDashboard }) {
     }
     if (!linhas.length) { toast.error('Não consegui ler nenhuma linha. Suba um extrato (PDF/OFX/CSV) ou cole o texto com data, valor e descrição.'); return; }
     const usadas = new Set<string>();
-    let conciliados = 0; const semPar: typeof linhas = [];
+    // match EXATO (valor+sinal, data ±5d) em QUALQUER conta → já existe, concilia.
+    let conciliados = 0; const semPar: { data: string; valor: number; descricao: string; dup: boolean }[] = [];
     for (const l of linhas) {
       const alvo = isoNum(l.data);
       const match = data.transacoes.find((t) => {
         if (t.id && usadas.has(t.id)) return false;
-        if (t.conta && t.conta !== conc.conta) return false;
         if (Math.sign(t.valor) !== Math.sign(l.valor)) return false;
         if (Math.abs(Math.abs(t.valor) - Math.abs(l.valor)) > 0.01) return false;
         return Math.abs(isoNum(t.data) - alvo) <= 5 || Math.abs((t.vencimento ? isoNum(t.vencimento) : 0) - alvo) <= 5;
       });
-      if (match) { conciliados++; if (match.id) usadas.add(match.id); } else semPar.push(l);
+      if (match) { conciliados++; if (match.id) usadas.add(match.id); continue; }
+      // sem par exato — mas se há lançamento de MESMO valor+sinal (qualquer data/conta),
+      // marca como POSSÍVEL DUPLICADO e deixa DESmarcado por padrão (o usuário decide).
+      const dup = data.transacoes.some((t) => !(t.id && usadas.has(t.id)) && Math.sign(t.valor) === Math.sign(l.valor) && Math.abs(Math.abs(t.valor) - Math.abs(l.valor)) <= 0.01);
+      semPar.push({ data: l.data, valor: l.valor, descricao: l.descricao, dup });
     }
     setConcResult({ conciliados, semPar });
+    setConcSel(new Set(semPar.map((l, i) => (l.dup ? -1 : i)).filter((i) => i >= 0))); // só os não-suspeitos vêm marcados
   };
   const criarComIA = async () => {
-    if (!conc || !concResult?.semPar.length) return;
+    if (!conc || !concResult) return;
+    const escolhidos = concResult.semPar.filter((_, i) => concSel.has(i));
+    if (!escolhidos.length) { toast.error('Selecione ao menos um lançamento para criar.'); return; }
+    const ehCartao = !!contas.find((c) => c.id === conc.conta)?.cartao; // cartão → gasto vira fatura (a_pagar), fora do caixa
     setIaLoading(true);
     try {
-      const sug = await financeiroService.classificarExtrato(concResult.semPar.map((l) => ({ descricao: l.descricao, valor: l.valor })));
-      for (let i = 0; i < concResult.semPar.length; i++) {
-        const l = concResult.semPar[i]; const s = sug.find((x) => x.i === i);
-        await financeiroService.addTransacao({ data: l.data, tipo: (s?.tipo as 'receita' | 'despesa') ?? (l.valor >= 0 ? 'receita' : 'despesa'), categoria: s?.categoria ?? (l.valor >= 0 ? 'Honorários' : 'Outros'), valor: Math.abs(l.valor), pagador: s?.party || l.descricao.slice(0, 60), conta: conc.conta, status: l.valor >= 0 ? 'recebido' : 'pago' });
+      const sug = await financeiroService.classificarExtrato(escolhidos.map((l) => ({ descricao: l.descricao, valor: l.valor })));
+      for (let i = 0; i < escolhidos.length; i++) {
+        const l = escolhidos[i]; const s = sug.find((x) => x.i === i);
+        const tipo: 'receita' | 'despesa' = (s?.tipo as 'receita' | 'despesa') ?? (l.valor >= 0 ? 'receita' : 'despesa');
+        await financeiroService.addTransacao({ data: l.data, tipo, categoria: s?.categoria ?? (l.valor >= 0 ? 'Honorários' : 'Outros'), valor: Math.abs(l.valor), pagador: s?.party || l.descricao.slice(0, 60), conta: conc.conta, status: tipo === 'receita' ? 'recebido' : (ehCartao ? 'a_pagar' : 'pago') });
       }
       qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
-      toast.success(`${concResult.semPar.length} lançamento(s) criado(s) e conciliado(s)`);
-      setConc(null); setConcResult(null);
+      toast.success(`${escolhidos.length} lançamento(s) criado(s) e conciliado(s)`);
+      setConc(null); setConcResult(null); setConcSel(new Set());
     } catch (e: any) { toast.error(e?.message || 'Erro ao criar lançamentos'); } finally { setIaLoading(false); }
   };
 
@@ -2354,6 +2364,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <Field label="…ou cole o extrato (CSV: data; valor; descrição)">
                 <textarea value={conc.texto} onChange={(e) => { setConc({ ...conc, texto: e.target.value }); setConcResult(null); setConcLinhas([]); }} rows={4} placeholder={'10/06/2026;47,00;Pix recebido Júlia Macedo\n12/06/2026;-2850,00;Aluguel Top Office'} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900" />
               </Field>
+              {contas.find((c) => c.id === conc.conta)?.cartao && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Esta conta é um <strong>cartão</strong>. Aqui deve entrar só o <strong>extrato do cartão</strong> (os gastos viram fatura). O extrato da <strong>conta bancária</strong> deve ir numa conta normal.</p>
+              )}
               <button onClick={analisar} disabled={iaLoading} className="inline-flex items-center gap-1.5 rounded-lg bg-[#228BE6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{iaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Analisar e casar</button>
 
               {concResult && (
@@ -2364,16 +2377,23 @@ function ContasTab({ data }: { data: FinDashboard }) {
                   </div>
                   {concResult.semPar.length > 0 && (
                     <>
-                      <div className="mt-2 max-h-40 space-y-0.5 overflow-y-auto scrollbar-thin">
+                      <p className="mt-2 text-[11px] text-zinc-400">Marque o que quer <strong>criar</strong>. Linhas em <span className="text-amber-600">âmbar</span> têm um lançamento de mesmo valor já existente (possível duplicado) — vêm desmarcadas.</p>
+                      <div className="mt-1.5 max-h-52 space-y-0.5 overflow-y-auto scrollbar-thin">
                         {concResult.semPar.map((l, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs">
+                          <label key={i} className={`flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800/50 ${l.dup ? 'bg-amber-50/60 dark:bg-amber-900/10' : ''}`}>
+                            <input type="checkbox" checked={concSel.has(i)} onChange={(e) => setConcSel((prev) => { const n = new Set(prev); if (e.target.checked) n.add(i); else n.delete(i); return n; })} className="h-3.5 w-3.5 shrink-0 accent-[#7048E8]" />
                             <span className="w-12 shrink-0 text-zinc-400">{l.data.slice(0, 5)}</span>
-                            <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">{l.descricao || '—'}</span>
+                            <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">{l.descricao || '—'}{l.dup && <span className="ml-1 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">já existe?</span>}</span>
                             <span className={`shrink-0 tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</span>
-                          </div>
+                          </label>
                         ))}
                       </div>
-                      <button onClick={criarComIA} disabled={iaLoading} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{iaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Criar os {concResult.semPar.length} faltantes com IA</button>
+                      <div className="mt-2 flex items-center gap-3 text-[11px]">
+                        <button onClick={() => setConcSel(new Set(concResult.semPar.map((_, i) => i)))} className="font-medium text-[#228BE6] hover:underline">marcar todos</button>
+                        <button onClick={() => setConcSel(new Set())} className="font-medium text-zinc-500 hover:underline">desmarcar todos</button>
+                        <span className="ml-auto text-zinc-400">{concSel.size} selecionado(s)</span>
+                      </div>
+                      <button onClick={criarComIA} disabled={iaLoading || concSel.size === 0} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{iaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} Criar {concSel.size} selecionado(s)</button>
                     </>
                   )}
                   {concResult.semPar.length === 0 && <p className="mt-2 text-xs text-emerald-600">Tudo conciliado! Nenhum lançamento faltando.</p>}
@@ -2398,7 +2418,10 @@ function ContasTab({ data }: { data: FinDashboard }) {
                 </span>
               </div>
               <p className={`mt-2 text-2xl font-bold tabular-nums ${s.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(s.saldo)}</p>
-              <p className="text-[11px] text-zinc-400">{s.real ? 'saldo real (API) · ' : ''}{s.n} lançamento(s) nesta conta</p>
+              <p className="text-[11px] text-zinc-400">{s.real ? 'saldo real (API) · ' : ''}{c.cartao ? 'cartão · ' : ''}{s.n} lançamento(s) nesta conta</p>
+              {s.saldo < 0 && !s.real && !c.cartao && (c.saldoInicial ?? 0) === 0 && (
+                <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ','), cartao: !!c.cartao, fechamento: c.fechamento ? String(c.fechamento) : '', vencimento: c.vencimento ? String(c.vencimento) : '' })} className="mt-2 block w-full rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-left text-[11px] text-amber-700 hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Saldo negativo? Falta o <strong>saldo inicial</strong> da conta. Clique e informe o saldo de abertura (o extrato traz "saldo anterior").</button>
+              )}
               {(s.aReceber > 0 || s.aPagar > 0) && (
                 <div className="mt-2 flex gap-3 text-[11px]">
                   {s.aReceber > 0 && <span className="text-amber-600">a receber {brl(s.aReceber)}</span>}
