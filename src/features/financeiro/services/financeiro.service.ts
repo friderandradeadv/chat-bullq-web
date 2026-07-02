@@ -103,8 +103,11 @@ export interface HoleriteMes {
   mes: string;
   entradas: { cliente: string; valor: number; data: string }[];
   entradaTot: number;
+  saidas: { label: string; valor: number }[];
+  saidaTot: number;
   retiradas: { desc: string; valor: number; data: string }[];
   retiradaTot: number;
+  liquido: number;
 }
 
 export interface VerticalCusto { label: string; valor: number }
@@ -307,6 +310,14 @@ export const financeiroService = {
     return data.data ?? data;
   },
   // ── Custos diretos por vertical (agência, anúncios…) ──
+  async getCustosPessoa(): Promise<{ custosPessoa: Record<string, { area: string; pct: number }[]> }> {
+    const { data } = await api.get('/financeiro/custos-pessoa');
+    return data.data ?? data;
+  },
+  async setCustosPessoa(custosPessoa: Record<string, { area: string; pct: number }[]>): Promise<{ ok: boolean }> {
+    const { data } = await api.patch('/financeiro/custos-pessoa', { custosPessoa });
+    return data.data ?? data;
+  },
   async getVerticalCustos(): Promise<{ verticalCustos: Record<string, VerticalCusto[]> }> {
     const { data } = await api.get('/financeiro/vertical-custos');
     return data.data ?? data;

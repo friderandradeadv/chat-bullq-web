@@ -155,8 +155,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           if (hol.length === 0) return <p className="mt-6 text-center text-sm text-zinc-400">Ainda não há holerite. Quando você receber honorários com <strong>rateio</strong> (sua parte) ou tiver <strong>retiradas</strong>, sua folha do mês aparece aqui.</p>;
           const mes = hol.some((x) => x.mes === holMesSel) ? holMesSel : hol[0].mes;
           const h = hol.find((x) => x.mes === mes) ?? hol[0];
-          const custos = 0; // rateio de custos (agência/anúncios) entra quando configurado
-          const liquido = h.entradaTot - custos;
+          const liquido = h.liquido ?? (h.entradaTot - (h.saidaTot ?? 0));
           return (
             <div className="mt-4">
               <div className="mb-3 flex items-center gap-2">
@@ -185,9 +184,21 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   )}
                   <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-1 text-sm font-semibold dark:border-zinc-800"><span className="text-zinc-500">Total de entradas</span><span className="tabular-nums text-emerald-600">{brl2(h.entradaTot)}</span></div>
 
-                  {/* Saídas (custos rateados) — placeholder até configurar rateio/anúncios */}
+                  {/* Saídas (custos rateados que a pessoa assume) */}
                   <p className="mb-1.5 mt-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-rose-600"><ArrowDownCircle className="h-3.5 w-3.5" /> Saídas (custos rateados)</p>
-                  <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-400 dark:bg-zinc-800/40">Rateio de custos (ex.: 1/3 da agência, saldo de anúncios) entra aqui quando você configurar em <strong>Verticais</strong>. Por enquanto: R$ 0,00.</p>
+                  {(h.saidas?.length ?? 0) === 0 ? (
+                    <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-400 dark:bg-zinc-800/40">Sem custos rateados neste mês. Configure quais verticais o colaborador assume em <strong>RH › Configurações</strong> (ex.: 1/3 da agência) — a fatia do mês aparece aqui.</p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {h.saidas.map((sd, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="truncate text-zinc-600 dark:text-zinc-300">{sd.label}</span>
+                          <span className="shrink-0 font-medium tabular-nums text-rose-600">− {brl2(sd.valor)}</span>
+                        </div>
+                      ))}
+                      <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-1 text-sm font-semibold dark:border-zinc-800"><span className="text-zinc-500">Total de saídas</span><span className="tabular-nums text-rose-600">− {brl2(h.saidaTot)}</span></div>
+                    </div>
+                  )}
 
                   {/* Líquido */}
                   <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-zinc-200 pt-3 dark:border-zinc-700">

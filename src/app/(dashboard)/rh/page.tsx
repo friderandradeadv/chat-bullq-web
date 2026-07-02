@@ -152,7 +152,72 @@ function ConfiguracoesView({ team, members, honorariosPct, acessoFin, pessoas, c
       <p className="text-sm text-zinc-500">Honorários, divisão dos sócios e acessos do escritório — tudo num lugar só. Vale para a plataforma inteira e reflete no Financeiro na hora.</p>
       <HonorariosEscritorioCard canEdit={canEdit} />
       <AcessosHonorariosTable team={team} honorariosPct={honorariosPct} acessoFin={acessoFin} pessoas={pessoas} cargoById={cargoById} canEdit={canEdit} />
+      <CustosPessoaCard team={team} cargoById={cargoById} pessoas={pessoas} canEdit={canEdit} />
       <SociosSection members={members} />
+    </div>
+  );
+}
+
+// Custos rateados que cada colaborador assume (alimenta as SAÍDAS do holerite em Meu Espaço).
+const AREAS_VERT = ['Bancário', 'Previdenciário', 'Trabalhista', 'Consumidor', 'Cível'];
+function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[]; cargoById: Record<string, any>; pessoas: Record<string, any>; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const { data: cfg } = useQuery({ queryKey: ['financeiro', 'custos-pessoa'], queryFn: () => financeiroService.getCustosPessoa() });
+  const [draft, setDraft] = useState<Record<string, { area: string; pct: string }[]>>({});
+  useEffect(() => { if (cfg?.custosPessoa) setDraft(Object.fromEntries(Object.entries(cfg.custosPessoa).map(([k, v]) => [k, (v ?? []).map((x) => ({ area: x.area, pct: String(x.pct) }))]))); }, [cfg]);
+  const [saving, setSaving] = useState(false);
+  const rows = (uid: string) => draft[uid] ?? [];
+  const setRows = (uid: string, r: { area: string; pct: string }[]) => setDraft((d) => ({ ...d, [uid]: r }));
+  const salvar = async () => {
+    setSaving(true);
+    try {
+      const clean: Record<string, { area: string; pct: number }[]> = {};
+      for (const [k, v] of Object.entries(draft)) { const ls = v.filter((x) => x.area && Number(x.pct) > 0).map((x) => ({ area: x.area, pct: Math.max(0, Math.min(100, Number(x.pct) || 0)) })); if (ls.length) clean[k] = ls; }
+      await financeiroService.setCustosPessoa(clean);
+      await Promise.all([qc.invalidateQueries({ queryKey: ['financeiro', 'custos-pessoa'] }), qc.invalidateQueries({ queryKey: ['financeiro'] })]);
+      toast.success('Custos por colaborador salvos');
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao salvar'); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><Network className="h-4 w-4 text-[#E64980]" /> Custos rateados por colaborador</h3>
+          <p className="mt-0.5 text-sm text-zinc-500">Quais verticais o custo rateado (agência, anúncios) cada um assume — vira a <strong>saída</strong> no holerite dele. Ex.: Kauani → Bancário 100% (o 1/3 da agência).</p>
+        </div>
+        {canEdit && <button onClick={salvar} disabled={saving} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#E64980] px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button>}
+      </div>
+      <div className="mt-4 space-y-3">
+        {team.map((m) => {
+          const uid = m.user.id; const r = rows(uid); const info = pessoas[uid] ?? {}; const cargo = cargoById[info.cargoId ?? ''];
+          return (
+            <div key={uid} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <div className="flex items-center justify-between">
+                <div><p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{m.user.name}</p><p className="text-[11px] text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p></div>
+                {canEdit && <button onClick={() => setRows(uid, [...r, { area: '', pct: '100' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> vertical</button>}
+              </div>
+              {r.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {r.map((x, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <select value={x.area} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: e.target.value } : y))} disabled={!canEdit} className={`${INPUT} flex-1`}>
+                        <option value="">vertical…</option>
+                        {AREAS_VERT.map((a) => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                      <div className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+                        <input value={x.pct} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, pct: e.target.value.replace(/[^\d]/g, '').slice(0, 3) } : y))} disabled={!canEdit} inputMode="numeric" className="w-10 bg-transparent text-right text-sm tabular-nums outline-none" />
+                        <span className="text-xs text-zinc-400">%</span>
+                      </div>
+                      {canEdit && <button onClick={() => setRows(uid, r.filter((_, j) => j !== i))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
