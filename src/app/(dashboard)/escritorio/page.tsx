@@ -925,6 +925,14 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
             {info?.oab && <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 shrink-0 text-[#7048E8]" /> OAB {info.oab}</span>}
             {info?.conoscoDesde && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> Conosco desde {info.conoscoDesde}</span>}
             {cargo?.vertical && <span className="inline-flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 shrink-0 text-[#15AABF]" /> Cargo: {cargo.vertical}</span>}
+            {(info?.atuacao?.length ?? 0) > 0 && (
+              <span className="flex flex-wrap items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 shrink-0 text-[#02883C]" /> Verticais:
+                {info!.atuacao!.map((v) => (
+                  <span key={v} className="rounded-full bg-[#02883C]/10 px-2 py-0.5 text-[11px] font-medium text-[#0b7a37] dark:bg-[#02883C]/20 dark:text-[#69db7c]">{v}</span>
+                ))}
+              </span>
+            )}
           </div>
         </div>
         {onEdit && (
@@ -1128,6 +1136,7 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
           <div><p className={LABEL}>Vidas impactadas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
         </div>
       )}
+      {!selfMode && <div><p className={LABEL}>Verticais / áreas de atuação (separe por vírgula)</p><input value={(f.atuacao ?? []).join(', ')} onChange={(e) => set({ atuacao: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="ex.: Bancário, Previdenciário, Consumidor" className={`${INPUT} mt-1`} /><p className="mt-1 text-[11px] text-zinc-400">Aparecem abaixo do cargo no perfil.</p></div>}
       {!selfMode && <div><p className={LABEL}>Financeiro (do contrato) — um item por linha</p><textarea value={(f.financeiro ?? []).join('\n')} onChange={(e) => set({ financeiro: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} placeholder={'70% dos honorários de clientes que capta e atende\n30% quando é nomeada para atuar'} className={`${INPUT} mt-1`} /></div>}
       {!selfMode && <div><p className={LABEL}>Reconhecimento / motivação (em destaque)</p><input value={f.destaque ?? ''} onChange={(e) => set({ destaque: e.target.value })} placeholder="ex.: Referência em RMC, cuida de cada cliente com carinho." className={`${INPUT} mt-1`} /></div>}
       <div><p className={LABEL}>Frase / lema pessoal</p><input value={f.frase ?? ''} onChange={(e) => set({ frase: e.target.value })} placeholder="ex.: Justiça com gente de verdade." className={`${INPUT} mt-1`} /></div>
