@@ -91,16 +91,20 @@ function NavSection({
   // Restaura o que o usuário deixou aberto/fechado (persistido por seção).
   // Lê no efeito (não no init) pra não dar mismatch de hidratação SSR.
   useEffect(() => {
+    // Só as SEÇÕES principais lembram o estado (localStorage). As subabas são
+    // EFÊMERAS: ao fechar a mãe elas desmontam e, ao reabrir, voltam fechadas.
+    if (variant !== 'section') return;
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved !== null) setOpen(saved === '1');
     } catch {
       /* localStorage indisponível — mantém o default */
     }
-  }, [storageKey]);
+  }, [storageKey, variant]);
 
   const setOpenPersist = (next: boolean) => {
     setOpen(next);
+    if (variant !== 'section') return; // subaba não persiste
     try {
       localStorage.setItem(storageKey, next ? '1' : '0');
     } catch {
@@ -314,14 +318,21 @@ export function AppSidebar() {
             </NavSection>
           </div>
 
-          {/* ADMINISTRATIVO — Financeiro, Contabilidade, etc. */}
-          <div className="mt-3">
-            <NavSection label="Administrativo" defaultOpen={false}>
+          {/* ADMINISTRATIVO — só administradores. Associados NÃO veem a seção;
+              recebem apenas o Financeiro (avulso), escopado aos casos deles. */}
+          {isAdmin ? (
+            <div className="mt-3">
+              <NavSection label="Administrativo" defaultOpen={false}>
+                <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
+                <NavItem href="/rh" icon={Users} label="RH & Seleção" />
+                <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
+              </NavSection>
+            </div>
+          ) : (
+            <div className="mt-3 border-t border-zinc-200/70 pt-2 dark:border-zinc-800">
               <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
-              {isAdmin && <NavItem href="/rh" icon={Users} label="RH & Seleção" />}
-              {isAdmin && <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />}
-            </NavSection>
-          </div>
+            </div>
+          )}
 
         </SidebarSection>
 
