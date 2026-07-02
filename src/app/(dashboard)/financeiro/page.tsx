@@ -2323,7 +2323,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
 
   // ── Separar Nubank em conta bancária + cartão (os gastos de fatura vão pro cartão) ──
   const [sepRun, setSepRun] = useState(false);
-  const nubankCartao = contas.find((c) => c.cartao && /nubank/i.test(c.nome));
+  const [showTools, setShowTools] = useState(false);
+  // só oferece separar se há um Nubank marcado como cartão QUE NÃO seja o "Nubank cartão" já separado
+  const nubankCartao = contas.find((c) => c.cartao && /nubank/i.test(c.nome) && !/cart[aã]o/i.test(c.nome));
   const separarNubank = async () => {
     const nb = nubankCartao;
     if (!nb) { toast.error('Não achei um "Nubank" marcado como cartão.'); return; }
@@ -2417,8 +2419,13 @@ function ContasTab({ data }: { data: FinDashboard }) {
 
       <AsaasImport />
 
-      {/* Gastos retroativos do Astrea */}
-      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+      {/* Ferramentas de configuração inicial — recolhível (ações de uma vez só) */}
+      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <button onClick={() => setShowTools((v) => !v)} className="flex w-full items-center justify-between gap-2 px-5 py-3.5 text-left hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40">
+          <span className="flex items-center gap-2 text-sm font-bold text-zinc-700 dark:text-zinc-200"><Scissors className="h-4 w-4 text-zinc-400" /> Ferramentas de configuração <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">uma vez só</span></span>
+          <ChevronDown className={`h-4 w-4 text-zinc-400 transition ${showTools ? 'rotate-180' : ''}`} />
+        </button>
+        {showTools && (<div className="border-t border-zinc-100 p-5 dark:border-zinc-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><ArrowDownCircle className="h-4 w-4 text-[#820AD1]" /> Gastos retroativos (Astrea)</h3>
@@ -2451,6 +2458,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
           </div>
         )}
         {retroMsg && <p className={`mt-3 rounded-lg border px-3 py-2 text-[13px] ${retroMsg.startsWith('⚠️') ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>{retroMsg}</p>}
+        </div>)}
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
