@@ -941,6 +941,9 @@ export default function InicioPage() {
   const dlQ = useQuery({ queryKey: ['hub', 'deadlines', user?.id], queryFn: () => deadlinesService.list({ assignedToId: user!.id }), enabled: mounted && !!user?.id, staleTime: 60_000, retry: 1 });
   const evQ = useQuery({ queryKey: ['hub', 'events', user?.id], queryFn: () => calendarService.list({ assignedToId: user!.id }), enabled: mounted && !!user?.id, staleTime: 60_000, retry: 1 });
   const casesQ = useQuery({ queryKey: ['hub', 'cases', user?.id], queryFn: () => legalCasesService.list({ responsibleId: user!.id }), enabled: mounted && !!user?.id, staleTime: 300_000, retry: 1 });
+  // Contagem de processos pela MESMA fonte do card financeiro (resolve pelo token,
+  // não pelo user.id do store) — evita o "0 processos seus" quando a lista falha.
+  const finCountQ = useQuery({ queryKey: ['hub', 'fin-count'], queryFn: () => financeiroService.meuFinanceiro(), enabled: mounted, staleTime: 60_000, retry: 1 });
 
   const { stats, proximos } = useMemo(() => {
     const today = now ? localDay(now) : '';
@@ -969,10 +972,10 @@ export default function InicioPage() {
       : [];
 
     return {
-      stats: { hoje, fatais, concluidas, processos: (casesQ.data ?? []).length, loading: tasksQ.isLoading || dlQ.isLoading || evQ.isLoading },
+      stats: { hoje, fatais, concluidas, processos: finCountQ.data?.resumo?.nCasos ?? (casesQ.data ?? []).length, loading: tasksQ.isLoading || dlQ.isLoading || evQ.isLoading },
       proximos: upcoming,
     };
-  }, [now, tasksQ.data, dlQ.data, evQ.data, casesQ.data, tasksQ.isLoading, dlQ.isLoading, evQ.isLoading]);
+  }, [now, tasksQ.data, dlQ.data, evQ.data, casesQ.data, finCountQ.data, tasksQ.isLoading, dlQ.isLoading, evQ.isLoading]);
 
   const relDate = (iso: string) => {
     const today = now ? localDay(now) : '';
