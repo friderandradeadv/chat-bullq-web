@@ -188,6 +188,7 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
         </div>
         {canEdit && <button onClick={salvar} disabled={saving} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#E64980] px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button>}
       </div>
+      <datalist id="rh-frentes-custos">{[...new Set([...AREAS_VERT, ...Object.values(draft).flat().map((x) => x.area).filter(Boolean)])].map((a) => <option key={a} value={a} />)}</datalist>
       <div className="mt-4 space-y-3">
         {team.map((m) => {
           const uid = m.user.id; const r = rows(uid); const info = pessoas[uid] ?? {}; const cargo = cargoById[info.cargoId ?? ''];
@@ -201,10 +202,7 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
                 <div className="mt-2 space-y-1.5">
                   {r.map((x, i) => (
                     <div key={i} className="flex items-center gap-1.5">
-                      <select value={x.area} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: e.target.value } : y))} disabled={!canEdit} className={`${INPUT} flex-1`}>
-                        <option value="">vertical…</option>
-                        {AREAS_VERT.map((a) => <option key={a} value={a}>{a}</option>)}
-                      </select>
+                      <input list="rh-frentes-custos" value={x.area} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: e.target.value } : y))} disabled={!canEdit} placeholder="vertical ou frente (ex.: REPB)" className={`${INPUT} flex-1`} />
                       <div className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
                         <input value={x.pct} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, pct: e.target.value.replace(/[^\d]/g, '').slice(0, 3) } : y))} disabled={!canEdit} inputMode="numeric" className="w-10 bg-transparent text-right text-sm tabular-nums outline-none" />
                         <span className="text-xs text-zinc-400">%</span>

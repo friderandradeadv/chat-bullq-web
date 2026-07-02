@@ -451,8 +451,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const areasVert = useMemo(() => {
     const base = ['Bancário', 'Previdenciário', 'Trabalhista', 'Consumidor', 'Cível'];
     const extra = [...(data.verticalPnL?.verticais ?? []).map((v) => v.area), ...(data.crescimento?.verticalArea ?? []).map((v) => v.area)];
-    return [...new Set([...base, ...extra])].filter((a) => a && a !== 'Não identificada');
-  }, [data.verticalPnL, data.crescimento]);
+    // frentes/campanhas já usadas em rateios (ex.: "REPB") viram sugestões também
+    const frentes: string[] = [];
+    for (const t of data.transacoes) for (const x of t.rateioVerticais ?? []) if (x.area) frentes.push(x.area);
+    return [...new Set([...base, ...extra, ...frentes])].filter((a) => a && a !== 'Não identificada');
+  }, [data.verticalPnL, data.crescimento, data.transacoes]);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const { organizations, activeOrgId } = useAuthStore();
@@ -820,13 +823,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 return (
                 <Field label="Ratear entre verticais (custo por área — opcional)">
                   <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
-                    <p className="text-[11px] text-zinc-400">A despesa aparece <strong>uma vez</strong> no livro-razão; cada área puxa a fatia no financeiro da vertical (ex.: agência R$1.300 ÷ 3).</p>
+                    <p className="text-[11px] text-zinc-400">A despesa aparece <strong>uma vez</strong> no livro-razão; cada área puxa a fatia (ex.: agência R$1.300 ÷ 3). Pode ser uma <strong>vertical</strong> (Bancário…) ou uma <strong>frente/campanha</strong> de anúncio (ex.: REPB).</p>
+                    <datalist id="fin-frentes-rateio">{areasVert.map((a) => <option key={a} value={a} />)}</datalist>
                     {editor.rateioVerticais.map((x, i) => (
                       <div key={i} className="flex flex-wrap items-center gap-1.5">
-                        <select value={x.area} onChange={(e) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: e.target.value } : y) })} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-                          <option value="">vertical…</option>
-                          {areasVert.map((a) => <option key={a} value={a}>{a}</option>)}
-                        </select>
+                        <input list="fin-frentes-rateio" value={x.area} onChange={(e) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: e.target.value } : y) })} placeholder="vertical ou frente (ex.: REPB)" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
                         <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, valor: v } : y) })} /></div>
                         <button onClick={() => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                       </div>
