@@ -449,7 +449,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const contaNome = (id?: string | null) => contas.find((c) => c.id === id)?.nome ?? null;
   // Cartões de crédito: os gastos do cartão NÃO entram no caixa (livro-razão) — vivem na visão de cartão.
   const cardIds = useMemo(() => new Set(contas.filter((c) => c.cartao).map((c) => c.id)), [contas]);
-  const isCard = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta);
+  // Gasto de FATURA do cartão (sai do caixa): despesa numa conta-cartão que veio do
+  // extrato do cartão (fonteImport) OU ainda está em aberto (a_pagar). Uma despesa
+  // LANÇADA À MÃO numa conta-cartão (ex.: repasse) NÃO é fatura — fica no livro-razão.
+  const isFaturaCartao = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta) && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar');
   const [modo, setModo] = useState<'ledger' | 'cartao'>('ledger');
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
@@ -478,7 +481,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const txs = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return data.transacoes.filter((t) => {
-      if (isCard(t) && t.valor < 0) return false; // GASTOS do cartão vivem na fatura (fora do caixa); ENTRADAS na conta continuam no livro-razão
+      if (isFaturaCartao(t)) return false; // gastos de FATURA do cartão vivem fora do caixa; entradas e repasses manuais ficam no livro-razão
       const iso = toISOInput(t.data);
       if (temPeriodo) { if (deISO && iso < deISO) return false; if (ateISO && iso > ateISO) return false; }
       else if (mesSel && mesKey(t) !== mesSel) return false;
@@ -923,7 +926,9 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
 
   const fechamento = cartao?.fechamento ?? 0;
   const vencDia = cartao?.vencimento ?? 0;
-  const gastos = useMemo(() => data.transacoes.filter((t) => t.conta === cartao?.id && t.valor < 0), [data.transacoes, cartao?.id]);
+  // Gastos da fatura: despesas do cartão vindas do extrato (fonteImport) ou em aberto.
+  // Despesa lançada à mão (ex.: repasse) NÃO entra na fatura — fica no livro-razão.
+  const gastos = useMemo(() => data.transacoes.filter((t) => t.conta === cartao?.id && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar')), [data.transacoes, cartao?.id]);
 
   // A qual fatura (mês/ciclo) um gasto pertence: se o dia > fechamento, cai na fatura do mês seguinte.
   const faturaInfo = (dataBR: string) => {

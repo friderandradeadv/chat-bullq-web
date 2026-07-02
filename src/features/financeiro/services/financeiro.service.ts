@@ -42,6 +42,7 @@ export interface FinTransacao {
   conta?: string | null;
   parcela?: string | null;
   manual?: boolean;
+  fonteImport?: string | null; // 'extrato' | 'asaas' | 'mercadopago' — veio de import (não é lançamento manual)
 }
 export interface FinInsight { nivel: 'critico' | 'alerta' | 'ok' | 'info'; titulo: string; texto: string }
 
