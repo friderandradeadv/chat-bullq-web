@@ -1,19 +1,11 @@
 'use client';
 
-import { Stethoscope } from 'lucide-react';
-import { AdminBoard } from '@/features/legal-cases/components/admin-board';
+import { InssBoard } from '@/features/legal-cases/components/inss-board';
 
-// Fase administrativa do INSS — processos na etapa "PROCESSO ADMINISTRATIVO - INSS"
-// (fase inss_admin), agrupados por produto (BPC/LOAS, aposentadoria, auxílio…).
+// Fase administrativa do INSS — processos na etapa "PROCESSO ADMINISTRATIVO -
+// INSS" (fase inss_admin), com abas por resultado do requerimento (em análise /
+// deferido / em recurso / indeferido) e, no indeferimento, o atalho para entrar
+// com a ação judicial.
 export default function InssAdministrativoPage() {
-  return (
-    <AdminBoard
-      title="INSS — Administrativo"
-      subtitle="Requerimentos e recursos na esfera administrativa do INSS, antes do ajuizamento."
-      icon={Stethoscope}
-      accent="#7048e8"
-      filter={(c) => c.phase === 'inss_admin'}
-      emptyHint="Nenhum processo na fase administrativa do INSS. Quando um card entrar na etapa PROCESSO ADMINISTRATIVO - INSS, ele aparece aqui."
-    />
-  );
+  return <InssBoard />;
 }

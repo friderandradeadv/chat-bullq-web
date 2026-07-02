@@ -18,6 +18,7 @@ import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits'
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
+import { chipTextColor } from '@/lib/avatar';
 
 const KEY = ['legal-cases', 'kanban'];
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif";
@@ -475,6 +476,12 @@ function Card({
             </span>
           ) : null;
         })()}
+        {/* Etiquetas jurídicas (tags) do processo */}
+        {(c.tags ?? []).map((t) => (
+          <span key={t.id} className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: t.color, color: chipTextColor(t.color) }}>
+            {t.name}
+          </span>
+        ))}
       </div>
 
       {/* Cliente (título, CAPS) × parte adversa */}

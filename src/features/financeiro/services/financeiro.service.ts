@@ -15,7 +15,7 @@ export interface FinCliente { cliente: string; recebido: number; parcelas: numbe
 
 export type TxStatus = 'a_receber' | 'recebido' | 'a_pagar' | 'pago';
 export type AcessoNivel = 'full' | 'cases' | 'none';
-export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean }
+export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean; cartao?: boolean }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
 export interface RateioExito { bruto: number; cliente: number; sucumbencia: number; honorarios: number }
 export interface FinTransacao {
@@ -193,8 +193,12 @@ export const financeiroService = {
     const { data } = await api.get('/financeiro/contas');
     return data.data ?? data;
   },
-  async addConta(input: { nome: string; banco?: string; cor?: string; saldoInicial?: number }): Promise<Conta> {
+  async addConta(input: { nome: string; banco?: string; cor?: string; saldoInicial?: number; cartao?: boolean }): Promise<Conta> {
     const { data } = await api.post('/financeiro/contas', input);
+    return data.data ?? data;
+  },
+  async pagarFatura(input: { cartaoId: string; contaPagamentoId: string; data: string; txIds?: string[]; categoria?: string }): Promise<{ pago: number; baixados: number }> {
+    const { data } = await api.post('/financeiro/fatura/pagar', input);
     return data.data ?? data;
   },
   async updateConta(id: string, input: Partial<Conta>): Promise<{ ok: boolean }> {

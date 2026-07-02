@@ -13,7 +13,7 @@ import {
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem,
 } from 'lucide-react';
-import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta } from '@/features/financeiro/services/financeiro.service';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
@@ -447,6 +447,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
   const contas = data.contas ?? [];
   const contaNome = (id?: string | null) => contas.find((c) => c.id === id)?.nome ?? null;
+  // Cartões de crédito: os gastos do cartão NÃO entram no caixa (livro-razão) — vivem na visão de cartão.
+  const cardIds = useMemo(() => new Set(contas.filter((c) => c.cartao).map((c) => c.id)), [contas]);
+  const isCard = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta);
+  const [modo, setModo] = useState<'ledger' | 'cartao'>('ledger');
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const { organizations, activeOrgId } = useAuthStore();
@@ -474,6 +478,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const txs = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return data.transacoes.filter((t) => {
+      if (isCard(t)) return false; // gastos de cartão vivem na visão "Cartão de crédito"
       const iso = toISOInput(t.data);
       if (temPeriodo) { if (deISO && iso < deISO) return false; if (ateISO && iso > ateISO) return false; }
       else if (mesSel && mesKey(t) !== mesSel) return false;
@@ -561,6 +566,17 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>
       </div>}>
 
+      {/* Alternador: caixa (livro-razão) × cartão de crédito */}
+      {cardIds.size > 0 && (
+        <div className="mb-3 inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+          {([['ledger', 'Livro-razão'], ['cartao', 'Cartão de crédito']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setModo(k)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition ${modo === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{k === 'cartao' && <CreditCard className="h-3.5 w-3.5" />}{l}</button>
+          ))}
+        </div>
+      )}
+
+      {modo === 'cartao' && cardIds.size > 0 ? <CartaoCreditoView data={data} contas={contas} onDone={invalidate} /> : (
+      <>
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
         <CalendarioFiltro
@@ -623,11 +639,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                   </div>
                 </button>
               )}
-              {aberto && (
-                <div>
-                  {g.items.map((t) => {
-                    const st = txStatus(t);
-                    return (
+              {aberto && (() => {
+                const linha = (t: FinTransacao) => {
+                  const st = txStatus(t);
+                  return (
                       <div key={t.id} className="group flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-sm dark:border-zinc-800/70">
                         <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{((!ehLiquidado(st) && t.vencimento) ? t.vencimento : t.data).slice(0, 5)}</span>
                         {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
@@ -647,15 +662,30 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                  );
+                };
+                // Separa de fato o que já caiu no caixa do que ainda é a receber / a pagar.
+                const liq = g.items.filter((t) => ehLiquidado(txStatus(t)));
+                const pend = g.items.filter((t) => !ehLiquidado(txStatus(t)));
+                const secao = (titulo: string, cor: string, itens: FinTransacao[]) => itens.length === 0 ? null : (
+                  <div>
+                    <div className="flex items-center gap-1.5 border-t border-zinc-100 bg-zinc-50/50 px-3 py-1 dark:border-zinc-800/70 dark:bg-zinc-800/20">
+                      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: cor }}>{titulo}</span>
+                      <span className="text-[10px] text-zinc-400">({itens.length})</span>
+                      <span className="ml-auto text-[10px] font-semibold tabular-nums text-zinc-400">{brl(itens.reduce((s, t) => s + Math.abs(t.valor), 0))}</span>
+                    </div>
+                    {itens.map(linha)}
+                  </div>
+                );
+                return <div>{secao('Recebido / pago (caixa)', '#02883C', liq)}{secao('A receber / a pagar', '#F08C00', pend)}</div>;
+              })()}
             </div>
           );
         })}
         {grupos.length === 0 && <p className="py-10 text-center text-sm text-zinc-400">Nenhum lançamento neste filtro.</p>}
       </div>
+      </>
+      )}
 
       {/* Modal de edição / novo lançamento */}
       {editor && (
@@ -879,6 +909,95 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   );
 }
 
+// ── Visão de cartão de crédito: gastos da fatura + saldo em aberto + pagar fatura ──
+function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; contas: Conta[]; onDone: () => void }) {
+  const cartoes = useMemo(() => contas.filter((c) => c.cartao), [contas]);
+  const contasPagam = useMemo(() => contas.filter((c) => !c.cartao), [contas]);
+  const [cardId, setCardId] = useState<string>(cartoes[0]?.id ?? '');
+  const cartao = cartoes.find((c) => c.id === cardId) ?? cartoes[0];
+  const [pagando, setPagando] = useState(false);
+  const [contaPg, setContaPg] = useState<string>(contasPagam[0]?.id ?? '');
+  const [dataPg, setDataPg] = useState<string>(toISOInput(hojeBR()));
+  const qc = useQueryClient();
+
+  const gastos = useMemo(() => data.transacoes.filter((t) => t.conta === cartao?.id && t.valor < 0), [data.transacoes, cartao?.id]);
+  const emAberto = useMemo(() => gastos.filter((t) => txStatus(t) === 'a_pagar'), [gastos]);
+  const pagos = useMemo(() => gastos.filter((t) => txStatus(t) === 'pago'), [gastos]);
+  const abertoTotal = useMemo(() => emAberto.reduce((s, t) => s + Math.abs(t.valor), 0), [emAberto]);
+
+  const pagar = useMutation({
+    mutationFn: () => financeiroService.pagarFatura({ cartaoId: cartao!.id, contaPagamentoId: contaPg, data: toBR(dataPg) }),
+    onSuccess: (r) => { toast.success(`Fatura paga: ${brl2(r.pago)} · ${r.baixados} gasto(s) baixado(s)`); setPagando(false); onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] }); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pagar fatura'),
+  });
+
+  const linha = (t: FinTransacao) => (
+    <div key={t.id} className="flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-sm dark:border-zinc-800/70">
+      <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{(t.data || '').slice(0, 5)}</span>
+      <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+      <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{titleCase(t.pagador || t.recebedor || t.party || '') || t.categoria}</span>
+      <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="truncate">{t.categoria}</span></span>
+      <span className="w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums text-rose-600">{brl2(t.valor)}</span>
+    </div>
+  );
+
+  if (!cartao) return null;
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {cartoes.length > 1 ? (
+          <select value={cardId} onChange={(e) => setCardId(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            {cartoes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200"><CreditCard className="h-4 w-4" style={{ color: cartao.cor ?? '#820AD1' }} /> {cartao.nome}</span>
+        )}
+        <button onClick={() => { setContaPg(contasPagam[0]?.id ?? ''); setDataPg(toISOInput(hojeBR())); setPagando(true); }} disabled={abertoTotal <= 0 || contasPagam.length === 0} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"><Banknote className="h-3.5 w-3.5" /> Pagar fatura</button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="rounded-lg bg-rose-50 py-2 text-center dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Fatura em aberto</p><p className="text-lg font-bold tabular-nums text-rose-600">{brl2(abertoTotal)}</p></div>
+        <div className="rounded-lg bg-zinc-50 py-2 text-center dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Gastos em aberto</p><p className="text-lg font-bold tabular-nums text-zinc-600 dark:text-zinc-300">{emAberto.length}</p></div>
+        <div className="rounded-lg bg-emerald-50 py-2 text-center dark:bg-emerald-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Já pago (histórico)</p><p className="text-lg font-bold tabular-nums text-emerald-600">{brl2(pagos.reduce((s, t) => s + Math.abs(t.valor), 0))}</p></div>
+      </div>
+
+      <p className="mt-3 text-xs text-zinc-400">Os gastos do cartão ficam <strong>fora do caixa</strong> até a fatura ser paga. Ao pagar, entra <strong>uma saída</strong> na conta escolhida (aí sim conta no saldo real).</p>
+
+      <div className="mt-2 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+        <div className="flex items-center gap-1.5 bg-zinc-50/50 px-3 py-1 dark:bg-zinc-800/20"><span className="text-[10px] font-bold uppercase tracking-wide text-[#F08C00]">Em aberto (fatura atual)</span><span className="text-[10px] text-zinc-400">({emAberto.length})</span></div>
+        {emAberto.map(linha)}
+        {emAberto.length === 0 && <p className="border-t border-zinc-100 py-6 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum gasto em aberto. Suba o extrato do cartão em <strong>Importar extrato</strong> (escolha a conta do cartão).</p>}
+        {pagos.length > 0 && <><div className="flex items-center gap-1.5 border-t border-zinc-100 bg-zinc-50/50 px-3 py-1 dark:border-zinc-800/70 dark:bg-zinc-800/20"><span className="text-[10px] font-bold uppercase tracking-wide text-[#02883C]">Faturas pagas (histórico)</span><span className="text-[10px] text-zinc-400">({pagos.length})</span></div>{pagos.slice(0, 40).map(linha)}</>}
+      </div>
+
+      {pagando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-3 flex items-center justify-between"><h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Pagar fatura · {cartao.nome}</h3><button onClick={() => setPagando(false)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button></div>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Vai baixar <strong>{emAberto.length}</strong> gasto(s) em aberto (<strong className="text-rose-600">{brl2(abertoTotal)}</strong>) e lançar uma saída na conta escolhida.</p>
+            <div className="mt-3 space-y-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Pagar com a conta</p>
+                <select value={contaPg} onChange={(e) => setContaPg(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                  {contasPagam.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Data do pagamento</p>
+                <input type="date" value={dataPg} onChange={(e) => setDataPg(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button onClick={() => setPagando(false)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              <button onClick={() => pagar.mutate()} disabled={pagar.isPending || !contaPg || abertoTotal <= 0} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{pagar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} Pagar {brl2(abertoTotal)}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Modal: importar extrato (PDF/CSV/OFX) → lançamentos, com dedup server-side ──
 function ImportExtratoModal({ contas, onClose }: { contas: { id: string; nome: string }[]; onClose: () => void }) {
   const qc = useQueryClient();
@@ -1096,6 +1215,39 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
                         </div>
                       ))}
                     </div>
+                    {(() => {
+                      // Rateio: quem recebeu o quê dos honorários deste cliente (split entre advogados + escritório) e a prestação de contas do êxito.
+                      const txsCli = dataF.transacoes.filter((t) => /honor/i.test(t.categoria) && normNome(t.pagador || t.party || '') === normNome(c.nome) && ((t.split?.length ?? 0) > 0 || t.rateio));
+                      if (txsCli.length === 0) return null;
+                      const acc = new Map<string, number>();
+                      let escritorio = 0;
+                      for (const t of txsCli) {
+                        const sp = t.split ?? [];
+                        const assigned = sp.reduce((s, x) => s + (x.valor || 0), 0);
+                        for (const x of sp) { const k = x.nome || (x.tipo === 'associado' ? 'Associado' : 'Sócio'); acc.set(k, (acc.get(k) ?? 0) + (x.valor || 0)); }
+                        escritorio += Math.max(0, Math.abs(t.valor) - assigned);
+                      }
+                      const exitos = txsCli.filter((t) => t.rateio);
+                      return (
+                        <div className="mt-2 border-t border-zinc-200/60 pt-2 dark:border-zinc-800/60">
+                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#7048E8]">Rateio dos honorários (quem recebeu)</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {escritorio > 0 && <span className="rounded-full bg-[#228BE6]/10 px-2 py-0.5 text-[11px] font-semibold text-[#228BE6]">Escritório: {brl2(escritorio)}</span>}
+                            {[...acc.entries()].map(([nome, v]) => <span key={nome} className="rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-[11px] font-semibold text-[#7048E8]">{nome}: {brl2(v)}</span>)}
+                          </div>
+                          {exitos.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <p className="text-[11px] text-zinc-400">Prestação de contas (êxito):</p>
+                              {exitos.map((t, i) => t.rateio ? (
+                                <div key={i} className="rounded bg-white/60 px-1.5 py-1 text-[11px] text-zinc-500 dark:bg-zinc-900/40">
+                                  <span className="tabular-nums">{t.data}</span> · bruto <strong className="text-zinc-700 dark:text-zinc-200">{brl2(t.rateio.bruto)}</strong> · cliente {brl2(t.rateio.cliente)} · honorário {brl2(t.rateio.honorarios)} · sucumbência {brl2(t.rateio.sucumbencia)}
+                                </div>
+                              ) : null)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1919,9 +2071,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
       else toast.success(`${linhas.length} lançamento(s) lido(s) do extrato`);
     } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setUpLoading(false); }
   };
-  const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string } | null>(null);
+  const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string; cartao?: boolean } | null>(null);
   const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
-  const addM = useMutation({ mutationFn: (i: { nome: string; banco: string; saldoInicial: number }) => financeiroService.addConta(i), onSuccess: () => { inval(); toast.success('Conta adicionada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
+  const addM = useMutation({ mutationFn: (i: { nome: string; banco: string; saldoInicial: number; cartao?: boolean }) => financeiroService.addConta(i), onSuccess: () => { inval(); toast.success('Conta adicionada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
   const updM = useMutation({ mutationFn: ({ id, i }: { id: string; i: any }) => financeiroService.updateConta(id, i), onSuccess: () => { inval(); toast.success('Conta atualizada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
   const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeConta(id), onSuccess: () => { inval(); toast.success('Conta removida'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
 
@@ -1943,7 +2095,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
 
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
-    const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial) };
+    const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial), cartao: !!form.cartao };
     if (form.id) updM.mutate({ id: form.id, i }); else addM.mutate(i);
   };
 
@@ -2009,7 +2161,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Saldo somado das contas" value={brl(total)} hint={`${contas.length} conta(s)`} accent={total >= 0 ? '#2F9E44' : '#E03131'} />
         <MiniStat label="Lançamentos sem conta" value={String(semConta)} hint="marque a conta neles para conciliar" accent="#F59F00" />
         <div className="rounded-2xl border border-dashed border-[#DEE2E6] bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-900">
-          <button onClick={() => setForm({ nome: '', banco: 'nubank', saldoInicial: '' })} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Nova conta</button>
+          <button onClick={() => setForm({ nome: '', banco: 'nubank', saldoInicial: '', cartao: false })} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Nova conta</button>
         </div>
       </div>
 
@@ -2070,7 +2222,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100"><span className="h-3 w-3 rounded-full" style={{ background: c.cor ?? '#868E96' }} />{c.nome}</span>
                 <span className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                  <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ',') })} className="rounded p-1 text-zinc-300 hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ','), cartao: !!c.cartao })} className="rounded p-1 text-zinc-300 hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                   <button onClick={() => { if (confirm(`Remover a conta "${c.nome}"?`)) delM.mutate(c.id); }} className="rounded p-1 text-zinc-300 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                 </span>
               </div>
@@ -2101,6 +2253,10 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <Field label="Banco"><select value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value, nome: form.nome || (BANCOS.find((b) => b.id === e.target.value)?.nome ?? '') })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{BANCOS.map((b) => <option key={b.id} value={b.id}>{b.nome}</option>)}</select></Field>
               <Field label="Nome / apelido"><input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="ex.: Nubank PJ" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
               <Field label="Saldo inicial (opcional)"><input value={form.saldoInicial} onChange={(e) => setForm({ ...form, saldoInicial: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              <label className="flex items-start gap-2 rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
+                <input type="checkbox" checked={!!form.cartao} onChange={(e) => setForm({ ...form, cartao: e.target.checked })} className="mt-0.5 h-4 w-4 accent-[#820AD1]" />
+                <span className="text-sm text-zinc-600 dark:text-zinc-300">É <strong>cartão de crédito</strong><span className="mt-0.5 block text-[11px] text-zinc-400">Os gastos ficam na fatura (fora do caixa) até você pagar a fatura. Use a visão “Cartão de crédito” em Lançamentos.</span></span>
+              </label>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setForm(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>

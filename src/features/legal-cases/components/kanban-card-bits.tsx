@@ -8,9 +8,13 @@
 //   jurídica (2º badge) é derivada disso no backend, então atualiza sozinha.
 
 import { useEffect, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, X, Pencil, Trash2, Check, Tag as TagIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { legalCasesService } from '../services/legal-cases.service';
+import { legalCasesService, type LegalTag } from '../services/legal-cases.service';
+import { tagsService } from '@/features/settings/services/tags.service';
+import { ColorPicker } from '@/features/settings/components/color-picker';
+import { chipTextColor } from '@/lib/avatar';
 
 export function PhaseHeader({
   phase,
@@ -191,6 +195,163 @@ export function ProdutoTags({
                   <span className="truncate text-zinc-700 dark:text-zinc-300">{p}</span>
                 </button>
               ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Etiquetas jurídicas (Tags scope="legal") do processo ──
+// No card: anexar/remover etiquetas + criar, renomear e mudar a cor ali mesmo.
+// Reflete no pool de etiquetas do escritório (Configurações › Jurídico).
+const DEFAULT_TAG_COLOR = '#3B82F6';
+
+export function LegalTags({
+  caseId,
+  legalTags,
+  onChanged,
+}: {
+  caseId: string;
+  legalTags: LegalTag[];
+  onChanged: () => void;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [novo, setNovo] = useState('');
+  const [novaCor, setNovaCor] = useState(DEFAULT_TAG_COLOR);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [editCor, setEditCor] = useState(DEFAULT_TAG_COLOR);
+
+  const { data: pool = [] } = useQuery({
+    queryKey: ['tags', 'legal'],
+    queryFn: () => tagsService.list('legal'),
+    enabled: open,
+  });
+
+  const attached = new Set(legalTags.map((t) => t.tagId));
+  const refresh = () => { onChanged(); qc.invalidateQueries({ queryKey: ['tags', 'legal'] }); };
+
+  const toggle = async (tagId: string) => {
+    setBusy(true);
+    try {
+      if (attached.has(tagId)) await tagsService.removeFromCase(caseId, tagId);
+      else await tagsService.addToCase(caseId, tagId);
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao aplicar etiqueta');
+    } finally { setBusy(false); }
+  };
+  const detach = async (tagId: string) => {
+    setBusy(true);
+    try { await tagsService.removeFromCase(caseId, tagId); refresh(); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao remover etiqueta'); }
+    finally { setBusy(false); }
+  };
+  const criar = async () => {
+    const name = novo.trim();
+    if (!name) return;
+    setBusy(true);
+    try {
+      const tag = await tagsService.create({ name, color: novaCor, scope: 'legal' });
+      await tagsService.addToCase(caseId, tag.id);
+      setNovo(''); setNovaCor(DEFAULT_TAG_COLOR);
+      refresh();
+      toast.success('Etiqueta criada');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Só sócios podem criar etiquetas');
+    } finally { setBusy(false); }
+  };
+  const startEdit = (id: string, nome: string, cor: string) => { setEditId(id); setEditNome(nome); setEditCor(cor); };
+  const salvarEdit = async () => {
+    if (!editId) return;
+    setBusy(true);
+    try {
+      await tagsService.update(editId, { name: editNome.trim() || undefined, color: editCor });
+      setEditId(null);
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Só sócios podem editar etiquetas');
+    } finally { setBusy(false); }
+  };
+  const excluir = async (id: string) => {
+    if (!confirm('Excluir esta etiqueta de TODOS os processos?')) return;
+    setBusy(true);
+    try { await tagsService.remove(id); setEditId(null); refresh(); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Só sócios podem excluir etiquetas'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+      {legalTags.map((t) => (
+        <span
+          key={t.id}
+          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold"
+          style={{ background: t.tag.color, color: chipTextColor(t.tag.color) }}
+        >
+          <TagIcon className="h-2.5 w-2.5 opacity-80" />
+          {t.tag.name}
+          <button type="button" disabled={busy} title="Remover etiqueta" onClick={() => detach(t.tagId)} className="hover:opacity-70">
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </span>
+      ))}
+      <div className="relative">
+        <button
+          type="button"
+          title="Gerenciar etiquetas do processo"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-zinc-300 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 hover:border-[#e11970] hover:text-[#e11970] dark:border-zinc-600"
+        >
+          <TagIcon className="h-2.5 w-2.5" /> Etiqueta
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setEditId(null); }} />
+            <div className="absolute left-0 z-20 mt-1 max-h-80 w-72 overflow-y-auto rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+              <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Etiquetas do jurídico</p>
+              {pool.length === 0 && <p className="px-3 py-1.5 text-xs text-zinc-400">Nenhuma etiqueta ainda — crie a primeira abaixo.</p>}
+              {pool.map((tag) =>
+                editId === tag.id ? (
+                  <div key={tag.id} className="flex items-center gap-1.5 px-2 py-1.5">
+                    <ColorPicker value={editCor} onChange={setEditCor} />
+                    <input
+                      value={editNome}
+                      onChange={(e) => setEditNome(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); salvarEdit(); } }}
+                      className="min-w-0 flex-1 rounded border border-zinc-300 px-2 py-1 text-xs outline-none focus:border-[#e11970] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    />
+                    <button type="button" disabled={busy} onClick={salvarEdit} title="Salvar" className="rounded p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"><Check className="h-3.5 w-3.5" /></button>
+                    <button type="button" disabled={busy} onClick={() => excluir(tag.id)} title="Excluir etiqueta" className="rounded p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                ) : (
+                  <div key={tag.id} className="group flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                    <button type="button" disabled={busy} onClick={() => toggle(tag.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded ${attached.has(tag.id) ? '' : 'border border-zinc-300 dark:border-zinc-600'}`} style={attached.has(tag.id) ? { background: tag.color } : undefined}>
+                        {attached.has(tag.id) && <Check className="h-3 w-3" style={{ color: chipTextColor(tag.color) }} />}
+                      </span>
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tag.color }} />
+                      <span className="truncate text-sm text-zinc-700 dark:text-zinc-300">{tag.name}</span>
+                    </button>
+                    <button type="button" onClick={() => startEdit(tag.id, tag.name, tag.color)} title="Renomear / mudar cor" className="rounded p-1 text-zinc-300 opacity-0 hover:bg-zinc-100 hover:text-zinc-600 group-hover:opacity-100 dark:hover:bg-zinc-700"><Pencil className="h-3 w-3" /></button>
+                  </div>
+                ),
+              )}
+              <div className="mt-1 flex items-center gap-1.5 border-t border-zinc-100 px-2 pb-1 pt-2 dark:border-zinc-800">
+                <ColorPicker value={novaCor} onChange={setNovaCor} />
+                <input
+                  value={novo}
+                  onChange={(e) => setNovo(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); criar(); } }}
+                  placeholder="Nova etiqueta…"
+                  className="min-w-0 flex-1 rounded border border-zinc-300 px-2 py-1 text-xs outline-none focus:border-[#e11970] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+                <button type="button" disabled={busy || !novo.trim()} onClick={criar} className="shrink-0 rounded-lg bg-[#e11970] px-2 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40">Criar</button>
+              </div>
             </div>
           </>
         )}
