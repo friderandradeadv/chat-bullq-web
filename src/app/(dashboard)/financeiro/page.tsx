@@ -2268,7 +2268,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
     return { saldo: real != null ? real : ini + mov, aReceber, aPagar, n, real: real != null };
   };
   const semConta = data.transacoes.filter((t) => !t.conta).length;
-  const total = contas.reduce((s, c) => s + saldoConta(c.id).saldo, 0);
+  // Cartões não entram na lista de contas nem no "saldo somado" — vivem na aba Cartão de crédito.
+  const contasVis = contas.filter((c) => !c.cartao);
+  const total = contasVis.reduce((s, c) => s + saldoConta(c.id).saldo, 0);
 
   // ── Lançar gastos retroativos do Astrea (idempotente: pula o que já existe) ──
   const norm = (s?: string | null) => (s || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
@@ -2452,7 +2454,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <MiniStat label="Saldo somado das contas" value={brl(total)} hint={`${contas.length} conta(s)`} accent={total >= 0 ? '#2F9E44' : '#E03131'} />
+        <MiniStat label="Saldo somado das contas" value={brl(total)} hint={`${contasVis.length} conta(s)`} accent={total >= 0 ? '#2F9E44' : '#E03131'} />
         <MiniStat label="Lançamentos sem conta" value={String(semConta)} hint="marque a conta neles para conciliar" accent="#F59F00" />
         <div className="rounded-2xl border border-dashed border-[#DEE2E6] bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-900">
           <button onClick={() => setForm({ nome: '', banco: 'nubank', saldoInicial: '', cartao: false, fechamento: '', vencimento: '' })} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Nova conta</button>
@@ -2519,7 +2521,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
       )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {contas.map((c) => {
+        {contasVis.map((c) => {
           const s = saldoConta(c.id);
           return (
             <div key={c.id} className="group rounded-2xl border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -2544,7 +2546,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
             </div>
           );
         })}
-        {contas.length === 0 && <p className="col-span-full py-8 text-center text-sm text-zinc-400">Nenhuma conta cadastrada. Clique em "Nova conta".</p>}
+        {contasVis.length === 0 && <p className="col-span-full py-8 text-center text-sm text-zinc-400">Nenhuma conta cadastrada. Clique em "Nova conta".</p>}
       </div>
 
       <p className="mt-4 rounded-xl border border-dashed border-zinc-200 px-4 py-3 text-xs text-zinc-500 dark:border-zinc-700">
