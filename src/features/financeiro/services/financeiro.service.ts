@@ -43,6 +43,7 @@ export interface FinTransacao {
   parcela?: string | null;
   manual?: boolean;
   fonteImport?: string | null; // 'extrato' | 'asaas' | 'mercadopago' — veio de import (não é lançamento manual)
+  rateioVerticais?: { area: string; valor: number }[] | null; // rateio de despesa entre verticais
 }
 export interface FinInsight { nivel: 'critico' | 'alerta' | 'ok' | 'info'; titulo: string; texto: string }
 
@@ -162,6 +163,7 @@ export interface AddTransacaoInput {
   status?: TxStatus; parcelas?: number; intervalo?: 'mensal' | 'anual'; split?: SplitItem[];
   rateio?: RateioExito | null;
   responsavelId?: string; responsavel?: string; conta?: string; area?: string;
+  rateioVerticais?: { area: string; valor: number }[] | null;
   caseId?: string; contactId?: string;
 }
 export interface UpdateTransacaoInput {
@@ -170,6 +172,7 @@ export interface UpdateTransacaoInput {
   pagador?: string; recebedor?: string; status?: TxStatus; split?: SplitItem[];
   rateio?: RateioExito | null;
   responsavelId?: string; responsavel?: string; conta?: string;
+  rateioVerticais?: { area: string; valor: number }[] | null;
   escopo?: 'uma' | 'proximas';
 }
 

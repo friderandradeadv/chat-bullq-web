@@ -320,6 +320,7 @@ interface Editor {
   categoria: string; subtipo: 'inicial' | 'exito'; pagador: string; recebedor: string; valor: string;
   status: TxStatus; parcelas: string; repetir: 'nao' | 'mensal' | 'anual'; escopo: 'uma' | 'proximas'; split: SplitRow[];
   rateio: RateioForm; responsavelId: string; conta: string;
+  rateioVerticais: { area: string; valor: string }[]; // rateio de despesa entre verticais
   contactId?: string; caseId?: string; procLabel?: string;
 }
 const RATEIO_VAZIO: RateioForm = { bruto: '', cliente: '', sucumbencia: '', honorarios: '' };
@@ -449,6 +450,12 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   // LANÇADA À MÃO numa conta-cartão (ex.: repasse) NÃO é fatura — fica no livro-razão.
   const isFaturaCartao = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta) && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar');
   const [modo, setModo] = useState<'ledger' | 'cartao'>('ledger');
+  // Verticais disponíveis para ratear uma despesa (ex.: agência 1/3 cada).
+  const areasVert = useMemo(() => {
+    const base = ['Bancário', 'Previdenciário', 'Trabalhista', 'Consumidor', 'Cível'];
+    const extra = [...(data.verticalPnL?.verticais ?? []).map((v) => v.area), ...(data.crescimento?.verticalArea ?? []).map((v) => v.area)];
+    return [...new Set([...base, ...extra])].filter((a) => a && a !== 'Não identificada');
+  }, [data.verticalPnL, data.crescimento]);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const { organizations, activeOrgId } = useAuthStore();
@@ -520,8 +527,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const [importing, setImporting] = useState(false);
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: orgName, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', contactId: '', caseId: '', procLabel: '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO } });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: orgName, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', rateioVerticais: [], contactId: '', caseId: '', procLabel: '' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor) })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
@@ -543,12 +550,13 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     if (!(v > 0)) { toast.error(rateio ? 'Preencha honorário e/ou sucumbência do escritório' : 'Informe um valor maior que zero'); return; }
     const liq = ehLiquidado(editor.status);
     const split = buildSplit(editor);
+    const rvArr = editor.tipo === 'despesa' ? editor.rateioVerticais.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor) })) : [];
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined, contactId: editor.contactId || undefined, caseId: editor.caseId || undefined });
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, rateioVerticais: rvArr.length ? rvArr : undefined, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined, contactId: editor.contactId || undefined, caseId: editor.caseId || undefined });
     } else {
-      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, rateioVerticais: rvArr.length ? rvArr : null, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '' } });
     }
   };
   const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
@@ -650,6 +658,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                           {t.responsavel ? <span className="hidden shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 lg:inline-flex">{t.responsavel.split(' ')[0]}</span> : null}
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
+                          {(t.rateioVerticais?.length ?? 0) > 0 ? <span className="shrink-0 rounded bg-[#7048E8]/10 px-1 text-[9px] font-semibold text-[#7048E8]" title={(t.rateioVerticais ?? []).map((x) => `${x.area}: ${brl2(x.valor)}`).join(' · ')}>rateado</span> : null}
                         </span>
                         <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden truncate md:inline">{t.categoria}</span></span>
                         <span className="hidden w-20 shrink-0 text-center sm:block"><span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span></span>
@@ -805,6 +814,37 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                   </select>
                 </Field>
               </div>
+
+              {/* Rateio de DESPESA entre verticais (ex.: agência 1/3 cada). Aparece 1x no livro-razão; cada área puxa a fatia no P&L. */}
+              {editor.tipo === 'despesa' && (() => {
+                const total = parseValor(editor.valor);
+                const somaRV = editor.rateioVerticais.reduce((s, x) => s + parseValor(x.valor), 0);
+                const dividirIgual = () => { const n = editor.rateioVerticais.filter((x) => x.area).length || editor.rateioVerticais.length; if (!n || total <= 0) return; const cada = Math.floor((total / n) * 100) / 100; setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((x, i, arr) => ({ ...x, valor: fmtMoney(i === arr.length - 1 ? total - cada * (n - 1) : cada) })) }); };
+                return (
+                <Field label="Ratear entre verticais (custo por área — opcional)">
+                  <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
+                    <p className="text-[11px] text-zinc-400">A despesa aparece <strong>uma vez</strong> no livro-razão; cada área puxa a fatia no financeiro da vertical (ex.: agência R$1.300 ÷ 3).</p>
+                    {editor.rateioVerticais.map((x, i) => (
+                      <div key={i} className="flex flex-wrap items-center gap-1.5">
+                        <select value={x.area} onChange={(e) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: e.target.value } : y) })} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                          <option value="">vertical…</option>
+                          {areasVert.map((a) => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                        <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, valor: v } : y) })} /></div>
+                        <button onClick={() => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setEditor({ ...editor, rateioVerticais: [...editor.rateioVerticais, { area: '', valor: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar vertical</button>
+                        {editor.rateioVerticais.length > 0 && total > 0 && <button onClick={dividirIgual} className="text-xs font-medium text-[#7048E8] hover:underline">dividir igual</button>}
+                      </div>
+                      {editor.rateioVerticais.length > 0 && <span className={`text-[11px] ${somaRV - total > 0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>rateado {brl2(somaRV)}{total > 0 ? ` de ${brl2(total)}` : ''}{somaRV - total > 0.01 ? ' · excede!' : (total - somaRV > 0.01 ? ` · ${brl2(total - somaRV)} no geral` : '')}</span>}
+                    </div>
+                  </div>
+                </Field>
+                );
+              })()}
 
               {/* Rateio (split) — só para honorários. Cada advogado por R$ ou % (auto-calcula). */}
               {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && (() => {
