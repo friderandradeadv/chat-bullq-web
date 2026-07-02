@@ -135,7 +135,7 @@ export default function CopilotoPage() {
               <Sparkles className="h-4 w-4" />
             </div>
             <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-zinc-100 px-3.5 py-2.5 text-sm text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-              <Loader2 className="h-4 w-4 animate-spin" /> pensando…
+              <Loader2 className="h-4 w-4 animate-spin" /> investigando… (uns 10s)
             </div>
           </div>
         )}
