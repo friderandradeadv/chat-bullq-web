@@ -948,7 +948,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 // ── Visão de cartão de crédito: gastos da fatura + saldo em aberto + pagar fatura ──
 function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; contas: Conta[]; onDone: () => void }) {
   const cartoes = useMemo(() => contas.filter((c) => c.cartao), [contas]);
-  const contasPagam = useMemo(() => contas.filter((c) => !c.cartao), [contas]);
+  // Pode pagar a fatura com QUALQUER conta (incl. Nubank, que é conta e cartão) — não-cartão primeiro.
+  const contasPagam = useMemo(() => [...contas].sort((a, b) => (a.cartao ? 1 : 0) - (b.cartao ? 1 : 0)), [contas]);
   const [cardId, setCardId] = useState<string>(cartoes[0]?.id ?? '');
   const cartao = cartoes.find((c) => c.id === cardId) ?? cartoes[0];
   const [contaPg, setContaPg] = useState<string>(contasPagam[0]?.id ?? '');
