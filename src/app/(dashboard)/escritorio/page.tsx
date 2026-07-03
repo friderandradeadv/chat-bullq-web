@@ -208,7 +208,6 @@ export default function EscritorioPage() {
           canEdit={data.canEdit}
           proprio={!vendoOutro}
           onEdit={alvoUserId ? () => setPerfilUserId(alvoUserId) : undefined}
-          onVerContrato={() => setTab('contrato')}
         />
 
         {/* Cultura: missão / visão / valores (informações básicas do escritório) */}
@@ -911,7 +910,7 @@ const FRASES_ORGULHO = [
 ];
 
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
-function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true, onEdit, onVerContrato }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; proprio?: boolean; onEdit?: () => void; onVerContrato?: () => void }) {
+function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; proprio?: boolean; onEdit?: () => void }) {
   const sexo = info?.sexo;
   const foto = avatarUrl || info?.fotoUrl;
   const r = fin && !fin.vazio ? fin.resumo : undefined;
@@ -962,6 +961,12 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
         )}
       </div>
       <div className="space-y-3 px-5 pb-5">
+        {cargo?.descricao && (
+          <div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#228BE6]"><Target className="h-3.5 w-3.5" /> O que esperamos de você</p>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{gen(cargo.descricao, sexo)}</p>
+          </div>
+        )}
         {metricas.length > 0 && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {metricas.map((m) => (
@@ -976,15 +981,16 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
         {r && (
           <p className="text-xs text-zinc-500 dark:text-zinc-400">Já recebido <strong className="text-zinc-700 dark:text-zinc-200">{brl(r.recebido)}</strong>{typeof proj?.liquidoProvavel === 'number' && proj.liquidoProvavel > 0 ? <> · sua parte provável na carteira <strong className="text-zinc-700 dark:text-zinc-200">{brl(proj.liquidoProvavel)}</strong></> : null} · veja tudo na aba <strong className="text-[#02883C]">Financeiro</strong>.</p>
         )}
-        {cargo && onVerContrato && (
-          <button onClick={onVerContrato} className="flex w-full items-center gap-2.5 rounded-xl border border-[#7048E8]/25 bg-white/70 p-3.5 text-left transition hover:border-[#7048E8]/50 hover:bg-white dark:border-[#7048E8]/30 dark:bg-zinc-900/60 dark:hover:bg-zinc-900">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#7048E8]/10 text-[#7048E8]"><ScrollText className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-zinc-800 dark:text-zinc-100">{proprio ? 'Seu contrato & cargo' : 'Contrato & cargo'}</span>
-              <span className="block text-xs text-zinc-500 dark:text-zinc-400">O que esperamos, suas atribuições, o que é exigido e como {proprio ? 'você é' : 'é'} remunerado{proprio ? '' : 'a'}.</span>
-            </span>
-            <span className="shrink-0 text-xs font-semibold text-[#7048E8]">Abrir →</span>
-          </button>
+        {(info?.financeiro?.length || cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios) && (
+          <div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500"><Wallet className="h-3.5 w-3.5" /> Como você é remunerado</p>
+            <div className="mt-2 space-y-2.5">
+              <SecaoLista icon={Wallet} titulo="Pelo seu contrato" itens={info?.financeiro} cor="#02883C" />
+              {!info?.financeiro?.length && <SecaoLista icon={Wallet} titulo="Salário / bolsa & benefícios" itens={cargo?.remuneracao} cor="#02883C" />}
+              {!info?.financeiro?.length && <SecaoLista icon={CircleDollarSign} titulo="Honorários (modelo do cargo)" itens={cargo?.honorarios} cor="#02883C" />}
+              {cargo?.divisaoHonorarios && !info?.financeiro?.length && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Divisão:</span> {cargo.divisaoHonorarios}</p>}
+            </div>
+          </div>
         )}
         {info?.destaque && (
           <div className="flex items-start gap-2 rounded-xl border border-[#F08C00]/30 bg-[#F08C00]/10 p-3.5 text-sm text-[#9a5b00] dark:text-[#F0B860]"><Trophy className="mt-0.5 h-4 w-4 shrink-0" /> <p className="font-medium">{info.destaque}</p></div>
