@@ -190,8 +190,8 @@ export default function FinanceiroPage() {
 
         {view === 'lancamentos' && <LancamentosTab data={data} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
-        {/* "A receber" reúne Cobranças (parcelas/ASAAS) + CS (recebíveis dos processos) num lugar só. */}
-        {view === 'cobrancas' && (<><CobrancasTab data={data} /><CumprimentoTab /></>)}
+        {/* "A receber" reúne Cobranças (parcelas/ASAAS) + CS (recebíveis dos processos), separados por subaba. */}
+        {view === 'cobrancas' && <AReceberTab data={data} />}
         {view === 'retiradas' && <RetiradasTab data={data} />}
         {view === 'contas' && <ContasTab data={data} />}
         {view === 'verticais' && <VerticaisTab data={data} />}
@@ -1562,6 +1562,27 @@ const STATUS_COB: Record<string, { label: string; badge: string }> = {
   quitada: { label: 'Quitada', badge: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' },
   cancelada: { label: 'Cancelada', badge: 'bg-zinc-100 text-zinc-400' },
 };
+
+// "A receber" com 2 subvisualizações: Honorários iniciais (ASAAS/boletos) × A receber judicial (CS — prestação + cumprimento).
+function AReceberTab({ data }: { data: FinDashboard }) {
+  const [sub, setSub] = useState<'honorarios' | 'judicial'>('honorarios');
+  return (
+    <div>
+      <div className="mt-4 inline-flex rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+        {([['honorarios', 'Honorários iniciais', CreditCard], ['judicial', 'A receber judicial', Gavel]] as const).map(([k, l, Icon]) => (
+          <button key={k} onClick={() => setSub(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${sub === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+            <Icon className="h-3.5 w-3.5" /> {l}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-zinc-400">{sub === 'honorarios'
+        ? 'Boletos/parcelas dos honorários iniciais — sincroniza sozinho do ASAAS.'
+        : 'Recebíveis dos processos (prestação de contas + cumprimento de sentença) — a parte do escritório, preenchida no card de cada processo.'}</p>
+      {sub === 'honorarios' && <CobrancasTab data={data} />}
+      {sub === 'judicial' && <CumprimentoTab />}
+    </div>
+  );
+}
 
 function CobrancasTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
