@@ -177,13 +177,15 @@ export default function FinanceiroPage() {
         <>
         {/* KPIs — pulso financeiro sempre visível */}
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Kpi icon={Scale} accent={k.saldoAtual < 0 ? '#E03131' : '#2F9E44'} label={`Caixa real · ${k.mesAtualLabel}`} value={brl(k.saldoAtual)} hint={(k.aporteAcumulado ?? 0) > 0 ? `operacional ${brl(k.saldoOperacional ?? k.saldoAtual)} · ${brl(k.aporteAcumulado!)} em aportes` : (k.saldoAtual < 0 ? 'caixa no vermelho' : 'caixa positivo')} onClick={() => setShowSaldo(true)} />
+          {(() => { const caixa = k.caixaContas ?? k.saldoAtual; return (
+          <Kpi icon={Scale} accent={caixa < 0 ? '#E03131' : '#2F9E44'} label={`Caixa real · ${k.mesAtualLabel}`} value={brl(caixa)} hint={`nas contas · operacional ${brl(k.saldoOperacional ?? k.saldoAtual)}${(k.aporteAcumulado ?? 0) > 0 ? ` · ${brl(k.aporteAcumulado!)} em aportes` : ''}`} onClick={() => setShowSaldo(true)} />
+          ); })()}
           <Kpi icon={k.resultadoMes >= 0 ? TrendingUp : TrendingDown} accent={k.resultadoMes >= 0 ? '#2F9E44' : '#E03131'} label="Resultado do mês" value={brl(k.resultadoMes)} hint={`receita ${brl(k.receitaMes)} · despesa ${brl(k.despesaMes)}`} />
           <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(k.receita12m)} hint={`média ${brl(k.receitaMedia)}/mês`} />
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
-        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} onClose={() => setShowSaldo(false)} />}
+        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
@@ -269,7 +271,7 @@ function Kpi({ icon: Icon, accent, label, value, hint, onClick }: { icon: React.
 }
 
 // Detalhe do saldo acumulado: saldo inicial das contas + soma dos resultados mês a mês.
-function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, onClose }: { meses: FinMes[]; saldoAtual: number; saldoOperacional: number; onClose: () => void }) {
+function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, onClose }: { meses: FinMes[]; saldoAtual: number; saldoOperacional: number; caixaContas: number; onClose: () => void }) {
   const realizados = meses.filter((m) => !m.projecao);
   const saldoInicial = realizados.length ? realizados[0].acumulado - realizados[0].resultado - (realizados[0].aporte ?? 0) : 0;
   const totalReceita = realizados.reduce((s, m) => s + m.receita, 0);
@@ -308,10 +310,10 @@ function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, onClose }: { m
           <div className="flex items-center justify-between text-zinc-500"><span>Total de receitas</span><span className="tabular-nums text-emerald-600">{brl2(totalReceita)}</span></div>
           <div className="flex items-center justify-between text-zinc-500"><span>Total de despesas</span><span className="tabular-nums text-rose-600">− {brl2(totalDespesa)}</span></div>
           {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Aportes (Você + Pai)</span><span className="tabular-nums text-sky-600">+ {brl2(totalAporte)}</span></div>}
-          {totalAporte > 0 && (
-            <div className="flex items-center justify-between border-t border-dashed border-zinc-200 pt-1.5 dark:border-zinc-700"><span className="text-zinc-500">Resultado operacional <span className="text-[11px] text-zinc-400">(sem aportes — o que o escritório gerou/queimou)</span></span><span className={`font-semibold tabular-nums ${saldoOperacional >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoOperacional)}</span></div>
-          )}
-          <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Caixa real <span className="text-[11px] font-normal text-zinc-400">(o que há em conta{totalAporte > 0 ? ', com aportes' : ''})</span></span><span className={`tabular-nums ${saldoAtual >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoAtual)}</span></div>
+          {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Resultado operacional <span className="text-[11px] text-zinc-400">(sem aportes — o que o escritório gerou/queimou)</span></span><span className={`font-semibold tabular-nums ${saldoOperacional >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoOperacional)}</span></div>}
+          <div className="flex items-center justify-between border-t border-dashed border-zinc-200 pt-1.5 text-zinc-500 dark:border-zinc-700"><span>Saldo calculado <span className="text-[11px] text-zinc-400">(inicial + resultados{totalAporte > 0 ? ' + aportes' : ''})</span></span><span className={`tabular-nums ${saldoAtual >= 0 ? 'text-zinc-600 dark:text-zinc-300' : 'text-rose-600'}`}>{brl2(saldoAtual)}</span></div>
+          <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Caixa real <span className="text-[11px] font-normal text-zinc-400">(dinheiro nas contas agora)</span></span><span className={`tabular-nums ${caixaContas >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(caixaContas)}</span></div>
+          {Math.abs(caixaContas - saldoAtual) > 1 && <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">O <strong>caixa real</strong> ({brl2(caixaContas)}) diverge do <strong>saldo calculado</strong> ({brl2(saldoAtual)}) em {brl2(Math.abs(caixaContas - saldoAtual))}. Isso acontece quando o <strong>saldo inicial das contas</strong> não foi informado, ou os <strong>aportes</strong> foram lançados como tampão (sem cair numa conta). Ajuste o saldo inicial em <strong>Contas</strong> para reconciliar.</p>}
         </div>
         <p className="mt-3 text-[11px] text-zinc-400">Dica: para ver os lançamentos de um mês, use o filtro de mês no livro-razão abaixo.</p>
       </div>

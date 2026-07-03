@@ -60,7 +60,8 @@ export interface FinDashboard {
   despesaTotalGeral?: number;
   kpis: {
     receitaMes: number; despesaMes: number; resultadoMes: number; saldoAtual: number; mesAtualLabel: string;
-    saldoOperacional?: number; aporteAcumulado?: number; // caixa real (saldoAtual, com aportes) × operacional (sem aportes)
+    caixaContas?: number; // CAIXA REAL = dinheiro nas contas (saldo API ou saldoInicial+movimentos). saldoAtual = saldo calculado (com aportes).
+    saldoOperacional?: number; aporteAcumulado?: number; // operacional (sem aportes) × aportes acumulados
     receita12m: number; despesa12m: number; resultado12m: number; margem12m: number;
     receitaMedia: number; despesaMediaMensal: number; custoFixoMensal: number;
     mesesNoVermelho: number; totalMesesRealizados: number;
