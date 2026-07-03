@@ -73,6 +73,22 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'local', label: 'Local / link da audiência', type: 'text' },
   ],
   aguardando_sentenca: [{ key: 'obs', label: 'Observações', type: 'textarea' }],
+  // Sentença dividida em dois desfechos. Os dois formulários gravam no MESMO
+  // objeto metadata.faseData.sentenca (mesma key 'resultado'/'julgamento'), então
+  // o financeiro/jurimetria e o badge do card continuam lendo faseData.sentenca.
+  sentenca_favoravel: [
+    { key: 'resultado', label: 'Sentença proferida', type: 'radio', options: ['Procedente', 'Parcialmente procedente'] },
+    { key: 'julgamento', label: 'Julgamento', type: 'textarea' },
+    { key: 'valor_estimado', label: 'Estimativa do que vamos receber (CS)', type: 'currency' },
+    { key: 'recorre_adversa', label: 'A parte adversa recorreu?', type: 'radio', options: ['Sim', 'Não', 'Aguardando prazo'] },
+  ],
+  sentenca_desfavoravel: [
+    { key: 'resultado', label: 'Sentença proferida', type: 'radio', options: ['Improcedente', 'Extinto sem mérito'] },
+    { key: 'julgamento', label: 'Julgamento', type: 'textarea' },
+    { key: 'recorrer', label: 'Vamos recorrer?', type: 'radio', options: ['Sim', 'Não'] },
+    { key: 'motivo', label: 'Motivo (se não recorrer)', type: 'text' },
+  ],
+  // Compat: fase legada 'sentenca' (cards ainda não migrados) — mesmo form antigo.
   sentenca: [
     { key: 'resultado', label: 'Sentença proferida', type: 'radio', options: ['Procedente', 'Parcialmente procedente', 'Improcedente'] },
     { key: 'julgamento', label: 'Julgamento', type: 'textarea' },

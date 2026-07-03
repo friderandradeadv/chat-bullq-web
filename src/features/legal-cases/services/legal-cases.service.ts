@@ -288,7 +288,7 @@ export interface JurimetriaData {
 export interface CsBase { caseId: string; title: string; cliente: string | null; cnj: string | null; area: string | null; responsavel: string | null; valorCausa: number | null; legalPhaseAt: string | null }
 export interface CsCumprimento extends CsBase { fase: 'cumprimento'; protocolado: boolean; valorCalculo: number; numeroCs: string | null }
 export interface CsPrestacao extends CsBase { fase: 'prestacao_contas'; valorAlvara: number; honorariosNossos: number; sucumbencia: number; valorCliente: number; aReceberNosso: number }
-export interface CsFavoravel extends CsBase { fase: 'sentenca' | 'transito'; resultado: string | null; exito: number | null; estimado: number | null; manualEstimado?: boolean }
+export interface CsFavoravel extends CsBase { fase: 'sentenca_favoravel' | 'transito'; resultado: string | null; exito: number | null; estimado: number | null; manualEstimado?: boolean }
 export interface CumprimentoFinanceiro {
   prestacao: CsPrestacao[];
   cumprimento: CsCumprimento[];
@@ -319,7 +319,7 @@ export const legalCasesService = {
     return data.data ?? data;
   },
   async kanban(
-    query: { responsibleId?: string; area?: string; search?: string } = {},
+    query: { responsibleId?: string; area?: string; search?: string; lane?: 'pre' | 'judicial' | 'banco' } = {},
   ): Promise<KanbanData> {
     const { data } = await api.get(`/legal-cases/kanban${qs(query)}`);
     return data.data ?? data;
