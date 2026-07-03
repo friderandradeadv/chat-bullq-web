@@ -62,7 +62,7 @@ export default function EscritorioPage() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
   const [tab, setTab] = useState<string>('perfil'); // aba ativa (só a ativa é renderizada)
-  const [estruturaSub, setEstruturaSub] = useState<string>('escritorio'); // subaba da Estrutura (abre no Escritório)
+  const [estruturaSub, setEstruturaSub] = useState<string>('organograma'); // subaba da Estrutura
   const [verComo, setVerComo] = useState<string | null>(null); // sócio monitorando o espaço de outra pessoa
   const alvoUserId = (verComo && data.canEdit) ? verComo : user?.id;
   // Financeiro pessoal (do usuário logado, ou de quem o sócio está monitorando).
@@ -220,7 +220,7 @@ export default function EscritorioPage() {
         />
 
         {/* Cultura (só leitura) — dá uma motivada na página principal. A edição fica em Estrutura › Escritório. */}
-        {(cur.cultura.manifesto || cur.cultura.missao || cur.cultura.visao || (cur.cultura.valores?.length ?? 0) > 0 || cur.cultura.cultura) && (<>
+        {(cur.cultura.manifesto || cur.cultura.missao || cur.cultura.visao || (cur.cultura.valores?.length ?? 0) > 0 || cur.cultura.rotina || cur.cultura.cultura) && (<>
           <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Sobre a Frider Andrade</h2>
           {cur.cultura.manifesto && (
             <div className="relative mt-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#7048E8] via-[#5f3dd0] to-[#228BE6] p-5 text-white shadow-sm">
@@ -249,13 +249,28 @@ export default function EscritorioPage() {
               </div>
             )}
           </div>
+          {(cur.cultura.rotina ?? '').trim() && (
+            <div className="mt-3">
+              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#F08C00]"><MapPin className="h-3.5 w-3.5" /> Como é a rotina aqui</p>
+              <div className="mt-2 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                <ul className="space-y-2.5">
+                  {(cur.cultura.rotina ?? '').split('\n').map((s) => s.trim()).filter(Boolean).map((r, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F08C00]/12 text-[11px] font-bold text-[#F08C00]">{i + 1}</span>
+                      <span className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">{fmtLinha(r)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
           {cur.cultura.cultura && (
             <div className={`${CARD} mt-3`}>
               <p className={LABEL}>Como trabalhamos</p>
               <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">{cur.cultura.cultura}</p>
             </div>
           )}
-          <p className="mt-2 text-xs text-zinc-400">Veja a cultura completa (manifesto, rotina, documentos) em <strong>Estrutura › Escritório</strong>.</p>
+          <p className="mt-2 text-xs text-zinc-400">Os documentos oficiais (regimento, estatuto) ficam em <strong>Estrutura › Escritório</strong>.</p>
         </>)}
         </>)}
 
@@ -298,7 +313,7 @@ export default function EscritorioPage() {
 
         {/* Subabas da Estrutura */}
         <div className="mt-3 flex gap-1 overflow-x-auto rounded-xl border border-zinc-200/70 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">
-          {([['escritorio', 'Escritório', Landmark], ['organograma', 'Organograma', Network], ['carreira', 'Carreira', Rocket], ['verticais', 'Verticais', Layers]] as const).map(([key, label, Icon]) => (
+          {([['organograma', 'Organograma', Network], ['carreira', 'Carreira', Rocket], ['verticais', 'Verticais', Layers], ['escritorio', 'Escritório', Landmark]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setEstruturaSub(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${estruturaSub === key ? 'bg-[#f08c00] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
