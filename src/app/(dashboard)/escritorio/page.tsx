@@ -11,8 +11,9 @@ import {
   CheckCircle2, Circle, Sparkles,
   Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
   CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera, Layers, ArrowLeft, ScrollText,
+  Building2, ArrowRight, Rocket, MapPin,
 } from 'lucide-react';
-import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo, type Vertical } from '@/features/escritorio/services/escritorio.service';
+import { escritorioService, type Escritorio, type Cargo, type Cultura, type Manual, type OnboardingItem, type PessoaInfo, type Vertical } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { MeuFinanceiroConteudo } from '@/features/financeiro/components/meu-financeiro-conteudo';
@@ -79,6 +80,12 @@ export default function EscritorioPage() {
     mutationFn: (patch: Partial<PessoaInfo>) => escritorioService.saveMeuPerfil(patch),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['escritorio'] }); toast.success('Perfil atualizado'); setPerfilUserId(null); },
     onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao salvar'),
+  });
+  // Renomear a pessoa (nome do usuário) — só sócio (endpoint é OWNER/ADMIN).
+  const renameM = useMutation({
+    mutationFn: ({ memberId, name }: { memberId: string; name: string }) => membersService.updateName(memberId, name),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['org-members'] }); qc.invalidateQueries({ queryKey: ['members'] }); toast.success('Nome atualizado'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao renomear'),
   });
 
   // Aplica o acesso aos módulos do Hub a cada pessoa a partir do cargo dela
@@ -173,7 +180,7 @@ export default function EscritorioPage() {
 
         {/* Abas — só a ativa é renderizada */}
         <div className="sticky top-0 z-10 -mx-4 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa]/95 px-4 py-2 backdrop-blur lg:-mx-6 lg:px-6 dark:border-zinc-800 dark:bg-zinc-950/95">
-          {([['perfil', 'Meu Perfil', UserCircle], ['contrato', 'Meu Contrato', ScrollText], ['financeiro', 'Financeiro', CircleDollarSign], ['cargos', 'Cargos', Briefcase], ['verticais', 'Verticais', Layers], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
+          {([['perfil', 'Meu Perfil', UserCircle], ['contrato', 'Meu Contrato', ScrollText], ['financeiro', 'Financeiro', CircleDollarSign], ['estrutura', 'Estrutura', Building2], ['cultura', 'Cultura', Heart], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
@@ -209,47 +216,6 @@ export default function EscritorioPage() {
           proprio={!vendoOutro}
           onEdit={alvoUserId ? () => setPerfilUserId(alvoUserId) : undefined}
         />
-
-        {/* Cultura: missão / visão / valores (informações básicas do escritório) */}
-        <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Sobre a Frider Andrade</h2>
-        <div className="mt-2 grid gap-3 sm:grid-cols-2">
-          {([['missao', 'Missão', Target, '#228BE6'], ['visao', 'Visão', Eye, '#7048E8']] as const).map(([k, label, Icon, cor]) => (
-            <div key={k} className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-              <span className="absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-10" style={{ background: cor }} />
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: `${cor}1A`, color: cor }}><Icon className="h-5 w-5" /></span>
-              <p className="mt-3 text-xs font-bold uppercase tracking-wider" style={{ color: cor }}>{label}</p>
-              {editing ? (
-                <textarea value={cur.cultura[k]} onChange={(e) => setCultura({ [k]: e.target.value })} rows={3} className={`${INPUT} mt-2`} placeholder={`Nossa ${label.toLowerCase()}…`} />
-              ) : (
-                <p className="mt-1 whitespace-pre-wrap text-[15px] font-medium leading-relaxed text-zinc-700 dark:text-zinc-200">{cur.cultura[k] || <span className="text-zinc-400">—</span>}</p>
-              )}
-            </div>
-          ))}
-          <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 sm:col-span-2 dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><Sparkles className="h-3.5 w-3.5" /> Nossos valores</p>
-            {editing ? (
-              <textarea value={(cur.cultura.valores ?? []).join('\n')} onChange={(e) => setCultura({ valores: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={4} className={`${INPUT} mt-2`} placeholder={'Um valor por linha\nÉtica\nExcelência'} />
-            ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(cur.cultura.valores ?? []).length === 0 && <span className="text-sm text-zinc-400">—</span>}
-                {(cur.cultura.valores ?? []).map((v, i) => {
-                  const c = VALOR_CORES[i % VALOR_CORES.length];
-                  return <span key={i} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold shadow-sm" style={{ background: `${c}14`, color: c }}><Heart className="h-4 w-4" /> {v}</span>;
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-        {(editing || cur.cultura.cultura) && (
-          <div className={`${CARD} mt-3`}>
-            <p className={LABEL}>Sobre a cultura / como trabalhamos</p>
-            {editing ? (
-              <textarea value={cur.cultura.cultura} onChange={(e) => setCultura({ cultura: e.target.value })} rows={3} className={`${INPUT} mt-2`} placeholder="Como é trabalhar aqui, jeito do escritório, princípios do dia a dia…" />
-            ) : (
-              <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">{cur.cultura.cultura}</p>
-            )}
-          </div>
-        )}
         </>)}
 
         {/* ─────────── ABA: MEU CONTRATO (o cargo/contrato da pessoa, em texto claro) ─────────── */}
@@ -285,10 +251,10 @@ export default function EscritorioPage() {
             : <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>}
         </>)}
 
-        {/* ─────────── ABA: ORGANOGRAMA ─────────── */}
-        {/* ─────────── ABA: CARGOS (organograma) ─────────── */}
-        {tab === 'cargos' && (<>
-        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Briefcase className="h-4 w-4 text-[#f08c00]" /> Cargos &amp; organograma</h2>
+        {/* ─────────── ABA: ESTRUTURA (organograma + verticais + plano de carreira) ─────────── */}
+        {tab === 'estrutura' && (<>
+        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Building2 className="h-4 w-4 text-[#f08c00]" /> Estrutura do escritório</h2>
+        <p className="mt-1 text-xs text-zinc-400">Como a Frider Andrade se organiza: o <strong>organograma</strong>, as <strong>verticais</strong> (áreas de atuação) e o <strong>plano de carreira</strong> — de onde se entra até onde dá pra chegar.</p>
         {!editing ? (
           <>
             <div className={`${CARD} mt-2`}>
@@ -389,14 +355,21 @@ export default function EscritorioPage() {
             </button>
           </div>
         )}
+        {/* Verticais (áreas de atuação) */}
+        <h3 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Layers className="h-4 w-4 text-[#F08C00]" /> Verticais (áreas de atuação)</h3>
+        <p className="mt-1 text-xs text-zinc-400">Cada área tem um titular e regras próprias de honorários — é assim que cada um sabe onde atua e como é remunerado por área.</p>
+        <VerticaisSection verticais={cur.verticais ?? []} pessoas={cur.pessoas ?? {}} team={team} editing={editing} setDraft={setDraft} onVerPerfil={(uid) => setPerfilUserId(uid)} />
+
+        {/* Plano de carreira — trilhas com "você está aqui" e onde dá pra chegar */}
+        {!editing && (
+          <PlanoCarreira cargos={cur.cargos ?? []} meuCargoId={meuCargo?.id} onOpen={(id) => setViewCargoId(id)} />
+        )}
         </>)}
 
-        {/* ─────────── ABA: VERTICAIS ─────────── */}
-        {tab === 'verticais' && (<>
-        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Layers className="h-4 w-4 text-[#F08C00]" /> Verticais (áreas de atuação)</h2>
-        <p className="mt-1 text-xs text-zinc-400">O escritório se organiza por <strong>verticais</strong> — cada área tem um titular e regras próprias de honorários. É assim que cada um sabe onde atua e como é remunerado por área.</p>
-        <VerticaisSection verticais={cur.verticais ?? []} pessoas={cur.pessoas ?? {}} team={team} editing={editing} setDraft={setDraft} onVerPerfil={(uid) => setPerfilUserId(uid)} />
-        </>)}
+        {/* ─────────── ABA: CULTURA (manifesto, missão/visão, valores, rotina) ─────────── */}
+        {tab === 'cultura' && (
+          <CulturaTab cultura={cur.cultura} editing={editing} setCultura={setCultura} />
+        )}
 
         {/* ─────────── ABA: MANUAIS ─────────── */}
         {tab === 'manuais' && (<>
@@ -480,11 +453,13 @@ export default function EscritorioPage() {
           avatarUrl={memberByUser[perfilUserId]?.user.avatarUrl ?? null}
           data={data}
           cargoById={cargoById}
-          saving={saveM.isPending || saveMeuM.isPending}
+          saving={saveM.isPending || saveMeuM.isPending || renameM.isPending}
           selfMode={!data.canEdit && perfilUserId === user?.id}
+          memberId={memberByUser[perfilUserId]?.id}
           onClose={() => setPerfilUserId(null)}
           onSave={patchEscritorio}
           onSaveSelf={(patch) => saveMeuM.mutate(patch)}
+          onRename={(name) => { const mid = memberByUser[perfilUserId!]?.id; if (mid) renameM.mutate({ memberId: mid, name }); }}
         />
       )}
 
@@ -1106,6 +1081,151 @@ function MeuContrato({ info, cargo, proprio = true, canEdit, onEditCargo, onEdit
   );
 }
 
+// Ordena os cargos de uma trilha por senioridade (do 1º degrau ao topo) por palavra-chave.
+const SENIORIDADE = ['estag', 'trainee', 'aprendiz', 'júnior', 'junior', ' jr', 'pleno', 'sênior', 'senior', ' sr', 'master', 'coordena', 'gerente', 'nominal', 'diretor', 'nominal'];
+function rankSenioridade(nome: string): number {
+  const n = ` ${nome.toLowerCase()} `;
+  for (let i = SENIORIDADE.length - 1; i >= 0; i--) if (n.includes(SENIORIDADE[i])) return i;
+  return 500; // sem palavra-chave → mantém a ordem relativa (sort estável)
+}
+
+// Plano de carreira: cada trilha (cargo.vertical) vira um caminho de degraus, do início
+// ao topo, com "você está aqui" e para onde dá pra crescer. Clicar abre o detalhe do cargo.
+function PlanoCarreira({ cargos, meuCargoId, onOpen }: { cargos: Cargo[]; meuCargoId?: string; onOpen: (id: string) => void }) {
+  const trilhas: { nome: string; itens: Cargo[] }[] = [];
+  for (const c of cargos) {
+    if (!c.vertical || c.nome === c.vertical) continue; // ignora o cargo "cabeça de trilha"
+    let t = trilhas.find((x) => x.nome === c.vertical);
+    if (!t) { t = { nome: c.vertical, itens: [] }; trilhas.push(t); }
+    t.itens.push(c);
+  }
+  for (const t of trilhas) t.itens.sort((a, b) => rankSenioridade(a.nome) - rankSenioridade(b.nome));
+  if (!trilhas.length) return null;
+  return (
+    <div className="mt-7">
+      <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Rocket className="h-4 w-4 text-[#7048E8]" /> Plano de carreira</h3>
+      <p className="mt-1 text-xs text-zinc-400">Aqui se cresce por mérito — do primeiro degrau ao topo de cada trilha.{meuCargoId ? ' O seu cargo está destacado.' : ''} Toque num degrau para ver o que se faz e o que é exigido.</p>
+      <div className="mt-3 space-y-3">
+        {trilhas.map((t, ti) => {
+          const cor = BRANCH_COLORS[ti % BRANCH_COLORS.length];
+          return (
+            <div key={t.nome} className="overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/50 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: cor }}><span className="h-2.5 w-2.5 rounded-full" style={{ background: cor }} /> {t.nome}</p>
+              <div className="flex items-stretch gap-1.5 overflow-x-auto pb-1">
+                {t.itens.map((c, i) => {
+                  const isMine = c.id === meuCargoId;
+                  const sub = c.duracao || c.progride || c.resumo;
+                  return (
+                    <div key={c.id} className="flex shrink-0 items-center gap-1.5">
+                      <button onClick={() => onOpen(c.id)} title={c.resumo || c.descricao || 'Ver detalhes'} className={`flex min-w-[128px] max-w-[180px] flex-col rounded-xl border px-3 py-2 text-left transition hover:-translate-y-px hover:shadow-md ${isMine ? 'text-white shadow-sm' : 'bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'}`} style={isMine ? { background: cor, borderColor: cor } : { borderColor: `${cor}66` }}>
+                        <span className="flex items-center gap-1.5 text-[13px] font-bold leading-tight">{c.nome}{isMine && <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">você</span>}</span>
+                        {sub && <span className={`mt-0.5 line-clamp-2 text-[10px] leading-snug ${isMine ? 'text-white/85' : 'text-zinc-400'}`}>{sub}</span>}
+                      </button>
+                      {i < t.itens.length - 1 && <ArrowRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Aba Cultura: manifesto (quem somos / o que queremos), missão/visão, valores em cards,
+// como é a rotina e como trabalhamos — rica e visual; editável pelos sócios (Editar geral).
+function CulturaTab({ cultura, editing, setCultura }: { cultura: Cultura; editing: boolean; setCultura: (p: Partial<Cultura>) => void }) {
+  if (editing) {
+    return (
+      <div className="mt-2 space-y-3">
+        <div className={CARD}><p className={LABEL}>Manifesto — quem somos / o que queremos (1–2 frases fortes)</p><textarea value={cultura.manifesto ?? ''} onChange={(e) => setCultura({ manifesto: e.target.value })} rows={2} className={`${INPUT} mt-1`} placeholder="ex.: A gente existe pra devolver dignidade a quem foi lesado — com excelência e alma." /></div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className={CARD}><p className={LABEL}>Missão</p><textarea value={cultura.missao} onChange={(e) => setCultura({ missao: e.target.value })} rows={3} className={`${INPUT} mt-1`} placeholder="Nossa missão…" /></div>
+          <div className={CARD}><p className={LABEL}>Visão</p><textarea value={cultura.visao} onChange={(e) => setCultura({ visao: e.target.value })} rows={3} className={`${INPUT} mt-1`} placeholder="Nossa visão…" /></div>
+        </div>
+        <div className={CARD}><p className={LABEL}>Valores — um por linha, no formato "Título — descrição"</p><textarea value={(cultura.valores ?? []).join('\n')} onChange={(e) => setCultura({ valores: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={5} className={`${INPUT} mt-1`} placeholder={'Excelência — aqui não se faz mais ou menos; se faz bem feito\nCliente em primeiro lugar — atrás de cada processo tem uma vida'} /></div>
+        <div className={CARD}><p className={LABEL}>Como é a rotina aqui — um item por linha</p><textarea value={cultura.rotina ?? ''} onChange={(e) => setCultura({ rotina: e.target.value })} rows={5} className={`${INPUT} mt-1`} placeholder={'O dia começa com um alinhamento rápido do que é prioridade\nCada um é dono da sua vertical e toca com autonomia\nSexta é dia de olhar os números e comemorar as entregas'} /></div>
+        <div className={CARD}><p className={LABEL}>Como trabalhamos / princípios (texto livre)</p><textarea value={cultura.cultura} onChange={(e) => setCultura({ cultura: e.target.value })} rows={4} className={`${INPUT} mt-1`} placeholder="O jeito da casa, princípios do dia a dia…" /></div>
+      </div>
+    );
+  }
+  const valores = (cultura.valores ?? []).map((v) => {
+    const m = v.match(/^(.*?)\s*[—–-]\s*(.+)$/); // "Título — descrição"
+    return m ? { titulo: m[1].trim(), desc: m[2].trim() } : { titulo: v, desc: '' };
+  });
+  const rotina = (cultura.rotina ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
+  const comoTrab = (cultura.cultura ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
+  const vazio = !cultura.manifesto && !cultura.missao && !cultura.visao && !valores.length && !rotina.length && !comoTrab.length;
+  if (vazio) return <div className={`${CARD} mt-2 text-sm text-zinc-400`}>A cultura ainda não foi preenchida. Um sócio pode escrevê-la clicando em <strong>Editar</strong>.</div>;
+  return (
+    <div className="mt-2 space-y-5">
+      {cultura.manifesto && (
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#7048E8] via-[#5f3dd0] to-[#228BE6] p-7 text-white shadow-sm sm:p-9">
+          <Sparkles className="absolute -right-4 -top-4 h-28 w-28 opacity-15" />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70">Frider Andrade · quem somos</p>
+          <p className="mt-2 max-w-3xl whitespace-pre-wrap text-xl font-bold leading-snug sm:text-2xl">{cultura.manifesto}</p>
+        </div>
+      )}
+      {(cultura.missao || cultura.visao) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {([['missao', 'Missão', Target, '#228BE6'], ['visao', 'Visão', Eye, '#7048E8']] as const).map(([k, label, Icon, cor]) => (cultura[k] ? (
+            <div key={k} className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+              <span className="absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-10" style={{ background: cor }} />
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: `${cor}1A`, color: cor }}><Icon className="h-5 w-5" /></span>
+              <p className="mt-3 text-xs font-bold uppercase tracking-wider" style={{ color: cor }}>{label}</p>
+              <p className="mt-1 whitespace-pre-wrap text-[15px] font-medium leading-relaxed text-zinc-700 dark:text-zinc-200">{cultura[k]}</p>
+            </div>
+          ) : null))}
+        </div>
+      )}
+      {valores.length > 0 && (
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Sparkles className="h-4 w-4 text-[#02883C]" /> Nossos valores</h3>
+          <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
+            {valores.map((v, i) => {
+              const c = VALOR_CORES[i % VALOR_CORES.length];
+              return (
+                <div key={i} className="group flex items-start gap-3 rounded-2xl border border-zinc-200/80 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900" style={{ borderLeftColor: c, borderLeftWidth: 4 }}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: `${c}1A`, color: c }}><Heart className="h-5 w-5" /></span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-zinc-800 dark:text-zinc-100">{v.titulo}</p>
+                    {v.desc && <p className="mt-0.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{v.desc}</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {rotina.length > 0 && (
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><MapPin className="h-4 w-4 text-[#F08C00]" /> Como é a rotina aqui</h3>
+          <div className="mt-2 rounded-2xl border border-zinc-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <ul className="space-y-2.5">
+              {rotina.map((r, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F08C00]/12 text-[11px] font-bold text-[#F08C00]">{i + 1}</span>
+                  <span className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-200">{fmtLinha(r)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      {comoTrab.length > 0 && (
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Como trabalhamos</h3>
+          <div className="mt-2 space-y-2.5 rounded-2xl border border-zinc-200/80 bg-white p-5 text-sm leading-relaxed text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+            {comoTrab.map((p, i) => <p key={i}>{fmtLinha(p)}</p>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Overlay base dos modais.
 function ModalShell({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {
   return (
@@ -1209,9 +1329,10 @@ function VerticaisEditor({ value, onChange, sugestoes }: { value: string[]; onCh
   );
 }
 
-function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMode, onClose, onSave, onSaveSelf }: { userId: string; nome: string; avatarUrl: string | null; data: Escritorio; cargoById: Record<string, Cargo>; saving: boolean; selfMode?: boolean; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void; onSaveSelf?: (patch: Partial<PessoaInfo>) => void }) {
+function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMode, memberId, onClose, onSave, onSaveSelf, onRename }: { userId: string; nome: string; avatarUrl: string | null; data: Escritorio; cargoById: Record<string, Cargo>; saving: boolean; selfMode?: boolean; memberId?: string; onClose: () => void; onSave: (mut: (d: Escritorio) => Escritorio) => void; onSaveSelf?: (patch: Partial<PessoaInfo>) => void; onRename?: (name: string) => void }) {
   const atual = data.pessoas?.[userId];
   const [f, setF] = useState<PessoaInfo>({ ...(atual ?? {}) });
+  const [nomeEdit, setNomeEdit] = useState(nome);
   const set = (p: Partial<PessoaInfo>) => setF((x) => ({ ...x, ...p }));
   const num = (s: string) => (s === '' ? undefined : Math.max(0, parseInt(s, 10) || 0));
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1241,8 +1362,10 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
   const cargo = cargoById[f.cargoId ?? atual?.cargoId ?? ''];
   const foto = f.fotoUrl || avatarUrl;
   const salvar = () => {
-    if (selfMode && onSaveSelf) onSaveSelf({ fotoUrl: f.fotoUrl ?? '', frase: f.frase ?? '', bio: f.bio ?? '', oab: f.oab ?? '' });
-    else onSave((d) => ({ ...d, pessoas: { ...(d.pessoas ?? {}), [userId]: { ...(d.pessoas?.[userId] ?? {}), ...f } } }));
+    if (selfMode && onSaveSelf) { onSaveSelf({ fotoUrl: f.fotoUrl ?? '', frase: f.frase ?? '', bio: f.bio ?? '', oab: f.oab ?? '' }); return; }
+    // Nome vem do usuário (não do PessoaInfo) → endpoint próprio, só sócio.
+    if (onRename && memberId && nomeEdit.trim() && nomeEdit.trim() !== nome) onRename(nomeEdit.trim());
+    onSave((d) => ({ ...d, pessoas: { ...(d.pessoas ?? {}), [userId]: { ...(d.pessoas?.[userId] ?? {}), ...f } } }));
   };
   return (
     <ModalShell
@@ -1272,6 +1395,7 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
         </div>
         <input value={f.fotoUrl?.startsWith('data:') ? '' : (f.fotoUrl ?? '')} onChange={(e) => set({ fotoUrl: e.target.value })} placeholder="ou cole uma URL: https://…/foto.jpg" className={`${INPUT} mt-1.5`} />
       </div>
+      {!selfMode && <div><p className={LABEL}>Nome</p><input value={nomeEdit} onChange={(e) => setNomeEdit(e.target.value)} placeholder="Nome completo da pessoa" className={`${INPUT} mt-1 font-semibold`} /><p className="mt-1 text-[11px] text-zinc-400">É o nome que aparece no Hub inteiro (kanban, chat, jurídico…).</p></div>}
       <div><p className={LABEL}>OAB</p><input value={f.oab ?? ''} onChange={(e) => set({ oab: e.target.value })} placeholder="ex.: PR 123.456 · SP 654.321" className={`${INPUT} mt-1`} /></div>
       {!selfMode && (
         <div className="grid grid-cols-2 gap-2">

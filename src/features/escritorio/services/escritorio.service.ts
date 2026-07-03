@@ -19,7 +19,14 @@ export interface Cargo {
   custoFirma?: string;     // cota / contribuição com a estrutura
   progride?: string;       // de onde vem · pra onde vai
 }
-export interface Cultura { missao: string; visao: string; valores: string[]; cultura: string }
+export interface Cultura {
+  missao: string;
+  visao: string;
+  valores: string[];
+  cultura: string;         // "como trabalhamos" / princípios do dia a dia (texto livre)
+  manifesto?: string;      // quem somos / o que queremos (headline forte da cultura)
+  rotina?: string;         // como é vivida a rotina aqui (um item por linha)
+}
 export interface Manual { id: string; titulo: string; conteudo: string }
 export interface OnboardingItem { id: string; texto: string }
 // Vertical = área de atuação do escritório (Previdenciário, Bancário RMC/RCC, etc.).
