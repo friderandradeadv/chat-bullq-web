@@ -6,6 +6,7 @@ import {
   Bell, Monitor, Smartphone, Volume2, VolumeX, Moon,
   MessageSquare, Users, AlertTriangle, ArrowRightLeft, AtSign, Cog,
 } from 'lucide-react';
+import { enablePush, disablePush, getPushSubscription } from '@/features/notifications/push';
 
 const notifTypes = [
   { type: 'NEW_MESSAGE', label: 'Nova mensagem', description: 'Quando um cliente envia uma mensagem', icon: MessageSquare },
@@ -30,26 +31,53 @@ export default function SettingsNotificationsPage() {
   const [dndEnabled, setDndEnabled] = useState(false);
   const [dndStart, setDndStart] = useState('22:00');
   const [dndEnd, setDndEnd] = useState('08:00');
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPushPermission(Notification.permission);
+      // reflete se ESTE dispositivo já está inscrito (não só a permissão global)
+      getPushSubscription()
+        .then((sub) => setPushSubscribed(!!sub))
+        .catch(() => undefined);
     } else {
       setPushPermission('unsupported');
     }
   }, []);
 
   const handleRequestPush = async () => {
-    if (!('Notification' in window)) {
-      toast.error('Notificações push não são suportadas neste navegador');
-      return;
+    setPushBusy(true);
+    try {
+      const result = await enablePush();
+      if (result === 'unsupported') {
+        toast.error('Notificações push não são suportadas neste navegador');
+        setPushPermission('unsupported');
+      } else if (result === 'denied') {
+        setPushPermission('denied');
+        toast.error('Permissão negada pelo navegador');
+      } else {
+        setPushPermission('granted');
+        setPushSubscribed(true);
+        toast.success('Notificações push ativadas neste dispositivo!');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Não foi possível ativar as notificações push');
+    } finally {
+      setPushBusy(false);
     }
-    const permission = await Notification.requestPermission();
-    setPushPermission(permission);
-    if (permission === 'granted') {
-      toast.success('Notificações push ativadas!');
-    } else {
-      toast.error('Permissão negada pelo navegador');
+  };
+
+  const handleDisablePush = async () => {
+    setPushBusy(true);
+    try {
+      await disablePush();
+      setPushSubscribed(false);
+      toast.success('Notificações push desativadas neste dispositivo');
+    } catch {
+      toast.error('Não foi possível desativar');
+    } finally {
+      setPushBusy(false);
     }
   };
 
@@ -80,32 +108,53 @@ export default function SettingsNotificationsPage() {
       </div>
 
       <div className="mt-6 space-y-6">
-        {/* Push permission banner */}
-        {pushPermission !== 'granted' && pushPermission !== 'unsupported' && (
-          <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20">
+        {/* Push (por dispositivo) */}
+        {pushPermission === 'unsupported' ? (
+          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <Monitor className="h-5 w-5 text-zinc-400" />
+            <p className="text-sm text-zinc-500">Este navegador não suporta notificações push.</p>
+          </div>
+        ) : pushSubscribed ? (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20">
+            <div className="flex items-center gap-3">
+              <Smartphone className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-green-800 dark:text-green-300">Push ativo neste dispositivo</p>
+                <p className="text-xs text-green-600 dark:text-green-400">Você recebe alertas mesmo com o app fechado</p>
+              </div>
+            </div>
+            <button
+              onClick={handleDisablePush}
+              disabled={pushBusy}
+              className="shrink-0 rounded-md border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50 dark:border-green-800/50 dark:bg-transparent dark:text-green-300 dark:hover:bg-green-900/30"
+            >
+              Desativar aqui
+            </button>
+          </div>
+        ) : pushPermission === 'denied' ? (
+          <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <div>
+              <p className="text-sm font-medium text-red-800 dark:text-red-300">Permissão bloqueada</p>
+              <p className="text-xs text-red-600 dark:text-red-400">Libere as notificações para este site nas configurações do navegador e recarregue.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20">
             <div className="flex items-center gap-3">
               <Monitor className="h-5 w-5 text-amber-600" />
               <div>
                 <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Notificações push desativadas</p>
-                <p className="text-xs text-amber-600 dark:text-amber-400">Ative para receber alertas mesmo quando a aba estiver fechada</p>
+                <p className="text-xs text-amber-600 dark:text-amber-400">Ative para receber alertas mesmo quando o app estiver fechado</p>
               </div>
             </div>
             <button
               onClick={handleRequestPush}
-              className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+              disabled={pushBusy}
+              className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
             >
-              Ativar push
+              {pushBusy ? 'Ativando…' : 'Ativar push'}
             </button>
-          </div>
-        )}
-
-        {pushPermission === 'granted' && (
-          <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20">
-            <Monitor className="h-5 w-5 text-green-600" />
-            <div>
-              <p className="text-sm font-medium text-green-800 dark:text-green-300">Notificações push ativas</p>
-              <p className="text-xs text-green-600 dark:text-green-400">Você receberá alertas no navegador</p>
-            </div>
           </div>
         )}
 
