@@ -17,11 +17,13 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#ffffff',
     lang: 'pt-BR',
     dir: 'ltr',
+    // ?v=2 = ícone dark (fundo preto, FA. clara centralizada). O sufixo força
+    // navegador/instalação a rebaixar o cache do ícone antigo (fundo branco).
     icons: [
-      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icon-192.png?v=2', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icon-512.png?v=2', sizes: '512x512', type: 'image/png', purpose: 'any' },
       {
-        src: '/icon-maskable-512.png',
+        src: '/icon-maskable-512.png?v=2',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
