@@ -56,8 +56,8 @@ export function MobileTabBar() {
       </Link>
 
       <Link
-        href="/juridico"
-        className={linkCls(isActive(['/juridico', '/processos', '/agenda', '/caixa-djen', '/clientes']))}
+        href="/agenda"
+        className={linkCls(isActive(['/agenda', '/juridico', '/processos', '/caixa-djen', '/clientes']))}
       >
         <Scale className="h-5 w-5" />
         <span>Jurídico</span>
