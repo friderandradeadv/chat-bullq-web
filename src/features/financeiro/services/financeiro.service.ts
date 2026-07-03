@@ -8,7 +8,8 @@ export interface FinMes {
   despesaTotal: number;
   resultado: number;
   acumulado: number;
-  aporte?: number; // capital (Você/Pai) — entra no saldo, não no faturamento
+  aporte?: number; // capital (Você/Pai) — entra no CAIXA REAL, não no faturamento
+  acumuladoOperacional?: number; // resultado acumulado SEM aportes = quanto o escritório gerou/queimou
   projecao: boolean;
 }
 export interface FinCategoria { nome: string; total: number; cor: string }
@@ -59,6 +60,7 @@ export interface FinDashboard {
   despesaTotalGeral?: number;
   kpis: {
     receitaMes: number; despesaMes: number; resultadoMes: number; saldoAtual: number; mesAtualLabel: string;
+    saldoOperacional?: number; aporteAcumulado?: number; // caixa real (saldoAtual, com aportes) × operacional (sem aportes)
     receita12m: number; despesa12m: number; resultado12m: number; margem12m: number;
     receitaMedia: number; despesaMediaMensal: number; custoFixoMensal: number;
     mesesNoVermelho: number; totalMesesRealizados: number;

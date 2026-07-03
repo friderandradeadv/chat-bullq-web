@@ -177,13 +177,13 @@ export default function FinanceiroPage() {
         <>
         {/* KPIs — pulso financeiro sempre visível */}
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Kpi icon={Scale} accent={k.saldoAtual < 0 ? '#E03131' : '#2F9E44'} label={`Saldo acumulado · ${k.mesAtualLabel}`} value={brl(k.saldoAtual)} hint={k.saldoAtual < 0 ? 'caixa no vermelho' : 'caixa positivo'} onClick={() => setShowSaldo(true)} />
+          <Kpi icon={Scale} accent={k.saldoAtual < 0 ? '#E03131' : '#2F9E44'} label={`Caixa real · ${k.mesAtualLabel}`} value={brl(k.saldoAtual)} hint={(k.aporteAcumulado ?? 0) > 0 ? `operacional ${brl(k.saldoOperacional ?? k.saldoAtual)} · ${brl(k.aporteAcumulado!)} em aportes` : (k.saldoAtual < 0 ? 'caixa no vermelho' : 'caixa positivo')} onClick={() => setShowSaldo(true)} />
           <Kpi icon={k.resultadoMes >= 0 ? TrendingUp : TrendingDown} accent={k.resultadoMes >= 0 ? '#2F9E44' : '#E03131'} label="Resultado do mês" value={brl(k.resultadoMes)} hint={`receita ${brl(k.receitaMes)} · despesa ${brl(k.despesaMes)}`} />
           <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(k.receita12m)} hint={`média ${brl(k.receitaMedia)}/mês`} />
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
-        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} onClose={() => setShowSaldo(false)} />}
+        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
@@ -269,7 +269,7 @@ function Kpi({ icon: Icon, accent, label, value, hint, onClick }: { icon: React.
 }
 
 // Detalhe do saldo acumulado: saldo inicial das contas + soma dos resultados mês a mês.
-function SaldoDetalheModal({ meses, saldoAtual, onClose }: { meses: FinMes[]; saldoAtual: number; onClose: () => void }) {
+function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, onClose }: { meses: FinMes[]; saldoAtual: number; saldoOperacional: number; onClose: () => void }) {
   const realizados = meses.filter((m) => !m.projecao);
   const saldoInicial = realizados.length ? realizados[0].acumulado - realizados[0].resultado - (realizados[0].aporte ?? 0) : 0;
   const totalReceita = realizados.reduce((s, m) => s + m.receita, 0);
@@ -279,7 +279,7 @@ function SaldoDetalheModal({ meses, saldoAtual, onClose }: { meses: FinMes[]; sa
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl scrollbar-thin dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">De onde vem o saldo acumulado</h3>
+          <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Caixa real × resultado operacional</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
         </div>
         <p className="text-sm text-zinc-500 dark:text-zinc-400"><strong>Saldo inicial</strong> + <strong>resultados</strong> (receita − despesa <strong>liquidadas</strong>) de cada mês{totalAporte > 0 ? <> + <strong className="text-sky-600">aportes</strong> (capital que Você/Pai colocou — não é faturamento)</> : null}. Fatura de cartão só entra quando paga.</p>
@@ -308,7 +308,10 @@ function SaldoDetalheModal({ meses, saldoAtual, onClose }: { meses: FinMes[]; sa
           <div className="flex items-center justify-between text-zinc-500"><span>Total de receitas</span><span className="tabular-nums text-emerald-600">{brl2(totalReceita)}</span></div>
           <div className="flex items-center justify-between text-zinc-500"><span>Total de despesas</span><span className="tabular-nums text-rose-600">− {brl2(totalDespesa)}</span></div>
           {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Aportes (Você + Pai)</span><span className="tabular-nums text-sky-600">+ {brl2(totalAporte)}</span></div>}
-          <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Saldo acumulado</span><span className={`tabular-nums ${saldoAtual >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoAtual)}</span></div>
+          {totalAporte > 0 && (
+            <div className="flex items-center justify-between border-t border-dashed border-zinc-200 pt-1.5 dark:border-zinc-700"><span className="text-zinc-500">Resultado operacional <span className="text-[11px] text-zinc-400">(sem aportes — o que o escritório gerou/queimou)</span></span><span className={`font-semibold tabular-nums ${saldoOperacional >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoOperacional)}</span></div>
+          )}
+          <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Caixa real <span className="text-[11px] font-normal text-zinc-400">(o que há em conta{totalAporte > 0 ? ', com aportes' : ''})</span></span><span className={`tabular-nums ${saldoAtual >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoAtual)}</span></div>
         </div>
         <p className="mt-3 text-[11px] text-zinc-400">Dica: para ver os lançamentos de um mês, use o filtro de mês no livro-razão abaixo.</p>
       </div>
@@ -1905,76 +1908,109 @@ function CsTabela({ cols, children, foot, w0 = '44%', widths }: { cols: string[]
 // ═══════════════════════════ ABA · RETIRADAS / PRÓ-LABORE ═════════════════════
 
 function RetiradasTab({ data }: { data: FinDashboard }) {
-  const qc = useQueryClient();
   const { data: members = [], isLoading } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advs = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const r = useMemo(() => aggregarRetiradas(data, advs), [data, advs]);
   const contas = data.contas ?? [];
-  type RetEd = { id: string | null; tipo: 'Pró-labore' | 'Retirada'; recebedor: string; dataISO: string; valor: string; conta: string };
-  const [ed, setEd] = useState<RetEd | null>(null);
-  const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
-  const openNovo = (nome?: string) => setEd({ id: null, tipo: 'Pró-labore', recebedor: nome ?? '', dataISO: toISOInput(hojeBR()), valor: '', conta: contas[0]?.id ?? '' });
-  const openEdit = (t: FinTransacao) => setEd({ id: t.id ?? null, tipo: t.categoria === 'Retirada' ? 'Retirada' : 'Pró-labore', recebedor: t.recebedor ?? t.party ?? '', dataISO: toISOInput(t.data), valor: String(Math.abs(t.valor)).replace('.', ','), conta: t.conta ?? '' });
-  const saveM = useMutation({
-    mutationFn: async () => {
-      if (!ed) throw new Error('sem editor');
-      const base = { data: toBR(ed.dataISO), tipo: 'despesa' as const, categoria: ed.tipo, valor: parseValor(ed.valor), recebedor: ed.recebedor || undefined, conta: ed.conta || undefined, status: 'pago' as const };
-      if (ed.id) await financeiroService.updateTransacao(ed.id, { ...base, recebedor: ed.recebedor || '', conta: ed.conta || '', escopo: 'uma' });
-      else await financeiroService.addTransacao(base);
-    },
-    onSuccess: () => { inval(); toast.success(ed?.id ? 'Retirada atualizada' : 'Retirada lançada'); setEd(null); },
-    onError: (e: any) => toast.error(e?.message || 'Erro ao salvar'),
-  });
-  const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeTransacao(id, 'uma'), onSuccess: () => { inval(); toast.success('Retirada removida'); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
   const retiradas = useMemo(() => data.transacoes.filter((t) => t.categoria === 'Pró-labore' || t.categoria === 'Retirada').sort((a, b) => toISOInput(b.data).localeCompare(toISOInput(a.data))), [data.transacoes]);
+
+  // Matriz mês × advogado (quanto cada um retirou) — puxada DIRETO do livro-razão.
+  const { matriz, colUsers, totalGeral } = useMemo(() => {
+    const rows = new Map<string, Map<string, number>>();
+    const labels = new Map<string, string>();
+    for (const t of retiradas) {
+      const mk = mesKey(t);
+      const nome = (t.recebedor || t.party || '').trim() || '—';
+      const u = advs.find((a) => normNome(a.name) === normNome(nome));
+      const uk = u ? u.id : (normNome(nome) || '—');
+      labels.set(uk, u ? u.name : nome);
+      let mm = rows.get(mk); if (!mm) { mm = new Map(); rows.set(mk, mm); }
+      mm.set(uk, (mm.get(uk) ?? 0) + Math.abs(t.valor));
+    }
+    const colTot = new Map<string, number>();
+    for (const mm of rows.values()) for (const [uk, v] of mm) colTot.set(uk, (colTot.get(uk) ?? 0) + v);
+    const colUsers = [...colTot.entries()].sort((a, b) => b[1] - a[1]).map(([uk]) => ({ uk, label: labels.get(uk) ?? uk }));
+    const matriz = [...rows.entries()].map(([mk, mm]) => ({ mk, cells: mm, tot: [...mm.values()].reduce((s, v) => s + v, 0) })).sort((a, b) => b.mk.localeCompare(a.mk));
+    const totalGeral = [...colTot.values()].reduce((s, v) => s + v, 0);
+    return { matriz, colUsers, totalGeral };
+  }, [retiradas, advs]);
 
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
   const totalParts = r.porUser.reduce((s, u) => s + u.aReceber, 0);
 
   return (
     <>
-      <div className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-cyan-50 to-white p-5 dark:border-zinc-800 dark:from-cyan-900/15 dark:to-zinc-900">
-        <div>
-          <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Wallet className="h-5 w-5 text-[#15AABF]" /> Retiradas e pró-labore</h2>
-          <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
-            Quando um honorário entra, o rateio (no lançamento) separa a parte do <strong>escritório</strong>, do <strong>sócio</strong> e do <strong>associado</strong>. Aqui você vê quanto cada advogado tem a receber e quanto já retirou — e lança novas retiradas.
-          </p>
-        </div>
-        <button onClick={() => openNovo()} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#15AABF] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1098AD]"><Plus className="h-4 w-4" /> Nova retirada</button>
+      <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-cyan-50 to-white p-5 dark:border-zinc-800 dark:from-cyan-900/15 dark:to-zinc-900">
+        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Wallet className="h-5 w-5 text-[#15AABF]" /> Retiradas e pró-labore</h2>
+        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+          Painel <strong>informativo</strong>: mostra quanto cada pessoa já retirou por mês, lido direto do <strong>livro-razão</strong>. Para registrar uma retirada ou pró-labore, lance na aba <strong>Lançamentos</strong> (tipo despesa, categoria <em>Retirada</em>/<em>Pró-labore</em>, recebedor = a pessoa). Assim não há dois lugares para conferir.
+        </p>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MiniStat label="Total já retirado" value={brl(r.totalRetirado)} hint="pró-labore + retiradas (livro-razão)" accent="#E64980" />
         <MiniStat label="Honorários recebidos" value={brl(r.totalHonorarios)} hint="base do rateio" accent="#2F9E44" />
-        <MiniStat label="Parte do escritório" value={brl(r.escritorio)} hint="caixa do escritório" accent="#228BE6" />
-        <MiniStat label="Parte dos advogados" value={brl(totalParts)} hint="a receber pelo rateio" accent="#7048E8" />
-        <MiniStat label="Total já retirado" value={brl(r.totalRetirado)} hint="pró-labore + retiradas pagas" accent="#E64980" />
+        <MiniStat label="Ficou no escritório" value={brl(r.escritorio)} hint="parte do escritório no rateio" accent="#228BE6" />
+        <MiniStat label="Crédito do rateio" value={brl(totalParts)} hint="parte dos advogados (informativo)" accent="#7048E8" />
       </div>
 
-      <Card title="Por advogado" sub="parte do rateio × retiradas pagas (categoria Pró-labore/Retirada).">
+      <Card title="Retiradas por mês" sub="quanto cada pessoa retirou em cada mês — espelho do livro-razão.">
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Advogado</th><th className="px-2 py-1.5 text-right font-medium">A receber (parte)</th><th className="px-2 py-1.5 text-right font-medium">Já retirou</th><th className="px-2 py-1.5 text-right font-medium">Saldo</th><th className="w-24"></th></tr></thead>
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400">
+                <th className="px-2 py-1.5 font-medium">Mês</th>
+                {colUsers.map((c) => <th key={c.uk} className="px-2 py-1.5 text-right font-medium">{c.label.split(' ')[0]}</th>)}
+                <th className="px-2 py-1.5 text-right font-medium">Total</th>
+              </tr>
+            </thead>
             <tbody>
-              {r.porUser.map((u) => (
+              {matriz.map((row) => (
+                <tr key={row.mk} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <td className="px-2 py-1.5 text-zinc-600 dark:text-zinc-300">{mesLabel(row.mk)}</td>
+                  {colUsers.map((c) => { const v = row.cells.get(c.uk) ?? 0; return <td key={c.uk} className="px-2 py-1.5 text-right tabular-nums text-pink-600">{v ? brl2(v) : '—'}</td>; })}
+                  <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(row.tot)}</td>
+                </tr>
+              ))}
+              {matriz.length === 0 && <tr><td colSpan={colUsers.length + 2} className="py-8 text-center text-sm text-zinc-400">Nenhuma retirada lançada ainda. Lance na aba Lançamentos.</td></tr>}
+            </tbody>
+            {matriz.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-zinc-200 text-[13px] font-bold dark:border-zinc-700">
+                  <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">Total</td>
+                  {colUsers.map((c) => { const v = matriz.reduce((s, row) => s + (row.cells.get(c.uk) ?? 0), 0); return <td key={c.uk} className="px-2 py-1.5 text-right tabular-nums text-pink-600">{brl2(v)}</td>; })}
+                  <td className="px-2 py-1.5 text-right tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(totalGeral)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </Card>
+
+      <Card title="Por advogado (acumulado)" sub="crédito do rateio × o que já foi retirado — apenas informativo, sem 'a pagar'.">
+        <div className="overflow-x-auto scrollbar-thin">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Advogado</th><th className="px-2 py-1.5 text-right font-medium">Crédito do rateio</th><th className="px-2 py-1.5 text-right font-medium">Já retirou</th><th className="px-2 py-1.5 text-right font-medium">Diferença</th></tr></thead>
+            <tbody>
+              {r.porUser.filter((u) => u.aReceber || u.retirado).map((u) => (
                 <tr key={u.userId} className="border-t border-zinc-100 dark:border-zinc-800">
                   <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><UserCircle2 className="h-4 w-4 shrink-0 text-zinc-400" />{u.nome}</span></td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-violet-600">{u.aReceber ? brl2(u.aReceber) : '—'}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-pink-600">{u.retirado ? brl2(u.retirado) : '—'}</td>
-                  <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${u.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(u.saldo)}</td>
-                  <td className="px-2 py-1.5 text-right"><button onClick={() => openNovo(u.nome)} className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-600 hover:border-[#15AABF] hover:text-[#15AABF] dark:border-zinc-700 dark:text-zinc-300">Lançar retirada</button></td>
+                  <td className={`px-2 py-1.5 text-right tabular-nums ${u.saldo >= 0 ? 'text-zinc-400' : 'text-amber-600'}`}>{brl2(u.saldo)}</td>
                 </tr>
               ))}
-              {r.porUser.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Nenhum advogado ativo encontrado.</td></tr>}
+              {r.porUser.filter((u) => u.aReceber || u.retirado).length === 0 && <tr><td colSpan={4} className="py-8 text-center text-sm text-zinc-400">Nenhum crédito ou retirada ainda.</td></tr>}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[11px] text-zinc-400">A parte de cada advogado vem do rateio definido na hora do recebimento do honorário (no lançamento). Sem rateio, o valor inteiro fica com o escritório.</p>
+        <p className="mt-2 text-[11px] text-zinc-400">O <strong>crédito do rateio</strong> é a parte que coube a cada advogado nos honorários recebidos (definida no lançamento do honorário). A <strong>diferença</strong> é só uma referência de quanto ainda não foi sacado — <strong>não é uma dívida a pagar</strong>. O pagamento real é o lançamento da retirada no livro-razão.</p>
       </Card>
 
-      <Card title="Retiradas lançadas" sub="pró-labore e retiradas pagas — clique para editar ou remover.">
+      <Card title="Lançamentos de retirada" sub="pró-labore e retiradas do livro-razão. Para editar, abra a aba Lançamentos.">
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Tipo</th><th className="px-2 py-1.5 font-medium">Recebedor</th><th className="px-2 py-1.5 font-medium">Conta</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="w-20"></th></tr></thead>
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Tipo</th><th className="px-2 py-1.5 font-medium">Recebedor</th><th className="px-2 py-1.5 font-medium">Conta</th><th className="px-2 py-1.5 text-right font-medium">Valor</th></tr></thead>
             <tbody>
               {retiradas.map((t) => {
                 const conta = contas.find((c) => c.id === t.conta);
@@ -1985,56 +2021,14 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
                     <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{t.recebedor || t.party || '—'}</td>
                     <td className="px-2 py-1.5 text-zinc-500 dark:text-zinc-400">{conta?.nome || '—'}</td>
                     <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-rose-600">{brl2(Math.abs(t.valor))}</td>
-                    <td className="px-2 py-1.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEdit(t)} className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-[#15AABF] dark:hover:bg-zinc-800" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => { if (t.id && confirm('Remover esta retirada?')) delM.mutate(t.id); }} className="rounded-md p-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30" title="Remover"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </div>
-                    </td>
                   </tr>
                 );
               })}
-              {retiradas.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-sm text-zinc-400">Nenhuma retirada lançada ainda.</td></tr>}
+              {retiradas.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Nenhuma retirada lançada ainda.</td></tr>}
             </tbody>
           </table>
         </div>
       </Card>
-
-      {/* Modal: lançar / editar retirada */}
-      {ed && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEd(null)}>
-          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-3 text-base font-bold text-zinc-800 dark:text-zinc-100">{ed.id ? 'Editar retirada' : 'Nova retirada'}</h3>
-            <div className="space-y-3">
-              <Field label="Tipo">
-                <div className="flex gap-2">
-                  {(['Pró-labore', 'Retirada'] as const).map((tp) => (
-                    <button key={tp} onClick={() => setEd({ ...ed, tipo: tp })} className={`flex-1 rounded-md border px-2 py-1.5 text-sm font-medium ${ed.tipo === tp ? 'border-[#15AABF] bg-cyan-50 text-[#15AABF] dark:bg-cyan-900/20' : 'border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300'}`}>{tp}</button>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Recebedor">
-                <input list="ret-advs" value={ed.recebedor} onChange={(e) => setEd({ ...ed, recebedor: e.target.value })} placeholder="Nome do advogado" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-                <datalist id="ret-advs">{advs.map((a) => <option key={a.id} value={a.name} />)}</datalist>
-              </Field>
-              <Field label="Conta">
-                <select value={ed.conta} onChange={(e) => setEd({ ...ed, conta: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-                  <option value="">— sem conta —</option>
-                  {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Data"><input type="date" value={ed.dataISO} onChange={(e) => setEd({ ...ed, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-                <Field label="Valor"><input value={ed.valor} onChange={(e) => setEd({ ...ed, valor: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setEd(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
-              <button onClick={() => saveM.mutate()} disabled={saveM.isPending || !(parseValor(ed.valor) > 0)} className="inline-flex items-center gap-1 rounded-lg bg-[#15AABF] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{saveM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : ed.id ? 'Salvar' : 'Lançar retirada'}</button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
