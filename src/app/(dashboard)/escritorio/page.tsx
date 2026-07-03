@@ -10,7 +10,7 @@ import {
   Compass, MessageSquare, CalendarClock, FolderKanban, Calculator, ShieldCheck,
   CheckCircle2, Circle, Sparkles,
   Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
-  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera, Layers, ArrowLeft,
+  CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera, Layers, ArrowLeft, ScrollText,
 } from 'lucide-react';
 import { escritorioService, type Escritorio, type Cargo, type Manual, type OnboardingItem, type PessoaInfo, type Vertical } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
@@ -173,7 +173,7 @@ export default function EscritorioPage() {
 
         {/* Abas — só a ativa é renderizada */}
         <div className="sticky top-0 z-10 -mx-4 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa]/95 px-4 py-2 backdrop-blur lg:-mx-6 lg:px-6 dark:border-zinc-800 dark:bg-zinc-950/95">
-          {([['perfil', 'Meu Perfil', UserCircle], ['financeiro', 'Financeiro', CircleDollarSign], ['cargos', 'Cargos', Briefcase], ['verticais', 'Verticais', Layers], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
+          {([['perfil', 'Meu Perfil', UserCircle], ['contrato', 'Meu Contrato', ScrollText], ['financeiro', 'Financeiro', CircleDollarSign], ['cargos', 'Cargos', Briefcase], ['verticais', 'Verticais', Layers], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
@@ -208,6 +208,7 @@ export default function EscritorioPage() {
           canEdit={data.canEdit}
           proprio={!vendoOutro}
           onEdit={alvoUserId ? () => setPerfilUserId(alvoUserId) : undefined}
+          onVerContrato={() => setTab('contrato')}
         />
 
         {/* Cultura: missão / visão / valores (informações básicas do escritório) */}
@@ -251,6 +252,18 @@ export default function EscritorioPage() {
           </div>
         )}
         </>)}
+
+        {/* ─────────── ABA: MEU CONTRATO (o cargo/contrato da pessoa, em texto claro) ─────────── */}
+        {tab === 'contrato' && (
+          <MeuContrato
+            info={alvoInfo}
+            cargo={alvoCargo}
+            proprio={!vendoOutro}
+            canEdit={data.canEdit}
+            onEditCargo={data.canEdit && alvoCargo ? () => setEditCargoId(alvoCargo.id) : undefined}
+            onEditPessoa={data.canEdit && alvoUserId ? () => setPerfilUserId(alvoUserId) : undefined}
+          />
+        )}
 
         {/* ─────────── ABA: FINANCEIRO (só renderiza ao clicar) ─────────── */}
         {tab === 'financeiro' && (<>
@@ -898,7 +911,7 @@ const FRASES_ORGULHO = [
 ];
 
 // Perfil rico do profissional logado (foto, função, datas, expectativa, métricas, financeiro, motivação).
-function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true, onEdit }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; proprio?: boolean; onEdit?: () => void }) {
+function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true, onEdit, onVerContrato }: { nome: string; avatarUrl: string | null; info?: PessoaInfo; cargo?: Cargo; fin?: any; canEdit?: boolean; proprio?: boolean; onEdit?: () => void; onVerContrato?: () => void }) {
   const sexo = info?.sexo;
   const foto = avatarUrl || info?.fotoUrl;
   const r = fin && !fin.vazio ? fin.resumo : undefined;
@@ -949,12 +962,6 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
         )}
       </div>
       <div className="space-y-3 px-5 pb-5">
-        {cargo?.descricao && (
-          <div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#228BE6]"><Target className="h-3.5 w-3.5" /> O que esperamos de você</p>
-            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{gen(cargo.descricao, sexo)}</p>
-          </div>
-        )}
         {metricas.length > 0 && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {metricas.map((m) => (
@@ -969,16 +976,15 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
         {r && (
           <p className="text-xs text-zinc-500 dark:text-zinc-400">Já recebido <strong className="text-zinc-700 dark:text-zinc-200">{brl(r.recebido)}</strong>{typeof proj?.liquidoProvavel === 'number' && proj.liquidoProvavel > 0 ? <> · sua parte provável na carteira <strong className="text-zinc-700 dark:text-zinc-200">{brl(proj.liquidoProvavel)}</strong></> : null} · veja tudo na aba <strong className="text-[#02883C]">Financeiro</strong>.</p>
         )}
-        {(info?.financeiro?.length || cargo?.honorarios?.length || cargo?.remuneracao?.length || cargo?.divisaoHonorarios) && (
-          <div className="rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500"><Wallet className="h-3.5 w-3.5" /> Como você é remunerado</p>
-            <div className="mt-2 space-y-2.5">
-              <SecaoLista icon={Wallet} titulo="Pelo seu contrato" itens={info?.financeiro} cor="#02883C" />
-              {!info?.financeiro?.length && <SecaoLista icon={Wallet} titulo="Salário / bolsa & benefícios" itens={cargo?.remuneracao} cor="#02883C" />}
-              {!info?.financeiro?.length && <SecaoLista icon={CircleDollarSign} titulo="Honorários (modelo do cargo)" itens={cargo?.honorarios} cor="#02883C" />}
-              {cargo?.divisaoHonorarios && !info?.financeiro?.length && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Divisão:</span> {cargo.divisaoHonorarios}</p>}
-            </div>
-          </div>
+        {cargo && onVerContrato && (
+          <button onClick={onVerContrato} className="flex w-full items-center gap-2.5 rounded-xl border border-[#7048E8]/25 bg-white/70 p-3.5 text-left transition hover:border-[#7048E8]/50 hover:bg-white dark:border-[#7048E8]/30 dark:bg-zinc-900/60 dark:hover:bg-zinc-900">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#7048E8]/10 text-[#7048E8]"><ScrollText className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-zinc-800 dark:text-zinc-100">{proprio ? 'Seu contrato & cargo' : 'Contrato & cargo'}</span>
+              <span className="block text-xs text-zinc-500 dark:text-zinc-400">O que esperamos, suas atribuições, o que é exigido e como {proprio ? 'você é' : 'é'} remunerado{proprio ? '' : 'a'}.</span>
+            </span>
+            <span className="shrink-0 text-xs font-semibold text-[#7048E8]">Abrir →</span>
+          </button>
         )}
         {info?.destaque && (
           <div className="flex items-start gap-2 rounded-xl border border-[#F08C00]/30 bg-[#F08C00]/10 p-3.5 text-sm text-[#9a5b00] dark:text-[#F0B860]"><Trophy className="mt-0.5 h-4 w-4 shrink-0" /> <p className="font-medium">{info.destaque}</p></div>
@@ -991,6 +997,105 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
         </div>
         {!cargo && <p className="text-sm text-zinc-500">Seu cargo ainda não foi definido. {canEdit ? 'Defina no organograma.' : 'Peça a um sócio.'}</p>}
       </div>
+    </div>
+  );
+}
+
+// Aba "Meu Contrato": o cargo/contrato da pessoa em texto claro — o que esperamos dela,
+// o que ela faz (atribuições), o que é exigido, jornada/carreira e as condições do contrato.
+// Reaproveita os dados do Cargo + as condições pessoais de PessoaInfo (do contrato dela).
+function MeuContrato({ info, cargo, proprio = true, canEdit, onEditCargo, onEditPessoa }: { info?: PessoaInfo; cargo?: Cargo; proprio?: boolean; canEdit?: boolean; onEditCargo?: () => void; onEditPessoa?: () => void }) {
+  const sexo = info?.sexo;
+  const g = (s?: string) => gen(s, sexo) ?? '';
+  const temContrato = !!(info?.financeiro?.length || cargo?.remuneracao?.length || cargo?.honorarios?.length || cargo?.custoFirma || cargo?.divisaoHonorarios);
+  if (!cargo) {
+    return (
+      <div className={`${CARD} mt-2 text-sm text-zinc-500 dark:text-zinc-400`}>
+        {proprio ? 'Seu cargo ainda não foi definido, então o contrato ainda não aparece aqui. ' : 'O cargo desta pessoa ainda não foi definido. '}
+        {canEdit ? 'Defina o cargo pelo organograma (aba Cargos).' : 'Peça a um sócio para definir o seu cargo.'}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 space-y-3">
+      {/* Cabeçalho do contrato: cargo, trilha, resumo e dados do vínculo */}
+      <div className="overflow-hidden rounded-2xl border border-[#7048E8]/25 bg-gradient-to-br from-[#7048E8]/10 via-white to-[#228BE6]/5 p-5 dark:border-[#7048E8]/30 dark:from-[#7048E8]/15 dark:via-zinc-900 dark:to-zinc-900">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">{proprio ? 'Seu contrato & cargo' : 'Contrato & cargo'}</p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{g(cargo.nome) || 'Cargo'}</h2>
+              {cargo.vertical && <span className="rounded-full bg-[#7048E8] px-2.5 py-0.5 text-xs font-semibold text-white">{cargo.vertical}</span>}
+            </div>
+            {cargo.resumo && <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{g(cargo.resumo)}</p>}
+          </div>
+          {(onEditPessoa || onEditCargo) && (
+            <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+              {onEditPessoa && <button onClick={onEditPessoa} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"><Pencil className="h-3.5 w-3.5" /> Editar condições</button>}
+              {onEditCargo && <button onClick={onEditCargo} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"><Briefcase className="h-3.5 w-3.5" /> Editar cargo</button>}
+            </div>
+          )}
+        </div>
+        {(info?.oab || info?.conoscoDesde || info?.contratadaDesde || (info?.atuacao?.length ?? 0) > 0) && (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+            {info?.oab && <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 shrink-0 text-[#7048E8]" /> OAB {info.oab}</span>}
+            {info?.conoscoDesde && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> Conosco desde {info.conoscoDesde}</span>}
+            {info?.contratadaDesde && !info?.conoscoDesde && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> Contratad{sexo === 'F' ? 'a' : 'o'} desde {info.contratadaDesde}</span>}
+            {(info?.atuacao?.length ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1.5"><Layers className="h-3.5 w-3.5 shrink-0 text-[#02883C]" /> Verticais: {info!.atuacao!.join(' · ')}</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* O que esperamos de você (descrição do cargo) */}
+      {cargo.descricao && cargo.descricao !== cargo.resumo && (
+        <div className={CARD}>
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#228BE6]"><Target className="h-3.5 w-3.5" /> O que esperamos de {proprio ? 'você' : 'quem está aqui'}</p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{g(cargo.descricao)}</p>
+        </div>
+      )}
+
+      {/* Atribuições (o que faz) + o que é exigido (como se entra) */}
+      {((cargo.atribuicoes?.length ?? 0) > 0 || (cargo.selecao?.length ?? 0) > 0) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(cargo.atribuicoes?.length ?? 0) > 0 && (
+            <div className={CARD}><SecaoLista icon={ListChecks} titulo={proprio ? 'Suas atribuições — o que você faz' : 'Atribuições — o que faz'} itens={cargo.atribuicoes} cor="#7048E8" /></div>
+          )}
+          {(cargo.selecao?.length ?? 0) > 0 && (
+            <div className={CARD}><SecaoLista icon={ClipboardList} titulo="O que é exigido para o cargo" itens={cargo.selecao} cor="#228BE6" /></div>
+          )}
+        </div>
+      )}
+
+      {/* Jornada e carreira */}
+      {(cargo.horario || cargo.duracao || cargo.progride) && (
+        <div className="grid gap-2 sm:grid-cols-3">
+          {cargo.horario && <Mini icon={Clock} label="Horário" valor={cargo.horario} />}
+          {cargo.duracao && <Mini icon={CalendarDays} label="Duração no cargo" valor={cargo.duracao} />}
+          {cargo.progride && <Mini icon={TrendingUp} label="Carreira" valor={cargo.progride} />}
+        </div>
+      )}
+
+      {/* Condições do contrato (financeiro pessoal; senão, o modelo do cargo) */}
+      {temContrato && (
+        <div className="rounded-2xl border border-[#02883C]/25 bg-[#02883C]/5 p-5 dark:border-[#02883C]/30 dark:bg-[#02883C]/10">
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#02883C]"><CircleDollarSign className="h-3.5 w-3.5" /> {proprio ? 'Condições do seu contrato' : 'Condições do contrato'}</p>
+          <div className="mt-2.5 space-y-3">
+            {info?.financeiro?.length ? (
+              <SecaoLista icon={Wallet} titulo="Pelo seu contrato" itens={info.financeiro} cor="#02883C" />
+            ) : (
+              <>
+                <SecaoLista icon={Wallet} titulo="Salário / bolsa & benefícios" itens={cargo.remuneracao} cor="#02883C" />
+                <SecaoLista icon={CircleDollarSign} titulo="Honorários (modelo do cargo)" itens={cargo.honorarios} cor="#02883C" />
+                {cargo.divisaoHonorarios && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Divisão:</span> {cargo.divisaoHonorarios}</p>}
+                {cargo.custoFirma && <p className="text-sm text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-zinc-700 dark:text-zinc-200">Custo da firma:</span> {cargo.custoFirma}</p>}
+              </>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">Os valores e o acompanhamento do que {proprio ? 'você tem' : 'há'} a receber ficam na aba <strong className="text-[#02883C]">Financeiro</strong>.</p>
+        </div>
+      )}
     </div>
   );
 }
