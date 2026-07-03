@@ -119,8 +119,16 @@ export interface HoleriteMes {
 }
 
 export interface VerticalCusto { label: string; valor: number }
-export interface VerticalPnL { area: string; nCasos: number; entradas: number; diretas: number; custos?: VerticalCusto[]; overhead: number; saidas: number; resultado: number; projetado: number; margem: number | null }
-export interface FinVerticalPnL { verticais: VerticalPnL[]; overheadTotal: number; nCasosTotal: number; criterio: string }
+export interface VerticalMes { mes: string; label: string; entradas: number; inicial: number; exito: number; diretas: number; resultado: number }
+export interface VerticalPnL { area: string; nCasos: number; entradas: number; inicial?: number; exito?: number; diretas: number; custos?: VerticalCusto[]; overhead: number; saidas: number; resultado: number; projetado: number; margem: number | null; porMes?: VerticalMes[] }
+export interface VerticalBucketMes { mes: string; label: string; valor: number }
+export interface FinVerticalPnL {
+  verticais: VerticalPnL[];
+  comum?: { total: number; porMes: VerticalBucketMes[] };     // custos do escritório (não rateados)
+  pessoas?: { total: number; porMes: VerticalBucketMes[] };   // pró-labore/retiradas
+  consolidado?: { entradas: number; diretas: number; comum: number; pessoas: number; resultado: number };
+  overheadTotal: number; nCasosTotal: number; criterio: string;
+}
 export interface FinVerticalArea { area: string; receita: number; despesa: number; resultado: number }
 export interface FinCrescimento {
   carteira: { brutoCausas: number; condenacaoEstimada: number; honorariosEscritorio: number; nComValor: number; nCasos: number; porArea: { area: string; valor: number }[] };

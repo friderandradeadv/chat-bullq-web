@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -2084,13 +2084,22 @@ const corArea = (a: string) => CORES_AREA[a] ?? '#15AABF';
 
 function VerticaisTab({ data }: { data: FinDashboard }) {
   const [sel, setSel] = useState('');
-  const verticais = data.crescimento?.verticalArea ?? [];
+  const [exp, setExp] = useState(''); // vertical com o livro-razão mensal aberto
+  const pnl = data.verticalPnL;
+  const verticais = pnl?.verticais ?? [];
+  const cons = pnl?.consolidado;
+  const comum = pnl?.comum;
+  const pessoas = pnl?.pessoas;
   const carteira = data.crescimento?.carteira.porArea ?? [];
-  const totRec = verticais.reduce((s, v) => s + v.receita, 0);
-  const totDesp = verticais.reduce((s, v) => s + v.despesa, 0);
-  const recVerticais = verticais.filter((v) => v.receita > 0).sort((a, b) => b.receita - a.receita);
-  const naoId = verticais.find((v) => v.area === 'Não identificada')?.receita ?? 0;
-  const chart = recVerticais.map((v) => ({ area: v.area, receita: v.receita }));
+  const comReceita = verticais.filter((v) => v.entradas > 0).sort((a, b) => b.entradas - a.entradas);
+  const chart = comReceita.map((v) => ({ area: v.area, entradas: v.entradas }));
+  // meses que aparecem em comum/pessoas (pra tabela "fora das verticais")
+  const mesesFora = useMemo(() => {
+    const m = new Map<string, { label: string; comum: number; pessoas: number }>();
+    for (const x of comum?.porMes ?? []) { const r = m.get(x.mes) ?? { label: x.label, comum: 0, pessoas: 0 }; r.comum = x.valor; m.set(x.mes, r); }
+    for (const x of pessoas?.porMes ?? []) { const r = m.get(x.mes) ?? { label: x.label, comum: 0, pessoas: 0 }; r.pessoas = x.valor; m.set(x.mes, r); }
+    return [...m.entries()].map(([mes, r]) => ({ mes, ...r })).sort((a, b) => b.mes.localeCompare(a.mes));
+  }, [comum, pessoas]);
 
   // Unificado: entrar numa vertical mostra o financeiro completo da área aqui mesmo.
   if (sel && sel !== 'Não identificada') return (
@@ -2103,21 +2112,22 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
   return (
     <>
       <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-violet-50 to-white p-5 dark:border-zinc-800 dark:from-violet-900/15 dark:to-zinc-900">
-        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Layers className="h-5 w-5 text-[#7048E8]" /> Verticais por área</h2>
-        <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
-          Quanto cada área (<strong>Bancário</strong>, <strong>Previdenciário</strong>, <strong>Trabalhista</strong>…) traz de honorário recebido e quanto pesa de despesa. A receita é casada pelo cliente do processo; despesas gerais do escritório ficam fora das áreas.
+        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Layers className="h-5 w-5 text-[#7048E8]" /> Verticais — o que cada área custa e rende</h2>
+        <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-300">
+          Cada vertical é como um <strong>livro-razão próprio</strong>: quanto faturou (honorário <strong>inicial</strong> + <strong>êxito</strong>) e quanto custou de <strong>direto</strong> (agência + anúncios), <strong>mês a mês</strong>. Custos <strong>comuns</strong> do escritório (aluguel, contador, impostos, Claude…) e <strong>pró-labore</strong> ficam num balde à parte — <strong>não são rateados</strong> nas verticais. Clique numa vertical para abrir os meses.
         </p>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MiniStat label="Receita por área (honorários)" value={brl(totRec)} hint="recebido, casado por cliente" accent="#2F9E44" />
-        <MiniStat label="Despesa atribuída" value={brl(totDesp)} hint="repasses + geral" accent="#E03131" />
-        <MiniStat label="Áreas com receita" value={String(recVerticais.filter((v) => v.area !== 'Não identificada').length)} hint="verticais ativas" accent="#7048E8" />
-        <MiniStat label="Não identificada" value={brl(naoId)} hint="cliente sem processo casado" accent="#ADB5BD" />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <MiniStat label="Faturou (verticais)" value={brl(cons?.entradas ?? 0)} hint="honorários casados" accent="#2F9E44" />
+        <MiniStat label="Custo direto" value={brl(cons?.diretas ?? 0)} hint="agência + anúncios" accent="#E8590C" />
+        <MiniStat label="Comum (escritório)" value={brl(cons?.comum ?? 0)} hint="não rateado" accent="#228BE6" />
+        <MiniStat label="Pró-labore/retiradas" value={brl(cons?.pessoas ?? 0)} hint="pessoas" accent="#E64980" />
+        <MiniStat label="Resultado do escritório" value={brl(cons?.resultado ?? 0)} hint="faturou − direto − comum − pessoas" accent={(cons?.resultado ?? 0) >= 0 ? '#2F9E44' : '#E03131'} />
       </div>
 
-      {chart.length > 0 ? (
-        <Card title="Receita recebida por área" sub="honorários casados ao cliente do processo.">
+      {chart.length > 0 && (
+        <Card title="Faturamento por vertical" sub="honorários recebidos, casados ao cliente do processo.">
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chart} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
@@ -2125,31 +2135,87 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
                 <XAxis type="number" tickFormatter={(v) => brl(v)} tick={{ fontSize: 11 }} className="text-zinc-400" />
                 <YAxis type="category" dataKey="area" width={110} tick={{ fontSize: 12 }} className="text-zinc-500" />
                 <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="receita" name="Receita" radius={[0, 6, 6, 0]} barSize={22}>
+                <Bar dataKey="entradas" name="Faturou" radius={[0, 6, 6, 0]} barSize={22}>
                   {chart.map((c) => <Cell key={c.area} fill={corArea(c.area)} />)}
                 </Bar>
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         </Card>
-      ) : (
-        <Card title="Receita recebida por área"><p className="py-8 text-center text-sm text-zinc-400">Ainda não há honorários recebidos casados a um cliente com processo. Lance honorários com o nome do cliente igual ao do processo para verticalizar.</p></Card>
       )}
 
-      <Card title="Resumo por área" sub="clique numa área para ver o financeiro completo dela.">
-        <CsTabela cols={['Área', 'Receita', 'Despesa', 'Resultado', '% receita']} w0="34%">
-          {verticais.map((v) => (
-            <tr key={v.area} className={`border-t border-zinc-100 dark:border-zinc-800 ${v.area !== 'Não identificada' ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/40' : ''}`} onClick={() => v.area !== 'Não identificada' && setSel(v.area)}>
-              <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}{v.area !== 'Não identificada' && <ChevronRight className="h-3.5 w-3.5 text-zinc-300" />}</span></td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{v.receita ? brl2(v.receita) : '—'}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-rose-600">{v.despesa ? brl2(v.despesa) : '—'}</td>
-              <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${v.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(v.resultado)}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{totRec > 0 && v.receita > 0 ? `${Math.round((v.receita / totRec) * 100)}%` : '—'}</td>
-            </tr>
-          ))}
-          {verticais.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Sem dados de verticalização ainda.</td></tr>}
-        </CsTabela>
+      <Card title="Resumo por vertical" sub="clique numa vertical para abrir o livro-razão mês a mês (inicial × êxito × custo direto).">
+        <div className="overflow-x-auto scrollbar-thin">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 text-right font-medium">Casos</th><th className="px-2 py-1.5 text-right font-medium">Faturou</th><th className="px-2 py-1.5 text-right font-medium">Inicial</th><th className="px-2 py-1.5 text-right font-medium">Êxito</th><th className="px-2 py-1.5 text-right font-medium">Custo direto</th><th className="px-2 py-1.5 text-right font-medium">Resultado</th><th className="px-2 py-1.5 text-right font-medium">Margem</th></tr></thead>
+            <tbody>
+              {verticais.map((v) => (
+                <Fragment key={v.area}>
+                  <tr className="cursor-pointer border-t border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40" onClick={() => setExp(exp === v.area ? '' : v.area)}>
+                    <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><ChevronRight className={`h-3.5 w-3.5 text-zinc-400 transition ${exp === v.area ? 'rotate-90' : ''}`} /><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span></td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{v.nCasos}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{v.entradas ? brl2(v.entradas) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{v.inicial ? brl2(v.inicial) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-violet-600">{v.exito ? brl2(v.exito) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-rose-500">{v.diretas ? brl2(v.diretas) : '—'}</td>
+                    <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${v.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(v.resultado)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{v.margem != null ? `${Math.round(v.margem)}%` : '—'}</td>
+                  </tr>
+                  {exp === v.area && (
+                    <tr className="border-t border-zinc-100 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-800/30">
+                      <td colSpan={8} className="px-3 py-2.5">
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#7048E8]">Livro-razão da vertical · {v.area}</p>
+                        {(v.porMes?.length ?? 0) > 0 ? (
+                          <table className="w-full text-xs">
+                            <thead><tr className="text-left text-[10px] uppercase tracking-wide text-zinc-400"><th className="py-1 font-medium">Mês</th><th className="py-1 text-right font-medium">Faturou</th><th className="py-1 text-right font-medium">Inicial</th><th className="py-1 text-right font-medium">Êxito</th><th className="py-1 text-right font-medium">Custo direto</th><th className="py-1 text-right font-medium">Resultado</th></tr></thead>
+                            <tbody>
+                              {v.porMes!.map((m) => (
+                                <tr key={m.mes} className="border-t border-zinc-100 dark:border-zinc-800/70">
+                                  <td className="py-1 text-zinc-600 dark:text-zinc-300">{m.label}</td>
+                                  <td className="py-1 text-right tabular-nums text-emerald-600">{m.entradas ? brl2(m.entradas) : '—'}</td>
+                                  <td className="py-1 text-right tabular-nums text-zinc-500">{m.inicial ? brl2(m.inicial) : '—'}</td>
+                                  <td className="py-1 text-right tabular-nums text-violet-600">{m.exito ? brl2(m.exito) : '—'}</td>
+                                  <td className="py-1 text-right tabular-nums text-rose-500">{m.diretas ? brl2(m.diretas) : '—'}</td>
+                                  <td className={`py-1 text-right font-semibold tabular-nums ${m.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(m.resultado)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : <p className="text-xs text-zinc-400">Sem lançamentos com data nesta vertical ainda. Lance honorários (casados ao cliente do processo) e rateie as despesas de agência/anúncios pra ela.</p>}
+                        {(v.custos?.length ?? 0) > 0 && <p className="mt-2 text-[11px] text-zinc-400">Custos cadastrados (referência): {v.custos!.map((c) => `${c.label} ${brl2(c.valor)}`).join(' · ')}.</p>}
+                        <button onClick={(e) => { e.stopPropagation(); setSel(v.area); }} className="mt-2 text-xs font-medium text-[#228BE6] hover:underline">ver detalhe completo da vertical →</button>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+              {verticais.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-sm text-zinc-400">Sem dados de verticalização ainda. Lance honorários com o cliente do processo e rateie as despesas de agência/anúncios.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </Card>
+
+      {mesesFora.length > 0 && (
+        <Card title={<span className="flex items-center gap-2"><Banknote className="h-4 w-4 text-[#228BE6]" /> Fora das verticais (escritório)</span>}
+          sub="custos comuns (aluguel, contador, impostos, Claude…) e pró-labore — não entram no P&L de nenhuma vertical, por decisão sua.">
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Mês</th><th className="px-2 py-1.5 text-right font-medium">Comum (escritório)</th><th className="px-2 py-1.5 text-right font-medium">Pró-labore/retiradas</th><th className="px-2 py-1.5 text-right font-medium">Total fora</th></tr></thead>
+              <tbody>
+                {mesesFora.map((m) => (
+                  <tr key={m.mes} className="border-t border-zinc-100 dark:border-zinc-800">
+                    <td className="px-2 py-1.5 text-zinc-600 dark:text-zinc-300">{m.label}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-sky-600">{m.comum ? brl2(m.comum) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-pink-600">{m.pessoas ? brl2(m.pessoas) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(m.comum + m.pessoas)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr className="border-t-2 border-zinc-200 text-[13px] font-bold dark:border-zinc-700"><td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">Total</td><td className="px-2 py-1.5 text-right tabular-nums text-sky-600">{brl2(comum?.total ?? 0)}</td><td className="px-2 py-1.5 text-right tabular-nums text-pink-600">{brl2(pessoas?.total ?? 0)}</td><td className="px-2 py-1.5 text-right tabular-nums text-zinc-800 dark:text-zinc-100">{brl2((comum?.total ?? 0) + (pessoas?.total ?? 0))}</td></tr></tfoot>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {carteira.length > 0 && (
         <Card title="Carteira em processo por área" sub="honorário provável (valor da causa × chance de êxito × % do escritório) — ainda não é caixa.">
@@ -2162,26 +2228,6 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
               </tr>
             )); })()}
           </CsTabela>
-        </Card>
-      )}
-
-      {data.verticalPnL && data.verticalPnL.verticais.length > 0 && (
-        <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-[#15AABF]" /> Custo real por vertical</span>}
-          sub={`entradas × saídas com a estrutura compartilhada do escritório (${brl(data.verticalPnL.overheadTotal)}) rateada por nº de casos — mostra se cada área se paga.`}>
-          <CsTabela cols={['Área', 'Casos', 'Entradas', 'Diretas', 'Estrutura', 'Resultado', 'A caminho']} w0="22%">
-            {data.verticalPnL.verticais.map((v) => (
-              <tr key={v.area} className="border-t border-zinc-100 dark:border-zinc-800">
-                <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span></td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{v.nCasos}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{v.entradas ? brl2(v.entradas) : '—'}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-rose-500">{v.diretas ? brl2(v.diretas) : '—'}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-rose-400">{v.overhead ? brl2(v.overhead) : '—'}</td>
-                <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${v.resultado >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>{brl2(v.resultado)}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-violet-600">{v.projetado ? brl2(v.projetado) : '—'}</td>
-              </tr>
-            ))}
-          </CsTabela>
-          <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">Estrutura = aluguel, contador, OAB, suprimentos e demais custos compartilhados, rateados por nº de casos ativos. Custos diretos = honorário repassado ao cliente da área + pró-labore do advogado da vertical + os custos fixos que você lançar abaixo. Resultado negativo = a área ainda investe mais do que recebe (ex.: previdenciário de gratuidade, com retorno futuro em <strong>A caminho</strong>).</p>
         </Card>
       )}
 
