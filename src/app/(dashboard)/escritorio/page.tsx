@@ -220,7 +220,7 @@ export default function EscritorioPage() {
         />
 
         {/* Cultura (só leitura) — dá uma motivada na página principal. A edição fica em Estrutura › Escritório. */}
-        {(cur.cultura.manifesto || cur.cultura.missao || cur.cultura.visao || (cur.cultura.valores?.length ?? 0) > 0 || cur.cultura.rotina || cur.cultura.cultura) && (<>
+        {(cur.cultura.manifesto || cur.cultura.missao || cur.cultura.visao || (cur.cultura.valores?.length ?? 0) > 0 || cur.cultura.rotina) && (<>
           <h2 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Heart className="h-4 w-4 text-[#e64980]" /> Sobre a Frider Andrade</h2>
           {cur.cultura.manifesto && (
             <div className="relative mt-2 overflow-hidden rounded-2xl bg-gradient-to-br from-[#7048E8] via-[#5f3dd0] to-[#228BE6] p-5 text-white shadow-sm">
@@ -262,12 +262,6 @@ export default function EscritorioPage() {
                   ))}
                 </ul>
               </div>
-            </div>
-          )}
-          {cur.cultura.cultura && (
-            <div className={`${CARD} mt-3`}>
-              <p className={LABEL}>Como trabalhamos</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-200">{cur.cultura.cultura}</p>
             </div>
           )}
           <p className="mt-2 text-xs text-zinc-400">Os documentos oficiais (regimento, estatuto) ficam em <strong>Estrutura › Escritório</strong>.</p>

@@ -39,6 +39,16 @@ export interface Rh {
 // Campos que a IA consegue preencher a partir de um documento cadastral.
 export type FichaExtraida = Pick<Ficha, 'cpf' | 'rg' | 'nascimento' | 'estadoCivil' | 'endereco' | 'telefone'> & { nome?: string };
 
+// Aniversariante (visível a todos no Início do Hub) — só dia/mês + nome/foto, sem ano.
+export interface Aniversariante {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  dia: number;
+  mes: number;
+  diasAte: number; // 0 = hoje
+}
+
 export const rhService = {
   async get(): Promise<Rh> {
     const { data } = await api.get('/organizations/rh');
@@ -51,6 +61,11 @@ export const rhService = {
   // Extrai dados cadastrais de um documento (PDF/imagem/Word) com IA.
   async extrairFicha(input: { base64: string; mime: string; nomeArquivo: string }): Promise<FichaExtraida> {
     const { data } = await api.post('/organizations/rh/extrair-ficha', input);
+    return data.data ?? data;
+  },
+  // Aniversariantes do escritório (hoje + próximos 15 dias) — todos os membros veem.
+  async aniversarios(): Promise<{ aniversariantes: Aniversariante[] }> {
+    const { data } = await api.get('/organizations/rh/aniversarios');
     return data.data ?? data;
   },
 };

@@ -6,14 +6,16 @@ import { toast } from 'sonner';
 import {
   Users, UserPlus, KanbanSquare, Loader2, Plus, Trash2, X, Save, GripVertical,
   Mail, Phone, Star, Lock, MapPin, IdCard, FileText, ExternalLink,
-  Network, LayoutGrid, Sparkles, SlidersHorizontal, HandCoins, TrendingUp,
+  Network, LayoutGrid, Sparkles, SlidersHorizontal, HandCoins, TrendingUp, UploadCloud,
 } from 'lucide-react';
 import { SociosSection } from '@/features/financeiro/components/socios-divisao';
-import { rhService, type Rh, type Candidato, type Etapa, type Ficha } from '@/features/rh/services/rh.service';
+import { rhService, type Rh, type Candidato, type Etapa, type Ficha, type Documento } from '@/features/rh/services/rh.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { escritorioService, type Cargo, type Vertical, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
 import { financeiroService, type AcessoNivel } from '@/features/financeiro/services/financeiro.service';
+import { inboxService } from '@/features/inbox/services/inbox.service';
 import { DropZone } from '@/components/drop-zone';
+import { maskCpf, maskDataBR, maskTelefoneBR } from '@/lib/masks';
 import { useAuthStore } from '@/stores/auth-store';
 
 // Dados financeiros do colaborador editáveis no RH (refletem no módulo Financeiro).
@@ -358,20 +360,25 @@ function AcessosHonorariosTable({ team, honorariosPct, acessoFin, pessoas, cargo
 function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, honorariosPct, acessoFin, canEdit, onSaveFicha }: { team: Member[]; pessoas: Record<string, any>; cargos: Cargo[]; verticais: Vertical[]; cargoById: Record<string, any>; fichas: Record<string, Ficha>; honorariosPct: Record<string, number>; acessoFin: Record<string, AcessoNivel>; canEdit: boolean; onSaveFicha: (userId: string, ficha: Ficha, funcionais: Pick<PessoaInfo, 'cargoId' | 'atuacao' | 'conoscoDesde' | 'contratadaDesde'>, financeiro?: FinColaborador) => Promise<void> }) {
   const [fichaId, setFichaId] = useState<string | null>(null);
   const [view, setView] = useState<'cards' | 'org'>('cards');
+  const [addOpen, setAddOpen] = useState(false);
   const membro = team.find((m) => m.user.id === fichaId);
   return (
     <div className="mt-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-zinc-500">{team.length} {team.length === 1 ? 'pessoa' : 'pessoas'} no escritório · clique num colaborador para abrir a ficha completa.</p>
-        {/* Alternar entre cartões e organograma (hierarquia por cargo). */}
-        <div className="inline-flex shrink-0 rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
-          {([['cards', 'Cartões', LayoutGrid], ['org', 'Organograma', Network]] as const).map(([k, label, Icon]) => (
-            <button key={k} onClick={() => setView(k)} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition ${view === k ? 'bg-[#7048E8] text-white' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
-              <Icon className="h-3.5 w-3.5" /> {label}
-            </button>
-          ))}
+        <div className="flex shrink-0 items-center gap-2">
+          {canEdit && <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#5f3dd0]"><UserPlus className="h-3.5 w-3.5" /> Adicionar colaborador</button>}
+          {/* Alternar entre cartões e organograma (hierarquia por cargo). */}
+          <div className="inline-flex rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
+            {([['cards', 'Cartões', LayoutGrid], ['org', 'Organograma', Network]] as const).map(([k, label, Icon]) => (
+              <button key={k} onClick={() => setView(k)} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition ${view === k ? 'bg-[#7048E8] text-white' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+      {addOpen && <AddColaboradorModal onClose={() => setAddOpen(false)} />}
 
       {view === 'org' && <Organograma team={team} pessoas={pessoas} cargos={cargos} cargoById={cargoById} fichas={fichas} onOpen={setFichaId} />}
 
@@ -391,11 +398,12 @@ function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, hono
                   <p className="truncate text-xs text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p>
                 </div>
               </div>
+              {/* Ordem pedida no RH: CPF · Endereço · Email · Telefone */}
               <div className="mt-3 space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {ficha.cpf && <p className="flex items-center gap-1.5"><IdCard className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> CPF {ficha.cpf}</p>}
+                {ficha.endereco && <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#E64980]" /> <span className="truncate">{ficha.endereco}</span></p>}
                 <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{m.user.email}</span></p>
                 {ficha.telefone && <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 shrink-0 text-[#02883C]" /> {ficha.telefone}</p>}
-                {ficha.endereco && <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#E64980]" /> <span className="truncate">{ficha.endereco}</span></p>}
-                {ficha.cpf && <p className="flex items-center gap-1.5"><IdCard className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> CPF {ficha.cpf}</p>}
               </div>
               {(info.atuacao?.length ?? 0) > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
@@ -416,7 +424,7 @@ function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, hono
         })}
       </div>
       )}
-      <p className="mt-4 text-xs text-zinc-400">Para adicionar ou remover membros, use <strong>Configurações › Membros</strong> (ou o botão em Meu Espaço). As fotos aparecem no organograma, nos kanbans e onde mais o nome da pessoa aparecer.</p>
+      <p className="mt-4 text-xs text-zinc-400">Use <strong>Adicionar colaborador</strong> aqui em cima para cadastrar alguém novo. Para remover, mudar papel ou canais, vá em <strong>Configurações › Membros</strong>. As fotos aparecem no organograma, nos kanbans e onde mais o nome da pessoa aparecer.</p>
       {membro && (
         <FichaModal
           membro={membro}
@@ -432,6 +440,67 @@ function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, hono
           onSave={async (f, funcionais, financeiro) => { await onSaveFicha(membro.user.id, f, funcionais, financeiro); setFichaId(null); }}
         />
       )}
+    </div>
+  );
+}
+
+// Cadastro de um novo colaborador direto do RH (mesmo convite de Configurações › Membros).
+// Ao adicionar, ele já aparece na equipe, no organograma e recebe ficha para preencher.
+function AddColaboradorModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('AGENT');
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
+  const salvar = async () => {
+    if (!email.trim()) { toast.error('Informe o e-mail do colaborador'); return; }
+    setBusy(true);
+    try {
+      const r = await membersService.invite({ email: email.trim(), role });
+      await qc.invalidateQueries({ queryKey: ['org-members'] });
+      await qc.invalidateQueries({ queryKey: ['members'] });
+      if (r?.autoAccepted) {
+        toast.success('Colaborador adicionado! Abra a ficha dele para completar os dados.');
+        onClose();
+      } else {
+        setLink(`${window.location.origin}/register?invite=${r.token}`);
+        toast.success('Convite criado — mande o link para o colaborador.');
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao adicionar colaborador');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-3.5 dark:border-zinc-800">
+          <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><UserPlus className="h-4 w-4 text-[#7048E8]" /> Adicionar colaborador</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-3 p-5">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">É o mesmo cadastro de <strong>Configurações › Membros</strong> — não precisa fazer duas vezes. Ao adicionar, o colaborador já aparece no RH e no organograma. O nome vem quando ele aceitar o convite (ou renomeie depois em Configurações › Membros).</p>
+          <div><p className={LABEL}>E-mail</p><input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && salvar()} type="email" placeholder="email@exemplo.com" className={`${INPUT} mt-1`} /></div>
+          <div>
+            <p className={LABEL}>Papel</p>
+            <select value={role} onChange={(e) => setRole(e.target.value)} className={`${INPUT} mt-1`}>
+              <option value="AGENT">Associado / Agente</option>
+              <option value="ADMIN">Sócio / Admin</option>
+            </select>
+          </div>
+          {link && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#7048E8]/25 bg-[#7048E8]/5 p-2.5 dark:bg-[#7048E8]/10">
+              <p className="min-w-0 flex-1 truncate text-xs text-zinc-600 dark:text-zinc-300">{link}</p>
+              <button onClick={() => { navigator.clipboard.writeText(link); toast.success('Link copiado!'); }} className="shrink-0 rounded-md bg-[#7048E8] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#5f3dd0]">Copiar</button>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
+          <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">{link ? 'Fechar' : 'Cancelar'}</button>
+          {!link && <button onClick={salvar} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Adicionar</button>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -580,6 +649,28 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
   const updDoc = (id: string, p: Partial<{ nome: string; url: string }>) => set({ documentos: (f.documentos ?? []).map((d) => (d.id === id ? { ...d, ...p } : d)) });
   const delDoc = (id: string) => set({ documentos: (f.documentos ?? []).filter((d) => d.id !== id) });
 
+  // Upload de verdade: sobe o arquivo (mesmo storage das mídias) e guarda a URL no documento.
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const [upBusy, setUpBusy] = useState(false);
+  const subirDocs = async (files: File[]) => {
+    if (!files.length) return;
+    setUpBusy(true);
+    try {
+      const novos: Documento[] = [];
+      for (const file of files) {
+        const up = await inboxService.uploadMedia(file);
+        novos.push({ id: rid(), nome: file.name.replace(/\.[^.]+$/, ''), url: up.url });
+      }
+      set({ documentos: [...(f.documentos ?? []), ...novos] });
+      toast.success(novos.length > 1 ? `${novos.length} documentos enviados` : 'Documento enviado — salve a ficha.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui subir o documento.');
+    } finally {
+      setUpBusy(false);
+      if (uploadRef.current) uploadRef.current.value = '';
+    }
+  };
+
   // Importa um documento (RG/CPF/CNH/comprovante/contrato) e a IA preenche a ficha.
   const docRef = useRef<HTMLInputElement>(null);
   const [imp, setImp] = useState(false);
@@ -591,12 +682,12 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
       const p = await rhService.extrairFicha({ base64, mime: file.type, nomeArquivo: file.name });
       // Só preenche o que veio do documento; não apaga o que já estava.
       set({
-        cpf: p.cpf || f.cpf,
+        cpf: p.cpf ? maskCpf(p.cpf) : f.cpf,
         rg: p.rg || f.rg,
-        nascimento: p.nascimento || f.nascimento,
+        nascimento: p.nascimento ? maskDataBR(p.nascimento) : f.nascimento,
         estadoCivil: p.estadoCivil || f.estadoCivil,
         endereco: p.endereco || f.endereco,
-        telefone: p.telefone || f.telefone,
+        telefone: p.telefone ? maskTelefoneBR(p.telefone) : f.telefone,
       });
       toast.success('Dados preenchidos do documento — confira e salve.');
     } catch (e: any) {
@@ -632,12 +723,12 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
-            <div><p className={LABEL}>Telefone</p><input value={f.telefone ?? ''} onChange={(e) => set({ telefone: e.target.value })} disabled={!canEdit} placeholder="(44) 99999-9999" className={`${INPUT} mt-1`} /></div>
-            <div><p className={LABEL}>Nascimento</p><input value={f.nascimento ?? ''} onChange={(e) => set({ nascimento: e.target.value })} disabled={!canEdit} placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /></div>
-            <div><p className={LABEL}>CPF</p><input value={f.cpf ?? ''} onChange={(e) => set({ cpf: e.target.value })} disabled={!canEdit} placeholder="000.000.000-00" className={`${INPUT} mt-1`} /></div>
+            <div><p className={LABEL}>Telefone</p><input value={f.telefone ?? ''} onChange={(e) => set({ telefone: maskTelefoneBR(e.target.value) })} disabled={!canEdit} inputMode="tel" placeholder="+55 (44) 99185-6865" className={`${INPUT} mt-1`} /></div>
+            <div><p className={LABEL}>Nascimento</p><input value={f.nascimento ?? ''} onChange={(e) => set({ nascimento: maskDataBR(e.target.value) })} disabled={!canEdit} inputMode="numeric" placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /><p className="mt-1 text-[10px] text-zinc-400">Vira parabéns com confete no Início do Hub no dia. 🎉</p></div>
+            <div><p className={LABEL}>CPF</p><input value={f.cpf ?? ''} onChange={(e) => set({ cpf: maskCpf(e.target.value) })} disabled={!canEdit} inputMode="numeric" placeholder="000.000.000-00" className={`${INPUT} mt-1`} /></div>
             <div><p className={LABEL}>RG</p><input value={f.rg ?? ''} onChange={(e) => set({ rg: e.target.value })} disabled={!canEdit} className={`${INPUT} mt-1`} /></div>
             <div><p className={LABEL}>Estado civil</p><input value={f.estadoCivil ?? ''} onChange={(e) => set({ estadoCivil: e.target.value })} disabled={!canEdit} className={`${INPUT} mt-1`} /></div>
-            <div><p className={LABEL}>Admissão / associação</p><input value={f.admissao ?? ''} onChange={(e) => set({ admissao: e.target.value })} disabled={!canEdit} placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /></div>
+            <div><p className={LABEL}>Admissão / associação</p><input value={f.admissao ?? ''} onChange={(e) => set({ admissao: maskDataBR(e.target.value) })} disabled={!canEdit} inputMode="numeric" placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /></div>
           </div>
           <div><p className={LABEL}>Endereço completo</p><input value={f.endereco ?? ''} onChange={(e) => set({ endereco: e.target.value })} disabled={!canEdit} placeholder="Rua, nº, bairro, cidade/UF, CEP" className={`${INPUT} mt-1`} /></div>
           <div><p className={LABEL}>Contrato / cargo</p><input value={f.contrato ?? ''} onChange={(e) => set({ contrato: e.target.value })} disabled={!canEdit} placeholder="ex.: Advogado Associado (contrato de associação) — link do Drive" className={`${INPUT} mt-1`} /></div>
@@ -703,9 +794,23 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
           </div>
 
           <div>
-            <div className="flex items-center justify-between"><p className={LABEL}>Documentos</p>{canEdit && <button onClick={addDoc} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar</button>}</div>
-            <div className="mt-1 space-y-1.5">
-              {(f.documentos ?? []).length === 0 && <p className="text-xs text-zinc-400">Nenhum documento. Cole os links do Drive (RG, CPF, contrato, comprovantes…).</p>}
+            <div className="flex items-center justify-between">
+              <p className={LABEL}>Documentos pessoais</p>
+              {canEdit && (
+                <div className="flex items-center gap-3">
+                  <input ref={uploadRef} type="file" accept=".pdf,.doc,.docx,image/*" multiple className="hidden" onChange={(e) => subirDocs(Array.from(e.target.files ?? []))} />
+                  <button onClick={() => uploadRef.current?.click()} disabled={upBusy} className="inline-flex items-center gap-1 text-xs font-semibold text-[#7048E8] hover:underline disabled:opacity-60">{upBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />} Subir arquivo</button>
+                  <button onClick={addDoc} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Colar link</button>
+                </div>
+              )}
+            </div>
+            {canEdit && (
+              <DropZone accept=".pdf,.doc,.docx,image/*" multiple disabled={upBusy} onFiles={(fs) => subirDocs(fs)} className="mt-1.5 block" overlayLabel="Soltar documentos">
+                <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/60 px-3 py-2 text-center text-[11px] text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950/40">Arraste RG, CPF, CNH, comprovantes ou contrato aqui — ou use “Subir arquivo”.</div>
+              </DropZone>
+            )}
+            <div className="mt-1.5 space-y-1.5">
+              {(f.documentos ?? []).length === 0 && <p className="text-xs text-zinc-400">Nenhum documento ainda. Suba os arquivos ou cole links do Drive.</p>}
               {(f.documentos ?? []).map((d) => (
                 <div key={d.id} className="flex items-center gap-1.5">
                   <input value={d.nome} onChange={(e) => updDoc(d.id, { nome: e.target.value })} disabled={!canEdit} placeholder="Nome (ex.: RG)" className={`${INPUT} w-1/3`} />
@@ -829,7 +934,7 @@ function CandidatoModal({ etapas, candidato, onClose, onSave, onDelete }: { etap
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div><p className={LABEL}>E-mail</p><input value={f.email ?? ''} onChange={(e) => set({ email: e.target.value })} className={`${INPUT} mt-1`} /></div>
-            <div><p className={LABEL}>Telefone</p><input value={f.telefone ?? ''} onChange={(e) => set({ telefone: e.target.value })} className={`${INPUT} mt-1`} /></div>
+            <div><p className={LABEL}>Telefone</p><input value={f.telefone ?? ''} onChange={(e) => set({ telefone: maskTelefoneBR(e.target.value) })} inputMode="tel" placeholder="+55 (44) 99185-6865" className={`${INPUT} mt-1`} /></div>
           </div>
           <div><p className={LABEL}>Currículo (link ou observação)</p><input value={f.curriculo ?? ''} onChange={(e) => set({ curriculo: e.target.value })} placeholder="link do Drive, LinkedIn…" className={`${INPUT} mt-1`} /></div>
           <div><p className={LABEL}>Nota (prova/entrevista, 0–10)</p><input type="number" min={0} max={10} value={f.nota ?? ''} onChange={(e) => set({ nota: e.target.value === '' ? undefined : Math.max(0, Math.min(10, Number(e.target.value))) })} className={`${INPUT} mt-1`} /></div>

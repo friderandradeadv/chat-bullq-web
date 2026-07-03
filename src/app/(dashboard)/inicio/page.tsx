@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -39,9 +39,12 @@ import {
   TrendingUp,
   CircleDollarSign,
   HandCoins,
+  Cake,
+  Gift,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
+import { rhService } from '@/features/rh/services/rh.service';
 import { tasksService } from '@/features/tasks/services/tasks.service';
 import { deadlinesService } from '@/features/deadlines/services/deadlines.service';
 import { calendarService } from '@/features/calendar/services/calendar.service';
@@ -874,6 +877,65 @@ function HojeNoMundo() {
   );
 }
 
+// ── Aniversariantes do escritório (todos veem) — confete no dia + próximos ──
+function Aniversariantes({ onCelebrate }: { onCelebrate: () => void }) {
+  const { user } = useAuthStore();
+  const q = useQuery({ queryKey: ['hub', 'aniversarios'], queryFn: () => rhService.aniversarios(), staleTime: 300_000, retry: 1 });
+  const lista = q.data?.aniversariantes ?? [];
+  const hoje = lista.filter((a) => a.diasAte === 0);
+  const proximos = lista.filter((a) => a.diasAte > 0).slice(0, 5);
+  const fired = useRef(false);
+  useEffect(() => {
+    if (hoje.length && !fired.current) { fired.current = true; onCelebrate(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q.data]);
+  if (!lista.length) return null;
+
+  const primeiro = (n: string) => n.split(' ').filter(Boolean)[0] ?? n;
+  const ehVoce = (uid: string) => uid === user?.id;
+  const quando = (d: number) => (d === 1 ? 'amanhã' : `em ${d} dias`);
+  const Ava = ({ a, size }: { a: { name: string; avatarUrl: string | null }; size: number }) =>
+    a.avatarUrl
+      ? <img src={a.avatarUrl} alt={a.name} className="shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-zinc-900" style={{ width: size, height: size }} />
+      : <span className="flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white dark:ring-zinc-900" style={{ width: size, height: size, fontSize: size * 0.4, background: avatarColor(a.name) }}>{avatarInitials(a.name)}</span>;
+
+  const nomesHoje = hoje.map((a) => (ehVoce(a.userId) ? 'você' : primeiro(a.name)));
+  const tituloHoje = hoje.length === 1
+    ? (ehVoce(hoje[0].userId) ? 'Feliz aniversário, você! 🎂' : `Hoje é aniversário de ${primeiro(hoje[0].name)}! 🎂`)
+    : `Hoje temos aniversariantes: ${nomesHoje.join(', ').replace(/, ([^,]*)$/, ' e $1')}! 🎂`;
+
+  return (
+    <div className="welcome-pop mt-4 w-full" style={{ animationDelay: '0.18s' }}>
+      {hoje.length > 0 && (
+        <div className="relative overflow-hidden rounded-2xl border border-[#E64980]/30 bg-gradient-to-r from-[#E64980]/12 via-[#7048E8]/12 to-[#F59F00]/12 p-4 text-left dark:border-[#E64980]/30">
+          <div className="flex items-center gap-3">
+            <div className="flex -space-x-2">{hoje.map((a) => <Ava key={a.userId} a={a} size={44} />)}</div>
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 text-base font-bold text-zinc-800 dark:text-zinc-100"><Cake className="h-4 w-4 shrink-0 text-[#E64980]" /> {tituloHoje}</p>
+              <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-300">{hoje.some((a) => ehVoce(a.userId)) ? 'Que seu dia seja tão especial quanto você é pra este time. 🎉✨' : 'Passa lá pra dar um abraço e desejar um feliz aniversário! 🎉'}</p>
+            </div>
+            <PartyPopper className="hidden h-8 w-8 shrink-0 text-[#F59F00] sm:block" />
+          </div>
+        </div>
+      )}
+      {proximos.length > 0 && (
+        <div className={`rounded-2xl border border-zinc-200/70 bg-white/70 p-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60 ${hoje.length > 0 ? 'mt-3' : ''}`}>
+          <p className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-zinc-400"><Gift className="h-3.5 w-3.5 text-[#7048E8]" /> Próximos aniversários</p>
+          <div className="flex flex-wrap gap-2">
+            {proximos.map((a) => (
+              <div key={a.userId} className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white py-1 pl-1 pr-3 dark:border-zinc-700 dark:bg-zinc-900">
+                <Ava a={a} size={26} />
+                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-200">{ehVoce(a.userId) ? 'Você' : primeiro(a.name)}</span>
+                <span className="text-[11px] text-zinc-400">{String(a.dia).padStart(2, '0')}/{String(a.mes).padStart(2, '0')} · {quando(a.diasAte)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function InicioPage() {
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
@@ -1027,6 +1089,9 @@ export default function InicioPage() {
             <StatCard href="/processos" icon={Briefcase} color="#7048E8" value={stats.processos} label="processos seus" on={statOn} />
           </div>
         )}
+
+        {/* Aniversariantes do escritório — confete no dia + próximos */}
+        {mounted && <Aniversariantes onCelebrate={() => setBurst((b) => b + 1)} />}
 
         {/* Seu financeiro (visão pessoal do advogado — sócio e associado) */}
         {mounted && <MeuFinanceiro on={statOn} enabled={!!user?.id} />}
