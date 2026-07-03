@@ -160,7 +160,6 @@ function ConfiguracoesView({ team, members, honorariosPct, acessoFin, pessoas, c
 
 // Custos rateados que cada colaborador assume (alimenta as SAÍDAS do holerite em Meu Espaço).
 const AREAS_VERT = ['Bancário', 'Previdenciário', 'Trabalhista', 'Consumidor', 'Cível'];
-const brlInt = (n: number) => 'R$ ' + Math.round(n).toLocaleString('pt-BR');
 function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[]; cargoById: Record<string, any>; pessoas: Record<string, any>; canEdit: boolean }) {
   const qc = useQueryClient();
   const { data: cfg } = useQuery({ queryKey: ['financeiro', 'custos-pessoa'], queryFn: () => financeiroService.getCustosPessoa() });
@@ -177,8 +176,6 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
     for (const [area, linhas] of Object.entries(vcfg?.verticalCustos ?? {})) m[area] = (linhas ?? []).filter((l) => l.label).map((l) => ({ label: l.label, valor: Number(l.valor) || 0 }));
     return m;
   }, [vcfg]);
-  // base em R$ de uma linha: se tem label, o valor daquela linha; senão, o total da vertical.
-  const baseDe = (area: string, label: string) => label ? (custoLinhas[area] ?? []).filter((l) => l.label === label).reduce((s, l) => s + l.valor, 0) : (custoFixo[area] ?? 0);
   const [draft, setDraft] = useState<Record<string, { area: string; label: string; pct: string }[]>>({});
   useEffect(() => { if (cfg?.custosPessoa) setDraft(Object.fromEntries(Object.entries(cfg.custosPessoa).map(([k, v]) => [k, (v ?? []).map((x) => ({ area: x.area, label: x.label ?? '', pct: String(x.pct) }))]))); }, [cfg]);
   const [saving, setSaving] = useState(false);
@@ -220,8 +217,6 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
                   {r.map((x, i) => {
                     const pctN = Math.max(0, Math.min(100, Number(x.pct) || 0));
                     const linhas = custoLinhas[x.area] ?? [];
-                    const base = baseDe(x.area, x.label);
-                    const temBase = base > 0;
                     const alvo = x.label || (x.area ? `${x.area} (inteira)` : '');
                     return (
                     <div key={i}>
@@ -230,7 +225,7 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
                         {/* Linha de custo específica da vertical (ex.: Agência 1/3, Anúncios REPB) — ou a vertical inteira. */}
                         <select value={x.label} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, label: e.target.value } : y))} disabled={!canEdit || linhas.length === 0} className="min-w-[9rem] flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 disabled:opacity-50">
                           <option value="">{linhas.length ? 'Vertical inteira' : 'Vertical inteira (sem linhas)'}</option>
-                          {linhas.map((l) => <option key={l.label} value={l.label}>{l.label} · {brlInt(l.valor)}</option>)}
+                          {linhas.map((l) => <option key={l.label} value={l.label}>{l.label}</option>)}
                         </select>
                         <div className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
                           <input value={x.pct} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, pct: e.target.value.replace(/[^\d]/g, '').slice(0, 3) } : y))} disabled={!canEdit} inputMode="numeric" className="w-10 bg-transparent text-right text-sm tabular-nums outline-none" />
@@ -242,7 +237,6 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
                       {x.area && (
                         <p className="mt-1 pl-1 text-[11px] text-zinc-500 dark:text-zinc-400">
                           Banca <span className="font-semibold text-[#7048E8]">{pctN}%</span> de <span className="font-medium">{alvo}</span> — o valor entra no holerite conforme o que você <strong>lançar no mês</strong> (recalcula sozinho).
-                          {temBase && <span className="text-zinc-400"> Referência hoje: ≈ {brlInt(base * pctN / 100)}.</span>}
                         </p>
                       )}
                     </div>
