@@ -17,13 +17,13 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#ffffff',
     lang: 'pt-BR',
     dir: 'ltr',
-    // ?v=3 = ícone dark (cinza escuro #26262a, "FA." clara centralizada pelas
+    // ?v=3 = ícone dark (cinza escuro #1e1e22, "FA." clara centralizada pelas
     // letras). O sufixo força navegador/instalação a rebaixar o cache anterior.
     icons: [
-      { src: '/icon-192.png?v=3', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icon-512.png?v=3', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icon-192.png?v=4', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icon-512.png?v=4', sizes: '512x512', type: 'image/png', purpose: 'any' },
       {
-        src: '/icon-maskable-512.png?v=3',
+        src: '/icon-maskable-512.png?v=4',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',

@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     ],
     // Ícone da tela inicial no iOS (dark: cinza escuro, "FA." clara centralizada).
     // ?v=3 força o iOS a buscar o novo ao re-adicionar à tela inicial.
-    apple: '/apple-touch-icon.png?v=3',
+    apple: '/apple-touch-icon.png?v=4',
   },
   // iOS: abre em tela cheia ("standalone") quando adicionado à tela inicial.
   appleWebApp: {
