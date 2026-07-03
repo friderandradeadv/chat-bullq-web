@@ -589,6 +589,9 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   }, [txs]);
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  // Lançamentos com o rateio (verticais/honorários) expandido no livro-razão.
+  const [rvOpen, setRvOpen] = useState<Set<string>>(new Set());
+  const toggleRv = (id: string) => setRvOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const [importing, setImporting] = useState(false);
   const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: orgName, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', rateioVerticais: [], contactId: '', caseId: '', procLabel: '' });
@@ -712,8 +715,16 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
               {aberto && (() => {
                 const linha = (t: FinTransacao) => {
                   const st = txStatus(t);
+                  const rv = t.rateioVerticais ?? [];
+                  const sp = (t.split ?? []).filter((s) => s.tipo !== 'escritorio');
+                  const temRv = rv.length > 0;
+                  const temSplit = sp.length > 0;
+                  const podeExpandir = temRv || temSplit;
+                  const open = podeExpandir && rvOpen.has(t.id!);
+                  const escrit = Math.abs(t.valor) - sp.reduce((a, s) => a + (Number(s.valor) || 0), 0);
                   return (
-                      <div key={t.id} className="group flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-sm dark:border-zinc-800/70">
+                    <div key={t.id} className="border-t border-zinc-100 dark:border-zinc-800/70">
+                      <div className="group flex items-center gap-2 px-3 py-1.5 text-sm">
                         <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{((!ehLiquidado(st) && t.vencimento) ? t.vencimento : t.data).slice(0, 5)}</span>
                         {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -722,7 +733,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                           {t.responsavel ? <span className="hidden shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 lg:inline-flex">{t.responsavel.split(' ')[0]}</span> : null}
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
-                          {(t.rateioVerticais?.length ?? 0) > 0 ? <span className="shrink-0 rounded bg-[#7048E8]/10 px-1 text-[9px] font-semibold text-[#7048E8]" title={(t.rateioVerticais ?? []).map((x) => `${x.area}: ${brl2(x.valor)}`).join(' · ')}>rateado</span> : null}
+                          {podeExpandir ? <button onClick={() => toggleRv(t.id!)} title="Ver o rateio" className="inline-flex shrink-0 items-center gap-0.5 rounded bg-[#7048E8]/10 px-1 text-[9px] font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/20">{temRv ? 'rateado' : 'rateio'} {open ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}</button> : null}
                         </span>
                         <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden truncate md:inline">{t.categoria}</span></span>
                         <span className="hidden w-20 shrink-0 text-center sm:block"><span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span></span>
@@ -733,6 +744,43 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </span>
                       </div>
+                      {open && (
+                        <div className="bg-[#7048E8]/[0.04] px-3 pb-2 pl-10 pt-1 dark:bg-[#7048E8]/[0.07]">
+                          {temRv && (
+                            <div className="mb-1.5">
+                              <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#7048E8]">Rateio entre verticais (custo por área)</p>
+                              <div className="space-y-0.5">
+                                {rv.map((x, i) => (
+                                  <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="truncate text-zinc-600 dark:text-zinc-300">{x.area}{x.label ? <span className="text-zinc-400"> · {x.label}</span> : null}</span>
+                                    <span className="shrink-0 font-medium tabular-nums text-rose-600">− {brl2(x.valor)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {temSplit && (
+                            <div>
+                              <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#7048E8]">Rateio dos honorários (quem recebeu)</p>
+                              <div className="space-y-0.5">
+                                {sp.map((s, i) => (
+                                  <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="truncate text-zinc-600 dark:text-zinc-300">{s.nome || 'Advogado'}</span>
+                                    <span className="shrink-0 font-medium tabular-nums text-emerald-600">{brl2(s.valor)}</span>
+                                  </div>
+                                ))}
+                                {escrit > 0.01 && (
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-zinc-600 dark:text-zinc-300">Escritório</span>
+                                    <span className="shrink-0 font-medium tabular-nums text-emerald-600">{brl2(escrit)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 };
                 // Separa de fato o que já caiu no caixa do que ainda é a receber / a pagar.
