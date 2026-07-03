@@ -312,11 +312,11 @@ export const financeiroService = {
     return data.data ?? data;
   },
   // ── Custos diretos por vertical (agência, anúncios…) ──
-  async getCustosPessoa(): Promise<{ custosPessoa: Record<string, { area: string; pct: number }[]> }> {
+  async getCustosPessoa(): Promise<{ custosPessoa: Record<string, { area: string; label?: string; pct: number }[]> }> {
     const { data } = await api.get('/financeiro/custos-pessoa');
     return data.data ?? data;
   },
-  async setCustosPessoa(custosPessoa: Record<string, { area: string; pct: number }[]>): Promise<{ ok: boolean }> {
+  async setCustosPessoa(custosPessoa: Record<string, { area: string; label?: string; pct: number }[]>): Promise<{ ok: boolean }> {
     const { data } = await api.patch('/financeiro/custos-pessoa', { custosPessoa });
     return data.data ?? data;
   },

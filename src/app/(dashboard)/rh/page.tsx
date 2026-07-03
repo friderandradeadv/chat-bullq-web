@@ -171,16 +171,24 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
     for (const [area, linhas] of Object.entries(vcfg?.verticalCustos ?? {})) m[area] = (linhas ?? []).reduce((s, l) => s + (Number(l.valor) || 0), 0);
     return m;
   }, [vcfg]);
-  const [draft, setDraft] = useState<Record<string, { area: string; pct: string }[]>>({});
-  useEffect(() => { if (cfg?.custosPessoa) setDraft(Object.fromEntries(Object.entries(cfg.custosPessoa).map(([k, v]) => [k, (v ?? []).map((x) => ({ area: x.area, pct: String(x.pct) }))]))); }, [cfg]);
+  // Linhas de custo por vertical (ex.: Bancário → ['Agência (1/3)', 'Anúncios REPB']) — pra mirar UMA linha.
+  const custoLinhas = useMemo(() => {
+    const m: Record<string, { label: string; valor: number }[]> = {};
+    for (const [area, linhas] of Object.entries(vcfg?.verticalCustos ?? {})) m[area] = (linhas ?? []).filter((l) => l.label).map((l) => ({ label: l.label, valor: Number(l.valor) || 0 }));
+    return m;
+  }, [vcfg]);
+  // base em R$ de uma linha: se tem label, o valor daquela linha; senão, o total da vertical.
+  const baseDe = (area: string, label: string) => label ? (custoLinhas[area] ?? []).filter((l) => l.label === label).reduce((s, l) => s + l.valor, 0) : (custoFixo[area] ?? 0);
+  const [draft, setDraft] = useState<Record<string, { area: string; label: string; pct: string }[]>>({});
+  useEffect(() => { if (cfg?.custosPessoa) setDraft(Object.fromEntries(Object.entries(cfg.custosPessoa).map(([k, v]) => [k, (v ?? []).map((x) => ({ area: x.area, label: x.label ?? '', pct: String(x.pct) }))]))); }, [cfg]);
   const [saving, setSaving] = useState(false);
   const rows = (uid: string) => draft[uid] ?? [];
-  const setRows = (uid: string, r: { area: string; pct: string }[]) => setDraft((d) => ({ ...d, [uid]: r }));
+  const setRows = (uid: string, r: { area: string; label: string; pct: string }[]) => setDraft((d) => ({ ...d, [uid]: r }));
   const salvar = async () => {
     setSaving(true);
     try {
-      const clean: Record<string, { area: string; pct: number }[]> = {};
-      for (const [k, v] of Object.entries(draft)) { const ls = v.filter((x) => x.area && Number(x.pct) > 0).map((x) => ({ area: x.area, pct: Math.max(0, Math.min(100, Number(x.pct) || 0)) })); if (ls.length) clean[k] = ls; }
+      const clean: Record<string, { area: string; label?: string; pct: number }[]> = {};
+      for (const [k, v] of Object.entries(draft)) { const ls = v.filter((x) => x.area && Number(x.pct) > 0).map((x) => ({ area: x.area, ...(x.label ? { label: x.label } : {}), pct: Math.max(0, Math.min(100, Number(x.pct) || 0)) })); if (ls.length) clean[k] = ls; }
       await financeiroService.setCustosPessoa(clean);
       await Promise.all([qc.invalidateQueries({ queryKey: ['financeiro', 'custos-pessoa'] }), qc.invalidateQueries({ queryKey: ['financeiro'] })]);
       toast.success('Custos por colaborador salvos');
@@ -192,8 +200,8 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><Network className="h-4 w-4 text-[#E64980]" /> Quem banca o custo de cada vertical</h3>
-          <p className="mt-0.5 text-sm text-zinc-500">O custo fixo de uma vertical (ex.: <strong>1/3 da agência</strong>, anúncios) é dividido entre quem atua nela. Aqui você diz que <strong>fatia (%)</strong> cada colaborador assume — vira a <strong>saída no holerite</strong> dele (Meu Espaço › Financeiro).</p>
-          <p className="mt-1 text-xs text-zinc-400">O valor em R$ vem de <a href="/financeiro" className="font-medium text-[#228BE6] hover:underline">Financeiro › Verticais</a> (custos por vertical). Ex.: <strong>Kauani → Bancário 50%</strong> = metade do 1/3 da agência.</p>
+          <p className="mt-0.5 text-sm text-zinc-500">Os custos fixos de uma vertical (ex.: <strong>1/3 da agência</strong>, anúncios) são divididos entre quem atua nela. Aqui você diz que <strong>fatia (%)</strong> de cada linha o colaborador assume — vira a <strong>saída no holerite</strong> dele (Meu Espaço › Financeiro).</p>
+          <p className="mt-1 text-xs text-zinc-400">Escolha a <strong>vertical inteira</strong> ou uma <strong>linha específica</strong>. Os valores em R$ vêm de <a href="/financeiro" className="font-medium text-[#228BE6] hover:underline">Financeiro › Verticais</a>. Ex.: <strong>Kauani → 50% de “Agência (1/3)” + 50% de “Anúncios REPB”</strong>.</p>
         </div>
         {canEdit && <button onClick={salvar} disabled={saving} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#E64980] px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button>}
       </div>
@@ -205,28 +213,35 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
             <div key={uid} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
               <div className="flex items-center justify-between">
                 <div><p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{m.user.name}</p><p className="text-[11px] text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p></div>
-                {canEdit && <button onClick={() => setRows(uid, [...r, { area: '', pct: '50' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> vertical</button>}
+                {canEdit && <button onClick={() => setRows(uid, [...r, { area: '', label: '', pct: '50' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> custo</button>}
               </div>
               {r.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {r.map((x, i) => {
                     const pctN = Math.max(0, Math.min(100, Number(x.pct) || 0));
-                    const fixo = custoFixo[x.area];
-                    const temFixo = fixo != null && fixo > 0;
+                    const linhas = custoLinhas[x.area] ?? [];
+                    const base = baseDe(x.area, x.label);
+                    const temBase = base > 0;
+                    const alvo = x.label || (x.area ? `${x.area} (inteira)` : '');
                     return (
                     <div key={i}>
-                      <div className="flex items-center gap-1.5">
-                        <input list="rh-frentes-custos" value={x.area} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: e.target.value } : y))} disabled={!canEdit} placeholder="vertical ou frente (ex.: REPB)" className={`${INPUT} flex-1`} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <input list="rh-frentes-custos" value={x.area} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: e.target.value, label: '' } : y))} disabled={!canEdit} placeholder="vertical ou frente (ex.: Bancário)" className={`${INPUT} min-w-[8rem] flex-1`} />
+                        {/* Linha de custo específica da vertical (ex.: Agência 1/3, Anúncios REPB) — ou a vertical inteira. */}
+                        <select value={x.label} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, label: e.target.value } : y))} disabled={!canEdit || linhas.length === 0} className="min-w-[9rem] flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 disabled:opacity-50">
+                          <option value="">{linhas.length ? 'Vertical inteira' : 'Vertical inteira (sem linhas)'}</option>
+                          {linhas.map((l) => <option key={l.label} value={l.label}>{l.label} · {brlInt(l.valor)}</option>)}
+                        </select>
                         <div className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
                           <input value={x.pct} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, pct: e.target.value.replace(/[^\d]/g, '').slice(0, 3) } : y))} disabled={!canEdit} inputMode="numeric" className="w-10 bg-transparent text-right text-sm tabular-nums outline-none" />
                           <span className="text-xs text-zinc-400">%</span>
                         </div>
                         {canEdit && <button onClick={() => setRows(uid, r.filter((_, j) => j !== i))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
                       </div>
-                      {/* Prévia em R$ — conecta direto ao custo fixo da vertical (Financeiro › Verticais). */}
-                      {x.area && (temFixo
-                        ? <p className="mt-1 pl-1 text-[11px] text-zinc-500 dark:text-zinc-400"><span className="font-semibold text-rose-600">≈ {brlInt(fixo * pctN / 100)}/mês</span> <span className="text-zinc-400">— {pctN}% de {brlInt(fixo)} (custo fixo de {x.area})</span></p>
-                        : <p className="mt-1 pl-1 text-[11px] text-amber-600 dark:text-amber-400">Sem custo fixo cadastrado para “{x.area}” — defina em <a href="/financeiro" className="font-medium underline">Financeiro › Verticais</a> para o valor entrar no holerite.</p>
+                      {/* Prévia em R$ — conecta direto ao custo (Financeiro › Verticais). */}
+                      {x.area && (temBase
+                        ? <p className="mt-1 pl-1 text-[11px] text-zinc-500 dark:text-zinc-400"><span className="font-semibold text-rose-600">≈ {brlInt(base * pctN / 100)}/mês</span> <span className="text-zinc-400">— {pctN}% de {brlInt(base)} ({alvo})</span></p>
+                        : <p className="mt-1 pl-1 text-[11px] text-amber-600 dark:text-amber-400">Sem custo cadastrado para “{alvo}” — defina em <a href="/financeiro" className="font-medium underline">Financeiro › Verticais</a> para o valor entrar no holerite.</p>
                       )}
                     </div>
                     );
