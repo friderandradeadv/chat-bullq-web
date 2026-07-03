@@ -201,7 +201,7 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><Network className="h-4 w-4 text-[#E64980]" /> Quem banca o custo de cada vertical</h3>
           <p className="mt-0.5 text-sm text-zinc-500">Os custos de uma vertical (ex.: <strong>1/3 da agência</strong>, tráfego) são divididos entre quem atua nela. Aqui você diz que <strong>fatia (%)</strong> de cada linha o colaborador assume — vira a <strong>saída no holerite</strong> dele <strong>no mês em que você lançar a despesa</strong> no livro-razão (marcando a linha).</p>
-          <p className="mt-1 text-xs text-zinc-400">Escolha a <strong>vertical inteira</strong> ou uma <strong>linha específica</strong>. Os valores de referência vêm de <a href="/financeiro" className="font-medium text-[#228BE6] hover:underline">Financeiro › Verticais</a>. Ex.: <strong>Kauani → 50% de “Agência 1/3” + 50% de “Tráfego Pago”</strong>.</p>
+          <p className="mt-1 text-xs text-zinc-400">É só <strong>percentual</strong> — o R$ <strong>recalcula sozinho</strong> pelo que você lançar (se o tráfego mudar de valor ou variar no mês, não precisa mexer aqui). Paga a mesma % de tudo da área? Use <strong>“Vertical inteira”</strong> (ex.: <strong>Kauani → Bancário 50%</strong>). Só use uma <strong>linha</strong> se a % for diferente por tipo de custo.</p>
         </div>
         {canEdit && <button onClick={salvar} disabled={saving} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#E64980] px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button>}
       </div>
@@ -238,10 +238,12 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
                         </div>
                         {canEdit && <button onClick={() => setRows(uid, r.filter((_, j) => j !== i))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
                       </div>
-                      {/* Prévia em R$ — referência (o real cai no holerite quando a despesa é lançada). */}
-                      {x.area && (temBase
-                        ? <p className="mt-1 pl-1 text-[11px] text-zinc-500 dark:text-zinc-400"><span className="font-semibold text-rose-600">≈ {brlInt(base * pctN / 100)}</span> <span className="text-zinc-400">— {pctN}% de {brlInt(base)} ({alvo}) · entra no holerite quando você lançar a despesa</span></p>
-                        : <p className="mt-1 pl-1 text-[11px] text-amber-600 dark:text-amber-400">Sem custo cadastrado para “{alvo}” — defina em <a href="/financeiro" className="font-medium underline">Financeiro › Verticais</a> como referência.</p>
+                      {/* Regra é só percentual — o R$ do holerite vem do que for LANÇADO no mês (não fica preso a valor fixo). */}
+                      {x.area && (
+                        <p className="mt-1 pl-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                          Banca <span className="font-semibold text-[#7048E8]">{pctN}%</span> de <span className="font-medium">{alvo}</span> — o valor entra no holerite conforme o que você <strong>lançar no mês</strong> (recalcula sozinho).
+                          {temBase && <span className="text-zinc-400"> Referência hoje: ≈ {brlInt(base * pctN / 100)}.</span>}
+                        </p>
                       )}
                     </div>
                     );
