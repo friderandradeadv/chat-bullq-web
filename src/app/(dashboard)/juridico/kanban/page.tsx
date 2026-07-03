@@ -390,6 +390,11 @@ function MultiSelect({
   );
 }
 
+// Quantos cards uma coluna monta de início. Colunas gordas (100+ cards) montando
+// tudo de uma vez — cada card é um draggable do dnd-kit — travavam a aba. O resto
+// entra sob demanda com "ver mais", sem perder nada.
+const COLUNA_INICIAL = 20;
+
 function Column({
   phase, items, phases, onMove, onOpen, onChanged, canRename, onRename,
 }: {
@@ -398,6 +403,11 @@ function Column({
   onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
+  const [limit, setLimit] = useState(COLUNA_INICIAL);
+  // Reseta o limite quando o conjunto de cards muda (filtro/refetch/troca de fase).
+  useEffect(() => { setLimit(COLUNA_INICIAL); }, [phase.key, items.length]);
+  const shown = items.length > limit ? items.slice(0, limit) : items;
+  const rest = items.length - shown.length;
   return (
     <div className="flex min-h-0 w-[280px] shrink-0 flex-col">
       {/* Header da fase (40px) — nome magenta (editável p/ OWNER) + badge */}
@@ -418,7 +428,15 @@ function Column({
             Vazio
           </p>
         )}
-        {items.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} onOpen={onOpen} onChanged={onChanged} />)}
+        {shown.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} onOpen={onOpen} onChanged={onChanged} />)}
+        {rest > 0 && (
+          <button
+            onClick={() => setLimit((l) => l + 50)}
+            className="rounded border border-dashed border-[#cfd6de] py-2 text-center text-xs font-medium text-[#4b5863] hover:bg-white dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            + {rest} mais
+          </button>
+        )}
       </div>
     </div>
   );
