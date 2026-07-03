@@ -823,12 +823,17 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // 2º grau (acórdão) vs 1º grau (sentença): pela instância do processo OU por
   // marcadores no título/dispositivo/recorte. Define quais recursos oferecer.
   const decisaoTxt = `${activity.title} ${activity.dispositivo ?? ''} ${activity.recorte ?? ''}`;
-  // A INSTÂNCIA do processo manda: 1º Grau só tem sentença (nunca acórdão), então
-  // quando ela é conhecida ('1º Grau') nunca é acórdão — evita o falso-positivo do
-  // ACORDAO_MARKER casar algo no recorte. Só usa o heurístico de texto quando a
-  // instância é desconhecida.
-  const isAcordao = isDecisaoBase && grade !== '1º Grau'
-    && (grade === '2º Grau' || ACORDAO_MARKER.test(decisaoTxt) || /ac[óo]rd[ãa]o/i.test(activity.title));
+  // Sinal FORTE: o título "Analisar acórdão" (posto pelo classificador do DJEN
+  // quando o recurso foi julgado) manda por cima da instância do processo — que no
+  // Astrea costuma ficar em "1º Grau" mesmo com o recurso já julgado no 2º grau
+  // (era o bug: acórdão da Tânia com instância 1º Grau caía nos botões de sentença).
+  // O heurístico de texto (ACORDAO_MARKER) segue guardado pelo gate de 1º grau, pra
+  // não dar falso-positivo casando "relator"/"acórdão" citado no recorte de sentença.
+  const isAcordao = isDecisaoBase && (
+    /ac[óo]rd[ãa]o/i.test(activity.title)
+    || grade === '2º Grau'
+    || (grade !== '1º Grau' && ACORDAO_MARKER.test(decisaoTxt))
+  );
   const isDecisaoAnalise = isDecisaoBase && (isDecisaoTitulo || isAcordao);
   const ementaAcordao = isAcordao ? extractEmentaClient(activity.recorte ?? activity.dispositivo) : null;
 
