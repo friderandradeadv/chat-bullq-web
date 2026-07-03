@@ -371,7 +371,7 @@ interface Editor {
   categoria: string; subtipo: 'inicial' | 'exito'; pagador: string; recebedor: string; valor: string;
   status: TxStatus; parcelas: string; repetir: 'nao' | 'mensal' | 'anual'; escopo: 'uma' | 'proximas'; split: SplitRow[];
   rateio: RateioForm; responsavelId: string; conta: string;
-  rateioVerticais: { area: string; valor: string }[]; // rateio de despesa entre verticais
+  rateioVerticais: { area: string; valor: string; label?: string }[]; // rateio de despesa entre verticais (label = linha do custo, ex.: Agência 1/3)
   contactId?: string; caseId?: string; procLabel?: string;
 }
 const RATEIO_VAZIO: RateioForm = { bruto: '', cliente: '', sucumbencia: '', honorarios: '' };
@@ -510,6 +510,14 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     for (const t of data.transacoes) for (const x of t.rateioVerticais ?? []) if (x.area) frentes.push(x.area);
     return [...new Set([...base, ...extra, ...frentes])].filter((a) => a && a !== 'Não identificada');
   }, [data.verticalPnL, data.crescimento, data.transacoes]);
+  // Linhas de custo cadastradas por vertical (ex.: Bancário → Agência 1/3, Tráfego Pago).
+  // Ao ratear uma despesa, marcar a linha faz a saída cair no holerite de quem a assume.
+  const { data: vcCfg } = useQuery({ queryKey: ['financeiro', 'vertical-custos'], queryFn: () => financeiroService.getVerticalCustos(), staleTime: 300_000 });
+  const linhasPorArea = useMemo(() => {
+    const m: Record<string, { label: string; valor: number }[]> = {};
+    for (const [area, linhas] of Object.entries(vcCfg?.verticalCustos ?? {})) m[area] = (linhas ?? []).filter((l) => l.label).map((l) => ({ label: l.label, valor: Number(l.valor) || 0 }));
+    return m;
+  }, [vcCfg]);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const { organizations, activeOrgId } = useAuthStore();
@@ -584,7 +592,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   const [importing, setImporting] = useState(false);
   const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: orgName, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', rateioVerticais: [], contactId: '', caseId: '', procLabel: '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor) })) });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
@@ -606,7 +614,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     if (!(v > 0)) { toast.error(rateio ? 'Preencha honorário e/ou sucumbência do escritório' : 'Informe um valor maior que zero'); return; }
     const liq = ehLiquidado(editor.status);
     const split = buildSplit(editor);
-    const rvArr = editor.tipo === 'despesa' ? editor.rateioVerticais.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor) })) : [];
+    const rvArr = editor.tipo === 'despesa' ? editor.rateioVerticais.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) })) : [];
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
@@ -879,18 +887,27 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 return (
                 <Field label="Ratear entre verticais (custo por área — opcional)">
                   <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
-                    <p className="text-[11px] text-zinc-400">A despesa aparece <strong>uma vez</strong> no livro-razão; cada área puxa a fatia (ex.: agência R$1.300 ÷ 3). Pode ser uma <strong>vertical</strong> (Bancário…) ou uma <strong>frente/campanha</strong> de anúncio (ex.: REPB).</p>
+                    <p className="text-[11px] text-zinc-400">A despesa aparece <strong>uma vez</strong> no livro-razão; cada área puxa a fatia (ex.: agência R$1.300 ÷ 3). Pode ser uma <strong>vertical</strong> (Bancário…) ou uma <strong>frente/campanha</strong> (ex.: REPB). Marque a <strong>linha</strong> (ex.: Agência 1/3) para a fatia cair no <strong>holerite</strong> de quem assume esse custo (RH › Configurações).</p>
                     <datalist id="fin-frentes-rateio">{areasVert.map((a) => <option key={a} value={a} />)}</datalist>
-                    {editor.rateioVerticais.map((x, i) => (
+                    {editor.rateioVerticais.map((x, i) => {
+                      const lns = linhasPorArea[x.area] ?? [];
+                      return (
                       <div key={i} className="flex flex-wrap items-center gap-1.5">
-                        <input list="fin-frentes-rateio" value={x.area} onChange={(e) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: e.target.value } : y) })} placeholder="vertical ou frente (ex.: REPB)" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                        <input list="fin-frentes-rateio" value={x.area} onChange={(e) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: e.target.value, label: '' } : y) })} placeholder="vertical ou frente (ex.: REPB)" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                        {lns.length > 0 && (
+                          <select value={x.label ?? ''} title="Linha do custo — quem assume essa linha (RH) vê a fatia no holerite deste mês" onChange={(e) => { const lbl = e.target.value; const ln = lns.find((l) => l.label === lbl); setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, label: lbl, valor: (lbl && ln && parseValor(y.valor) === 0) ? fmtMoney(ln.valor) : y.valor } : y) }); }} className="min-w-[8rem] flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                            <option value="">Linha (opcional)…</option>
+                            {lns.map((l) => <option key={l.label} value={l.label}>{l.label} · {brl2(l.valor)}</option>)}
+                          </select>
+                        )}
                         <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, valor: v } : y) })} /></div>
                         <button onClick={() => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                       </div>
-                    ))}
+                      );
+                    })}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => setEditor({ ...editor, rateioVerticais: [...editor.rateioVerticais, { area: '', valor: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar vertical</button>
+                        <button onClick={() => setEditor({ ...editor, rateioVerticais: [...editor.rateioVerticais, { area: '', valor: '', label: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar vertical</button>
                         {editor.rateioVerticais.length > 0 && total > 0 && <button onClick={dividirIgual} className="text-xs font-medium text-[#7048E8] hover:underline">dividir igual</button>}
                       </div>
                       {editor.rateioVerticais.length > 0 && <span className={`text-[11px] ${somaRV - total > 0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>rateado {brl2(somaRV)}{total > 0 ? ` de ${brl2(total)}` : ''}{somaRV - total > 0.01 ? ' · excede!' : (total - somaRV > 0.01 ? ` · ${brl2(total - somaRV)} no geral` : '')}</span>}
