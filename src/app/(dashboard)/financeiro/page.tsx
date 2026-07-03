@@ -520,6 +520,20 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   }, [vcCfg]);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+  const nomeUser = useMemo(() => Object.fromEntries(members.map((m) => [m.user.id, m.user.name])) as Record<string, string>, [members]);
+  // Quem assume cada custo (RH › Configurações). Cruza com o rateio pra mostrar,
+  // na expansão do lançamento, que sócio/associado paga que fatia de cada linha.
+  const { data: cpCfg } = useQuery({ queryKey: ['financeiro', 'custos-pessoa'], queryFn: () => financeiroService.getCustosPessoa(), staleTime: 300_000 });
+  const assumentesDe = (area: string, label?: string): { nome: string; pct: number }[] => {
+    const out: { nome: string; pct: number }[] = [];
+    for (const [uid, linhas] of Object.entries(cpCfg?.custosPessoa ?? {})) {
+      for (const c of linhas ?? []) {
+        // linha específica bate no label; "vertical inteira" (sem label) assume qualquer linha da área
+        if (c.area === area && (c.label ? c.label === label : true)) out.push({ nome: nomeUser[uid] || 'Colaborador', pct: c.pct });
+      }
+    }
+    return out;
+  };
   const { organizations, activeOrgId } = useAuthStore();
   const orgName = organizations.find((o) => o.id === activeOrgId)?.name ?? 'Escritório';
   // cliente → responsável (do processo) para sugestão automática nos honorários
@@ -749,13 +763,28 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                           {temRv && (
                             <div className="mb-1.5">
                               <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#7048E8]">Rateio entre verticais (custo por área)</p>
-                              <div className="space-y-0.5">
-                                {rv.map((x, i) => (
-                                  <div key={i} className="flex items-center justify-between gap-2 text-xs">
-                                    <span className="truncate text-zinc-600 dark:text-zinc-300">{x.area}{x.label ? <span className="text-zinc-400"> · {x.label}</span> : null}</span>
-                                    <span className="shrink-0 font-medium tabular-nums text-rose-600">− {brl2(x.valor)}</span>
+                              <div className="space-y-1">
+                                {rv.map((x, i) => {
+                                  const ass = assumentesDe(x.area, x.label);
+                                  return (
+                                  <div key={i}>
+                                    <div className="flex items-center justify-between gap-2 text-xs">
+                                      <span className="truncate text-zinc-600 dark:text-zinc-300">{x.area}{x.label ? <span className="text-zinc-400"> · {x.label}</span> : null}</span>
+                                      <span className="shrink-0 font-medium tabular-nums text-rose-600">− {brl2(x.valor)}</span>
+                                    </div>
+                                    {ass.length > 0 && (
+                                      <div className="ml-2 mt-0.5 space-y-0.5 border-l-2 border-[#7048E8]/20 pl-2">
+                                        {ass.map((a, j) => (
+                                          <div key={j} className="flex items-center justify-between gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                            <span className="truncate">{a.nome} banca {a.pct}%</span>
+                                            <span className="shrink-0 tabular-nums">− {brl2(x.valor * a.pct / 100)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
