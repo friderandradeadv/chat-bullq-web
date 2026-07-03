@@ -21,9 +21,9 @@ export const metadata: Metadata = {
       { url: '/favicon-light.png', media: '(prefers-color-scheme: light)' },
       { url: '/favicon-dark.png', media: '(prefers-color-scheme: dark)' },
     ],
-    // Ícone da tela inicial no iOS (dark: fundo preto, FA. clara centralizada).
-    // ?v=2 força o iOS a buscar o novo ao re-adicionar à tela inicial.
-    apple: '/apple-touch-icon.png?v=2',
+    // Ícone da tela inicial no iOS (dark: cinza escuro, "FA." clara centralizada).
+    // ?v=3 força o iOS a buscar o novo ao re-adicionar à tela inicial.
+    apple: '/apple-touch-icon.png?v=3',
   },
   // iOS: abre em tela cheia ("standalone") quando adicionado à tela inicial.
   appleWebApp: {
