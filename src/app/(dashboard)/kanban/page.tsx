@@ -157,7 +157,7 @@ export default function KanbanPage() {
   const totalCards = board?.columns.reduce((a, c) => a + c.count, 0) ?? 0;
 
   return (
-    <div className="flex h-full flex-col min-h-0">
+    <div className="flex h-full flex-col min-h-0 max-lg:overflow-y-auto">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
         <h1 className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
@@ -209,7 +209,7 @@ export default function KanbanPage() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className={cn('flex flex-1 gap-3 p-4 min-h-0', view === 'lista' ? 'flex-col overflow-y-auto' : 'overflow-x-auto')}>
+          <div className={cn('flex gap-3 p-4 lg:flex-1 lg:min-h-0', view === 'lista' ? 'flex-col lg:overflow-y-auto' : 'overflow-x-auto')}>
             {board.columns.map((col) => (
               <Column
                 key={col.id}
@@ -280,7 +280,7 @@ function Column({
         ref={setNodeRef}
         className={cn(
           'space-y-2 px-2 pb-2 transition-colors rounded-lg',
-          list ? 'min-h-[40px]' : 'flex-1 overflow-y-auto min-h-[80px]',
+          list ? 'min-h-[40px]' : 'min-h-[80px] lg:flex-1 lg:overflow-y-auto',
           isOver && 'bg-primary/[0.06] ring-1 ring-inset ring-primary/30',
         )}
       >

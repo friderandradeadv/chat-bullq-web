@@ -86,7 +86,7 @@ export default function TarefasPage() {
   };
 
   return (
-    <div className="flex h-full flex-col min-h-0">
+    <div className="flex h-full flex-col min-h-0 max-lg:overflow-y-auto">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
         <h1 className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
@@ -129,7 +129,7 @@ export default function TarefasPage() {
           }}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex flex-1 gap-3 overflow-x-auto p-4 min-h-0">
+          <div className="flex gap-3 overflow-x-auto p-4 lg:flex-1 lg:min-h-0">
             {COLUMNS.map((col) => (
               <Column
                 key={col}
@@ -173,7 +173,7 @@ function Column({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex-1 space-y-2 overflow-y-auto rounded-lg px-2 pb-2 min-h-[120px] transition-colors',
+          'space-y-2 rounded-lg px-2 pb-2 min-h-[120px] transition-colors lg:flex-1 lg:overflow-y-auto',
           isOver && 'bg-primary/[0.06] ring-1 ring-inset ring-primary/30',
         )}
       >

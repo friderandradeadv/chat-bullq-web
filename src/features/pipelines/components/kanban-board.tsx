@@ -130,7 +130,7 @@ export function KanbanBoard({ pipelineId }: Props) {
 
   return (
     <>
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col max-lg:overflow-y-auto">
         <div className="flex shrink-0 justify-end px-4 pt-3">
           <div className="inline-flex overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
             <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-primary text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
@@ -143,7 +143,7 @@ export function KanbanBoard({ pipelineId }: Props) {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div ref={dragScroll.ref} {...(view === 'lista' ? {} : dragScroll.handlers)} className={`flex min-h-0 flex-1 gap-3 px-4 pb-4 pt-2 ${view === 'lista' ? 'flex-col overflow-y-auto' : 'overflow-x-auto cursor-grab'}`}>
+          <div ref={dragScroll.ref} {...(view === 'lista' ? {} : dragScroll.handlers)} className={`flex gap-3 px-4 pb-4 pt-2 lg:min-h-0 lg:flex-1 ${view === 'lista' ? 'flex-col lg:overflow-y-auto' : 'overflow-x-auto cursor-grab'}`}>
             {board.stages.map((stage) => (
               <KanbanColumn
                 key={stage.id}

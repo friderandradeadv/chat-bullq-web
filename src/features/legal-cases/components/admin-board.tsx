@@ -97,7 +97,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   }, [filtered, colDefs, columnsFromPhases, data]);
 
   return (
-    <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto">
       <div className="shrink-0 border-b border-[#dbeaf5] px-6 pb-4 pt-6 dark:border-zinc-800">
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5" style={{ color: accent }} />
@@ -124,14 +124,14 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
           </div>
         </div>
       ) : (
-        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:pl-6">
+        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col) => (
             <div key={col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col">
               <div className="flex h-10 items-center gap-2 px-1">
                 <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
                 <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
               </div>
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border border-[#dcdfe5] bg-[#f2f2f2] px-1.5 pb-2 pt-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="flex flex-col gap-2 rounded border border-[#dcdfe5] bg-[#f2f2f2] px-1.5 pb-2 pt-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto dark:border-zinc-800 dark:bg-zinc-900/40">
                 {col.cards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
                 {col.cards.map((c) => <AdminCard key={c.id} c={c} onOpen={setOpenCaseId} />)}
               </div>

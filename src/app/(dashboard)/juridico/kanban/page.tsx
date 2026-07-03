@@ -258,7 +258,7 @@ export default function FaseJudicialKanbanPage() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200" style={{ fontFamily: INTER }}>
+    <div className="flex h-full flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto" style={{ fontFamily: INTER }}>
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 pt-6 pb-4 lg:px-6">
         <div className="flex items-center gap-2">
           <Columns3 className="h-5 w-5 text-[#e11970]" />
@@ -314,7 +314,7 @@ export default function FaseJudicialKanbanPage() {
         <CasesListView byPhase={byPhase} phases={visiblePhases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} />
@@ -409,7 +409,7 @@ function Column({
       </div>
       <div
         ref={setNodeRef}
-        className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border px-1.5 pb-2 pt-3 transition-colors ${
+        className={`flex flex-col gap-2 rounded border px-1.5 pb-2 pt-3 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${
           isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'
         }`}
       >

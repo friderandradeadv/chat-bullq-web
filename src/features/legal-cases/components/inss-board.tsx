@@ -139,7 +139,7 @@ export function InssBoard() {
   const active = inss.find((c) => c.id === activeId) ?? null;
 
   return (
-    <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto">
       <div className="shrink-0 border-b border-[#dbeaf5] px-4 pb-3 pt-6 lg:px-6 dark:border-zinc-800">
         <div className="flex items-center gap-2">
           <Stethoscope className="h-5 w-5" style={{ color: ACCENT }} />
@@ -174,7 +174,7 @@ export function InssBoard() {
         <CasesListView byPhase={listaByPhase} phases={listaPhases} onOpen={setOpenCaseId} accent={ACCENT} />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {COLS.map((col) => (
               <Column key={col.dropId} col={col} items={byRes[col.key]} onOpen={setOpenCaseId} onEntrarJudicial={entrarJudicial} />
             ))}
@@ -205,7 +205,7 @@ function Column({
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
       <div ref={setNodeRef}
-        className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded border px-1.5 pb-2 pt-3 transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
+        className={`flex flex-col gap-2 rounded border px-1.5 pb-2 pt-3 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((c) => <InssCard key={c.id} c={c} onOpen={onOpen} onEntrarJudicial={onEntrarJudicial} />)}
       </div>

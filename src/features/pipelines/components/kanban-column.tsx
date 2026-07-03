@@ -92,7 +92,7 @@ export function KanbanColumn({ stage, cards, onAddCard, onCardClick, list }: Pro
 
       <div
         ref={setNodeRef}
-        className={`space-y-2 rounded-b-lg p-2 transition-colors ${list ? 'min-h-[40px]' : 'flex-1 overflow-y-auto'} ${
+        className={`space-y-2 rounded-b-lg p-2 transition-colors ${list ? 'min-h-[40px]' : 'lg:flex-1 lg:overflow-y-auto'} ${
           isOver
             ? 'bg-primary/10 ring-2 ring-primary/30'
             : 'bg-zinc-50/40 dark:bg-zinc-900/40'
