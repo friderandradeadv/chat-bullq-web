@@ -189,14 +189,18 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   {(h.saidas?.length ?? 0) === 0 ? (
                     <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-400 dark:bg-zinc-800/40">Sem custos rateados neste mês. Configure quais verticais o colaborador assume em <strong>RH › Configurações</strong> (ex.: 1/3 da agência) — a fatia do mês aparece aqui.</p>
                   ) : (
-                    <div className="space-y-0.5">
+                    <div className="space-y-1">
                       {h.saidas.map((sd, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <span className="truncate text-zinc-600 dark:text-zinc-300">{sd.label}</span>
+                        <div key={i} className="flex items-start justify-between gap-2 text-sm">
+                          <span className="min-w-0 text-zinc-600 dark:text-zinc-300">
+                            <span className="block truncate">{sd.label}</span>
+                            {sd.base != null && sd.pct != null && <span className="block text-[11px] text-zinc-400">base {brl2(sd.base)} × {sd.pct}%{sd.area ? ` · ${sd.area}` : ''}</span>}
+                          </span>
                           <span className="shrink-0 font-medium tabular-nums text-rose-600">− {brl2(sd.valor)}</span>
                         </div>
                       ))}
                       <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-1 text-sm font-semibold dark:border-zinc-800"><span className="text-zinc-500">Total de saídas</span><span className="tabular-nums text-rose-600">− {brl2(h.saidaTot)}</span></div>
+                      <p className="pt-0.5 text-[11px] text-zinc-400">Cada saída = o que você assume daquela linha (definido no <strong>RH › Configurações</strong>) sobre o valor <strong>lançado no livro-razão</strong> naquele mês.</p>
                     </div>
                   )}
 
@@ -486,13 +490,22 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
               <p className="py-10 text-center text-sm text-zinc-400">Nenhum lançamento neste filtro.</p>
             ) : txs.map((t) => {
               const st = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
+              const fatia = t.minhaFatiaRateio; // despesa rateada: só a fatia é sua
+              const valorMostrado = fatia ? -fatia.valor : t.valor;
               return (
-                <div key={t.id} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
-                  <span className="w-12 shrink-0 text-xs tabular-nums text-zinc-400">{t.data.slice(0, 5)}</span>
-                  {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
-                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{t.pagador || t.recebedor || t.party || t.categoria}{t.parcelaNum ? <span className="ml-1 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}</span>
-                  <span className={`hidden shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:inline ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span>
-                  <span className={`w-24 shrink-0 text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
+                <div key={t.id} className="flex items-start gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
+                  <span className="mt-0.5 w-12 shrink-0 text-xs tabular-nums text-zinc-400">{t.data.slice(0, 5)}</span>
+                  {valorMostrado >= 0 ? <ArrowUpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />}
+                  <span className="min-w-0 flex-1 text-zinc-700 dark:text-zinc-300">
+                    <span className="flex items-center gap-1">
+                      <span className="truncate">{t.pagador || t.recebedor || t.party || t.categoria}</span>
+                      {fatia && <span className="shrink-0 rounded bg-[#7048E8]/10 px-1 text-[9px] font-semibold text-[#7048E8]" title="sua parte do rateio (definida no RH)">sua fatia</span>}
+                      {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
+                    </span>
+                    {fatia && <span className="block truncate text-[11px] text-zinc-400">{fatia.itens.map((x) => `${x.pct}% de ${brl2(x.base)}${x.label ? ` (${x.label})` : ` · ${x.area}`}`).join(' + ')}</span>}
+                  </span>
+                  <span className={`mt-0.5 hidden shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:inline ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span>
+                  <span className={`mt-0.5 w-24 shrink-0 text-right font-semibold tabular-nums ${valorMostrado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(valorMostrado)}</span>
                 </div>
               );
             })}

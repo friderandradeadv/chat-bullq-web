@@ -49,6 +49,8 @@ export interface FinTransacao {
   fonteImport?: string | null; // 'extrato' | 'asaas' | 'mercadopago' — veio de import (não é lançamento manual)
   faturaDe?: string | null; // id do cartão de origem (débito que migrou pra conta ao pagar a fatura)
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null; // rateio de despesa entre verticais
+  // fatia DESTA pessoa numa despesa rateada (Meu Espaço) — conforme os % do RH (custosPessoa)
+  minhaFatiaRateio?: { valor: number; itens: { area: string; label: string | null; base: number; pct: number; valor: number }[] } | null;
 }
 export interface FinInsight { nivel: 'critico' | 'alerta' | 'ok' | 'info'; titulo: string; texto: string }
 
@@ -111,7 +113,7 @@ export interface HoleriteMes {
   mes: string;
   entradas: { cliente: string; valor: number; data: string }[];
   entradaTot: number;
-  saidas: { label: string; valor: number }[];
+  saidas: { label: string; valor: number; area?: string; linha?: string | null; base?: number; pct?: number }[];
   saidaTot: number;
   retiradas: { desc: string; valor: number; data: string }[];
   retiradaTot: number;
