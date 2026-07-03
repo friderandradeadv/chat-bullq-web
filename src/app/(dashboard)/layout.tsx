@@ -2,15 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { SidebarLayout } from '@/components/ui/sidebar-layout';
-import { Navbar, NavbarSection, NavbarSpacer } from '@/components/ui/navbar';
 import { AppSidebar } from '@/components/layout/app-sidebar';
+import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
+import { Logo } from '@/components/brand/logo';
 import { useAuthStore } from '@/stores/auth-store';
 import { authService } from '@/features/auth/services/auth.service';
 import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sync';
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
 import { GlobalSearch } from '@/components/layout/global-search';
 import { ThemeToggle } from '@/features/auth/components/theme-toggle';
+import {
+  NotificationCenterProvider,
+  NotificationBell,
+} from '@/features/notifications/notification-center';
 
 // Bloquear o pai também bloqueia o filho (ex.: sem "Jurídico" → sem Análise/Cálculos).
 const MODULE_PARENT: Record<string, string> = { analise: 'juridico', calculos: 'juridico' };
@@ -102,22 +108,33 @@ export default function DashboardLayout({
     <SidebarLayout
       sidebar={<AppSidebar />}
       navbar={
-        <Navbar>
-          <NavbarSpacer />
-          <NavbarSection><></></NavbarSection>
-        </Navbar>
+        // Barra app do mobile (à direita do menu-hambúrguer): marca + tema.
+        <div className="flex items-center justify-between gap-2">
+          <Link href="/inicio" className="block">
+            <Logo size="sm" />
+          </Link>
+          <ThemeToggle className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
+        </div>
       }
     >
-      <div className="flex h-full flex-col">
-        <ToolFailureBanner />
-        {/* Barra de busca global central (estilo Astrea) — em cima de todas as telas.
-            Toggle de tema (só ícone Sol/Lua) ancorado no canto superior direito. */}
-        <div className="relative flex h-11 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5">
-          <GlobalSearch />
-          <ThemeToggle className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
+      <NotificationCenterProvider>
+        <div className="flex h-full flex-col">
+          <ToolFailureBanner />
+          {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
+              a barra de abas inferior, então esta faixa não aparece (fim do
+              empilhamento de 2 barras que dava cara de "web espremida"). */}
+          <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5 lg:flex">
+            <GlobalSearch />
+            <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
+              <NotificationBell />
+              <ThemeToggle className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
+            </div>
+          </div>
+          {/* Conteúdo — no mobile reserva espaço p/ a barra de abas (pb-tabbar). */}
+          <div className="min-h-0 flex-1 pb-tabbar lg:pb-0">{children}</div>
         </div>
-        <div className="flex-1 min-h-0">{children}</div>
-      </div>
+        <MobileTabBar />
+      </NotificationCenterProvider>
     </SidebarLayout>
   );
 }

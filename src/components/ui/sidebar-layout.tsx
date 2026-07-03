@@ -26,6 +26,15 @@ export function useSidebarCollapse() {
   return useContext(SidebarCollapseContext);
 }
 
+// Permite que a barra de abas inferior (mobile) abra o menu lateral.
+interface MobileNavCtx {
+  openSidebar: () => void;
+}
+const MobileNavContext = createContext<MobileNavCtx | null>(null);
+export function useMobileNav() {
+  return useContext(MobileNavContext);
+}
+
 interface SidebarLayoutProps {
   sidebar: ReactNode;
   navbar?: ReactNode;
@@ -51,6 +60,7 @@ export function SidebarLayout({
   };
 
   return (
+    <MobileNavContext.Provider value={{ openSidebar: () => setSidebarOpen(true) }}>
     <div className="relative isolate flex h-svh w-full bg-white max-lg:flex-col lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950">
       {/* Mobile sidebar overlay */}
       <Dialog open={sidebarOpen} onClose={setSidebarOpen} className="lg:hidden">
@@ -60,7 +70,7 @@ export function SidebarLayout({
         />
         <DialogPanel
           transition
-          className="fixed inset-y-0 left-0 w-full max-w-80 p-2 transition duration-300 ease-in-out data-[closed]:-translate-x-full"
+          className="fixed inset-y-0 left-0 w-full max-w-80 p-2 pt-safe pb-safe transition duration-300 ease-in-out data-[closed]:-translate-x-full"
         >
           <div className="flex h-full flex-col rounded-lg bg-white shadow-sm ring-1 ring-zinc-200 dark:bg-[#0d0d0d] dark:ring-white/10">
             <div className="-mb-3 px-4 pt-3">
@@ -122,8 +132,8 @@ export function SidebarLayout({
           collapsed ? "lg:pl-0" : "lg:pl-64"
         }`}
       >
-        {/* Mobile header */}
-        <div className="flex items-center gap-4 border-b border-zinc-950/5 px-4 py-2.5 dark:border-white/5 lg:hidden">
+        {/* Mobile header (barra app) — respeita a safe-area do topo (notch/ilha). */}
+        <div className="flex items-center gap-3 border-b border-zinc-950/5 px-4 py-2.5 pt-safe dark:border-white/5 lg:hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -143,5 +153,6 @@ export function SidebarLayout({
         </div>
       </main>
     </div>
+    </MobileNavContext.Provider>
   );
 }

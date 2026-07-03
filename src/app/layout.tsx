@@ -38,9 +38,21 @@ export const metadata: Metadata = {
   },
 };
 
-// Cor da barra de status/tema no modo instalado (Android/desktop PWA).
 export const viewport: Viewport = {
-  themeColor: '#ffffff',
+  width: 'device-width',
+  initialScale: 1,
+  // O conteúdo se estende sob a notch/ilha e a barra inferior; cada barra do
+  // app compensa com env(safe-area-inset-*). Sem isto o layout ficava "cortado"
+  // no iPhone (cara de web espremida). maximumScale/userScalable travam o zoom
+  // acidental por duplo-toque, deixando com toque de app nativo.
+  viewportFit: 'cover',
+  maximumScale: 1,
+  userScalable: false,
+  // Cor da barra de status/tema no PWA instalado — acompanha o tema do SO.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d0d0d' },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -76,7 +76,30 @@
   }
 }
 
+@layer base {
+  /* App-shell mobile: sem rubber-band branco no topo/base (dá cara de web), e
+     sem rolagem horizontal acidental. O scroll real acontece nos painéis
+     internos (que têm overflow-y-auto), não no body. */
+  html,
+  body {
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    overflow-x: hidden;
+  }
+}
+
 @layer utilities {
+  /* Safe-area (notch / ilha dinâmica / barra de gestos do iPhone). Só têm efeito
+     com viewport-fit=cover no PWA instalado; no navegador comum viram 0. */
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  /* Sobe o conteúdo acima da barra de abas mobile + a safe-area inferior. */
+  .pb-tabbar { padding-bottom: calc(3.5rem + env(safe-area-inset-bottom)); }
+
   .scrollbar-none {
     -ms-overflow-style: none;
     scrollbar-width: none;

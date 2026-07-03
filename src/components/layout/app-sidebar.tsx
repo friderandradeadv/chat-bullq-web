@@ -42,6 +42,7 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
+import { useUnreadConversations } from '@/features/notifications/use-unread-conversations';
 import { Avatar } from '@/components/ui/avatar';
 import { Logo } from '@/components/brand/logo';
 import {
@@ -206,6 +207,7 @@ export function AppSidebar() {
   const { user, organizations, activeOrgId, logout } = useAuthStore();
   const orgRole = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
+  const unreadConversations = useUnreadConversations();
 
   return (
     <Sidebar>
@@ -229,7 +231,7 @@ export function AppSidebar() {
             <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
               <NavSection label="Geral" storageKey="Geral-comercial" variant="sub" defaultOpen={false}>
                 <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-                <NavItem href="/inbox" icon={MessageSquare} label="Conversas" />
+                <NavItem href="/inbox" icon={MessageSquare} label="Conversas" badge={unreadConversations} />
               </NavSection>
             </div>
 
