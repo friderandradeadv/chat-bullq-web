@@ -10,6 +10,7 @@ import { authService } from '@/features/auth/services/auth.service';
 import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sync';
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
 import { GlobalSearch } from '@/components/layout/global-search';
+import { ThemeToggle } from '@/features/auth/components/theme-toggle';
 
 // Bloquear o pai também bloqueia o filho (ex.: sem "Jurídico" → sem Análise/Cálculos).
 const MODULE_PARENT: Record<string, string> = { analise: 'juridico', calculos: 'juridico' };
@@ -109,9 +110,11 @@ export default function DashboardLayout({
     >
       <div className="flex h-full flex-col">
         <ToolFailureBanner />
-        {/* Barra de busca global central (estilo Astrea) — em cima de todas as telas. */}
-        <div className="flex h-11 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5">
+        {/* Barra de busca global central (estilo Astrea) — em cima de todas as telas.
+            Toggle de tema (só ícone Sol/Lua) ancorado no canto superior direito. */}
+        <div className="relative flex h-11 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5">
           <GlobalSearch />
+          <ThemeToggle className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
         </div>
         <div className="flex-1 min-h-0">{children}</div>
       </div>

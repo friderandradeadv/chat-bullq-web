@@ -26,8 +26,6 @@ import {
   Gavel,
   Scale,
   Workflow,
-  Sun,
-  Moon,
   CircleDot,
   Tags,
   CircleDollarSign,
@@ -43,7 +41,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/stores/auth-store';
 import { Avatar } from '@/components/ui/avatar';
 import { Logo } from '@/components/brand/logo';
@@ -209,10 +206,6 @@ export function AppSidebar() {
   const { user, organizations, activeOrgId, logout } = useAuthStore();
   const orgRole = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const isDark = mounted && resolvedTheme === 'dark';
 
   return (
     <Sidebar>
@@ -337,16 +330,6 @@ export function AppSidebar() {
       </SidebarBody>
 
       <SidebarFooter>
-        {/* Alternador de tema (claro/escuro) */}
-        <button
-          onClick={() => setTheme(isDark ? 'light' : 'dark')}
-          title={isDark ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
-          aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
-          className="mb-1 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-zinc-600 transition-colors hover:bg-zinc-950/5 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"
-        >
-          {isDark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
-          <span className="flex-1 text-left">{isDark ? 'Modo claro' : 'Modo escuro'}</span>
-        </button>
         {/* Copiloto — assistente admin, sempre à vista no rodapé (só sócio/admin) */}
         {isAdmin && (
           <div className="mb-1">
