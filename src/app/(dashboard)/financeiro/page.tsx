@@ -2833,7 +2833,97 @@ function ContasTab({ data }: { data: FinDashboard }) {
           </div>
         </div>
       )}
+
+      <ConciliacaoAstrea data={data} />
     </>
+  );
+}
+
+/** Auditoria do rombo real: compara o ledger vivo com a referência do Astrea, mês a mês. */
+function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
+  const [open, setOpen] = useState(false);
+  const ASTREA_RECEITA = 85110.58, ASTREA_RESULT = -29826.10;
+  const ymBR = (d: string) => { const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}` : ''; };
+  const astreaDesp = ASTREA_DESPESAS.reduce((s, o) => s + o.valor, 0);
+  const astreaMes = useMemo(() => { const m = new Map<string, number>(); for (const o of ASTREA_DESPESAS) { const k = ymBR(o.data); if (k) m.set(k, (m.get(k) ?? 0) + o.valor); } return m; }, []);
+  const realizados = (data.meses ?? []).filter((m) => !m.projecao);
+  const sysReceita = realizados.reduce((s, m) => s + m.receita, 0);
+  const sysDespesa = realizados.reduce((s, m) => s + m.despesaTotal, 0);
+  const sysResult = sysReceita - sysDespesa;
+  const diffRec = sysReceita - ASTREA_RECEITA;
+  const diffDesp = sysDespesa - astreaDesp;
+  const sysByKey = new Map(realizados.map((m) => [m.key, m]));
+  const meses = [...new Set([...astreaMes.keys(), ...realizados.map((m) => m.key)])].filter((k) => /^\d{4}-\d{2}$/.test(k)).sort((a, b) => b.localeCompare(a));
+
+  return (
+    <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-amber-600" /> Conciliação Astrea × sistema</span>}
+      sub="por que o resultado operacional do sistema difere do déficit que você conhece do Astrea.">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Sistema (ledger vivo)</p>
+          <div className="mt-1 space-y-0.5 text-sm">
+            <div className="flex justify-between"><span className="text-zinc-500">Receita</span><span className="tabular-nums text-emerald-600">{brl2(sysReceita)}</span></div>
+            <div className="flex justify-between"><span className="text-zinc-500">Despesa</span><span className="tabular-nums text-rose-600">{brl2(sysDespesa)}</span></div>
+            <div className="flex justify-between border-t border-zinc-100 pt-0.5 font-semibold dark:border-zinc-800"><span className="text-zinc-600 dark:text-zinc-300">Resultado</span><span className={`tabular-nums ${sysResult >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(sysResult)}</span></div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Astrea (referência)</p>
+          <div className="mt-1 space-y-0.5 text-sm">
+            <div className="flex justify-between"><span className="text-zinc-500">Receita</span><span className="tabular-nums text-emerald-600">{brl2(ASTREA_RECEITA)}</span></div>
+            <div className="flex justify-between"><span className="text-zinc-500">Despesa</span><span className="tabular-nums text-rose-600">{brl2(astreaDesp)}</span></div>
+            <div className="flex justify-between border-t border-zinc-100 pt-0.5 font-semibold dark:border-zinc-800"><span className="text-zinc-600 dark:text-zinc-300">Resultado</span><span className="tabular-nums text-rose-600">{brl2(ASTREA_RESULT)}</span></div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">Diferença (sistema − Astrea)</p>
+          <div className="mt-1 space-y-0.5 text-sm">
+            <div className="flex justify-between"><span className="text-zinc-500">Receita</span><span className={`font-semibold tabular-nums ${Math.abs(diffRec) > 1000 ? 'text-amber-700 dark:text-amber-300' : 'text-zinc-500'}`}>{diffRec >= 0 ? '+' : ''}{brl2(diffRec)}</span></div>
+            <div className="flex justify-between"><span className="text-zinc-500">Despesa</span><span className={`font-semibold tabular-nums ${Math.abs(diffDesp) > 1000 ? 'text-amber-700 dark:text-amber-300' : 'text-zinc-500'}`}>{diffDesp >= 0 ? '+' : ''}{brl2(diffDesp)}</span></div>
+            <div className="flex justify-between border-t border-amber-200/60 pt-0.5 font-semibold dark:border-amber-900/40"><span className="text-zinc-600 dark:text-zinc-300">No resultado</span><span className="tabular-nums text-amber-700 dark:text-amber-300">{(sysResult - ASTREA_RESULT) >= 0 ? '+' : ''}{brl2(sysResult - ASTREA_RESULT)}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-[13px] leading-relaxed text-zinc-600 dark:bg-zinc-800/40 dark:text-zinc-300">
+        {Math.abs(diffRec) >= Math.abs(diffDesp)
+          ? <>A maior causa é a <strong>receita</strong>: o sistema mostra <strong>{diffRec >= 0 ? `${brl2(diffRec)} a mais` : `${brl2(-diffRec)} a menos`}</strong> que o Astrea. {diffRec > 0 ? 'Provável: honorários que entraram por ASAAS/cobranças (e não estavam no relatório do Astrea), ou lançamentos duplicados. Confira os meses de receita alta abaixo — se algum não bater, é aí que o rombo "some".' : 'Faltam receitas no sistema.'}</>
+          : <>A maior causa é a <strong>despesa</strong>: o sistema tem <strong>{diffDesp >= 0 ? `${brl2(diffDesp)} a mais` : `${brl2(-diffDesp)} a menos`}</strong> que o Astrea. {diffDesp < 0 ? 'Faltam gastos retroativos — rode "Lançar gastos retroativos" acima.' : 'Há despesas além das do Astrea.'}</>}
+        {' '}O <strong>déficit real</strong> que você conhece (−{brl2(-ASTREA_RESULT)}) é o do Astrea; o sistema só bate com ele quando a receita e a despesa aqui casarem com a referência.
+      </p>
+
+      <button onClick={() => setOpen(!open)} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#228BE6] hover:underline">
+        {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />} {open ? 'Ocultar' : 'Ver'} mês a mês
+      </button>
+      {open && (
+        <div className="mt-2 overflow-x-auto scrollbar-thin">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Mês</th><th className="px-2 py-1.5 text-right font-medium">Despesa Astrea</th><th className="px-2 py-1.5 text-right font-medium">Despesa sistema</th><th className="px-2 py-1.5 text-right font-medium">Δ despesa</th><th className="px-2 py-1.5 text-right font-medium">Receita sistema</th><th className="px-2 py-1.5 text-right font-medium">Resultado sistema</th></tr></thead>
+            <tbody>
+              {meses.map((k) => {
+                const ad = astreaMes.get(k) ?? 0;
+                const sm = sysByKey.get(k);
+                const sd = sm?.despesaTotal ?? 0;
+                const sr = sm?.receita ?? 0;
+                const res = sr - sd;
+                const dd = sd - ad;
+                return (
+                  <tr key={k} className="border-t border-zinc-100 dark:border-zinc-800">
+                    <td className="px-2 py-1.5 text-zinc-600 dark:text-zinc-300">{mesLabel(k)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{ad ? brl2(ad) : '—'}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-rose-600">{sd ? brl2(sd) : '—'}</td>
+                    <td className={`px-2 py-1.5 text-right tabular-nums ${Math.abs(dd) > 500 ? 'text-amber-600' : 'text-zinc-400'}`}>{dd ? `${dd >= 0 ? '+' : ''}${brl2(dd)}` : '—'}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{sr ? brl2(sr) : '—'}</td>
+                    <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${res >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{sm ? brl2(res) : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-2 text-[11px] text-zinc-400">O Astrea só me deu o <strong>total</strong> de receitas (sem quebra por mês), então a coluna de receita mostra só a do sistema. <strong>Δ despesa</strong> em âmbar = mês onde o sistema destoa do Astrea (gasto faltando ou sobrando).</p>
+        </div>
+      )}
+    </Card>
   );
 }
 
