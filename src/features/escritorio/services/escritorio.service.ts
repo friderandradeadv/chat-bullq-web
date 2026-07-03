@@ -19,6 +19,9 @@ export interface Cargo {
   custoFirma?: string;     // cota / contribuição com a estrutura
   progride?: string;       // de onde vem · pra onde vai
 }
+// Documento institucional do escritório (regimento interno, estatuto…) — PDF/arquivo
+// hospedado (URL pública do /messages/uploads/media) que todos visualizam.
+export interface DocInstitucional { id: string; titulo: string; url: string; mime?: string }
 export interface Cultura {
   missao: string;
   visao: string;
@@ -26,6 +29,7 @@ export interface Cultura {
   cultura: string;         // "como trabalhamos" / princípios do dia a dia (texto livre)
   manifesto?: string;      // quem somos / o que queremos (headline forte da cultura)
   rotina?: string;         // como é vivida a rotina aqui (um item por linha)
+  documentos?: DocInstitucional[]; // regimento interno, estatuto, etc. (persiste dentro de cultura)
 }
 export interface Manual { id: string; titulo: string; conteudo: string }
 export interface OnboardingItem { id: string; texto: string }
@@ -45,6 +49,8 @@ export interface PessoaInfo {
   financeiro?: string[];   // condições financeiras pessoais (do contrato): percentuais, custos…
   atuacao?: string[];      // verticais/áreas em que a pessoa atua (nomes)
   sexo?: 'F' | 'M';        // para flexionar cargo/textos no feminino/masculino
+  contratoUrl?: string;    // contrato assinado (PDF) que o sócio sobe; a pessoa visualiza
+  contratoNome?: string;   // nome do arquivo do contrato (para exibir)
 }
 
 export interface Escritorio {

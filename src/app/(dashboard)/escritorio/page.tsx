@@ -11,10 +11,11 @@ import {
   CheckCircle2, Circle, Sparkles,
   Scale, Trophy, CalendarDays, Quote, ZoomIn, ZoomOut, GraduationCap, UserPlus,
   CircleDollarSign, Clock, ClipboardList, TrendingUp, Wallet, Maximize2, Move, Camera, Layers, ArrowLeft, ScrollText,
-  Building2, ArrowRight, Rocket, MapPin,
+  Building2, ArrowRight, Rocket, MapPin, Network, FileText, Upload, Landmark, ExternalLink,
 } from 'lucide-react';
-import { escritorioService, type Escritorio, type Cargo, type Cultura, type Manual, type OnboardingItem, type PessoaInfo, type Vertical } from '@/features/escritorio/services/escritorio.service';
+import { escritorioService, type Escritorio, type Cargo, type Cultura, type DocInstitucional, type Manual, type OnboardingItem, type PessoaInfo, type Vertical } from '@/features/escritorio/services/escritorio.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
+import { inboxService } from '@/features/inbox/services/inbox.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { MeuFinanceiroConteudo } from '@/features/financeiro/components/meu-financeiro-conteudo';
 import { DropZone } from '@/components/drop-zone';
@@ -61,6 +62,7 @@ export default function EscritorioPage() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
   const [tab, setTab] = useState<string>('perfil'); // aba ativa (só a ativa é renderizada)
+  const [estruturaSub, setEstruturaSub] = useState<string>('organograma'); // subaba da Estrutura
   const [verComo, setVerComo] = useState<string | null>(null); // sócio monitorando o espaço de outra pessoa
   const alvoUserId = (verComo && data.canEdit) ? verComo : user?.id;
   // Financeiro pessoal (do usuário logado, ou de quem o sócio está monitorando).
@@ -180,7 +182,7 @@ export default function EscritorioPage() {
 
         {/* Abas — só a ativa é renderizada */}
         <div className="sticky top-0 z-10 -mx-4 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa]/95 px-4 py-2 backdrop-blur lg:-mx-6 lg:px-6 dark:border-zinc-800 dark:bg-zinc-950/95">
-          {([['perfil', 'Meu Perfil', UserCircle], ['contrato', 'Meu Contrato', ScrollText], ['financeiro', 'Financeiro', CircleDollarSign], ['estrutura', 'Estrutura', Building2], ['cultura', 'Cultura', Heart], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
+          {([['perfil', 'Meu Perfil', UserCircle], ['contrato', 'Meu Contrato', ScrollText], ['financeiro', 'Financeiro', CircleDollarSign], ['estrutura', 'Estrutura', Building2], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
@@ -251,13 +253,24 @@ export default function EscritorioPage() {
             : <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>}
         </>)}
 
-        {/* ─────────── ABA: ESTRUTURA (organograma + verticais + plano de carreira) ─────────── */}
+        {/* ─────────── ABA: ESTRUTURA (subabas: organograma · carreira · verticais · escritório) ─────────── */}
         {tab === 'estrutura' && (<>
         <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Building2 className="h-4 w-4 text-[#f08c00]" /> Estrutura do escritório</h2>
-        <p className="mt-1 text-xs text-zinc-400">Como a Frider Andrade se organiza: o <strong>organograma</strong>, as <strong>verticais</strong> (áreas de atuação) e o <strong>plano de carreira</strong> — de onde se entra até onde dá pra chegar.</p>
+
+        {/* Subabas da Estrutura */}
+        <div className="mt-3 flex gap-1 overflow-x-auto rounded-xl border border-zinc-200/70 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">
+          {([['organograma', 'Organograma', Network], ['carreira', 'Carreira', Rocket], ['verticais', 'Verticais', Layers], ['escritorio', 'Escritório', Landmark]] as const).map(([key, label, Icon]) => (
+            <button key={key} onClick={() => setEstruturaSub(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${estruturaSub === key ? 'bg-[#f08c00] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ))}
+        </div>
+
+        {/* SUB: ORGANOGRAMA (+ edição de cargos, atribuição de cargo, aplicar acessos) */}
+        {estruturaSub === 'organograma' && (<>
         {!editing ? (
           <>
-            <div className={`${CARD} mt-2`}>
+            <div className={`${CARD} mt-3`}>
               {(cur.cargos ?? []).length === 0 ? (
                 <p className="text-sm text-zinc-400">Nenhum cargo cadastrado ainda{data.canEdit ? ' — entre em Editar para montar a estrutura.' : '.'}</p>
               ) : (
@@ -282,7 +295,7 @@ export default function EscritorioPage() {
             <CargosPorVertical cargos={cur.cargos ?? []} grupos={grupos} onOpen={(id) => setViewCargoId(id)} />
           </>
         ) : (
-          <div className="mt-2 space-y-3">
+          <div className="mt-3 space-y-3">
             <p className="text-xs text-zinc-400">Dica: o jeito mais rápido de editar um cargo (com seleção, atribuições, financeiro e responsáveis) é pelo lápis no próprio organograma. Abaixo fica a edição simples da lista.</p>
             {(cur.cargos ?? []).map((cg, i) => (
               <div key={cg.id} className={CARD}>
@@ -355,21 +368,27 @@ export default function EscritorioPage() {
             </button>
           </div>
         )}
-        {/* Verticais (áreas de atuação) */}
-        <h3 className="mt-7 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Layers className="h-4 w-4 text-[#F08C00]" /> Verticais (áreas de atuação)</h3>
-        <p className="mt-1 text-xs text-zinc-400">Cada área tem um titular e regras próprias de honorários — é assim que cada um sabe onde atua e como é remunerado por área.</p>
-        <VerticaisSection verticais={cur.verticais ?? []} pessoas={cur.pessoas ?? {}} team={team} editing={editing} setDraft={setDraft} onVerPerfil={(uid) => setPerfilUserId(uid)} />
-
-        {/* Plano de carreira — trilhas com "você está aqui" e onde dá pra chegar */}
-        {!editing && (
-          <PlanoCarreira cargos={cur.cargos ?? []} meuCargoId={meuCargo?.id} onOpen={(id) => setViewCargoId(id)} />
-        )}
         </>)}
 
-        {/* ─────────── ABA: CULTURA (manifesto, missão/visão, valores, rotina) ─────────── */}
-        {tab === 'cultura' && (
-          <CulturaTab cultura={cur.cultura} editing={editing} setCultura={setCultura} />
+        {/* SUB: CARREIRA */}
+        {estruturaSub === 'carreira' && (
+          !editing
+            ? <PlanoCarreira cargos={cur.cargos ?? []} meuCargoId={meuCargo?.id} onOpen={(id) => setViewCargoId(id)} />
+            : <p className={`${CARD} mt-3 text-sm text-zinc-500`}>O plano de carreira é montado a partir dos cargos (trilha, duração e progressão de cada um). Edite esses campos no <strong>Organograma</strong> (lápis do cargo) e a carreira se atualiza sozinha.</p>
         )}
+
+        {/* SUB: VERTICAIS */}
+        {estruturaSub === 'verticais' && (<>
+        <p className="mt-3 text-xs text-zinc-400">Cada área tem um titular e regras próprias de honorários — é assim que cada um sabe onde atua e como é remunerado por área.</p>
+        <VerticaisSection verticais={cur.verticais ?? []} pessoas={cur.pessoas ?? {}} team={team} editing={editing} setDraft={setDraft} onVerPerfil={(uid) => setPerfilUserId(uid)} />
+        </>)}
+
+        {/* SUB: ESCRITÓRIO (institucional: manifesto/missão/visão/valores/cultura + documentos oficiais) */}
+        {estruturaSub === 'escritorio' && (<>
+        <CulturaTab cultura={cur.cultura} editing={editing} setCultura={setCultura} />
+        <DocumentosInstitucionais documentos={cur.cultura.documentos ?? []} canEdit={data.canEdit} editing={editing} onSave={patchEscritorio} />
+        </>)}
+        </>)}
 
         {/* ─────────── ABA: MANUAIS ─────────── */}
         {tab === 'manuais' && (<>
@@ -989,6 +1008,7 @@ function MeuContrato({ info, cargo, proprio = true, canEdit, onEditCargo, onEdit
   const sexo = info?.sexo;
   const g = (s?: string) => gen(s, sexo) ?? '';
   const temContrato = !!(info?.financeiro?.length || cargo?.remuneracao?.length || cargo?.honorarios?.length || cargo?.custoFirma || cargo?.divisaoHonorarios);
+  const [verContrato, setVerContrato] = useState(false);
   if (!cargo) {
     return (
       <div className={`${CARD} mt-2 text-sm text-zinc-500 dark:text-zinc-400`}>
@@ -1028,6 +1048,22 @@ function MeuContrato({ info, cargo, proprio = true, canEdit, onEditCargo, onEdit
           </div>
         )}
       </div>
+
+      {/* Contrato assinado (PDF) — a pessoa visualiza o que o sócio subiu */}
+      {info?.contratoUrl && (
+        <div className="overflow-hidden rounded-2xl border border-[#02883C]/25 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex flex-wrap items-center gap-2 p-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#02883C]/10 text-[#02883C]"><FileText className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{proprio ? 'Seu contrato assinado' : 'Contrato assinado'}</p>
+              <p className="truncate text-xs text-zinc-400">{info.contratoNome || 'documento em PDF'}</p>
+            </div>
+            <button onClick={() => setVerContrato((v) => !v)} className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/10">{verContrato ? 'Fechar' : 'Visualizar'}</button>
+            <a href={info.contratoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"><ExternalLink className="h-3.5 w-3.5" /> Abrir</a>
+          </div>
+          {verContrato && <iframe src={info.contratoUrl} title="Contrato assinado" className="h-[70vh] w-full border-t border-zinc-100 dark:border-zinc-800" />}
+        </div>
+      )}
 
       {/* O que esperamos de você (descrição do cargo) */}
       {cargo.descricao && cargo.descricao !== cargo.resumo && (
@@ -1226,6 +1262,65 @@ function CulturaTab({ cultura, editing, setCultura }: { cultura: Cultura; editin
   );
 }
 
+// Documentos oficiais do escritório (regimento interno, estatuto…): sócio sobe um PDF,
+// todos visualizam (inline em iframe ou abrindo em nova aba). Persiste em cultura.documentos.
+function DocumentosInstitucionais({ documentos, canEdit, editing, onSave }: { documentos: DocInstitucional[]; canEdit?: boolean; editing?: boolean; onSave: (mut: (d: Escritorio) => Escritorio) => void }) {
+  const [titulo, setTitulo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [aberto, setAberto] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const podeGerenciar = !!canEdit && !editing; // upload/remoção salva contra o dado atual (fora do rascunho de Editar)
+  const subir = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const up = await inboxService.uploadMedia(file);
+      const doc: DocInstitucional = { id: rid(), titulo: titulo.trim() || file.name.replace(/\.[^.]+$/, ''), url: up.url, mime: up.mimeType || file.type };
+      onSave((d) => ({ ...d, cultura: { ...d.cultura, documentos: [...(d.cultura?.documentos ?? []), doc] } }));
+      setTitulo('');
+      toast.success('Documento adicionado');
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Não consegui subir o documento'); }
+    finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
+  const remover = (id: string) => {
+    if (typeof window !== 'undefined' && !window.confirm('Remover este documento?')) return;
+    onSave((d) => ({ ...d, cultura: { ...d.cultura, documentos: (d.cultura?.documentos ?? []).filter((x) => x.id !== id) } }));
+  };
+  return (
+    <div className="mt-6">
+      <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Landmark className="h-4 w-4 text-[#7048E8]" /> Documentos oficiais</h3>
+      <p className="mt-1 text-xs text-zinc-400">Regimento interno, estatuto e outros documentos do escritório.{podeGerenciar ? ' Suba um PDF para todos visualizarem.' : ' Toque em Visualizar para abrir o PDF.'}</p>
+      <div className="mt-2 space-y-2">
+        {documentos.length === 0 && <p className="text-sm text-zinc-400">Nenhum documento publicado ainda.</p>}
+        {documentos.map((doc) => {
+          const isPdf = (doc.mime || '').includes('pdf') || /\.pdf($|\?)/i.test(doc.url);
+          const open = aberto === doc.id;
+          return (
+            <div key={doc.id} className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#7048E8]/10 text-[#7048E8]"><FileText className="h-5 w-5" /></span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">{doc.titulo}</span>
+                {isPdf && <button onClick={() => setAberto(open ? null : doc.id)} className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/10">{open ? 'Fechar' : 'Visualizar'}</button>}
+                <a href={doc.url} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"><ExternalLink className="h-3.5 w-3.5" /> Abrir</a>
+                {podeGerenciar && <button onClick={() => remover(doc.id)} title="Remover" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>}
+              </div>
+              {open && isPdf && <iframe src={doc.url} title={doc.titulo} className="h-[70vh] w-full border-t border-zinc-100 dark:border-zinc-800" />}
+            </div>
+          );
+        })}
+      </div>
+      {podeGerenciar && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (ex.: Regimento Interno)" className={`${INPUT} max-w-xs flex-1`} />
+          <input ref={fileRef} type="file" accept=".pdf,.docx,.doc,image/*" className="hidden" onChange={(e) => subir(e.target.files?.[0])} />
+          <button onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Subir documento</button>
+        </div>
+      )}
+      {canEdit && editing && <p className="mt-2 text-xs text-zinc-400">Saia do modo <strong>Editar</strong> (Salvar/Cancelar) para subir ou remover documentos.</p>}
+    </div>
+  );
+}
+
 // Overlay base dos modais.
 function ModalShell({ title, onClose, children, footer }: { title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {
   return (
@@ -1359,6 +1454,19 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Não consegui importar do documento'); }
     finally { setImp(false); if (docRef.current) docRef.current.value = ''; }
   };
+  // Contrato assinado (PDF) — sobe pro storage e guarda a URL no perfil da pessoa.
+  const contratoRef = useRef<HTMLInputElement>(null);
+  const [contratoBusy, setContratoBusy] = useState(false);
+  const subirContrato = async (file?: File) => {
+    if (!file) return;
+    setContratoBusy(true);
+    try {
+      const up = await inboxService.uploadMedia(file);
+      set({ contratoUrl: up.url, contratoNome: up.filename || file.name });
+      toast.success('Contrato anexado — clique em Salvar para confirmar.');
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Não consegui subir o contrato'); }
+    finally { setContratoBusy(false); if (contratoRef.current) contratoRef.current.value = ''; }
+  };
   const cargo = cargoById[f.cargoId ?? atual?.cargoId ?? ''];
   const foto = f.fotoUrl || avatarUrl;
   const salvar = () => {
@@ -1413,6 +1521,18 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
       )}
       {!selfMode && <div><p className={LABEL}>Verticais / áreas de atuação</p><VerticaisEditor value={f.atuacao ?? []} onChange={(v) => set({ atuacao: v })} sugestoes={(data.verticais ?? []).map((x) => x.nome).filter(Boolean)} /><p className="mt-1 text-[11px] text-zinc-400">Aparecem (clicáveis, levam ao financeiro da área) abaixo do cargo no perfil.</p></div>}
       {!selfMode && <div><p className={LABEL}>Financeiro (do contrato) — um item por linha</p><textarea value={(f.financeiro ?? []).join('\n')} onChange={(e) => set({ financeiro: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} placeholder={'70% dos honorários de clientes que capta e atende\n30% quando é nomeada para atuar'} className={`${INPUT} mt-1`} /></div>}
+      {!selfMode && (
+        <div>
+          <p className={LABEL}>Contrato assinado (PDF)</p>
+          <p className="mt-0.5 text-[11px] text-zinc-400">A pessoa vê este PDF na aba <strong>Meu Contrato</strong> dela.</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <input ref={contratoRef} type="file" accept=".pdf,.docx,.doc,image/*" className="hidden" onChange={(e) => subirContrato(e.target.files?.[0])} />
+            <button type="button" onClick={() => contratoRef.current?.click()} disabled={contratoBusy} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">{contratoBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {f.contratoUrl ? 'Trocar contrato' : 'Subir contrato'}</button>
+            {f.contratoUrl && <a href={f.contratoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><FileText className="h-3.5 w-3.5" /> {f.contratoNome || 'ver PDF'}</a>}
+            {f.contratoUrl && <button type="button" onClick={() => set({ contratoUrl: '', contratoNome: '' })} className="text-xs font-medium text-rose-500 hover:underline">remover</button>}
+          </div>
+        </div>
+      )}
       {!selfMode && <div><p className={LABEL}>Reconhecimento / motivação (em destaque)</p><input value={f.destaque ?? ''} onChange={(e) => set({ destaque: e.target.value })} placeholder="ex.: Referência em RMC, cuida de cada cliente com carinho." className={`${INPUT} mt-1`} /></div>}
       <div><p className={LABEL}>Frase / lema pessoal</p><input value={f.frase ?? ''} onChange={(e) => set({ frase: e.target.value })} placeholder="ex.: Justiça com gente de verdade." className={`${INPUT} mt-1`} /></div>
       <div><p className={LABEL}>Perfil pessoal</p><textarea value={f.bio ?? ''} onChange={(e) => set({ bio: e.target.value })} rows={3} placeholder="Conte um pouco sobre você, sua trajetória, o que te move…" className={`${INPUT} mt-1`} /></div>
