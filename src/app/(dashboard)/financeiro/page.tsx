@@ -13,7 +13,7 @@ import {
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw,
 } from 'lucide-react';
-import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
 import { ASTREA_DESPESAS, APORTES } from '@/features/financeiro/data/astrea-despesas';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
@@ -2834,8 +2834,51 @@ function ContasTab({ data }: { data: FinDashboard }) {
         </div>
       )}
 
+      <CadastrosCard data={data} />
       <ConciliacaoAstrea data={data} />
     </>
+  );
+}
+
+/** Gestão do cadastro de pagadores/recebedores (escritório, fornecedores, sócios). */
+function CadastrosCard({ data }: { data: FinDashboard }) {
+  const qc = useQueryClient();
+  const cadastros = data.cadastros ?? [];
+  const [nome, setNome] = useState('');
+  const [tipo, setTipo] = useState<CadastroTipo>('fornecedor');
+  const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
+  const TIPOS: { k: CadastroTipo; label: string }[] = [{ k: 'escritorio', label: 'Escritório' }, { k: 'fornecedor', label: 'Fornecedor' }, { k: 'socio', label: 'Sócio/CPF' }, { k: 'cliente', label: 'Cliente' }, { k: 'outro', label: 'Outro' }];
+  const addM = useMutation({ mutationFn: () => financeiroService.addCadastro({ nome: nome.trim(), tipo }), onSuccess: () => { inval(); setNome(''); toast.success('Cadastrado'); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro') });
+  const updM = useMutation({ mutationFn: (v: { id: string; tipo: CadastroTipo }) => financeiroService.updateCadastro(v.id, { tipo: v.tipo }), onSuccess: inval, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro') });
+  const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeCadastro(id), onSuccess: () => { inval(); toast.success('Removido'); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro') });
+  const ordenados = [...cadastros].sort((a, b) => (a.tipo === 'escritorio' ? -1 : b.tipo === 'escritorio' ? 1 : a.nome.localeCompare(b.nome)));
+
+  return (
+    <Card title={<span className="flex items-center gap-2"><UserCircle2 className="h-4 w-4 text-[#228BE6]" /> Cadastro de pagadores/recebedores</span>}
+      sub="quem aparece nos campos de pagador/recebedor do lançamento. Fornecedores entram sozinhos ao lançar despesas; aqui você organiza e pré-cadastra (ex.: seu pai como sócio).">
+      <div className="flex flex-wrap items-end gap-2">
+        <input value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && nome.trim()) addM.mutate(); }} placeholder="Nome (ex.: José Andrade)" className="min-w-[10rem] flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+        <select value={tipo} onChange={(e) => setTipo(e.target.value as CadastroTipo)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{TIPOS.filter((t) => t.k !== 'escritorio').map((t) => <option key={t.k} value={t.k}>{t.label}</option>)}</select>
+        <button onClick={() => addM.mutate()} disabled={!nome.trim() || addM.isPending} className="inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"><Plus className="h-3.5 w-3.5" /> Adicionar</button>
+      </div>
+      <div className="mt-3 overflow-x-auto scrollbar-thin">
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Nome</th><th className="px-2 py-1.5 font-medium">Tipo</th><th className="w-10"></th></tr></thead>
+          <tbody>
+            {ordenados.map((c) => (
+              <tr key={c.id} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{c.nome}</td>
+                <td className="px-2 py-1.5">
+                  <select value={c.tipo} disabled={c.id === 'escritorio'} onChange={(e) => updM.mutate({ id: c.id, tipo: e.target.value as CadastroTipo })} className="rounded-md border border-zinc-200 bg-white px-1.5 py-1 text-xs disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900">{TIPOS.map((t) => <option key={t.k} value={t.k}>{t.label}</option>)}</select>
+                </td>
+                <td className="px-2 py-1.5 text-right">{c.id !== 'escritorio' && <button onClick={() => { if (confirm(`Remover "${c.nome}" do cadastro?`)) delM.mutate(c.id); }} className="rounded p-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30" title="Remover"><Trash2 className="h-3.5 w-3.5" /></button>}</td>
+              </tr>
+            ))}
+            {ordenados.length === 0 && <tr><td colSpan={3} className="py-6 text-center text-sm text-zinc-400">Nenhum cadastro ainda.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 
@@ -2854,6 +2897,21 @@ function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
   const diffDesp = sysDespesa - astreaDesp;
   const sysByKey = new Map(realizados.map((m) => [m.key, m]));
   const meses = [...new Set([...astreaMes.keys(), ...realizados.map((m) => m.key)])].filter((k) => /^\d{4}-\d{2}$/.test(k)).sort((a, b) => b.localeCompare(a));
+
+  // Caça-duplicatas: receitas com MESMO valor + MESMO mês + MESMO pagador = provável duplicata.
+  const [openDup, setOpenDup] = useState(false);
+  const qc = useQueryClient();
+  const delTx = useMutation({ mutationFn: (id: string) => financeiroService.removeTransacao(id, 'uma'), onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success('Lançamento removido'); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro') });
+  const dups = useMemo(() => {
+    const groups = new Map<string, FinTransacao[]>();
+    for (const t of data.transacoes ?? []) {
+      if (t.valor <= 0 || (t.status && t.status !== 'recebido')) continue;
+      const key = `${Math.round(t.valor * 100)}|${mesKey(t)}|${normNome(t.pagador ?? t.party ?? '')}`;
+      const arr = groups.get(key) ?? []; arr.push(t); groups.set(key, arr);
+    }
+    return [...groups.values()].filter((g) => g.length > 1).sort((a, b) => b[0].valor - a[0].valor);
+  }, [data.transacoes]);
+  const dupTotal = dups.reduce((s, g) => s + g[0].valor * (g.length - 1), 0);
 
   return (
     <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-amber-600" /> Conciliação Astrea × sistema</span>}
@@ -2921,6 +2979,33 @@ function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
             </tbody>
           </table>
           <p className="mt-2 text-[11px] text-zinc-400">O Astrea só me deu o <strong>total</strong> de receitas (sem quebra por mês), então a coluna de receita mostra só a do sistema. <strong>Δ despesa</strong> em âmbar = mês onde o sistema destoa do Astrea (gasto faltando ou sobrando).</p>
+        </div>
+      )}
+
+      {dups.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
+          <button onClick={() => setOpenDup(!openDup)} className="flex w-full items-center justify-between gap-2 text-left">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300"><Flame className="h-4 w-4" /> {dups.length} possível(is) receita(s) duplicada(s) · ~{brl2(dupTotal)}</span>
+            {openDup ? <ChevronDown className="h-4 w-4 text-amber-600" /> : <ChevronRight className="h-4 w-4 text-amber-600" />}
+          </button>
+          <p className="mt-1 text-[11px] text-amber-700/80 dark:text-amber-300/80">Mesmo valor + mesmo mês + mesmo pagador. Confira e remova a cópia extra — isso deve aproximar o operacional do rombo real. (parcelas legítimas do mesmo cliente caem em meses diferentes, então não entram aqui.)</p>
+          {openDup && (
+            <div className="mt-2 space-y-2">
+              {dups.map((g, gi) => (
+                <div key={gi} className="rounded-lg border border-amber-200/70 bg-white/60 p-2 dark:border-amber-900/30 dark:bg-zinc-900/40">
+                  <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{titleCase(g[0].pagador ?? g[0].party ?? '') || g[0].categoria} · {brl2(g[0].valor)} · {mesLabel(mesKey(g[0]))} <span className="font-normal text-zinc-400">({g.length}×)</span></p>
+                  <div className="mt-1 space-y-0.5">
+                    {g.map((t, ti) => (
+                      <div key={t.id} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="text-zinc-500">{t.data} · {t.categoria}{ti === 0 ? <span className="ml-1 rounded bg-emerald-100 px-1 text-[9px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">manter</span> : null}</span>
+                        {ti > 0 && <button onClick={() => { if (t.id && confirm(`Remover esta cópia de ${brl2(t.valor)} (${t.data})?`)) delTx.mutate(t.id); }} disabled={delTx.isPending} className="rounded border border-rose-200 px-1.5 py-0.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900/40 dark:hover:bg-rose-900/20">remover cópia</button>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </Card>
