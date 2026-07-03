@@ -232,8 +232,19 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MiniStat label="Recebido (seus casos)" value={brl(r.recebido)} hint={melhorMes ? `melhor mês: ${mesLabel(melhorMes.mes).replace(' de ', '/')}` : `${r.nClientes} cliente(s)`} accent="#2F9E44" />
           <MiniStat label="A receber" value={brl(r.aReceber)} hint="lançamentos pendentes" accent="#F59F00" />
-          <MiniStat label="Sua parte (rateio)" value={brl(r.minhaParte)} hint="honorários divididos com você" accent="#7048E8" />
+          <MiniStat label="Sua parte (rateio no êxito)" value={brl(r.minhaParte)} hint="o que você recebe de fato" accent="#7048E8" />
           <MiniStat label="Total a entrar" value={brl(aReceberTotal)} hint="a receber + sua parte + CS" accent="#228BE6" />
+        </div>
+        )}
+
+        {/* Como funciona a remuneração da associada — honorários custeiam a vertical; ela recebe o rateio no êxito */}
+        {subtab === 'resumo' && (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-900/40 dark:bg-violet-900/10">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-100 text-[#7048E8] dark:bg-violet-900/30"><Scale className="h-4 w-4" /></span>
+          <div className="min-w-0 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+            <p className="font-semibold text-zinc-800 dark:text-zinc-100">Como funciona a sua remuneração</p>
+            <p className="mt-0.5">Os honorários <strong>iniciais e parcelados</strong> que aparecem aqui <strong>custeiam a vertical</strong> (estrutura, agência, anúncios) — não são o que você leva. <strong className="text-[#7048E8]">O que você recebe de fato é o rateio no êxito</strong>: a sua parte quando o caso é ganho. Ela aparece em <strong>“Sua parte (rateio no êxito)”</strong> acima e detalhada na aba <strong>Holerite</strong>.</p>
+          </div>
         </div>
         )}
 
@@ -461,7 +472,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Lançamentos — filtrável (aba Lançamentos) */}
         {subtab === 'lancamentos' && (
-        <Card title={<>{deArea ? <>Lançamentos da área · {areaNome}</> : 'Seus lançamentos'} <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub={deArea ? `entradas e saídas ligadas à vertical ${areaNome} (inclui o que você lançar).` : 'movimentações dos seus casos.'} action={criar && <button onClick={() => setNovo(true)} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo</button>}>
+        <Card title={<>{deArea ? <>Lançamentos da área · {areaNome}</> : 'Seus lançamentos'} <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub={deArea ? `entradas e saídas ligadas à vertical ${areaNome} (inclui o que você lançar) — os honorários iniciais e parcelados custeiam a vertical; a sua remuneração é o rateio no êxito.` : 'movimentações dos seus casos — honorários iniciais e parcelados custeiam a vertical; a sua remuneração é o rateio no êxito.'} action={criar && <button onClick={() => setNovo(true)} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo</button>}>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
               <Calendar className="h-3.5 w-3.5 text-zinc-400" />
