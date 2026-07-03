@@ -18,6 +18,8 @@ export interface FinCliente { cliente: string; recebido: number; parcelas: numbe
 export type TxStatus = 'a_receber' | 'recebido' | 'a_pagar' | 'pago';
 export type AcessoNivel = 'full' | 'cases' | 'none';
 export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean; cartao?: boolean; fechamento?: number; vencimento?: number }
+export type CadastroTipo = 'escritorio' | 'fornecedor' | 'socio' | 'cliente' | 'outro';
+export interface FinCadastro { id: string; nome: string; tipo: CadastroTipo; doc?: string | null }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
 export interface RateioExito { bruto: number; cliente: number; sucumbencia: number; honorarios: number }
 export interface FinTransacao {
@@ -80,6 +82,7 @@ export interface FinDashboard {
   resumoLancamentos?: { total: number; receitas: number; despesas: number; saldo: number };
   categoriasConhecidas?: string[];
   contas?: Conta[];
+  cadastros?: FinCadastro[]; // pagadores/recebedores cadastrados (escritório + fornecedores/sócios)
   saldosReais?: Record<string, number>; // saldo real por conta (ASAAS via API)
   acessoMembros?: Record<string, AcessoNivel>;
   // controle de acesso por membro
@@ -321,6 +324,23 @@ export const financeiroService = {
   },
   async setCustosPessoa(custosPessoa: Record<string, { area: string; label?: string; pct: number }[]>): Promise<{ ok: boolean }> {
     const { data } = await api.patch('/financeiro/custos-pessoa', { custosPessoa });
+    return data.data ?? data;
+  },
+  // ── Cadastro de pagadores/recebedores ──
+  async getCadastros(): Promise<FinCadastro[]> {
+    const { data } = await api.get('/financeiro/cadastros');
+    return data.data ?? data;
+  },
+  async addCadastro(input: { nome: string; tipo?: CadastroTipo; doc?: string | null }): Promise<{ ok: boolean; cadastro?: FinCadastro }> {
+    const { data } = await api.post('/financeiro/cadastros', input);
+    return data.data ?? data;
+  },
+  async updateCadastro(id: string, input: { nome?: string; tipo?: CadastroTipo; doc?: string | null }): Promise<{ ok: boolean }> {
+    const { data } = await api.patch(`/financeiro/cadastros/${id}`, input);
+    return data.data ?? data;
+  },
+  async removeCadastro(id: string): Promise<{ ok: boolean }> {
+    const { data } = await api.delete(`/financeiro/cadastros/${id}`);
     return data.data ?? data;
   },
   async getVerticalCustos(): Promise<{ verticalCustos: Record<string, VerticalCusto[]> }> {

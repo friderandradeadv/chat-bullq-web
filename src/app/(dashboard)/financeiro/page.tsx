@@ -541,6 +541,24 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   };
   const { organizations, activeOrgId } = useAuthStore();
   const orgName = organizations.find((o) => o.id === activeOrgId)?.name ?? 'Escritório';
+  // ── Cadastro de pagadores/recebedores (escritório pré-cad + fornecedores/sócios) ──
+  const cadastros = data.cadastros ?? [];
+  const escritorioNome = cadastros.find((c) => c.tipo === 'escritorio')?.nome ?? orgName;
+  // fornecedores = quem RECEBE numa despesa (cadastrados + já usados no livro-razão)
+  const fornecedores = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of cadastros) if (c.tipo === 'fornecedor' || c.tipo === 'outro') m.set(normNome(c.nome), c.nome);
+    for (const t of data.transacoes) if (t.valor < 0) { const n = (t.recebedor || '').trim(); if (n && normNome(n) !== normNome(escritorioNome)) m.set(normNome(n), n); }
+    return [...m.values()].sort((a, b) => a.localeCompare(b));
+  }, [cadastros, data.transacoes, escritorioNome]);
+  // pagadores de despesa = escritório + sócios/CPFs (+ advogados)
+  const pagadoresDespesa = useMemo(() => {
+    const m = new Map<string, string>();
+    m.set(normNome(escritorioNome), escritorioNome);
+    for (const c of cadastros) if (c.tipo === 'escritorio' || c.tipo === 'socio') m.set(normNome(c.nome), c.nome);
+    for (const a of advogados) m.set(normNome(a.name), a.name);
+    return [...m.values()];
+  }, [cadastros, escritorioNome, advogados]);
   // cliente → responsável (do processo) para sugestão automática nos honorários
   const { data: juri } = useQuery({ queryKey: ['jurimetria'], queryFn: () => legalCasesService.jurimetria(), staleTime: 300_000 });
   const clienteResp = useMemo(() => {
@@ -613,7 +631,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const toggleRv = (id: string) => setRvOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const [importing, setImporting] = useState(false);
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: orgName, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', rateioVerticais: [], contactId: '', caseId: '', procLabel: '' });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', rateioVerticais: [], contactId: '', caseId: '', procLabel: '' });
   const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
@@ -853,7 +871,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
               {/* tipo */}
               <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
                 {(['receita', 'despesa'] as const).map((tp) => (
-                  <button key={tp} onClick={() => setEditor({ ...editor, tipo: tp, categoria: tp === 'receita' ? 'Honorários' : 'Aluguel', status: tp === 'receita' ? (editor.status === 'a_receber' ? 'a_receber' : 'recebido') : (editor.status === 'a_pagar' ? 'a_pagar' : 'pago') })} className={`px-4 py-1.5 text-sm font-semibold capitalize ${editor.tipo === tp ? (tp === 'receita' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{tp}</button>
+                  <button key={tp} onClick={() => setEditor({ ...editor, tipo: tp, categoria: tp === 'receita' ? 'Honorários' : 'Aluguel', status: tp === 'receita' ? (editor.status === 'a_receber' ? 'a_receber' : 'recebido') : (editor.status === 'a_pagar' ? 'a_pagar' : 'pago'),
+                    // despesa: quem paga é o escritório (default) e o recebedor é o fornecedor (a preencher); receita: o inverso
+                    pagador: tp === 'despesa' ? escritorioNome : (editor.pagador === escritorioNome ? '' : editor.pagador),
+                    recebedor: tp === 'receita' ? escritorioNome : (editor.recebedor === escritorioNome ? '' : editor.recebedor),
+                    contactId: tp === 'despesa' ? undefined : editor.contactId })} className={`px-4 py-1.5 text-sm font-semibold capitalize ${editor.tipo === tp ? (tp === 'receita' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{tp}</button>
                 ))}
               </div>
 
@@ -923,17 +945,34 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                   : <Field label="Vence em"><input type="date" value={editor.vencISO} onChange={(e) => setEditor({ ...editor, vencISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Pagador (cliente/origem)"><BuscaCliente value={editor.pagador} onPick={(c) => setEditor((ed) => ed ? { ...ed, pagador: c?.nome ?? '', contactId: c?.id, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(c?.nome ?? '') : '') } : ed)} onText={(t) => setEditor((ed) => ed ? { ...ed, pagador: t, contactId: undefined, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(t) : '') } : ed)} /></Field>
-                <Field label="Recebedor (destino)">
-                  <input list="fin-recebedores" value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="quem recebe (escritório, advogado…)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-                  <datalist id="fin-recebedores">
-                    <option value={orgName} />
-                    {advogados.map((a) => <option key={a.id} value={a.name} />)}
-                  </datalist>
-                  {editor.recebedor !== orgName && <button type="button" onClick={() => setEditor({ ...editor, recebedor: orgName })} className="mt-1 text-[11px] font-medium text-[#228BE6] hover:underline">usar o escritório ({orgName})</button>}
-                </Field>
-              </div>
+              {editor.tipo === 'receita' ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Cliente / origem (quem pagou)"><BuscaCliente value={editor.pagador} onPick={(c) => setEditor((ed) => ed ? { ...ed, pagador: c?.nome ?? '', contactId: c?.id, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(c?.nome ?? '') : '') } : ed)} onText={(t) => setEditor((ed) => ed ? { ...ed, pagador: t, contactId: undefined, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(t) : '') } : ed)} /></Field>
+                  <Field label="Recebedor (destino)">
+                    <input list="fin-recebedores-rec" value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="quem recebe (escritório, advogado…)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                    <datalist id="fin-recebedores-rec">
+                      <option value={escritorioNome} />
+                      {advogados.map((a) => <option key={a.id} value={a.name} />)}
+                    </datalist>
+                    {editor.recebedor !== escritorioNome && <button type="button" onClick={() => setEditor({ ...editor, recebedor: escritorioNome })} className="mt-1 text-[11px] font-medium text-[#228BE6] hover:underline">usar o escritório ({escritorioNome})</button>}
+                  </Field>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {/* DESPESA: o escritório paga (pagador) → o destaque é o RECEBEDOR (fornecedor) */}
+                  <Field label="Recebedor (fornecedor / quem recebeu)">
+                    <input list="fin-fornecedores" value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="ex.: Topoffice, contador, Meta, advogado…" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                    <datalist id="fin-fornecedores">{fornecedores.map((n) => <option key={n} value={n} />)}</datalist>
+                    <p className="mt-1 text-[11px] text-zinc-400">puxa do cadastro; um fornecedor novo é cadastrado ao salvar.</p>
+                  </Field>
+                  <Field label="Pagador (quem pagou a despesa)">
+                    <input list="fin-pagadores" value={editor.pagador} onChange={(e) => setEditor({ ...editor, pagador: e.target.value, contactId: undefined })} placeholder={escritorioNome} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                    <datalist id="fin-pagadores">{pagadoresDespesa.map((n) => <option key={n} value={n} />)}</datalist>
+                    {normNome(editor.pagador) !== normNome(escritorioNome) && <button type="button" onClick={() => setEditor({ ...editor, pagador: escritorioNome })} className="mt-1 text-[11px] font-medium text-[#228BE6] hover:underline">pago pelo escritório ({escritorioNome})</button>}
+                    {normNome(editor.pagador) !== normNome(escritorioNome) && !!editor.pagador && <p className="mt-1 text-[11px] text-amber-600">pago por um sócio/CPF → é <strong>empréstimo do sócio</strong> se não for reembolsado.</p>}
+                  </Field>
+                </div>
+              )}
 
               <Field label="Vincular a um processo (opcional — pra quitar/registrar no processo)">
                 {editor.caseId ? (
