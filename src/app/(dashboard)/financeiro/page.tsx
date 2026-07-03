@@ -177,8 +177,8 @@ export default function FinanceiroPage() {
         <>
         {/* KPIs — pulso financeiro sempre visível */}
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {(() => { const caixa = k.caixaContas ?? k.saldoAtual; return (
-          <Kpi icon={Scale} accent={caixa < 0 ? '#E03131' : '#2F9E44'} label={`Caixa real · ${k.mesAtualLabel}`} value={brl(caixa)} hint={`nas contas · operacional ${brl(k.saldoOperacional ?? k.saldoAtual)}${(k.aporteAcumulado ?? 0) > 0 ? ` · ${brl(k.aporteAcumulado!)} em aportes` : ''}`} onClick={() => setShowSaldo(true)} />
+          {(() => { const caixa = k.caixaContas ?? k.saldoAtual; const divida = k.aporteAcumulado ?? 0; const pos = caixa - divida; const temDivida = divida > 0; const valor = temDivida ? pos : caixa; return (
+          <Kpi icon={Scale} accent={valor < 0 ? '#E03131' : '#2F9E44'} label={`${temDivida ? 'Posição real' : 'Caixa real'} · ${k.mesAtualLabel}`} value={brl(valor)} hint={temDivida ? `${brl(caixa)} em caixa − ${brl(divida)} devido aos sócios` : `nas contas · operacional ${brl(k.saldoOperacional ?? k.saldoAtual)}`} onClick={() => setShowSaldo(true)} />
           ); })()}
           <Kpi icon={k.resultadoMes >= 0 ? TrendingUp : TrendingDown} accent={k.resultadoMes >= 0 ? '#2F9E44' : '#E03131'} label="Resultado do mês" value={brl(k.resultadoMes)} hint={`receita ${brl(k.receitaMes)} · despesa ${brl(k.despesaMes)}`} />
           <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(k.receita12m)} hint={`média ${brl(k.receitaMedia)}/mês`} />
@@ -284,7 +284,7 @@ function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, o
           <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Caixa real × resultado operacional</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
         </div>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400"><strong>Saldo inicial</strong> + <strong>resultados</strong> (receita − despesa <strong>liquidadas</strong>) de cada mês{totalAporte > 0 ? <> + <strong className="text-sky-600">aportes</strong> (capital que Você/Pai colocou — não é faturamento)</> : null}. Fatura de cartão só entra quando paga.</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400"><strong>Saldo inicial</strong> + <strong>resultados</strong> (receita − despesa <strong>liquidadas</strong>) de cada mês{totalAporte > 0 ? <> + <strong className="text-amber-600">empréstimo dos sócios</strong> (o que os CPFs cobriram — é <strong>dívida a devolver</strong>, não faturamento)</> : null}. Fatura de cartão só entra quando paga.</p>
 
         <div className="mt-3 flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800/40">
           <span className="text-zinc-500">Saldo inicial das contas</span>
@@ -297,7 +297,7 @@ function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, o
           </div>
           {realizados.map((m) => (
             <div key={m.key} className="grid grid-cols-[1fr_5rem_5rem_5.5rem] items-center gap-1 border-t border-zinc-100 px-3 py-1.5 text-xs dark:border-zinc-800/70">
-              <span className="flex min-w-0 items-center gap-1 truncate text-zinc-600 dark:text-zinc-300">{m.label}{(m.aporte ?? 0) > 0 && <span className="shrink-0 rounded bg-sky-100 px-1 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300" title="aporte Você + Pai">+aporte {brl2(m.aporte!)}</span>}</span>
+              <span className="flex min-w-0 items-center gap-1 truncate text-zinc-600 dark:text-zinc-300">{m.label}{(m.aporte ?? 0) > 0 && <span className="shrink-0 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title="empréstimo dos sócios (CPFs) — dívida a devolver">+empréstimo {brl2(m.aporte!)}</span>}</span>
               <span className="text-right tabular-nums text-emerald-600">{m.receita ? brl2(m.receita) : '—'}</span>
               <span className="text-right tabular-nums text-rose-600">{m.despesaTotal ? brl2(m.despesaTotal) : '—'}</span>
               <span className={`text-right font-semibold tabular-nums ${m.acumulado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brl2(m.acumulado)}</span>
@@ -309,11 +309,11 @@ function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, o
         <div className="mt-3 space-y-1 text-sm">
           <div className="flex items-center justify-between text-zinc-500"><span>Total de receitas</span><span className="tabular-nums text-emerald-600">{brl2(totalReceita)}</span></div>
           <div className="flex items-center justify-between text-zinc-500"><span>Total de despesas</span><span className="tabular-nums text-rose-600">− {brl2(totalDespesa)}</span></div>
-          {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Aportes (Você + Pai)</span><span className="tabular-nums text-sky-600">+ {brl2(totalAporte)}</span></div>}
-          {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Resultado operacional <span className="text-[11px] text-zinc-400">(sem aportes — o que o escritório gerou/queimou)</span></span><span className={`font-semibold tabular-nums ${saldoOperacional >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoOperacional)}</span></div>}
-          <div className="flex items-center justify-between border-t border-dashed border-zinc-200 pt-1.5 text-zinc-500 dark:border-zinc-700"><span>Saldo calculado <span className="text-[11px] text-zinc-400">(inicial + resultados{totalAporte > 0 ? ' + aportes' : ''})</span></span><span className={`tabular-nums ${saldoAtual >= 0 ? 'text-zinc-600 dark:text-zinc-300' : 'text-rose-600'}`}>{brl2(saldoAtual)}</span></div>
-          <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Caixa real <span className="text-[11px] font-normal text-zinc-400">(dinheiro nas contas agora)</span></span><span className={`tabular-nums ${caixaContas >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(caixaContas)}</span></div>
-          {Math.abs(caixaContas - saldoAtual) > 1 && <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">O <strong>caixa real</strong> ({brl2(caixaContas)}) diverge do <strong>saldo calculado</strong> ({brl2(saldoAtual)}) em {brl2(Math.abs(caixaContas - saldoAtual))}. Isso acontece quando o <strong>saldo inicial das contas</strong> não foi informado, ou os <strong>aportes</strong> foram lançados como tampão (sem cair numa conta). Ajuste o saldo inicial em <strong>Contas</strong> para reconciliar.</p>}
+          {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Resultado operacional <span className="text-[11px] text-zinc-400">(o que o escritório gerou/queimou)</span></span><span className={`font-semibold tabular-nums ${saldoOperacional >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoOperacional)}</span></div>}
+          <div className="flex items-center justify-between border-t border-dashed border-zinc-200 pt-1.5 font-semibold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Caixa real <span className="text-[11px] font-normal text-zinc-400">(dinheiro nas contas agora)</span></span><span className={`tabular-nums ${caixaContas >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(caixaContas)}</span></div>
+          {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Empréstimo dos sócios <span className="text-[11px] text-zinc-400">(dívida a devolver aos CPFs)</span></span><span className="tabular-nums text-amber-600">− {brl2(totalAporte)}</span></div>}
+          {totalAporte > 0 && <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Posição real <span className="text-[11px] font-normal text-zinc-400">(caixa − empréstimo dos sócios)</span></span><span className={`tabular-nums ${caixaContas - totalAporte >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(caixaContas - totalAporte)}</span></div>}
+          {totalAporte > 0 && <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">O escritório está com <strong>{brl2(caixaContas)}</strong> em caixa mas deve <strong>{brl2(totalAporte)}</strong> aos sócios (dinheiro que os CPFs gastaram e ainda não foi devolvido). A <strong>posição real</strong> é de <strong>{brl2(caixaContas - totalAporte)}</strong> — o rombo verdadeiro. Conforme o escritório for pagando os sócios de volta, essa dívida cai.</p>}
         </div>
         <p className="mt-3 text-[11px] text-zinc-400">Dica: para ver os lançamentos de um mês, use o filtro de mês no livro-razão abaixo.</p>
       </div>
@@ -2588,11 +2588,11 @@ function ContasTab({ data }: { data: FinDashboard }) {
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
           <div>
-            <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-4 w-4 text-[#2F9E44]" /> Fechar o caixa com aportes (Você + Pai)</h4>
-            <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">O escritório teve <strong>{brl(APORTES.reduce((s, a) => s + a.valor, 0))}</strong> de déficit no período, coberto por você + seu pai. Isso lança esse total como <strong>Aporte</strong> (capital, não faturamento) nos meses de aperto — o saldo para de mostrar negativo fantasma. Edite depois pra separar quanto foi do seu pai.</p>
+            <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-4 w-4 text-amber-600" /> Registrar empréstimo dos sócios (Você + Pai)</h4>
+            <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">O escritório teve <strong>{brl(APORTES.reduce((s, a) => s + a.valor, 0))}</strong> de déficit no período, coberto pelos CPFs (você + seu pai). Isso registra esse total como <strong>empréstimo dos sócios</strong> — uma <strong>dívida a devolver</strong>, não faturamento. O <strong>rombo real continua aparecendo</strong> (posição real = caixa − empréstimo); a dívida só cai quando o escritório pagar os sócios de volta. Edite depois pra separar quanto foi do seu pai.</p>
           </div>
-          <button onClick={lancarAportes} disabled={aporteRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#2F9E44] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
-            {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Lançando…</> : <><Scale className="h-3.5 w-3.5" /> Fechar caixa com aportes</>}
+          <button onClick={lancarAportes} disabled={aporteRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+            {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Registrando…</> : <><Scale className="h-3.5 w-3.5" /> Registrar empréstimo dos sócios</>}
           </button>
         </div>
         {nubankCartao && (
