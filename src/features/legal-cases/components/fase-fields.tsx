@@ -97,7 +97,7 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'valor_estimado', label: 'Estimativa do que vamos receber (CS)', type: 'currency' },
   ],
   recurso: [
-    { key: 'especie', label: 'Espécie de recurso', type: 'select', options: ['Apelação', 'Agravo de instrumento', 'Embargos de declaração', 'Recurso especial', 'Recurso extraordinário', 'Recurso inominado'] },
+    { key: 'especie', label: 'Espécie de recurso', type: 'select', options: ['Embargos de declaração', 'Agravo interno', 'Recurso especial', 'Recurso extraordinário', 'Agravo em REsp', 'Apelação', 'Agravo de instrumento', 'Recurso inominado', 'Recurso ordinário'] },
     { key: 'julgamento', label: 'Julgamento', type: 'radio', options: ['Provido', 'Não provido', 'Parcialmente provido', 'Aguardando'] },
   ],
   aguardando_arquivamento: [{ key: 'motivo', label: 'Motivo do arquivamento', type: 'textarea' }],
