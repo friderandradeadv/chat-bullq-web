@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -188,9 +188,11 @@ export default function FaseJudicialKanbanPage() {
   // Só sócios (dono/OWNER ou ADMIN) renomeiam as fases.
   const activeOrg = useAuthStore((s) => s.organizations.find((o) => o.id === s.activeOrgId));
   const isOwner = activeOrg?.role === 'OWNER' || activeOrg?.role === 'ADMIN';
-  const onChanged = () => qc.invalidateQueries({ queryKey: KEY });
+  // Handlers estáveis (useCallback) — sem isso o React.memo do Card não segura, e
+  // cada refetch/tecla re-renderiza as ~centenas de cards.
+  const onChanged = useCallback(() => qc.invalidateQueries({ queryKey: KEY }), [qc]);
 
-  const renamePhase = async (key: string, label: string) => {
+  const renamePhase = useCallback(async (key: string, label: string) => {
     // Otimista: atualiza o label no cache do board na hora.
     qc.setQueryData<KanbanData>(KEY, (old) =>
       old ? { ...old, phases: old.phases.map((p) => (p.key === key ? { ...p, label } : p)) } : old,
@@ -202,23 +204,24 @@ export default function FaseJudicialKanbanPage() {
       qc.invalidateQueries({ queryKey: KEY });
       toast.error(err?.response?.data?.message || 'Só o dono do escritório pode renomear fases');
     }
-  };
+  }, [qc]);
 
-  const move = async (card: KanbanCard, toPhase: string) => {
+  const move = useCallback(async (card: KanbanCard, toPhase: string) => {
     if (card.phase === toPhase) return;
     qc.setQueryData<KanbanData>(KEY, (old) =>
       old ? { ...old, cards: old.cards.map((x) => (x.id === card.id ? { ...x, phase: toPhase } : x)) } : old,
     );
     try {
       await legalCasesService.movePhase(card.id, toPhase);
-      const label = phases.find((p) => p.key === toPhase)?.label ?? toPhase;
+      // Lê o label do cache (não do closure) pra manter o handler estável.
+      const label = qc.getQueryData<KanbanData>(KEY)?.phases.find((p) => p.key === toPhase)?.label ?? toPhase;
       toast.success(`Movido para "${label}"`);
       qc.invalidateQueries({ queryKey: KEY });
     } catch (err: any) {
       qc.invalidateQueries({ queryKey: KEY });
       toast.error(err?.response?.data?.message || 'Erro ao mover o processo');
     }
-  };
+  }, [qc]);
 
   const onDragEnd = (e: DragEndEvent) => {
     setActiveId(null);
@@ -442,7 +445,7 @@ function Column({
   );
 }
 
-function Card({
+const Card = memo(function Card({
   c, phases, onMove, onOpen, onChanged, overlay,
 }: {
   c: KanbanCard; phases: KanbanPhase[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onChanged?: () => void; overlay?: boolean;
@@ -456,6 +459,10 @@ function Card({
   const style: React.CSSProperties = {
     borderLeftWidth: 4,
     borderLeftColor: areaDot(c.areaJuridica),
+    // Virtualização nativa de PAINT: o navegador não faz layout/paint dos cards
+    // fora da tela (colunas/linhas não visíveis) — some com o engasgo de montar
+    // centenas de cards. contain-intrinsic-size reserva ~altura pro scroll não pular.
+    ...(overlay ? {} : { contentVisibility: 'auto', containIntrinsicSize: '0 116px' } as React.CSSProperties),
     ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
   };
 
@@ -583,4 +590,4 @@ function Card({
       </div>
     </div>
   );
-}
+});
