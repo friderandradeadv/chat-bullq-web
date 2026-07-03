@@ -19,7 +19,9 @@ import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
-const KEY = ['legal-cases', 'kanban'];
+// queryKey por lane: cada board escopa a busca no servidor à sua trilha; keys
+// distintas evitam que o cache de um board sirva os cards de outro.
+const KEY = ['legal-cases', 'kanban', 'judicial'];
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif";
 
 // Cor da borda esquerda (4px) + dot da área, por área jurídica.
@@ -100,8 +102,8 @@ export default function FaseJudicialKanbanPage() {
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: KEY,
-    queryFn: () => legalCasesService.kanban({}),
-    refetchInterval: 30_000,
+    queryFn: () => legalCasesService.kanban({ lane: 'judicial' }),
+    refetchInterval: 60_000,
   });
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
@@ -257,7 +259,7 @@ export default function FaseJudicialKanbanPage() {
 
   return (
     <div className="flex h-full flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200" style={{ fontFamily: INTER }}>
-      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-6 pt-6 pb-4">
+      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 pt-6 pb-4 lg:px-6">
         <div className="flex items-center gap-2">
           <Columns3 className="h-5 w-5 text-[#e11970]" />
           <h1 className="text-xl font-bold text-[#101820] dark:text-zinc-100">Fase Judicial</h1>
@@ -271,13 +273,13 @@ export default function FaseJudicialKanbanPage() {
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar cliente, réu, CNJ…"
-              className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
             />
           </div>
           <Select value={area} onChange={setArea} placeholder="Todas as áreas" options={areas} />
@@ -312,7 +314,7 @@ export default function FaseJudicialKanbanPage() {
         <CasesListView byPhase={byPhase} phases={visiblePhases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} />

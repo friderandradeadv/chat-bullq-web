@@ -8,7 +8,6 @@ import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
-const KEY = ['legal-cases', 'kanban'];
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.floor(d / 365)}a` : d >= 30 ? `${Math.floor(d / 30)}m` : `${d}d`);
@@ -46,6 +45,8 @@ export interface AdminBoardProps {
   columns?: { key: string; label: string }[];
   /** colunas derivadas das fases do endpoint (respeita rename/ordem/esconder/custom das Configurações). */
   columnsFromPhases?: (p: KanbanPhase) => boolean;
+  /** trilha do board — escopa a busca no servidor (performance). */
+  lane?: 'pre' | 'judicial' | 'banco';
 }
 
 /**
@@ -53,7 +54,9 @@ export interface AdminBoardProps {
  * os cards do kanban jurídico, filtra pela trilha e agrupa por PRODUTO em colunas.
  * Cards clicáveis abrem a ficha (sem drag — a trilha não é uma fase movível).
  */
-export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases }: AdminBoardProps) {
+export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases, lane }: AdminBoardProps) {
+  // queryKey por lane (mesma convenção dos demais boards) — evita colisão de cache.
+  const KEY = ['legal-cases', 'kanban', lane ?? 'all'];
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const dragScroll = useDragScroll();
@@ -63,7 +66,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     if (cid) setOpenCaseId(cid);
   }, []);
 
-  const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({}), refetchInterval: 30_000 });
+  const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban(lane ? { lane } : {}), refetchInterval: 60_000 });
   const preKeys = useMemo(() => new Set((data?.phases ?? []).filter((p) => p.lane === 'pre').map((p) => p.key)), [data]);
 
   const filtered = useMemo(() => {
@@ -121,7 +124,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
           </div>
         </div>
       ) : (
-        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
+        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:pl-6">
           {columns.map((col) => (
             <div key={col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col">
               <div className="flex h-10 items-center gap-2 px-1">

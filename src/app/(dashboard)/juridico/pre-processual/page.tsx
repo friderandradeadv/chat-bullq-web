@@ -18,7 +18,7 @@ import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits'
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
-const KEY = ['legal-cases', 'kanban'];
+const KEY = ['legal-cases', 'kanban', 'pre'];
 const INPUT = 'h-[38px] w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
 
 function cleanProduto(s: string | null): string | null {
@@ -62,7 +62,7 @@ export default function PreProcessualPage() {
   const dragScroll = useDragScroll();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({}), refetchInterval: 30_000 });
+  const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'pre' }), refetchInterval: 60_000 });
   // Exclui a trilha bancária (banco_*): ela tem board próprio (Fase Bancária).
   const phases = (data?.phases ?? []).filter((p) => p.lane === 'pre' && !p.key.startsWith('banco_'));
   const cards = data?.cards ?? [];
@@ -124,7 +124,7 @@ export default function PreProcessualPage() {
 
   return (
     <div className="flex h-full flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200">
-      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-6 pt-6 pb-4">
+      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 pt-6 pb-4 lg:px-6">
         <div className="flex items-center gap-2">
           <Workflow className="h-5 w-5 text-[#e11970]" />
           <h1 className="text-xl font-bold text-[#101820] dark:text-zinc-100">Pré-Processual</h1>
@@ -133,10 +133,10 @@ export default function PreProcessualPage() {
         </div>
         <p className="mt-0.5 text-sm text-zinc-500">Do fechamento do contrato até o protocolo. Ao protocolar, o processo migra para a Fase Judicial.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
-              className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
+              className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
           <select value={resp} onChange={(e) => setResp(e.target.value)} className="h-9 max-w-[200px] rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
             <option value="">Todos os responsáveis</option>
@@ -156,7 +156,7 @@ export default function PreProcessualPage() {
         <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} />

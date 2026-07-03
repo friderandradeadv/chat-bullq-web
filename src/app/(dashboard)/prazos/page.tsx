@@ -73,7 +73,7 @@ export default function PrazosPage() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 p-6 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
@@ -93,7 +93,7 @@ export default function PrazosPage() {
         </button>
       </div>
 
-      <div className="mt-5 flex gap-2">
+      <div className="mt-5 flex flex-wrap gap-2">
         {(['OPEN', 'DONE', 'EXPIRED', 'CANCELLED'] as DeadlineStatus[]).map((s) => (
           <button
             key={s}
@@ -233,9 +233,9 @@ function CreateDeadlineDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-50 w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div className="relative z-50 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl dark:bg-zinc-900 sm:p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Novo prazo</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700">
@@ -256,7 +256,7 @@ function CreateDeadlineDialog({
           <Field label="Título *">
             <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="Ex.: Contestação" />
           </Field>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label="Tipo">
               <select value={type} onChange={(e) => setType(e.target.value as any)} className={inputCls}>
                 <option value="ORDINARY">Comum</option>

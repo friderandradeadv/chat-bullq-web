@@ -29,7 +29,7 @@ export function JarvisWatchdogTab() {
 
   if (isLoading || !data) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 lg:p-6">
         <p className="text-sm text-zinc-500">Carregando…</p>
       </div>
     );
@@ -38,7 +38,7 @@ export function JarvisWatchdogTab() {
   const { enabled, config, stats, topAlert, recentStuck } = data;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 lg:p-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
@@ -218,8 +218,8 @@ function Section({
           {empty}
         </p>
       ) : (
-        <div className="mt-2 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
-          <table className="w-full text-sm">
+        <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-500 dark:bg-zinc-900/50">
               <tr>
                 <th className="px-3 py-2 text-left">Cliente</th>

@@ -72,7 +72,7 @@ export default function AutomationsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+      <header className="border-b border-zinc-200 px-4 py-4 lg:px-6 dark:border-zinc-800">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-amber-500" />
@@ -93,7 +93,7 @@ export default function AutomationsPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto px-4 py-5 lg:px-6">
         <TemplatesStrip onPick={(t) => setTemplateSeed(t.seed)} />
 
         {isLoading && (

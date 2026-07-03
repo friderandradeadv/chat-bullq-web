@@ -160,7 +160,7 @@ export default function SettingsMembersPage() {
         </div>
       </div>
 
-      <div className="mt-6 flex items-end gap-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+      <div className="mt-6 flex flex-col items-stretch gap-3 rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-4 sm:flex-row sm:items-end dark:border-zinc-700 dark:bg-zinc-900/50">
         <div className="flex-1">
           <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">Email do membro</label>
           <input

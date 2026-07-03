@@ -13,7 +13,9 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
-const KEY = ['legal-cases', 'kanban'];
+// inss_admin está na trilha 'pre' — escopa a busca por lane (mesma key/cache do
+// board Pré-processual, que puxa os mesmos cards).
+const KEY = ['legal-cases', 'kanban', 'pre'];
 const ACCENT = '#7048e8';
 // Fase judicial de destino ao "entrar com o processo" após indeferimento.
 const JUDICIAL_TARGET = 'montar_inicial';
@@ -76,7 +78,7 @@ export function InssBoard() {
     if (cid) setOpenCaseId(cid);
   }, []);
 
-  const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({}), refetchInterval: 30_000 });
+  const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'pre' }), refetchInterval: 60_000 });
 
   const inss = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -138,7 +140,7 @@ export function InssBoard() {
 
   return (
     <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200">
-      <div className="shrink-0 border-b border-[#dbeaf5] px-6 pb-3 pt-6 dark:border-zinc-800">
+      <div className="shrink-0 border-b border-[#dbeaf5] px-4 pb-3 pt-6 lg:px-6 dark:border-zinc-800">
         <div className="flex items-center gap-2">
           <Stethoscope className="h-5 w-5" style={{ color: ACCENT }} />
           <h1 className="text-xl font-bold text-[#101820] dark:text-zinc-100">INSS — Administrativo</h1>
@@ -148,10 +150,10 @@ export function InssBoard() {
         <p className="mt-0.5 text-sm text-zinc-500">Arraste os cards entre as situações. No indeferimento, você entra com a ação judicial em um clique.</p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
-              className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
+              className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
           <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
             <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#7048e8] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
@@ -172,7 +174,7 @@ export function InssBoard() {
         <CasesListView byPhase={listaByPhase} phases={listaPhases} onOpen={setOpenCaseId} accent={ACCENT} />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-6 pr-4">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:pl-6">
             {COLS.map((col) => (
               <Column key={col.dropId} col={col} items={byRes[col.key]} onOpen={setOpenCaseId} onEntrarJudicial={entrarJudicial} />
             ))}

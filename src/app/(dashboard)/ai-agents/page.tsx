@@ -36,7 +36,7 @@ export default function AiAgentsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-zinc-200 bg-white px-6 pt-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="border-b border-zinc-200 bg-white px-4 pt-4 lg:px-6 dark:border-zinc-800 dark:bg-zinc-950">
         <h1 className="inline-flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
           <Bot className="h-5 w-5 text-primary" />
           Jarvis

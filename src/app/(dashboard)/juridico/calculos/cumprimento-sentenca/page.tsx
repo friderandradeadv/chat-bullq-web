@@ -473,8 +473,8 @@ function ItensEditor({
   return (
     <div className="space-y-2">
       {itens.map((l, i) => (
-        <div key={i} className="grid grid-cols-[1fr_120px_110px_auto] items-center gap-2">
-          <input className={inputCls} placeholder={placeholderDesc} value={l.descricao} onChange={(e) => upd(i, 'descricao', e.target.value)} />
+        <div key={i} className="grid grid-cols-[1fr_110px_auto] items-center gap-2 lg:grid-cols-[1fr_120px_110px_auto]">
+          <input className={`${inputCls} col-span-3 lg:col-span-1`} placeholder={placeholderDesc} value={l.descricao} onChange={(e) => upd(i, 'descricao', e.target.value)} />
           <input type="date" className={inputCls} value={l.data} onChange={(e) => upd(i, 'data', e.target.value)} />
           <input className={inputCls} inputMode="decimal" placeholder="R$" value={l.valor} onChange={(e) => upd(i, 'valor', e.target.value)} />
           <button type="button" onClick={() => setItens(itens.filter((_, j) => j !== i))} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-rose-600 dark:hover:bg-zinc-800" title="Remover">

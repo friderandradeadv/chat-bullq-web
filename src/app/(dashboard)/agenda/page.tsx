@@ -14,7 +14,7 @@ import type { DateClickArg } from '@fullcalendar/interaction';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Plus, X, MapPin, RefreshCw,
   MoreVertical, Search, Tag, Check, CalendarClock, ExternalLink, CalendarDays,
-  ClipboardList, Pencil, MessageSquare, Paperclip, List, MessageCircle, Sparkles,
+  ClipboardList, Pencil, MessageSquare, Paperclip, List, MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { calendarService, type CalendarEvent, type EventKind } from '@/features/calendar/services/calendar.service';
@@ -22,8 +22,8 @@ import { deadlinesService, type Deadline } from '@/features/deadlines/services/d
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
-import { GerarPecaDialog, type TipoPeca } from '@/features/legal-cases/components/gerar-peca-dialog';
 import { useAuthStore } from '@/stores/auth-store';
+import { usePermissions } from '@/hooks/use-permissions';
 import { inputCls, Field, ASTREA_BLUE, CnjNumber } from '../processos/page';
 
 const EV_PENDING = { bg: '#DAF3FF', text: '#1D6BB7' };
@@ -189,13 +189,19 @@ export default function AgendaPage() {
   // igual ao Astrea. Aplica uma única vez quando o usuário fica disponível;
   // depois o filtro fica livre (o usuário pode escolher Todas ou outra pessoa).
   const meId = useAuthStore((s) => s.user?.id) ?? null;
+  // Associado (AGENT): só vê a própria agenda. Trava o filtro de pessoa nele e
+  // pede ao backend só o que é dele (o backend também filtra por conta própria).
+  const { isSocio } = usePermissions();
   const didInitPerson = useRef(false);
   useEffect(() => {
-    if (didInitPerson.current || !meId) return;
+    if (!meId) return;
+    // AGENT fica sempre travado em "minhas atribuições".
+    if (!isSocio) { setPersonId(meId); setDPerson(meId); return; }
+    if (didInitPerson.current) return;
     didInitPerson.current = true;
     setPersonId(meId);
     setDPerson(meId);
-  }, [meId]);
+  }, [meId, isSocio]);
 
   const api = () => calRef.current?.getApi();
 
@@ -207,6 +213,10 @@ export default function AgendaPage() {
   const from = useMemo(() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString(); }, []);
   const to = useMemo(() => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString(); }, []);
 
+  // O escopo do associado é feito no BACKEND (calendar/deadlines/tasks já filtram
+  // por responsável + co-responsável quando o usuário não é sócio) — não passamos
+  // assignedToId aqui pra não estreitar demais (perderia os itens de co-responsável
+  // do calendar). O filtro client-side abaixo trava a visão do AGENT em si mesmo.
   const evQ = useQuery({ queryKey: ['calendar', 'agenda'], queryFn: () => calendarService.list({ from, to }) });
   const dlQ = useQuery({ queryKey: ['deadlines', 'agenda'], queryFn: () => deadlinesService.list({}) });
   const tkQ = useQuery({ queryKey: ['tasks', 'agenda'], queryFn: () => tasksService.list() });
@@ -302,7 +312,9 @@ export default function AgendaPage() {
     if (status === 'aconcluir' && (a.done || a.cancelled)) return false;
     if (status === 'concluidas' && !a.done) return false;
     if (status === 'canceladas' && !a.cancelled) return false;
-    if (personId !== 'all' && a.responsibleId !== personId) return false;
+    // Filtra por pessoa como responsável OU co-responsável (envolvido) — assim o
+    // associado, travado em si mesmo, também vê os itens em que é co-responsável.
+    if (personId !== 'all' && a.responsibleId !== personId && !(a.coResponsibleIds ?? []).includes(personId)) return false;
     if (tagFilter.length && !a.tags.some((t) => tagFilter.includes(t.id))) return false;
     if (q) {
       const byText = a.title.toLowerCase().includes(q) || (a.caseTitle ?? '').toLowerCase().includes(q);
@@ -379,7 +391,7 @@ export default function AgendaPage() {
   const isMonth = mode === 'dayGridMonth';
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 p-6 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">Agenda</h1>
         <div className="flex items-center gap-2">
@@ -416,11 +428,13 @@ export default function AgendaPage() {
             </div></>)}
         </div>
 
-        {/* Minhas atribuições */}
+        {/* Minhas atribuições — só sócios trocam de pessoa; o associado fica travado
+            nas próprias atribuições (não vê a agenda dos outros). */}
+        {isSocio && (
         <div className="relative">
           <FilterBtn onClick={() => { setDAtribOpen(); setFAtrib((v) => !v); }} active={personId !== 'all'}>{personLabel}<ChevronDown className="h-3.5 w-3.5" /></FilterBtn>
           {fAtrib && (<><div className="fixed inset-0 z-10" onClick={() => setFAtrib(false)} />
-            <div className="absolute left-0 top-11 z-20 w-[420px] rounded-lg border border-[#DEE2E6] bg-white p-4 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="absolute left-0 top-11 z-20 w-[calc(100vw-2rem)] max-w-[420px] rounded-lg border border-[#DEE2E6] bg-white p-4 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Atribuição</p>
@@ -444,6 +458,7 @@ export default function AgendaPage() {
               </div>
             </div></>)}
         </div>
+        )}
 
         {/* Todas as atividades */}
         <div className="relative">
@@ -533,7 +548,7 @@ export default function AgendaPage() {
             )}
           </div>
         </div>
-        {showSidePanel && (<div className="w-[360px] shrink-0 overflow-y-auto"><SidePanel activities={filtered} mode={mode} onOpen={openDetail} isUnseenNew={isUnseenNew} /></div>)}
+        {showSidePanel && (<div className="hidden w-[360px] shrink-0 overflow-y-auto lg:block"><SidePanel activities={filtered} mode={mode} onOpen={openDetail} isUnseenNew={isUnseenNew} /></div>)}
       </div>
 
       {chooser && (
@@ -762,7 +777,6 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [respId, setRespId] = useState(activity.responsibleId);
   const [respName, setRespName] = useState(activity.responsibleName);
   const [prazoBusy, setPrazoBusy] = useState(false);
-  const [pecaTipo, setPecaTipo] = useState<TipoPeca | null>(null);
   const [coIds, setCoIds] = useState<string[]>(activity.coResponsibleIds ?? []);
   const [coMenu, setCoMenu] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
@@ -1180,33 +1194,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           </div>
         )}
 
-        {/* Gerar peça por IA — quando o item está vinculado a um processo. */}
-        {activity.caseId && (
-          <div className="mt-5 rounded-lg border border-[#7048E8]/30 bg-[#7048E8]/5 p-3 dark:border-[#7048E8]/40 dark:bg-[#7048E8]/10">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#7048E8] dark:text-[#b197fc]">Gerar peça (IA)</p>
-            <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-              Sobe o documento-base (contestação, réplica ou sentença) e a IA redige a peça sobre o timbrado — anexa no processo. Confira as teses e as lacunas “[ • ]” antes do protocolo.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {([
-                { tipo: 'replica' as TipoPeca, label: 'Réplica' },
-                { tipo: 'especificacao' as TipoPeca, label: 'Especificação de provas' },
-                { tipo: 'recurso' as TipoPeca, label: 'Recurso (apelação)' },
-              ]).map((b) => (
-                <button
-                  key={b.tipo}
-                  onClick={() => setPecaTipo(b.tipo)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-[#7048E8] px-3 py-2 text-sm font-medium text-[#7048E8] hover:bg-[#7048E8]/10"
-                >
-                  <Sparkles className="h-4 w-4" /> {b.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {pecaTipo && activity.caseId && (
-          <GerarPecaDialog caseId={activity.caseId} tipo={pecaTipo} onClose={() => setPecaTipo(null)} onGenerated={onRefetch} />
-        )}
+        {/* Geração de peças por IA saiu da agenda (usa-se o Cowork). A geração fica
+            na ficha do processo (PecasActions) e a de iniciais no kanban pré-judicial. */}
 
         {/* Comentários */}
         <div className="mt-5 border-t border-[#DEE2E6] pt-4 dark:border-zinc-800">

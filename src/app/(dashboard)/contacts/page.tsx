@@ -228,7 +228,7 @@ export default function ContactsPage() {
     'rounded-lg border border-zinc-200 bg-white py-2.5 px-3 text-sm text-zinc-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 
   return (
-    <div className="flex h-full flex-col min-h-0 min-w-0 p-6">
+    <div className="flex h-full flex-col min-h-0 min-w-0 p-4 lg:p-6">
       <div className="w-full shrink-0">
         {/* Cabeçalho */}
         <div className="flex flex-wrap items-end justify-between gap-3">

@@ -37,6 +37,8 @@ interface ChatPanelProps {
   onConversationUpdate: () => void;
   panelOpen?: boolean;
   onTogglePanel?: () => void;
+  /** Volta pra lista de conversas no celular (seta ◀ no cabeçalho). */
+  onBack?: () => void;
 }
 
 const statusIcons: Record<string, React.ElementType> = {
@@ -380,7 +382,7 @@ function ContactAvatar({
   );
 }
 
-export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTogglePanel }: ChatPanelProps) {
+export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTogglePanel, onBack }: ChatPanelProps) {
   const queryClient = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
   const { on, emit, onReconnect } = useSocket();
@@ -917,7 +919,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     // ChatInput pra fora do painel — quebra dramaticamente quando o pai
     // é um modal com altura fixa.
     <div
-      className="relative flex min-h-0 flex-1 min-w-[400px] flex-col"
+      className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col lg:min-w-[400px]"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -938,7 +940,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         <button
           onClick={onTogglePanel}
           title={panelOpen ? 'Fechar painel' : 'Abrir painel'}
-          className="group absolute right-0 top-1/2 z-30 flex h-12 w-5 -translate-y-1/2 items-center justify-center rounded-l-md bg-zinc-100 text-zinc-500 opacity-60 ring-1 ring-zinc-200 transition-all duration-200 hover:bg-zinc-200 hover:text-zinc-900 hover:opacity-100 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-white"
+          className="group absolute right-0 top-1/2 z-30 hidden h-12 w-5 -translate-y-1/2 items-center justify-center rounded-l-md bg-zinc-100 text-zinc-500 opacity-60 ring-1 ring-zinc-200 transition-all duration-200 hover:bg-zinc-200 hover:text-zinc-900 hover:opacity-100 lg:flex dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-white"
         >
           {panelOpen ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
         </button>
@@ -949,6 +951,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         panelOpen={panelOpen}
         onTogglePanel={onTogglePanel}
         onToggleSearch={toggleConvSearch}
+        onBack={onBack}
       />
 
       {/* Barra de busca dentro da conversa */}

@@ -66,14 +66,14 @@ export default function SettingsNotificationsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Notificações</h2>
           <p className="mt-0.5 text-sm text-zinc-500">Configure como e quando você deseja ser notificado</p>
         </div>
         <button
           onClick={handleSave}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="shrink-0 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           Salvar preferências
         </button>
@@ -152,8 +152,8 @@ export default function SettingsNotificationsPage() {
         </div>
 
         {/* Notification matrix */}
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <table className="w-full">
+        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <table className="w-full min-w-[480px]">
             <thead>
               <tr className="border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Tipo de notificação</th>

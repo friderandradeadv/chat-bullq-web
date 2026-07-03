@@ -88,7 +88,7 @@ export default function CaixaDjenPage() {
   return (
     <div className="flex h-full flex-col bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 pb-1 pt-8">
+      <div className="flex items-center justify-between px-4 pb-1 pt-8 lg:px-8">
         <h1 className="flex items-center gap-2 text-2xl font-normal text-zinc-700 dark:text-zinc-100">
           <Newspaper className="h-6 w-6" style={{ color: ASTREA_BLUE }} /> Publicações
         </h1>
@@ -102,7 +102,7 @@ export default function CaixaDjenPage() {
       </div>
 
       {/* Cartões-resumo + mini-gráfico */}
-      <div className="px-8 pt-4">
+      <div className="px-4 pt-4 lg:px-8">
         <div className="flex flex-wrap items-stretch gap-3 rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <StatCard n={stats?.naoTratadosHoje ?? 0} label="Não tratadas de hoje" color="text-zinc-900 dark:text-zinc-100" />
           <Sep />
@@ -116,8 +116,8 @@ export default function CaixaDjenPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-2 px-8 pt-4">
-        <div className="relative max-w-md flex-1">
+      <div className="flex flex-wrap items-center gap-2 px-4 pt-4 lg:px-8">
+        <div className="relative w-full max-w-md flex-1 basis-full sm:basis-auto">
           <input
             value={q} onChange={(e) => setQ(e.target.value)}
             placeholder="Digite o processo ou termo pesquisado"
@@ -182,21 +182,22 @@ export default function CaixaDjenPage() {
       </div>
 
       {/* contagem + expandir */}
-      <div className="flex items-center justify-between px-8 pt-3 text-sm text-zinc-500">
+      <div className="flex items-center justify-between px-4 pt-3 text-sm text-zinc-500 lg:px-8">
         <span>{selected.size > 0 ? `${selected.size} selecionada(s)` : `Mostrando ${pubs.length} publicaç${pubs.length === 1 ? 'ão' : 'ões'}`}</span>
         <button onClick={() => setExpandAll((v) => !v)} className="text-[#228BE6] hover:underline">{expandAll ? 'Recolher todos' : 'Expandir todos'}</button>
       </div>
 
       {/* banner de seleção total (estilo Astrea) */}
       {allOnPage && pubs.length > 0 && (
-        <div className="mx-8 mt-2 rounded-md bg-[#228BE6]/10 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300">
+        <div className="mx-4 mt-2 rounded-md bg-[#228BE6]/10 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300 lg:mx-8">
           {`Todas as ${pubs.length} publicações desta página estão selecionadas.`}
         </div>
       )}
 
       {/* Tabela */}
-      <div className="mt-2 flex-1 overflow-auto px-8 pb-6">
+      <div className="mt-2 flex-1 overflow-auto px-4 pb-6 lg:px-8">
         <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-left">
             <thead>
               <tr className="border-b border-zinc-100 text-xs font-bold uppercase tracking-wide text-[#6C757D] dark:border-zinc-800">
@@ -218,6 +219,7 @@ export default function CaixaDjenPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>
@@ -341,7 +343,7 @@ function PubRow({ p, selected, onToggle, forceOpen, onChange }: { p: Publication
       </tr>
       {isOpen && (
         <tr className="border-b border-zinc-100 dark:border-zinc-800/70">
-          <td colSpan={8} className="bg-zinc-50/60 px-12 py-4 dark:bg-zinc-800/30">
+          <td colSpan={8} className="bg-zinc-50/60 px-4 py-4 dark:bg-zinc-800/30 lg:px-12">
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{p.rawContent}</p>
             {dias ? (
               <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">

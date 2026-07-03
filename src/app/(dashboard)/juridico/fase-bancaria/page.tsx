@@ -28,6 +28,7 @@ export default function FaseBancariaPage() {
       filter={(c) => c.phase.startsWith('banco_')}
       columnsFromPhases={(p) => p.key.startsWith('banco_')}
       columns={COLUNAS}
+      lane="banco"
     />
   );
 }

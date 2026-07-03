@@ -131,7 +131,9 @@ export function CaseDetailDrawer({
   const adversa = c?.parties?.find((p) => p.role === 'OPPONENT') ?? null;
   const phaseKey = (c as any)?.legalPhase as string | undefined;
   const fase = phases.find((p) => p.key === phaseKey);
-  const faseData = (c?.metadata as any)?.faseData?.[phaseKey ?? ''] ?? {};
+  // Fases de sentença (favorável/desfavorável) leem do bucket compartilhado 'sentenca'.
+  const faseBucket = (phaseKey ?? '').startsWith('sentenca_') ? 'sentenca' : (phaseKey ?? '');
+  const faseData = (c?.metadata as any)?.faseData?.[faseBucket] ?? {};
   const isFilhote = !!(c?.metadata as any)?.desmembradoDe;
   const inIntake = phaseKey ? INTAKE_PHASES.has(phaseKey) : false;
   const inMontar = phaseKey ? MONTAR_PHASES.has(phaseKey) : false;
@@ -164,14 +166,14 @@ export function CaseDetailDrawer({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ fontFamily: INTER }}>
       <div className="absolute inset-0 bg-black/10" onClick={onClose} />
-      <div className="relative flex h-[608px] max-h-[90vh] w-[944px] max-w-[96vw] overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-zinc-950">
+      <div className="relative flex h-[90vh] max-h-[90vh] w-[944px] max-w-[96vw] flex-col overflow-y-auto rounded-xl bg-white shadow-2xl lg:h-[608px] lg:flex-row lg:overflow-hidden dark:bg-zinc-950">
         <button onClick={onClose} className="absolute right-4 top-4 z-10 rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
           <X className="h-5 w-5" />
         </button>
 
         {/* ── PAINEL ESQUERDO ── */}
-        <div className="flex min-w-0 flex-1 flex-col border-r border-[#cfe0ed] dark:border-zinc-800">
-          <div className="px-8 pt-6">
+        <div className="flex min-w-0 flex-1 flex-col border-b border-[#cfe0ed] lg:border-b-0 lg:border-r dark:border-zinc-800">
+          <div className="px-4 pt-6 lg:px-8">
             {c ? (
               <EditableName caseId={c.id} cliente={cliente} title={c.title} onSaved={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
             ) : (
@@ -210,7 +212,7 @@ export function CaseDetailDrawer({
             </div>
           </div>
 
-          <div className="mt-3 flex-1 overflow-y-auto px-8 pb-6">
+          <div className="mt-3 flex-1 px-4 pb-6 lg:overflow-y-auto lg:px-8">
             {isLoading && <p className="py-6 text-sm text-zinc-400">Carregando…</p>}
             {c && tab === 'dados' && (
               <>
@@ -385,8 +387,8 @@ export function CaseDetailDrawer({
         </div>
 
         {/* ── PAINEL DIREITO: FASE ATUAL ── */}
-        <div className="relative flex w-[420px] shrink-0 flex-col">
-          <div className="flex-1 overflow-y-auto p-6">
+        <div className="relative flex w-full shrink-0 flex-col lg:w-[420px]">
+          <div className="flex-1 p-4 lg:overflow-y-auto lg:p-6">
             <h3 className="text-base font-semibold text-black dark:text-zinc-100">Fase atual</h3>
             <p className="mt-1 text-xs font-semibold" style={{ color: MAGENTA }}>{fase?.label ?? '—'}</p>
 

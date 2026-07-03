@@ -85,7 +85,7 @@ export default function PartesAdversasPage() {
   const top5Share = totalProcessos ? Math.round((filtered.slice(0, 5).reduce((s, r) => s + r.casesCount, 0) / totalProcessos) * 100) : 0;
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-[#fafafa] p-6 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="flex h-full flex-col overflow-y-auto bg-[#fafafa] p-4 text-zinc-800 lg:p-6 dark:bg-zinc-950 dark:text-zinc-200">
       <div className="flex items-center gap-2">
         <Gavel className="h-5 w-5 text-[#228BE6]" />
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Partes Adversas</h1>

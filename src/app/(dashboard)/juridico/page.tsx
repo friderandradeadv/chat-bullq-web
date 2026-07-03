@@ -101,7 +101,7 @@ export default function JuridicoDashboardPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
-      <div className="mx-auto w-full max-w-6xl p-6">
+      <div className="mx-auto w-full max-w-6xl p-4 lg:p-6">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
           <BarChart3 className="h-6 w-6" style={{ color: BLUE }} /> Dashboard do Jurídico
         </h1>

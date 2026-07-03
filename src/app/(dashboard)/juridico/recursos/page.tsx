@@ -72,7 +72,7 @@ export default function RecursosPage() {
   }, [filtered]);
 
   return (
-    <div className="h-full overflow-y-auto bg-white p-6 text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="h-full overflow-y-auto bg-white p-4 text-zinc-800 lg:p-6 dark:bg-zinc-950 dark:text-zinc-200">
       <div className="flex items-center gap-2">
         <Gavel className="h-5 w-5 text-[#228BE6]" />
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Recursos</h1>

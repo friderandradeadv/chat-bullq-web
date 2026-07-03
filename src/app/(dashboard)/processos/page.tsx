@@ -279,7 +279,7 @@ export default function ProcessosPage() {
   return (
     <div className="flex h-full flex-col bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 pb-1 pt-9">
+      <div className="flex items-center justify-between px-4 pb-1 pt-9 lg:px-8">
         <h1 className="text-2xl font-normal text-zinc-700 dark:text-zinc-100">Processos e casos</h1>
         <div className="flex items-center gap-2">
           <IconBtn title="Imprimir">
@@ -303,8 +303,8 @@ export default function ProcessosPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex items-center gap-3 px-8 pt-5">
-        <div className="relative max-w-2xl flex-1">
+      <div className="flex flex-wrap items-center gap-3 px-4 pt-5 lg:px-8">
+        <div className="relative w-full max-w-2xl flex-1 basis-full lg:basis-auto">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -338,7 +338,7 @@ export default function ProcessosPage() {
         </select>
       </div>
 
-      <div className="flex items-center gap-3 px-8 pt-3 text-sm">
+      <div className="flex items-center gap-3 px-4 pt-3 text-sm lg:px-8">
         {canDeleteCases && selected.size > 0 ? (
           <BulkBar
             count={selected.size}
@@ -371,9 +371,10 @@ export default function ProcessosPage() {
       </div>
 
       {/* Tabela */}
-      <div className="mt-2 flex-1 overflow-y-auto px-8 pb-6">
+      <div className="mt-2 flex-1 overflow-y-auto px-4 pb-6 lg:px-8">
         <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <table className="w-full text-left">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left">
             <thead>
               <tr className="border-b border-zinc-100 text-xs font-bold uppercase tracking-wide text-[#6C757D] dark:border-zinc-800">
                 {canDeleteCases && <th className="w-10 px-3 py-4"><input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-4 w-4 accent-[#228BE6]" title="Selecionar todos" /></th>}
@@ -405,6 +406,7 @@ export default function ProcessosPage() {
               ))}
             </tbody>
           </table>
+          </div>
           {pageSize > 0 && pageCount > 1 && (
             <div className="flex items-center justify-between border-t border-[#DEE2E6] px-4 py-3 text-sm dark:border-zinc-800">
               <span className="text-zinc-500">
@@ -845,7 +847,7 @@ function CreateCaseDialog({
               placeholder="Ex.: Cliente x Banco — Cumprimento de sentença"
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Nº CNJ">
               <input
                 value={form.cnjNumber ?? ''}
@@ -862,7 +864,7 @@ function CreateCaseDialog({
               />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Ação / Área">
               <input
                 value={form.area ?? ''}

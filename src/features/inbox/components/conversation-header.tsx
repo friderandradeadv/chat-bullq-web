@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Search,
   Eraser,
+  ChevronLeft,
 } from 'lucide-react';
 import { formatPhone } from '@/lib/brazil-states';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -30,6 +31,8 @@ interface ConversationHeaderProps {
   panelOpen?: boolean;
   onTogglePanel?: () => void;
   onToggleSearch?: () => void;
+  /** Celular: seta ◀ que fecha o chat e volta pra lista de conversas. */
+  onBack?: () => void;
 }
 
 function HeaderAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: string | null }) {
@@ -54,7 +57,7 @@ function HeaderAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: str
   );
 }
 
-export function ConversationHeader({ conversation, onUpdate, panelOpen = true, onTogglePanel, onToggleSearch }: ConversationHeaderProps) {
+export function ConversationHeader({ conversation, onUpdate, panelOpen = true, onTogglePanel, onToggleSearch, onBack }: ConversationHeaderProps) {
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -143,6 +146,17 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
     <div className="flex h-[67px] items-center justify-between border-b border-zinc-200 bg-white px-3.5 dark:border-zinc-800 dark:bg-zinc-950">
       {/* Contact info — name+avatar toggles the right panel; copy button is separate */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Voltar para conversas"
+            title="Voltar"
+            className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 lg:hidden dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={onTogglePanel}

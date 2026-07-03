@@ -17,7 +17,14 @@ export default function InboxPage() {
   const deepLinkConvId = searchParams.get('conversationId');
   const deepLinkSearch = searchParams.get('search');
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
-  const [panelOpen, setPanelOpen] = useState(true);
+  // No desktop o painel de detalhes vem aberto (layout de 3 colunas). No celular
+  // ele começa fechado — senão o overlay taparia o chat assim que a conversa abre.
+  const [panelOpen, setPanelOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
+      setPanelOpen(true);
+    }
+  }, []);
   const queryClient = useQueryClient();
   const archivedOnly = useInboxFilterStore((s) => s.archivedOnly);
   const setSearch = useInboxFilterStore((s) => s.setSearch);
@@ -103,14 +110,18 @@ export default function InboxPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Full-width top toolbar — search + Responsável + Status + Mais filtros (LíderHub style) */}
-      <InboxToolbar />
+      {/* Full-width top toolbar — search + Responsável + Status + Mais filtros (LíderHub style).
+          No celular, ao abrir uma conversa a barra some pra dar a tela toda ao chat. */}
+      <div className={activeConversation ? 'max-lg:hidden' : ''}>
+        <InboxToolbar />
+      </div>
 
-      <div className="flex min-h-0 flex-1 overflow-x-auto">
+      <div className="flex min-h-0 flex-1 lg:overflow-x-auto">
         <ConversationList
           activeId={activeConversation?.id || null}
           onSelect={setActiveConversation}
           viewId={viewId}
+          hiddenOnMobile={!!activeConversation}
         />
 
         {activeConversation ? (
@@ -121,16 +132,21 @@ export default function InboxPage() {
             onConversationUpdate={handleConversationUpdate}
             panelOpen={panelOpen}
             onTogglePanel={() => setPanelOpen((v) => !v)}
+            onBack={() => setActiveConversation(null)}
           />
           {panelOpen && (
-            <ContactDetailsPanel
-              key={`panel-${activeConversation.id}`}
-              conversation={activeConversation}
-            />
+            /* Desktop: 3ª coluna inline. Celular: overlay em tela cheia por cima do chat. */
+            <div className="max-lg:fixed max-lg:inset-0 max-lg:z-40 flex max-lg:bg-white lg:contents dark:max-lg:bg-zinc-950">
+              <ContactDetailsPanel
+                key={`panel-${activeConversation.id}`}
+                conversation={activeConversation}
+                onCloseMobile={() => setPanelOpen(false)}
+              />
+            </div>
           )}
         </>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-900/50">
+        <div className="hidden flex-1 flex-col items-center justify-center bg-zinc-50 lg:flex dark:bg-zinc-900/50">
           <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
             <MessageSquare className="h-10 w-10 text-zinc-300 dark:text-zinc-600" />
           </div>

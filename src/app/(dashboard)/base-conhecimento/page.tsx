@@ -77,8 +77,8 @@ export default function BaseConhecimentoPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col p-6">
-        <div className="flex shrink-0 items-center justify-between">
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col p-4 lg:p-6">
+        <div className="flex shrink-0 flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Base de Conhecimento</h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -87,7 +87,7 @@ export default function BaseConhecimentoPage() {
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
           >
             <Plus className="h-4 w-4" /> Adicionar Documento
           </button>
@@ -121,8 +121,8 @@ export default function BaseConhecimentoPage() {
         </div>
 
         <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <table className="w-full text-sm">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="sticky top-0 z-10 bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
                 <tr>
                   <th className="px-4 py-2.5 text-left font-medium">Nome</th>

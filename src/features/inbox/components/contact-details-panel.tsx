@@ -30,6 +30,7 @@ import {
   CircleDot,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Bot,
   Wrench,
   AlertTriangle,
@@ -1980,14 +1981,32 @@ function ScheduledTab({ conversationId }: { conversationId: string }) {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function ContactDetailsPanel({ conversation }: { conversation: Conversation }) {
+export function ContactDetailsPanel({
+  conversation,
+  onCloseMobile,
+}: {
+  conversation: Conversation;
+  /** Celular: fecha o painel de detalhes (overlay) e volta pro chat. */
+  onCloseMobile?: () => void;
+}) {
   const [activeTab, setActiveTab] = useState<PanelTab>('profile');
 
   return (
-    <div className="flex w-80 shrink-0 flex-col border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="flex h-full w-full shrink-0 flex-col border-l border-zinc-200 bg-white lg:w-80 dark:border-zinc-800 dark:bg-zinc-950">
       {/* Tab bar — same height as the conversation header so the icons line up
           on the same horizontal row (LíderHub style) */}
       <div className="flex h-[67px] items-center border-b border-zinc-200 dark:border-zinc-800">
+        {onCloseMobile && (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Fechar detalhes"
+            title="Fechar"
+            className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 lg:hidden dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        )}
         {TABS.map(({ id, icon: Icon, label }) => {
           const isActive = activeTab === id;
           return (

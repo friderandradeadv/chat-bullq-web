@@ -108,7 +108,7 @@ export default function ClienteDetailPage() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-      <div className="px-6 pt-6">
+      <div className="px-4 pt-6 lg:px-6">
         <button onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-[#228BE6]">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
@@ -126,7 +126,7 @@ export default function ClienteDetailPage() {
         </div>
       </div>
 
-      <div className="grid flex-1 gap-5 px-6 py-5 lg:grid-cols-3">
+      <div className="grid flex-1 gap-5 px-4 py-5 lg:grid-cols-3 lg:px-6">
         {/* Ficha cadastral + etiquetas */}
         <div className="space-y-5">
           <Card title="Ficha cadastral" icon={User}>

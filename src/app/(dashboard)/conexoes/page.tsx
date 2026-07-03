@@ -88,9 +88,9 @@ export default function ConexoesPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl p-6">
+    <div className="mx-auto w-full max-w-6xl p-4 lg:p-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Conexões</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -155,8 +155,8 @@ export default function ConexoesPage() {
       </div>
 
       {/* Table */}
-      <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-left text-sm">
+      <div className="mt-3 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <table className="w-full min-w-[640px] text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 bg-zinc-50 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
               <th className="px-4 py-3">Conexão</th>

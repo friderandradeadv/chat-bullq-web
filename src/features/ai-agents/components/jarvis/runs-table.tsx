@@ -29,8 +29,8 @@ export function RunsTable({ runs, emptyHint }: RunsTableProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <table className="w-full min-w-[860px] text-sm">
         <thead>
           <tr className="border-b border-zinc-200 bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
             <th className="w-6 px-3 py-2"></th>

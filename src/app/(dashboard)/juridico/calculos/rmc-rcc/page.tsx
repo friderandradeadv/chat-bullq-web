@@ -888,7 +888,7 @@ export default function CalculadoraRmcPage() {
                 (ex.: <code>01/12/2022 60,60</code>).
               </p>
 
-              <div className="mb-3 grid grid-cols-[1fr_1fr_70px_auto] items-end gap-2">
+              <div className="mb-3 grid grid-cols-2 items-end gap-2 lg:grid-cols-[1fr_1fr_70px_auto]">
                 <div>
                   <label className={labelCls}>1ª competência</label>
                   <input

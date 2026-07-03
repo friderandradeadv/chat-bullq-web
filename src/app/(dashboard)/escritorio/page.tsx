@@ -145,7 +145,7 @@ export default function EscritorioPage() {
   if (isLoading) return <div className="flex h-full items-center justify-center text-sm text-zinc-400"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando…</div>;
 
   return (
-    <div className="h-full overflow-y-auto bg-[#fafafa] px-6 py-6 dark:bg-zinc-950">
+    <div className="h-full overflow-y-auto bg-[#fafafa] px-4 py-6 lg:px-6 dark:bg-zinc-950">
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -172,7 +172,7 @@ export default function EscritorioPage() {
         </div>
 
         {/* Abas — só a ativa é renderizada */}
-        <div className="sticky top-0 z-10 -mx-6 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa]/95 px-6 py-2 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+        <div className="sticky top-0 z-10 -mx-4 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa]/95 px-4 py-2 backdrop-blur lg:-mx-6 lg:px-6 dark:border-zinc-800 dark:bg-zinc-950/95">
           {([['perfil', 'Meu Perfil', UserCircle], ['financeiro', 'Financeiro', CircleDollarSign], ['cargos', 'Cargos', Briefcase], ['verticais', 'Verticais', Layers], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}

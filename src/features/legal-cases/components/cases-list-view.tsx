@@ -34,8 +34,8 @@ export function CasesListView({
   const td = 'border-b border-[#eef2f8] px-3 py-2.5 align-top dark:border-zinc-800';
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-6 pb-6">
-      <table className="w-full border-separate border-spacing-0 text-sm">
+    <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 lg:px-6">
+      <table className="w-full min-w-[720px] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
             <th className={th}>Cliente × Parte adversa</th>

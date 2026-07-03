@@ -105,15 +105,15 @@ export default function ClientesPage() {
   return (
     <div className="flex h-full flex-col bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 pb-1 pt-8">
+      <div className="flex items-center justify-between px-4 pb-1 pt-8 lg:px-8">
         <h1 className="flex items-center gap-2 text-2xl font-normal text-zinc-700 dark:text-zinc-200">
           <Users className="h-6 w-6" style={{ color: '#228BE6' }} /> Clientes
         </h1>
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-2 px-8 pt-4">
-        <div className="relative min-w-[240px] flex-1">
+      <div className="flex flex-wrap items-center gap-2 px-4 pt-4 lg:px-8">
+        <div className="relative w-full min-w-[240px] flex-1 basis-full sm:basis-auto">
           <input
             value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome ou documento"
@@ -161,7 +161,7 @@ export default function ClientesPage() {
         </Filter>
       </div>
 
-      <div className="flex min-h-[36px] flex-wrap items-center justify-between gap-2 px-8 pt-3 text-sm text-zinc-500">
+      <div className="flex min-h-[36px] flex-wrap items-center justify-between gap-2 px-4 pt-3 text-sm text-zinc-500 lg:px-8">
         {selected.size > 0 ? (
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-[#228BE6]">{selected.size} selecionado(s)</span>
@@ -211,8 +211,9 @@ export default function ClientesPage() {
       </div>
 
       {/* Lista */}
-      <div className="mt-2 flex-1 overflow-auto px-8 pb-6">
+      <div className="mt-2 flex-1 overflow-auto px-4 pb-6 lg:px-8">
         <div className="overflow-hidden rounded-lg border border-[#DEE2E6] bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-left">
             <thead>
               <tr className="border-b border-[#DEE2E6] text-xs font-bold uppercase tracking-wide text-[#6C757D] dark:border-zinc-800">
@@ -232,6 +233,7 @@ export default function ClientesPage() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {pageCount > 1 && (
             <div className="flex items-center justify-between border-t border-[#DEE2E6] px-4 py-3 text-sm dark:border-zinc-800">

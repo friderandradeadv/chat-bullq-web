@@ -186,8 +186,8 @@ export default function SettingsStatusesPage() {
       </div>
 
       {/* Tabela — estilo LíderHub */}
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-left text-sm">
+      <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <table className="w-full min-w-[560px] text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 bg-zinc-50/80 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60">
               <th className="px-4 py-3">Nome</th>

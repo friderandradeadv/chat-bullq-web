@@ -259,8 +259,8 @@ export default function JurimetriaPage() {
           {tribTese.length === 0 ? (
             <p className="py-6 text-center text-sm text-zinc-400">Ainda sem combinações com decisões suficientes nesta seleção.</p>
           ) : (
-            <div className="max-h-96 overflow-y-auto scrollbar-thin">
-              <table className="w-full text-sm">
+            <div className="max-h-96 overflow-auto scrollbar-thin">
+              <table className="w-full min-w-[480px] text-sm">
                 <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
                   <tr><th className="px-2 py-1.5 font-medium">Tribunal</th><th className="px-2 py-1.5 font-medium">Tese</th><th className="px-2 py-1.5 text-right font-medium">Decididos</th><th className="px-2 py-1.5 text-right font-medium">Favoráveis</th><th className="px-2 py-1.5 text-right font-medium">Taxa</th></tr>
                 </thead>
@@ -400,8 +400,8 @@ function Stat({ big, label, color }: { big: number; label: string; color: string
 function TaxaTabela({ data, colLabel }: { data: ResRow[]; colLabel: string }) {
   if (data.length === 0) return <p className="py-6 text-center text-sm text-zinc-400">Sem decisões nesta seleção.</p>;
   return (
-    <div className="max-h-80 overflow-y-auto scrollbar-thin">
-      <table className="w-full text-sm">
+    <div className="max-h-80 overflow-auto scrollbar-thin">
+      <table className="w-full min-w-[440px] text-sm">
         <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
           <tr><th className="px-2 py-1.5 font-medium">{colLabel}</th><th className="px-2 py-1.5 text-right font-medium">Dec.</th><th className="px-2 py-1.5 text-right font-medium">Fav.</th><th className="px-2 py-1.5 text-right font-medium">Perd.</th><th className="px-2 py-1.5 text-right font-medium">Ext.</th><th className="px-2 py-1.5 text-right font-medium">Taxa</th></tr>
         </thead>

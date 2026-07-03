@@ -139,7 +139,7 @@ export default function ProcessoDetailPage() {
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       {/* Cabeçalho */}
-      <div className="px-6 pt-6">
+      <div className="px-4 pt-6 lg:px-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{c.title}</h1>
@@ -225,7 +225,7 @@ export default function ProcessoDetailPage() {
         </dl>
 
         {/* Abas */}
-        <div className="mt-5 flex border-b border-[#DEE2E6] dark:border-zinc-800">
+        <div className="mt-5 flex overflow-x-auto border-b border-[#DEE2E6] dark:border-zinc-800">
           {([
             ['resumo', 'Resumo'],
             ['atividades', 'Atividades'],
@@ -235,7 +235,7 @@ export default function ProcessoDetailPage() {
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`-mb-px border-b-4 px-6 py-3 text-base font-medium transition-colors ${
+              className={`-mb-px shrink-0 whitespace-nowrap border-b-4 px-6 py-3 text-base font-medium transition-colors ${
                 tab === key
                   ? 'border-[#228BE6] text-[#202124] dark:text-zinc-100'
                   : 'border-transparent text-[#6C757D] hover:text-[#202124] dark:hover:text-zinc-200'
@@ -248,7 +248,7 @@ export default function ProcessoDetailPage() {
       </div>
 
       {/* Conteúdo das abas */}
-      <div className="flex-1 px-6 py-5">
+      <div className="flex-1 px-4 py-5 lg:px-6">
         {tab === 'resumo' && <ResumoTab c={c} />}
         {tab === 'atividades' && <AtividadesTab caseId={id} events={c.events} onChange={refetch} />}
         {tab === 'recursos' && <RecursosTab caseId={id} />}
@@ -1023,7 +1023,7 @@ function AddDeadlineInline({
         placeholder="Ex.: Contestação"
         className={inputCls}
       />
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <select value={type} onChange={(e) => setType(e.target.value as any)} className={inputCls}>
           <option value="ORDINARY">Comum</option>
           <option value="FATAL">Fatal</option>
@@ -1340,7 +1340,7 @@ function EditCaseDialog({
         <Field label="Título *">
           <input autoFocus value={form.title} onChange={set('title')} className={inputCls} />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Nº CNJ">
             <input value={form.cnjNumber} onChange={set('cnjNumber')} className={inputCls} placeholder="0000000-00.0000.0.00.0000" />
           </Field>
@@ -1348,7 +1348,7 @@ function EditCaseDialog({
             <input value={form.internalCode} onChange={set('internalCode')} className={inputCls} />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Ação / Área">
             <input value={form.area} onChange={set('area')} className={inputCls} />
           </Field>
@@ -1356,7 +1356,7 @@ function EditCaseDialog({
             <input value={form.court} onChange={set('court')} className={inputCls} />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Comarca / Foro">
             <input value={form.jurisdiction} onChange={set('jurisdiction')} className={inputCls} />
           </Field>
@@ -1364,7 +1364,7 @@ function EditCaseDialog({
             <input type="number" step="0.01" value={form.value} onChange={set('value')} className={inputCls} />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Distribuído em">
             <input type="date" value={form.distributedAt} onChange={set('distributedAt')} className={inputCls} />
           </Field>
@@ -1690,7 +1690,7 @@ function RecursoForm({
 
   return (
     <div className="mb-4 rounded-lg border border-[#DEE2E6] bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Espécie">
           <input
             list="especies-recurso"

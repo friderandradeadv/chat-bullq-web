@@ -135,6 +135,12 @@ interface ConversationListProps {
   activeId: string | null;
   onSelect: (conversation: Conversation) => void;
   /**
+   * No celular só cabe um painel por vez: quando uma conversa está aberta,
+   * a lista some (`hidden`) e o chat ocupa a tela inteira. No desktop (lg+)
+   * a lista fica sempre visível ao lado do chat.
+   */
+  hiddenOnMobile?: boolean;
+  /**
    * When set, fetches conversations through the inbox view endpoint
    * (`/inbox-views/:id/conversations`) which applies the view's saved
    * filters server-side. The user's local filters (status/channel/scope)
@@ -143,7 +149,7 @@ interface ConversationListProps {
   viewId?: string | null;
 }
 
-export function ConversationList({ activeId, onSelect, viewId }: ConversationListProps) {
+export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }: ConversationListProps) {
   const queryClient = useQueryClient();
   const orgId = useOrgId();
   const { on, onReconnect } = useSocket();
@@ -768,7 +774,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   const archivedCount = statusCounts?.['ARCHIVED'] ?? 0;
 
   return (
-    <div className="flex h-full w-80 shrink-0 flex-col border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <div className={`h-full w-full shrink-0 flex-col border-r border-zinc-200/80 bg-white lg:flex lg:w-80 dark:border-zinc-800 dark:bg-zinc-950 ${hiddenOnMobile ? 'hidden' : 'flex'}`}>
       {/* Cabeçalho "Conversas" — título + ⋮ menu + nova conversa (estilo LíderHub:
           tira essas ações da linha das abas pra elas ficarem limpas e largas). */}
       <div className="flex items-center justify-between border-b border-zinc-200/80 px-3.5 py-3 dark:border-zinc-800">
