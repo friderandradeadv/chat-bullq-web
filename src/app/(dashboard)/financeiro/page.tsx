@@ -2247,8 +2247,8 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
 // ═══════════════════════════ ABA · VERTICAIS (POR ÁREA) ═══════════════════════
 
 const CORES_AREA: Record<string, string> = {
-  'Bancário': '#7048E8', 'Previdenciário': '#228BE6', 'Trabalhista': '#E8590C',
-  'Consumidor': '#0CA678', 'Cível': '#F08C00', 'Geral (escritório)': '#868E96', 'Não identificada': '#ADB5BD',
+  'RMC/RCC': '#7048E8', 'REPB': '#9C36B5', 'Bancário': '#7048E8', 'Previdenciário': '#228BE6', 'Trabalhista': '#E8590C',
+  'Consumidor': '#0CA678', 'Cível': '#F08C00', 'Dativos': '#495057', 'Geral (escritório)': '#868E96', 'Não identificada': '#ADB5BD',
 };
 const corArea = (a: string) => CORES_AREA[a] ?? '#15AABF';
 
