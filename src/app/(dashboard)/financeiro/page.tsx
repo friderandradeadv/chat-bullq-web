@@ -127,7 +127,7 @@ export default function FinanceiroPage() {
 
   if (!data || data.vazio || !data.kpis) {
     return (
-      <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950">
+      <div className="h-full overflow-y-auto overflow-x-hidden bg-[#f5f6f8] dark:bg-zinc-950">
         <div className="mx-auto max-w-3xl p-6">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100"><CircleDollarSign className="h-6 w-6 text-emerald-600" /> Financeiro</h1>
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-6 text-sm dark:border-amber-900/40 dark:bg-amber-900/10">
@@ -141,7 +141,7 @@ export default function FinanceiroPage() {
   const k = data.kpis;
 
   return (
-    <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+    <div className="h-full overflow-y-auto overflow-x-hidden bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       <div className="mx-auto w-full max-w-6xl p-6">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -3633,7 +3633,7 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
   // o próprio advogado pode lançar honorários/despesas na vertical dele
   const criar = user?.id && data.minhaArea ? { userId: user.id, area: data.minhaArea } : undefined;
   return (
-    <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+    <div className="h-full overflow-y-auto overflow-x-hidden bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       <div className="mx-auto w-full max-w-5xl p-6">
         {/* Visão pessoal escopada à vertical do advogado — lançamentos (pode criar),
             CS, projeção e motivação. O caixa e a carteira do escritório inteiro
