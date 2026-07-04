@@ -111,6 +111,8 @@ export interface FinDashboard {
   minhaVertical?: { itens: { area: string; receita: number; despesa: number; resultado: number; pct: number; minhaParte: number }[]; totalParte: number; configurada: boolean };
   overheadCriterio?: string;
   holerite?: HoleriteMes[];                     // folha do mês (Meu Espaço)
+  // Saídas PADRÃO da(s) vertical(is) em que a pessoa atua (custos compartilhados: agência, anúncios). Selecionável no front.
+  saidasVerticais?: { area: string; total: number; lancamentos: { data: string; categoria: string; fornecedor: string; valor: number; mes: string }[]; porMes: { mes: string; valor: number }[] }[];
 }
 
 export interface HoleriteMes {

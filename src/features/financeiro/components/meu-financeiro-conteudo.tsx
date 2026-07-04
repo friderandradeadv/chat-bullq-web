@@ -118,6 +118,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
   const [mesSel, setMesSel] = useState(mesAtual); // abre no mês corrente (igual livro-razão); usuário muda no seletor
   const [stf, setStf] = useState<'todos' | 'recebido' | 'a_receber'>('todos');
   const [busca, setBusca] = useState('');
+  const [vertSaidaSel, setVertSaidaSel] = useState(''); // qual vertical (ela pode atuar em +de1: RMC, REPB) exibir as saídas
 
   // meses disponíveis + sempre o mês corrente (pra ele aparecer no seletor mesmo sem lançamento ainda)
   const mesesDisp = useMemo(() => Array.from(new Set([mesAtual, ...lancFonte.map(mesKey)])).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [lancFonte, mesAtual]);
@@ -220,7 +221,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-400/20 text-amber-600"><Flame className="h-5 w-5" /></span>
             <div className="min-w-0">
               <p className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
-                {r.recebido > 0 ? `Você já trouxe ${brl(r.recebido)} em honorários${aReceberTotal > 0 ? `, e ainda tem ${brl(aReceberTotal)} a entrar` : ''}. ` : ''}{FRASES_ADV[fraseIdx]}
+                {r.recebido > 0 ? `Você já trouxe ${brl(r.recebido)} em honorários pra sua vertical. ` : ''}{FRASES_ADV[fraseIdx]}
               </p>
               <button onClick={() => setFraseIdx((i) => (i + 1) % FRASES_ADV.length)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#7048E8] hover:underline"><Sparkles className="h-3.5 w-3.5" /> Me motive de novo</button>
             </div>
@@ -228,13 +229,16 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         </div>
         )}
 
-        {/* Stats (Visão geral) */}
+        {/* Stats (Visão geral) — 2 grupos claros: o que custeia a vertical × o que VOCÊ leva */}
         {subtab === 'resumo' && (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MiniStat label="Recebido (seus casos)" value={brl(r.recebido)} hint={melhorMes ? `melhor mês: ${mesLabel(melhorMes.mes).replace(' de ', '/')}` : `${r.nClientes} cliente(s)`} accent="#2F9E44" />
-          <MiniStat label="A receber" value={brl(r.aReceber)} hint="lançamentos pendentes" accent="#F59F00" />
-          <MiniStat label="Sua parte (rateio no êxito)" value={brl(r.minhaParte)} hint="o que você recebe de fato" accent="#7048E8" />
-          <MiniStat label="Total a entrar" value={brl(aReceberTotal)} hint="a receber + sua parte + CS" accent="#228BE6" />
+        <div className="mt-4">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Você trouxe pra vertical <span className="font-normal text-zinc-400">— custeia a estrutura, não é o que você leva</span></p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MiniStat label="Honorários recebidos (seus casos)" value={brl(r.recebido)} hint={melhorMes ? `melhor mês: ${mesLabel(melhorMes.mes).replace(' de ', '/')}` : `${r.nClientes} cliente(s)`} accent="#2F9E44" />
+            <MiniStat label="A receber (seus casos)" value={brl(r.aReceber)} hint="honorários pendentes — também custeiam a vertical" accent="#F59F00" />
+          </div>
+          <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-[#7048E8]">O que VOCÊ leva</p>
+          <MiniStat label="Sua parte (rateio no êxito)" value={brl(r.minhaParte)} hint="a sua remuneração de fato — detalhada na aba Holerite" accent="#7048E8" />
         </div>
         )}
 
@@ -509,6 +513,40 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           </div>
         </Card>
         )}
+
+        {/* Saídas PADRÃO da vertical (custos compartilhados: agência, anúncios) — selecionável por vertical */}
+        {subtab === 'lancamentos' && (data.saidasVerticais?.length ?? 0) > 0 && (() => {
+          const sv = data.saidasVerticais!;
+          const cur = sv.find((x) => x.area === vertSaidaSel) ?? sv[0];
+          const lancs = cur.lancamentos.filter((l) => !mesSel || l.mes === mesSel);
+          const tot = lancs.reduce((s, l) => s + l.valor, 0);
+          return (
+            <Card title={<span className="flex items-center gap-2"><ArrowDownCircle className="h-4 w-4 text-rose-500" /> Saídas da vertical</span>}
+              sub="os custos padrão da vertical (agência, anúncios…) — compartilhados por todos que atuam nela. O que ENTRA é dos seus casos; o que SAI é da vertical.">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                  <Scale className="h-3.5 w-3.5 text-zinc-400" />
+                  <select value={cur.area} onChange={(e) => setVertSaidaSel(e.target.value)} className="bg-transparent text-sm font-medium outline-none">{sv.map((x) => <option key={x.area} value={x.area}>{x.area}</option>)}</select>
+                </div>
+                <span className="ml-auto text-sm font-semibold tabular-nums text-rose-600">Total{mesSel ? ' do mês' : ''}: {brl2(tot)}</span>
+              </div>
+              <div className="max-h-80 overflow-y-auto scrollbar-thin">
+                {lancs.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-zinc-400">Sem saídas nesta vertical{mesSel ? ' neste mês' : ''}. Os custos aparecem aqui quando forem lançados/rateados na vertical <strong>{cur.area}</strong> no Financeiro.</p>
+                ) : lancs.map((l, i) => (
+                  <div key={i} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
+                    <span className="w-12 shrink-0 text-xs tabular-nums text-zinc-400">{l.data.slice(0, 5)}</span>
+                    <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                    <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{l.fornecedor || l.categoria}</span>
+                    <span className="hidden shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 sm:inline dark:bg-zinc-800">{l.categoria}</span>
+                    <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-rose-600">{brl2(l.valor)}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-400">Saídas padrão da vertical — as mesmas pra todo mundo que atua nela. Não saem do seu bolso; entram no cálculo de quanto a vertical se paga.</p>
+            </Card>
+          );
+        })()}
 
         <p className="mt-4 pb-2 text-center text-xs text-zinc-400">{deArea ? <>Esta visão reflete a vertical <strong>{areaNome}</strong> — sua área de atuação.</> : 'Esta visão mostra apenas os seus processos — em que você é o responsável.'}</p>
     </>

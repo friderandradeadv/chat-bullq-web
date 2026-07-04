@@ -515,7 +515,10 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
       if (!t.id) continue;
       try {
         if (v === '__ratear') {
-          const rv = (rateio[g.key] ?? []).filter((r) => r.area && r.pct > 0).map((r) => ({ area: r.area, valor: Math.round(Math.abs(t.valor) * (r.pct / 100) * 100) / 100 }));
+          const rows = (rateio[g.key] ?? []).filter((r) => r.area && r.pct > 0);
+          const abs = Math.abs(t.valor);
+          let acc = 0;
+          const rv = rows.map((r, i) => { const valor = i === rows.length - 1 ? Math.round((abs - acc) * 100) / 100 : Math.round(abs * (r.pct / 100) * 100) / 100; acc += valor; return { area: r.area, valor }; });
           await financeiroService.updateTransacao(t.id, { area: '', rateioVerticais: rv, escopo: 'uma' });
         } else {
           await financeiroService.updateTransacao(t.id, { area: v || '', rateioVerticais: [], escopo: 'uma' });
@@ -526,7 +529,9 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
     toast.success(`${g.txs.length} lançamento(s) · ${v === '__ratear' ? 'rateado' : v === 'Escritório' ? 'comum' : v || 'sem vertical'}`);
   };
   const nomeAtual = (a: string) => a === 'rateio' ? 'rateado' : a === '' ? 'sem vertical' : a;
-  const somaR = (key: string) => (rateio[key] ?? []).reduce((s, r) => s + (r.pct || 0), 0);
+  const somaR = (key: string) => Math.round((rateio[key] ?? []).reduce((s, r) => s + (r.pct || 0), 0) * 100) / 100;
+  // Divide 100% igualmente entre as linhas (ex.: 3 → 33,33 / 33,33 / 33,34 — a última absorve o resto p/ fechar 100).
+  const dividirIgual = (key: string) => setRateio((rr) => { const rows = rr[key] ?? []; const n = rows.length; if (!n) return rr; const base = Math.floor(10000 / n) / 100; const pcts = Array(n).fill(base); pcts[n - 1] = Math.round((100 - base * (n - 1)) * 100) / 100; return { ...rr, [key]: rows.map((x, i) => ({ ...x, pct: pcts[i] })) }; });
   // Separa o que falta classificar (some da lista principal quando aplicado) do que já tem vertical/rateio/comum.
   // Usa o estado PERSISTIDO (g.atual), não o sel transitório — senão a linha pula de seção no meio da edição.
   const pendentes = grupos.filter((g) => !g.atual);
@@ -553,13 +558,14 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
           {(rateio[g.key] ?? []).map((r, i) => (
             <div key={i} className="flex items-center gap-2">
               <select value={r.area} onChange={(e) => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).map((x, j) => j === i ? { ...x, area: e.target.value } : x) }))} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{verticais.map((v) => <option key={v} value={v}>{v}</option>)}</select>
-              <input value={String(r.pct)} onChange={(e) => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).map((x, j) => j === i ? { ...x, pct: Math.max(0, Math.min(100, Number(e.target.value.replace(/\D/g, '')) || 0)) } : x) }))} inputMode="numeric" className="w-14 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-sm text-zinc-400">%</span>
+              <input value={String(r.pct)} onChange={(e) => { const n = Math.max(0, Math.min(100, parseFloat(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.')) || 0)); setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).map((x, j) => j === i ? { ...x, pct: n } : x) })); }} inputMode="decimal" className="w-16 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-sm text-zinc-400">%</span>
               <button onClick={() => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).filter((_, j) => j !== i) }))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
             </div>
           ))}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => setRateio((rr) => ({ ...rr, [g.key]: [...(rr[g.key] ?? []), { area: verticais[0] ?? '', pct: 0 }] }))} className="text-xs font-medium text-[#228BE6] hover:underline">+ vertical</button>
-            <span className={`text-[11px] ${somaR(g.key) === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>soma {somaR(g.key)}%{somaR(g.key) !== 100 ? ' (ideal 100%)' : ''}</span>
+            <button onClick={() => dividirIgual(g.key)} className="rounded-md border border-[#228BE6]/40 px-2 py-0.5 text-[11px] font-medium text-[#228BE6] hover:bg-[#228BE6]/10">÷ dividir igual</button>
+            <span className={`text-[11px] ${Math.abs(somaR(g.key) - 100) < 0.02 ? 'text-emerald-600' : 'text-amber-600'}`}>soma {somaR(g.key)}%{Math.abs(somaR(g.key) - 100) >= 0.02 ? ' (ideal 100%)' : ' ✓'}</span>
           </div>
         </div>
       )}
