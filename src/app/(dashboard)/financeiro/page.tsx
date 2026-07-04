@@ -2164,54 +2164,38 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
         </Card>
       )}
 
-      <Card title="Resumo por vertical" sub="clique numa vertical para abrir o livro-razão mês a mês (inicial × êxito × custo direto).">
-        <div className="overflow-x-auto scrollbar-thin">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 text-right font-medium">Casos</th><th className="px-2 py-1.5 text-right font-medium">Faturou</th><th className="px-2 py-1.5 text-right font-medium">Inicial</th><th className="px-2 py-1.5 text-right font-medium">Êxito</th><th className="px-2 py-1.5 text-right font-medium">Custo direto</th><th className="px-2 py-1.5 text-right font-medium">Resultado</th><th className="px-2 py-1.5 text-right font-medium">Margem</th></tr></thead>
-            <tbody>
-              {verticais.map((v) => (
-                <Fragment key={v.area}>
-                  <tr className="cursor-pointer border-t border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40" onClick={() => setExp(exp === v.area ? '' : v.area)}>
-                    <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><ChevronRight className={`h-3.5 w-3.5 text-zinc-400 transition ${exp === v.area ? 'rotate-90' : ''}`} /><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span></td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{v.nCasos}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{v.entradas ? brl2(v.entradas) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{v.inicial ? brl2(v.inicial) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-violet-600">{v.exito ? brl2(v.exito) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-rose-500">{v.diretas ? brl2(v.diretas) : '—'}</td>
-                    <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${v.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(v.resultado)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{v.margem != null ? `${Math.round(v.margem)}%` : '—'}</td>
-                  </tr>
-                  {exp === v.area && (
-                    <tr className="border-t border-zinc-100 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-800/30">
-                      <td colSpan={8} className="px-3 py-2.5">
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#7048E8]">Livro-razão da vertical · {v.area}</p>
-                        {(v.porMes?.length ?? 0) > 0 ? (
-                          <table className="w-full text-xs">
-                            <thead><tr className="text-left text-[10px] uppercase tracking-wide text-zinc-400"><th className="py-1 font-medium">Mês</th><th className="py-1 text-right font-medium">Faturou</th><th className="py-1 text-right font-medium">Inicial</th><th className="py-1 text-right font-medium">Êxito</th><th className="py-1 text-right font-medium">Custo direto</th><th className="py-1 text-right font-medium">Resultado</th></tr></thead>
-                            <tbody>
-                              {v.porMes!.map((m) => (
-                                <tr key={m.mes} className="border-t border-zinc-100 dark:border-zinc-800/70">
-                                  <td className="py-1 text-zinc-600 dark:text-zinc-300">{m.label}</td>
-                                  <td className="py-1 text-right tabular-nums text-emerald-600">{m.entradas ? brl2(m.entradas) : '—'}</td>
-                                  <td className="py-1 text-right tabular-nums text-zinc-500">{m.inicial ? brl2(m.inicial) : '—'}</td>
-                                  <td className="py-1 text-right tabular-nums text-violet-600">{m.exito ? brl2(m.exito) : '—'}</td>
-                                  <td className="py-1 text-right tabular-nums text-rose-500">{m.diretas ? brl2(m.diretas) : '—'}</td>
-                                  <td className={`py-1 text-right font-semibold tabular-nums ${m.resultado >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(m.resultado)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        ) : <p className="text-xs text-zinc-400">Sem lançamentos com data nesta vertical ainda. Lance honorários (casados ao cliente do processo) e rateie as despesas de agência/anúncios pra ela.</p>}
-                        {(v.custos?.length ?? 0) > 0 && <p className="mt-2 text-[11px] text-zinc-400">Custos cadastrados (referência): {v.custos!.map((c) => `${c.label} ${brl2(c.valor)}`).join(' · ')}.</p>}
-                        <button onClick={(e) => { e.stopPropagation(); setSel(v.area); }} className="mt-2 text-xs font-medium text-[#228BE6] hover:underline">ver detalhe completo da vertical →</button>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-              {verticais.length === 0 && <tr><td colSpan={8} className="py-8 text-center text-sm text-zinc-400">Sem dados de verticalização ainda. Lance honorários com o cliente do processo e rateie as despesas de agência/anúncios.</td></tr>}
-            </tbody>
-          </table>
+      <Card title="Cada vertical se paga?" sub="Receita − Despesa da área = Resultado. Clique num card pra ver o mês a mês.">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {verticais.map((v) => (
+            <div key={v.area} className="cursor-pointer rounded-xl border p-4 transition hover:shadow-sm" style={{ borderColor: `${corArea(v.area)}55` }} onClick={() => setExp(exp === v.area ? '' : v.area)}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-sm font-bold text-zinc-800 dark:text-zinc-100"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${v.resultado >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>{v.resultado >= 0 ? '✅ se paga' : '⚠️ subsidiada'}</span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Receita</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(v.entradas)}</p></div>
+                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesa</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(v.diretas)}</p></div>
+                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Resultado</p><p className={`text-sm font-bold tabular-nums ${v.resultado >= 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-rose-600'}`}>{brl(v.resultado)}</p></div>
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-400">{v.nCasos} caso(s){v.margem != null ? ` · margem ${Math.round(v.margem)}%` : ''} · <span className="text-[#228BE6]">{exp === v.area ? 'ocultar' : 'ver mês a mês'}</span></p>
+              {exp === v.area && (
+                <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
+                  {(v.porMes?.length ?? 0) > 0 ? (
+                    <div className="space-y-0.5">
+                      {v.porMes!.map((m) => (
+                        <div key={m.mes} className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="truncate text-zinc-500">{m.label}</span>
+                          <span className="flex shrink-0 items-center gap-2 tabular-nums"><span className="text-emerald-600">{brl(m.entradas)}</span><span className="text-rose-500">−{brl(m.diretas)}</span><span className={`font-semibold ${m.resultado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brl(m.resultado)}</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-[11px] text-zinc-400">Sem lançamentos com data ainda. Lance honorários e marque a vertical nas despesas.</p>}
+                  <button onClick={(e) => { e.stopPropagation(); setSel(v.area); }} className="mt-1.5 text-[11px] font-medium text-[#228BE6] hover:underline">detalhe completo da vertical →</button>
+                </div>
+              )}
+            </div>
+          ))}
+          {verticais.length === 0 && <p className="col-span-full py-8 text-center text-sm text-zinc-400">Sem verticais ainda. Lance honorários (casam pelo cliente) e marque a vertical nas despesas.</p>}
         </div>
       </Card>
 
