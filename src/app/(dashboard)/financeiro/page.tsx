@@ -733,7 +733,16 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       if (stFiltro === 'liquidado' && !ehLiquidado(st)) return false;
       if (respFiltro && (t.responsavelId ?? '') !== respFiltro) return false;
       if (contaFiltro && (t.conta ?? '') !== contaFiltro) return false;
-      if (vertFiltro) { const vs = t.verticais ?? []; if (vertFiltro === '__comum' ? vs.length > 0 : !vs.includes(vertFiltro)) return false; }
+      if (vertFiltro) {
+        const vs = t.verticais ?? [];
+        if (vertFiltro === '__comum') { if (vs.length > 0) return false; }
+        else {
+          // vertical específica: mostra o que é da vertical + as DESPESAS COMUNS (sem vertical),
+          // porque o comum é consumido por TODAS as verticais (rateado por igual).
+          const ehComum = vs.length === 0 && t.valor < 0;
+          if (!vs.includes(vertFiltro) && !ehComum) return false;
+        }
+      }
       if (q && !`${t.pagador ?? t.party ?? ''} ${t.recebedor ?? ''} ${t.responsavel ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
       return true;
     });
@@ -917,6 +926,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
                           {(t.verticais?.length ?? 0) > 0 && <span className="hidden shrink-0 rounded px-1 text-[9px] font-semibold text-white lg:inline" style={{ background: corArea(t.verticais![0]) }} title={t.verticais!.join(' · ')}>{t.verticais!.length > 1 ? `${t.verticais!.length}×vert.` : t.verticais![0]}</span>}
+                          {(t.verticais?.length ?? 0) === 0 && t.valor < 0 && <span className="hidden shrink-0 rounded bg-sky-100 px-1 text-[9px] font-semibold text-sky-600 lg:inline dark:bg-sky-900/30 dark:text-sky-300" title="custo comum do escritório — rateado por igual em todas as verticais">comum</span>}
                           {podeExpandir ? <button onClick={() => toggleRv(t.id!)} title="Ver o rateio" className="inline-flex shrink-0 items-center gap-0.5 rounded bg-[#7048E8]/10 px-1 text-[9px] font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/20">{temRv ? 'rateado' : 'rateio'} {open ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}</button> : null}
                         </span>
                         <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden truncate md:inline">{t.categoria}</span></span>
@@ -1110,13 +1120,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 <div className="grid gap-3 sm:grid-cols-2">
                   {/* DESPESA: o escritório paga (pagador) → o destaque é o RECEBEDOR (fornecedor) */}
                   <Field label="Recebedor (fornecedor / quem recebeu)">
-                    <input list="fin-fornecedores" value={editor.recebedor} onChange={(e) => setEditor({ ...editor, recebedor: e.target.value })} placeholder="ex.: Topoffice, contador, Meta, advogado…" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-                    <datalist id="fin-fornecedores">{fornecedores.map((n) => <option key={n} value={n} />)}</datalist>
+                    <ComboBox value={editor.recebedor} options={fornecedores} allowFree placeholder="buscar fornecedor…" onChange={(v) => setEditor({ ...editor, recebedor: v })} />
                     <p className="mt-1 text-[11px] text-zinc-400">puxa do cadastro; um fornecedor novo é cadastrado ao salvar.</p>
                   </Field>
                   <Field label="Pagador (quem pagou a despesa)">
-                    <input list="fin-pagadores" value={editor.pagador} onChange={(e) => setEditor({ ...editor, pagador: e.target.value, contactId: undefined })} placeholder={escritorioNome} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-                    <datalist id="fin-pagadores">{pagadoresDespesa.map((n) => <option key={n} value={n} />)}</datalist>
+                    <ComboBox value={editor.pagador} options={pagadoresDespesa} allowFree placeholder={escritorioNome} onChange={(v) => setEditor({ ...editor, pagador: v, contactId: undefined })} />
                     {normNome(editor.pagador) !== normNome(escritorioNome) && <button type="button" onClick={() => setEditor({ ...editor, pagador: escritorioNome })} className="mt-1 text-[11px] font-medium text-[#228BE6] hover:underline">pago pelo escritório ({escritorioNome})</button>}
                     {normNome(editor.pagador) !== normNome(escritorioNome) && !!editor.pagador && <p className="mt-1 text-[11px] text-amber-600">pago por um sócio/CPF → é <strong>empréstimo do sócio</strong> se não for reembolsado.</p>}
                   </Field>
