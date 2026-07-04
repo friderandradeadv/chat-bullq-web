@@ -266,20 +266,19 @@ export default function FaseJudicialKanbanPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto" style={{ fontFamily: INTER }}>
-      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 pt-6 pb-4 lg:px-6">
+      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 pt-3 pb-2.5 lg:px-6">
         <div className="flex items-center gap-2">
-          <Columns3 className="h-5 w-5 text-[#e11970]" />
-          <h1 className="text-xl font-bold text-[#101820] dark:text-zinc-100">Fase Judicial</h1>
+          <Columns3 className="h-5 w-5 shrink-0 text-[#e11970]" />
+          <h1 className="text-lg font-bold text-[#101820] dark:text-zinc-100">Fase Judicial</h1>
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
             {filtered.length} processos
           </span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
+          {/* dica curta inline (sem ocupar uma linha própria) */}
+          <span className="hidden truncate text-xs text-zinc-400 xl:inline">· o quadro se move sozinho conforme as publicações do DJEN</span>
         </div>
-        <p className="mt-0.5 text-sm text-zinc-500">
-          Arraste os processos entre as fases. O quadro se move sozinho conforme as publicações do DJEN.
-        </p>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input
@@ -345,7 +344,7 @@ export default function FaseJudicialKanbanPage() {
         <CasesListView byPhase={byPhase} phases={visiblePhases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-3 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} />
