@@ -477,34 +477,51 @@ function CalendarioFiltro({ mesSel, deISO, ateISO, onMes, onPeriodo, onLimpar }:
   );
 }
 
-/** Classificador em lote: agrupa despesas SEM vertical por categoria/fornecedor e permite atribuir a vertical de cada grupo. */
+/** Classificador em lote: agrupa despesas por categoria/fornecedor; atribui UMA vertical, RATEIA entre várias, marca comum ou desfaz. Mostra as já classificadas pra corrigir. */
 function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose: () => void }) {
   const qc = useQueryClient();
   const verticais = useMemo(() => [...new Set([...data.transacoes.flatMap((t) => t.verticais ?? []), 'Bancário', 'Previdenciário', 'Trabalhista', 'Cível', 'Consumidor'])].filter(Boolean), [data.transacoes]);
   const grupos = useMemo(() => {
-    const m = new Map<string, { key: string; categoria: string; fornecedor: string; ids: string[]; total: number; n: number }>();
+    const m = new Map<string, { key: string; categoria: string; fornecedor: string; txs: FinTransacao[]; total: number; atual: string }>();
     for (const t of data.transacoes) {
-      if (t.valor >= 0 || (t.verticais?.length ?? 0) > 0 || t.area || !t.id) continue; // só despesa SEM vertical e não classificada
+      if (t.valor >= 0 || !t.id || t.area === 'Escritório') continue; // pula receita e comum-confirmado
       const forn = (t.recebedor || t.party || t.pagador || '').trim();
       const key = `${t.categoria}|${normNome(forn)}`;
-      const g = m.get(key) ?? { key, categoria: t.categoria, fornecedor: forn, ids: [], total: 0, n: 0 };
-      g.ids.push(t.id); g.total += Math.abs(t.valor); g.n++; m.set(key, g);
+      const g = m.get(key) ?? { key, categoria: t.categoria, fornecedor: forn, txs: [], total: 0, atual: '' };
+      g.txs.push(t); g.total += Math.abs(t.valor); m.set(key, g);
+    }
+    for (const g of m.values()) {
+      const rateado = g.txs.some((t) => (t.rateioVerticais?.length ?? 0) > 0);
+      const areas = new Set(g.txs.map((t) => t.area || ''));
+      g.atual = rateado ? 'rateio' : (areas.size === 1 && [...areas][0] ? String([...areas][0]) : '');
     }
     return [...m.values()].sort((a, b) => b.total - a.total);
   }, [data.transacoes]);
   const [sel, setSel] = useState<Record<string, string>>({});
+  const [rateio, setRateio] = useState<Record<string, { area: string; pct: number }[]>>({});
   const [busy, setBusy] = useState('');
-  const [feitos, setFeitos] = useState<Set<string>>(new Set());
-  const aplicar = async (g: { key: string; ids: string[]; n: number }) => {
-    const v = sel[g.key]; if (!v) return;
+  const inval = () => qc.invalidateQueries({ queryKey: ['financeiro'] });
+  const curDe = (g: { key: string; atual: string }) => sel[g.key] ?? (g.atual === 'rateio' ? '__ratear' : g.atual);
+
+  const aplicar = async (g: { key: string; txs: FinTransacao[] }) => {
+    const v = curDe(g as any);
     setBusy(g.key);
-    let ok = 0;
-    for (const id of g.ids) { try { await financeiroService.updateTransacao(id, { area: v, escopo: 'uma' }); ok++; } catch { /* ignore */ } }
-    setBusy(''); setFeitos((f) => new Set([...f, g.key]));
-    qc.invalidateQueries({ queryKey: ['financeiro'] });
-    toast.success(`${ok} lançamento(s) → ${v}`);
+    for (const t of g.txs) {
+      if (!t.id) continue;
+      try {
+        if (v === '__ratear') {
+          const rv = (rateio[g.key] ?? []).filter((r) => r.area && r.pct > 0).map((r) => ({ area: r.area, valor: Math.round(Math.abs(t.valor) * (r.pct / 100) * 100) / 100 }));
+          await financeiroService.updateTransacao(t.id, { area: '', rateioVerticais: rv, escopo: 'uma' });
+        } else {
+          await financeiroService.updateTransacao(t.id, { area: v || '', rateioVerticais: [], escopo: 'uma' });
+        }
+      } catch { /* ignore */ }
+    }
+    setBusy(''); inval();
+    toast.success(`${g.txs.length} lançamento(s) · ${v === '__ratear' ? 'rateado' : v === 'Escritório' ? 'comum' : v || 'sem vertical'}`);
   };
-  const pendentes = grupos.filter((g) => !feitos.has(g.key));
+  const nomeAtual = (a: string) => a === 'rateio' ? 'rateado' : a === '' ? 'sem vertical' : a;
+  const somaR = (key: string) => (rateio[key] ?? []).reduce((s, r) => s + (r.pct || 0), 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -513,28 +530,46 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
           <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Layers className="h-5 w-5 text-[#7048E8]" /> Classificar despesas por vertical</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
         </div>
-        <p className="mb-3 text-[13px] text-zinc-500 dark:text-zinc-400">Despesas <strong>sem vertical</strong>, agrupadas por categoria/fornecedor. Escolha a vertical de cada grupo e clique <strong>Aplicar</strong> — vale pra todos os lançamentos do grupo. O que for <strong>custo comum</strong> (aluguel, contador, impostos, Claude) <strong>deixe como está</strong> (fica no Escritório).</p>
-        {pendentes.length === 0 ? (
-          <p className="py-10 text-center text-sm text-zinc-400">✅ Nada pendente — todas as despesas já têm vertical ou foram classificadas.</p>
+        <p className="mb-3 text-[13px] text-zinc-500 dark:text-zinc-400">Cada grupo (categoria/fornecedor): escolha <strong>uma vertical</strong>, <strong>Ratear</strong> entre várias (ex.: agência 1/3 cada), ou <strong>Escritório (comum)</strong> pro que é do escritório. Já classificou algo errado? O <strong>estado atual</strong> aparece do lado — é só trocar pra <strong>— sem vertical —</strong> e Aplicar pra desfazer.</p>
+        {grupos.length === 0 ? (
+          <p className="py-10 text-center text-sm text-zinc-400">✅ Nada a classificar — todas as despesas já são de uma vertical, rateadas ou comuns.</p>
         ) : (
           <div className="space-y-1.5">
-            {pendentes.map((g) => (
-              <div key={g.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{g.fornecedor || g.categoria}</p>
-                  <p className="text-[11px] text-zinc-400">{g.categoria} · {g.n} lançamento(s) · {brl2(g.total)}</p>
+            {grupos.map((g) => { const cur = curDe(g); return (
+              <div key={g.key} className="rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{g.fornecedor || g.categoria}{g.atual && <span className="shrink-0 rounded bg-zinc-100 px-1 text-[9px] font-semibold text-zinc-500 dark:bg-zinc-800">{nomeAtual(g.atual)}</span>}</p>
+                    <p className="text-[11px] text-zinc-400">{g.categoria} · {g.txs.length} lançamento(s) · {brl2(g.total)}</p>
+                  </div>
+                  <select value={cur} onChange={(e) => { const val = e.target.value; setSel((s) => ({ ...s, [g.key]: val })); if (val === '__ratear' && !rateio[g.key]) setRateio((r) => ({ ...r, [g.key]: [{ area: verticais[0] ?? '', pct: 50 }, { area: verticais[1] ?? '', pct: 50 }] })); }} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                    <option value="">— sem vertical —</option>
+                    {verticais.map((v) => <option key={v} value={v}>{v}</option>)}
+                    <option value="Escritório">Escritório (comum)</option>
+                    <option value="__ratear">Ratear entre verticais…</option>
+                  </select>
+                  <button onClick={() => aplicar(g)} disabled={busy === g.key} className="inline-flex items-center gap-1 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{busy === g.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Aplicar'}</button>
                 </div>
-                <select value={sel[g.key] ?? ''} onChange={(e) => setSel((s) => ({ ...s, [g.key]: e.target.value }))} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-                  <option value="">— escolher vertical —</option>
-                  {verticais.map((v) => <option key={v} value={v}>{v}</option>)}
-                  <option value="Escritório">Escritório (comum)</option>
-                </select>
-                <button onClick={() => aplicar(g)} disabled={!sel[g.key] || busy === g.key} className="inline-flex items-center gap-1 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{busy === g.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Aplicar'}</button>
+                {cur === '__ratear' && (
+                  <div className="mt-2 space-y-1 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                    {(rateio[g.key] ?? []).map((r, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <select value={r.area} onChange={(e) => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).map((x, j) => j === i ? { ...x, area: e.target.value } : x) }))} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{verticais.map((v) => <option key={v} value={v}>{v}</option>)}</select>
+                        <input value={String(r.pct)} onChange={(e) => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).map((x, j) => j === i ? { ...x, pct: Math.max(0, Math.min(100, Number(e.target.value.replace(/\D/g, '')) || 0)) } : x) }))} inputMode="numeric" className="w-14 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-sm text-zinc-400">%</span>
+                        <button onClick={() => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).filter((_, j) => j !== i) }))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setRateio((rr) => ({ ...rr, [g.key]: [...(rr[g.key] ?? []), { area: verticais[0] ?? '', pct: 0 }] }))} className="text-xs font-medium text-[#228BE6] hover:underline">+ vertical</button>
+                      <span className={`text-[11px] ${somaR(g.key) === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>soma {somaR(g.key)}%{somaR(g.key) !== 100 ? ' (ideal 100%)' : ''}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
+            ); })}
           </div>
         )}
-        <p className="mt-3 text-[11px] text-zinc-400">Dica: despesa <strong>compartilhada</strong> entre verticais (ex.: agência 1/3 cada) é melhor <strong>ratear</strong> no lápis do lançamento — aqui é pra atribuição direta a UMA vertical.</p>
+        <p className="mt-3 text-[11px] text-zinc-400">O rateio divide o valor de cada lançamento pelos % escolhidos — a despesa continua <strong>uma só</strong> no livro-razão; cada vertical enxerga sua fatia.</p>
       </div>
     </div>
   );
@@ -558,6 +593,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const [vertFiltro, setVertFiltro] = useState(''); // filtro por vertical (centro de custos). '' = todas; '__comum' = escritório/sem vertical
   const [showClassif, setShowClassif] = useState(false); // classificador de despesas sem vertical
   const nSemVert = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && (t.verticais?.length ?? 0) === 0 && !t.area).length, [data.transacoes]);
+  const temClassif = useMemo(() => data.transacoes.some((t) => t.valor < 0 && t.area !== 'Escritório'), [data.transacoes]); // há despesas p/ classificar OU corrigir
   const [busca, setBusca] = useState('');
   // verticais que aparecem nos lançamentos (pra popular o filtro)
   const verticaisLanc = useMemo(() => [...new Set(data.transacoes.flatMap((t) => t.verticais ?? []))].filter(Boolean).sort((a, b) => a.localeCompare(b)), [data.transacoes]);
@@ -793,8 +829,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
             <option value="__comum">Escritório (comum)</option>
           </select>
         )}
-        {nSemVert > 0 && (
-          <button onClick={() => setShowClassif(true)} title="Classificar despesas sem vertical em lote" className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8]/40 bg-[#7048E8]/5 px-2.5 py-1.5 text-xs font-semibold text-[#7048E8] hover:bg-[#7048E8]/10"><Layers className="h-3.5 w-3.5" /> Classificar por vertical ({nSemVert})</button>
+        {temClassif && (
+          <button onClick={() => setShowClassif(true)} title="Classificar / ratear / desfazer despesas por vertical" className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8]/40 bg-[#7048E8]/5 px-2.5 py-1.5 text-xs font-semibold text-[#7048E8] hover:bg-[#7048E8]/10"><Layers className="h-3.5 w-3.5" /> Classificar por vertical{nSemVert > 0 ? ` (${nSemVert})` : ''}</button>
         )}
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />

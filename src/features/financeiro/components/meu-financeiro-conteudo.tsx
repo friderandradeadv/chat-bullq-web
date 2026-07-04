@@ -185,25 +185,12 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     </div>
                   )}
 
-                  {/* Líquido = o que recebeu de fato */}
+                  {/* Líquido = o que recebeu de fato (repasses/retiradas) */}
                   <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-zinc-200 pt-3 dark:border-zinc-700">
                     <span className="text-sm font-bold uppercase tracking-wide text-zinc-500">Líquido do mês</span>
                     <span className={`text-xl font-bold tabular-nums ${liquido >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(liquido)}</span>
                   </div>
-
-                  {/* Referência: quanto a vertical rendeu pra você pelo novo modelo (% do resultado) */}
-                  {h.entradas.length > 0 && (
-                    <div className="mt-4 rounded-lg bg-violet-50/60 p-3 dark:bg-violet-900/15">
-                      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#7048E8]">Referência · sua parte pelos honorários dos seus processos</p>
-                      {h.entradas.map((e, i) => (
-                        <div key={i} className="flex items-start justify-between gap-2 text-sm">
-                          <span className="min-w-0 text-zinc-600 dark:text-zinc-300"><span className="block truncate">Meus processos</span>{e.resultado != null && e.pct != null && <span className="block text-[11px] text-zinc-400">honorários dos meus processos {brl2(e.resultado)} × {e.pct}%</span>}</span>
-                          <span className="shrink-0 font-medium tabular-nums text-[#7048E8]">{brl2(e.valor)}</span>
-                        </div>
-                      ))}
-                      <p className="mt-1.5 text-[11px] text-zinc-400">Sua parte pelos honorários que <strong>você trouxe</strong> (% dos seus processos). O recebido acima pode diferir conforme os repasses do mês.</p>
-                    </div>
-                  )}
+                  <p className="mt-2 text-[11px] text-zinc-400">Sua remuneração vem do <strong>rateio no êxito</strong> (repasses). Os honorários iniciais que aparecem no "Meu financeiro" custeiam a vertical — <strong>não são o que você leva</strong>.</p>
                 </div>
               </div>
             </div>
@@ -217,10 +204,10 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
               <div key={v.area} className="rounded-2xl border border-[#7048E8]/30 bg-gradient-to-br from-violet-50 to-white p-5 dark:border-violet-900/40 dark:from-violet-900/15 dark:to-zinc-900">
                 <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-5 w-5 text-[#7048E8]" /> Meu financeiro{v.area ? ` · ${v.area}` : ''}</h3>
                 <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Recebido (meus honorários)</p><p className="text-2xl font-bold tabular-nums text-emerald-600">{brl(v.receita)}</p></div>
-                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Minha parte ({v.pct}%)</p><p className="text-2xl font-bold tabular-nums text-[#7048E8]">{brl(v.minhaParte)}</p></div>
+                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Honorários que você trouxe</p><p className="text-2xl font-bold tabular-nums text-emerald-600">{brl(v.receita)}</p><p className="text-[10px] text-zinc-400">custeiam a vertical</p></div>
+                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Sua parte (rateio no êxito)</p><p className="text-2xl font-bold tabular-nums text-[#7048E8]">{brl(data.projecaoCasos?.liquidoProvavel ?? 0)}</p><p className="text-[10px] text-zinc-400">o que você leva</p></div>
                 </div>
-                <p className="mt-2 text-[11px] text-zinc-400">Sua remuneração = <strong>{v.pct}% dos honorários dos seus processos</strong>{!data.minhaVertical!.configurada ? ' · % provisório, o escritório ainda vai definir sua participação' : ''}. Só aparecem os processos em que você participa.</p>
+                <p className="mt-2 text-[11px] text-zinc-400">Os honorários <strong>iniciais/parcelados</strong> que você traz <strong>custeiam a vertical</strong> (estrutura, agência, anúncios). A sua remuneração vem do <strong>rateio no êxito</strong> dos seus processos. Só aparecem os processos em que você participa.</p>
               </div>
             ))}
           </div>
