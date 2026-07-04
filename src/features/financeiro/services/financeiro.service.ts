@@ -119,7 +119,7 @@ export interface HoleriteMes {
   mes: string;
   entradas: { cliente: string; valor: number; data: string; area?: string; pct?: number; resultado?: number }[];
   entradaTot: number;
-  saidas: { label: string; valor: number; area?: string; linha?: string | null; base?: number; pct?: number }[];
+  saidas: { label: string; valor: number; area?: string; linha?: string | null; base?: number; pct?: number; data?: string }[];
   saidaTot: number;
   retiradas: { desc: string; valor: number; data: string }[];
   retiradaTot: number;

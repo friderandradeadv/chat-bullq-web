@@ -15,6 +15,7 @@ import { contactsService } from '@/features/contacts/services/contacts.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import { mesKey, mesLabel, mesCurtoKey } from '@/features/financeiro/lib/clientes';
+import { ComboBox } from '@/features/financeiro/components/combo-box';
 
 /** Contexto de criação de lançamento (quando o advogado pode lançar na vertical dele). */
 export type CriarCtx = { userId: string; area: string; nome?: string };
@@ -186,12 +187,27 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     </div>
                   )}
 
-                  {/* Líquido = o que recebeu de fato (repasses/retiradas) */}
+                  {/* Saídas do mês (o que ela ajudou a pagar — fatia dela nas despesas) */}
+                  {(h.saidas?.length ?? 0) > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-rose-600"><ArrowDownCircle className="h-3.5 w-3.5" /> Saídas que você ajudou a pagar</p>
+                      <div className="space-y-0.5">
+                        {h.saidas.map((sd, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span className="flex min-w-0 items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><span className="w-9 shrink-0 text-[11px] tabular-nums text-zinc-400">{(sd.data || '').slice(0, 5)}</span><span className="truncate">{sd.label}</span></span>
+                            <span className="shrink-0 font-medium tabular-nums text-rose-600">-{brl2(sd.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Líquido = o que recebeu de fato − o que ajudou a pagar */}
                   <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-zinc-200 pt-3 dark:border-zinc-700">
                     <span className="text-sm font-bold uppercase tracking-wide text-zinc-500">Líquido do mês</span>
                     <span className={`text-xl font-bold tabular-nums ${liquido >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(liquido)}</span>
                   </div>
-                  <p className="mt-2 text-[11px] text-zinc-400">Sua remuneração vem do <strong>rateio no êxito</strong> (repasses). Os honorários iniciais que aparecem no "Meu financeiro" custeiam a vertical — <strong>não são o que você leva</strong>.</p>
+                  <p className="mt-2 text-[11px] text-zinc-400">Fiel ao livro-razão: <strong>o que caiu pra você</strong> (repasses/retiradas) menos <strong>o que você ajudou a pagar</strong> (sua fatia das despesas). Sua remuneração vem do <strong>rateio no êxito</strong> — só aparece quando o lançamento é feito.</p>
                 </div>
               </div>
             </div>
@@ -475,6 +491,23 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           </Card>
         )}
 
+        {/* Resultado do mês — casa ENTRADAS (seus casos) com SAÍDAS (da vertical) = resultado real */}
+        {subtab === 'lancamentos' && (() => {
+          const entradasMes = txs.filter((t) => !t.minhaFatiaRateio && t.valor > 0).reduce((s, t) => s + t.valor, 0);
+          const svAll = data.saidasVerticais ?? [];
+          const svCur = svAll.find((x) => x.area === vertSaidaSel) ?? svAll[0];
+          const saidasMes = svCur ? svCur.lancamentos.filter((l) => !mesSel || l.mes === mesSel).reduce((s, l) => s + l.valor, 0) : 0;
+          const res = entradasMes - saidasMes;
+          if (entradasMes === 0 && saidasMes === 0) return null;
+          return (
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Entradas{mesSel ? ' do mês' : ''} (seus casos)</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl2(entradasMes)}</p><p className="text-[10px] text-zinc-400">honorários que você trouxe</p></div>
+              <div className="rounded-2xl border border-rose-200 bg-rose-50/40 p-3.5 dark:border-rose-900/40 dark:bg-rose-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Saídas{mesSel ? ' do mês' : ''}{svCur ? ` · ${svCur.area}` : ''}</p><p className="mt-0.5 text-xl font-bold tabular-nums text-rose-600">{brl2(saidasMes)}</p><p className="text-[10px] text-zinc-400">custos da vertical</p></div>
+              <div className={`rounded-2xl border p-3.5 ${res >= 0 ? 'border-violet-300 bg-violet-50/60 dark:border-violet-900/50 dark:bg-violet-900/15' : 'border-amber-200 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-900/10'}`}><p className="text-[11px] uppercase tracking-wide text-zinc-400">Resultado{mesSel ? ' do mês' : ''}</p><p className={`mt-0.5 text-xl font-bold tabular-nums ${res >= 0 ? 'text-[#7048E8]' : 'text-amber-600'}`}>{brl2(res)}</p><p className="text-[10px] text-zinc-400">entradas − saídas</p></div>
+            </div>
+          );
+        })()}
+
         {/* Lançamentos — filtrável (aba Lançamentos) */}
         {subtab === 'lancamentos' && (
         <Card title={<>{deArea ? <>Lançamentos da área · {areaNome}</> : 'Seus lançamentos'} <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub={deArea ? `entradas e saídas ligadas à vertical ${areaNome} (inclui o que você lançar) — os honorários iniciais e parcelados custeiam a vertical; a sua remuneração é o rateio no êxito.` : 'movimentações dos seus casos — honorários iniciais e parcelados custeiam a vertical; a sua remuneração é o rateio no êxito.'} action={criar && <button onClick={() => setNovo(true)} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo</button>}>
@@ -524,10 +557,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
             <Card title={<span className="flex items-center gap-2"><ArrowDownCircle className="h-4 w-4 text-rose-500" /> Saídas da vertical</span>}
               sub="os custos padrão da vertical (agência, anúncios…) — compartilhados por todos que atuam nela. O que ENTRA é dos seus casos; o que SAI é da vertical.">
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-                  <Scale className="h-3.5 w-3.5 text-zinc-400" />
-                  <select value={cur.area} onChange={(e) => setVertSaidaSel(e.target.value)} className="bg-transparent text-sm font-medium outline-none">{sv.map((x) => <option key={x.area} value={x.area}>{x.area}</option>)}</select>
-                </div>
+                {sv.length > 1 && <ComboBox className="w-44" value={cur.area} options={sv.map((x) => x.area)} placeholder="vertical…" onChange={setVertSaidaSel} />}
                 <span className="ml-auto text-sm font-semibold tabular-nums text-rose-600">Total{mesSel ? ' do mês' : ''}: {brl2(tot)}</span>
               </div>
               <div className="max-h-80 overflow-y-auto scrollbar-thin">

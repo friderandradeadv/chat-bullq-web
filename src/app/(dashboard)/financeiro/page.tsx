@@ -19,6 +19,7 @@ import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
 import { MeuFinanceiroConteudo, BuscaCliente, BuscaProcesso } from '@/features/financeiro/components/meu-financeiro-conteudo';
+import { ComboBox } from '@/features/financeiro/components/combo-box';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
@@ -82,10 +83,11 @@ function areaJuridica(produto?: string | null): string {
   return 'Cível';
 }
 
-// Verticais-padrão (centros de custo do financeiro). RMC e REPB são frentes distintas
-// do Bancário — separadas p/ o holerite conseguir mirar cada uma (ex.: Kauani RMC 30% + REPB 40%).
-// Dativos = causas por nomeação. Não são "área jurídica" do processo; são centro de custo/receita.
-const VERTICAIS_PADRAO = ['Bancário', 'RMC', 'REPB', 'Previdenciário', 'Trabalhista', 'Consumidor', 'Cível', 'Dativos'];
+// Verticais-padrão (centros de custo do financeiro) — LISTA ÚNICA usada em todo lugar
+// (classificador, modal, filtros, participações). O antigo "Bancário" foi desdobrado nas
+// frentes reais: RMC/RCC (reserva de margem + cartão consignado) e REPB (reestruturação de
+// passivo bancário) — é isso que o holerite mira. Dativos = causas por nomeação.
+const VERTICAIS_PADRAO = ['RMC/RCC', 'REPB', 'Previdenciário', 'Trabalhista', 'Consumidor', 'Cível', 'Dativos'];
 
 export default function FinanceiroPage() {
   // Organismo vivo: refaz sozinho a cada 60s e ao voltar pra aba — reflete movimentação dos processos/recebimentos.
@@ -545,19 +547,18 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
           <p className="flex items-center gap-1.5 truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{g.fornecedor || g.categoria}{g.atual && <span className="shrink-0 rounded bg-zinc-100 px-1 text-[9px] font-semibold text-zinc-500 dark:bg-zinc-800">{nomeAtual(g.atual)}</span>}</p>
           <p className="text-[11px] text-zinc-400">{g.categoria} · {g.txs.length} lançamento(s) · {brl2(g.total)}</p>
         </div>
-        <select value={cur} onChange={(e) => { const val = e.target.value; setSel((s) => ({ ...s, [g.key]: val })); if (val === '__ratear' && !rateio[g.key]) setRateio((r) => ({ ...r, [g.key]: [{ area: verticais[0] ?? '', pct: 50 }, { area: verticais[1] ?? '', pct: 50 }] })); }} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-          <option value="">— sem vertical —</option>
-          {verticais.map((v) => <option key={v} value={v}>{v}</option>)}
-          <option value="Escritório">Escritório (comum)</option>
-          <option value="__ratear">Ratear entre verticais…</option>
-        </select>
+        <ComboBox className="w-56" value={cur} options={verticais}
+          actions={[{ value: '', label: '— sem vertical —' }, { value: 'Escritório', label: 'Escritório (comum · rateio auto)' }, { value: '__ratear', label: 'Ratear entre verticais…' }]}
+          labelOf={(v) => v === '__ratear' ? 'Ratear entre verticais…' : v === 'Escritório' ? 'Escritório (comum)' : v === '' ? '— sem vertical —' : v}
+          placeholder="vertical…"
+          onChange={(val) => { setSel((s) => ({ ...s, [g.key]: val })); if (val === '__ratear' && !rateio[g.key]) setRateio((r) => ({ ...r, [g.key]: [{ area: verticais[0] ?? '', pct: 50 }, { area: verticais[1] ?? '', pct: 50 }] })); }} />
         <button onClick={() => aplicar(g)} disabled={busy === g.key} className="inline-flex items-center gap-1 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{busy === g.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Aplicar'}</button>
       </div>
       {cur === '__ratear' && (
         <div className="mt-2 space-y-1 border-t border-zinc-100 pt-2 dark:border-zinc-800">
           {(rateio[g.key] ?? []).map((r, i) => (
             <div key={i} className="flex items-center gap-2">
-              <select value={r.area} onChange={(e) => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).map((x, j) => j === i ? { ...x, area: e.target.value } : x) }))} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{verticais.map((v) => <option key={v} value={v}>{v}</option>)}</select>
+              <ComboBox className="min-w-0 flex-1" value={r.area} options={verticais} placeholder="vertical…" onChange={(val) => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).map((x, j) => j === i ? { ...x, area: val } : x) }))} />
               <input value={String(r.pct)} onChange={(e) => { const n = Math.max(0, Math.min(100, parseFloat(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.')) || 0)); setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).map((x, j) => j === i ? { ...x, pct: n } : x) })); }} inputMode="decimal" className="w-16 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-sm text-zinc-400">%</span>
               <button onClick={() => setRateio((rr) => ({ ...rr, [g.key]: (rr[g.key] ?? []).filter((_, j) => j !== i) }))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
             </div>
@@ -854,11 +855,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
           </select>
         )}
         {verticaisLanc.length > 0 && (
-          <select value={vertFiltro} onChange={(e) => setVertFiltro(e.target.value)} title="Filtrar por vertical (centro de custos)" className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-            <option value="">Todas as verticais</option>
-            {verticaisLanc.map((v) => <option key={v} value={v}>{v}</option>)}
-            <option value="__comum">Escritório (comum)</option>
-          </select>
+          <ComboBox className="w-48" value={vertFiltro} options={verticaisLanc}
+            actions={[{ value: '', label: 'Todas as verticais' }, { value: '__comum', label: 'Escritório (comum)' }]}
+            labelOf={(v) => v === '' ? 'Todas as verticais' : v === '__comum' ? 'Escritório (comum)' : v}
+            placeholder="filtrar vertical…" onChange={setVertFiltro} />
         )}
         {temClassif && (
           <button onClick={() => setShowClassif(true)} title="Classificar / ratear / desfazer despesas por vertical" className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8]/40 bg-[#7048E8]/5 px-2.5 py-1.5 text-xs font-semibold text-[#7048E8] hover:bg-[#7048E8]/10"><Layers className="h-3.5 w-3.5" /> Classificar por vertical{nSemVert > 0 ? ` (${nSemVert})` : ''}</button>
@@ -1150,28 +1150,36 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 </Field>
               </div>
 
-              {/* Vertical (centro de custos) — atributo do lançamento; o livro-razão e as verticais filtram por isso */}
-              <Field label="Vertical (centro de custos — opcional)">
-                <input list="fin-verticais-lanc" value={editor.area} onChange={(e) => setEditor({ ...editor, area: e.target.value })} placeholder="Bancário, Previdenciário, Cível… (vazio = escritório/comum)" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
-                <datalist id="fin-verticais-lanc">{[...new Set([...verticaisLanc, ...VERTICAIS_PADRAO])].map((v) => <option key={v} value={v} />)}</datalist>
-                <p className="mt-1 text-[11px] text-zinc-400">Vazio = <strong>custo comum do escritório</strong> (não entra em vertical nenhuma). Se a receita é honorário, a vertical já casa sozinha pelo cliente do processo. Despesa <strong>compartilhada</strong>? Use o rateio abaixo.</p>
-              </Field>
+              {/* Centro de custos UNIFICADO: uma vertical · Escritório (comum, rateia auto) · Ratear entre várias.
+                  Um controle só — some a confusão de ter "vertical" e "ratear" separados. */}
+              {(() => {
+                const modo = editor.rateioVerticais.length > 0 ? '__ratear' : editor.area;
+                const opcoes = [...new Set([...verticaisLanc, ...VERTICAIS_PADRAO])];
+                return (
+                <Field label="Centro de custos (vertical)">
+                  <ComboBox value={modo} options={opcoes} allowFree placeholder="digite a vertical…"
+                    labelOf={(v) => v === '__ratear' ? 'Ratear entre várias verticais' : v === 'Escritório' ? 'Escritório (comum · rateia auto entre todas)' : v === '' ? '— escolher —' : v}
+                    actions={[{ value: 'Escritório', label: 'Escritório (comum · rateia auto entre todas)' }, { value: '__ratear', label: 'Ratear entre várias verticais…' }]}
+                    onChange={(v) => { if (v === '__ratear') setEditor({ ...editor, area: '', rateioVerticais: editor.rateioVerticais.length ? editor.rateioVerticais : [{ area: '', valor: '', label: '' }, { area: '', valor: '', label: '' }] }); else setEditor({ ...editor, area: v, rateioVerticais: [] }); }} />
+                  <p className="mt-1 text-[11px] text-zinc-400"><strong>Uma vertical</strong> = custo direto dela · <strong>Escritório (comum)</strong> = rateia automático e igual entre todas as verticais · <strong>Ratear</strong> = você define a fatia de cada uma (ex.: agência ÷ 3). Honorário casa a vertical sozinho pelo cliente do processo.</p>
+                </Field>
+                );
+              })()}
 
-              {/* Rateio de DESPESA entre verticais (ex.: agência 1/3 cada). Aparece 1x no livro-razão; cada área puxa a fatia no P&L. */}
-              {editor.tipo === 'despesa' && (() => {
+              {/* Linhas do rateio manual — só quando escolheu "Ratear entre várias" acima */}
+              {editor.tipo === 'despesa' && editor.rateioVerticais.length > 0 && (() => {
                 const total = parseValor(editor.valor);
                 const somaRV = editor.rateioVerticais.reduce((s, x) => s + parseValor(x.valor), 0);
                 const dividirIgual = () => { const n = editor.rateioVerticais.filter((x) => x.area).length || editor.rateioVerticais.length; if (!n || total <= 0) return; const cada = Math.floor((total / n) * 100) / 100; setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((x, i, arr) => ({ ...x, valor: fmtMoney(i === arr.length - 1 ? total - cada * (n - 1) : cada) })) }); };
                 return (
-                <Field label="Ratear entre verticais (custo por área — opcional)">
+                <Field label="Fatia de cada vertical">
                   <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
-                    <p className="text-[11px] text-zinc-400">A despesa aparece <strong>uma vez</strong> no livro-razão; cada área puxa a fatia (ex.: agência R$1.300 ÷ 3). Pode ser uma <strong>vertical</strong> (Bancário…) ou uma <strong>frente/campanha</strong> (ex.: REPB). Marque a <strong>linha</strong> (ex.: Agência 1/3) para a fatia cair no <strong>holerite</strong> de quem assume esse custo (RH › Configurações).</p>
-                    <datalist id="fin-frentes-rateio">{areasVert.map((a) => <option key={a} value={a} />)}</datalist>
+                    <p className="text-[11px] text-zinc-400">A despesa aparece <strong>uma vez</strong> no livro-razão; cada área puxa a fatia (ex.: agência R$1.300 ÷ 3). Marque a <strong>linha</strong> (ex.: Agência 1/3) para a fatia cair no <strong>holerite</strong> de quem assume esse custo.</p>
                     {editor.rateioVerticais.map((x, i) => {
                       const lns = linhasPorArea[x.area] ?? [];
                       return (
                       <div key={i} className="flex flex-wrap items-center gap-1.5">
-                        <input list="fin-frentes-rateio" value={x.area} onChange={(e) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: e.target.value, label: '' } : y) })} placeholder="vertical ou frente (ex.: REPB)" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                        <ComboBox className="min-w-0 flex-1" value={x.area} options={areasVert} allowFree placeholder="vertical ou frente…" onChange={(val) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: val, label: '' } : y) })} />
                         {lns.length > 0 && (
                           <select value={x.label ?? ''} title="Linha do custo — quem assume essa linha (RH) vê a fatia no holerite deste mês" onChange={(e) => { const lbl = e.target.value; const ln = lns.find((l) => l.label === lbl); setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, label: lbl, valor: (lbl && ln && parseValor(y.valor) === 0) ? fmtMoney(ln.valor) : y.valor } : y) }); }} className="min-w-[8rem] flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
                             <option value="">Linha (opcional)…</option>
@@ -2388,8 +2396,8 @@ function RemunVerticalEditor({ data }: { data: FinDashboard }) {
               <div className="space-y-1.5">
                 {rows(a.id).map((r, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <select value={r.area} onChange={(e) => setRow(a.id, i, { area: e.target.value })} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{verticais.map((v) => <option key={v} value={v}>{v}</option>)}</select>
-                    <div className="flex items-center gap-1"><input value={String(r.pct)} onChange={(e) => setRow(a.id, i, { pct: Math.max(0, Math.min(100, Number(e.target.value.replace(/\D/g, '')) || 0)) })} inputMode="numeric" className="w-14 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-sm text-zinc-400">%</span></div>
+                    <ComboBox className="min-w-0 flex-1" value={r.area} options={verticais} allowFree placeholder="vertical…" onChange={(val) => setRow(a.id, i, { area: val })} />
+                    <div className="flex items-center gap-1"><input value={String(r.pct)} onChange={(e) => setRow(a.id, i, { pct: Math.max(0, Math.min(100, parseFloat(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.')) || 0)) })} inputMode="decimal" className="w-14 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-sm text-zinc-400">%</span></div>
                     <button onClick={() => rmRow(a.id, i)} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
