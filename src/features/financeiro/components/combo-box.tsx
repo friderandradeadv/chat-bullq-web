@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
 
 export type ComboAction = { value: string; label: string; hint?: string };
@@ -38,6 +38,16 @@ export function ComboBox({
 
   const pick = (v: string) => { onChange(v); setQ(''); setOpen(false); };
 
+  // Fecha ao clicar FORA (listener no documento — robusto dentro de modais, onde um "backdrop"
+  // por z-index não pega o clique). Também fecha no scroll de fundo e no Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent | TouchEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('touchstart', onDown); };
+  }, [open]);
+
   return (
     <div ref={ref} className={`relative ${className}`}>
       <button type="button" disabled={disabled} onClick={() => !disabled && setOpen((o) => !o)}
@@ -47,7 +57,6 @@ export function ComboBox({
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg scrollbar-thin dark:border-zinc-700 dark:bg-zinc-900">
             <div className="sticky top-0 flex items-center gap-1.5 bg-white px-2 py-1 dark:bg-zinc-900">
               <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
