@@ -112,7 +112,7 @@ export interface FinDashboard {
   overheadCriterio?: string;
   holerite?: HoleriteMes[];                     // folha do mês (Meu Espaço)
   // Saídas PADRÃO da(s) vertical(is) em que a pessoa atua (custos compartilhados: agência, anúncios). Selecionável no front.
-  saidasVerticais?: { area: string; total: number; lancamentos: { data: string; categoria: string; fornecedor: string; valor: number; mes: string }[]; porMes: { mes: string; valor: number }[] }[];
+  saidasVerticais?: { area: string; total: number; lancamentos: { data: string; categoria: string; fornecedor: string; valor: number; mes: string; comum?: boolean }[]; porMes: { mes: string; valor: number }[] }[];
 }
 
 export interface HoleriteMes {
@@ -127,8 +127,8 @@ export interface HoleriteMes {
 }
 
 export interface VerticalCusto { label: string; valor: number }
-export interface VerticalMes { mes: string; label: string; entradas: number; inicial: number; exito: number; diretas: number; resultado: number }
-export interface VerticalPnL { area: string; nCasos: number; entradas: number; inicial?: number; exito?: number; diretas: number; custos?: VerticalCusto[]; overhead: number; saidas: number; resultado: number; projetado: number; margem: number | null; porMes?: VerticalMes[] }
+export interface VerticalMes { mes: string; label: string; entradas: number; inicial: number; exito: number; diretas: number; comum?: number; resultado: number }
+export interface VerticalPnL { area: string; nCasos: number; entradas: number; inicial?: number; exito?: number; diretas: number; comum?: number; custos?: VerticalCusto[]; overhead: number; saidas: number; resultado: number; projetado: number; margem: number | null; porMes?: VerticalMes[] }
 export interface VerticalBucketMes { mes: string; label: string; valor: number }
 export interface FinVerticalPnL {
   verticais: VerticalPnL[];

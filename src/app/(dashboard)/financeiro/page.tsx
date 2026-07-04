@@ -2279,14 +2279,14 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
       <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-violet-50 to-white p-5 dark:border-zinc-800 dark:from-violet-900/15 dark:to-zinc-900">
         <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Layers className="h-5 w-5 text-[#7048E8]" /> Verticais — o que cada área custa e rende</h2>
         <p className="mt-1 max-w-3xl text-sm text-zinc-600 dark:text-zinc-300">
-          Cada vertical é como um <strong>livro-razão próprio</strong>: quanto faturou (honorário <strong>inicial</strong> + <strong>êxito</strong>) e quanto custou de <strong>direto</strong> (agência + anúncios), <strong>mês a mês</strong>. Custos <strong>comuns</strong> do escritório (aluguel, contador, impostos, Claude…) e <strong>pró-labore</strong> ficam num balde à parte — <strong>não são rateados</strong> nas verticais. Clique numa vertical para abrir os meses.
+          Cada vertical é como um <strong>livro-razão próprio</strong>: quanto faturou (honorário <strong>inicial</strong> + <strong>êxito</strong>) e quanto custou de <strong>direto</strong> (agência + anúncios), <strong>mês a mês</strong>. Os custos <strong>comuns</strong> do escritório (aluguel, contador, impostos, Claude…) são <strong>rateados por igual</strong> entre todas as verticais — cada área banca sua fatia. O <strong>pró-labore</strong> fica num balde à parte. Clique numa vertical para abrir os meses.
         </p>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <MiniStat label="Faturou (verticais)" value={brl(cons?.entradas ?? 0)} hint="honorários casados" accent="#2F9E44" />
         <MiniStat label="Custo direto" value={brl(cons?.diretas ?? 0)} hint="agência + anúncios" accent="#E8590C" />
-        <MiniStat label="Comum (escritório)" value={brl(cons?.comum ?? 0)} hint="não rateado" accent="#228BE6" />
+        <MiniStat label="Comum (escritório)" value={brl(cons?.comum ?? 0)} hint="rateado igual nas verticais" accent="#228BE6" />
         <MiniStat label="Pró-labore/retiradas" value={brl(cons?.pessoas ?? 0)} hint="pessoas" accent="#E64980" />
         <MiniStat label="Resultado do escritório" value={brl(cons?.resultado ?? 0)} hint="faturou − direto − comum − pessoas" accent={(cons?.resultado ?? 0) >= 0 ? '#2F9E44' : '#E03131'} />
       </div>
@@ -2301,7 +2301,7 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Receita</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(v.entradas)}</p></div>
-                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesa</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(v.diretas)}</p></div>
+                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesa</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(v.saidas)}</p>{(v.comum ?? 0) > 0 && <p className="text-[9px] text-zinc-400">direto {brl(v.diretas)} + comum {brl(v.comum ?? 0)}</p>}</div>
                 <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Resultado</p><p className={`text-sm font-bold tabular-nums ${v.resultado >= 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-rose-600'}`}>{brl(v.resultado)}</p></div>
               </div>
               <p className="mt-2 text-[11px] text-zinc-400">{v.nCasos} caso(s){v.margem != null ? ` · margem ${Math.round(v.margem)}%` : ''} · <span className="text-[#228BE6]">{exp === v.area ? 'ocultar' : 'ver mês a mês'}</span></p>
@@ -2328,7 +2328,7 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
 
       {mesesFora.length > 0 && (
         <Card title={<span className="flex items-center gap-2"><Banknote className="h-4 w-4 text-[#228BE6]" /> Fora das verticais (escritório)</span>}
-          sub="custos comuns (aluguel, contador, impostos, Claude…) e pró-labore — não entram no P&L de nenhuma vertical, por decisão sua.">
+          sub="de onde vêm os custos comuns (aluguel, contador, impostos, Claude…) — são rateados por igual dentro das verticais acima. Pró-labore fica fora do P&L.">
           <div className="overflow-x-auto scrollbar-thin">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Mês</th><th className="px-2 py-1.5 text-right font-medium">Comum (escritório)</th><th className="px-2 py-1.5 text-right font-medium">Pró-labore/retiradas</th><th className="px-2 py-1.5 text-right font-medium">Total fora</th></tr></thead>

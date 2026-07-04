@@ -555,7 +555,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           const tot = lancs.reduce((s, l) => s + l.valor, 0);
           return (
             <Card title={<span className="flex items-center gap-2"><ArrowDownCircle className="h-4 w-4 text-rose-500" /> Saídas da vertical</span>}
-              sub="os custos padrão da vertical (agência, anúncios…) — compartilhados por todos que atuam nela. O que ENTRA é dos seus casos; o que SAI é da vertical.">
+              sub="custos da vertical (agência, anúncios) + as saídas gerais do escritório (aluguel, contador, Claude…) rateadas por igual. O que ENTRA é dos seus casos; o que SAI é da vertical.">
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 {sv.length > 1 && <ComboBox className="w-44" value={cur.area} options={sv.map((x) => x.area)} placeholder="vertical…" onChange={setVertSaidaSel} />}
                 <span className="ml-auto text-sm font-semibold tabular-nums text-rose-600">Total{mesSel ? ' do mês' : ''}: {brl2(tot)}</span>
@@ -568,6 +568,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     <span className="w-12 shrink-0 text-xs tabular-nums text-zinc-400">{l.data.slice(0, 5)}</span>
                     <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
                     <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{l.fornecedor || l.categoria}</span>
+                    {l.comum && <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-medium text-sky-600 dark:bg-sky-900/30 dark:text-sky-300" title="custo comum do escritório rateado igual entre as verticais">geral</span>}
                     <span className="hidden shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 sm:inline dark:bg-zinc-800">{l.categoria}</span>
                     <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-rose-600">{brl2(l.valor)}</span>
                   </div>
