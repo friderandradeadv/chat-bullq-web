@@ -107,13 +107,15 @@ export interface FinDashboard {
   verticalPnL?: FinVerticalPnL;                 // P&L por vertical (admin/full)
   resultadoVertical?: VerticalPnL | null;       // P&L da vertical do advogado (visão limitada)
   minhaArea?: string | null;
+  // FASE B: minha participação = % do RESULTADO da vertical
+  minhaVertical?: { itens: { area: string; receita: number; despesa: number; resultado: number; pct: number; minhaParte: number }[]; totalParte: number; configurada: boolean };
   overheadCriterio?: string;
   holerite?: HoleriteMes[];                     // folha do mês (Meu Espaço)
 }
 
 export interface HoleriteMes {
   mes: string;
-  entradas: { cliente: string; valor: number; data: string }[];
+  entradas: { cliente: string; valor: number; data: string; area?: string; pct?: number; resultado?: number }[];
   entradaTot: number;
   saidas: { label: string; valor: number; area?: string; linha?: string | null; base?: number; pct?: number }[];
   saidaTot: number;
@@ -336,6 +338,15 @@ export const financeiroService = {
   },
   async setCustosPessoa(custosPessoa: Record<string, { area: string; label?: string; pct: number }[]>): Promise<{ ok: boolean }> {
     const { data } = await api.patch('/financeiro/custos-pessoa', { custosPessoa });
+    return data.data ?? data;
+  },
+  // ── Participação por vertical (Fase B) ──
+  async getRemunVertical(): Promise<{ remunVertical: Record<string, { area: string; pct: number }[]> }> {
+    const { data } = await api.get('/financeiro/remun-vertical');
+    return data.data ?? data;
+  },
+  async setRemunVertical(remunVertical: Record<string, { area: string; pct: number }[]>): Promise<{ ok: boolean }> {
+    const { data } = await api.patch('/financeiro/remun-vertical', { remunVertical });
     return data.data ?? data;
   },
   // ── Cadastro de pagadores/recebedores ──

@@ -172,37 +172,29 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   <div className="text-right"><p className="text-[11px] uppercase tracking-wider opacity-80">{data.meuNome || ''}</p><p className="inline-flex items-center gap-1 text-sm font-semibold"><Wallet className="h-4 w-4" /> holerite</p></div>
                 </div>
                 <div className="px-5 py-4">
-                  {/* Entradas */}
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600"><ArrowUpCircle className="h-3.5 w-3.5" /> Entradas (sua parte nos honorários)</p>
-                  {h.entradas.length === 0 ? <p className="pb-1 text-xs text-zinc-400">Sem entradas neste mês.</p> : (
-                    <div className="space-y-0.5">
+                  {/* Sua parte = % do resultado da vertical (Fase B) */}
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600"><ArrowUpCircle className="h-3.5 w-3.5" /> Sua parte (% do resultado da vertical)</p>
+                  {h.entradas.length === 0 ? <p className="pb-1 text-xs text-zinc-400">Sem resultado a receber neste mês.</p> : (
+                    <div className="space-y-1">
                       {h.entradas.map((e, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <span className="flex min-w-0 items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><span className="w-9 shrink-0 text-[11px] tabular-nums text-zinc-400">{(e.data || '').slice(0, 5)}</span><span className="truncate">{e.cliente}</span></span>
-                          <span className="shrink-0 font-medium tabular-nums text-emerald-600">{brl2(e.valor)}</span>
+                        <div key={i} className="flex items-start justify-between gap-2 text-sm">
+                          <span className="min-w-0 text-zinc-600 dark:text-zinc-300">
+                            <span className="block truncate">{e.area ?? e.cliente}</span>
+                            {e.resultado != null && e.pct != null && <span className="block text-[11px] text-zinc-400">resultado da vertical {brl2(e.resultado)} × {e.pct}%</span>}
+                          </span>
+                          <span className={`shrink-0 font-medium tabular-nums ${e.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(e.valor)}</span>
                         </div>
                       ))}
                     </div>
                   )}
-                  <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-1 text-sm font-semibold dark:border-zinc-800"><span className="text-zinc-500">Total de entradas</span><span className="tabular-nums text-emerald-600">{brl2(h.entradaTot)}</span></div>
-
-                  {/* Saídas (custos rateados que a pessoa assume) */}
-                  <p className="mb-1.5 mt-4 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-rose-600"><ArrowDownCircle className="h-3.5 w-3.5" /> Saídas (custos rateados)</p>
-                  {(h.saidas?.length ?? 0) === 0 ? (
-                    <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-400 dark:bg-zinc-800/40">Sem custos rateados neste mês. Configure quais verticais o colaborador assume em <strong>RH › Configurações</strong> (ex.: 1/3 da agência) — a fatia do mês aparece aqui.</p>
-                  ) : (
-                    <div className="space-y-1">
+                  <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-1 text-sm font-semibold dark:border-zinc-800"><span className="text-zinc-500">Sua remuneração do mês</span><span className={`tabular-nums ${h.entradaTot >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(h.entradaTot)}</span></div>
+                  <p className="pt-1 text-[11px] text-zinc-400">Sua parte = <strong>% do resultado</strong> (receita − custos) da vertical no mês. Os custos da área já estão descontados — não há mais dedução separada.</p>
+                  {(h.saidas?.length ?? 0) > 0 && (
+                    <div className="mt-3 space-y-1">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-rose-600">Descontos</p>
                       {h.saidas.map((sd, i) => (
-                        <div key={i} className="flex items-start justify-between gap-2 text-sm">
-                          <span className="min-w-0 text-zinc-600 dark:text-zinc-300">
-                            <span className="block truncate">{sd.label}</span>
-                            {sd.base != null && sd.pct != null && <span className="block text-[11px] text-zinc-400">base {brl2(sd.base)} × {sd.pct}%{sd.area ? ` · ${sd.area}` : ''}</span>}
-                          </span>
-                          <span className="shrink-0 font-medium tabular-nums text-rose-600">− {brl2(sd.valor)}</span>
-                        </div>
+                        <div key={i} className="flex items-center justify-between text-sm"><span className="truncate text-zinc-600 dark:text-zinc-300">{sd.label}</span><span className="shrink-0 font-medium tabular-nums text-rose-600">− {brl2(sd.valor)}</span></div>
                       ))}
-                      <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-1 text-sm font-semibold dark:border-zinc-800"><span className="text-zinc-500">Total de saídas</span><span className="tabular-nums text-rose-600">− {brl2(h.saidaTot)}</span></div>
-                      <p className="pt-0.5 text-[11px] text-zinc-400">Cada saída = o que você assume daquela linha (definido no <strong>RH › Configurações</strong>) sobre o valor <strong>lançado no livro-razão</strong> naquele mês.</p>
                     </div>
                   )}
 
@@ -217,6 +209,27 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
             </div>
           );
         })()}
+
+        {/* Minha vertical (Fase B) — o que ela vê em 10 segundos: receita − despesa = resultado → minha parte */}
+        {subtab === 'resumo' && data.minhaVertical && data.minhaVertical.itens.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {data.minhaVertical.itens.map((v) => (
+              <div key={v.area} className="rounded-2xl border border-[#7048E8]/30 bg-gradient-to-br from-violet-50 to-white p-5 dark:border-violet-900/40 dark:from-violet-900/15 dark:to-zinc-900">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-5 w-5 text-[#7048E8]" /> Minha vertical · {v.area}</h3>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${v.resultado >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>{v.resultado >= 0 ? '✅ se paga' : '⚠️ subsidiada'}</span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Receita</p><p className="text-lg font-bold tabular-nums text-emerald-600">{brl(v.receita)}</p></div>
+                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Despesa</p><p className="text-lg font-bold tabular-nums text-rose-600">{brl(v.despesa)}</p></div>
+                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Resultado</p><p className={`text-lg font-bold tabular-nums ${v.resultado >= 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-rose-600'}`}>{brl(v.resultado)}</p></div>
+                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Minha parte ({v.pct}%)</p><p className="text-lg font-bold tabular-nums text-[#7048E8]">{brl(v.minhaParte)}</p></div>
+                </div>
+                <p className="mt-2 text-[11px] text-zinc-400">Sua remuneração = <strong>{v.pct}% do resultado</strong> da vertical (receita − custos da área){!data.minhaVertical!.configurada ? ' · % provisório, o escritório ainda vai definir sua participação' : ''}.</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Banner motivacional (Visão geral) */}
         {subtab === 'resumo' && (
