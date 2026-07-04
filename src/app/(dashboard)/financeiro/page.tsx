@@ -2516,6 +2516,8 @@ function ContasTab({ data }: { data: FinDashboard }) {
 
   // ── Fechar o caixa com aportes (Você + Pai) — idempotente ──
   const [aporteRun, setAporteRun] = useState(false);
+  const [aporteArmed, setAporteArmed] = useState(false); // confirmação em 2 cliques do "Desfazer"
+  const nAportes = data.transacoes.filter((t) => t.valor > 0 && /aporte/i.test(t.categoria || '')).length;
   const lancarAportes = async () => {
     const existentes = data.transacoes.filter((t) => t.valor > 0 && /aporte/i.test(t.categoria || ''));
     const jaTem = (a: { data: string; valor: number }) => existentes.some((e) => centsOf(e.valor) === centsOf(a.valor) && ymOf(e.data) === ymOf(a.data));
@@ -2537,9 +2539,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
   // Desfazer: remove os lançamentos de aporte/empréstimo (a posição real volta a ser o caixa).
   const removerAportes = async () => {
     const aportes = data.transacoes.filter((t) => t.valor > 0 && /aporte/i.test(t.categoria || '') && t.id);
-    if (!aportes.length) { toast.success('Não há empréstimo registrado.'); return; }
-    const total = aportes.reduce((s, t) => s + t.valor, 0);
-    if (!confirm(`Remover os ${aportes.length} lançamento(s) de empréstimo dos sócios (${brl(total)})?\n\nA "posição real" volta a ser o caixa de verdade. Você pode registrar de novo depois, com o valor real que os CPFs colocaram.`)) return;
+    if (!aportes.length) { toast.success('Não há empréstimo registrado.'); setAporteArmed(false); return; }
+    if (!aporteArmed) { setAporteArmed(true); return; } // 1º clique: arma; 2º clique: executa
+    setAporteArmed(false);
     setAporteRun(true);
     let ok = 0, fail = 0, firstErr = '';
     for (const t of aportes) {
@@ -2697,9 +2699,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
             <button onClick={lancarAportes} disabled={aporteRun} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
               {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> …</> : <><Scale className="h-3.5 w-3.5" /> Registrar empréstimo dos sócios</>}
             </button>
-            <button onClick={removerAportes} disabled={aporteRun} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-[11px] font-medium text-zinc-500 hover:border-rose-300 hover:text-rose-600 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-400">
-              <Trash2 className="h-3 w-3" /> Desfazer (posição = caixa)
-            </button>
+            {nAportes > 0 && <button onClick={removerAportes} onBlur={() => setAporteArmed(false)} disabled={aporteRun} className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium disabled:opacity-60 ${aporteArmed ? 'border-rose-500 bg-rose-50 text-rose-600 dark:bg-rose-900/20' : 'border-zinc-300 text-zinc-500 hover:border-rose-300 hover:text-rose-600 dark:border-zinc-700 dark:text-zinc-400'}`}>
+              <Trash2 className="h-3 w-3" /> {aporteArmed ? `Confirmar: remover ${nAportes}` : 'Desfazer (posição = caixa)'}
+            </button>}
           </div>
         </div>
         {nubankCartao && (
