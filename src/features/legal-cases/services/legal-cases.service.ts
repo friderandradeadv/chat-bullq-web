@@ -221,6 +221,10 @@ export interface KanbanCard {
 export interface KanbanData {
   phases: KanbanPhase[];
   cards: KanbanCard[];
+  // Fotos dos responsáveis DEDUPLICADAS (1 entrada por usuário, não por card): as
+  // fotos são data URIs base64 (~14 KB) e repeti-las por card inchava a resposta.
+  // O service backfill preenche card.responsible.avatarUrl a partir deste mapa.
+  avatars?: Record<string, string | null>;
 }
 
 export interface RecursoRow {
@@ -322,7 +326,19 @@ export const legalCasesService = {
     query: { responsibleId?: string; area?: string; search?: string; lane?: 'pre' | 'judicial' | 'banco' } = {},
   ): Promise<KanbanData> {
     const { data } = await api.get(`/legal-cases/kanban${qs(query)}`);
-    return data.data ?? data;
+    const kb: KanbanData = data.data ?? data;
+    // Backfill da foto do responsável a partir do mapa deduplicado (avatars) — o
+    // card lê card.responsible.avatarUrl, então todos os quadros ganham a foto de
+    // volta sem mexer no render. Sem o mapa, o card cai nas iniciais (como antes).
+    const avatars = kb.avatars;
+    if (avatars && Array.isArray(kb.cards)) {
+      for (const c of kb.cards) {
+        if (c.responsible && c.responsible.avatarUrl == null) {
+          c.responsible.avatarUrl = avatars[c.responsible.id] ?? null;
+        }
+      }
+    }
+    return kb;
   },
   async opponents(): Promise<OpponentRow[]> {
     const { data } = await api.get('/legal-cases/opponents');

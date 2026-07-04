@@ -171,6 +171,21 @@ export default function AgendaPage() {
   // no mount, antes de o efeito repintar).
   const seenRef = useRef<Set<string>>(new Set());
   const [seenNew, setSeenNew] = useState<Set<string>>(new Set());
+  const qcPrefs = useQueryClient();
+  // Grava o objeto `agenda` INTEIRO nas preferências do usuário. O merge do
+  // backend é RASO no topo, então mandar só um campo (view OU seenNew) apagaria
+  // o outro — por isso sempre reenviamos o objeto completo.
+  const patchAgendaPrefs = (partial: { view?: ViewMode; seenNew?: string[] }) => {
+    const cur =
+      (qcPrefs.getQueryData(['user-preferences']) as { agenda?: Record<string, unknown> } | undefined)
+        ?.agenda ?? {};
+    const nextAgenda = { ...cur, ...partial };
+    qcPrefs.setQueryData(['user-preferences'], (prev: Record<string, unknown> | undefined) => ({
+      ...(prev || {}),
+      agenda: nextAgenda,
+    }));
+    preferencesService.patch({ agenda: nextAgenda }).catch(() => { /* best-effort */ });
+  };
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SEEN_NEW_KEY);
@@ -183,7 +198,11 @@ export default function AgendaPage() {
     if (seenRef.current.has(id)) return;
     const next = new Set(seenRef.current); next.add(id);
     seenRef.current = next; setSeenNew(next);
-    try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify([...next])); } catch { /* */ }
+    // Cap p/ não crescer sem limite nas prefs (só itens de hoje viram bolinha).
+    const arr = [...next].slice(-500);
+    try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify(arr)); } catch { /* */ }
+    // Sincroniza "já visto" entre aparelhos (leu na web → some no celular).
+    patchAgendaPrefs({ seenNew: arr });
   };
 
   // Por padrão a agenda abre nas atribuições do usuário logado (não "Todas"),
@@ -217,7 +236,6 @@ export default function AgendaPage() {
   //    (ex.: escolheu "por mês" no desktop → abre em "por mês" no celular).
   //    O servidor é a fonte da verdade e sobrepõe o localStorage UMA vez, só se
   //    o usuário ainda não trocou de visão nesta sessão.
-  const qcPrefs = useQueryClient();
   const prefsQ = useQuery({
     queryKey: ['user-preferences'],
     queryFn: () => preferencesService.get(),
@@ -231,6 +249,21 @@ export default function AgendaPage() {
     if (v && v in VIEW_LABEL) {
       setMode(v);
       try { localStorage.setItem(VIEW_KEY, v); } catch { /* */ }
+    }
+  }, [prefsQ.isSuccess, prefsQ.data]);
+
+  // 3) "Já visto" por USUÁRIO (servidor): une o conjunto do servidor ao local
+  //    uma vez — quem leu na web não vê tudo como "novo" no celular.
+  const didApplyServerSeen = useRef(false);
+  useEffect(() => {
+    if (didApplyServerSeen.current || !prefsQ.isSuccess) return;
+    didApplyServerSeen.current = true;
+    const arr = (prefsQ.data?.agenda as { seenNew?: string[] } | undefined)?.seenNew;
+    if (arr && arr.length) {
+      const merged = new Set<string>([...seenRef.current, ...arr]);
+      seenRef.current = merged;
+      setSeenNew(merged);
+      try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify([...merged].slice(-500))); } catch { /* */ }
     }
   }, [prefsQ.isSuccess, prefsQ.data]);
 
@@ -385,11 +418,9 @@ export default function AgendaPage() {
     // já interagiu nesta sessão → um fetch tardio de preferências não sobrescreve.
     didApplyServerView.current = true;
     try { localStorage.setItem(VIEW_KEY, m); } catch { /* */ }
-    // Salva por usuário no servidor (merge raso — não mexe em outras prefs).
-    preferencesService.patch({ agenda: { view: m } }).catch(() => { /* best-effort */ });
-    // Mantém o cache coerente: se a Agenda remontar dentro do staleTime, não
-    // reverte pra visão antiga do servidor.
-    qcPrefs.setQueryData(['user-preferences'], (prev: any) => ({ ...(prev || {}), agenda: { view: m } }));
+    // Salva por usuário no servidor mantendo o `seenNew` (patchAgendaPrefs reenvia
+    // o objeto agenda inteiro — o merge do backend é raso no topo).
+    patchAgendaPrefs({ view: m });
   };
   const openCreate = (type: 'evento' | 'tarefa', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
@@ -1233,8 +1264,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           </div>
         )}
 
-        {/* Geração de peças por IA saiu da agenda (usa-se o Cowork). A geração fica
-            na ficha do processo (PecasActions) e a de iniciais no kanban pré-judicial. */}
+        {/* Geração de peças por IA saiu do BullQ (réplica/especificação/recurso usam
+            o Cowork). No kanban pré-judicial fica só a geração de iniciais de RMC/RCC. */}
 
         {/* Comentários */}
         <div className="mt-5 border-t border-[#DEE2E6] pt-4 dark:border-zinc-800">

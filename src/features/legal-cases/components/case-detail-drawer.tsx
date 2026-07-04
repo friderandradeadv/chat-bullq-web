@@ -18,7 +18,6 @@ import { ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 import { DropZone } from '@/components/drop-zone';
-import { GerarPecaDialog, type TipoPeca } from './gerar-peca-dialog';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
@@ -300,24 +299,6 @@ export function CaseDetailDrawer({
                   />
                 )}
 
-                {/* Direcionar ESTE card (útil p/ um filhote ou p/ um card de banco único):
-                    atalho rápido p/ Documentos faltantes ou Montar inicial. */}
-                {inIntake && (
-                  <div className="mt-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Direcionar este card</p>
-                    <div className="mt-1.5 flex gap-1.5">
-                      <button onClick={() => onMove('info_faltantes')} disabled={phaseKey === 'info_faltantes'}
-                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-400 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-40 dark:text-amber-400 dark:hover:bg-amber-900/20">
-                        <ArrowRight className="h-3.5 w-3.5" /> Documentos faltantes
-                      </button>
-                      <button onClick={() => onMove('montar_inicial')}
-                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#005efc] px-3 py-2 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5">
-                        <ArrowRight className="h-3.5 w-3.5" /> Montar inicial
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {/* Cálculo RMC/RCC + gerar inicial: SÓ na fase Montar inicial em diante
                     (com o card certo — polo passivo/produto). Na fase de intake essa etapa
                     não aparece: primeiro cria-se os cards dos bancos réus. */}
@@ -353,11 +334,6 @@ export function CaseDetailDrawer({
                     <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                   </div>
                 )}
-
-                {/* Peças por IA — geradas sobre o timbrado a partir do documento subido. */}
-                <div className="mt-4">
-                  <PecasActions caseId={c.id} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
-                </div>
 
                 {pf.recordUrl && (
                   <a href={pf.recordUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
@@ -1031,37 +1007,6 @@ function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: a
       >
         <Upload className="h-3.5 w-3.5" /> {orgBusy ? 'Organizando no Drive…' : 'Organizar pasta da inicial (Drive)'}
       </button>
-    </div>
-  );
-}
-
-// Peças por IA (réplica / especificação de provas / recurso): abre o modal que sobe
-// o documento-base (contestação/réplica/sentença) e gera a peça sobre o timbrado.
-function PecasActions({ caseId, onChanged }: { caseId: string; onChanged: () => void }) {
-  const [tipo, setTipo] = useState<TipoPeca | null>(null);
-  const BTNS: { tipo: TipoPeca; label: string }[] = [
-    { tipo: 'replica', label: 'Réplica' },
-    { tipo: 'especificacao', label: 'Especificação de provas' },
-    { tipo: 'recurso', label: 'Recurso (apelação)' },
-  ];
-  return (
-    <div>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f] dark:text-zinc-400">Gerar peça (IA)</p>
-      <p className="mb-1.5 mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Sobe o documento-base e a IA redige a peça sobre o timbrado — confira antes do protocolo.</p>
-      <div className="flex flex-wrap gap-1.5">
-        {BTNS.map((b) => (
-          <button
-            key={b.tipo}
-            onClick={() => setTipo(b.tipo)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8] px-3 py-2 text-xs font-semibold text-[#7048E8] hover:bg-[#7048E8]/5"
-          >
-            <Sparkles className="h-3.5 w-3.5" /> {b.label}
-          </button>
-        ))}
-      </div>
-      {tipo && (
-        <GerarPecaDialog caseId={caseId} tipo={tipo} onClose={() => setTipo(null)} onGenerated={onChanged} />
-      )}
     </div>
   );
 }

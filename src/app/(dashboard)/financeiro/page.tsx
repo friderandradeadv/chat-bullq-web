@@ -237,7 +237,9 @@ function TabsMenu({ view, setView, lancCount }: { view: View; setView: (v: View)
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 z-40 mt-1.5 w-[min(92vw,440px)] rounded-2xl border border-[#DEE2E6] bg-white p-2 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+          {/* Mobile: ocupa a coluna toda (não estoura/corta com o overflow-x-hidden
+              do root). Desktop: painel largo fixo. */}
+          <div className="absolute left-0 z-40 mt-1.5 w-full sm:w-[min(92vw,440px)] rounded-2xl border border-[#DEE2E6] bg-white p-2 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
             {GRUPOS.map((g) => (
               <div key={g} className="mb-1 last:mb-0">
                 <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{g}</p>

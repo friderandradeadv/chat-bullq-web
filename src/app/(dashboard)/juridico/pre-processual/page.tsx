@@ -63,8 +63,9 @@ export default function PreProcessualPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'pre' }), refetchInterval: 60_000 });
-  // Exclui a trilha bancária (banco_*): ela tem board próprio (Fase Bancária).
-  const phases = (data?.phases ?? []).filter((p) => p.lane === 'pre' && !p.key.startsWith('banco_'));
+  // Exclui a trilha bancária (banco_*) e o Processo Administrativo INSS (inss_admin):
+  // cada um tem board próprio (Fase Bancária / INSS Administrativo).
+  const phases = (data?.phases ?? []).filter((p) => p.lane === 'pre' && !p.key.startsWith('banco_') && p.key !== 'inss_admin');
   const cards = data?.cards ?? [];
 
   const resps = useMemo(() => {
