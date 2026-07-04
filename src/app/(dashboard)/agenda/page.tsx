@@ -393,30 +393,6 @@ export default function AgendaPage() {
     return true;
   }), [activities, exibir, status, personId, tagFilter, q, qDigits]);
 
-  // A bolinha "adicionado hoje" serve pra você NOTAR o que entrou hoje — não é um
-  // "não lido" que precisa de clique. Depois que a agenda fica visível por um
-  // instante, marca tudo como visto e SINCRONIZA (servidor): quem já olhou aqui
-  // ou na web não vê mais como novo em nenhum aparelho. Antes só sumia ao abrir
-  // cada atividade uma a uma — por isso "as bolinhas seguiam lá".
-  useEffect(() => {
-    const novos = filtered
-      .filter(isCreatedToday)
-      .map((a) => a.id)
-      .filter((id) => !seenRef.current.has(id));
-    if (novos.length === 0) return;
-    const t = setTimeout(() => {
-      const next = new Set(seenRef.current);
-      novos.forEach((id) => next.add(id));
-      seenRef.current = next;
-      setSeenNew(next);
-      const arr = [...next].slice(-500);
-      try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify(arr)); } catch { /* */ }
-      patchAgendaPrefs({ seenNew: arr });
-    }, 2200);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered]);
-
   const byId = useMemo(() => new Map(filtered.map((a) => [a.id, a])), [filtered]);
   // Repinta a barra do topo de cada evento já montado quando as etiquetas/filtro
   // mudam — as tags carregam async, depois do mount, e sem isto a barra ficava
