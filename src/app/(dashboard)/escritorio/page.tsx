@@ -18,6 +18,8 @@ import { membersService, type Member } from '@/features/settings/services/member
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { MeuFinanceiroConteudo } from '@/features/financeiro/components/meu-financeiro-conteudo';
+import { ComboBox } from '@/features/financeiro/components/combo-box';
+import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { DropZone } from '@/components/drop-zone';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -861,7 +863,7 @@ function VerticaisSection({ verticais, pessoas, team, editing, setDraft, onVerPe
         {verticais.map((v, i) => (
           <div key={v.id} className={CARD}>
             <div className="flex items-center gap-2">
-              <input value={v.nome} onChange={(e) => upd(i, { nome: e.target.value })} placeholder="Nome da vertical (ex.: Previdenciário)" className={`${INPUT} font-semibold`} />
+              <ComboBox className="flex-1 font-semibold" value={v.nome} options={VERTICAIS_PADRAO} allowFree placeholder="Nome da vertical (ex.: Previdenciário)" onChange={(val) => upd(i, { nome: val })} />
               <button onClick={() => del(i)} className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1567,7 +1569,7 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
           <div><p className={LABEL}>Vidas impactadas</p><input type="number" min={0} value={f.vidas ?? ''} onChange={(e) => set({ vidas: num(e.target.value) })} className={`${INPUT} mt-1`} /></div>
         </div>
       )}
-      {!selfMode && <div><p className={LABEL}>Verticais / áreas de atuação</p><VerticaisEditor value={f.atuacao ?? []} onChange={(v) => set({ atuacao: v })} sugestoes={(data.verticais ?? []).map((x) => x.nome).filter(Boolean)} /><p className="mt-1 text-[11px] text-zinc-400">Aparecem (clicáveis, levam ao financeiro da área) abaixo do cargo no perfil.</p></div>}
+      {!selfMode && <div><p className={LABEL}>Verticais / áreas de atuação</p><VerticaisEditor value={f.atuacao ?? []} onChange={(v) => set({ atuacao: v })} sugestoes={[...new Set([...VERTICAIS_PADRAO, ...(data.verticais ?? []).map((x) => x.nome).filter(Boolean)])]} /><p className="mt-1 text-[11px] text-zinc-400">Aparecem (clicáveis, levam ao financeiro da área) abaixo do cargo no perfil.</p></div>}
       {!selfMode && <div><p className={LABEL}>Financeiro (do contrato) — um item por linha</p><textarea value={(f.financeiro ?? []).join('\n')} onChange={(e) => set({ financeiro: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })} rows={3} placeholder={'70% dos honorários de clientes que capta e atende\n30% quando é nomeada para atuar'} className={`${INPUT} mt-1`} /></div>}
       {!selfMode && (
         <div>

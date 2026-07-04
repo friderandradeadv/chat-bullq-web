@@ -20,6 +20,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { membersService } from '@/features/settings/services/members.service';
 import { MeuFinanceiroConteudo, BuscaCliente, BuscaProcesso } from '@/features/financeiro/components/meu-financeiro-conteudo';
 import { ComboBox } from '@/features/financeiro/components/combo-box';
+import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
@@ -83,11 +84,7 @@ function areaJuridica(produto?: string | null): string {
   return 'Cível';
 }
 
-// Verticais-padrão (centros de custo do financeiro) — LISTA ÚNICA usada em todo lugar
-// (classificador, modal, filtros, participações). O antigo "Bancário" foi desdobrado nas
-// frentes reais: RMC/RCC (reserva de margem + cartão consignado) e REPB (reestruturação de
-// passivo bancário) — é isso que o holerite mira. Dativos = causas por nomeação.
-const VERTICAIS_PADRAO = ['RMC/RCC', 'REPB', 'Previdenciário', 'Trabalhista', 'Consumidor', 'Cível', 'Dativos'];
+// VERTICAIS_PADRAO agora vem da fonte única (features/financeiro/lib/verticais) — importada abaixo.
 
 export default function FinanceiroPage() {
   // Organismo vivo: refaz sozinho a cada 60s e ao voltar pra aba — reflete movimentação dos processos/recebimentos.

@@ -13,6 +13,8 @@ import { rhService, type Rh, type Candidato, type Etapa, type Ficha, type Docume
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { escritorioService, type Cargo, type Vertical, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
 import { financeiroService, type AcessoNivel } from '@/features/financeiro/services/financeiro.service';
+import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
+import { ComboBox } from '@/features/financeiro/components/combo-box';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { DropZone } from '@/components/drop-zone';
 import { maskCpf, maskDataBR, maskTelefoneBR } from '@/lib/masks';
@@ -161,7 +163,8 @@ function ConfiguracoesView({ team, members, honorariosPct, acessoFin, pessoas, c
 }
 
 // Custos rateados que cada colaborador assume (alimenta as SAÍDAS do holerite em Meu Espaço).
-const AREAS_VERT = ['Bancário', 'Previdenciário', 'Trabalhista', 'Consumidor', 'Cível'];
+// Verticais vêm da FONTE ÚNICA (mesma lista do Financeiro/Estrutura/Meu Espaço).
+const AREAS_VERT = VERTICAIS_PADRAO;
 function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[]; cargoById: Record<string, any>; pessoas: Record<string, any>; canEdit: boolean }) {
   const qc = useQueryClient();
   const { data: cfg } = useQuery({ queryKey: ['financeiro', 'custos-pessoa'], queryFn: () => financeiroService.getCustosPessoa() });
@@ -223,7 +226,7 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
                     return (
                     <div key={i}>
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <input list="rh-frentes-custos" value={x.area} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: e.target.value, label: '' } : y))} disabled={!canEdit} placeholder="vertical ou frente (ex.: Bancário)" className={`${INPUT} min-w-[8rem] flex-1`} />
+                        <ComboBox className="min-w-[8rem] flex-1" value={x.area} options={[...new Set([...AREAS_VERT, ...Object.keys(custoFixo)])]} allowFree disabled={!canEdit} placeholder="vertical…" onChange={(val) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: val, label: '' } : y))} />
                         {/* Linha de custo específica da vertical (ex.: Agência 1/3, Anúncios REPB) — ou a vertical inteira. */}
                         <select value={x.label} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, label: e.target.value } : y))} disabled={!canEdit || linhas.length === 0} className="min-w-[9rem] flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 disabled:opacity-50">
                           <option value="">{linhas.length ? 'Vertical inteira' : 'Vertical inteira (sem linhas)'}</option>
