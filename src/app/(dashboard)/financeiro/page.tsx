@@ -2590,11 +2590,14 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const updM = useMutation({ mutationFn: ({ id, i }: { id: string; i: any }) => financeiroService.updateConta(id, i), onSuccess: () => { inval(); toast.success('Conta atualizada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
   const delM = useMutation({ mutationFn: (id: string) => financeiroService.removeConta(id), onSuccess: () => { inval(); toast.success('Conta removida'); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
 
+  // Aporte/empréstimo dos sócios NÃO é dinheiro que está na conta — é passivo (aparece na "posição real").
+  // Excluir do saldo da conta (senão infla o Nubank; ex.: 8.151 reais + 9.435 empréstimo = 17.586 fantasma).
+  const ehAporte = (t: FinTransacao) => /aporte|empr[eé]stimo dos s[óo]cios/i.test(`${t.categoria} ${t.pagador ?? ''}`);
   const saldoConta = (id: string) => {
     const ini = contas.find((c) => c.id === id)?.saldoInicial ?? 0;
     let mov = 0, aReceber = 0, aPagar = 0, n = 0;
     for (const t of data.transacoes) {
-      if (t.conta !== id) continue; n++;
+      if (t.conta !== id || ehAporte(t)) continue; n++;
       const st = txStatus(t);
       if (t.valor >= 0) { if (st === 'recebido') mov += t.valor; else aReceber += t.valor; }
       else { if (st === 'pago') mov += t.valor; else aPagar += -t.valor; }
