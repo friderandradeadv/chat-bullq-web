@@ -134,7 +134,11 @@ export default function DashboardLayout({
             </div>
           </div>
           {/* Conteúdo — no mobile reserva espaço p/ a barra de abas (pb-tabbar). */}
-          <div className="min-h-0 flex-1 pb-tabbar lg:pb-0">{children}</div>
+          {/* pb-tabbar dá espaço pra barra de abas do mobile; no desktop tem que
+              ZERAR — mas o utilitário custom .pb-tabbar vencia o lg:pb-0 na cascata
+              (56px de padding sobravam no rodapé, "cortando" o kanban). O !important
+              garante padding-bottom:0 no lg. */}
+          <div className="min-h-0 flex-1 pb-tabbar lg:!pb-0">{children}</div>
         </div>
         <MobileTabBar />
       </NotificationCenterProvider>
