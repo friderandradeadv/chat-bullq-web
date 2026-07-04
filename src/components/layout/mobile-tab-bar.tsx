@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, MessageSquare, Scale, Bell, Menu } from 'lucide-react';
+import { Sparkles, MessageSquare, Scale, CircleDollarSign, UserCircle, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth-store';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
-import { useNotificationCenter } from '@/features/notifications/notification-center';
 import { useUnreadConversations } from '@/features/notifications/use-unread-conversations';
 
 // Barra de abas inferior — só no mobile (lg:hidden). Dá a navegação principal
 // com toque de app nativo; respeita a barra de gestos do iPhone (pb-safe).
+// As notificações (sino) ficam no topo, canto superior direito (não aqui).
 
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -23,8 +24,10 @@ function Badge({ count }: { count: number }) {
 export function MobileTabBar() {
   const pathname = usePathname();
   const nav = useMobileNav();
-  const { toggle, unreadCount } = useNotificationCenter();
   const unreadConversations = useUnreadConversations();
+  const { organizations, activeOrgId } = useAuthStore();
+  const role = organizations.find((o) => o.id === activeOrgId)?.role;
+  const isAdmin = role === 'OWNER' || role === 'ADMIN';
 
   const isActive = (prefixes: string[]) =>
     prefixes.some((p) => (p === '/inicio' ? pathname === p : pathname.startsWith(p)));
@@ -63,13 +66,17 @@ export function MobileTabBar() {
         <span>Jurídico</span>
       </Link>
 
-      <button type="button" onClick={toggle} className={linkCls(false)}>
-        <span className="relative">
-          <Bell className="h-5 w-5" />
-          <Badge count={unreadCount} />
-        </span>
-        <span>Avisos</span>
-      </button>
+      {isAdmin && (
+        <Link href="/financeiro" className={linkCls(isActive(['/financeiro']))}>
+          <CircleDollarSign className="h-5 w-5" />
+          <span>Financeiro</span>
+        </Link>
+      )}
+
+      <Link href="/escritorio" className={linkCls(isActive(['/escritorio']))}>
+        <UserCircle className="h-5 w-5" />
+        <span>Espaço</span>
+      </Link>
 
       <button type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>
         <Menu className="h-5 w-5" />

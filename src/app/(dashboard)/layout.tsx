@@ -104,23 +104,29 @@ export default function DashboardLayout({
     );
   }
 
+  const bellBtnCls =
+    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800';
+
   return (
-    <SidebarLayout
-      sidebar={<AppSidebar />}
-      navbar={
-        // Barra app do mobile: marca CENTRALIZADA (bloco flex-1 no meio, entre o
-        // menu-hambúrguer à esquerda e o tema à direita), com toque de app.
-        <div className="flex items-center gap-2">
-          <div className="flex flex-1 justify-center">
-            <Link href="/inicio" className="block">
-              <Logo size="sm" />
-            </Link>
-          </div>
-          <ThemeToggle className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
-        </div>
-      }
-    >
-      <NotificationCenterProvider>
+    // Provider ENVOLVE o SidebarLayout: assim o sino (no app bar do topo, que o
+    // SidebarLayout renderiza) e o painel de notificações compartilham o contexto.
+    <NotificationCenterProvider>
+      <SidebarLayout
+        sidebar={<AppSidebar />}
+        navbar={
+          // Marca centralizada na tela toda (o SidebarLayout posiciona no centro).
+          <Link href="/inicio" className="block">
+            <Logo size="sm" />
+          </Link>
+        }
+        navbarRight={
+          // Canto superior direito do mobile: sino de notificações + tema.
+          <>
+            <NotificationBell />
+            <ThemeToggle className={bellBtnCls} />
+          </>
+        }
+      >
         <div className="flex h-full flex-col">
           <ToolFailureBanner />
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
@@ -130,7 +136,7 @@ export default function DashboardLayout({
             <GlobalSearch />
             <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
               <NotificationBell />
-              <ThemeToggle className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
+              <ThemeToggle className={bellBtnCls} />
             </div>
           </div>
           {/* Conteúdo — no mobile reserva espaço p/ a barra de abas (pb-tabbar). */}
@@ -141,7 +147,7 @@ export default function DashboardLayout({
           <div className="min-h-0 flex-1 pb-tabbar lg:!pb-0">{children}</div>
         </div>
         <MobileTabBar />
-      </NotificationCenterProvider>
-    </SidebarLayout>
+      </SidebarLayout>
+    </NotificationCenterProvider>
   );
 }
