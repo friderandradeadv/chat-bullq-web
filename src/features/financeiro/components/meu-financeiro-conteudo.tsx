@@ -120,17 +120,21 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
   const [stf, setStf] = useState<'todos' | 'recebido' | 'a_receber'>('todos');
   const [busca, setBusca] = useState('');
   const [vertSaidaSel, setVertSaidaSel] = useState(''); // qual vertical (ela pode atuar em +de1: RMC, REPB) exibir as saídas
+  const [vertF, setVertF] = useState(''); // filtro por vertical nas entradas/lançamentos ('' = todas as dela)
+  // verticais que aparecem nos lançamentos dela (Maju pode estar em RMC/RCC + Trabalhista)
+  const verticaisEntradas = useMemo(() => [...new Set((data.transacoes ?? []).map((t) => t.vertical).filter(Boolean) as string[])].sort(), [data.transacoes]);
 
   // meses disponíveis + sempre o mês corrente (pra ele aparecer no seletor mesmo sem lançamento ainda)
   const mesesDisp = useMemo(() => Array.from(new Set([mesAtual, ...lancFonte.map(mesKey)])).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [lancFonte, mesAtual]);
   const txs = useMemo(() => lancFonte.filter((t) => {
     if (mesSel && mesKey(t) !== mesSel) return false;
+    if (vertF && t.vertical !== vertF) return false;
     const st = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
     if (stf === 'recebido' && !(st === 'recebido' || st === 'pago')) return false;
     if (stf === 'a_receber' && (st === 'recebido' || st === 'pago')) return false;
     if (busca && !`${t.pagador ?? t.party ?? ''} ${t.categoria}`.toLowerCase().includes(busca.toLowerCase())) return false;
     return true;
-  }), [lancFonte, mesSel, stf, busca]);
+  }), [lancFonte, mesSel, stf, busca, vertF]);
   const chartData = serie.map((s) => ({ nome: mesCurtoKey(s.mes), valor: s.valor }));
 
   return (
@@ -495,7 +499,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         {subtab === 'lancamentos' && (() => {
           const entradasMes = txs.filter((t) => !t.minhaFatiaRateio && t.valor > 0).reduce((s, t) => s + t.valor, 0);
           const svAll = data.saidasVerticais ?? [];
-          const svCur = svAll.find((x) => x.area === vertSaidaSel) ?? svAll[0];
+          const svCur = svAll.find((x) => x.area === (vertF || vertSaidaSel)) ?? svAll[0];
           const saidasMes = svCur ? svCur.lancamentos.filter((l) => !mesSel || l.mes === mesSel).reduce((s, l) => s + l.valor, 0) : 0;
           const res = entradasMes - saidasMes;
           if (entradasMes === 0 && saidasMes === 0) return null;
@@ -517,6 +521,12 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
               <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="bg-transparent text-sm font-medium outline-none"><option value="">Todos os meses</option>{mesesDisp.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}</select>
             </div>
             <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">{STATUS_FILTROS_ADV.map((a) => <button key={a.key} onClick={() => setStf(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${stf === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}</div>
+            {verticaisEntradas.length > 1 && (
+              <ComboBox className="w-40" value={vertF} options={verticaisEntradas}
+                actions={[{ value: '', label: 'Todas as verticais' }]}
+                labelOf={(v) => v === '' ? 'Todas as verticais' : v}
+                placeholder="vertical…" onChange={setVertF} />
+            )}
             <div className="relative ml-auto"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="w-40 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
           </div>
           <div className="max-h-[30rem] overflow-y-auto scrollbar-thin">
@@ -550,7 +560,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         {/* Saídas PADRÃO da vertical (custos compartilhados: agência, anúncios) — selecionável por vertical */}
         {subtab === 'lancamentos' && (data.saidasVerticais?.length ?? 0) > 0 && (() => {
           const sv = data.saidasVerticais!;
-          const cur = sv.find((x) => x.area === vertSaidaSel) ?? sv[0];
+          const cur = sv.find((x) => x.area === (vertF || vertSaidaSel)) ?? sv[0];
           const lancs = cur.lancamentos.filter((l) => !mesSel || l.mes === mesSel);
           const tot = lancs.reduce((s, l) => s + l.valor, 0);
           return (

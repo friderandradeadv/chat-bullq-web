@@ -51,6 +51,7 @@ export interface FinTransacao {
   area?: string | null; // vertical direta do lançamento (centro de custos)
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null; // rateio de despesa entre verticais
   verticais?: string[]; // verticais que o lançamento toca (centro de custos) — vazio = comum/escritório
+  vertical?: string | null; // vertical resolvida do lançamento (visão Meu Espaço — p/ filtro das entradas)
   // fatia DESTA pessoa numa despesa rateada (Meu Espaço) — conforme os % do RH (custosPessoa)
   minhaFatiaRateio?: { valor: number; itens: { area: string; label: string | null; base: number; pct: number; valor: number }[] } | null;
 }
