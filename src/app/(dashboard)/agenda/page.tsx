@@ -22,6 +22,7 @@ import { deadlinesService, type Deadline } from '@/features/deadlines/services/d
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { preferencesService } from '@/features/inbox/services/preferences.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePermissions } from '@/hooks/use-permissions';
 import { inputCls, Field, ASTREA_BLUE, CnjNumber } from '../processos/page';
@@ -205,10 +206,33 @@ export default function AgendaPage() {
 
   const api = () => calRef.current?.getApi();
 
+  // 1) Restauração INSTANTÂNEA (localStorage) — evita "piscar" na lista antes de
+  //    a preferência do servidor chegar.
   useEffect(() => {
     const saved = (typeof window !== 'undefined' && localStorage.getItem(VIEW_KEY)) as ViewMode | null;
     if (saved && saved in VIEW_LABEL) setMode(saved);
   }, []);
+
+  // 2) Preferência POR USUÁRIO (servidor) — segue o Matheus entre aparelhos
+  //    (ex.: escolheu "por mês" no desktop → abre em "por mês" no celular).
+  //    O servidor é a fonte da verdade e sobrepõe o localStorage UMA vez, só se
+  //    o usuário ainda não trocou de visão nesta sessão.
+  const qcPrefs = useQueryClient();
+  const prefsQ = useQuery({
+    queryKey: ['user-preferences'],
+    queryFn: () => preferencesService.get(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const didApplyServerView = useRef(false);
+  useEffect(() => {
+    if (didApplyServerView.current || !prefsQ.isSuccess) return;
+    didApplyServerView.current = true;
+    const v = (prefsQ.data?.agenda as { view?: ViewMode } | undefined)?.view;
+    if (v && v in VIEW_LABEL) {
+      setMode(v);
+      try { localStorage.setItem(VIEW_KEY, v); } catch { /* */ }
+    }
+  }, [prefsQ.isSuccess, prefsQ.data]);
 
   const from = useMemo(() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString(); }, []);
   const to = useMemo(() => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString(); }, []);
@@ -356,7 +380,17 @@ export default function AgendaPage() {
     };
   }), [filtered, personId]);
 
-  const pickMode = (m: ViewMode) => { setMode(m); setViewMenu(false); try { localStorage.setItem(VIEW_KEY, m); } catch { /* */ } };
+  const pickMode = (m: ViewMode) => {
+    setMode(m); setViewMenu(false);
+    // já interagiu nesta sessão → um fetch tardio de preferências não sobrescreve.
+    didApplyServerView.current = true;
+    try { localStorage.setItem(VIEW_KEY, m); } catch { /* */ }
+    // Salva por usuário no servidor (merge raso — não mexe em outras prefs).
+    preferencesService.patch({ agenda: { view: m } }).catch(() => { /* best-effort */ });
+    // Mantém o cache coerente: se a Agenda remontar dentro do staleTime, não
+    // reverte pra visão antiga do servidor.
+    qcPrefs.setQueryData(['user-preferences'], (prev: any) => ({ ...(prev || {}), agenda: { view: m } }));
+  };
   const openCreate = (type: 'evento' | 'tarefa', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
   // Abrir a atividade = visualizá-la → tira a bolinha de "novo".
