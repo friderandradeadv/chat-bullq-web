@@ -6,7 +6,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Plus, Download, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Plus, Download, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -97,6 +97,10 @@ export default function FaseJudicialKanbanPage() {
   const [showFora, setShowFora] = useState(false);
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Quantos filtros estão ativos (badge do botão "Filtros"). Busca e ordenação não contam.
+  const activeFilters = [area, produto, resp].filter(Boolean).length + (phaseSel.length ? 1 : 0) + (tagSel.length ? 1 : 0) + (showFora ? 1 : 0);
+  const limparFiltros = () => { setArea(''); setProduto(''); setResp(''); setPhaseSel([]); setTagSel([]); setShowFora(false); };
   const dragScroll = useDragScroll();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -285,21 +289,45 @@ export default function FaseJudicialKanbanPage() {
               className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
             />
           </div>
-          <Select value={area} onChange={setArea} placeholder="Todas as áreas" options={areas} />
-          <Select value={produto} onChange={setProduto} placeholder="Todos os produtos" options={produtos} />
-          <Select value={resp} onChange={setResp} placeholder="Todos os responsáveis" valueMap={resps} />
-          <MultiSelect label="Fases" options={phaseOptions} selected={phaseSel} onChange={setPhaseSel} />
-          <MultiSelect label="Etiquetas" options={tagOptions} selected={tagSel} onChange={setTagSel} />
-          <div className="flex items-center gap-1" title="Ordenar os cards">
-            <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)} className="h-9 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-              {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
-            </select>
+          {/* Filtros num painel (não polui a barra): área, produto, responsável,
+              fases, etiquetas, ordenação e arquivados. Busca fica fora. */}
+          <div className="relative">
+            <button
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium dark:bg-zinc-900 ${activeFilters ? 'border-[#e11970] bg-[#e11970]/5 text-[#e11970]' : 'border-[#cfe0ed] bg-white text-[#101820] dark:border-zinc-700 dark:text-zinc-300'}`}
+            >
+              <SlidersHorizontal className="h-4 w-4" /> Filtros
+              {activeFilters > 0 && <span className="rounded-full bg-[#e11970] px-1.5 text-[11px] font-semibold text-white">{activeFilters}</span>}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {filtersOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setFiltersOpen(false)} />
+                <div className="absolute left-0 top-11 z-30 w-[280px] rounded-lg border border-[#cfe0ed] bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                  <div className="space-y-2.5">
+                    <div><p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Área</p><Select value={area} onChange={setArea} placeholder="Todas as áreas" options={areas} full /></div>
+                    <div><p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Produto</p><Select value={produto} onChange={setProduto} placeholder="Todos os produtos" options={produtos} full /></div>
+                    <div><p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Responsável</p><Select value={resp} onChange={setResp} placeholder="Todos os responsáveis" valueMap={resps} full /></div>
+                    <div><p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Fases</p><MultiSelect label="Selecionar fases" options={phaseOptions} selected={phaseSel} onChange={setPhaseSel} full /></div>
+                    <div><p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Etiquetas</p><MultiSelect label="Selecionar etiquetas" options={tagOptions} selected={tagSel} onChange={setTagSel} full /></div>
+                    <div>
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Ordenar por</p>
+                      <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)} className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                        {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
+                      </select>
+                    </div>
+                    <label className="flex cursor-pointer items-center gap-2 pt-0.5 text-sm text-zinc-600 dark:text-zinc-300">
+                      <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#e11970]" />
+                      Mostrar arquivados/abandonados
+                    </label>
+                    {activeFilters > 0 && (
+                      <button onClick={limparFiltros} className="w-full rounded-lg border border-[#e11970] py-1.5 text-xs font-semibold text-[#e11970] hover:bg-[#e11970]/5">Limpar filtros ({activeFilters})</button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-          <label className="ml-1 flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500">
-            <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#e11970]" />
-            Mostrar arquivados/abandonados
-          </label>
           <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
             <Plus className="h-4 w-4" /> Novo processo
           </button>
@@ -336,16 +364,16 @@ export default function FaseJudicialKanbanPage() {
 }
 
 function Select({
-  value, onChange, placeholder, options, valueMap,
+  value, onChange, placeholder, options, valueMap, full,
 }: {
   value: string; onChange: (v: string) => void; placeholder: string; options?: string[];
-  valueMap?: { id: string; name: string }[];
+  valueMap?: { id: string; name: string }[]; full?: boolean;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-9 max-w-[180px] rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+      className={`h-9 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 ${full ? 'w-full' : 'max-w-[180px]'}`}
     >
       <option value="">{placeholder}</option>
       {(valueMap ?? (options ?? []).map((o) => ({ id: o, name: o }))).map((o) => (
@@ -357,9 +385,9 @@ function Select({
 
 // Filtro multi-seleção (popover com checkboxes) — usado para Fases e Etiquetas.
 function MultiSelect({
-  label, options, selected, onChange,
+  label, options, selected, onChange, full,
 }: {
-  label: string; options: { id: string; name: string; color?: string }[]; selected: string[]; onChange: (v: string[]) => void;
+  label: string; options: { id: string; name: string; color?: string }[]; selected: string[]; onChange: (v: string[]) => void; full?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
@@ -367,7 +395,7 @@ function MultiSelect({
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-9 items-center gap-1 rounded-lg border px-2.5 text-sm dark:bg-zinc-900 ${selected.length ? 'border-[#e11970] bg-[#e11970]/5 text-[#e11970]' : 'border-[#cfe0ed] bg-white text-[#101820] dark:border-zinc-700 dark:text-zinc-300'}`}
+        className={`flex h-9 items-center gap-1 rounded-lg border px-2.5 text-sm dark:bg-zinc-900 ${full ? 'w-full justify-between' : ''} ${selected.length ? 'border-[#e11970] bg-[#e11970]/5 text-[#e11970]' : 'border-[#cfe0ed] bg-white text-[#101820] dark:border-zinc-700 dark:text-zinc-300'}`}
       >
         {label}{selected.length ? ` (${selected.length})` : ''} <ChevronDown className="h-3.5 w-3.5" />
       </button>
