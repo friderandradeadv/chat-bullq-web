@@ -114,11 +114,13 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
   const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
 
   const [fraseIdx, setFraseIdx] = useState(0);
-  const [mesSel, setMesSel] = useState('');
+  const mesAtual = useMemo(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }, []);
+  const [mesSel, setMesSel] = useState(mesAtual); // abre no mês corrente (igual livro-razão); usuário muda no seletor
   const [stf, setStf] = useState<'todos' | 'recebido' | 'a_receber'>('todos');
   const [busca, setBusca] = useState('');
 
-  const mesesDisp = useMemo(() => Array.from(new Set(lancFonte.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [lancFonte]);
+  // meses disponíveis + sempre o mês corrente (pra ele aparecer no seletor mesmo sem lançamento ainda)
+  const mesesDisp = useMemo(() => Array.from(new Set([mesAtual, ...lancFonte.map(mesKey)])).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [lancFonte, mesAtual]);
   const txs = useMemo(() => lancFonte.filter((t) => {
     if (mesSel && mesKey(t) !== mesSel) return false;
     const st = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');

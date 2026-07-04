@@ -49,6 +49,7 @@ export interface FinTransacao {
   fonteImport?: string | null; // 'extrato' | 'asaas' | 'mercadopago' — veio de import (não é lançamento manual)
   faturaDe?: string | null; // id do cartão de origem (débito que migrou pra conta ao pagar a fatura)
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null; // rateio de despesa entre verticais
+  verticais?: string[]; // verticais que o lançamento toca (centro de custos) — vazio = comum/escritório
   // fatia DESTA pessoa numa despesa rateada (Meu Espaço) — conforme os % do RH (custosPessoa)
   minhaFatiaRateio?: { valor: number; itens: { area: string; label: string | null; base: number; pct: number; valor: number }[] } | null;
 }

@@ -491,7 +491,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const [stFiltro, setStFiltro] = useState<'todos' | 'a_receber' | 'liquidado'>('liquidado');
   const [respFiltro, setRespFiltro] = useState('');
   const [contaFiltro, setContaFiltro] = useState('');
+  const [vertFiltro, setVertFiltro] = useState(''); // filtro por vertical (centro de custos). '' = todas; '__comum' = escritório/sem vertical
   const [busca, setBusca] = useState('');
+  // verticais que aparecem nos lançamentos (pra popular o filtro)
+  const verticaisLanc = useMemo(() => [...new Set(data.transacoes.flatMap((t) => t.verticais ?? []))].filter(Boolean).sort((a, b) => a.localeCompare(b)), [data.transacoes]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<Editor | null>(null);
   const [serieDel, setSerieDel] = useState<FinTransacao | null>(null);
@@ -597,10 +600,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       if (stFiltro === 'liquidado' && !ehLiquidado(st)) return false;
       if (respFiltro && (t.responsavelId ?? '') !== respFiltro) return false;
       if (contaFiltro && (t.conta ?? '') !== contaFiltro) return false;
+      if (vertFiltro) { const vs = t.verticais ?? []; if (vertFiltro === '__comum' ? vs.length > 0 : !vs.includes(vertFiltro)) return false; }
       if (q && !`${t.pagador ?? t.party ?? ''} ${t.recebedor ?? ''} ${t.responsavel ?? ''} ${t.categoria} ${t.data}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data.transacoes, mesSel, aba, stFiltro, respFiltro, contaFiltro, busca, mostrarFuturas, mesHoje, temPeriodo, deISO, ateISO]);
+  }, [data.transacoes, mesSel, aba, stFiltro, respFiltro, contaFiltro, vertFiltro, busca, mostrarFuturas, mesHoje, temPeriodo, deISO, ateISO]);
   const nFuturas = useMemo(() => data.transacoes.filter((t) => !ehLiquidado(txStatus(t)) && mesKey(t) > mesHoje).length, [data.transacoes, mesHoje]);
 
   const grupos = useMemo(() => {
@@ -716,6 +720,13 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
             {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         )}
+        {verticaisLanc.length > 0 && (
+          <select value={vertFiltro} onChange={(e) => setVertFiltro(e.target.value)} title="Filtrar por vertical (centro de custos)" className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            <option value="">Todas as verticais</option>
+            {verticaisLanc.map((v) => <option key={v} value={v}>{v}</option>)}
+            <option value="__comum">Escritório (comum)</option>
+          </select>
+        )}
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="w-40 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
@@ -770,6 +781,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                           {t.responsavel ? <span className="hidden shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 lg:inline-flex">{t.responsavel.split(' ')[0]}</span> : null}
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}
+                          {(t.verticais?.length ?? 0) > 0 && <span className="hidden shrink-0 rounded px-1 text-[9px] font-semibold text-white lg:inline" style={{ background: corArea(t.verticais![0]) }} title={t.verticais!.join(' · ')}>{t.verticais!.length > 1 ? `${t.verticais!.length}×vert.` : t.verticais![0]}</span>}
                           {podeExpandir ? <button onClick={() => toggleRv(t.id!)} title="Ver o rateio" className="inline-flex shrink-0 items-center gap-0.5 rounded bg-[#7048E8]/10 px-1 text-[9px] font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/20">{temRv ? 'rateado' : 'rateio'} {open ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}</button> : null}
                         </span>
                         <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden truncate md:inline">{t.categoria}</span></span>
