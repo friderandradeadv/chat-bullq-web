@@ -2534,6 +2534,23 @@ function ContasTab({ data }: { data: FinDashboard }) {
     if (fail) { setRetroMsg(`⚠️ Aportes: ${ok} ok, ${fail} falharam. Erro: ${firstErr}`); toast.error(`${fail} falharam: ${firstErr}`); }
     else { setRetroMsg(`✅ ${ok} aporte(s) lançado(s) · caixa fechado. Recarregue pra ver.`); toast.success(`${ok} aporte(s) lançado(s)`); }
   };
+  // Desfazer: remove os lançamentos de aporte/empréstimo (a posição real volta a ser o caixa).
+  const removerAportes = async () => {
+    const aportes = data.transacoes.filter((t) => t.valor > 0 && /aporte/i.test(t.categoria || '') && t.id);
+    if (!aportes.length) { toast.success('Não há empréstimo registrado.'); return; }
+    const total = aportes.reduce((s, t) => s + t.valor, 0);
+    if (!confirm(`Remover os ${aportes.length} lançamento(s) de empréstimo dos sócios (${brl(total)})?\n\nA "posição real" volta a ser o caixa de verdade. Você pode registrar de novo depois, com o valor real que os CPFs colocaram.`)) return;
+    setAporteRun(true);
+    let ok = 0, fail = 0, firstErr = '';
+    for (const t of aportes) {
+      try { await financeiroService.removeTransacao(t.id!, 'uma'); ok++; }
+      catch (e: any) { fail++; if (!firstErr) firstErr = e?.response?.data?.message || e?.message || 'erro'; }
+    }
+    qc.invalidateQueries({ queryKey: ['financeiro'] });
+    setAporteRun(false);
+    if (fail) { setRetroMsg(`⚠️ Remoção: ${ok} ok, ${fail} falharam. Erro: ${firstErr}`); toast.error(`${fail} falharam: ${firstErr}`); }
+    else { setRetroMsg(`✅ ${ok} aporte(s) removido(s) · posição real = caixa. Recarregue pra ver.`); toast.success(`${ok} removido(s)`); }
+  };
 
   // ── Separar Nubank em conta bancária + cartão (os gastos de fatura vão pro cartão) ──
   const [sepRun, setSepRun] = useState(false);
@@ -2676,9 +2693,14 @@ function ContasTab({ data }: { data: FinDashboard }) {
             <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-4 w-4 text-amber-600" /> Registrar empréstimo dos sócios (Você + Pai)</h4>
             <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">O escritório teve <strong>{brl(APORTES.reduce((s, a) => s + a.valor, 0))}</strong> de déficit no período, coberto pelos CPFs (você + seu pai). Isso registra esse total como <strong>empréstimo dos sócios</strong> — uma <strong>dívida a devolver</strong>, não faturamento. O <strong>rombo real continua aparecendo</strong> (posição real = caixa − empréstimo); a dívida só cai quando o escritório pagar os sócios de volta. Edite depois pra separar quanto foi do seu pai.</p>
           </div>
-          <button onClick={lancarAportes} disabled={aporteRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
-            {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Registrando…</> : <><Scale className="h-3.5 w-3.5" /> Registrar empréstimo dos sócios</>}
-          </button>
+          <div className="flex shrink-0 flex-col gap-1.5">
+            <button onClick={lancarAportes} disabled={aporteRun} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+              {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> …</> : <><Scale className="h-3.5 w-3.5" /> Registrar empréstimo dos sócios</>}
+            </button>
+            <button onClick={removerAportes} disabled={aporteRun} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-[11px] font-medium text-zinc-500 hover:border-rose-300 hover:text-rose-600 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-400">
+              <Trash2 className="h-3 w-3" /> Desfazer (posição = caixa)
+            </button>
+          </div>
         </div>
         {nubankCartao && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
