@@ -162,38 +162,26 @@ function ConfiguracoesView({ team, members, honorariosPct, acessoFin, pessoas, c
   );
 }
 
-// Custos rateados que cada colaborador assume (alimenta as SAÍDAS do holerite em Meu Espaço).
-// Verticais vêm da FONTE ÚNICA (mesma lista do Financeiro/Estrutura/Meu Espaço).
+// Participação por vertical — FONTE ÚNICA (remunVertical): o mesmo % define quanto a pessoa
+// RECEBE do êxito da vertical e quanto BANCA dos custos dela (entrada e saída do holerite).
+// Mesma config do Financeiro › Verticais. Verticais vêm da lista única (VERTICAIS_PADRAO).
 const AREAS_VERT = VERTICAIS_PADRAO;
 function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[]; cargoById: Record<string, any>; pessoas: Record<string, any>; canEdit: boolean }) {
   const qc = useQueryClient();
-  const { data: cfg } = useQuery({ queryKey: ['financeiro', 'custos-pessoa'], queryFn: () => financeiroService.getCustosPessoa() });
-  // Custo FIXO por vertical (Financeiro › Verticais) — a MESMA base do holerite e do P&L.
-  const { data: vcfg } = useQuery({ queryKey: ['financeiro', 'vertical-custos'], queryFn: () => financeiroService.getVerticalCustos() });
-  const custoFixo = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const [area, linhas] of Object.entries(vcfg?.verticalCustos ?? {})) m[area] = (linhas ?? []).reduce((s, l) => s + (Number(l.valor) || 0), 0);
-    return m;
-  }, [vcfg]);
-  // Linhas de custo por vertical (ex.: Bancário → ['Agência (1/3)', 'Anúncios REPB']) — pra mirar UMA linha.
-  const custoLinhas = useMemo(() => {
-    const m: Record<string, { label: string; valor: number }[]> = {};
-    for (const [area, linhas] of Object.entries(vcfg?.verticalCustos ?? {})) m[area] = (linhas ?? []).filter((l) => l.label).map((l) => ({ label: l.label, valor: Number(l.valor) || 0 }));
-    return m;
-  }, [vcfg]);
-  const [draft, setDraft] = useState<Record<string, { area: string; label: string; pct: string }[]>>({});
-  useEffect(() => { if (cfg?.custosPessoa) setDraft(Object.fromEntries(Object.entries(cfg.custosPessoa).map(([k, v]) => [k, (v ?? []).map((x) => ({ area: x.area, label: x.label ?? '', pct: String(x.pct) }))]))); }, [cfg]);
+  const { data: cfg } = useQuery({ queryKey: ['financeiro', 'remun-vertical'], queryFn: () => financeiroService.getRemunVertical() });
+  const [draft, setDraft] = useState<Record<string, { area: string; pct: string }[]>>({});
+  useEffect(() => { if (cfg?.remunVertical) setDraft(Object.fromEntries(Object.entries(cfg.remunVertical).map(([k, v]) => [k, (v ?? []).map((x) => ({ area: x.area, pct: String(x.pct) }))]))); }, [cfg]);
   const [saving, setSaving] = useState(false);
   const rows = (uid: string) => draft[uid] ?? [];
-  const setRows = (uid: string, r: { area: string; label: string; pct: string }[]) => setDraft((d) => ({ ...d, [uid]: r }));
+  const setRows = (uid: string, r: { area: string; pct: string }[]) => setDraft((d) => ({ ...d, [uid]: r }));
   const salvar = async () => {
     setSaving(true);
     try {
-      const clean: Record<string, { area: string; label?: string; pct: number }[]> = {};
-      for (const [k, v] of Object.entries(draft)) { const ls = v.filter((x) => x.area && Number(x.pct) > 0).map((x) => ({ area: x.area, ...(x.label ? { label: x.label } : {}), pct: Math.max(0, Math.min(100, Number(x.pct) || 0)) })); if (ls.length) clean[k] = ls; }
-      await financeiroService.setCustosPessoa(clean);
-      await Promise.all([qc.invalidateQueries({ queryKey: ['financeiro', 'custos-pessoa'] }), qc.invalidateQueries({ queryKey: ['financeiro'] })]);
-      toast.success('Custos por colaborador salvos');
+      const clean: Record<string, { area: string; pct: number }[]> = {};
+      for (const [k, v] of Object.entries(draft)) { const ls = v.filter((x) => x.area && Number(x.pct) > 0).map((x) => ({ area: x.area, pct: Math.max(0, Math.min(100, Number(x.pct) || 0)) })); if (ls.length) clean[k] = ls; }
+      await financeiroService.setRemunVertical(clean);
+      await qc.invalidateQueries({ queryKey: ['financeiro'] });
+      toast.success('Participações salvas');
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao salvar'); }
     finally { setSaving(false); }
   };
@@ -201,13 +189,12 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
     <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><Network className="h-4 w-4 text-[#E64980]" /> Quem banca o custo de cada vertical</h3>
-          <p className="mt-0.5 text-sm text-zinc-500">Os custos de uma vertical (ex.: <strong>1/3 da agência</strong>, tráfego) são divididos entre quem atua nela. Aqui você diz que <strong>fatia (%)</strong> de cada linha o colaborador assume — vira a <strong>saída no holerite</strong> dele <strong>no mês em que você lançar a despesa</strong> no livro-razão (marcando a linha).</p>
-          <p className="mt-1 text-xs text-zinc-400">É só <strong>percentual</strong> — o R$ <strong>recalcula sozinho</strong> pelo que você lançar (se o tráfego mudar de valor ou variar no mês, não precisa mexer aqui). Paga a mesma % de tudo da área? Use <strong>“Vertical inteira”</strong> (ex.: <strong>Kauani → Bancário 50%</strong>). Só use uma <strong>linha</strong> se a % for diferente por tipo de custo.</p>
+          <h3 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><Network className="h-4 w-4 text-[#E64980]" /> Participação por vertical</h3>
+          <p className="mt-0.5 text-sm text-zinc-500">Quanto % de cada vertical a pessoa participa. Esse % é <strong>uma coisa só</strong>: define quanto ela <strong>recebe</strong> do êxito da vertical <strong>e</strong> quanto ela <strong>banca</strong> dos custos — vira a entrada e a saída do <strong>holerite</strong>, sempre pelo que for lançado no livro-razão (recalcula sozinho).</p>
+          <p className="mt-1 text-xs text-zinc-400">Ex.: <strong>Kauani → RMC/RCC 30% + REPB 40%</strong>. É o <strong>mesmo lugar</strong> que o Financeiro › Verticais › Participação — mudou aqui, muda lá.</p>
         </div>
         {canEdit && <button onClick={salvar} disabled={saving} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#E64980] px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar</button>}
       </div>
-      <datalist id="rh-frentes-custos">{[...new Set([...AREAS_VERT, ...Object.keys(custoFixo), ...Object.values(draft).flat().map((x) => x.area).filter(Boolean)])].map((a) => <option key={a} value={a} />)}</datalist>
       <div className="mt-4 space-y-3">
         {team.map((m) => {
           const uid = m.user.id; const r = rows(uid); const info = pessoas[uid] ?? {}; const cargo = cargoById[info.cargoId ?? ''];
@@ -215,38 +202,20 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
             <div key={uid} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{m.user.name}</p><p className="truncate text-[11px] text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p></div>
-                {canEdit && <button onClick={() => setRows(uid, [...r, { area: '', label: '', pct: '50' }])} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> custo</button>}
+                {canEdit && <button onClick={() => setRows(uid, [...r, { area: '', pct: '30' }])} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> vertical</button>}
               </div>
-              {r.length > 0 && (
+              {r.length === 0 ? <p className="mt-1 text-[11px] text-zinc-400">Sem participação configurada — cai no padrão do contrato.</p> : (
                 <div className="mt-2 space-y-1.5">
-                  {r.map((x, i) => {
-                    const pctN = Math.max(0, Math.min(100, Number(x.pct) || 0));
-                    const linhas = custoLinhas[x.area] ?? [];
-                    const alvo = x.label || (x.area ? `${x.area} (inteira)` : '');
-                    return (
-                    <div key={i}>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <ComboBox className="min-w-[8rem] flex-1" value={x.area} options={[...new Set([...AREAS_VERT, ...Object.keys(custoFixo)])]} allowFree disabled={!canEdit} placeholder="vertical…" onChange={(val) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: val, label: '' } : y))} />
-                        {/* Linha de custo específica da vertical (ex.: Agência 1/3, Anúncios REPB) — ou a vertical inteira. */}
-                        <select value={x.label} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, label: e.target.value } : y))} disabled={!canEdit || linhas.length === 0} className="min-w-[9rem] flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 disabled:opacity-50">
-                          <option value="">{linhas.length ? 'Vertical inteira' : 'Vertical inteira (sem linhas)'}</option>
-                          {linhas.map((l) => <option key={l.label} value={l.label}>{l.label}</option>)}
-                        </select>
-                        <div className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
-                          <input value={x.pct} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, pct: e.target.value.replace(/[^\d]/g, '').slice(0, 3) } : y))} disabled={!canEdit} inputMode="numeric" className="w-10 bg-transparent text-right text-sm tabular-nums outline-none" />
-                          <span className="text-xs text-zinc-400">%</span>
-                        </div>
-                        {canEdit && <button onClick={() => setRows(uid, r.filter((_, j) => j !== i))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
+                  {r.map((x, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-1.5">
+                      <ComboBox className="min-w-[8rem] flex-1" value={x.area} options={AREAS_VERT} allowFree disabled={!canEdit} placeholder="vertical…" onChange={(val) => setRows(uid, r.map((y, j) => j === i ? { ...y, area: val } : y))} />
+                      <div className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+                        <input value={x.pct} onChange={(e) => setRows(uid, r.map((y, j) => j === i ? { ...y, pct: e.target.value.replace(/[^\d]/g, '').slice(0, 3) } : y))} disabled={!canEdit} inputMode="numeric" className="w-10 bg-transparent text-right text-sm tabular-nums outline-none" />
+                        <span className="text-xs text-zinc-400">%</span>
                       </div>
-                      {/* Regra é só percentual — o R$ do holerite vem do que for LANÇADO no mês (não fica preso a valor fixo). */}
-                      {x.area && (
-                        <p className="mt-1 pl-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                          Banca <span className="font-semibold text-[#7048E8]">{pctN}%</span> de <span className="font-medium">{alvo}</span> — o valor entra no holerite conforme o que você <strong>lançar no mês</strong> (recalcula sozinho).
-                        </p>
-                      )}
+                      {canEdit && <button onClick={() => setRows(uid, r.filter((_, j) => j !== i))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>}
                     </div>
-                    );
-                  })}
+                  ))}
                 </div>
               )}
             </div>
