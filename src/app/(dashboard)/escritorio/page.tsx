@@ -194,7 +194,7 @@ export default function EscritorioPage() {
         {data.canEdit && team.length > 1 && (
           <div className={`mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm ${vendoOutro ? 'border-[#7048E8]/40 bg-[#7048E8]/5 dark:bg-[#7048E8]/10' : 'border-zinc-200/70 bg-white dark:border-zinc-800 dark:bg-zinc-900'}`}>
             <span className="inline-flex items-center gap-1 text-zinc-500"><Eye className="h-4 w-4" /> Ver o espaço de:</span>
-            <select value={verComo ?? user?.id ?? ''} onChange={(e) => setVerComo(e.target.value === user?.id ? null : e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
+            <select value={verComo ?? user?.id ?? ''} onChange={(e) => setVerComo(e.target.value === user?.id ? null : e.target.value)} className="min-w-0 max-w-full truncate rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200">
               {team.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.id === user?.id ? `Você (${user?.name?.split(' ')[0] ?? 'meu espaço'})` : m.user.name}</option>)}
             </select>
             {vendoOutro ? (<>
@@ -389,11 +389,11 @@ export default function EscritorioPage() {
             <div className="mt-2 space-y-2">
               {team.map((m) => (
                 <div key={m.user.id} className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-zinc-700 dark:text-zinc-200">{m.user.name} <span className="text-xs text-zinc-400">· {m.role === 'AGENT' ? 'associado' : 'sócio'}</span></span>
+                  <span className="min-w-0 truncate text-sm text-zinc-700 dark:text-zinc-200">{m.user.name} <span className="text-xs text-zinc-400">· {m.role === 'AGENT' ? 'associado' : 'sócio'}</span></span>
                   <select
                     value={draft.pessoas?.[m.user.id]?.cargoId ?? ''}
                     onChange={(e) => setDraft((d) => ({ ...d, pessoas: { ...d.pessoas, [m.user.id]: { ...d.pessoas?.[m.user.id], cargoId: e.target.value || undefined } } }))}
-                    className={`${INPUT} max-w-[200px]`}
+                    className={`${INPUT} min-w-0 max-w-[200px]`}
                   >
                     <option value="">— sem cargo —</option>
                     {(draft.cargos ?? []).map((cg) => <option key={cg.id} value={cg.id}>{cg.nome}</option>)}
@@ -571,7 +571,7 @@ function AdicionarAdvogadoModal({ onClose, onDone }: { onClose: () => void; onDo
         <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3 dark:bg-[#02883C]/10">
           <p className="text-xs font-semibold text-[#02883C]">Convite criado! Mande este link para {email}:</p>
           <div className="mt-1.5 flex items-center gap-2">
-            <input readOnly value={link} className={`${INPUT} text-xs`} onFocus={(e) => e.target.select()} />
+            <input readOnly value={link} className={`${INPUT} min-w-0 text-xs`} onFocus={(e) => e.target.select()} />
             <button onClick={() => { navigator.clipboard?.writeText(link); toast.success('Link copiado'); }} className="shrink-0 rounded-lg bg-[#228BE6] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1c7ed6]">Copiar</button>
           </div>
         </div>
@@ -884,7 +884,7 @@ function VerticaisSection({ verticais, pessoas, team, editing, setDraft, onVerPe
         return (
           <div key={v.id} className="rounded-xl border border-zinc-200/80 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-900" style={{ borderLeftColor: cor, borderLeftWidth: 4 }}>
             <div className="flex flex-wrap items-center justify-between gap-1.5">
-              <span className="font-bold text-zinc-800 dark:text-zinc-100">{v.nome}</span>
+              <span className="min-w-0 break-words font-bold text-zinc-800 dark:text-zinc-100">{v.nome}</span>
               {v.titular && <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: cor }}>{v.titular}</span>}
             </div>
             {v.descricao && <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{v.descricao}</p>}
@@ -892,8 +892,8 @@ function VerticaisSection({ verticais, pessoas, team, editing, setDraft, onVerPe
             {gente.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {gente.map((m) => (
-                  <button key={m.user.id} onClick={() => onVerPerfil(m.user.id)} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
-                    <PessoaAvatar nome={m.user.name} foto={m.user.avatarUrl || pessoas?.[m.user.id]?.fotoUrl} size={20} bg={cor} className="text-[8px]" />{m.user.name}
+                  <button key={m.user.id} onClick={() => onVerPerfil(m.user.id)} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
+                    <PessoaAvatar nome={m.user.name} foto={m.user.avatarUrl || pessoas?.[m.user.id]?.fotoUrl} size={20} bg={cor} className="text-[8px]" /><span className="truncate">{m.user.name}</span>
                   </button>
                 ))}
               </div>
@@ -981,7 +981,7 @@ function PerfilHero({ nome, avatarUrl, info, cargo, fin, canEdit, proprio = true
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">{proprio ? 'Seu espaço' : 'Espaço do time'}</p>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{nome}</h2>
+            <h2 className="min-w-0 break-words text-xl font-bold text-zinc-800 dark:text-zinc-100">{nome}</h2>
             {cargo && <span className="rounded-full bg-[#7048E8] px-2.5 py-0.5 text-xs font-semibold text-white">{gen(cargo.nome, sexo)}</span>}
           </div>
           <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -1073,7 +1073,7 @@ function MeuContrato({ info, cargo, proprio = true, canEdit, onEditCargo, onEdit
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">{proprio ? 'Seu contrato & cargo' : 'Contrato & cargo'}</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{g(cargo.nome) || 'Cargo'}</h2>
+              <h2 className="min-w-0 break-words text-xl font-bold text-zinc-800 dark:text-zinc-100">{g(cargo.nome) || 'Cargo'}</h2>
               {cargo.vertical && <span className="rounded-full bg-[#7048E8] px-2.5 py-0.5 text-xs font-semibold text-white">{cargo.vertical}</span>}
             </div>
             {cargo.resumo && <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{g(cargo.resumo)}</p>}
@@ -1540,7 +1540,7 @@ function PerfilModal({ userId, nome, avatarUrl, data, cargoById, saving, selfMod
       )}
       <div className="flex items-center gap-3">
         {foto ? <img src={foto} alt={nome} className="h-20 w-20 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7048E8] text-2xl font-bold text-white">{iniciaisDe(nome)}</div>}
-        <div className="min-w-0 flex-1"><p className="font-semibold text-zinc-800 dark:text-zinc-100">{nome}</p>{cargo && <p className="text-xs text-zinc-400">{cargo.nome}</p>}</div>
+        <div className="min-w-0 flex-1"><p className="truncate font-semibold text-zinc-800 dark:text-zinc-100">{nome}</p>{cargo && <p className="truncate text-xs text-zinc-400">{cargo.nome}</p>}</div>
       </div>
       <div>
         <p className={LABEL}>Foto</p>
@@ -1626,8 +1626,8 @@ function CargoDetalhe({ cargo, pessoas, onVerPerfil }: { cargo: Cargo; pessoas: 
           <p className={LABEL}>Quem está aqui</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {pessoas.map((m) => (
-              <button key={m.user.id} onClick={() => onVerPerfil?.(m.user.id)} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
-                <PessoaAvatar nome={m.user.name} foto={m.user.avatarUrl} size={20} bg="#7048E8" className="text-[8px]" />{m.user.name}
+              <button key={m.user.id} onClick={() => onVerPerfil?.(m.user.id)} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">
+                <PessoaAvatar nome={m.user.name} foto={m.user.avatarUrl} size={20} bg="#7048E8" className="text-[8px]" /><span className="truncate">{m.user.name}</span>
               </button>
             ))}
           </div>
@@ -1692,7 +1692,7 @@ function CargosPorVertical({ cargos, grupos, onOpen }: { cargos: Cargo[]; grupos
                 return (
                   <button key={c.id} onClick={() => onOpen(c.id)} className="group flex flex-col rounded-xl border border-zinc-200/80 bg-white p-3 text-left transition hover:-translate-y-px hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900" style={{ borderLeftColor: cor, borderLeftWidth: 3 }}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-zinc-800 dark:text-zinc-100">{c.nome}</span>
+                      <span className="min-w-0 break-words font-bold text-zinc-800 dark:text-zinc-100">{c.nome}</span>
                       {ppl.length > 0 && (
                         <span className="flex shrink-0 items-center -space-x-1.5">
                           {ppl.slice(0, 3).map((m) => <PessoaAvatar key={m.user.id} title={m.user.name ?? ''} nome={m.user.name} foto={m.user.avatarUrl} size={20} bg={cor} className="text-[8px] ring-2 ring-white dark:ring-zinc-900" />)}
@@ -1812,10 +1812,10 @@ function CargoModal({ cargoId, data, members, saving, onClose, onSave, onEditPer
             const on = assigned.has(m.user.id);
             return (
               <div key={m.user.id} className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
-                <button onClick={() => toggle(m.user.id)} className="flex flex-1 items-center gap-2 text-left">
+                <button onClick={() => toggle(m.user.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
                   {on ? <CheckCircle2 className="h-5 w-5 shrink-0 text-[#228BE6]" /> : <Circle className="h-5 w-5 shrink-0 text-zinc-300 dark:text-zinc-600" />}
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{iniciaisDe(m.user.name)}</span>
-                  <span className={`text-sm ${on ? 'font-medium text-zinc-800 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-300'}`}>{m.user.name}</span>
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{iniciaisDe(m.user.name)}</span>
+                  <span className={`min-w-0 truncate text-sm ${on ? 'font-medium text-zinc-800 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-300'}`}>{m.user.name}</span>
                 </button>
                 <button onClick={() => onEditPerfil(m.user.id)} title="Editar perfil desta pessoa" className="rounded p-1 text-zinc-400 hover:text-[#7048E8]"><UserPlus className="h-4 w-4" /></button>
               </div>

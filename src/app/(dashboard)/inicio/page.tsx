@@ -437,10 +437,10 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
   };
 
   return (
-    <div className="welcome-pop flex w-full flex-col rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.21s' }}>
+    <div className="welcome-pop flex w-full min-w-0 flex-col rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.21s' }}>
       <div className="mb-1.5 flex items-center justify-between px-1">
-        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          <MessageSquare className="h-3.5 w-3.5 text-[#228BE6]" />
+        <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <MessageSquare className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" />
           Mensagens esperando você
           {pending.length > 0 && (
             <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E03131] px-1.5 text-[10px] font-bold text-white">
@@ -679,10 +679,10 @@ function NewTodayAgenda({ now }: { now: Date | null }) {
   const shown = showAll ? items.slice(0, 12) : items.slice(0, 5);
 
   return (
-    <div className="welcome-pop w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.215s' }}>
+    <div className="welcome-pop w-full min-w-0 rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.215s' }}>
       <div className="mb-1.5 flex items-center justify-between px-1">
-        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          <CalendarPlus className="h-3.5 w-3.5 text-[#02883C]" />
+        <p className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <CalendarPlus className="h-3.5 w-3.5 shrink-0 text-[#02883C]" />
           Novos na agenda hoje
           {items.length > 0 && (
             <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#02883C] px-1.5 text-[10px] font-bold text-white">
@@ -708,7 +708,7 @@ function NewTodayAgenda({ now }: { now: Date | null }) {
           {shown.map((it) => {
             const m = KIND_META[it.kind];
             return (
-              <Link key={it.id} href="/agenda" className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+              <Link key={it.id} href="/agenda" className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${m.color}1A` }}>
                   <m.icon className="h-4 w-4" style={{ color: m.color }} />
                 </span>
@@ -1098,12 +1098,12 @@ export default function InicioPage() {
 
         {/* Painel — 2 colunas em telas largas: mensagens | agenda + compromissos */}
         {mounted && (
-          <div className="welcome-pop mt-4 grid w-full items-stretch gap-4 text-left lg:grid-cols-2" style={{ animationDelay: '0.21s' }}>
+          <div className="welcome-pop mt-4 grid w-full min-w-0 items-stretch gap-4 text-left lg:grid-cols-2" style={{ animationDelay: '0.21s' }}>
             <PendingMessages now={now} onCelebrate={() => setBurst((b) => b + 1)} />
-            <div className="flex flex-col gap-4">
+            <div className="flex min-w-0 flex-col gap-4">
               <NewTodayAgenda now={now} />
               {proximos.length > 0 && (
-                <div className="welcome-pop w-full rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.22s' }}>
+                <div className="welcome-pop w-full min-w-0 rounded-2xl border border-zinc-200/70 bg-white/70 p-3 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60" style={{ animationDelay: '0.22s' }}>
                   <div className="mb-1.5 flex items-center justify-between px-1">
                     <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Próximos compromissos</p>
                     <Link href="/agenda" className="text-[11px] font-semibold text-[#228BE6] hover:underline">ver agenda →</Link>
@@ -1112,7 +1112,7 @@ export default function InicioPage() {
                     {proximos.map((p) => {
                       const m = KIND_META[p.kind];
                       return (
-                        <Link key={p.id} href="/agenda" className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                        <Link key={p.id} href="/agenda" className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
                           <m.icon className="h-4 w-4 shrink-0" style={{ color: m.color }} />
                           <span className="min-w-0 flex-1 truncate text-sm text-zinc-700 dark:text-zinc-200">{p.title}{p.caso ? <span className="text-zinc-400"> · {p.caso}</span> : null}</span>
                           <span className="shrink-0 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">

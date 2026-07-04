@@ -210,9 +210,9 @@ function CustosPessoaCard({ team, cargoById, pessoas, canEdit }: { team: Member[
           const uid = m.user.id; const r = rows(uid); const info = pessoas[uid] ?? {}; const cargo = cargoById[info.cargoId ?? ''];
           return (
             <div key={uid} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{m.user.name}</p><p className="text-[11px] text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p></div>
-                {canEdit && <button onClick={() => setRows(uid, [...r, { area: '', label: '', pct: '50' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> custo</button>}
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{m.user.name}</p><p className="truncate text-[11px] text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p></div>
+                {canEdit && <button onClick={() => setRows(uid, [...r, { area: '', label: '', pct: '50' }])} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> custo</button>}
               </div>
               {r.length > 0 && (
                 <div className="mt-2 space-y-1.5">
@@ -708,9 +708,9 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
           <div className="flex items-center gap-3">
             {foto ? <img src={foto} alt={membro.user.name} className="h-16 w-16 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#7048E8] text-xl font-bold text-white">{ini(membro.user.name)}</div>}
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-zinc-800 dark:text-zinc-100">{membro.user.name}</p>
-              <p className="text-xs text-zinc-400">{cargo?.nome ?? roleLabel(membro.role)} · {membro.user.email}</p>
-              {info.oab && <p className="text-xs text-zinc-400">OAB {info.oab}</p>}
+              <p className="truncate font-bold text-zinc-800 dark:text-zinc-100">{membro.user.name}</p>
+              <p className="truncate text-xs text-zinc-400">{cargo?.nome ?? roleLabel(membro.role)} · {membro.user.email}</p>
+              {info.oab && <p className="truncate text-xs text-zinc-400">OAB {info.oab}</p>}
             </div>
           </div>
           {canEdit && (
@@ -813,8 +813,8 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
               {(f.documentos ?? []).length === 0 && <p className="text-xs text-zinc-400">Nenhum documento ainda. Suba os arquivos ou cole links do Drive.</p>}
               {(f.documentos ?? []).map((d) => (
                 <div key={d.id} className="flex items-center gap-1.5">
-                  <input value={d.nome} onChange={(e) => updDoc(d.id, { nome: e.target.value })} disabled={!canEdit} placeholder="Nome (ex.: RG)" className={`${INPUT} w-1/3`} />
-                  <input value={d.url ?? ''} onChange={(e) => updDoc(d.id, { url: e.target.value })} disabled={!canEdit} placeholder="link do documento" className={`${INPUT} flex-1`} />
+                  <input value={d.nome} onChange={(e) => updDoc(d.id, { nome: e.target.value })} disabled={!canEdit} placeholder="Nome (ex.: RG)" className={`${INPUT} w-1/3 min-w-0`} />
+                  <input value={d.url ?? ''} onChange={(e) => updDoc(d.id, { url: e.target.value })} disabled={!canEdit} placeholder="link do documento" className={`${INPUT} min-w-0 flex-1`} />
                   {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-[#228BE6]"><ExternalLink className="h-4 w-4" /></a>}
                   {canEdit && <button onClick={() => delDoc(d.id)} className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>}
                 </div>

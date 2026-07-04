@@ -1385,8 +1385,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
               <span className="text-zinc-500">{conf.novos} novo(s) · <span className="text-amber-600">{conf.duplicados} já existe(m)</span></span>
               <span className="text-xs text-zinc-400">{sel.size} selecionado(s)</span>
             </div>
-            <div className="max-h-72 overflow-y-auto rounded-lg border border-zinc-200/70 scrollbar-thin dark:border-zinc-800">
-              <table className="w-full text-sm">
+            <div className="max-h-72 overflow-x-auto overflow-y-auto rounded-lg border border-zinc-200/70 scrollbar-thin dark:border-zinc-800">
+              <table className="w-full min-w-[26rem] text-sm">
                 <thead className="sticky top-0 bg-white dark:bg-zinc-900"><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium"></th><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="px-2 py-1.5 font-medium">Status</th></tr></thead>
                 <tbody>
                   {conf.linhas.map((l, i) => (
@@ -3646,8 +3646,8 @@ function PrevisoesCarteira() {
       </Card>
 
       <Card title="Por tese — valor, recuperação e desempenho" sub="onde está o valor e quanto tende a voltar (por tese/produto).">
-        <div className="max-h-96 overflow-y-auto scrollbar-thin">
-          <table className="w-full text-sm">
+        <div className="max-h-96 overflow-x-auto overflow-y-auto scrollbar-thin">
+          <table className="w-full min-w-[30rem] text-sm">
             <thead className="sticky top-0 bg-white text-left text-[11px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-900">
               <tr><th className="px-2 py-1.5 font-medium">Tese</th><th className="px-2 py-1.5 text-right font-medium">Casos</th><th className="px-2 py-1.5 text-right font-medium">Em causa</th><th className="px-2 py-1.5 text-right font-medium">Esperado</th><th className="px-2 py-1.5 text-right font-medium">Êxito real</th></tr>
             </thead>

@@ -734,7 +734,7 @@ function ActivityList({ activities, onOpen, isUnseenNew }: { activities: Activit
             <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${a.done ? 'border-emerald-500 bg-emerald-500 text-white' : a.fatal ? 'border-red-400' : 'border-zinc-300'}`}>{a.done && <Check className="h-3 w-3" />}</span>
             <div className="w-24 shrink-0 text-xs text-zinc-500">{new Date(a.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', ...(a.hasTime ? {} : { timeZone: 'UTC' as const }) })}{a.hasTime && <div className="font-medium text-zinc-700 dark:text-zinc-300">{new Date(a.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>}</div>
             <div className="min-w-0 flex-1">
-              <p className={`flex items-center gap-1.5 text-sm font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{isUnseenNew(a) && <span title="Adicionado hoje" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FA5252]" />}{a.title}</p>
+              <p className={`flex min-w-0 items-center gap-1.5 text-sm font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{isUnseenNew(a) && <span title="Adicionado hoje" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FA5252]" />}<span className="truncate">{a.title}</span></p>
               {a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}{a.cnj ? ` · ${a.cnj}` : ''}</p>}
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5"><TypeChip source={a.source} /><TagStrip tags={a.tags} /></div>
             </div>
@@ -760,7 +760,7 @@ function SidePanel({ activities, mode, onOpen, isUnseenNew }: { activities: Acti
           <h3 className="mb-3 text-base font-medium text-[#202124] dark:text-zinc-100">{dayList.length} {dayList.length === 1 ? 'atividade' : 'atividades'}</h3>
           <div className="space-y-3">
             {dayList.length === 0 && <p className="text-sm text-zinc-400">Sem atividades hoje.</p>}
-            {dayList.map((a) => (<button key={a.id} onClick={() => onOpen(a)} className="block w-full text-left text-sm"><p className={`flex items-center gap-1.5 font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{isUnseenNew(a) && <span title="Adicionado hoje" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FA5252]" />}{a.title}</p>{a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}</p>}<span className="mt-1 inline-block"><TypeChip source={a.source} /></span></button>))}
+            {dayList.map((a) => (<button key={a.id} onClick={() => onOpen(a)} className="block w-full min-w-0 text-left text-sm"><p className={`flex min-w-0 items-center gap-1.5 font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{isUnseenNew(a) && <span title="Adicionado hoje" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FA5252]" />}<span className="truncate">{a.title}</span></p>{a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}</p>}<span className="mt-1 inline-block"><TypeChip source={a.source} /></span></button>))}
           </div>
         </div>
       ) : (
