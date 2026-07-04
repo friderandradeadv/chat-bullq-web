@@ -144,7 +144,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Subabas da visão escopada — organiza como o dashboard, mas na vertical */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
-          {([['resumo', 'Minha vertical', Scale], ['lancamentos', 'Lançamentos', Receipt], ['holerite', 'Holerite', Wallet]] as const).map(([k, label, Icon]) => (
+          {([['resumo', 'Minha vertical', Scale], ['holerite', 'Holerite', Wallet], ['lancamentos', 'Lançamentos', Receipt]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setSubtab(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${subtab === k ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}><Icon className="h-4 w-4" /> {label}</button>
           ))}
           {criar && <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"><Plus className="h-4 w-4" /> Novo lançamento</button>}
@@ -172,38 +172,38 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   <div className="text-right"><p className="text-[11px] uppercase tracking-wider opacity-80">{data.meuNome || ''}</p><p className="inline-flex items-center gap-1 text-sm font-semibold"><Wallet className="h-4 w-4" /> holerite</p></div>
                 </div>
                 <div className="px-5 py-4">
-                  {/* Sua parte = % do resultado da vertical (Fase B) */}
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600"><ArrowUpCircle className="h-3.5 w-3.5" /> Sua parte (% do resultado da vertical)</p>
-                  {h.entradas.length === 0 ? <p className="pb-1 text-xs text-zinc-400">Sem resultado a receber neste mês.</p> : (
-                    <div className="space-y-1">
-                      {h.entradas.map((e, i) => (
-                        <div key={i} className="flex items-start justify-between gap-2 text-sm">
-                          <span className="min-w-0 text-zinc-600 dark:text-zinc-300">
-                            <span className="block truncate">{e.area ?? e.cliente}</span>
-                            {e.resultado != null && e.pct != null && <span className="block text-[11px] text-zinc-400">resultado da vertical {brl2(e.resultado)} × {e.pct}%</span>}
-                          </span>
-                          <span className={`shrink-0 font-medium tabular-nums ${e.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(e.valor)}</span>
+                  {/* Recebido de fato no mês (repasses + retiradas) = o dinheiro real */}
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600"><ArrowUpCircle className="h-3.5 w-3.5" /> Recebido no mês (repasses e retiradas)</p>
+                  {(h.retiradas?.length ?? 0) === 0 ? <p className="pb-1 text-xs text-zinc-400">Nada foi pago a você neste mês ainda.</p> : (
+                    <div className="space-y-0.5">
+                      {h.retiradas.map((rt, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="flex min-w-0 items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><span className="w-9 shrink-0 text-[11px] tabular-nums text-zinc-400">{(rt.data || '').slice(0, 5)}</span><span className="truncate">{rt.desc}</span></span>
+                          <span className="shrink-0 font-medium tabular-nums text-emerald-600">{brl2(rt.valor)}</span>
                         </div>
                       ))}
                     </div>
                   )}
-                  <div className="mt-1 flex items-center justify-between border-t border-zinc-100 pt-1 text-sm font-semibold dark:border-zinc-800"><span className="text-zinc-500">Sua remuneração do mês</span><span className={`tabular-nums ${h.entradaTot >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(h.entradaTot)}</span></div>
-                  <p className="pt-1 text-[11px] text-zinc-400">Sua parte = <strong>% do resultado</strong> (receita − custos) da vertical no mês. Os custos da área já estão descontados — não há mais dedução separada.</p>
-                  {(h.saidas?.length ?? 0) > 0 && (
-                    <div className="mt-3 space-y-1">
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-rose-600">Descontos</p>
-                      {h.saidas.map((sd, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm"><span className="truncate text-zinc-600 dark:text-zinc-300">{sd.label}</span><span className="shrink-0 font-medium tabular-nums text-rose-600">− {brl2(sd.valor)}</span></div>
-                      ))}
-                    </div>
-                  )}
 
-                  {/* Líquido */}
+                  {/* Líquido = o que recebeu de fato */}
                   <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-zinc-200 pt-3 dark:border-zinc-700">
                     <span className="text-sm font-bold uppercase tracking-wide text-zinc-500">Líquido do mês</span>
                     <span className={`text-xl font-bold tabular-nums ${liquido >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(liquido)}</span>
                   </div>
-                  {h.retiradaTot > 0 && <p className="mt-2 text-right text-[11px] text-zinc-400">Já retirado neste mês: <strong className="text-zinc-500 dark:text-zinc-300">{brl2(h.retiradaTot)}</strong></p>}
+
+                  {/* Referência: quanto a vertical rendeu pra você pelo novo modelo (% do resultado) */}
+                  {h.entradas.length > 0 && (
+                    <div className="mt-4 rounded-lg bg-violet-50/60 p-3 dark:bg-violet-900/15">
+                      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#7048E8]">Referência · sua parte pelo resultado da vertical</p>
+                      {h.entradas.map((e, i) => (
+                        <div key={i} className="flex items-start justify-between gap-2 text-sm">
+                          <span className="min-w-0 text-zinc-600 dark:text-zinc-300"><span className="block truncate">{e.area ?? e.cliente}</span>{e.resultado != null && e.pct != null && <span className="block text-[11px] text-zinc-400">resultado da vertical {brl2(e.resultado)} × {e.pct}%</span>}</span>
+                          <span className="shrink-0 font-medium tabular-nums text-[#7048E8]">{brl2(e.valor)}</span>
+                        </div>
+                      ))}
+                      <p className="mt-1.5 text-[11px] text-zinc-400">Quanto sua vertical <strong>gerou</strong> pra você (% do resultado). Enquanto a área ainda não se paga sozinha, o escritório complementa — por isso o recebido acima pode ser maior.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
