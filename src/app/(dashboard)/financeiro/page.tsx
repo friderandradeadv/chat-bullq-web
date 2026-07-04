@@ -1480,12 +1480,14 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [parsing, setParsing] = useState(false);
   const [conf, setConf] = useState<import('@/features/financeiro/services/financeiro.service').ExtratoConferencia | null>(null);
   const [sel, setSel] = useState<Set<number>>(new Set());
+  const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA)
 
   const conferir = async (linhas: { data: string; valor: number; descricao: string }[], contaArg?: string) => {
     if (!linhas.length) { toast.error('Não consegui ler lançamentos desse arquivo. Tente OFX/CSV ou cole o texto.'); return; }
     try {
       const r = await financeiroService.conferirExtrato((contaArg ?? conta) || null, linhas);
       setConf(r);
+      setAreas(Object.fromEntries(r.linhas.map((l, i) => [i, l.verticalSugerida || '']))); // pré-preenche com a sugestão
       setSel(new Set(r.linhas.map((l, i) => (!l.duplicado ? i : -1)).filter((i) => i >= 0))); // novos marcados
       if (r.novos === 0) toast('Tudo nesse extrato já está lançado — nada novo.', { icon: '✅' });
       else toast.success(`${r.novos} novo(s) · ${r.duplicados} já existem`);
@@ -1512,7 +1514,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   };
 
   const importM = useMutation({
-    mutationFn: () => { if (!conf) throw new Error('confira primeiro'); const linhas = conf.linhas.filter((_, i) => sel.has(i)).map((l) => ({ data: l.data, valor: l.valor, descricao: l.descricao })); return financeiroService.importarExtratoLinhas(conta || null, linhas); },
+    mutationFn: () => { if (!conf) throw new Error('confira primeiro'); const linhas = conf.linhas.map((l, i) => ({ l, i })).filter(({ i }) => sel.has(i)).map(({ l, i }) => ({ data: l.data, valor: l.valor, descricao: l.descricao, area: (areas[i] || '').trim() || undefined })); return financeiroService.importarExtratoLinhas(conta || null, linhas); },
     onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s)${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`); onClose(); },
     onError: (e: any) => toast.error(e?.message || 'Erro ao importar'),
   });
@@ -1539,7 +1541,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
           </label>
           {nome && <span className="text-xs text-zinc-400">{nome}</span>}
         </div>
-        <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, classifica e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (por valor+data) e contra reenvio do mesmo arquivo.</p>
+        <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, <strong>sugere a vertical</strong> de cada despesa (você ajusta na coluna) e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (valor+data) e contra reenvio do mesmo arquivo. Comum do escritório → "Escritório" (rateia auto).</p>
         {contas.find((c) => c.id === conta)?.cartao
           ? <p className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] text-violet-700 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-300">💳 <strong>Fatura de cartão:</strong> as compras entram como <strong>"a pagar"</strong> (fora do caixa) e a linha de <strong>pagamento de fatura é ignorada</strong>. Só entram no caixa quando você clicar em <strong>Pagar fatura</strong>.</p>
           : <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Importando pra uma <strong>conta bancária</strong> (vira caixa). Se este for o <strong>extrato do cartão</strong>, troque a conta acima pra <strong>"Nubank cartão"</strong>.</p>}
@@ -1552,7 +1554,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             </div>
             <div className="max-h-72 overflow-x-auto overflow-y-auto rounded-lg border border-zinc-200/70 scrollbar-thin dark:border-zinc-800">
               <table className="w-full min-w-[26rem] text-sm">
-                <thead className="sticky top-0 bg-white dark:bg-zinc-900"><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium"></th><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="px-2 py-1.5 font-medium">Status</th></tr></thead>
+                <thead className="sticky top-0 bg-white dark:bg-zinc-900"><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium"></th><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 font-medium">Status</th></tr></thead>
                 <tbody>
                   {conf.linhas.map((l, i) => (
                     <tr key={i} className={`border-t border-zinc-100 dark:border-zinc-800 ${l.duplicado ? 'opacity-60' : ''}`}>
@@ -1560,6 +1562,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       <td className="px-2 py-1.5 tabular-nums text-zinc-500">{l.data}</td>
                       <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{l.descricao || '—'}</td>
                       <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</td>
+                      <td className="px-2 py-1.5">{l.valor < 0 ? (
+                        <ComboBox className="w-40" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
+                          actions={[{ value: '', label: '— sem vertical —' }, { value: 'Escritório', label: 'Escritório (comum · rateia auto)' }]}
+                          labelOf={(v) => v === '' ? '— sem vertical —' : v === 'Escritório' ? 'Escritório (comum)' : v}
+                          placeholder="vertical…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
+                      ) : <span className="text-[11px] text-zinc-400">casa pelo cliente</span>}</td>
                       <td className="px-2 py-1.5">{l.duplicado ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={l.motivo || ''}>Já existe</span> : <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Novo</span>}</td>
                     </tr>
                   ))}
