@@ -1173,16 +1173,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                   <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
                     <p className="text-[11px] text-zinc-400">A despesa aparece <strong>uma vez</strong> no livro-razão; cada área puxa a fatia (ex.: agência R$1.300 ÷ 3). Marque a <strong>linha</strong> (ex.: Agência 1/3) para a fatia cair no <strong>holerite</strong> de quem assume esse custo.</p>
                     {editor.rateioVerticais.map((x, i) => {
-                      const lns = linhasPorArea[x.area] ?? [];
                       return (
                       <div key={i} className="flex flex-wrap items-center gap-1.5">
-                        <ComboBox className="min-w-0 flex-1" value={x.area} options={areasVert} allowFree placeholder="vertical ou frente…" onChange={(val) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: val, label: '' } : y) })} />
-                        {lns.length > 0 && (
-                          <select value={x.label ?? ''} title="Linha do custo — quem assume essa linha (RH) vê a fatia no holerite deste mês" onChange={(e) => { const lbl = e.target.value; const ln = lns.find((l) => l.label === lbl); setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, label: lbl, valor: (lbl && ln && parseValor(y.valor) === 0) ? fmtMoney(ln.valor) : y.valor } : y) }); }} className="min-w-[8rem] flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-                            <option value="">Linha (opcional)…</option>
-                            {lns.map((l) => <option key={l.label} value={l.label}>{l.label} · {brl2(l.valor)}</option>)}
-                          </select>
-                        )}
+                        <ComboBox className="min-w-0 flex-1" value={x.area} options={areasVert} allowFree placeholder="vertical ou frente…" onChange={(val) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, area: val } : y) })} />
+                        {/* Linha do custo (Agência 1/3, Anúncios…) — casa com o CUSTEIO do RH: quem assume essa linha vê a fatia no holerite. Vazio = área inteira. */}
+                        <ComboBox className="min-w-[8rem] flex-1" value={x.label ?? ''} options={['Agência (1/3)', 'Anúncios', 'Tráfego Pago']} allowFree placeholder="linha (opcional)" onChange={(val) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, label: val } : y) })} />
                         <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.map((y, j) => j === i ? { ...y, valor: v } : y) })} /></div>
                         <button onClick={() => setEditor({ ...editor, rateioVerticais: editor.rateioVerticais.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                       </div>
