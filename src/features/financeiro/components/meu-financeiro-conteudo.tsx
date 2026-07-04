@@ -562,29 +562,44 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           const sv = data.saidasVerticais!;
           const cur = sv.find((x) => x.area === (vertF || vertSaidaSel)) ?? sv[0];
           const lancs = cur.lancamentos.filter((l) => !mesSel || l.mes === mesSel);
-          const tot = lancs.reduce((s, l) => s + l.valor, 0);
+          const daVert = lancs.filter((l) => !l.comum);
+          const doEsc = lancs.filter((l) => l.comum);
+          const totV = daVert.reduce((s, l) => s + l.valor, 0);
+          const totE = doEsc.reduce((s, l) => s + l.valor, 0);
+          const linha = (l: typeof lancs[number], i: number) => (
+            <div key={i} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
+              <span className="w-12 shrink-0 text-xs tabular-nums text-zinc-400">{l.data.slice(0, 5)}</span>
+              <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+              <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{l.fornecedor || l.categoria}</span>
+              <span className="hidden shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 sm:inline dark:bg-zinc-800">{l.categoria}</span>
+              <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-rose-600">{brl2(l.valor)}</span>
+            </div>
+          );
+          const subHeader = (titulo: string, hint: string, total: number, cor: string) => (
+            <div className="mt-3 flex items-baseline justify-between gap-2 border-b border-zinc-200/70 pb-1 dark:border-zinc-800">
+              <span className="flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: cor }}>{titulo}<span className="text-[10px] font-normal text-zinc-400">{hint}</span></span>
+              <span className="shrink-0 text-sm font-bold tabular-nums" style={{ color: cor }}>{brl2(total)}</span>
+            </div>
+          );
           return (
-            <Card title={<span className="flex items-center gap-2"><ArrowDownCircle className="h-4 w-4 text-rose-500" /> Saídas da vertical</span>}
-              sub="custos da vertical (agência, anúncios) + as saídas gerais do escritório (aluguel, contador, Claude…) rateadas por igual. O que ENTRA é dos seus casos; o que SAI é da vertical.">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                {sv.length > 1 && <ComboBox className="w-44" value={cur.area} options={sv.map((x) => x.area)} placeholder="vertical…" onChange={setVertSaidaSel} />}
-                <span className="ml-auto text-sm font-semibold tabular-nums text-rose-600">Total{mesSel ? ' do mês' : ''}: {brl2(tot)}</span>
+            <Card title={<span className="flex items-center gap-2"><ArrowDownCircle className="h-4 w-4 text-rose-500" /> Saídas do mês</span>}
+              sub="o que SAI: os custos da sua vertical (agência, anúncios) e a sua fatia das despesas gerais do escritório. O que ENTRA é dos seus casos.">
+              {sv.length > 1 && <div className="mb-1"><ComboBox className="w-44" value={cur.area} options={sv.map((x) => x.area)} placeholder="vertical…" onChange={setVertSaidaSel} /></div>}
+
+              {/* 1) Saídas da vertical (agência, anúncios) */}
+              {subHeader('Saídas da vertical', '· agência, anúncios', totV, '#E8590C')}
+              {daVert.length ? daVert.map(linha) : <p className="py-2 text-center text-[12px] text-zinc-400">Sem custo direto da vertical {cur.area}{mesSel ? ' neste mês' : ''}.</p>}
+
+              {/* 2) Saídas do escritório (comum rateado) */}
+              {subHeader('Saídas do escritório', '· comum rateado por igual', totE, '#228BE6')}
+              {doEsc.length ? doEsc.map(linha) : <p className="py-2 text-center text-[12px] text-zinc-400">Sem rateio do escritório{mesSel ? ' neste mês' : ''}.</p>}
+
+              {/* Total geral */}
+              <div className="mt-3 flex items-center justify-between border-t-2 border-dashed border-zinc-200 pt-2 dark:border-zinc-700">
+                <span className="text-sm font-bold uppercase tracking-wide text-zinc-500">Total de saídas{mesSel ? ' do mês' : ''}</span>
+                <span className="text-base font-bold tabular-nums text-rose-600">{brl2(totV + totE)}</span>
               </div>
-              <div className="max-h-80 overflow-y-auto scrollbar-thin">
-                {lancs.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-zinc-400">Sem saídas nesta vertical{mesSel ? ' neste mês' : ''}. Os custos aparecem aqui quando forem lançados/rateados na vertical <strong>{cur.area}</strong> no Financeiro.</p>
-                ) : lancs.map((l, i) => (
-                  <div key={i} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
-                    <span className="w-12 shrink-0 text-xs tabular-nums text-zinc-400">{l.data.slice(0, 5)}</span>
-                    <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
-                    <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{l.fornecedor || l.categoria}</span>
-                    {l.comum && <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-medium text-sky-600 dark:bg-sky-900/30 dark:text-sky-300" title="custo comum do escritório rateado igual entre as verticais">geral</span>}
-                    <span className="hidden shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 sm:inline dark:bg-zinc-800">{l.categoria}</span>
-                    <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-rose-600">{brl2(l.valor)}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-2 text-[11px] text-zinc-400">Saídas padrão da vertical — as mesmas pra todo mundo que atua nela. Não saem do seu bolso; entram no cálculo de quanto a vertical se paga.</p>
+              <p className="mt-2 text-[11px] text-zinc-400">Nenhuma dessas sai do seu bolso — entram no cálculo de quanto a vertical se paga. A sua remuneração é o rateio no êxito.</p>
             </Card>
           );
         })()}
