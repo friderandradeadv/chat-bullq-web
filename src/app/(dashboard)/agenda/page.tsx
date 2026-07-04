@@ -204,6 +204,18 @@ export default function AgendaPage() {
     // Sincroniza "já visto" entre aparelhos (leu na web → some no celular).
     patchAgendaPrefs({ seenNew: arr });
   };
+  // Marca VÁRIOS de uma vez (uma só gravação no servidor) — usado quando o usuário
+  // simplesmente visualiza a agenda: ver a lista já conta como "li", sem precisar
+  // abrir item por item. É o que faz o "já li na web" refletir no celular.
+  const markSeenBulk = (ids: string[]) => {
+    const fresh = ids.filter((id) => !seenRef.current.has(id));
+    if (!fresh.length) return;
+    const next = new Set(seenRef.current); for (const id of fresh) next.add(id);
+    seenRef.current = next; setSeenNew(next);
+    const arr = [...next].slice(-500);
+    try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify(arr)); } catch { /* */ }
+    patchAgendaPrefs({ seenNew: arr });
+  };
 
   // Por padrão a agenda abre nas atribuições do usuário logado (não "Todas"),
   // igual ao Astrea. Aplica uma única vez quando o usuário fica disponível;
@@ -381,6 +393,30 @@ export default function AgendaPage() {
     return true;
   }), [activities, exibir, status, personId, tagFilter, q, qDigits]);
 
+  // A bolinha "adicionado hoje" serve pra você NOTAR o que entrou hoje — não é um
+  // "não lido" que precisa de clique. Depois que a agenda fica visível por um
+  // instante, marca tudo como visto e SINCRONIZA (servidor): quem já olhou aqui
+  // ou na web não vê mais como novo em nenhum aparelho. Antes só sumia ao abrir
+  // cada atividade uma a uma — por isso "as bolinhas seguiam lá".
+  useEffect(() => {
+    const novos = filtered
+      .filter(isCreatedToday)
+      .map((a) => a.id)
+      .filter((id) => !seenRef.current.has(id));
+    if (novos.length === 0) return;
+    const t = setTimeout(() => {
+      const next = new Set(seenRef.current);
+      novos.forEach((id) => next.add(id));
+      seenRef.current = next;
+      setSeenNew(next);
+      const arr = [...next].slice(-500);
+      try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify(arr)); } catch { /* */ }
+      patchAgendaPrefs({ seenNew: arr });
+    }, 2200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered]);
+
   const byId = useMemo(() => new Map(filtered.map((a) => [a.id, a])), [filtered]);
   // Repinta a barra do topo de cada evento já montado quando as etiquetas/filtro
   // mudam — as tags carregam async, depois do mount, e sem isto a barra ficava
@@ -391,6 +427,19 @@ export default function AgendaPage() {
       if (a) renderEventStrip(el, a, isCreatedToday(a) && !seenNew.has(a.id));
     }
   }, [byId, seenNew]);
+  // Ver a agenda já conta como "li": alguns segundos depois de a lista aparecer, as
+  // bolinhas de "novo" que estão na tela são marcadas como vistas de uma vez (uma só
+  // gravação) e somem em todos os aparelhos — sem abrir item por item. Resolve o
+  // "no celular aparece tudo como não lido mesmo eu já tendo visto na web".
+  useEffect(() => {
+    if (!filtered.length) return;
+    const t = setTimeout(() => {
+      const ids = filtered.filter((a) => isCreatedToday(a) && !seenRef.current.has(a.id)).map((a) => a.id);
+      if (ids.length) markSeenBulk(ids);
+    }, 2000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered]);
   const fcEvents = useMemo<EventInput[]>(() => filtered.map((a) => {
     const c = a.done || a.cancelled ? EV_DONE : a.source === 'evento' ? EV_TIMED : EV_PENDING;
     // Eventos com hora precisam de FIM pra ter altura no timeGrid — sem isso o

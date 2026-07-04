@@ -3077,6 +3077,17 @@ function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
     return [...groups.values()].filter((g) => g.length > 1).sort((a, b) => b[0].valor - a[0].valor);
   }, [data.transacoes]);
   const dupTotal = dups.reduce((s, g) => s + g[0].valor * (g.length - 1), 0);
+  const dupCount = dups.reduce((s, g) => s + (g.length - 1), 0);
+  const [armAll, setArmAll] = useState(false); // arma o "remover todas" (2 cliques — confirm() nativo trava a automação)
+  const [busyAll, setBusyAll] = useState(false);
+  const removerTodas = async () => {
+    const ids = dups.flatMap((g) => g.slice(1).map((t) => t.id).filter(Boolean)) as string[];
+    setBusyAll(true); let ok = 0;
+    for (const id of ids) { try { await financeiroService.removeTransacao(id, 'uma'); ok++; } catch { /* ignora */ } }
+    setBusyAll(false); setArmAll(false);
+    qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
+    toast.success(`${ok} cópia(s) removida(s)`);
+  };
 
   return (
     <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-amber-600" /> Conciliação Astrea × sistema</span>}
@@ -3154,6 +3165,13 @@ function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
             {openDup ? <ChevronDown className="h-4 w-4 text-amber-600" /> : <ChevronRight className="h-4 w-4 text-amber-600" />}
           </button>
           <p className="mt-1 text-[11px] text-amber-700/80 dark:text-amber-300/80">Mesmo valor + mesmo mês + mesmo pagador. Confira e remova a cópia extra — isso deve aproximar o operacional do rombo real. (parcelas legítimas do mesmo cliente caem em meses diferentes, então não entram aqui.)</p>
+          <div className="mt-2">
+            <button onClick={() => (armAll ? removerTodas() : setArmAll(true))} disabled={busyAll} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${armAll ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
+              {busyAll ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Removendo…</> : armAll ? <><Trash2 className="h-3.5 w-3.5" /> Confirmar: remover {dupCount} cópia(s)</> : <><Trash2 className="h-3.5 w-3.5" /> Remover todas as cópias ({dupCount})</>}
+            </button>
+            {armAll && !busyAll && <button onClick={() => setArmAll(false)} className="ml-2 text-xs text-zinc-500 hover:text-zinc-700">cancelar</button>}
+            <span className="ml-2 text-[11px] text-zinc-400">mantém a 1ª de cada grupo, remove as cópias</span>
+          </div>
           {openDup && (
             <div className="mt-2 space-y-2">
               {dups.map((g, gi) => (
@@ -3163,7 +3181,7 @@ function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
                     {g.map((t, ti) => (
                       <div key={t.id} className="flex items-center justify-between gap-2 text-xs">
                         <span className="text-zinc-500">{t.data} · {t.categoria}{ti === 0 ? <span className="ml-1 rounded bg-emerald-100 px-1 text-[9px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">manter</span> : null}</span>
-                        {ti > 0 && <button onClick={() => { if (t.id && confirm(`Remover esta cópia de ${brl2(t.valor)} (${t.data})?`)) delTx.mutate(t.id); }} disabled={delTx.isPending} className="rounded border border-rose-200 px-1.5 py-0.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900/40 dark:hover:bg-rose-900/20">remover cópia</button>}
+                        {ti > 0 && <button onClick={() => { if (t.id) delTx.mutate(t.id); }} disabled={delTx.isPending} className="rounded border border-rose-200 px-1.5 py-0.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900/40 dark:hover:bg-rose-900/20">remover cópia</button>}
                       </div>
                     ))}
                   </div>
@@ -3473,13 +3491,13 @@ function simula(meses: FinDashboard['meses'], ticket: number, x: number, injecao
 
 function CamadaCS({ label, hint, cor, value, on, setOn }: { label: string; hint: string; cor: string; value: number; on: boolean; setOn: (v: boolean) => void }) {
   return (
-    <label className={`flex cursor-pointer items-center gap-2 rounded-xl border p-2.5 transition ${on ? 'border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900' : 'border-transparent bg-zinc-100/60 opacity-60 dark:bg-zinc-800/40'}`}>
+    <label className={`flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border p-2.5 transition ${on ? 'border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900' : 'border-transparent bg-zinc-100/60 opacity-60 dark:bg-zinc-800/40'}`}>
       <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} className="h-4 w-4 shrink-0" style={{ accentColor: cor }} />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} /><span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{label}</span></span>
+      <span className="min-w-0 flex-1 basis-0">
+        <span className="flex min-w-0 items-center gap-1.5"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cor }} /><span className="truncate text-sm font-semibold text-zinc-700 dark:text-zinc-200">{label}</span></span>
         <span className="block truncate text-[10px] text-zinc-400">{hint}</span>
       </span>
-      <span className="shrink-0 text-sm font-bold tabular-nums" style={{ color: cor }}>{brl(value)}</span>
+      <span className="ml-auto shrink-0 whitespace-nowrap text-sm font-bold tabular-nums" style={{ color: cor }}>{brl(value)}</span>
     </label>
   );
 }
