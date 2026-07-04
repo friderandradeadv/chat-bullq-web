@@ -14,7 +14,7 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
-import { ProdutoTags, LegalTags } from './kanban-card-bits';
+import { ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 import { DropZone } from '@/components/drop-zone';
@@ -189,12 +189,8 @@ export function CaseDetailDrawer({
               {c && <ProdutoTags caseId={c.id} area={c.area} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
               {adversa && <span className="inline-flex items-center gap-1 rounded-full bg-[#f1f3f4] px-2 py-1 text-[10px] font-semibold text-[#48626f] dark:bg-zinc-800 dark:text-zinc-300">× {adversa.name}</span>}
             </div>
-            {/* Etiquetas jurídicas (tags coloridas): anexar/remover + criar/renomear/recolorir. */}
-            {c && (
-              <div className="mt-2">
-                <LegalTags caseId={c.id} legalTags={c.legalTags} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
-              </div>
-            )}
+            {/* Etiquetas jurídicas importadas do Astrea (Bancário, RMC/RCC, nome do
+                escritório…) poluíam o topo do card e duplicavam o produto/área — ocultas. */}
             {/* abas (pills) */}
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {LEFT_TABS.map((t) => {

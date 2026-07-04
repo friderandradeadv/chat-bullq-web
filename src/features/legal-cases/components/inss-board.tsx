@@ -139,7 +139,7 @@ export function InssBoard() {
   const active = inss.find((c) => c.id === activeId) ?? null;
 
   return (
-    <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto">
       <div className="shrink-0 border-b border-[#dbeaf5] px-4 pb-3 pt-6 lg:px-6 dark:border-zinc-800">
         <div className="flex items-center gap-2">
           <Stethoscope className="h-5 w-5" style={{ color: ACCENT }} />

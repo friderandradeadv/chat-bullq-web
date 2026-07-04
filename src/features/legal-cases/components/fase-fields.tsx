@@ -168,6 +168,7 @@ export function FaseFields({ caseId, phase, data }: { caseId: string; phase: str
 
 function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave: (v: any) => void }) {
   const [local, setLocal] = useState(field.type === 'currency' ? currencyToInput(value) : (value ?? ''));
+  const [expanded, setExpanded] = useState(false);
   const debRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { setLocal(field.type === 'currency' ? currencyToInput(value) : (value ?? '')); }, [value, field.type]);
 
@@ -212,18 +213,36 @@ function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave
   }
 
   if (field.type === 'textarea') {
+    // O "Julgamento" guarda o dispositivo (texto longo, preenchido pelo DJEN) —
+    // mostra recolhido com "exibir mais", igual ao recorte na agenda. Expande num
+    // textarea editável. Os demais textareas seguem como campo simples.
+    const isDispositivo = field.key === 'julgamento';
+    const conteudo = (local ?? '').trim();
+    if (isDispositivo && conteudo && !expanded) {
+      return (
+        <div className="rounded-lg border border-[#cfe0ed] bg-[#f7fafc] px-2.5 py-2 dark:border-zinc-700 dark:bg-zinc-800/40">
+          <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-5 text-[#101820] dark:text-zinc-200">{conteudo}</p>
+          <button onClick={() => setExpanded(true)} className="mt-1 text-xs font-semibold text-[#4a90e2] hover:underline">exibir mais</button>
+        </div>
+      );
+    }
     return (
-      <textarea
-        value={local}
-        onChange={(e) => {
-          setLocal(e.target.value);
-          if (debRef.current) clearTimeout(debRef.current);
-          debRef.current = setTimeout(() => onSave(e.target.value), 700);
-        }}
-        onBlur={() => onSave(local)}
-        rows={2}
-        className="w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 py-1.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200"
-      />
+      <div>
+        <textarea
+          value={local}
+          onChange={(e) => {
+            setLocal(e.target.value);
+            if (debRef.current) clearTimeout(debRef.current);
+            debRef.current = setTimeout(() => onSave(e.target.value), 700);
+          }}
+          onBlur={() => onSave(local)}
+          rows={isDispositivo ? 6 : 2}
+          className="w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 py-1.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200"
+        />
+        {isDispositivo && conteudo && (
+          <button onClick={() => setExpanded(false)} className="mt-1 text-xs font-semibold text-[#4a90e2] hover:underline">exibir menos</button>
+        )}
+      </div>
     );
   }
 

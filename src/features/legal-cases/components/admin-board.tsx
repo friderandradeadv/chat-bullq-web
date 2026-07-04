@@ -97,7 +97,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   }, [filtered, colDefs, columnsFromPhases, data]);
 
   return (
-    <div className="flex h-full flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto">
       <div className="shrink-0 border-b border-[#dbeaf5] px-6 pb-4 pt-6 dark:border-zinc-800">
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5" style={{ color: accent }} />

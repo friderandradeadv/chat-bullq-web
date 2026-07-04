@@ -261,7 +261,7 @@ export default function FaseJudicialKanbanPage() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto" style={{ fontFamily: INTER }}>
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto" style={{ fontFamily: INTER }}>
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 pt-6 pb-4 lg:px-6">
         <div className="flex items-center gap-2">
           <Columns3 className="h-5 w-5 text-[#e11970]" />
