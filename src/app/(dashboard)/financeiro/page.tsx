@@ -2251,8 +2251,53 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
         </Card>
       )}
 
+      <RemunVerticalEditor data={data} />
       <VerticalCustosEditor data={data} />
     </>
+  );
+}
+
+/** Participação por vertical (Fase B): quanto % do RESULTADO de cada vertical cada pessoa recebe. */
+function RemunVerticalEditor({ data }: { data: FinDashboard }) {
+  const qc = useQueryClient();
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
+  const advs = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+  const verticais = useMemo(() => [...new Set([...(data.verticalPnL?.verticais ?? []).map((v) => v.area), 'Bancário', 'Previdenciário', 'Trabalhista', 'Cível', 'Consumidor'])], [data.verticalPnL]);
+  const { data: cfg } = useQuery({ queryKey: ['financeiro', 'remun-vertical'], queryFn: () => financeiroService.getRemunVertical(), staleTime: 300_000 });
+  const [draft, setDraft] = useState<Record<string, { area: string; pct: number }[]>>({});
+  useEffect(() => { if (cfg?.remunVertical) setDraft(cfg.remunVertical); }, [cfg]);
+  const save = useMutation({ mutationFn: () => financeiroService.setRemunVertical(draft), onSuccess: () => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success('Participações salvas'); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro') });
+  const rows = (uid: string) => draft[uid] ?? [];
+  const setRow = (uid: string, i: number, patch: Partial<{ area: string; pct: number }>) => setDraft((d) => ({ ...d, [uid]: (d[uid] ?? []).map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
+  const addRow = (uid: string) => setDraft((d) => ({ ...d, [uid]: [...(d[uid] ?? []), { area: verticais[0] ?? '', pct: 40 }] }));
+  const rmRow = (uid: string, i: number) => setDraft((d) => ({ ...d, [uid]: (d[uid] ?? []).filter((_, j) => j !== i) }));
+
+  return (
+    <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-[#7048E8]" /> Participação por vertical (remuneração)</span>}
+      sub="quanto % do RESULTADO (receita − custos) de cada vertical a pessoa recebe. É isso que alimenta o holerite dela.">
+      <div className="space-y-3">
+        {advs.map((a) => (
+          <div key={a.id} className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200"><UserCircle2 className="h-4 w-4 text-zinc-400" />{a.name}</span>
+              <button onClick={() => addRow(a.id)} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> vertical</button>
+            </div>
+            {rows(a.id).length === 0 ? <p className="text-[11px] text-zinc-400">Sem participação configurada — cai no padrão (área principal × 30%).</p> : (
+              <div className="space-y-1.5">
+                {rows(a.id).map((r, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <select value={r.area} onChange={(e) => setRow(a.id, i, { area: e.target.value })} className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{verticais.map((v) => <option key={v} value={v}>{v}</option>)}</select>
+                    <div className="flex items-center gap-1"><input value={String(r.pct)} onChange={(e) => setRow(a.id, i, { pct: Math.max(0, Math.min(100, Number(e.target.value.replace(/\D/g, '')) || 0)) })} inputMode="numeric" className="w-14 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-sm text-zinc-400">%</span></div>
+                    <button onClick={() => rmRow(a.id, i)} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex justify-end"><button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar participações'}</button></div>
+    </Card>
   );
 }
 
