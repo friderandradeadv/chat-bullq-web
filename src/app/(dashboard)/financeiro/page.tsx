@@ -2518,6 +2518,22 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const [aporteRun, setAporteRun] = useState(false);
   const [aporteArmed, setAporteArmed] = useState(false); // confirmação em 2 cliques do "Desfazer"
   const nAportes = data.transacoes.filter((t) => t.valor > 0 && /aporte/i.test(t.categoria || '')).length;
+  // sugestão do empréstimo que RECONCILIA: caixa − operacional = o que os CPFs puseram pra sustentar o caixa.
+  // Registrando esse valor, a "posição real" (caixa − empréstimo) volta a ser o resultado operacional.
+  const sugEmp = Math.max(0, (data.kpis?.caixaContas ?? 0) - (data.kpis?.saldoOperacional ?? 0));
+  const [empValor, setEmpValor] = useState(() => (sugEmp > 0 ? fmtMoney(sugEmp) : ''));
+  const registrarEmprestimo = async () => {
+    const v = parseValor(empValor);
+    if (!(v > 0)) { toast.error('Informe o valor do empréstimo.'); return; }
+    setAporteRun(true);
+    try {
+      await financeiroService.addTransacao({ data: hojeBR(), tipo: 'receita', categoria: 'Aporte', valor: v, pagador: 'Empréstimo dos sócios (CPF)', dataPagamento: hojeBR(), status: 'recebido' });
+      qc.invalidateQueries({ queryKey: ['financeiro'] });
+      setRetroMsg(`✅ Empréstimo de ${brl(v)} registrado. Posição real = caixa − empréstimo. Recarregue pra ver.`);
+      toast.success('Empréstimo registrado');
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro'); }
+    setAporteRun(false);
+  };
   const lancarAportes = async () => {
     const existentes = data.transacoes.filter((t) => t.valor > 0 && /aporte/i.test(t.categoria || ''));
     const jaTem = (a: { data: string; valor: number }) => existentes.some((e) => centsOf(e.valor) === centsOf(a.valor) && ymOf(e.data) === ymOf(a.data));
@@ -2692,15 +2708,18 @@ function ContasTab({ data }: { data: FinDashboard }) {
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
           <div>
-            <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-4 w-4 text-amber-600" /> Registrar empréstimo dos sócios (Você + Pai)</h4>
-            <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">O escritório teve <strong>{brl(APORTES.reduce((s, a) => s + a.valor, 0))}</strong> de déficit no período, coberto pelos CPFs (você + seu pai). Isso registra esse total como <strong>empréstimo dos sócios</strong> — uma <strong>dívida a devolver</strong>, não faturamento. O <strong>rombo real continua aparecendo</strong> (posição real = caixa − empréstimo); a dívida só cai quando o escritório pagar os sócios de volta. Edite depois pra separar quanto foi do seu pai.</p>
+            <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-4 w-4 text-amber-600" /> Empréstimo dos sócios (CPF)</h4>
+            <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">O que entrou dos CPFs (você + seu pai) pra tapar o buraco = <strong>dívida a devolver</strong>, não faturamento. Registrando, a <strong>posição real = caixa − empréstimo</strong> volta a mostrar o vermelho real. O valor sugerido (<strong>{brl(sugEmp)}</strong>) é o que <strong>reconcilia</strong> o caixa com o operacional — <strong>edite</strong> pra bater com o que vocês de fato colocaram (confere no extrato do CPF). A dívida cai quando o escritório pagar os sócios de volta.</p>
           </div>
           <div className="flex shrink-0 flex-col gap-1.5">
-            <button onClick={lancarAportes} disabled={aporteRun} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
-              {aporteRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> …</> : <><Scale className="h-3.5 w-3.5" /> Registrar empréstimo dos sócios</>}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <div className="w-28"><MoneyInput value={empValor} onChange={setEmpValor} /></div>
+              <button onClick={registrarEmprestimo} disabled={aporteRun} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                {aporteRun ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Scale className="h-3.5 w-3.5" /> Registrar</>}
+              </button>
+            </div>
             {nAportes > 0 && <button onClick={removerAportes} onBlur={() => setAporteArmed(false)} disabled={aporteRun} className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium disabled:opacity-60 ${aporteArmed ? 'border-rose-500 bg-rose-50 text-rose-600 dark:bg-rose-900/20' : 'border-zinc-300 text-zinc-500 hover:border-rose-300 hover:text-rose-600 dark:border-zinc-700 dark:text-zinc-400'}`}>
-              <Trash2 className="h-3 w-3" /> {aporteArmed ? `Confirmar: remover ${nAportes}` : 'Desfazer (posição = caixa)'}
+              <Trash2 className="h-3 w-3" /> {aporteArmed ? `Confirmar: remover ${nAportes}` : 'Desfazer'}
             </button>}
           </div>
         </div>
