@@ -144,7 +144,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Subabas da visão escopada — organiza como o dashboard, mas na vertical */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
-          {([['resumo', 'Visão geral', Scale], ['holerite', 'Holerite', Wallet], ['lancamentos', 'Lançamentos', Receipt], ['receber', 'A receber', Gavel], ['projecoes', 'Projeções', TrendingUp], ['motivacao', 'Motivação', Flame]] as const).map(([k, label, Icon]) => (
+          {([['resumo', 'Minha vertical', Scale], ['lancamentos', 'Lançamentos', Receipt], ['holerite', 'Holerite', Wallet]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setSubtab(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${subtab === k ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}><Icon className="h-4 w-4" /> {label}</button>
           ))}
           {criar && <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"><Plus className="h-4 w-4" /> Novo lançamento</button>}
