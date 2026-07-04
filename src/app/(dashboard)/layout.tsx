@@ -108,12 +108,15 @@ export default function DashboardLayout({
     <SidebarLayout
       sidebar={<AppSidebar />}
       navbar={
-        // Barra app do mobile (à direita do menu-hambúrguer): marca + tema.
-        <div className="flex items-center justify-between gap-2">
-          <Link href="/inicio" className="block">
-            <Logo size="sm" />
-          </Link>
-          <ThemeToggle className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
+        // Barra app do mobile: marca CENTRALIZADA (bloco flex-1 no meio, entre o
+        // menu-hambúrguer à esquerda e o tema à direita), com toque de app.
+        <div className="flex items-center gap-2">
+          <div className="flex flex-1 justify-center">
+            <Link href="/inicio" className="block">
+              <Logo size="sm" />
+            </Link>
+          </div>
+          <ThemeToggle className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" />
         </div>
       }
     >
