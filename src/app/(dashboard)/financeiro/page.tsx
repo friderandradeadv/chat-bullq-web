@@ -477,6 +477,68 @@ function CalendarioFiltro({ mesSel, deISO, ateISO, onMes, onPeriodo, onLimpar }:
   );
 }
 
+/** Classificador em lote: agrupa despesas SEM vertical por categoria/fornecedor e permite atribuir a vertical de cada grupo. */
+function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose: () => void }) {
+  const qc = useQueryClient();
+  const verticais = useMemo(() => [...new Set([...data.transacoes.flatMap((t) => t.verticais ?? []), 'Bancário', 'Previdenciário', 'Trabalhista', 'Cível', 'Consumidor'])].filter(Boolean), [data.transacoes]);
+  const grupos = useMemo(() => {
+    const m = new Map<string, { key: string; categoria: string; fornecedor: string; ids: string[]; total: number; n: number }>();
+    for (const t of data.transacoes) {
+      if (t.valor >= 0 || (t.verticais?.length ?? 0) > 0 || !t.id) continue; // só despesa SEM vertical
+      const forn = (t.recebedor || t.party || t.pagador || '').trim();
+      const key = `${t.categoria}|${normNome(forn)}`;
+      const g = m.get(key) ?? { key, categoria: t.categoria, fornecedor: forn, ids: [], total: 0, n: 0 };
+      g.ids.push(t.id); g.total += Math.abs(t.valor); g.n++; m.set(key, g);
+    }
+    return [...m.values()].sort((a, b) => b.total - a.total);
+  }, [data.transacoes]);
+  const [sel, setSel] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState('');
+  const [feitos, setFeitos] = useState<Set<string>>(new Set());
+  const aplicar = async (g: { key: string; ids: string[]; n: number }) => {
+    const v = sel[g.key]; if (!v) return;
+    setBusy(g.key);
+    let ok = 0;
+    for (const id of g.ids) { try { await financeiroService.updateTransacao(id, { area: v, escopo: 'uma' }); ok++; } catch { /* ignore */ } }
+    setBusy(''); setFeitos((f) => new Set([...f, g.key]));
+    qc.invalidateQueries({ queryKey: ['financeiro'] });
+    toast.success(`${ok} lançamento(s) → ${v}`);
+  };
+  const pendentes = grupos.filter((g) => !feitos.has(g.key));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl scrollbar-thin dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Layers className="h-5 w-5 text-[#7048E8]" /> Classificar despesas por vertical</h3>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
+        </div>
+        <p className="mb-3 text-[13px] text-zinc-500 dark:text-zinc-400">Despesas <strong>sem vertical</strong>, agrupadas por categoria/fornecedor. Escolha a vertical de cada grupo e clique <strong>Aplicar</strong> — vale pra todos os lançamentos do grupo. O que for <strong>custo comum</strong> (aluguel, contador, impostos, Claude) <strong>deixe como está</strong> (fica no Escritório).</p>
+        {pendentes.length === 0 ? (
+          <p className="py-10 text-center text-sm text-zinc-400">✅ Nada pendente — todas as despesas já têm vertical ou foram classificadas.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {pendentes.map((g) => (
+              <div key={g.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{g.fornecedor || g.categoria}</p>
+                  <p className="text-[11px] text-zinc-400">{g.categoria} · {g.n} lançamento(s) · {brl2(g.total)}</p>
+                </div>
+                <select value={sel[g.key] ?? ''} onChange={(e) => setSel((s) => ({ ...s, [g.key]: e.target.value }))} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+                  <option value="">— escolher vertical —</option>
+                  {verticais.map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <button onClick={() => aplicar(g)} disabled={!sel[g.key] || busy === g.key} className="inline-flex items-center gap-1 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{busy === g.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Aplicar'}</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-3 text-[11px] text-zinc-400">Dica: despesa <strong>compartilhada</strong> entre verticais (ex.: agência 1/3 cada) é melhor <strong>ratear</strong> no lápis do lançamento — aqui é pra atribuição direta a UMA vertical.</p>
+      </div>
+    </div>
+  );
+}
+
 function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
@@ -493,6 +555,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const [respFiltro, setRespFiltro] = useState('');
   const [contaFiltro, setContaFiltro] = useState('');
   const [vertFiltro, setVertFiltro] = useState(''); // filtro por vertical (centro de custos). '' = todas; '__comum' = escritório/sem vertical
+  const [showClassif, setShowClassif] = useState(false); // classificador de despesas sem vertical
+  const nSemVert = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && (t.verticais?.length ?? 0) === 0).length, [data.transacoes]);
   const [busca, setBusca] = useState('');
   // verticais que aparecem nos lançamentos (pra popular o filtro)
   const verticaisLanc = useMemo(() => [...new Set(data.transacoes.flatMap((t) => t.verticais ?? []))].filter(Boolean).sort((a, b) => a.localeCompare(b)), [data.transacoes]);
@@ -728,6 +792,9 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
             <option value="__comum">Escritório (comum)</option>
           </select>
         )}
+        {nSemVert > 0 && (
+          <button onClick={() => setShowClassif(true)} title="Classificar despesas sem vertical em lote" className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8]/40 bg-[#7048E8]/5 px-2.5 py-1.5 text-xs font-semibold text-[#7048E8] hover:bg-[#7048E8]/10"><Layers className="h-3.5 w-3.5" /> Classificar por vertical ({nSemVert})</button>
+        )}
         <div className="relative ml-auto">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="w-40 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
@@ -870,6 +937,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       </div>
       </>
       )}
+
+      {showClassif && <ClassificadorVertical data={data} onClose={() => setShowClassif(false)} />}
 
       {/* Modal de edição / novo lançamento */}
       {editor && (
