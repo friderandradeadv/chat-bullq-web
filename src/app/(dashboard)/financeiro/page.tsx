@@ -484,7 +484,7 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
   const grupos = useMemo(() => {
     const m = new Map<string, { key: string; categoria: string; fornecedor: string; ids: string[]; total: number; n: number }>();
     for (const t of data.transacoes) {
-      if (t.valor >= 0 || (t.verticais?.length ?? 0) > 0 || !t.id) continue; // só despesa SEM vertical
+      if (t.valor >= 0 || (t.verticais?.length ?? 0) > 0 || t.area || !t.id) continue; // só despesa SEM vertical e não classificada
       const forn = (t.recebedor || t.party || t.pagador || '').trim();
       const key = `${t.categoria}|${normNome(forn)}`;
       const g = m.get(key) ?? { key, categoria: t.categoria, fornecedor: forn, ids: [], total: 0, n: 0 };
@@ -527,6 +527,7 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
                 <select value={sel[g.key] ?? ''} onChange={(e) => setSel((s) => ({ ...s, [g.key]: e.target.value }))} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
                   <option value="">— escolher vertical —</option>
                   {verticais.map((v) => <option key={v} value={v}>{v}</option>)}
+                  <option value="Escritório">Escritório (comum)</option>
                 </select>
                 <button onClick={() => aplicar(g)} disabled={!sel[g.key] || busy === g.key} className="inline-flex items-center gap-1 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{busy === g.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Aplicar'}</button>
               </div>
@@ -556,7 +557,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const [contaFiltro, setContaFiltro] = useState('');
   const [vertFiltro, setVertFiltro] = useState(''); // filtro por vertical (centro de custos). '' = todas; '__comum' = escritório/sem vertical
   const [showClassif, setShowClassif] = useState(false); // classificador de despesas sem vertical
-  const nSemVert = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && (t.verticais?.length ?? 0) === 0).length, [data.transacoes]);
+  const nSemVert = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && (t.verticais?.length ?? 0) === 0 && !t.area).length, [data.transacoes]);
   const [busca, setBusca] = useState('');
   // verticais que aparecem nos lançamentos (pra popular o filtro)
   const verticaisLanc = useMemo(() => [...new Set(data.transacoes.flatMap((t) => t.verticais ?? []))].filter(Boolean).sort((a, b) => a.localeCompare(b)), [data.transacoes]);
@@ -2214,24 +2215,6 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Pró-labore/retiradas" value={brl(cons?.pessoas ?? 0)} hint="pessoas" accent="#E64980" />
         <MiniStat label="Resultado do escritório" value={brl(cons?.resultado ?? 0)} hint="faturou − direto − comum − pessoas" accent={(cons?.resultado ?? 0) >= 0 ? '#2F9E44' : '#E03131'} />
       </div>
-
-      {chart.length > 0 && (
-        <Card title="Faturamento por vertical" sub="honorários recebidos, casados ao cliente do processo.">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chart} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
-                <CartesianGrid horizontal={false} strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
-                <XAxis type="number" tickFormatter={(v) => brl(v)} tick={{ fontSize: 11 }} className="text-zinc-400" />
-                <YAxis type="category" dataKey="area" width={110} tick={{ fontSize: 12 }} className="text-zinc-500" />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="entradas" name="Faturou" radius={[0, 6, 6, 0]} barSize={22}>
-                  {chart.map((c) => <Cell key={c.area} fill={corArea(c.area)} />)}
-                </Bar>
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      )}
 
       <Card title="Cada vertical se paga?" sub="Receita − Despesa da área = Resultado. Clique num card pra ver o mês a mês.">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

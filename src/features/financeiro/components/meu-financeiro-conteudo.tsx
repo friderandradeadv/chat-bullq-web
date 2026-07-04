@@ -88,7 +88,7 @@ const FRASES_ADV = [
 const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido', label: 'Recebidos' }, { key: 'a_receber', label: 'A receber' }] as const;
 
 export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; criar?: CriarCtx }) {
-  const [subtab, setSubtab] = useState<'resumo' | 'holerite' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>('resumo');
+  const [subtab, setSubtab] = useState<'resumo' | 'holerite' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>('holerite');
   const [holMesSel, setHolMesSel] = useState('');
   const [novo, setNovo] = useState(false);
   const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nCasos: 0, nLancamentos: 0 };
@@ -144,7 +144,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Subabas da visão escopada — organiza como o dashboard, mas na vertical */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
-          {([['resumo', 'Minha vertical', Scale], ['holerite', 'Holerite', Wallet], ['lancamentos', 'Lançamentos', Receipt]] as const).map(([k, label, Icon]) => (
+          {([['holerite', 'Holerite', Wallet], ['resumo', 'Meu financeiro', Scale], ['lancamentos', 'Lançamentos', Receipt]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setSubtab(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${subtab === k ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}><Icon className="h-4 w-4" /> {label}</button>
           ))}
           {criar && <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"><Plus className="h-4 w-4" /> Novo lançamento</button>}
@@ -194,14 +194,14 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   {/* Referência: quanto a vertical rendeu pra você pelo novo modelo (% do resultado) */}
                   {h.entradas.length > 0 && (
                     <div className="mt-4 rounded-lg bg-violet-50/60 p-3 dark:bg-violet-900/15">
-                      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#7048E8]">Referência · sua parte pelo resultado da vertical</p>
+                      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-[#7048E8]">Referência · sua parte pelos honorários dos seus processos</p>
                       {h.entradas.map((e, i) => (
                         <div key={i} className="flex items-start justify-between gap-2 text-sm">
-                          <span className="min-w-0 text-zinc-600 dark:text-zinc-300"><span className="block truncate">{e.area ?? e.cliente}</span>{e.resultado != null && e.pct != null && <span className="block text-[11px] text-zinc-400">resultado da vertical {brl2(e.resultado)} × {e.pct}%</span>}</span>
+                          <span className="min-w-0 text-zinc-600 dark:text-zinc-300"><span className="block truncate">Meus processos</span>{e.resultado != null && e.pct != null && <span className="block text-[11px] text-zinc-400">honorários dos meus processos {brl2(e.resultado)} × {e.pct}%</span>}</span>
                           <span className="shrink-0 font-medium tabular-nums text-[#7048E8]">{brl2(e.valor)}</span>
                         </div>
                       ))}
-                      <p className="mt-1.5 text-[11px] text-zinc-400">Quanto sua vertical <strong>gerou</strong> pra você (% do resultado). Enquanto a área ainda não se paga sozinha, o escritório complementa — por isso o recebido acima pode ser maior.</p>
+                      <p className="mt-1.5 text-[11px] text-zinc-400">Sua parte pelos honorários que <strong>você trouxe</strong> (% dos seus processos). O recebido acima pode diferir conforme os repasses do mês.</p>
                     </div>
                   )}
                 </div>
@@ -215,17 +215,12 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           <div className="mt-4 space-y-3">
             {data.minhaVertical.itens.map((v) => (
               <div key={v.area} className="rounded-2xl border border-[#7048E8]/30 bg-gradient-to-br from-violet-50 to-white p-5 dark:border-violet-900/40 dark:from-violet-900/15 dark:to-zinc-900">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-5 w-5 text-[#7048E8]" /> Minha vertical · {v.area}</h3>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${v.resultado >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>{v.resultado >= 0 ? '✅ se paga' : '⚠️ subsidiada'}</span>
+                <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-5 w-5 text-[#7048E8]" /> Meu financeiro{v.area ? ` · ${v.area}` : ''}</h3>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Recebido (meus honorários)</p><p className="text-2xl font-bold tabular-nums text-emerald-600">{brl(v.receita)}</p></div>
+                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Minha parte ({v.pct}%)</p><p className="text-2xl font-bold tabular-nums text-[#7048E8]">{brl(v.minhaParte)}</p></div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Receita</p><p className="text-lg font-bold tabular-nums text-emerald-600">{brl(v.receita)}</p></div>
-                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Despesa</p><p className="text-lg font-bold tabular-nums text-rose-600">{brl(v.despesa)}</p></div>
-                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Resultado</p><p className={`text-lg font-bold tabular-nums ${v.resultado >= 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-rose-600'}`}>{brl(v.resultado)}</p></div>
-                  <div><p className="text-[11px] uppercase tracking-wide text-zinc-400">Minha parte ({v.pct}%)</p><p className="text-lg font-bold tabular-nums text-[#7048E8]">{brl(v.minhaParte)}</p></div>
-                </div>
-                <p className="mt-2 text-[11px] text-zinc-400">Sua remuneração = <strong>{v.pct}% do resultado</strong> da vertical (receita − custos da área){!data.minhaVertical!.configurada ? ' · % provisório, o escritório ainda vai definir sua participação' : ''}.</p>
+                <p className="mt-2 text-[11px] text-zinc-400">Sua remuneração = <strong>{v.pct}% dos honorários dos seus processos</strong>{!data.minhaVertical!.configurada ? ' · % provisório, o escritório ainda vai definir sua participação' : ''}. Só aparecem os processos em que você participa.</p>
               </div>
             ))}
           </div>
