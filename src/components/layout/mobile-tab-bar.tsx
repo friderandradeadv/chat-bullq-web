@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, MessageSquare, Scale, CircleDollarSign, UserCircle, Menu } from 'lucide-react';
+import { Sparkles, MessageSquare, Scale, CircleDollarSign, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
@@ -15,7 +15,7 @@ import { useUnreadConversations } from '@/features/notifications/use-unread-conv
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#1a1b1e]">
+    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#1D2125]">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -25,9 +25,10 @@ export function MobileTabBar() {
   const pathname = usePathname();
   const nav = useMobileNav();
   const unreadConversations = useUnreadConversations();
-  const { organizations, activeOrgId } = useAuthStore();
+  const { user, organizations, activeOrgId } = useAuthStore();
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
+  const iniciais = (user?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   const isActive = (prefixes: string[]) =>
     prefixes.some((p) => (p === '/inicio' ? pathname === p : pathname.startsWith(p)));
@@ -43,7 +44,7 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="Navegação principal"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#1a1b1e]/95 lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#1D2125]/95 lg:hidden"
     >
       <Link href="/inicio" className={linkCls(isActive(['/inicio']))}>
         <Sparkles className="h-5 w-5" />
@@ -74,7 +75,9 @@ export function MobileTabBar() {
       )}
 
       <Link href="/escritorio" className={linkCls(isActive(['/escritorio']))}>
-        <UserCircle className="h-5 w-5" />
+        {user?.avatarUrl
+          ? <img src={user.avatarUrl} alt="" className={`h-5 w-5 rounded-full object-cover ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`} />
+          : <span className={`flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200 text-[8px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`}>{iniciais}</span>}
         <span>Espaço</span>
       </Link>
 

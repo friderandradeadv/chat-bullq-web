@@ -143,7 +143,7 @@ export function KanbanBoard({ pipelineId }: Props) {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div ref={dragScroll.ref} {...(view === 'lista' ? {} : dragScroll.handlers)} className={`flex gap-3 px-4 pb-4 pt-2 lg:min-h-0 lg:flex-1 ${view === 'lista' ? 'flex-col lg:overflow-y-auto' : 'overflow-x-auto cursor-grab'}`}>
+          <div ref={dragScroll.ref} {...(view === 'lista' ? {} : dragScroll.handlers)} className={`flex gap-5 px-4 pb-4 pt-2 lg:min-h-0 lg:flex-1 ${view === 'lista' ? 'flex-col lg:overflow-y-auto' : 'overflow-x-auto cursor-grab'}`}>
             {board.stages.map((stage) => (
               <KanbanColumn
                 key={stage.id}

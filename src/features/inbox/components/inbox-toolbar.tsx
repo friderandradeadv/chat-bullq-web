@@ -538,83 +538,8 @@ export function InboxToolbar() {
         </PopoverPanel>
       </Popover>
 
-      {/* Divisor + sino + avatar (topo direito, estilo LíderHub) */}
-      <div className="mx-1 h-6 w-px shrink-0 bg-zinc-200 dark:bg-zinc-800" />
-
-      {/* Sino de notificações */}
-      <Popover className="relative shrink-0">
-        <PopoverButton
-          title="Notificações"
-          className="relative flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 outline-none transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-        >
-          <Bell className="h-[18px] w-[18px]" strokeWidth={1.75} />
-          {unreadNotifs > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-red-500 px-[4px] text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-zinc-950">
-              {unreadNotifs > 99 ? '99+' : unreadNotifs}
-            </span>
-          )}
-        </PopoverButton>
-        <PopoverPanel
-          anchor="bottom end"
-          transition
-          className="z-50 mt-1.5 w-[380px] rounded-xl border border-zinc-200/80 bg-white shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-        >
-          <NotificationsPanel />
-        </PopoverPanel>
-      </Popover>
-
-      {/* Avatar do usuário */}
-      <Popover className="relative shrink-0">
-        <PopoverButton className="outline-none" title={user?.name ?? 'Perfil'}>
-          {user?.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt={user.name ?? 'avatar'}
-              className="h-8 w-8 rounded-full object-cover ring-1 ring-zinc-200 transition-opacity hover:opacity-85 dark:ring-zinc-700"
-            />
-          ) : (
-            <span
-              className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-semibold text-white transition-opacity hover:opacity-85"
-              style={{ backgroundColor: avatarColor(user?.name ?? null) }}
-            >
-              {avatarInitials(user?.name ?? null)}
-            </span>
-          )}
-        </PopoverButton>
-        <PopoverPanel
-          anchor="bottom end"
-          transition
-          className="z-50 mt-1.5 w-60 rounded-xl border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
-        >
-          {({ close }) => (
-            <>
-              <div className="px-3 py-2">
-                <p className="truncate text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
-                  {user?.name ?? 'Usuário'}
-                </p>
-                {user?.email && (
-                  <p className="truncate text-[11px] text-zinc-400">{user.email}</p>
-                )}
-              </div>
-              <div className="mx-2 border-t border-zinc-100 dark:border-zinc-800" />
-              <button
-                onClick={() => { close(); router.push('/settings/general'); }}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-              >
-                <Settings className="h-4 w-4 shrink-0 text-zinc-400" />
-                Configurações
-              </button>
-              <button
-                onClick={() => { close(); logout(); }}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-              >
-                <LogOut className="h-4 w-4 shrink-0" />
-                Sair
-              </button>
-            </>
-          )}
-        </PopoverPanel>
-      </Popover>
+      {/* Sino e avatar removidos daqui — já ficam no topo global (sino/tema) e no
+          menu lateral (perfil/config/sair). Evita a duplicação no inbox. */}
     </div>
   );
 }

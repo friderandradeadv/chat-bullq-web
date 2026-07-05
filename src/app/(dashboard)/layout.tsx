@@ -143,6 +143,13 @@ export default function DashboardLayout({
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
           <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5 lg:flex">
+            {/* Modo simples: sem sidebar, então a logo (pequena, clicável → Início)
+                aparece no canto superior esquerdo pra não sumir a marca. */}
+            {simples && (
+              <Link href="/inicio" className="absolute left-4 top-1/2 -translate-y-1/2">
+                <Logo size="sm" className="h-6 w-auto" />
+              </Link>
+            )}
             <GlobalSearch />
             <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
               {/* Alternador Completo × Simples (simples = navegação na barra de baixo) */}

@@ -110,7 +110,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, banco…"
-              className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
+              className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" />
           </div>
         </div>
       </div>
@@ -124,14 +124,14 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
           </div>
         </div>
       ) : (
-        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col) => (
             <div key={col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col">
               <div className="flex h-10 items-center gap-2 px-1">
                 <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
                 <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
               </div>
-              <div className="flex flex-col gap-2 rounded border border-[#dcdfe5] bg-[#f2f2f2] px-1.5 pb-2 pt-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="flex flex-col gap-2.5 rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] p-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto dark:border-zinc-800 dark:bg-zinc-900/40">
                 {col.cards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
                 {col.cards.map((c) => <AdminCard key={c.id} c={c} onOpen={setOpenCaseId} />)}
               </div>
@@ -151,7 +151,7 @@ function AdminCard({ c, onOpen }: { c: KanbanCard; onOpen: (id: string) => void 
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   return (
     <button onClick={() => onOpen(c.id)}
-      className="w-full cursor-pointer rounded border border-[#cfe0ed] bg-white py-2.5 pl-2 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900">
+      className="w-full cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-zinc-700 dark:bg-zinc-800">
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}

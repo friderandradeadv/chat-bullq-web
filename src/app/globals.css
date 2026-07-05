@@ -35,38 +35,38 @@
 .dark {
   /* Dark "cinza" (estética Trello: só cor, sem wallpaper) — superfícies em tons
      de cinza, não preto. Hierarquia: fundo < card < elevado. */
-  --color-background: #1a1b1e;          /* fundo da página */
+  --color-background: #1D2125;          /* fundo da página */
   --color-foreground: oklch(0.985 0 0);
-  --color-card: #242529;                /* cards / colunas / painéis */
+  --color-card: #22272B;                /* cards / colunas / painéis */
   --color-card-foreground: oklch(0.985 0 0);
-  --color-popover: #242529;
+  --color-popover: #22272B;
   --color-popover-foreground: oklch(0.985 0 0);
   --color-primary: oklch(0.708 0.165 254.624);
   --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: #2f3035;           /* elevado / hover */
+  --color-secondary: #2C333A;           /* elevado / hover */
   --color-secondary-foreground: oklch(0.985 0 0);
-  --color-muted: #2f3035;
+  --color-muted: #2C333A;
   --color-muted-foreground: oklch(0.708 0 0);
-  --color-accent: #2f3035;
+  --color-accent: #2C333A;
   --color-accent-foreground: oklch(0.985 0 0);
   --color-destructive: oklch(0.577 0.245 27.325);
-  --color-border: #34353b;
-  --color-input: #34353b;
+  --color-border: #38414A;
+  --color-input: #38414A;
   --color-ring: oklch(0.708 0.165 254.624);
-  --color-sidebar: #1a1b1e;
+  --color-sidebar: #1D2125;
   --color-sidebar-foreground: oklch(0.985 0 0);
-  --color-sidebar-border: #34353b;
-  --color-sidebar-accent: #2f3035;
+  --color-sidebar-border: #38414A;
+  --color-sidebar-accent: #2C333A;
   --color-sidebar-accent-foreground: oklch(0.985 0 0);
 
   /* Vira a escala zinc de preto → cinza numa tacada (a plataforma usa muito
      dark:bg-zinc-900/800/950 e dark:border-zinc-800). Como no Tailwind v4 essas
      cores são var(), redefini-las aqui reflete em TODA a plataforma (kanban,
      agenda, financeiro, sidebar…) sem mexer arquivo por arquivo. */
-  --color-zinc-950: #1a1b1e;   /* era #09090b (quase preto) → fundo */
-  --color-zinc-900: #242529;   /* era #18181b → cards/colunas/painéis */
-  --color-zinc-800: #2f3035;   /* era #27272a → hover/bordas/secundário */
-  --color-zinc-700: #3b3c43;   /* era #3f3f46 → bordas/divisores mais fortes */
+  --color-zinc-950: #1D2125;   /* era #09090b (quase preto) → fundo */
+  --color-zinc-900: #22272B;   /* era #18181b → cards/colunas/painéis */
+  --color-zinc-800: #2C333A;   /* era #27272a → hover/bordas/secundário */
+  --color-zinc-700: #454F59;   /* era #3f3f46 → bordas/divisores mais fortes */
 }
 
 @layer base {
@@ -191,9 +191,9 @@
 /* Dark mode da agenda (FullCalendar): cinza escuro (NÃO preto puro) + eventos
    com preenchimento escuro de baixo contraste — sem "estourar" em branco. */
 .dark .fc {
-  --fc-page-bg-color: #1c1c1f;            /* cinza bem escuro (não preto) */
-  --fc-neutral-bg-color: #26262a;         /* all-day / desabilitado */
-  --fc-border-color: #34343a;             /* divisórias discretas */
+  --fc-page-bg-color: #1D2125;            /* cinza bem escuro (não preto) */
+  --fc-neutral-bg-color: #22272B;         /* all-day / desabilitado */
+  --fc-border-color: #38414A;             /* divisórias discretas */
   --fc-today-bg-color: rgba(34, 139, 230, 0.10);
   color: #e4e4e7;                          /* zinc-200 */
 }
@@ -207,9 +207,9 @@
 }
 .dark .fc .fc-day-other .fc-daygrid-day-number { color: #52525b; }
 .dark .fc .fc-daygrid-more-link { color: #a1a1aa; }
-.dark .fc .fc-list-event:hover td { background: #26262a; }
-.dark .fc .fc-popover { background: #1c1c1f; border-color: #34343a; }
-.dark .fc .fc-popover-header { background: #26262a; color: #e4e4e7; }
+.dark .fc .fc-list-event:hover td { background: #22272B; }
+.dark .fc .fc-popover { background: #1D2125; border-color: #38414A; }
+.dark .fc .fc-popover-header { background: #22272B; color: #e4e4e7; }
 /* Preenchimento dos eventos no escuro — sobrescreve as cores CLARAS inline
    (#DAF3FF / #D3F8E5 / #F1F3F4) por tons escuros. As tirinhas coloridas do topo
    (tipo/etiqueta, estilo Astrea) são REAPLICADAS depois, com a mesma

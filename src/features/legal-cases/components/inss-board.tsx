@@ -153,7 +153,7 @@ export function InssBoard() {
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
-              className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
+              className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" />
           </div>
           <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
             <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#7048e8] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
@@ -174,7 +174,7 @@ export function InssBoard() {
         <CasesListView byPhase={listaByPhase} phases={listaPhases} onOpen={setOpenCaseId} accent={ACCENT} />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-3 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {COLS.map((col) => (
               <Column key={col.dropId} col={col} items={byRes[col.key]} onOpen={setOpenCaseId} onEntrarJudicial={entrarJudicial} />
             ))}
@@ -205,7 +205,7 @@ function Column({
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
       <div ref={setNodeRef}
-        className={`flex flex-col gap-2 rounded border px-1.5 pb-2 pt-3 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
+        className={`flex flex-col gap-2.5 rounded-xl border p-2.5 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((c) => <InssCard key={c.id} c={c} onOpen={onOpen} onEntrarJudicial={onEntrarJudicial} />)}
       </div>
@@ -245,7 +245,7 @@ function InssCard({
         const d = down.current;
         if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
       }}
-      className={`cursor-pointer touch-none rounded border border-[#cfe0ed] bg-white py-3 pl-2 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${isDragging && !overlay ? 'opacity-40' : ''} ${overlay ? 'rotate-2 shadow-lg' : ''}`}
+      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800 ${isDragging && !overlay ? 'opacity-40' : ''} ${overlay ? 'rotate-2 shadow-lg' : ''}`}
     >
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}

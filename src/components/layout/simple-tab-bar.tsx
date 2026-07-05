@@ -15,7 +15,7 @@ import { useNavMode, barItemById, DEFAULT_SIMPLE_BAR } from '@/stores/nav-mode-s
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#1a1b1e]">
+    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#1D2125]">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -26,9 +26,15 @@ export function SimpleTabBar() {
   const unread = useUnreadConversations();
   const nav = useMobileNav();
   const { barItems, hydrated } = useNavMode();
-  const { organizations, activeOrgId } = useAuthStore();
+  const { user, organizations, activeOrgId } = useAuthStore();
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
+  const iniciais = (user?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  // O item "Espaço" mostra a foto do usuário (dinâmico) — como clicar no perfil.
+  const avatarEl = (active: boolean) =>
+    user?.avatarUrl
+      ? <img src={user.avatarUrl} alt="" className={`h-5 w-5 rounded-full object-cover ${active ? 'ring-2 ring-primary' : ''}`} />
+      : <span className={`flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200 text-[8px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 ${active ? 'ring-2 ring-primary' : ''}`}>{iniciais}</span>;
 
   const isActive = (href: string) => (href === '/inicio' ? pathname === href : pathname.startsWith(href));
   const linkCls = (active: boolean) =>
@@ -44,13 +50,15 @@ export function SimpleTabBar() {
   return (
     <nav
       aria-label="Atalhos"
-      className="fixed inset-x-0 bottom-0 z-30 hidden items-stretch border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-white/10 dark:bg-[#1a1b1e]/95 lg:flex"
+      className="fixed inset-x-0 bottom-0 z-30 hidden items-stretch border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-white/10 dark:bg-[#1D2125]/95 lg:flex"
     >
       {items.map((it) => {
         const Icon = it.icon;
         const iconEl =
           it.id === 'conversas' ? (
             <span className="relative"><Icon className="h-5 w-5" /><Badge count={unread} /></span>
+          ) : it.id === 'espaco' ? (
+            avatarEl(isActive('/escritorio'))
           ) : (
             <Icon className="h-5 w-5" />
           );
