@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/auth-store';
 import { profileService } from '@/features/settings/services/profile.service';
 import { inboxService } from '@/features/inbox/services/inbox.service';
+import { SimpleBarSettings } from '@/features/settings/components/simple-bar-settings';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -202,6 +203,9 @@ export default function PerfilPage() {
             </button>
           </div>
         </div>
+
+        {/* Barra de atalhos do modo simples (o que exibir + ordem) */}
+        <SimpleBarSettings />
       </div>
     </div>
   );

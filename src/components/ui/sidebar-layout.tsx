@@ -70,8 +70,9 @@ export function SidebarLayout({
   return (
     <MobileNavContext.Provider value={{ openSidebar: () => setSidebarOpen(true) }}>
     <div className="relative isolate flex h-svh w-full bg-white max-lg:flex-col lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950">
-      {/* Mobile sidebar overlay */}
-      <Dialog open={sidebarOpen} onClose={setSidebarOpen} className="lg:hidden">
+      {/* Menu lateral em overlay — no mobile (botão Menu do topo/barra) e também no
+          desktop quando o MODO SIMPLES esconde a sidebar fixa (item "Menu" da barra). */}
+      <Dialog open={sidebarOpen} onClose={setSidebarOpen}>
         <DialogBackdrop
           transition
           className="fixed inset-0 bg-black/30 transition-opacity data-[closed]:opacity-0 data-[enter]:duration-300 data-[leave]:duration-200"
