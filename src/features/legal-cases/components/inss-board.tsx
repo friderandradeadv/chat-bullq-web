@@ -198,14 +198,14 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.dropId });
   return (
-    <div className="flex min-h-0 w-[300px] shrink-0 flex-col">
-      <div className="flex h-10 items-center gap-2 px-1">
+    <div className={`flex min-h-0 w-[300px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5 dark:bg-[#7048e8]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/40'}`}>
+      <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} />
         <h2 className="truncate text-sm font-medium" style={{ color: col.color }}>{col.label}</h2>
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
       <div ref={setNodeRef}
-        className={`flex flex-col gap-2.5 rounded-xl border p-2.5 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-black/25'}`}>
+        className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((c) => <InssCard key={c.id} c={c} onOpen={onOpen} onEntrarJudicial={onEntrarJudicial} />)}
       </div>
