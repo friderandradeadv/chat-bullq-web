@@ -46,6 +46,11 @@ export function MobileTabBar() {
       aria-label="Navegação principal"
       className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#1D2125]/95 lg:hidden"
     >
+      <button type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>
+        <Menu className="h-5 w-5" />
+        <span>Menu</span>
+      </button>
+
       <Link href="/inicio" className={linkCls(isActive(['/inicio']))}>
         <Sparkles className="h-5 w-5" />
         <span>Início</span>
@@ -80,11 +85,6 @@ export function MobileTabBar() {
           : <span className={`flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200 text-[8px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`}>{iniciais}</span>}
         <span>Você</span>
       </Link>
-
-      <button type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>
-        <Menu className="h-5 w-5" />
-        <span>Menu</span>
-      </button>
     </nav>
   );
 }
