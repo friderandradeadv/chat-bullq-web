@@ -35,6 +35,7 @@ export interface CompetenciaApurada extends CompetenciaInput {
 export interface DocumentoContabil {
   id: string; comp: string; tipo: string; nome: string;
   url: string; mime: string; size: number; uploadedAt: string;
+  valor?: number | null; pagoEm?: string | null;
 }
 
 export interface PainelContabil {
@@ -69,7 +70,7 @@ export const contabilidadeService = {
     const { data } = await api.get('/contabilidade/documentos');
     return data;
   },
-  async addDocumento(dto: { comp: string; tipo: string; nome: string; mime: string; base64: string }): Promise<DocumentoContabil> {
+  async addDocumento(dto: { comp: string; tipo: string; nome: string; mime: string; base64: string; valor?: number | null; pagoEm?: string | null }): Promise<DocumentoContabil> {
     const { data } = await api.post('/contabilidade/documentos', dto);
     return data;
   },

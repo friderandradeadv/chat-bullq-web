@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import {
   Calculator, LayoutDashboard, Receipt, Users, CalendarClock, FolderOpen, FileText,
   Info, Landmark, TrendingUp, AlertTriangle, CheckCircle2, Clock, Download, Loader2, Upload, X, Database, Trash2, Plus,
+  ChevronLeft, ChevronRight, Calendar, Wallet,
 } from 'lucide-react';
 import { apurar, type AnexoId } from '@/features/contabilidade/lib/simples';
 import {
@@ -493,9 +494,32 @@ function Obrigacoes({ painel }: { painel: PainelContabil }) {
 }
 
 // ─── Documentos ─────────────────────────────────────────────────────────────────
-const DOC_TIPOS = ['Guia DAS', 'Guia INSS', 'Recibo PGDAS', 'Recibo DCTFWeb', 'DEFIS', 'Nota fiscal', 'Outro'];
+const DOC_TIPOS = ['Guia DAS', 'Guia INSS', 'Recibo PGDAS', 'Recibo DCTFWeb', 'DEFIS', 'Nota fiscal', 'Extrato/Folha', 'Recibo pró-labore', 'Honorários contador', 'Outro'];
 const fmtBytes = (n: number) => (n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 const compAtual = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const shiftComp = (comp: string, delta: number) => {
+  const [y, m] = comp.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+function DocRow({ d, onRemove, removing }: { d: DocumentoContabil; onRemove: () => void; removing: boolean }) {
+  return (
+    <li className="flex items-center justify-between gap-2 py-2.5">
+      <span className="flex min-w-0 items-center gap-2 text-sm">
+        <FileText className="h-4 w-4 shrink-0 text-zinc-400" />
+        <a href={d.url} target="_blank" rel="noopener noreferrer" className="truncate text-zinc-700 hover:underline dark:text-zinc-200">{d.nome}</a>
+        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800">{d.tipo}</span>
+        <span className="hidden shrink-0 text-xs text-zinc-400 sm:inline">{fmtBytes(d.size)}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-3 text-xs text-zinc-400">
+        {d.valor != null && <span className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{brl(d.valor)}</span>}
+        <a href={d.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-indigo-600 hover:underline"><Download className="h-3.5 w-3.5" /> abrir</a>
+        <button onClick={onRemove} disabled={removing} className="text-rose-500 hover:text-rose-600 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
+      </span>
+    </li>
+  );
+}
 
 function Documentos() {
   const qc = useQueryClient();
@@ -507,7 +531,14 @@ function Documentos() {
 
   const [comp, setComp] = useState(compAtual());
   const [tipo, setTipo] = useState(DOC_TIPOS[0]);
+  const [valor, setValor] = useState(0);
   const [arquivo, setArquivo] = useState<{ nome: string; mime: string; base64: string } | null>(null);
+
+  // navegação de período (calendário) + "ver todos"
+  const [verTodos, setVerTodos] = useState(false);
+  const periodos = useMemo(() => [...new Set(docs.map((d) => d.comp))].sort((a, b) => b.localeCompare(a)), [docs]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const periodo = cursor ?? periodos[0] ?? compAtual();
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -523,10 +554,10 @@ function Documentos() {
   }
 
   const upload = useMutation({
-    mutationFn: () => contabilidadeService.addDocumento({ comp, tipo, nome: arquivo!.nome, mime: arquivo!.mime, base64: arquivo!.base64 }),
+    mutationFn: () => contabilidadeService.addDocumento({ comp, tipo, nome: arquivo!.nome, mime: arquivo!.mime, base64: arquivo!.base64, valor: valor > 0 ? valor : null }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contabilidade', 'documentos'] });
-      setArquivo(null);
+      setArquivo(null); setValor(0);
       toast.success('Guia arquivada.');
     },
     onError: () => toast.error('Falha ao arquivar (backend indisponível?).'),
@@ -538,12 +569,15 @@ function Documentos() {
     onError: () => toast.error('Falha ao remover.'),
   });
 
-  // agrupa por competência (mais recente primeiro)
+  const doMes = useMemo(() => docs.filter((d) => d.comp === periodo).sort((a, b) => a.tipo.localeCompare(b.tipo)), [docs, periodo]);
   const grupos = useMemo(() => {
     const map = new Map<string, DocumentoContabil[]>();
     for (const d of docs) { const a = map.get(d.comp) ?? []; a.push(d); map.set(d.comp, a); }
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [docs]);
+  const somaValor = (lista: DocumentoContabil[]) => lista.reduce((s, d) => s + (d.valor ?? 0), 0);
+  const totalMes = somaValor(doMes);
+  const totalGeral = somaValor(docs);
 
   return (
     <div className="space-y-4">
@@ -551,7 +585,7 @@ function Documentos() {
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
           <Upload className="h-4 w-4 text-indigo-500" /> Arquivar guia / recibo
         </h3>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Competência">
             <input type="month" value={comp} onChange={(e) => setComp(e.target.value)}
               className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
@@ -562,6 +596,7 @@ function Documentos() {
               {DOC_TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </Field>
+          <Field label="Quanto paguei (opcional)"><MoneyInput value={valor} onChange={setValor} /></Field>
           <Field label="Arquivo (PDF/imagem/XML)">
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/50">
               <FileText className="h-4 w-4 shrink-0" />
@@ -579,42 +614,56 @@ function Documentos() {
       </Card>
 
       <Card>
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-          <FolderOpen className="h-4 w-4 text-indigo-500" /> Cofre de guias {docs.length > 0 && <span className="text-xs font-normal text-zinc-400">({docs.length})</span>}
-        </h3>
+        {/* barra de período (calendário) */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <button onClick={() => { setVerTodos(false); setCursor(shiftComp(periodo, -1)); }}
+              className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ChevronLeft className="h-4 w-4" /></button>
+            <span className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+              <Calendar className="h-4 w-4 text-indigo-500" /> {verTodos ? 'Todos os períodos' : compLabel(periodo)}
+            </span>
+            <button onClick={() => { setVerTodos(false); setCursor(shiftComp(periodo, 1)); }}
+              className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ChevronRight className="h-4 w-4" /></button>
+            <button onClick={() => setVerTodos((v) => !v)}
+              className={`ml-1 rounded-lg px-2 py-1 text-xs font-medium ${verTodos ? 'bg-indigo-600 text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>Todos</button>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm dark:bg-emerald-900/15">
+            <Wallet className="h-4 w-4 text-emerald-500" />
+            <span className="text-zinc-500">Paguei {verTodos ? 'no total' : 'no mês'}:</span>
+            <span className="font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{brl(verTodos ? totalGeral : totalMes)}</span>
+          </div>
+        </div>
+
         {isLoading ? (
           <p className="py-6 text-center text-sm text-zinc-400"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></p>
         ) : docs.length === 0 ? (
           <p className="py-8 text-center text-sm text-zinc-400">
-            Nenhuma guia arquivada ainda. Baixe as guias/recibos da Contabilizei e suba aqui — ficam guardadas por competência.
+            Nenhuma guia arquivada ainda. Baixe as guias/recibos e suba no formulário acima — ficam guardadas por competência.
           </p>
-        ) : (
+        ) : verTodos ? (
           <div className="space-y-4">
             {grupos.map(([g, lista]) => (
               <div key={g}>
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">{compLabel(g)}</p>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{compLabel(g)}</p>
+                  {somaValor(lista) > 0 && <p className="text-xs tabular-nums text-zinc-400">{brl(somaValor(lista))}</p>}
+                </div>
                 <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {lista.map((d) => (
-                    <li key={d.id} className="flex items-center justify-between py-2.5">
-                      <span className="flex min-w-0 items-center gap-2 text-sm">
-                        <FileText className="h-4 w-4 shrink-0 text-zinc-400" />
-                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="truncate text-zinc-700 hover:underline dark:text-zinc-200">{d.nome}</a>
-                        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800">{d.tipo}</span>
-                        <span className="shrink-0 text-xs text-zinc-400">{fmtBytes(d.size)}</span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-3 text-xs text-zinc-400">
-                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-indigo-600 hover:underline"><Download className="h-3.5 w-3.5" /> abrir</a>
-                        <button onClick={() => remover.mutate(d.id)} disabled={remover.isPending} className="flex items-center gap-1 text-rose-500 hover:underline disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </span>
-                    </li>
-                  ))}
+                  {lista.map((d) => <DocRow key={d.id} d={d} onRemove={() => remover.mutate(d.id)} removing={remover.isPending} />)}
                 </ul>
               </div>
             ))}
           </div>
+        ) : doMes.length === 0 ? (
+          <p className="py-8 text-center text-sm text-zinc-400">Nenhum documento em {compLabel(periodo)}. Use ‹ › para navegar ou "Todos".</p>
+        ) : (
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {doMes.map((d) => <DocRow key={d.id} d={d} onRemove={() => remover.mutate(d.id)} removing={remover.isPending} />)}
+          </ul>
         )}
+
         <p className="mt-3 text-xs text-zinc-400">
-          Baixe as guias na Contabilizei (URL assinada, expira em ~30 min) e arquive aqui — ficam permanentes no hub, por competência.
+          Guias e recibos ficam permanentes aqui, por competência. Informe "quanto paguei" pra ver o total do mês.
         </p>
       </Card>
     </div>
