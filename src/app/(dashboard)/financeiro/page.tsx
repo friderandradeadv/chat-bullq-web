@@ -1833,6 +1833,13 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
 
   const openNew = () => setForm({ cliente: '', descricao: '', valorTotal: '', nParcelas: '12', dataISO: toISOInput(hojeBR()), responsavelId: '', conta: contas[0]?.id ?? '' });
 
+  // Filtro por mês (igual o livro-razão): mostra as cobranças com parcela VENCENDO no mês escolhido.
+  const parcMes = (venc: string) => { const m = (venc || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}` : ''; };
+  const [mesF, setMesF] = useState('');
+  const mesesCob = useMemo(() => [...new Set(cobrancas.flatMap((c) => c.parcelas.map((p) => parcMes(p.vencimento))))].filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [cobrancas]);
+  const cobrancasF = useMemo(() => (!mesF ? cobrancas : cobrancas.filter((c) => c.parcelas.some((p) => p.status !== 'paga' && parcMes(p.vencimento) === mesF))), [cobrancas, mesF]);
+  const aReceberMes = useMemo(() => (!mesF ? 0 : cobrancas.flatMap((c) => c.parcelas).filter((p) => p.status !== 'paga' && parcMes(p.vencimento) === mesF).reduce((s, p) => s + p.valor, 0)), [cobrancas, mesF]);
+
   return (
     <>
       <div className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-blue-50 to-white p-5 dark:border-zinc-800 dark:from-blue-900/15 dark:to-zinc-900">
@@ -1854,13 +1861,24 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
         </div>
       </div>
 
+      {mesesCob.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            <CalendarClock className="h-3.5 w-3.5 text-zinc-400" />
+            <select value={mesF} onChange={(e) => setMesF(e.target.value)} className="bg-transparent text-sm font-medium outline-none"><option value="">Todos os meses</option>{mesesCob.map((m) => <option key={m} value={m}>{mesLabel(m)}</option>)}</select>
+          </div>
+          {mesF && <span className="text-sm text-zinc-500">A receber em <strong className="text-zinc-700 dark:text-zinc-200">{mesLabel(mesF)}</strong>: <strong className="tabular-nums text-[#228BE6]">{brl2(aReceberMes)}</strong></span>}
+          {mesF && <button onClick={() => setMesF('')} className="text-xs text-zinc-400 hover:text-zinc-600">limpar</button>}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>
-      ) : cobrancas.length === 0 ? (
-        <Card><p className="py-8 text-center text-sm text-zinc-400">Nenhuma cobrança ainda. Clique em "Nova cobrança" para cadastrar um contrato parcelado.</p></Card>
+      ) : cobrancasF.length === 0 ? (
+        <Card><p className="py-8 text-center text-sm text-zinc-400">{mesF ? `Nenhuma parcela a receber em ${mesLabel(mesF)}.` : 'Nenhuma cobrança ainda. Clique em "Nova cobrança" para cadastrar um contrato parcelado.'}</p></Card>
       ) : (
         <div className="mt-4 space-y-2">
-          {cobrancas.map((c) => {
+          {cobrancasF.map((c) => {
             const s = STATUS_COB[c.statusCalc] ?? STATUS_COB.em_dia;
             const exp = aberta === c.id;
             return (
@@ -2151,6 +2169,10 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
     return { matriz, colUsers, totalGeral };
   }, [retiradas, advs]);
 
+  // Filtro por mês (igual o livro-razão) — a matriz já é mês a mês; aqui você foca num mês só.
+  const [mesRet, setMesRet] = useState('');
+  const matrizF = useMemo(() => (mesRet ? matriz.filter((row) => row.mk === mesRet) : matriz), [matriz, mesRet]);
+
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
   const totalParts = r.porUser.reduce((s, u) => s + u.aReceber, 0);
 
@@ -2170,7 +2192,13 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Crédito do rateio" value={brl(totalParts)} hint="parte dos advogados (informativo)" accent="#7048E8" />
       </div>
 
-      <Card title="Retiradas por mês" sub="quanto cada pessoa retirou em cada mês — espelho do livro-razão.">
+      <Card title="Retiradas por mês" sub="quanto cada pessoa retirou em cada mês — espelho do livro-razão."
+        action={matriz.length > 0 ? (
+          <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            <CalendarClock className="h-3.5 w-3.5 text-zinc-400" />
+            <select value={mesRet} onChange={(e) => setMesRet(e.target.value)} className="bg-transparent text-sm font-medium outline-none"><option value="">Todos os meses</option>{matriz.map((row) => <option key={row.mk} value={row.mk}>{mesLabel(row.mk)}</option>)}</select>
+          </div>
+        ) : undefined}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead>
@@ -2181,21 +2209,21 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
               </tr>
             </thead>
             <tbody>
-              {matriz.map((row) => (
+              {matrizF.map((row) => (
                 <tr key={row.mk} className="border-t border-zinc-100 dark:border-zinc-800">
                   <td className="px-2 py-1.5 text-zinc-600 dark:text-zinc-300">{mesLabel(row.mk)}</td>
                   {colUsers.map((c) => { const v = row.cells.get(c.uk) ?? 0; return <td key={c.uk} className="px-2 py-1.5 text-right tabular-nums text-pink-600">{v ? brl2(v) : '—'}</td>; })}
                   <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(row.tot)}</td>
                 </tr>
               ))}
-              {matriz.length === 0 && <tr><td colSpan={colUsers.length + 2} className="py-8 text-center text-sm text-zinc-400">Nenhuma retirada lançada ainda. Lance na aba Lançamentos.</td></tr>}
+              {matrizF.length === 0 && <tr><td colSpan={colUsers.length + 2} className="py-8 text-center text-sm text-zinc-400">{mesRet ? 'Nenhuma retirada neste mês.' : 'Nenhuma retirada lançada ainda. Lance na aba Lançamentos.'}</td></tr>}
             </tbody>
-            {matriz.length > 0 && (
+            {matrizF.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-zinc-200 text-[13px] font-bold dark:border-zinc-700">
-                  <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">Total</td>
-                  {colUsers.map((c) => { const v = matriz.reduce((s, row) => s + (row.cells.get(c.uk) ?? 0), 0); return <td key={c.uk} className="px-2 py-1.5 text-right tabular-nums text-pink-600">{brl2(v)}</td>; })}
-                  <td className="px-2 py-1.5 text-right tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(totalGeral)}</td>
+                  <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">Total{mesRet ? ' do mês' : ''}</td>
+                  {colUsers.map((c) => { const v = matrizF.reduce((s, row) => s + (row.cells.get(c.uk) ?? 0), 0); return <td key={c.uk} className="px-2 py-1.5 text-right tabular-nums text-pink-600">{brl2(v)}</td>; })}
+                  <td className="px-2 py-1.5 text-right tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(matrizF.reduce((s, row) => s + row.tot, 0))}</td>
                 </tr>
               </tfoot>
             )}
