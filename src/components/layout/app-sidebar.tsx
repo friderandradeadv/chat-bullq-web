@@ -243,13 +243,22 @@ export function AppSidebar() {
           </div>
 
           {modo === 'simples' ? (
-            /* SIMPLES — só os mais acessados, como a barra de baixo no celular */
+            /* SIMPLES — só os mais acessados, como a barra de baixo no celular.
+               Jurídico abre direto a Agenda; os Kanbans ficam à mão logo abaixo.
+               Meu Espaço não entra aqui (já é fixo no rodapé). */
             <div className="space-y-1">
               <NavItem href="/inicio" icon={Sparkles} label="Início" />
               <NavItem href="/inbox" icon={MessageSquare} label="Conversas" badge={unreadConversations} />
-              <NavItem href="/juridico" icon={LayoutList} label="Jurídico" />
+              <NavItem href="/agenda" icon={Scale} label="Jurídico" />
+              <div className="border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
+                <NavSection label="Kanbans" variant="sub" defaultOpen={false}>
+                  <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
+                  <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
+                  <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
+                  <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
+                </NavSection>
+              </div>
               <NavItem href="/juridico/calculos" icon={Calculator} label="Cálculos" />
-              <NavItem href="/escritorio" icon={UserCircle} label="Meu Espaço" />
             </div>
           ) : (
           <>
