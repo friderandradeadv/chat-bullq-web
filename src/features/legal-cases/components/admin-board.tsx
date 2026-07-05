@@ -151,7 +151,7 @@ function AdminCard({ c, onOpen }: { c: KanbanCard; onOpen: (id: string) => void 
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   return (
     <button onClick={() => onOpen(c.id)}
-      className="w-full cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900">
+      className="w-full cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-zinc-900">
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}

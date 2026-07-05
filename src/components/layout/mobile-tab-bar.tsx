@@ -78,7 +78,7 @@ export function MobileTabBar() {
         {user?.avatarUrl
           ? <img src={user.avatarUrl} alt="" className={`h-5 w-5 rounded-full object-cover ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`} />
           : <span className={`flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200 text-[8px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`}>{iniciais}</span>}
-        <span>Espaço</span>
+        <span>Você</span>
       </Link>
 
       <button type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>

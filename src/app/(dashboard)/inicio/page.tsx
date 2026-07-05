@@ -1051,7 +1051,7 @@ export default function InicioPage() {
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-thin">
     <div className="relative flex min-h-full flex-col items-center justify-start px-4 py-8 lg:px-6">
-      <div className="welcome-gradient pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-[#228BE6]/10 via-[#7048E8]/10 to-[#15AABF]/10 dark:from-[#228BE6]/15 dark:via-[#7048E8]/15 dark:to-[#15AABF]/10" />
+      <div className="welcome-gradient pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-[#228BE6]/10 via-[#7048E8]/12 to-[#15AABF]/10 dark:from-[#7048E8]/20 dark:via-[#7048E8]/28 dark:to-[#228BE6]/16" />
 
       {mounted && (
         <div key={burst} className="pointer-events-none absolute inset-x-0 top-0 z-0 h-screen overflow-hidden">

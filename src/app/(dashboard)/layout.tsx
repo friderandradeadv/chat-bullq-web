@@ -142,12 +142,12 @@ export default function DashboardLayout({
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
-          <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5 lg:flex">
+          <div className={`relative hidden shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5 lg:flex ${simples ? 'h-16' : 'h-11'}`}>
             {/* Modo simples: sem sidebar, então a logo (pequena, clicável → Início)
                 aparece no canto superior esquerdo pra não sumir a marca. */}
             {simples && (
               <Link href="/inicio" className="absolute left-4 top-1/2 -translate-y-1/2">
-                <Logo size="sm" className="h-10 w-auto" />
+                <Logo size="sm" className="h-12 w-auto" />
               </Link>
             )}
             <GlobalSearch />

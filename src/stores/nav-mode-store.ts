@@ -39,7 +39,7 @@ export const SIMPLE_BAR_CATALOG: SimpleBarItem[] = [
   { id: 'calculos', label: 'Cálculos', icon: Calculator, href: '/juridico/calculos' },
   { id: 'clientes', label: 'Clientes', icon: Users, href: '/clientes' },
   { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign, href: '/financeiro', adminOnly: true },
-  { id: 'espaco', label: 'Espaço', icon: UserCircle, href: '/escritorio' },
+  { id: 'espaco', label: 'Você', icon: UserCircle, href: '/escritorio' },
   { id: 'config', label: 'Configurações', icon: Settings, href: '/settings' },
   { id: 'copiloto', label: 'Copiloto', icon: Bot, href: '/copiloto', adminOnly: true },
   { id: 'ajuda', label: 'Ajuda', icon: HelpCircle, href: '/ajuda' },
