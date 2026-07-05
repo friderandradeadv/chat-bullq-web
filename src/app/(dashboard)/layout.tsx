@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { SidebarLayout } from '@/components/ui/sidebar-layout';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar';
+import { SimpleTabBar } from '@/components/layout/simple-tab-bar';
+import { useNavMode } from '@/stores/nav-mode-store';
+import { LayoutList, PanelLeft } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { useAuthStore } from '@/stores/auth-store';
 import { authService } from '@/features/auth/services/auth.service';
@@ -49,6 +52,12 @@ export default function DashboardLayout({
   const [isLoading, setIsLoading] = useState(true);
 
   usePermissionsSync();
+
+  // Modo da navegação (desktop): 'simples' esconde a sidebar e usa a barra
+  // inferior (igual ao mobile). Hidrata do localStorage no cliente.
+  const { modo, hydrated, hydrate, setModo } = useNavMode();
+  useEffect(() => { hydrate(); }, [hydrate]);
+  const simples = hydrated && modo === 'simples';
 
   // ── Trava por módulo: redireciona quem não tem acesso à área da rota atual.
   // OWNER/ADMIN têm restrictedModules vazio (vêm assim da API) → nunca barra.
@@ -112,6 +121,7 @@ export default function DashboardLayout({
     // SidebarLayout renderiza) e o painel de notificações compartilham o contexto.
     <NotificationCenterProvider>
       <SidebarLayout
+        hideDesktopSidebar={simples}
         sidebar={<AppSidebar />}
         navbar={
           // Marca centralizada na tela toda (o SidebarLayout posiciona no centro).
@@ -135,6 +145,11 @@ export default function DashboardLayout({
           <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-zinc-200 px-4 dark:border-white/5 lg:flex">
             <GlobalSearch />
             <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
+              {/* Alternador Completo × Simples (simples = navegação na barra de baixo) */}
+              <div className="flex items-center rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+                <button onClick={() => setModo('completo')} title="Menu lateral completo" className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${!simples ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}><PanelLeft className="h-3.5 w-3.5" /> Completo</button>
+                <button onClick={() => setModo('simples')} title="Atalhos na barra de baixo (como no celular)" className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${simples ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}><LayoutList className="h-3.5 w-3.5" /> Simples</button>
+              </div>
               <NotificationBell />
               <ThemeToggle className={bellBtnCls} />
             </div>
@@ -144,9 +159,11 @@ export default function DashboardLayout({
               ZERAR — mas o utilitário custom .pb-tabbar vencia o lg:pb-0 na cascata
               (56px de padding sobravam no rodapé, "cortando" o kanban). O !important
               garante padding-bottom:0 no lg. */}
-          <div className="min-h-0 flex-1 pb-tabbar lg:!pb-0">{children}</div>
+          <div className={`min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
         </div>
         <MobileTabBar />
+        {/* Modo simples: barra de atalhos inferior também no desktop */}
+        {simples && <SimpleTabBar />}
       </SidebarLayout>
     </NotificationCenterProvider>
   );

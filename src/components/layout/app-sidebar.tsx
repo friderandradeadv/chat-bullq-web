@@ -209,14 +209,6 @@ export function AppSidebar() {
   const isAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
   const unreadConversations = useUnreadConversations();
 
-  // Modo da navegação: 'simples' mostra só os atalhos mais usados (como a barra
-  // de baixo no celular); 'completo' abre o menu inteiro. Lembra a escolha.
-  const [modo, setModo] = useState<'simples' | 'completo'>('completo');
-  useEffect(() => {
-    try { const s = localStorage.getItem('nav-mode'); if (s === 'simples' || s === 'completo') setModo(s); } catch { /* */ }
-  }, []);
-  const trocarModo = (m: 'simples' | 'completo') => { setModo(m); try { localStorage.setItem('nav-mode', m); } catch { /* */ } };
-
   return (
     <Sidebar>
       {/* Marca do escritório — clicar no logo leva ao Início (Hub) */}
@@ -228,40 +220,6 @@ export function AppSidebar() {
 
       <SidebarBody>
         <SidebarSection>
-          {/* Alternador Simples × Completo — atalho prático (igual à barra de baixo do celular) */}
-          <div className="mb-2 flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
-            {([['simples', 'Simples', Zap], ['completo', 'Completo', LayoutList]] as const).map(([m, txt, Icon]) => (
-              <button
-                key={m}
-                onClick={() => trocarModo(m)}
-                title={m === 'simples' ? 'Só os atalhos mais usados' : 'Menu completo'}
-                className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${modo === m ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
-              >
-                <Icon className="h-3.5 w-3.5" /> {txt}
-              </button>
-            ))}
-          </div>
-
-          {modo === 'simples' ? (
-            /* SIMPLES — só os mais acessados, como a barra de baixo no celular.
-               Jurídico abre direto a Agenda; os Kanbans ficam à mão logo abaixo.
-               Meu Espaço não entra aqui (já é fixo no rodapé). */
-            <div className="space-y-1">
-              <NavItem href="/inicio" icon={Sparkles} label="Início" />
-              <NavItem href="/inbox" icon={MessageSquare} label="Conversas" badge={unreadConversations} />
-              <NavItem href="/agenda" icon={Scale} label="Jurídico" />
-              <div className="border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
-                <NavSection label="Kanbans" variant="sub" defaultOpen={false}>
-                  <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
-                  <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
-                  <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
-                  <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
-                </NavSection>
-              </div>
-              <NavItem href="/juridico/calculos" icon={Calculator} label="Cálculos" />
-            </div>
-          ) : (
-          <>
           {/* INÍCIO — item avulso no topo (Hub de boas-vindas), fora das seções */}
           <div className="mb-1 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
             <NavItem href="/inicio" icon={Sparkles} label="Início" />
@@ -366,8 +324,6 @@ export function AppSidebar() {
                 <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
               </NavSection>
             </div>
-          )}
-          </>
           )}
 
         </SidebarSection>

@@ -41,6 +41,9 @@ interface SidebarLayoutProps {
   /** Bloco à direita do app bar mobile (ex.: sino + tema). Fica no canto
    *  superior direito; o `navbar` continua centralizado independentemente. */
   navbarRight?: ReactNode;
+  /** MODO SIMPLES: some com a sidebar lateral do desktop (a navegação vira a
+   *  barra inferior, igual ao mobile). Some também o toggle de recolher. */
+  hideDesktopSidebar?: boolean;
   children: ReactNode;
 }
 
@@ -48,6 +51,7 @@ export function SidebarLayout({
   sidebar,
   navbar,
   navbarRight,
+  hideDesktopSidebar = false,
   children,
 }: SidebarLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -91,10 +95,10 @@ export function SidebarLayout({
         </DialogPanel>
       </Dialog>
 
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — some no MODO SIMPLES (navegação vai pra barra inferior) */}
       <div
         className={`fixed inset-y-0 left-0 max-lg:hidden transition-[width] duration-200 ease-in-out ${
-          collapsed ? "w-0" : "w-64"
+          hideDesktopSidebar ? "lg:hidden" : collapsed ? "w-0" : "w-64"
         }`}
       >
         <div
@@ -119,9 +123,9 @@ export function SidebarLayout({
         onClick={toggleCollapsed}
         aria-label={collapsed ? "Abrir menu" : "Recolher menu"}
         title={collapsed ? "Abrir menu" : "Recolher menu"}
-        className={`group fixed bottom-4 z-30 hidden h-7 w-5 items-center justify-center rounded-r-md bg-zinc-100 text-zinc-500 opacity-70 ring-1 ring-zinc-200 transition-all duration-200 ease-in-out hover:bg-zinc-200 hover:text-zinc-900 hover:opacity-100 dark:bg-[#1a1a1a] dark:ring-white/10 dark:hover:bg-zinc-800 dark:hover:text-white lg:flex ${
-          collapsed ? "left-0" : "left-64"
-        }`}
+        className={`group fixed bottom-4 z-30 h-7 w-5 items-center justify-center rounded-r-md bg-zinc-100 text-zinc-500 opacity-70 ring-1 ring-zinc-200 transition-all duration-200 ease-in-out hover:bg-zinc-200 hover:text-zinc-900 hover:opacity-100 dark:bg-[#1a1a1a] dark:ring-white/10 dark:hover:bg-zinc-800 dark:hover:text-white ${
+          hideDesktopSidebar ? "hidden" : "hidden lg:flex"
+        } ${collapsed ? "left-0" : "left-64"}`}
       >
         <ChevronLeft
           className={`size-3.5 transition-transform duration-200 ${
@@ -133,7 +137,7 @@ export function SidebarLayout({
       {/* Content area */}
       <main
         className={`flex flex-1 flex-col min-h-0 lg:min-w-0 transition-[padding] duration-200 ease-in-out ${
-          collapsed ? "lg:pl-0" : "lg:pl-64"
+          hideDesktopSidebar || collapsed ? "lg:pl-0" : "lg:pl-64"
         }`}
       >
         {/* Mobile header (barra app) — respeita a safe-area do topo (notch/ilha).
