@@ -344,7 +344,7 @@ export default function FaseJudicialKanbanPage() {
         <CasesListView byPhase={byPhase} phases={visiblePhases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-3 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-4 pt-3 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} />
@@ -449,7 +449,7 @@ function Column({
       </div>
       <div
         ref={setNodeRef}
-        className={`flex flex-col gap-2 rounded border px-1.5 pb-2 pt-3 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${
+        className={`flex flex-col gap-2.5 rounded-xl border p-2.5 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${
           isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'
         }`}
       >
@@ -505,7 +505,7 @@ const Card = memo(function Card({
         const d = down.current;
         if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
       }}
-      className={`cursor-pointer touch-none rounded border border-[#cfe0ed] bg-white py-3 pl-2 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${
+      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800 ${
         isDragging && !overlay ? 'opacity-40' : ''
       } ${overlay ? 'rotate-2 shadow-lg' : ''}`}
     >

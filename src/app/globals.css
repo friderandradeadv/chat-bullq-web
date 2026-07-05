@@ -33,29 +33,40 @@
 }
 
 .dark {
-  --color-background: oklch(0.145 0 0);
+  /* Dark "cinza" (estética Trello: só cor, sem wallpaper) — superfícies em tons
+     de cinza, não preto. Hierarquia: fundo < card < elevado. */
+  --color-background: #1a1b1e;          /* fundo da página */
   --color-foreground: oklch(0.985 0 0);
-  --color-card: oklch(0.205 0 0);
+  --color-card: #242529;                /* cards / colunas / painéis */
   --color-card-foreground: oklch(0.985 0 0);
-  --color-popover: oklch(0.205 0 0);
+  --color-popover: #242529;
   --color-popover-foreground: oklch(0.985 0 0);
   --color-primary: oklch(0.708 0.165 254.624);
   --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: oklch(0.269 0 0);
+  --color-secondary: #2f3035;           /* elevado / hover */
   --color-secondary-foreground: oklch(0.985 0 0);
-  --color-muted: oklch(0.269 0 0);
+  --color-muted: #2f3035;
   --color-muted-foreground: oklch(0.708 0 0);
-  --color-accent: oklch(0.269 0 0);
+  --color-accent: #2f3035;
   --color-accent-foreground: oklch(0.985 0 0);
   --color-destructive: oklch(0.577 0.245 27.325);
-  --color-border: oklch(0.3 0 0);
-  --color-input: oklch(0.3 0 0);
+  --color-border: #34353b;
+  --color-input: #34353b;
   --color-ring: oklch(0.708 0.165 254.624);
-  --color-sidebar: oklch(0.205 0 0);
+  --color-sidebar: #1a1b1e;
   --color-sidebar-foreground: oklch(0.985 0 0);
-  --color-sidebar-border: oklch(0.3 0 0);
-  --color-sidebar-accent: oklch(0.269 0 0);
+  --color-sidebar-border: #34353b;
+  --color-sidebar-accent: #2f3035;
   --color-sidebar-accent-foreground: oklch(0.985 0 0);
+
+  /* Vira a escala zinc de preto → cinza numa tacada (a plataforma usa muito
+     dark:bg-zinc-900/800/950 e dark:border-zinc-800). Como no Tailwind v4 essas
+     cores são var(), redefini-las aqui reflete em TODA a plataforma (kanban,
+     agenda, financeiro, sidebar…) sem mexer arquivo por arquivo. */
+  --color-zinc-950: #1a1b1e;   /* era #09090b (quase preto) → fundo */
+  --color-zinc-900: #242529;   /* era #18181b → cards/colunas/painéis */
+  --color-zinc-800: #2f3035;   /* era #27272a → hover/bordas/secundário */
+  --color-zinc-700: #3b3c43;   /* era #3f3f46 → bordas/divisores mais fortes */
 }
 
 @layer base {

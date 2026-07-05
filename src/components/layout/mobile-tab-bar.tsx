@@ -15,7 +15,7 @@ import { useUnreadConversations } from '@/features/notifications/use-unread-conv
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#0d0d0d]">
+    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#1a1b1e]">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -43,7 +43,7 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="Navegação principal"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#0d0d0d]/95 lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#1a1b1e]/95 lg:hidden"
     >
       <Link href="/inicio" className={linkCls(isActive(['/inicio']))}>
         <Sparkles className="h-5 w-5" />
