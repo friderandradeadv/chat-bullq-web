@@ -10,11 +10,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Calculator, LayoutDashboard, Receipt, Users, CalendarClock, FolderOpen, FileText,
-  Info, Landmark, TrendingUp, AlertTriangle, CheckCircle2, Clock, Download, Loader2, Upload, X, Database,
+  Info, Landmark, TrendingUp, AlertTriangle, CheckCircle2, Clock, Download, Loader2, Upload, X, Database, Trash2, Plus,
 } from 'lucide-react';
 import { apurar, type AnexoId } from '@/features/contabilidade/lib/simples';
 import {
-  contabilidadeService, derivarPainelLocal, type PainelContabil, type CompetenciaApurada, type GuiaStatus,
+  contabilidadeService, derivarPainelLocal, type PainelContabil, type CompetenciaApurada, type GuiaStatus, type DocumentoContabil,
 } from '@/features/contabilidade/services/contabilidade.service';
 import {
   EMPRESA, COMPETENCIAS, SNAPSHOT_CAPTURA, DECLARACOES_ANUAIS, GUIA_LABEL, compLabel,
@@ -493,36 +493,131 @@ function Obrigacoes({ painel }: { painel: PainelContabil }) {
 }
 
 // ─── Documentos ─────────────────────────────────────────────────────────────────
+const DOC_TIPOS = ['Guia DAS', 'Guia INSS', 'Recibo PGDAS', 'Recibo DCTFWeb', 'DEFIS', 'Nota fiscal', 'Outro'];
+const fmtBytes = (n: number) => (n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const compAtual = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+
 function Documentos() {
-  const docs = [
-    { nome: 'PGDASD-DAS fev-2026.pdf', tipo: 'Guia DAS', data: '2026-03-01' },
-    { nome: 'DARF Unificado fev-2026.pdf', tipo: 'Guia INSS', data: '2026-03-01' },
-    { nome: 'DEFIS recibo 2025.pdf', tipo: 'Declaração', data: '2026-03-28' },
-  ];
+  const qc = useQueryClient();
+  const { data: docs = [], isLoading } = useQuery({
+    queryKey: ['contabilidade', 'documentos'],
+    queryFn: () => contabilidadeService.listDocumentos(),
+    retry: false,
+  });
+
+  const [comp, setComp] = useState(compAtual());
+  const [tipo, setTipo] = useState(DOC_TIPOS[0]);
+  const [arquivo, setArquivo] = useState<{ nome: string; mime: string; base64: string } | null>(null);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 20 * 1024 * 1024) { toast.error('Arquivo muito grande (máx 20MB).'); return; }
+    const base64 = await new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+    setArquivo({ nome: f.name, mime: f.type || 'application/pdf', base64 });
+  }
+
+  const upload = useMutation({
+    mutationFn: () => contabilidadeService.addDocumento({ comp, tipo, nome: arquivo!.nome, mime: arquivo!.mime, base64: arquivo!.base64 }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contabilidade', 'documentos'] });
+      setArquivo(null);
+      toast.success('Guia arquivada.');
+    },
+    onError: () => toast.error('Falha ao arquivar (backend indisponível?).'),
+  });
+
+  const remover = useMutation({
+    mutationFn: (id: string) => contabilidadeService.removeDocumento(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['contabilidade', 'documentos'] }); toast.success('Removido.'); },
+    onError: () => toast.error('Falha ao remover.'),
+  });
+
+  // agrupa por competência (mais recente primeiro)
+  const grupos = useMemo(() => {
+    const map = new Map<string, DocumentoContabil[]>();
+    for (const d of docs) { const a = map.get(d.comp) ?? []; a.push(d); map.set(d.comp, a); }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [docs]);
+
   return (
-    <Card>
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-        <FolderOpen className="h-4 w-4 text-indigo-500" /> Documentos contábeis <Tag>referência</Tag>
-      </h3>
-      <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-        {docs.map((d, i) => (
-          <li key={i} className="flex items-center justify-between py-2.5">
-            <span className="flex items-center gap-2 text-sm">
-              <FileText className="h-4 w-4 text-zinc-400" />
-              <span className="text-zinc-700 dark:text-zinc-200">{d.nome}</span>
-              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800">{d.tipo}</span>
-            </span>
-            <span className="flex items-center gap-3 text-xs text-zinc-400">
-              {dt(d.data)}
-              <button className="flex items-center gap-1 text-indigo-600 hover:underline"><Download className="h-3.5 w-3.5" /> baixar</button>
-            </span>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-3 text-xs text-zinc-400">
-        Os PDFs da Contabilizei vêm por URL assinada temporária (GCS, ~30 min) — no backend a gente baixa e arquiva por competência.
-      </p>
-    </Card>
+    <div className="space-y-4">
+      <Card>
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+          <Upload className="h-4 w-4 text-indigo-500" /> Arquivar guia / recibo
+        </h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Competência">
+            <input type="month" value={comp} onChange={(e) => setComp(e.target.value)}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
+          </Field>
+          <Field label="Tipo">
+            <select value={tipo} onChange={(e) => setTipo(e.target.value)}
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+              {DOC_TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </Field>
+          <Field label="Arquivo (PDF/imagem/XML)">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/50">
+              <FileText className="h-4 w-4 shrink-0" />
+              <span className="truncate">{arquivo ? arquivo.nome : 'escolher arquivo…'}</span>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xml,application/pdf,image/*,application/xml" className="hidden" onChange={onPick} />
+            </label>
+          </Field>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <button onClick={() => upload.mutate()} disabled={!arquivo || upload.isPending}
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+            {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Arquivar
+          </button>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+          <FolderOpen className="h-4 w-4 text-indigo-500" /> Cofre de guias {docs.length > 0 && <span className="text-xs font-normal text-zinc-400">({docs.length})</span>}
+        </h3>
+        {isLoading ? (
+          <p className="py-6 text-center text-sm text-zinc-400"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></p>
+        ) : docs.length === 0 ? (
+          <p className="py-8 text-center text-sm text-zinc-400">
+            Nenhuma guia arquivada ainda. Baixe as guias/recibos da Contabilizei e suba aqui — ficam guardadas por competência.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {grupos.map(([g, lista]) => (
+              <div key={g}>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400">{compLabel(g)}</p>
+                <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {lista.map((d) => (
+                    <li key={d.id} className="flex items-center justify-between py-2.5">
+                      <span className="flex min-w-0 items-center gap-2 text-sm">
+                        <FileText className="h-4 w-4 shrink-0 text-zinc-400" />
+                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="truncate text-zinc-700 hover:underline dark:text-zinc-200">{d.nome}</a>
+                        <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800">{d.tipo}</span>
+                        <span className="shrink-0 text-xs text-zinc-400">{fmtBytes(d.size)}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3 text-xs text-zinc-400">
+                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-indigo-600 hover:underline"><Download className="h-3.5 w-3.5" /> abrir</a>
+                        <button onClick={() => remover.mutate(d.id)} disabled={remover.isPending} className="flex items-center gap-1 text-rose-500 hover:underline disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-3 text-xs text-zinc-400">
+          Baixe as guias na Contabilizei (URL assinada, expira em ~30 min) e arquive aqui — ficam permanentes no hub, por competência.
+        </p>
+      </Card>
+    </div>
   );
 }
 

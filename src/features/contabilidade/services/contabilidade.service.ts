@@ -32,9 +32,15 @@ export interface CompetenciaApurada extends CompetenciaInput {
   totalMes: number;
 }
 
+export interface DocumentoContabil {
+  id: string; comp: string; tipo: string; nome: string;
+  url: string; mime: string; size: number; uploadedAt: string;
+}
+
 export interface PainelContabil {
   empresa: EmpresaContabil;
   competencias: CompetenciaApurada[];
+  documentos?: DocumentoContabil[];
   resumo: { meses: number; totalRecolhido: number; tetoInss: number };
 }
 
@@ -57,6 +63,18 @@ export const contabilidadeService = {
   },
   async importar(payload: { empresa?: Partial<EmpresaContabil>; competencias?: CompetenciaInput[] }, commit: boolean) {
     const { data } = await api.post('/contabilidade/importar', { ...payload, commit });
+    return data;
+  },
+  async listDocumentos(): Promise<DocumentoContabil[]> {
+    const { data } = await api.get('/contabilidade/documentos');
+    return data;
+  },
+  async addDocumento(dto: { comp: string; tipo: string; nome: string; mime: string; base64: string }): Promise<DocumentoContabil> {
+    const { data } = await api.post('/contabilidade/documentos', dto);
+    return data;
+  },
+  async removeDocumento(id: string): Promise<DocumentoContabil[]> {
+    const { data } = await api.delete(`/contabilidade/documentos/${id}`);
     return data;
   },
 };
