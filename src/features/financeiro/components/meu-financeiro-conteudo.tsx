@@ -482,11 +482,13 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                         <span className="flex flex-wrap gap-1">
                           {c.produto && <span className="rounded-full bg-[#228BE6]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#228BE6]">{c.produto}</span>}
                           {c.area && c.area !== c.produto && <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">{c.area}</span>}
+                          {c.projeta === false && <span title="ainda é lead — só entra na previsão quando virar processo (INSS/ação)" className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">lead</span>}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{c.valorCausa > 0 ? brl(c.valorCausa) : '—'}</td>
-                      <td className="hidden whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[#228BE6] md:table-cell">{c.escritorioValor > 0 ? <>{brl(c.escritorioValor)} <span className="text-[10px] text-zinc-400">{c.firmPct}%</span></> : '—'}</td>
-                      <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-[#7048E8]">{c.liquido > 0 ? brl(c.liquido) : '—'}</td>
+                      {/* Lead (pré-processo) não gera valor de carteira — colunas de dinheiro em branco. */}
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{c.projeta !== false && c.valorCausa > 0 ? brl(c.valorCausa) : '—'}</td>
+                      <td className="hidden whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-[#228BE6] md:table-cell">{c.projeta !== false && c.escritorioValor > 0 ? <>{brl(c.escritorioValor)} <span className="text-[10px] text-zinc-400">{c.firmPct}%</span></> : '—'}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-[#7048E8]">{c.projeta !== false && c.liquido > 0 ? brl(c.liquido) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

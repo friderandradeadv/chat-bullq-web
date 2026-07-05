@@ -64,7 +64,7 @@ export default function EscritorioPage() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Escritorio>(EMPTY);
   const [tab, setTab] = useState<string>('perfil'); // aba ativa (só a ativa é renderizada)
-  const [estruturaSub, setEstruturaSub] = useState<string>('organograma'); // subaba da Estrutura
+  const [estruturaSub, setEstruturaSub] = useState<string>('contrato'); // subaba da Estrutura (abre no Meu Contrato)
   const [verComo, setVerComo] = useState<string | null>(null); // sócio monitorando o espaço de outra pessoa
   const alvoUserId = (verComo && data.canEdit) ? verComo : user?.id;
   // Financeiro pessoal (do usuário logado, ou de quem o sócio está monitorando).
@@ -184,7 +184,7 @@ export default function EscritorioPage() {
 
         {/* Abas — só a ativa é renderizada */}
         <div className="sticky top-0 z-10 -mx-4 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa]/95 px-4 py-2 backdrop-blur lg:-mx-6 lg:px-6 dark:border-zinc-800 dark:bg-zinc-950/95">
-          {([['perfil', 'Meu Perfil', UserCircle], ['contrato', 'Meu Contrato', ScrollText], ['financeiro', 'Financeiro', CircleDollarSign], ['estrutura', 'Estrutura', Building2], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
+          {([['perfil', 'Meu Perfil', UserCircle], ['financeiro', 'Financeiro', CircleDollarSign], ['estrutura', 'Estrutura', Building2], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
@@ -270,18 +270,6 @@ export default function EscritorioPage() {
         </>)}
         </>)}
 
-        {/* ─────────── ABA: MEU CONTRATO (o cargo/contrato da pessoa, em texto claro) ─────────── */}
-        {tab === 'contrato' && (
-          <MeuContrato
-            info={alvoInfo}
-            cargo={alvoCargo}
-            proprio={!vendoOutro}
-            canEdit={data.canEdit}
-            onEditCargo={data.canEdit && alvoCargo ? () => setEditCargoId(alvoCargo.id) : undefined}
-            onEditPessoa={data.canEdit && alvoUserId ? () => setPerfilUserId(alvoUserId) : undefined}
-          />
-        )}
-
         {/* ─────────── ABA: FINANCEIRO (só renderiza ao clicar) ─────────── */}
         {tab === 'financeiro' && (<>
           {alvoInfo?.financeiro?.some((x) => x.includes('%')) && (
@@ -303,18 +291,32 @@ export default function EscritorioPage() {
             : <div className={`${CARD} text-sm text-zinc-400`}>{meuFin ? 'Ainda não há lançamentos ou casos vinculados a você.' : 'Carregando seu financeiro…'}</div>}
         </>)}
 
-        {/* ─────────── ABA: ESTRUTURA (subabas: organograma · carreira · verticais · escritório) ─────────── */}
+        {/* ─────────── ABA: ESTRUTURA (subabas: meu contrato · carreira · organograma · verticais · escritório) ─────────── */}
         {tab === 'estrutura' && (<>
-        <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Building2 className="h-4 w-4 text-[#f08c00]" /> Estrutura do escritório</h2>
+        {estruturaSub !== 'contrato' && (
+          <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><Building2 className="h-4 w-4 text-[#f08c00]" /> Estrutura do escritório</h2>
+        )}
 
         {/* Subabas da Estrutura */}
         <div className="mt-3 flex gap-1 overflow-x-auto rounded-xl border border-zinc-200/70 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">
-          {([['organograma', 'Organograma', Network], ['carreira', 'Carreira', Rocket], ['verticais', 'Verticais', Layers], ['escritorio', 'Escritório', Landmark]] as const).map(([key, label, Icon]) => (
+          {([['contrato', 'Meu Contrato', ScrollText], ['carreira', 'Carreira', Rocket], ['organograma', 'Organograma', Network], ['verticais', 'Verticais', Layers], ['escritorio', 'Escritório', Landmark]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setEstruturaSub(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${estruturaSub === key ? 'bg-[#f08c00] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}
             </button>
           ))}
         </div>
+
+        {/* SUB: MEU CONTRATO (o cargo/contrato da pessoa, em texto claro) */}
+        {estruturaSub === 'contrato' && (
+          <MeuContrato
+            info={alvoInfo}
+            cargo={alvoCargo}
+            proprio={!vendoOutro}
+            canEdit={data.canEdit}
+            onEditCargo={data.canEdit && alvoCargo ? () => setEditCargoId(alvoCargo.id) : undefined}
+            onEditPessoa={data.canEdit && alvoUserId ? () => setPerfilUserId(alvoUserId) : undefined}
+          />
+        )}
 
         {/* SUB: ORGANOGRAMA (+ edição de cargos, atribuição de cargo, aplicar acessos) */}
         {estruturaSub === 'organograma' && (<>
