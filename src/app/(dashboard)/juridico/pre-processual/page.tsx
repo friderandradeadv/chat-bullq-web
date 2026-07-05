@@ -183,7 +183,7 @@ function Column({ phase, items, onOpen, onProtocolar, onChanged, canRename, onRe
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
-      <div ref={setNodeRef} className={`flex flex-col gap-2.5 rounded-xl border p-2.5 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'}`}>
+      <div ref={setNodeRef} className={`flex flex-col gap-2.5 rounded-xl border p-2.5 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-black/25'}`}>
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((c) => <Card key={c.id} c={c} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
       </div>
@@ -202,7 +202,7 @@ function Card({ c, onOpen, onProtocolar, onChanged }: { c: KanbanCard; onOpen?: 
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id); }}
-      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800 ${isDragging ? 'opacity-40' : ''}`}>
+      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${isDragging ? 'opacity-40' : ''}`}>
       {/* Etiquetas: produto (cor) + área (cinza) */}
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}

@@ -450,7 +450,7 @@ function Column({
       <div
         ref={setNodeRef}
         className={`flex flex-col gap-2.5 rounded-xl border p-2.5 transition-colors lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${
-          isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-zinc-900/40'
+          isOver ? 'border-[#e11970] bg-[#e11970]/5' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-zinc-800 dark:bg-black/25'
         }`}
       >
         {items.length === 0 && (
@@ -505,7 +505,7 @@ const Card = memo(function Card({
         const d = down.current;
         if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
       }}
-      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800 ${
+      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${
         isDragging && !overlay ? 'opacity-40' : ''
       } ${overlay ? 'rotate-2 shadow-lg' : ''}`}
     >

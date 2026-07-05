@@ -147,7 +147,7 @@ export default function DashboardLayout({
                 aparece no canto superior esquerdo pra não sumir a marca. */}
             {simples && (
               <Link href="/inicio" className="absolute left-4 top-1/2 -translate-y-1/2">
-                <Logo size="sm" className="h-6 w-auto" />
+                <Logo size="sm" className="h-10 w-auto" />
               </Link>
             )}
             <GlobalSearch />
