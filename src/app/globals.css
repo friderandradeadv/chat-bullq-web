@@ -372,15 +372,20 @@
 .welcome-pop { animation: welcome-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .welcome-float { animation: welcome-float 4.5s ease-in-out infinite; }
 
-/* ── Barra superior de VIDRO REAL ──
-   Um wallpaper (montanhas escuras + brilho central, /topbar-bg.svg) fica ATRÁS da
-   barra (só dela). A barra é translúcida + blur e o backdrop-filter REVELA a foto
-   borrada — vidro de verdade, igual ao Trello. Como o wallpaper é escuro e fica só
-   atrás da barra, funciona idêntico nos DOIS modos (claro e escuro); a barra
-   continua escura com controles claros (classe literal `dark`). !important pra
-   vencer o `bg-[#1D2125]` utilitário. */
+/* ── Barra superior de VIDRO REAL (opção B) ──
+   A barra é SOBREPOSTA (absolute) e translúcida + blur. O conteúdo de cada página
+   rola POR BAIXO dela e o backdrop-filter revela o próprio conteúdo borrado — o
+   mecanismo genuíno do Trello, sem foto. `under-bar > *` dá um respiro no topo de
+   cada página (só desktop) pra o conteúdo começar abaixo da barra e rolar por
+   baixo. A barra fica escura (controles claros, classe literal `dark`) nos 2 modos.
+   !important pra vencer o `bg-[#1D2125]` utilitário. */
 .topbar-glass {
-  background: rgba(18, 21, 25, 0.28) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  backdrop-filter: blur(18px) saturate(1.3);
+  background: rgba(20, 23, 27, 0.55) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+@media (min-width: 1024px) {
+  .under-bar > * {
+    padding-top: 2.75rem; /* h-11 = altura da barra sobreposta */
+  }
 }

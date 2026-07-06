@@ -142,29 +142,12 @@ export default function DashboardLayout({
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
-          {/* Barra superior de VIDRO REAL: um wallpaper (montanhas escuras + brilho
-              central, /topbar-bg.svg) fica atrás SÓ da barra; a barra translúcida +
-              blur REVELA a foto borrada — vidro de verdade, igual ao Trello. Como o
-              wallpaper é escuro e só atrás da barra, funciona idêntico nos DOIS
-              modos. A classe `dark` faz os controles internos (busca, toggle, sino,
-              tema) herdarem o estilo escuro e casarem com a barra. */}
-          <div className="relative hidden shrink-0 lg:block">
-            {/* Substrato: o wallpaper que o vidro revela (só atrás da barra). */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0"
-              style={{
-                backgroundColor: '#101316',
-                backgroundImage: "url('/topbar-bg.jpg')",
-                backgroundSize: 'cover',
-                // 55% = a fatia do vale (parte mais clara da imagem). brightness
-                // clareia a imagem (que é bem escura) pro vidro ter o que revelar.
-                backgroundPosition: 'center 55%',
-                backgroundRepeat: 'no-repeat',
-                filter: 'brightness(2.2) contrast(1.06)',
-              }}
-            />
-          <div className="topbar-glass dark relative z-10 flex h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
+          {/* Barra superior de VIDRO REAL (opção B): SOBREPOSTA e translúcida. O
+              conteúdo da página rola POR BAIXO dela e o blur revela ele borrado — o
+              mecanismo genuíno do Trello. `absolute` tira a barra do fluxo; o respiro
+              no topo de cada página vem do `.under-bar` (globals). A classe `dark`
+              faz os controles (busca, toggle, sino, tema) herdarem o estilo escuro. */}
+          <div className="topbar-glass dark absolute inset-x-0 top-0 z-30 hidden h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] lg:flex">
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
                 canto superior esquerdo — versão clara pra contrastar na barra escura. */}
             {simples && (
@@ -183,13 +166,12 @@ export default function DashboardLayout({
               <ThemeToggle className={bellBtnCls} />
             </div>
           </div>
-          </div>
           {/* Conteúdo — no mobile reserva espaço p/ a barra de abas (pb-tabbar). */}
           {/* pb-tabbar dá espaço pra barra de abas do mobile; no desktop tem que
               ZERAR — mas o utilitário custom .pb-tabbar vencia o lg:pb-0 na cascata
               (56px de padding sobravam no rodapé, "cortando" o kanban). O !important
               garante padding-bottom:0 no lg. */}
-          <div className={`min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
+          <div className={`under-bar min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
         </div>
         <MobileTabBar />
         {/* Modo simples: barra de atalhos inferior também no desktop */}
