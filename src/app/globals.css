@@ -380,13 +380,12 @@
    baixo. A barra fica escura (controles claros, classe literal `dark`) nos 2 modos.
    !important pra vencer o `bg-[#1D2125]` utilitário. */
 .topbar-glass {
-  /* MODO CLARO — dark vibrancy: além do blur, ESCURECE o que está atrás
-     (brightness) pra o vidro ficar no tom escuro do Trello E ainda revelar o
-     conteúdo borrado por baixo (mesma sensação de vidro do modo escuro). Sem o
-     brightness, translúcido sobre branco viraria cinza lavado. */
-  background: rgba(29, 33, 37, 0.4) !important;
-  -webkit-backdrop-filter: blur(30px) brightness(0.48) saturate(1.2);
-  backdrop-filter: blur(30px) brightness(0.48) saturate(1.2);
+  /* MODO CLARO: MESMA cor do modo escuro (#1D2125). Sobre página branca, pra
+     ficar exatamente nesse tom, o vidro precisa ser quase sólido (translucidez
+     de verdade no claro só existe clareando a cor). Prioriza a cor igual ao dark. */
+  background: rgba(29, 33, 37, 0.96) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.15);
+  backdrop-filter: blur(30px) saturate(1.15);
 }
 /* MODO ESCURO: BEM translúcido, sem escurecer (o fundo já é escuro) — o blur
    revela bastante o conteúdo borrado por baixo ao rolar. */
