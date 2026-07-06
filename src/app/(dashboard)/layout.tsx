@@ -145,17 +145,14 @@ export default function DashboardLayout({
           {/* Barra superior de VIDRO REAL (opção B): SOBREPOSTA e translúcida. O
               conteúdo da página rola POR BAIXO dela e o blur revela ele borrado — o
               mecanismo genuíno do Trello. `absolute` tira a barra do fluxo; o respiro
-              no topo de cada página vem do `.under-bar` (globals). SEM a classe
-              `dark`: os controles (busca, toggle, sino, tema) seguem o TEMA REAL —
-              escuros no claro, claros no escuro — pra não sumirem quando o vidro
-              fica bem translúcido/claro no modo claro. */}
-          <div className="topbar-glass absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center border-b border-black/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] dark:border-white/10 lg:flex">
-            {/* Modo simples: a MARCA minimalista (FA. clicável → Início) — escura no
-                modo claro, clara no escuro, pra contrastar com a barra. */}
+              no topo de cada página vem do `.under-bar` (globals). A classe `dark`
+              mantém os controles (busca, toggle, sino, tema) e o logo SEMPRE claros
+              (barra escura clássica). */}
+          <div className="topbar-glass dark absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] lg:flex">
+            {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início). */}
             {simples && (
               <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
-                <img src="/favicon-light.png" alt="Início" className="h-8 w-8 object-contain dark:hidden" />
-                <img src="/favicon-dark.png" alt="Início" className="hidden h-8 w-8 object-contain dark:block" />
+                <img src="/favicon-dark.png" alt="Início" className="h-8 w-8 object-contain" />
               </Link>
             )}
             <GlobalSearch />
