@@ -103,7 +103,7 @@ export const calculadoraCsService = {
     files.forEach((f) => fd.append('files', f));
     const { data } = await api.post('/calculadora-cs/extrair-sentenca', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 180000, // leitura + IA pode levar alguns segundos
+      timeout: 300000, // leitura + IA de sentença longa pode passar de 2 min
     });
     return data.data ?? data;
   },

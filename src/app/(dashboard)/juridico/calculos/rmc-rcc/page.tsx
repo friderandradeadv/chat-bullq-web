@@ -137,6 +137,9 @@ const TIPOS = ['RMC', 'RCC'] as const;
 type ResultadoRmcExt = ResultadoRmc & { csSuc?: ResultadoCsAvulso };
 
 export default function CalculadoraRmcPage() {
+  // Fase do cálculo: "inicial" = 3 cenários de pedido (página limpa, sem CS);
+  // "cs" = cumprimento de sentença (tutela + sucumbência + multa do 523).
+  const [fase, setFase] = useState<'inicial' | 'cs'>('inicial');
   const [form, setForm] = useState({
     nomeCalculo: '',
     tipo: 'RMC' as (typeof TIPOS)[number],
@@ -166,6 +169,10 @@ export default function CalculadoraRmcPage() {
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     setCaseId(sp.get('case'));
+    if (sp.get('fase') === 'cs') {
+      setFase('cs');
+      setCs((c) => ({ ...c, ativar: true }));
+    }
     const banco = sp.get('banco');
     const cliente = sp.get('cliente');
     const tipo = sp.get('tipo');
@@ -248,11 +255,12 @@ export default function CalculadoraRmcPage() {
     [parcelas],
   );
   const parcelasExtras = useMemo(() => {
-    if (tutela.deferida || !ultimaParcela || !form.dataBase) return [] as ParcelaInput[];
+    if (fase !== 'cs' || tutela.deferida || !ultimaParcela || !form.dataBase)
+      return [] as ParcelaInput[];
     const v = parseValor(tutela.valorMensal);
     const valor = !isNaN(v) && v > 0 ? v : ultimaParcela.valor;
     return gerarParcelasPosteriores(ultimaParcela.data, form.dataBase, valor);
-  }, [tutela, ultimaParcela, form.dataBase]);
+  }, [fase, tutela, ultimaParcela, form.dataBase]);
   // HISCON/HISCRE costumam ser da época da inicial: quantos meses as parcelas
   // estão "atrasadas" em relação à data-base (0 = em dia).
   const defasagemMeses = useMemo(() => {
@@ -290,8 +298,9 @@ export default function CalculadoraRmcPage() {
         nomeCalculo: form.nomeCalculo || undefined,
         parcelas: [...parcelas, ...parcelasExtras],
       };
-      setCsInfo({ honFixado: cs.ativar && cs.sucBase === 'valorFixado' });
-      if (cs.ativar && cs.execucao === 'restituicao') {
+      const csAtivo = fase === 'cs' && cs.ativar;
+      setCsInfo({ honFixado: csAtivo && cs.sucBase === 'valorFixado' });
+      if (csAtivo && cs.execucao === 'restituicao') {
         const vc = parseValor(cs.valorCausa);
         const vf = parseValor(cs.valorFixado);
         payload.cs = {
@@ -326,7 +335,7 @@ export default function CalculadoraRmcPage() {
       // Obrigação de fazer: a restituição vira abatimento no recálculo — o que se
       // executa em dinheiro são só os honorários. Calculamos a execução à parte
       // (motor de atualização de débitos), com os honorários como principal.
-      if (cs.ativar && cs.execucao === 'soSucumbencia') {
+      if (csAtivo && cs.execucao === 'soSucumbencia') {
         const pctSuc = parseValor(cs.sucPercentual) || 0;
         const vc = parseValor(cs.valorCausa) || 0;
         const valor =
@@ -689,6 +698,35 @@ export default function CalculadoraRmcPage() {
         <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
           {/* ── Coluna de entrada ─────────────────────────────────────────── */}
           <div className="space-y-4">
+            {/* Fase do cálculo */}
+            <div className={cardCls}>
+              <label className={labelCls}>Fase do cálculo</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFase('inicial')}
+                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${fase === 'inicial' ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500/50 dark:bg-blue-500/15 dark:text-blue-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  Cálculo da inicial
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFase('cs');
+                    setCs((c) => ({ ...c, ativar: true }));
+                  }}
+                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${fase === 'cs' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  Cumprimento de sentença
+                </button>
+              </div>
+              <p className="mt-2 text-[10px] leading-tight text-zinc-400">
+                {fase === 'inicial'
+                  ? 'Os 3 cenários de pedido para a petição inicial (HISCON/HISCRE atuais).'
+                  : 'Execução: HISCON/HISCRE da época da inicial + tutela + sucumbência + multa do art. 523.'}
+              </p>
+            </div>
+
             {/* Importar documentos (HISCON + HISCRE) */}
             <div className={cardCls}>
               <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
@@ -1054,7 +1092,8 @@ export default function CalculadoraRmcPage() {
               </div>
             </div>
 
-            {/* Tutela / descontos continuados */}
+            {/* Tutela / descontos continuados — só no cumprimento de sentença */}
+            {fase === 'cs' && (
             <div className={cardCls}>
               <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
                 <ShieldAlert className="h-4 w-4 text-amber-500" /> Tutela deferida?{' '}
@@ -1125,8 +1164,10 @@ export default function CalculadoraRmcPage() {
                 </div>
               )}
             </div>
+            )}
 
-            {/* Cumprimento de Sentença (opcional) */}
+            {/* Cumprimento de Sentença — só na fase de execução */}
+            {fase === 'cs' && (
             <div className={cardCls}>
               <label className="flex items-start gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
                 <input
@@ -1360,6 +1401,7 @@ export default function CalculadoraRmcPage() {
                 </div>
               )}
             </div>
+            )}
 
             <button
               type="button"
@@ -1368,7 +1410,7 @@ export default function CalculadoraRmcPage() {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {calc.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {cs.ativar ? 'Calcular RMC + Cumprimento de Sentença' : 'Calcular os 3 cenários'}
+              {fase === 'cs' && cs.ativar ? 'Calcular RMC + Cumprimento de Sentença' : 'Calcular os 3 cenários'}
             </button>
             {calc.isError && (
               <p className="text-sm text-red-600 dark:text-red-400">

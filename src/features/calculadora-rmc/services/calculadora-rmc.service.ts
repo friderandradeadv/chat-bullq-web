@@ -172,7 +172,7 @@ export const calculadoraRmcService = {
     fd.append('file', file);
     const { data: d } = await api.post('/calculadora-rmc-rcc/hiscre/extrair', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000, // extração via IA pode levar alguns segundos
+      timeout: 300000, // HISCRE longo (anos de parcelas) → a IA pode passar de 2 min
     });
     return d.data ?? d;
   },
@@ -182,7 +182,7 @@ export const calculadoraRmcService = {
     fd.append('file', file);
     const { data: d } = await api.post('/calculadora-rmc-rcc/hiscon/extrair', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000,
+      timeout: 300000,
     });
     return d.data ?? d;
   },

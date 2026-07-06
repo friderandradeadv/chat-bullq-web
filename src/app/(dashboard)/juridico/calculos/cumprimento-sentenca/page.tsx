@@ -314,6 +314,19 @@ export default function CumprimentoSentencaPage() {
         <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[400px_minmax(0,1fr)]">
           {/* ── Entrada ─────────────────────────────────────────────────────── */}
           <div className="space-y-4">
+            {/* Caso RMC/RCC → calculadora própria em modo execução */}
+            <Link
+              href="/juridico/calculos/rmc-rcc?fase=cs"
+              className="flex items-start gap-2 rounded-2xl border border-blue-200 bg-blue-50/60 px-4 py-3 text-xs leading-relaxed text-blue-800 transition-colors hover:bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/15"
+            >
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                <b>Caso de RMC/RCC?</b> Use a calculadora RMC/RCC no modo{' '}
+                <b>Cumprimento de sentença</b> — lá você importa HISCON/HISCRE, responde a tutela e
+                o saldo já sai recalculado. Esta página serve para qualquer outra condenação.
+              </span>
+            </Link>
+
             {/* Importar sentença (IA) */}
             <div className={cardCls}>
               <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
