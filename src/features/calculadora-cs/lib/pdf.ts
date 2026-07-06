@@ -2,7 +2,7 @@ import { imprimirDocumento, _brl as brl, _dm as dm, esc } from '@/lib/print-pdf'
 import type { ResultadoCs } from '../services/calculadora-cs.service';
 
 /** Gera o PDF do cálculo de Cumprimento de Sentença / Atualização de Débitos. */
-export function gerarPdfCs(res: ResultadoCs) {
+export function gerarPdfCs(res: ResultadoCs, opts?: { honorariosLabel?: string }) {
   const cfg = res.config;
   const nome = res.nomeCalculo || 'Cumprimento de Sentença';
   const kv = (k: string, v: string) => `<tr><td>${esc(k)}</td><td style="text-align:left">${esc(v)}</td></tr>`;
@@ -17,7 +17,7 @@ export function gerarPdfCs(res: ResultadoCs) {
   if (t.multa > 0) tot.push(`<tr><td>Multa (${esc(String(cfg.multaPct).replace('.', ','))}%)</td><td>${brl(t.multa)}</td></tr>`);
   if (t.honorarios > 0)
     tot.push(
-      `<tr><td>Honorários sucumbenciais (${esc(String(cfg.honorarios?.percentual ?? 0).replace('.', ','))}%)</td><td>${brl(t.honorarios)}</td></tr>`,
+      `<tr><td>${esc(opts?.honorariosLabel ?? `Honorários sucumbenciais (${String(cfg.honorarios?.percentual ?? 0).replace('.', ',')}%)`)}</td><td>${brl(t.honorarios)}</td></tr>`,
     );
   if (t.multa523Moratoria > 0) tot.push(`<tr><td>Multa moratória 10% (art. 523, CPC)</td><td>${brl(t.multa523Moratoria)}</td></tr>`);
   if (t.multa523Honorarios > 0) tot.push(`<tr><td>Honorários 10% (art. 523, CPC)</td><td>${brl(t.multa523Honorarios)}</td></tr>`);

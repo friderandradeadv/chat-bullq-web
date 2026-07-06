@@ -11,6 +11,7 @@ import {
   Info,
   Loader2,
   Plus,
+  ShieldAlert,
   Sparkles,
   Trash2,
   Upload,
@@ -46,6 +47,40 @@ const hoje = new Date().toISOString().slice(0, 10);
 type Linha = { descricao: string; data: string; valor: string };
 const linhaVazia = (descricao = ''): Linha => ({ descricao, data: '', valor: '' });
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * Descontos mensais posteriores ao cálculo da inicial (tutela NÃO deferida):
+ * gera uma verba por mês, do mês seguinte ao último desconto até o termo final.
+ */
+function gerarDescontosPosteriores(
+  ultimoDesconto: string,
+  termoFinal: string,
+  valor: number,
+): { descricao: string; data: string; valor: number }[] {
+  const [y0, m0, d0] = ultimoDesconto.split('-').map(Number);
+  const [yF, mF, dF] = termoFinal.split('-').map(Number);
+  const out: { descricao: string; data: string; valor: number }[] = [];
+  let y = y0;
+  let m = m0;
+  for (let i = 0; i < 600; i++) {
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+    const ultimoDia = new Date(y, m, 0).getDate();
+    const d = Math.min(d0, ultimoDia);
+    if (y > yF || (y === yF && (m > mF || (m === mF && d > dF)))) break;
+    out.push({
+      descricao: `Desconto ${pad2(m)}/${y} — após a inicial`,
+      data: `${y}-${pad2(m)}-${pad2(d)}`,
+      valor,
+    });
+  }
+  return out;
+}
+
 export default function CumprimentoSentencaPage() {
   const [form, setForm] = useState({
     nomeCalculo: '',
@@ -56,12 +91,16 @@ export default function CumprimentoSentencaPage() {
     jurosInicial: 'vencimento', // 'vencimento' | data
     multaPct: '0',
     honPercentual: '10',
-    honBase: 'diferenca' as HonorariosBase,
+    honBase: 'diferenca' as HonorariosBase | 'valorFixado',
     honQuantiaFixa: '',
     honAtualizar: false,
     honQuantiaData: '',
+    honValorFixado: '',
     multa523Mor: false,
     multa523Hon: false,
+    tutelaDeferida: true,
+    descontoMensal: '',
+    ultimoDesconto: '',
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -135,6 +174,15 @@ export default function CumprimentoSentencaPage() {
     () => debitos.filter((d) => d.data && !isNaN(parseValor(d.valor)) && parseValor(d.valor) > 0),
     [debitos],
   );
+  // Tutela NÃO deferida → descontos continuaram: verbas mensais até o termo final
+  const descontosExtras = useMemo(() => {
+    if (form.tutelaDeferida) return [];
+    const v = parseValor(form.descontoMensal);
+    if (!form.ultimoDesconto || !form.termoFinal || isNaN(v) || v <= 0) return [];
+    return gerarDescontosPosteriores(form.ultimoDesconto, form.termoFinal, v);
+  }, [form.tutelaDeferida, form.descontoMensal, form.ultimoDesconto, form.termoFinal]);
+
+  const [calcInfo, setCalcInfo] = useState<{ honFixado: boolean; descontosExtras: number } | null>(null);
   const calc = useMutation({
     mutationFn: () => {
       const lin = (l: Linha) => ({ descricao: l.descricao || 'Item', data: l.data, valor: parseValor(l.valor) });
@@ -148,23 +196,36 @@ export default function CumprimentoSentencaPage() {
         jurosInicial: jmInicial,
         multaPct: parseValor(form.multaPct) || 0,
         honorarios:
-          parseValor(form.honPercentual) > 0
-            ? {
-                percentual: parseValor(form.honPercentual),
-                base: form.honBase,
-                quantiaFixa: form.honBase === 'fixa' ? parseValor(form.honQuantiaFixa) || 0 : undefined,
-                atualizarQuantia: form.honBase === 'fixa' ? form.honAtualizar : undefined,
-                quantiaData:
-                  form.honBase === 'fixa' && form.honAtualizar && form.honQuantiaData
-                    ? form.honQuantiaData
-                    : undefined,
-              }
-            : undefined,
+          form.honBase === 'valorFixado'
+            ? parseValor(form.honValorFixado) > 0
+              ? {
+                  // valor certo: o motor aplica 100% sobre a "quantia fixa"
+                  percentual: 100,
+                  base: 'fixa',
+                  quantiaFixa: parseValor(form.honValorFixado),
+                  atualizarQuantia: form.honAtualizar,
+                  quantiaData:
+                    form.honAtualizar && form.honQuantiaData ? form.honQuantiaData : undefined,
+                }
+              : undefined
+            : parseValor(form.honPercentual) > 0
+              ? {
+                  percentual: parseValor(form.honPercentual),
+                  base: form.honBase,
+                  quantiaFixa: form.honBase === 'fixa' ? parseValor(form.honQuantiaFixa) || 0 : undefined,
+                  atualizarQuantia: form.honBase === 'fixa' ? form.honAtualizar : undefined,
+                  quantiaData:
+                    form.honBase === 'fixa' && form.honAtualizar && form.honQuantiaData
+                      ? form.honQuantiaData
+                      : undefined,
+                }
+              : undefined,
         multaMoratoria523: form.multa523Mor,
         honorarios523: form.multa523Hon,
-        debitos: debitos.filter((d) => d.data && parseValor(d.valor) > 0).map(lin),
+        debitos: [...debitos.filter((d) => d.data && parseValor(d.valor) > 0).map(lin), ...descontosExtras],
         creditos: creditos.filter((c) => c.data && parseValor(c.valor) > 0).map(lin),
       };
+      setCalcInfo({ honFixado: form.honBase === 'valorFixado', descontosExtras: descontosExtras.length });
       return calculadoraCsService.calcular(payload);
     },
   });
@@ -238,6 +299,62 @@ export default function CumprimentoSentencaPage() {
               <ItensEditor itens={debitos} setItens={setDebitos} upd={(i, k, v) => upd(debitos, setDebitos, i, k, v)} placeholderDesc="Condenação / dano moral…" />
             </div>
 
+            {/* Tutela / descontos continuados */}
+            <div className={cardCls}>
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+                <ShieldAlert className="h-4 w-4 text-amber-500" /> Tutela deferida?{' '}
+                <span className="text-xs font-normal text-zinc-400">(suspensão dos descontos)</span>
+              </h2>
+              <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                Se a tutela <b>não</b> foi deferida, os descontos continuaram depois da inicial — o
+                saldo devedor é recalculado somando um desconto por mês até o termo final.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => set('tutelaDeferida', true)}
+                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${form.tutelaDeferida ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  Sim — descontos suspensos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set('tutelaDeferida', false)}
+                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${!form.tutelaDeferida ? 'border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  Não — descontos continuaram
+                </button>
+              </div>
+              {!form.tutelaDeferida && (
+                <div className="mt-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Desconto mensal (R$)</label>
+                      <input className={inputCls} inputMode="decimal" placeholder="105,00" value={form.descontoMensal} onChange={(e) => set('descontoMensal', e.target.value)} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Último desconto na inicial</label>
+                      <input type="date" className={inputCls} value={form.ultimoDesconto} onChange={(e) => set('ultimoDesconto', e.target.value)} />
+                    </div>
+                  </div>
+                  {descontosExtras.length > 0 ? (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                      Serão acrescidos <b>{descontosExtras.length} desconto(s)</b> de{' '}
+                      <b>{brl(parseValor(form.descontoMensal))}</b> (
+                      {descontosExtras[0].data.slice(0, 7).split('-').reverse().join('/')} a{' '}
+                      {descontosExtras[descontosExtras.length - 1].data.slice(0, 7).split('-').reverse().join('/')}
+                      ) ao saldo devedor, cada um corrigido com juros desde a própria data.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] leading-tight text-zinc-400">
+                      Informe o valor do desconto mensal e a data do último desconto considerado no
+                      cálculo da inicial.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Parâmetros */}
             <div className={cardCls}>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
@@ -293,17 +410,40 @@ export default function CumprimentoSentencaPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={labelCls}>Percentual (%)</label>
-                      <input className={inputCls} inputMode="decimal" placeholder="10" value={form.honPercentual} onChange={(e) => set('honPercentual', e.target.value)} />
+                      <input className={`${inputCls} disabled:opacity-50`} inputMode="decimal" placeholder={form.honBase === 'valorFixado' ? '—' : '10'} value={form.honBase === 'valorFixado' ? '' : form.honPercentual} disabled={form.honBase === 'valorFixado'} onChange={(e) => set('honPercentual', e.target.value)} />
                     </div>
                     <div>
                       <label className={labelCls}>Base</label>
-                      <select className={inputCls} value={form.honBase} onChange={(e) => set('honBase', e.target.value as HonorariosBase)}>
+                      <select className={inputCls} value={form.honBase} onChange={(e) => set('honBase', e.target.value as HonorariosBase | 'valorFixado')}>
                         <option value="diferenca">Sobre o principal corrigido</option>
                         <option value="debitos">Sobre os débitos corrigidos</option>
                         <option value="fixa">Sobre o valor da causa (fixo)</option>
+                        <option value="valorFixado">Valor fixado (R$)</option>
                       </select>
                     </div>
                   </div>
+                  {form.honBase === 'valorFixado' && (
+                    <div className="mt-3 space-y-2">
+                      <div>
+                        <label className={labelCls}>Honorários fixados (R$)</label>
+                        <input className={inputCls} inputMode="decimal" placeholder="1.175,87" value={form.honValorFixado} onChange={(e) => set('honValorFixado', e.target.value)} />
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                        <input type="checkbox" className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600" checked={form.honAtualizar} onChange={(e) => set('honAtualizar', e.target.checked)} />
+                        Corrigir o valor até o termo final
+                      </label>
+                      {form.honAtualizar && (
+                        <div>
+                          <label className={labelCls}>Data da fixação (sentença)</label>
+                          <input type="date" className={inputCls} value={form.honQuantiaData} onChange={(e) => set('honQuantiaData', e.target.value)} />
+                        </div>
+                      )}
+                      <p className="text-[10px] leading-tight text-zinc-400">
+                        Use quando não há condenação líquida (ex.: obrigação de fazer) e os
+                        honorários precisam ser fixados em valor certo.
+                      </p>
+                    </div>
+                  )}
                   {form.honBase === 'fixa' && (
                     <div className="mt-3 space-y-2">
                       <div>
@@ -384,7 +524,14 @@ export default function CumprimentoSentencaPage() {
                 <div className="flex justify-end">
                   <button
                     type="button"
-                    onClick={() => gerarPdfCs(res)}
+                    onClick={() =>
+                      gerarPdfCs(
+                        res,
+                        calcInfo?.honFixado
+                          ? { honorariosLabel: 'Honorários sucumbenciais — valor fixado' }
+                          : undefined,
+                      )
+                    }
                     className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     <FileDown className="h-3.5 w-3.5" /> Baixar PDF
@@ -403,13 +550,17 @@ export default function CumprimentoSentencaPage() {
                     {res.totais.multa > 0 && <ResRow label={`Multa (${pct(res.config.multaPct)})`} valor={res.totais.multa} />}
                     {res.totais.honorarios > 0 && (
                       <ResRow
-                        label={`Honorários sucumbenciais — ${pct(res.config.honorarios?.percentual)} ${
-                          res.config.honorarios?.base === 'fixa'
-                            ? `sobre o valor da causa (${brl(res.honorariosBase)})`
-                            : res.config.honorarios?.base === 'debitos'
-                              ? 'sobre os débitos'
-                              : 'sobre o principal'
-                        }`}
+                        label={
+                          calcInfo?.honFixado
+                            ? `Honorários sucumbenciais — valor fixado${res.config.honorarios?.atualizarQuantia ? ' (corrigido até o termo final)' : ''}`
+                            : `Honorários sucumbenciais — ${pct(res.config.honorarios?.percentual)} ${
+                                res.config.honorarios?.base === 'fixa'
+                                  ? `sobre o valor da causa (${brl(res.honorariosBase)})`
+                                  : res.config.honorarios?.base === 'debitos'
+                                    ? 'sobre os débitos'
+                                    : 'sobre o principal'
+                              }`
+                        }
                         valor={res.totais.honorarios}
                       />
                     )}
