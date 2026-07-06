@@ -226,6 +226,7 @@
 .dark .fc .ag-done {
   background-color: #24272b !important;      /* cinza — cumprido/cancelado */
   border-color: #24272b !important;
+  opacity: 0.5 !important;                    /* recua o chip inteiro (some o "branco") */
 }
 .dark .fc .ag-tarefa .fc-event-title, .dark .fc .ag-tarefa .fc-event-time,
 .dark .fc .ag-prazo .fc-event-title, .dark .fc .ag-prazo .fc-event-time { color: #ffffff !important; }
