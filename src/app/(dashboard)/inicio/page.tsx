@@ -1049,7 +1049,7 @@ export default function InicioPage() {
   const statOn = mounted && !stats.loading;
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-thin">
+    <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-thin dark:bg-[#17191c]">
     <div className="relative flex min-h-full flex-col items-center justify-start px-4 py-8 lg:px-6">
       <div className="welcome-gradient pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-[#7048E8]/12 via-[#7048E8]/6 to-transparent dark:from-[#7048E8]/22 dark:via-[#7048E8]/12 dark:to-transparent" />
 
