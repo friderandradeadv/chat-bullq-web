@@ -147,7 +147,7 @@ export default function DashboardLayout({
               mecanismo genuíno do Trello. `absolute` tira a barra do fluxo; o respiro
               no topo de cada página vem do `.under-bar` (globals). A classe `dark`
               faz os controles (busca, toggle, sino, tema) herdarem o estilo escuro. */}
-          <div className="topbar-glass dark absolute inset-x-0 top-0 z-30 hidden h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] lg:flex">
+          <div className="topbar-glass dark absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] lg:flex">
             {/* Realce sutil no topo (borda de vidro) — dá acabamento sem clarear
                 a barra escura. */}
             <div
