@@ -151,6 +151,26 @@ export interface HisconResultado {
   aviso?: string;
 }
 
+/** Dados extraídos do PDF do próprio cálculo da inicial (relatório da calculadora). */
+export interface CalculoExtraido {
+  tipo: 'RMC' | 'RCC' | string | null;
+  banco: string | null;
+  contrato: string | null;
+  valorEmprestimo: number | null;
+  taxaConversao: number | null;
+  dataContratacao: string | null;
+  dataBase: string | null; // data-base ORIGINAL do cálculo da inicial
+  indiceCorrecao: string | null;
+  dobro: boolean | null;
+  parcelas: { data: string; valor: number }[];
+  observacoes: string | null;
+}
+
+export interface CalculoResultado {
+  calculo: CalculoExtraido | null;
+  aviso?: string;
+}
+
 export const calculadoraRmcService = {
   async calcular(input: CalcularRmcInput): Promise<ResultadoRmc> {
     const { data } = await api.post('/calculadora-rmc-rcc/calcular', input);
@@ -183,6 +203,16 @@ export const calculadoraRmcService = {
     const { data: d } = await api.post('/calculadora-rmc-rcc/hiscon/extrair', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000,
+    });
+    return d.data ?? d;
+  },
+
+  async extrairCalculo(file: File): Promise<CalculoResultado> {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data: d } = await api.post('/calculadora-rmc-rcc/calculo/extrair', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // relatórios longos (anos de parcelas) → a IA pode demorar
     });
     return d.data ?? d;
   },

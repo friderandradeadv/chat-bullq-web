@@ -68,8 +68,14 @@ export async function classificarPdf(
   )
     return { tipo: 'hiscre', nome };
 
-  // Cálculo do escritório (relatório gerado pela própria calculadora)
-  if (t.includes('EVOLUCAO DO SALDO DEVEDOR') && t.includes('FRIDER ANDRADE'))
+  // Cálculo da inicial — relatório da calculadora (escritório/CJ) ou memorial
+  // equivalente. Guarda de EXCELENTISSIMO: petição que cita a tabela não é o cálculo.
+  if (
+    !t.includes('EXCELENTISSIMO') &&
+    (t.includes('EVOLUCAO DO SALDO DEVEDOR') ||
+      t.includes('EVOLUCAO DAS PARCELAS') ||
+      t.includes('MEMORIAL DE CALCULO'))
+  )
     return { tipo: 'calculo', nome };
 
   // Sentença / acórdão (o dispositivo "julgo…" é a assinatura mais confiável)

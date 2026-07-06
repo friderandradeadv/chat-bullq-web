@@ -33,6 +33,7 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
 import {
   calculadoraRmcService,
   type CalcularRmcInput,
+  type CalculoExtraido,
   type Cenario,
   type CenarioId,
   type HiscreContrato,
@@ -419,7 +420,13 @@ export default function CalculadoraRmcPage() {
 
   // Aplica a taxa de conversão automaticamente: assim que há data de
   // contratação (ou muda a modalidade), busca a taxa média do BACEN da época.
+  // Exceção: quando a taxa veio do cálculo da inicial (taxaAutoSkip), ela é a
+  // da sentença e não pode ser sobrescrita.
   useEffect(() => {
+    if (taxaAutoSkip.current) {
+      taxaAutoSkip.current = false;
+      return;
+    }
     if (/^\d{4}-\d{2}-\d{2}$/.test(form.dataContratacao)) {
       taxaMut.mutate();
     }
@@ -536,6 +543,74 @@ export default function CalculadoraRmcPage() {
     }
   };
 
+  // ── Cálculo da inicial (PDF do próprio relatório da calculadora) ──────────
+  // Na execução, reaproveita as parcelas e os dados do contrato do cálculo que
+  // instruiu a inicial — sem re-upar o HISCRE. A data-base fica a ATUAL (a
+  // execução atualiza até hoje); a original só aparece no aviso.
+  const calcPdfRef = useRef<HTMLInputElement>(null);
+  const [calcPdfAviso, setCalcPdfAviso] = useState<string | null>(null);
+  // Trava um ciclo do auto-preenchimento da taxa BACEN: a taxa extraída do
+  // cálculo original é a da sentença — não pode ser sobrescrita pela média.
+  const taxaAutoSkip = useRef(false);
+  const aplicarCalculo = (c: CalculoExtraido) => {
+    const preenchidos: string[] = [];
+    if (c.parcelas.length) {
+      setParcelasTexto(c.parcelas.map((p) => `${p.data}\t${p.valor.toFixed(2)}`).join('\n'));
+      preenchidos.push(`${c.parcelas.length} parcela(s)`);
+    }
+    if (c.tipo === 'RMC' || c.tipo === 'RCC') set('tipo', c.tipo);
+    if (c.banco) { set('banco', c.banco); preenchidos.push('banco'); }
+    if (c.contrato) set('numeroContrato', c.contrato);
+    if (c.valorEmprestimo != null) {
+      set('valorEmprestimo', c.valorEmprestimo.toFixed(2).replace('.', ','));
+      preenchidos.push('valor do empréstimo');
+    }
+    if (c.taxaConversao != null) {
+      set('taxaConversao', String(c.taxaConversao).replace('.', ','));
+      preenchidos.push(`taxa ${String(c.taxaConversao).replace('.', ',')}%`);
+      if (c.dataContratacao) taxaAutoSkip.current = true;
+    }
+    if (c.dataContratacao) set('dataContratacao', c.dataContratacao);
+    if (c.indiceCorrecao && ['INPC', 'IPCA-E', 'IPCA', 'IGP-M'].includes(c.indiceCorrecao)) {
+      set('indiceCorrecao', c.indiceCorrecao as IndiceCorrecao);
+      preenchidos.push(`índice ${c.indiceCorrecao}`);
+    }
+    if (c.dobro != null) set('dobro', c.dobro);
+    if (!form.nomeCalculo) {
+      const nome = [c.tipo, c.banco].filter(Boolean).join(' - ');
+      if (nome) set('nomeCalculo', nome);
+    }
+    const dataBr = (iso: string) => iso.split('-').reverse().join('/');
+    setCalcPdfAviso(
+      `Cálculo da inicial importado (${preenchidos.join(', ')}).` +
+        (c.dataBase
+          ? ` Data-base original: ${dataBr(c.dataBase)} — mantive a data-base ATUAL para a execução; as parcelas param lá, então confira o card "Tutela deferida?".`
+          : ' Confira o card "Tutela deferida?" — as parcelas param na época da inicial.') +
+        (c.observacoes ? ` IA: ${c.observacoes}` : ''),
+    );
+  };
+
+  const calcPdfMut = useMutation({
+    mutationFn: (file: File) => calculadoraRmcService.extrairCalculo(file),
+    onSuccess: (r) => {
+      if (r.calculo?.parcelas?.length) {
+        aplicarCalculo(r.calculo);
+      } else {
+        setCalcPdfAviso(r.aviso ?? 'Não identifiquei um cálculo de RMC/RCC nesse PDF.');
+      }
+    },
+    onError: (e) => setCalcPdfAviso((e as Error)?.message ?? 'Erro ao processar o cálculo.'),
+  });
+
+  const onPickCalcPdf = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) {
+      setCalcPdfAviso(null);
+      calcPdfMut.mutate(file);
+    }
+  };
+
   // ── Área única: solta tudo (HISCON, HISCRE, sentença, inicial) de uma vez ──
   // Classifica cada PDF no navegador (pdfjs + regex, sem custo de IA) e manda
   // cada um pro extrator certo. Sentença/inicial mudam a fase p/ CS sozinhas.
@@ -577,6 +652,14 @@ export default function CalculadoraRmcPage() {
         setCsSentAviso(null);
         jobs.push(csSentMut.mutateAsync(sentIniIdx.map((i) => files[i])));
       }
+      if (calculoIdx.length) {
+        partes.push(`cálculo da inicial (${cls[calculoIdx[0]].nome})`);
+        // O PDF do cálculo só existe depois da inicial protocolada = execução.
+        setFase('cs');
+        setCs((c) => ({ ...c, ativar: true }));
+        setCalcPdfAviso(null);
+        jobs.push(calcPdfMut.mutateAsync(files[calculoIdx[0]]));
+      }
       setLoteAviso(
         partes.length
           ? `Identifiquei: ${partes.join(' · ')}. Lendo com a IA…`
@@ -585,10 +668,6 @@ export default function CalculadoraRmcPage() {
       await Promise.allSettled(jobs);
       const avisos: string[] = [];
       if (partes.length) avisos.push(`Importados: ${partes.join(' · ')}.`);
-      if (calculoIdx.length)
-        avisos.push(
-          `"${cls[calculoIdx[0]].nome}" parece ser o cálculo da inicial — importação dele ainda não é suportada (use o HISCRE por enquanto).`,
-        );
       if (desconhecidos.length)
         avisos.push(`Não reconheci: ${desconhecidos.join(', ')} — use os botões específicos abaixo.`);
       setLoteAviso(avisos.join(' ') || 'Nada importado.');
@@ -820,7 +899,7 @@ export default function CalculadoraRmcPage() {
               <p className="mt-2 text-[10px] leading-tight text-zinc-400">
                 {fase === 'inicial'
                   ? 'Os 3 cenários de pedido para a petição inicial (HISCON/HISCRE atuais).'
-                  : 'Execução: HISCON/HISCRE da época da inicial + tutela + sucumbência + multa do art. 523.'}
+                  : 'Execução: cálculo da inicial (ou HISCON/HISCRE da época) + tutela + sucumbência + multa do art. 523.'}
               </p>
             </div>
 
@@ -830,8 +909,9 @@ export default function CalculadoraRmcPage() {
                 <FileSearch className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Importar documentos
               </h2>
               <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-                Solte <b>tudo de uma vez</b> — HISCON, HISCRE, sentença, inicial. Eu identifico
-                cada um e preencho o cálculo (fase, parâmetros, tutela, sucumbência).
+                Solte <b>tudo de uma vez</b> — HISCON, HISCRE, sentença, inicial, cálculo da
+                inicial. Eu identifico cada um e preencho o cálculo (fase, parâmetros, tutela,
+                sucumbência, parcelas).
               </p>
 
               {/* Área única */}
@@ -945,6 +1025,32 @@ export default function CalculadoraRmcPage() {
                 </button>
               </DropZone>
               {hiscreAviso && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{hiscreAviso}</p>}
+
+              {/* Cálculo da inicial — só na execução (reaproveita as parcelas sem re-upar o HISCRE) */}
+              {fase === 'cs' && (
+                <>
+                  <input ref={calcPdfRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickCalcPdf} />
+                  <DropZone accept="application/pdf,.pdf" multiple={false} disabled={calcPdfMut.isPending} onFiles={(fs) => { setCalcPdfAviso(null); calcPdfMut.mutate(fs[0]); }} className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => calcPdfRef.current?.click()}
+                      disabled={calcPdfMut.isPending}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 py-2.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-60 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+                    >
+                      {calcPdfMut.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o cálculo da inicial…</>
+                      ) : (
+                        <><Calculator className="h-4 w-4" /> Ou: importar o cálculo da inicial (PDF do relatório)</>
+                      )}
+                    </button>
+                  </DropZone>
+                  <p className="mt-1 text-[10px] leading-tight text-zinc-400">
+                    O PDF gerado pela calculadora (tabela &quot;Evolução do Saldo Devedor&quot;) —
+                    reaproveita as parcelas e os dados do contrato sem re-upar o HISCRE.
+                  </p>
+                  {calcPdfAviso && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{calcPdfAviso}</p>}
+                </>
+              )}
               {hiscreContratos && hiscreContratos.length > 1 && (
                 <div className="mt-2 space-y-1.5">
                   {hiscreContratos.map((c, i) => (
