@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type InboxScope = 'ALL' | 'MINE';
 export type InboxStatusTab = 'ALL' | 'OPEN' | 'PENDING' | 'BOT' | 'GROUPS';
@@ -45,7 +46,9 @@ interface InboxFilterStore {
   clearFilters: () => void;
 }
 
-export const useInboxFilterStore = create<InboxFilterStore>((set) => ({
+export const useInboxFilterStore = create<InboxFilterStore>()(
+  persist(
+    (set) => ({
   search: '',
   scope: 'ALL',
   // Abre nas conversas ATIVAS (não nas pendentes/todas) por padrão.
@@ -86,4 +89,11 @@ export const useInboxFilterStore = create<InboxFilterStore>((set) => ({
       selectedAssigneeIds: [],
       meusClientesOnly: false,
     }),
-}));
+  }),
+    {
+      name: 'inbox-filter',
+      // Persiste SÓ o "Meus clientes" — o resto dos filtros continua efêmero.
+      partialize: (s) => ({ meusClientesOnly: s.meusClientesOnly }),
+    },
+  ),
+);
