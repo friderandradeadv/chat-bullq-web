@@ -145,7 +145,7 @@ export default function DashboardLayout({
           {/* Barra superior estilo Trello: tom escuro do modo escuro (#1D2125). A
               classe `dark` faz TODOS os controles internos (busca, toggle, sino,
               tema) herdarem o estilo escuro/translúcido — casam com a barra. */}
-          <div className="dark relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1D2125] px-4 backdrop-blur-md lg:flex">
+          <div className="topbar-glass dark relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1D2125] px-4 lg:flex">
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
                 canto superior esquerdo — versão clara pra contrastar na barra escura. */}
             {simples && (

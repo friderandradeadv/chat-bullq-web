@@ -371,3 +371,28 @@
 }
 .welcome-pop { animation: welcome-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .welcome-float { animation: welcome-float 4.5s ease-in-out infinite; }
+
+/* ── Modo escuro estilo Trello: wallpaper grafite + cromo (barra/sidebar) de vidro ──
+   O wallpaper cobre a tela toda (fixo, atrás de tudo). A barra e a sidebar são
+   translúcidas e o backdrop-blur REVELA o wallpaper borrado — é o que dá o efeito
+   Trello. As regras de vidro usam `.dark .xxx` (tema REAL do html), então no modo
+   claro a barra/sidebar continuam sólidas (vidro sobre fundo branco não funciona).
+   A barra e a sidebar têm a classe literal `dark` (pros controles internos), por
+   isso não dá pra usar a variante `dark:` do Tailwind aqui — precisa do seletor de
+   ancestral `.dark` de verdade. */
+.app-wallpaper {
+  background:
+    radial-gradient(120% 80% at 12% -10%, rgba(255, 255, 255, 0.05), transparent 55%),
+    radial-gradient(120% 85% at 88% 110%, rgba(255, 255, 255, 0.035), transparent 55%),
+    linear-gradient(160deg, #16191e 0%, #101317 55%, #0b0d10 100%);
+}
+.dark .topbar-glass {
+  background: rgba(22, 25, 29, 0.5) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  backdrop-filter: blur(28px) saturate(1.2);
+}
+.dark .sidebar-glass {
+  background: rgba(22, 25, 29, 0.55) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2);
+}
