@@ -171,13 +171,40 @@ const ultimaComReceita = (p: PainelContabil): CompetenciaApurada | undefined =>
 
 // ─── Imposto do mês (apuração automática a partir do Financeiro) ────────────────
 function ImpostoReal({ painel }: { painel: PainelContabil }) {
+  const qc = useQueryClient();
   const anexo = painel.empresa.anexo;
-  const inssMes = calcularInssProlabore(painel.empresa.proLabore).total;
+  const inss = calcularInssProlabore(painel.empresa.proLabore);
+  const inssMes = inss.total;
 
   const { data: fin, isLoading, isError } = useQuery({
     queryKey: ['contabilidade', 'financeiro-receita'],
     queryFn: () => financeiroService.dashboard(),
     retry: false,
+  });
+
+  // ── Apuração do MÊS (pra emitir/registrar a DAS) ──
+  const [mesSel, setMesSel] = useState(compAtual());
+  const [receitaEdit, setReceitaEdit] = useState<number | null>(null);
+  const receitaFin = useMemo(() => {
+    const m = (fin?.meses ?? []).find((x: any) => x.key === mesSel);
+    return m ? Math.round((m.receita || 0) * 100) / 100 : 0;
+  }, [fin, mesSel]);
+  const receitaUsar = receitaEdit ?? receitaFin;
+  const rbt12Sel = useMemo(() => {
+    const ms = (fin?.meses ?? []).filter((m: any) => !m.projecao).sort((a: any, b: any) => a.key.localeCompare(b.key));
+    const i = ms.findIndex((m: any) => m.key === mesSel);
+    const base = i >= 0 ? ms.slice(Math.max(0, i - 12), i) : ms.slice(-12);
+    return base.reduce((s: number, x: any) => s + (x.receita || 0), 0) || receitaUsar;
+  }, [fin, mesSel, receitaUsar]);
+  const dasSel = receitaUsar > 0 ? apurar({ receitaMes: receitaUsar, rbt12: rbt12Sel, anexo }) : null;
+  const totalMesSel = (dasSel?.das ?? 0) + inssMes;
+  const vencComp = shiftComp(mesSel, 1);
+  const vencimento = `${vencComp}-20`;
+
+  const registrar = useMutation({
+    mutationFn: () => contabilidadeService.upsertCompetencia({ comp: mesSel, receita: receitaUsar }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['contabilidade', 'painel'] }); toast.success('Competência registrada no painel.'); },
+    onError: () => toast.error('Falha ao registrar (backend indisponível?).'),
   });
 
   // meses REAIS (exclui projeções futuras) com receita
@@ -210,6 +237,59 @@ function ImpostoReal({ painel }: { painel: PainelContabil }) {
           sem digitar nada. Some o INSS fixo de {brl(inssMes)}/mês.
         </p>
       </div>
+
+      {/* Apuração do mês — pra emitir/registrar a DAS */}
+      <Card className="border-indigo-200 dark:border-indigo-900/40">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            <Calculator className="h-4 w-4 text-indigo-500" /> Apuração do mês
+          </h3>
+          <div className="flex items-center gap-2">
+            <input type="month" value={mesSel} onChange={(e) => { setMesSel(e.target.value); setReceitaEdit(null); }}
+              className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Faturamento do mês">
+            <MoneyInput value={receitaUsar} onChange={setReceitaEdit} />
+            {receitaEdit == null && receitaFin > 0 && <span className="mt-1 block text-[11px] text-zinc-400">puxado do Financeiro</span>}
+          </Field>
+          <div className="rounded-lg bg-indigo-50/60 p-3 dark:bg-indigo-900/15">
+            <p className="text-xs text-zinc-500">DAS (Simples)</p>
+            <p className="text-lg font-bold tabular-nums text-indigo-700 dark:text-indigo-300">{brl(dasSel?.das ?? 0)}</p>
+            <p className="text-[11px] text-zinc-400">{dasSel ? pct(dasSel.aliquotaEfetiva) : '—'} · faixa {dasSel?.faixa ?? '—'}</p>
+          </div>
+          <div className="rounded-lg bg-emerald-50/50 p-3 dark:bg-emerald-900/15">
+            <p className="text-xs text-zinc-500">DARF INSS</p>
+            <p className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{brl(inssMes)}</p>
+            <p className="text-[11px] text-zinc-400">fixo (pró-labore)</p>
+          </div>
+          <div className="rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
+            <p className="text-xs text-zinc-500">Total a recolher</p>
+            <p className="text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{brl(totalMesSel)}</p>
+            <p className="text-[11px] text-zinc-400">vence {dt(vencimento)}</p>
+          </div>
+        </div>
+
+        {dasSel && (
+          <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-zinc-100 pt-2 text-xs text-zinc-500 dark:border-zinc-800">
+            {dasSel.tributos.map((t) => (
+              <li key={t.codigo} className="tabular-nums"><span className="text-zinc-400">{t.nome}</span> {brl(t.valor)}</li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-zinc-400">
+            Registrar deixa o mês salvo no painel e em Obrigações. Depois emita a DAS (Contabilizei/portal) e arquive a guia no cofre.
+          </p>
+          <button onClick={() => registrar.mutate()} disabled={registrar.isPending || receitaUsar <= 0}
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+            {registrar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Registrar competência
+          </button>
+        </div>
+      </Card>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
