@@ -13,10 +13,11 @@ import {
   Info, Landmark, TrendingUp, AlertTriangle, CheckCircle2, Clock, Download, Loader2, Upload, X, Database, Trash2, Plus,
   ChevronLeft, ChevronRight, Calendar, Wallet,
 } from 'lucide-react';
-import { apurar, type AnexoId } from '@/features/contabilidade/lib/simples';
+import { apurar, calcularInssProlabore, type AnexoId } from '@/features/contabilidade/lib/simples';
 import {
   contabilidadeService, derivarPainelLocal, type PainelContabil, type CompetenciaApurada, type GuiaStatus, type DocumentoContabil,
 } from '@/features/contabilidade/services/contabilidade.service';
+import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import {
   EMPRESA, COMPETENCIAS, SNAPSHOT_CAPTURA, DECLARACOES_ANUAIS, GUIA_LABEL, compLabel,
 } from '@/features/contabilidade/data/contabilizei';
@@ -25,10 +26,11 @@ const brl = (n: number) => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDi
 const pct = (n: number) => (n * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + '%';
 const dt = (s?: string) => (s ? new Date(s + 'T00:00').toLocaleDateString('pt-BR') : '—');
 
-type View = 'visao' | 'apuracao' | 'notas' | 'prolabore' | 'obrigacoes' | 'documentos';
+type View = 'visao' | 'imposto-real' | 'apuracao' | 'notas' | 'prolabore' | 'obrigacoes' | 'documentos';
 const TABS: { key: View; label: string; icon: React.ElementType }[] = [
   { key: 'visao', label: 'Visão geral', icon: LayoutDashboard },
-  { key: 'apuracao', label: 'Apuração', icon: Calculator },
+  { key: 'imposto-real', label: 'Imposto do mês', icon: TrendingUp },
+  { key: 'apuracao', label: 'Calculadora', icon: Calculator },
   { key: 'notas', label: 'Notas fiscais', icon: Receipt },
   { key: 'prolabore', label: 'Pró-labore / INSS', icon: Users },
   { key: 'obrigacoes', label: 'Obrigações', icon: CalendarClock },
@@ -127,6 +129,7 @@ export default function ContabilidadePage() {
 
         <div className="mt-5">
           {view === 'visao' && <VisaoGeral painel={painel} onGo={setView} />}
+          {view === 'imposto-real' && <ImpostoReal painel={painel} />}
           {view === 'apuracao' && <Apuracao painel={painel} />}
           {view === 'notas' && <Notas painel={painel} />}
           {view === 'prolabore' && <ProLabore painel={painel} />}
@@ -165,6 +168,109 @@ function StatusPill({ status }: { status: GuiaStatus }) {
 }
 const ultimaComReceita = (p: PainelContabil): CompetenciaApurada | undefined =>
   p.competencias.filter((c) => c.receita > 0).slice(-1)[0];
+
+// ─── Imposto do mês (apuração automática a partir do Financeiro) ────────────────
+function ImpostoReal({ painel }: { painel: PainelContabil }) {
+  const anexo = painel.empresa.anexo;
+  const inssMes = calcularInssProlabore(painel.empresa.proLabore).total;
+
+  const { data: fin, isLoading, isError } = useQuery({
+    queryKey: ['contabilidade', 'financeiro-receita'],
+    queryFn: () => financeiroService.dashboard(),
+    retry: false,
+  });
+
+  // meses REAIS (exclui projeções futuras) com receita
+  const linhas = useMemo(() => {
+    const meses = (fin?.meses ?? []).filter((m: any) => !m.projecao).sort((a: any, b: any) => a.key.localeCompare(b.key));
+    // comps que já têm guia de DAS registrada no cofre/painel
+    const dasRegistrado = new Set(
+      painel.competencias.filter((c) => (c.guias ?? []).some((g) => g.tipo === 'DAS')).map((c) => c.comp),
+    );
+    return meses.map((m: any, i: number) => {
+      const receita = Math.round((m.receita || 0) * 100) / 100;
+      const rbt12 = meses.slice(Math.max(0, i - 12), i).reduce((s: number, x: any) => s + (x.receita || 0), 0) || receita;
+      const das = receita > 0 ? apurar({ receitaMes: receita, rbt12, anexo }).das : 0;
+      return { comp: m.key, receita, das, pago: dasRegistrado.has(m.key) };
+    });
+  }, [fin, painel, anexo]);
+
+  const comReceita = linhas.filter((l) => l.receita > 0);
+  const totalDevido = comReceita.reduce((s, l) => s + l.das, 0);
+  const emAberto = comReceita.filter((l) => !l.pago);
+  const totalAberto = emAberto.reduce((s, l) => s + l.das, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 text-sm dark:border-indigo-900/40 dark:bg-indigo-900/10">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
+        <p className="text-indigo-900/90 dark:text-indigo-200/90">
+          <b>Apuração automática.</b> O DAS de cada mês é calculado direto do que você faturou no{' '}
+          <b>Financeiro</b> (× 4,5%). Toda vez que você lança um honorário lá, o imposto do mês aparece aqui —
+          sem digitar nada. Some o INSS fixo de {brl(inssMes)}/mês.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <p className="text-xs text-zinc-500">DAS total devido (período)</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{brl(totalDevido)}</p>
+          <p className="mt-0.5 text-xs text-zinc-400">{comReceita.length} meses com receita</p>
+        </Card>
+        <Card className={totalAberto > 0 ? 'border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-900/10' : ''}>
+          <p className="text-xs text-zinc-500">DAS em aberto (sem guia)</p>
+          <p className={`mt-1 text-xl font-bold tabular-nums ${totalAberto > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600'}`}>{brl(totalAberto)}</p>
+          <p className="mt-0.5 text-xs text-zinc-400">{emAberto.length} meses sem DAS registrado</p>
+        </Card>
+        <Card>
+          <p className="text-xs text-zinc-500">INSS fixo / mês</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{brl(inssMes)}</p>
+          <p className="mt-0.5 text-xs text-zinc-400">todo mês, independe de receita</p>
+        </Card>
+      </div>
+
+      <Card>
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+          <TrendingUp className="h-4 w-4 text-indigo-500" /> DAS por mês (do seu faturamento)
+        </h3>
+        {isLoading ? (
+          <p className="py-6 text-center text-sm text-zinc-400"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></p>
+        ) : isError ? (
+          <p className="py-6 text-center text-sm text-zinc-400">Não consegui ler o Financeiro agora.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-400 dark:border-zinc-800">
+                <th className="py-2 font-medium">Mês</th>
+                <th className="py-2 text-right font-medium">Faturou</th>
+                <th className="py-2 text-right font-medium">DAS (4,5%)</th>
+                <th className="py-2 text-right font-medium">Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comReceita.slice().reverse().map((l) => (
+                <tr key={l.comp} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/50">
+                  <td className="py-2 text-zinc-700 dark:text-zinc-200">{compLabel(l.comp)}</td>
+                  <td className="py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{brl(l.receita)}</td>
+                  <td className="py-2 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{brl(l.das)}</td>
+                  <td className="py-2 text-right">
+                    {l.pago
+                      ? <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">registrado</span>
+                      : <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-xs text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">em aberto</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="mt-3 text-xs text-zinc-400">
+          "Em aberto" = mês com faturamento mas sem guia de DAS registrada aqui — provável DAS a regularizar.
+          Base = sua receita do Financeiro; confirme que é honorário seu (não o bruto do alvará).
+        </p>
+      </Card>
+    </div>
+  );
+}
 
 // ─── Visão geral ────────────────────────────────────────────────────────────────
 function VisaoGeral({ painel, onGo }: { painel: PainelContabil; onGo: (v: View) => void }) {
