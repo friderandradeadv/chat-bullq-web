@@ -382,7 +382,7 @@
 .topbar-glass {
   /* Tom escuro PADRÃO (#1D2125) + translúcido. MODO CLARO: mantém um tom escuro
      pros controles/logo brancos ficarem visíveis, mas já mais aberto. */
-  background: rgba(29, 33, 37, 0.64) !important;
+  background: rgba(29, 33, 37, 0.76) !important;
   -webkit-backdrop-filter: blur(30px) saturate(1.15);
   backdrop-filter: blur(30px) saturate(1.15);
 }
