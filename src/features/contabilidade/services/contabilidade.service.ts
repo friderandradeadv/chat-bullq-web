@@ -48,35 +48,35 @@ export interface PainelContabil {
 export const contabilidadeService = {
   async painel(): Promise<PainelContabil> {
     const { data } = await api.get('/contabilidade/painel');
-    return data;
+    return data.data ?? data;
   },
   async setEmpresa(dto: Partial<EmpresaContabil>): Promise<EmpresaContabil> {
     const { data } = await api.patch('/contabilidade/empresa', dto);
-    return data;
+    return data.data ?? data;
   },
   async upsertCompetencia(dto: CompetenciaInput): Promise<PainelContabil> {
     const { data } = await api.post('/contabilidade/competencias', dto);
-    return data;
+    return data.data ?? data;
   },
   async removeCompetencia(comp: string): Promise<PainelContabil> {
     const { data } = await api.delete(`/contabilidade/competencias/${comp}`);
-    return data;
+    return data.data ?? data;
   },
   async importar(payload: { empresa?: Partial<EmpresaContabil>; competencias?: CompetenciaInput[] }, commit: boolean) {
     const { data } = await api.post('/contabilidade/importar', { ...payload, commit });
-    return data;
+    return data.data ?? data;
   },
   async listDocumentos(): Promise<DocumentoContabil[]> {
     const { data } = await api.get('/contabilidade/documentos');
-    return data;
+    return data.data ?? data;
   },
   async addDocumento(dto: { comp: string; tipo: string; nome: string; mime: string; base64: string; valor?: number | null; pagoEm?: string | null }): Promise<DocumentoContabil> {
     const { data } = await api.post('/contabilidade/documentos', dto);
-    return data;
+    return data.data ?? data;
   },
   async removeDocumento(id: string): Promise<DocumentoContabil[]> {
     const { data } = await api.delete(`/contabilidade/documentos/${id}`);
-    return data;
+    return data.data ?? data;
   },
 };
 

@@ -64,7 +64,7 @@ export default function ContabilidadePage() {
 
   // Fallback local: backend indisponível/vazio → apura a captura no cliente.
   const painelLocal = useMemo(() => derivarPainelLocal(EMPRESA, COMPETENCIAS), []);
-  const usandoFallback = isError || !data || data.competencias.length === 0;
+  const usandoFallback = isError || !data || !Array.isArray(data.competencias) || data.competencias.length === 0;
   const painel = usandoFallback ? painelLocal : data;
 
   return (
