@@ -383,9 +383,9 @@
   /* tom ESCURO (igual barra dark do Trello): predominantemente dark, com leve
      translucidez pro conteúdo revelar borrado ao rolar. No modo claro deixa de
      ficar cinza lavado. */
-  background: rgba(20, 23, 27, 0.72) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  backdrop-filter: blur(14px) saturate(1.2);
+  background: rgba(20, 23, 27, 0.8) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.35);
+  backdrop-filter: blur(26px) saturate(1.35);
 }
 @media (min-width: 1024px) {
   .under-bar > * {
