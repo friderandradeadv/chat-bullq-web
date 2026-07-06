@@ -267,6 +267,9 @@ export default function CalculadoraRmcPage() {
     const fs = ev.target.files ? Array.from(ev.target.files) : [];
     ev.target.value = '';
     if (fs.length) {
+      // Sentença/inicial = fase de execução: liga o CS sozinho.
+      setFase('cs');
+      setCs((c) => ({ ...c, ativar: true }));
       setCsSentAviso(null);
       csSentMut.mutate(fs);
     }
@@ -606,6 +609,9 @@ export default function CalculadoraRmcPage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (file) {
+      // O cálculo da inicial só existe depois do protocolo = execução.
+      setFase('cs');
+      setCs((c) => ({ ...c, ativar: true }));
       setCalcPdfAviso(null);
       calcPdfMut.mutate(file);
     }
@@ -669,7 +675,7 @@ export default function CalculadoraRmcPage() {
       const avisos: string[] = [];
       if (partes.length) avisos.push(`Importados: ${partes.join(' · ')}.`);
       if (desconhecidos.length)
-        avisos.push(`Não reconheci: ${desconhecidos.join(', ')} — use os botões específicos abaixo.`);
+        avisos.push(`Não reconheci: ${desconhecidos.join(', ')} — abra "Prefere enviar um por um?" e mande pelo botão certo.`);
       setLoteAviso(avisos.join(' ') || 'Nada importado.');
     } catch (err) {
       setLoteAviso((err as Error)?.message ?? 'Erro ao processar os documentos.');
@@ -682,6 +688,9 @@ export default function CalculadoraRmcPage() {
     e.target.value = '';
     importarLote(fs);
   };
+  // Envio um por um fica RECOLHIDO — a área única acima é o caminho padrão
+  // (evita a redundância de vários botões de upload na tela).
+  const [envioEspecifico, setEnvioEspecifico] = useState(false);
 
   // Auto-carrega o HISCON/HISCRE que JÁ foram upados no card — evita re-upar. Quando
   // aberta pelo card (?case=), busca os arquivos guardados (metadata.docs), extrai e
@@ -960,23 +969,81 @@ export default function CalculadoraRmcPage() {
                 </div>
               )}
 
-              {/* Upload HISCON */}
+              {/* Envio um por um — recolhido: a área única acima é o caminho padrão */}
               <input ref={hisconRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickHiscon} />
-              <DropZone accept="application/pdf,.pdf" multiple={false} disabled={hisconMut.isPending} onFiles={(fs) => { setHisconAviso(null); hisconMut.mutate(fs[0]); }} className="mb-2">
-                <button
-                  type="button"
-                  onClick={() => hisconRef.current?.click()}
-                  disabled={hisconMut.isPending}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 py-2.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/15"
-                >
-                  {hisconMut.isPending ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o HISCON…</>
-                  ) : (
-                    <><Building2 className="h-4 w-4" /> 1. Importar contrato (HISCON)</>
-                  )}
-                </button>
-              </DropZone>
-              {hisconAviso && <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">{hisconAviso}</p>}
+              <input ref={hiscreRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickHiscre} />
+              <input ref={csSentRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={onPickCsSent} />
+              <input ref={calcPdfRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickCalcPdf} />
+              <button
+                type="button"
+                onClick={() => setEnvioEspecifico((v) => !v)}
+                className="text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-700 hover:underline dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                {envioEspecifico ? '▴ Esconder envio um por um' : '▾ Prefere enviar um por um?'}
+              </button>
+              {envioEspecifico && (
+                <div className="mt-2 space-y-2">
+                  <DropZone accept="application/pdf,.pdf" multiple={false} disabled={hisconMut.isPending} onFiles={(fs) => { setHisconAviso(null); hisconMut.mutate(fs[0]); }}>
+                    <button
+                      type="button"
+                      onClick={() => hisconRef.current?.click()}
+                      disabled={hisconMut.isPending}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 py-2.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/15"
+                    >
+                      {hisconMut.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o HISCON…</>
+                      ) : (
+                        <><Building2 className="h-4 w-4" /> 1. Contrato (HISCON)</>
+                      )}
+                    </button>
+                  </DropZone>
+                  <DropZone accept="application/pdf,.pdf" multiple={false} disabled={hiscreMut.isPending} onFiles={(fs) => { setHiscreAviso(null); hiscreMut.mutate(fs[0]); }}>
+                    <button
+                      type="button"
+                      onClick={() => hiscreRef.current?.click()}
+                      disabled={hiscreMut.isPending}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 py-2.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-60 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/15"
+                    >
+                      {hiscreMut.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o HISCRE…</>
+                      ) : (
+                        <><Upload className="h-4 w-4" /> 2. Descontos (HISCRE)</>
+                      )}
+                    </button>
+                  </DropZone>
+                  <DropZone accept="application/pdf,.pdf" disabled={csSentMut.isPending} onFiles={(fs) => { setFase('cs'); setCs((c) => ({ ...c, ativar: true })); setCsSentAviso(null); csSentMut.mutate(fs); }}>
+                    <button
+                      type="button"
+                      onClick={() => csSentRef.current?.click()}
+                      disabled={csSentMut.isPending}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 py-2.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-60 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+                    >
+                      {csSentMut.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Lendo a sentença…</>
+                      ) : (
+                        <><Sparkles className="h-4 w-4" /> 3. Sentença / inicial (IA)</>
+                      )}
+                    </button>
+                  </DropZone>
+                  <DropZone accept="application/pdf,.pdf" multiple={false} disabled={calcPdfMut.isPending} onFiles={(fs) => { setFase('cs'); setCs((c) => ({ ...c, ativar: true })); setCalcPdfAviso(null); calcPdfMut.mutate(fs[0]); }}>
+                    <button
+                      type="button"
+                      onClick={() => calcPdfRef.current?.click()}
+                      disabled={calcPdfMut.isPending}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 py-2.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-60 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+                    >
+                      {calcPdfMut.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o cálculo da inicial…</>
+                      ) : (
+                        <><Calculator className="h-4 w-4" /> 4. Cálculo da inicial (PDF do relatório)</>
+                      )}
+                    </button>
+                  </DropZone>
+                </div>
+              )}
+
+              {/* Avisos e escolhas (valem também para o envio pela área única) */}
+              {hisconAviso && <p className="mb-2 mt-2 text-xs text-zinc-500 dark:text-zinc-400">{hisconAviso}</p>}
               {hisconContratos && hisconContratos.length > 1 && (
                 <div className="mb-2 space-y-1.5">
                   {hisconContratos.map((c, i) => (
@@ -1008,49 +1075,8 @@ export default function CalculadoraRmcPage() {
                 </div>
               )}
 
-              {/* Upload HISCRE */}
-              <input ref={hiscreRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickHiscre} />
-              <DropZone accept="application/pdf,.pdf" multiple={false} disabled={hiscreMut.isPending} onFiles={(fs) => { setHiscreAviso(null); hiscreMut.mutate(fs[0]); }}>
-                <button
-                  type="button"
-                  onClick={() => hiscreRef.current?.click()}
-                  disabled={hiscreMut.isPending}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 py-2.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-60 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/15"
-                >
-                  {hiscreMut.isPending ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o HISCRE…</>
-                  ) : (
-                    <><Upload className="h-4 w-4" /> 2. Importar descontos (HISCRE)</>
-                  )}
-                </button>
-              </DropZone>
               {hiscreAviso && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{hiscreAviso}</p>}
-
-              {/* Cálculo da inicial — só na execução (reaproveita as parcelas sem re-upar o HISCRE) */}
-              {fase === 'cs' && (
-                <>
-                  <input ref={calcPdfRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onPickCalcPdf} />
-                  <DropZone accept="application/pdf,.pdf" multiple={false} disabled={calcPdfMut.isPending} onFiles={(fs) => { setCalcPdfAviso(null); calcPdfMut.mutate(fs[0]); }} className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => calcPdfRef.current?.click()}
-                      disabled={calcPdfMut.isPending}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 py-2.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-60 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
-                    >
-                      {calcPdfMut.isPending ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" /> Lendo o cálculo da inicial…</>
-                      ) : (
-                        <><Calculator className="h-4 w-4" /> Ou: importar o cálculo da inicial (PDF do relatório)</>
-                      )}
-                    </button>
-                  </DropZone>
-                  <p className="mt-1 text-[10px] leading-tight text-zinc-400">
-                    O PDF gerado pela calculadora (tabela &quot;Evolução do Saldo Devedor&quot;) —
-                    reaproveita as parcelas e os dados do contrato sem re-upar o HISCRE.
-                  </p>
-                  {calcPdfAviso && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{calcPdfAviso}</p>}
-                </>
-              )}
+              {calcPdfAviso && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{calcPdfAviso}</p>}
               {hiscreContratos && hiscreContratos.length > 1 && (
                 <div className="mt-2 space-y-1.5">
                   {hiscreContratos.map((c, i) => (
@@ -1430,22 +1456,12 @@ export default function CalculadoraRmcPage() {
                       já sai recalculado.
                     </p>
                   )}
-                  {/* Importar sentença (IA) — preenche valor da causa + honorários */}
-                  <input ref={csSentRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={onPickCsSent} />
-                  <DropZone accept="application/pdf,.pdf" disabled={csSentMut.isPending} onFiles={(fs) => { setCsSentAviso(null); csSentMut.mutate(fs); }}>
-                    <button
-                      type="button"
-                      onClick={() => csSentRef.current?.click()}
-                      disabled={csSentMut.isPending}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-violet-300 bg-violet-50/50 py-2.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-50 disabled:opacity-60 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
-                    >
-                      {csSentMut.isPending ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" /> Lendo a sentença…</>
-                      ) : (
-                        <><Sparkles className="h-4 w-4" /> Importar sentença (IA) — valor da causa + honorários</>
-                      )}
-                    </button>
-                  </DropZone>
+                  {/* A sentença/inicial entram pela área "Importar documentos" (sem botão duplicado aqui) */}
+                  {csSentMut.isPending && (
+                    <p className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Lendo a sentença…
+                    </p>
+                  )}
                   {csSentAviso && <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">{csSentAviso}</p>}
 
                   <div>
