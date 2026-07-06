@@ -67,6 +67,7 @@ import { AssignmentPopover } from './assignment-popover';
 import { departmentsService } from '@/features/settings/services/departments.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { tasksService } from '@/features/tasks/services/tasks.service';
+import { useAuthStore } from '@/stores/auth-store';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
@@ -390,6 +391,7 @@ function QuickTaskSection({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const { data } = useQuery({
     queryKey: ['cases-by-contact', contactId],
     queryFn: () => legalCasesService.casesByContact(contactId),
@@ -414,6 +416,9 @@ function QuickTaskSection({
         title: t,
         // 9h como a criação de tarefa da própria agenda (evita virar "dia todo").
         dueAt: dueAt ? new Date(dueAt + 'T09:00:00').toISOString() : null,
+        // Atribui a VOCÊ (quem cria) — senão a tarefa fica sem dono e não aparece
+        // na "sua" agenda. Dá pra reatribuir depois na agenda/tarefas.
+        assigneeId: currentUserId || undefined,
         contactId,
         conversationId,
         caseId: caseId || undefined,
