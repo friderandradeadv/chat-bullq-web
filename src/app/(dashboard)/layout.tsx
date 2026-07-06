@@ -156,7 +156,7 @@ export default function DashboardLayout({
               className="pointer-events-none absolute inset-0"
               style={{
                 background:
-                  'radial-gradient(60% 180% at 32% 0%, rgba(255,255,255,0.09), transparent 60%), radial-gradient(55% 170% at 72% 100%, rgba(255,255,255,0.07), transparent 60%), linear-gradient(180deg, rgba(255,255,255,0.05), transparent 42%)',
+                  'radial-gradient(48% 200% at 30% 5%, rgba(255,255,255,0.12), transparent 62%), radial-gradient(55% 210% at 70% 100%, rgba(255,255,255,0.10), transparent 62%), radial-gradient(80% 150% at 50% 50%, rgba(255,255,255,0.06), transparent 65%), linear-gradient(180deg, rgba(255,255,255,0.06), transparent 42%)',
               }}
             />
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no

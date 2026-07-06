@@ -383,9 +383,16 @@
   /* tom ESCURO (igual barra dark do Trello): predominantemente dark, com leve
      translucidez pro conteúdo revelar borrado ao rolar. No modo claro deixa de
      ficar cinza lavado. */
-  background: rgba(20, 23, 27, 0.54) !important;
-  -webkit-backdrop-filter: blur(26px) saturate(1.35);
-  backdrop-filter: blur(26px) saturate(1.35);
+  /* MODO CLARO: um pouco mais fechado pra continuar um tom ESCURO (translúcido
+     demais sobre página branca vira cinza lavado). */
+  background: rgba(18, 21, 25, 0.62) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  backdrop-filter: blur(30px) saturate(1.4);
+}
+/* MODO ESCURO: bem mais translúcido — o fundo já é escuro, então fica dark de
+   verdade E revela bastante o conteúdo borrado por baixo. */
+.dark .topbar-glass {
+  background: rgba(18, 21, 25, 0.32) !important;
 }
 @media (min-width: 1024px) {
   .under-bar > * {
