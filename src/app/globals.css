@@ -380,9 +380,12 @@
    baixo. A barra fica escura (controles claros, classe literal `dark`) nos 2 modos.
    !important pra vencer o `bg-[#1D2125]` utilitário. */
 .topbar-glass {
-  background: rgba(20, 23, 27, 0.55) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
-  backdrop-filter: blur(16px) saturate(1.2);
+  /* tom ESCURO (igual barra dark do Trello): predominantemente dark, com leve
+     translucidez pro conteúdo revelar borrado ao rolar. No modo claro deixa de
+     ficar cinza lavado. */
+  background: rgba(20, 23, 27, 0.82) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
 }
 @media (min-width: 1024px) {
   .under-bar > * {
