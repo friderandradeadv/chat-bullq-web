@@ -253,6 +253,13 @@ export default function CalculadoraRmcPage() {
     const valor = !isNaN(v) && v > 0 ? v : ultimaParcela.valor;
     return gerarParcelasPosteriores(ultimaParcela.data, form.dataBase, valor);
   }, [tutela, ultimaParcela, form.dataBase]);
+  // HISCON/HISCRE costumam ser da época da inicial: quantos meses as parcelas
+  // estão "atrasadas" em relação à data-base (0 = em dia).
+  const defasagemMeses = useMemo(() => {
+    if (!ultimaParcela || !form.dataBase || ultimaParcela.data > form.dataBase) return 0;
+    return Math.max(0, mesesEntre(ultimaParcela.data, form.dataBase) - 1);
+  }, [ultimaParcela, form.dataBase]);
+  const mesBr = (iso: string) => iso.slice(0, 7).split('-').reverse().join('/');
 
   const gerarParcelas = () => {
     const di = parseData(ger.dataInicial) ?? ger.dataInicial;
@@ -1054,9 +1061,21 @@ export default function CalculadoraRmcPage() {
                 <span className="text-xs font-normal text-zinc-400">(suspensão dos descontos)</span>
               </h2>
               <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-                Se a tutela <b>não</b> foi deferida, os descontos continuaram — o saldo devedor é
+                O HISCON/HISCRE costumam ser <b>da época da inicial</b> — as parcelas param lá. Se
+                a tutela <b>não</b> foi deferida, os descontos continuaram — o saldo devedor é
                 recalculado somando uma parcela por mês, da última parcela até a data-base.
               </p>
+              {tutela.deferida && defasagemMeses >= 2 && ultimaParcela && (
+                <p className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    As parcelas param em <b>{mesBr(ultimaParcela.data)}</b> — {defasagemMeses}{' '}
+                    mês(es) antes da data-base ({mesBr(form.dataBase)}). HISCRE defasado? Se os
+                    descontos <b>não</b> foram suspensos por tutela, marque{' '}
+                    <b>"Não — descontos continuaram"</b> para completar o período.
+                  </span>
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -1128,6 +1147,26 @@ export default function CalculadoraRmcPage() {
 
               {cs.ativar && (
                 <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                  {/* Alinhamento com o card "Tutela deferida?": no CS, o HISCON/HISCRE
+                      da época da inicial deixa as parcelas defasadas até a data-base. */}
+                  {tutela.deferida && defasagemMeses >= 2 && ultimaParcela && (
+                    <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                      <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Para execução, confira o card <b>"Tutela deferida?"</b> acima: as parcelas
+                        (HISCRE da época da inicial?) param em <b>{mesBr(ultimaParcela.data)}</b>,{' '}
+                        {defasagemMeses} mês(es) antes da data-base. Sem tutela, os descontos
+                        continuaram e o saldo a executar está maior.
+                      </span>
+                    </p>
+                  )}
+                  {!tutela.deferida && parcelasExtras.length > 0 && (
+                    <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-relaxed text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300">
+                      ✓ Tutela não deferida: {parcelasExtras.length} parcela(s) de{' '}
+                      {brl(parcelasExtras[0].valor)} somadas até a data-base — o saldo da execução
+                      já sai recalculado.
+                    </p>
+                  )}
                   {/* Importar sentença (IA) — preenche valor da causa + honorários */}
                   <input ref={csSentRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={onPickCsSent} />
                   <DropZone accept="application/pdf,.pdf" disabled={csSentMut.isPending} onFiles={(fs) => { setCsSentAviso(null); csSentMut.mutate(fs); }}>
