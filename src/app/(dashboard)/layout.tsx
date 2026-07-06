@@ -137,12 +137,17 @@ export default function DashboardLayout({
           </>
         }
       >
-        <div className="flex h-full flex-col">
+        <div className="relative isolate flex h-full flex-col">
+          {/* Início: degradê roxo no TOPO, atrás da barra (que é translúcida) — o
+              roxo aparece através do menu, sem aquele bloco branco estático. */}
+          {pathname === '/inicio' && (
+            <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-gradient-to-b from-[#7048E8]/25 via-[#9775fa]/10 to-transparent dark:from-[#7048E8]/28 dark:via-[#7048E8]/12 dark:to-transparent" />
+          )}
           <ToolFailureBanner />
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
-          <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-zinc-200/70 bg-white/70 px-4 backdrop-blur-md dark:border-white/5 dark:bg-[#1D2125]/60 lg:flex">
+          <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-zinc-200/50 bg-white/55 px-4 backdrop-blur-md dark:border-white/5 dark:bg-[#17191c]/55 lg:flex">
             {/* Modo simples: sem sidebar, então a MARCA minimalista (FA., clicável →
                 Início) aparece no canto superior esquerdo. Versão clara/escura. */}
             {simples && (
