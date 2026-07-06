@@ -20,6 +20,7 @@ import {
   Plus,
   RefreshCw,
   Scale,
+  ShieldAlert,
   Sparkles,
   TriangleAlert,
   Upload,
@@ -38,8 +39,12 @@ import {
   type HisconContrato,
   type IndiceCorrecao,
   type ParcelaInput,
+  type ResultadoRmc,
 } from '@/features/calculadora-rmc/services/calculadora-rmc.service';
-import { calculadoraCsService } from '@/features/calculadora-cs/services/calculadora-cs.service';
+import {
+  calculadoraCsService,
+  type ResultadoCs as ResultadoCsAvulso,
+} from '@/features/calculadora-cs/services/calculadora-cs.service';
 import { gerarPdfRmc } from '@/features/calculadora-rmc/lib/pdf';
 import { DropZone } from '@/components/drop-zone';
 
@@ -98,6 +103,25 @@ function addMonthsISO(iso: string, n: number): string {
   ).padStart(2, '0')}`;
 }
 
+/**
+ * Parcelas mensais posteriores ao cálculo (tutela NÃO deferida): os descontos
+ * continuaram depois da inicial — gera uma parcela por mês, do mês seguinte à
+ * última parcela conhecida até a data-base, recalculando o saldo devedor.
+ */
+function gerarParcelasPosteriores(
+  ultimaData: string,
+  ateData: string,
+  valor: number,
+): ParcelaInput[] {
+  const out: ParcelaInput[] = [];
+  for (let i = 1; i <= 600; i++) {
+    const d = addMonthsISO(ultimaData, i);
+    if (d > ateData) break;
+    out.push({ data: d, valor });
+  }
+  return out;
+}
+
 /** Nº de competências (meses) entre duas datas ISO, mínimo 1. */
 function mesesEntre(de: string, ate: string): number {
   const [y1, m1] = de.split('-').map(Number);
@@ -108,6 +132,9 @@ function mesesEntre(de: string, ate: string): number {
 const hoje = new Date().toISOString().slice(0, 10);
 
 const TIPOS = ['RMC', 'RCC'] as const;
+
+/** Resultado da RMC + (opcional) execução só da sucumbência (obrigação de fazer). */
+type ResultadoRmcExt = ResultadoRmc & { csSuc?: ResultadoCsAvulso };
 
 export default function CalculadoraRmcPage() {
   const [form, setForm] = useState({
@@ -154,10 +181,12 @@ export default function CalculadoraRmcPage() {
   // ── Cumprimento de Sentença (opcional) ─────────────────────────────────────
   const [cs, setCs] = useState({
     ativar: false,
+    execucao: 'restituicao' as 'restituicao' | 'soSucumbencia',
     baseCenario: 'conversaoDobro' as CenarioId,
     sucPercentual: '10',
-    sucBase: 'valorCausa' as 'principal' | 'valorCausa',
+    sucBase: 'valorCausa' as 'principal' | 'valorCausa' | 'valorFixado',
     valorCausa: '',
+    valorFixado: '',
     atualizarValorCausa: false,
     valorCausaData: '',
     multaMoratoria: false,
@@ -179,8 +208,8 @@ export default function CalculadoraRmcPage() {
           sucBase: 'valorCausa',
           valorCausa: e.valorCausa != null ? String(e.valorCausa).replace('.', ',') : c.valorCausa,
           sucPercentual: e.honorarios ? String(e.honorarios.percentual).replace('.', ',') : c.sucPercentual,
-          multaMoratoria: e.aplicarMulta523 ?? c.multaMoratoria,
-          multaHonorarios: e.aplicarMulta523 ?? c.multaHonorarios,
+          // Multas do art. 523 NÃO são pré-marcadas pela IA: só incidem depois de
+          // esgotado o prazo de 15 dias sem pagamento — decisão do advogado.
         }));
       }
       setCsSentAviso(e?.observacoes ? `IA: ${e.observacoes}` : (r.aviso ?? 'Sentença lida.'));
@@ -200,6 +229,21 @@ export default function CalculadoraRmcPage() {
   const [ger, setGer] = useState({ dataInicial: '', valor: '', meses: '12' });
   const { parcelas, erros } = useMemo(() => parseParcelas(parcelasTexto), [parcelasTexto]);
 
+  // ── Tutela deferida? (suspensão dos descontos) ─────────────────────────────
+  // Se NÃO deferida, os descontos continuaram após a inicial: estende as
+  // parcelas mês a mês até a data-base, recalculando o saldo devedor.
+  const [tutela, setTutela] = useState({ deferida: true, valorMensal: '' });
+  const ultimaParcela = useMemo(
+    () => (parcelas.length ? parcelas.reduce((a, b) => (a.data > b.data ? a : b)) : null),
+    [parcelas],
+  );
+  const parcelasExtras = useMemo(() => {
+    if (tutela.deferida || !ultimaParcela || !form.dataBase) return [] as ParcelaInput[];
+    const v = parseValor(tutela.valorMensal);
+    const valor = !isNaN(v) && v > 0 ? v : ultimaParcela.valor;
+    return gerarParcelasPosteriores(ultimaParcela.data, form.dataBase, valor);
+  }, [tutela, ultimaParcela, form.dataBase]);
+
   const gerarParcelas = () => {
     const di = parseData(ger.dataInicial) ?? ger.dataInicial;
     const v = parseValor(ger.valor);
@@ -213,8 +257,9 @@ export default function CalculadoraRmcPage() {
   };
 
   // ── Cálculo ──────────────────────────────────────────────────────────────
+  const [csInfo, setCsInfo] = useState<{ honFixado: boolean } | null>(null);
   const calc = useMutation({
-    mutationFn: () => {
+    mutationFn: async (): Promise<ResultadoRmcExt> => {
       const jm = parseValor(form.jurosMora);
       const payload: CalcularRmcInput = {
         valorEmprestimo: parseValor(form.valorEmprestimo),
@@ -226,28 +271,76 @@ export default function CalculadoraRmcPage() {
         dataBase: form.dataBase,
         proRataDie: form.proRataDie,
         nomeCalculo: form.nomeCalculo || undefined,
-        parcelas,
+        parcelas: [...parcelas, ...parcelasExtras],
       };
-      if (cs.ativar) {
+      setCsInfo({ honFixado: cs.ativar && cs.sucBase === 'valorFixado' });
+      if (cs.ativar && cs.execucao === 'restituicao') {
         const vc = parseValor(cs.valorCausa);
+        const vf = parseValor(cs.valorFixado);
         payload.cs = {
           ativar: true,
           baseCenario: cs.baseCenario,
-          sucumbencia: {
-            percentual: parseValor(cs.sucPercentual) || 0,
-            base: cs.sucBase,
-            valorCausa: cs.sucBase === 'valorCausa' && !isNaN(vc) ? vc : undefined,
-            atualizarValorCausa: cs.sucBase === 'valorCausa' ? cs.atualizarValorCausa : undefined,
-            valorCausaData:
-              cs.sucBase === 'valorCausa' && cs.atualizarValorCausa && cs.valorCausaData
-                ? cs.valorCausaData
-                : undefined,
-          },
+          sucumbencia:
+            cs.sucBase === 'valorFixado'
+              ? {
+                  // valor certo: o motor aplica 100% sobre a "quantia" informada
+                  percentual: 100,
+                  base: 'valorCausa',
+                  valorCausa: isNaN(vf) ? 0 : vf,
+                  atualizarValorCausa: cs.atualizarValorCausa,
+                  valorCausaData:
+                    cs.atualizarValorCausa && cs.valorCausaData ? cs.valorCausaData : undefined,
+                }
+              : {
+                  percentual: parseValor(cs.sucPercentual) || 0,
+                  base: cs.sucBase,
+                  valorCausa: cs.sucBase === 'valorCausa' && !isNaN(vc) ? vc : undefined,
+                  atualizarValorCausa: cs.sucBase === 'valorCausa' ? cs.atualizarValorCausa : undefined,
+                  valorCausaData:
+                    cs.sucBase === 'valorCausa' && cs.atualizarValorCausa && cs.valorCausaData
+                      ? cs.valorCausaData
+                      : undefined,
+                },
           multaMoratoria523: cs.multaMoratoria,
           honorarios523: cs.multaHonorarios,
         };
       }
-      return calculadoraRmcService.calcular(payload);
+      const r = await calculadoraRmcService.calcular(payload);
+      // Obrigação de fazer: a restituição vira abatimento no recálculo — o que se
+      // executa em dinheiro são só os honorários. Calculamos a execução à parte
+      // (motor de atualização de débitos), com os honorários como principal.
+      if (cs.ativar && cs.execucao === 'soSucumbencia') {
+        const pctSuc = parseValor(cs.sucPercentual) || 0;
+        const vc = parseValor(cs.valorCausa) || 0;
+        const valor =
+          cs.sucBase === 'valorFixado'
+            ? parseValor(cs.valorFixado) || 0
+            : Math.round(((pctSuc / 100) * vc + Number.EPSILON) * 100) / 100;
+        if (valor > 0) {
+          const csSuc = await calculadoraCsService.calcular({
+            indiceCorrecao: form.indiceCorrecao,
+            termoFinal: form.dataBase,
+            proRataDie: form.proRataDie,
+            jurosMora: 0,
+            jurosInicial: 'vencimento',
+            multaMoratoria523: cs.multaMoratoria,
+            honorarios523: cs.multaHonorarios,
+            debitos: [
+              {
+                descricao:
+                  cs.sucBase === 'valorFixado'
+                    ? 'Honorários sucumbenciais fixados'
+                    : `Honorários sucumbenciais (${cs.sucPercentual}% sobre o valor da causa)`,
+                data:
+                  cs.atualizarValorCausa && cs.valorCausaData ? cs.valorCausaData : form.dataBase,
+                valor,
+              },
+            ],
+          });
+          return { ...r, csSuc };
+        }
+      }
+      return r;
     },
   });
 
@@ -944,6 +1037,66 @@ export default function CalculadoraRmcPage() {
               </div>
             </div>
 
+            {/* Tutela / descontos continuados */}
+            <div className={cardCls}>
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+                <ShieldAlert className="h-4 w-4 text-amber-500" /> Tutela deferida?{' '}
+                <span className="text-xs font-normal text-zinc-400">(suspensão dos descontos)</span>
+              </h2>
+              <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                Se a tutela <b>não</b> foi deferida, os descontos continuaram — o saldo devedor é
+                recalculado somando uma parcela por mês, da última parcela até a data-base.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTutela((t) => ({ ...t, deferida: true }))}
+                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${tutela.deferida ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500/50 dark:bg-blue-500/15 dark:text-blue-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  Sim — descontos suspensos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTutela((t) => ({ ...t, deferida: false }))}
+                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${!tutela.deferida ? 'border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  Não — descontos continuaram
+                </button>
+              </div>
+              {!tutela.deferida && (
+                <div className="mt-3 space-y-2">
+                  <div>
+                    <label className={labelCls}>Desconto mensal após a inicial (R$)</label>
+                    <input
+                      className={inputCls}
+                      inputMode="decimal"
+                      placeholder={
+                        ultimaParcela ? `${ultimaParcela.valor.toFixed(2).replace('.', ',')} (última parcela)` : '105,00'
+                      }
+                      value={tutela.valorMensal}
+                      onChange={(e) => setTutela((t) => ({ ...t, valorMensal: e.target.value }))}
+                    />
+                    <p className="mt-1 text-[10px] leading-tight text-zinc-400">
+                      Vazio = repete o valor da última parcela da lista.
+                    </p>
+                  </div>
+                  {parcelasExtras.length > 0 ? (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                      Serão acrescidas <b>{parcelasExtras.length} parcela(s)</b> de{' '}
+                      <b>{brl(parcelasExtras[0].valor)}</b> (
+                      {parcelasExtras[0].data.slice(0, 7).split('-').reverse().join('/')} a{' '}
+                      {parcelasExtras[parcelasExtras.length - 1].data.slice(0, 7).split('-').reverse().join('/')}
+                      ) — o saldo devedor será recalculado até a data-base.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] leading-tight text-zinc-400">
+                      Preencha as parcelas descontadas acima — a extensão parte da última.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Cumprimento de Sentença (opcional) */}
             <div className={cardCls}>
               <label className="flex items-start gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
@@ -959,8 +1112,8 @@ export default function CalculadoraRmcPage() {
                 </span>
               </label>
               <p className="mt-1 pl-6 text-xs text-zinc-500 dark:text-zinc-400">
-                Pega a restituição da RMC como Principal e soma honorários de
-                sucumbência + multa do art. 523 — num cálculo só.
+                Monta a execução com os parâmetros exatos da sentença: restituição como principal
+                (ou só a sucumbência, na obrigação de fazer) + honorários + multa do art. 523.
               </p>
 
               {cs.ativar && (
@@ -984,17 +1137,45 @@ export default function CalculadoraRmcPage() {
                   {csSentAviso && <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">{csSentAviso}</p>}
 
                   <div>
-                    <label className={labelCls}>Principal = restituição do cenário</label>
-                    <select
-                      className={inputCls}
-                      value={cs.baseCenario}
-                      onChange={(e) => setCsField('baseCenario', e.target.value as CenarioId)}
-                    >
-                      <option value="apenasConversao">Apenas conversão (simples)</option>
-                      <option value="conversaoDobro">Conversão + dobro</option>
-                      <option value="restituicaoTotal">Restituição total</option>
-                    </select>
+                    <label className={labelCls}>O que a sentença mandou executar?</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCsField('execucao', 'restituicao')}
+                        className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${cs.execucao === 'restituicao' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                      >
+                        Restituição em dinheiro + sucumbência
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCsField('execucao', 'soSucumbencia')}
+                        className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${cs.execucao === 'soSucumbencia' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                      >
+                        Só a sucumbência (obrigação de fazer)
+                      </button>
+                    </div>
+                    {cs.execucao === 'soSucumbencia' && (
+                      <p className="mt-1.5 text-[10px] leading-tight text-zinc-400">
+                        Sentença sem condenação líquida: a restituição vira abatimento no recálculo
+                        do contrato — executa-se em dinheiro apenas os honorários sucumbenciais.
+                      </p>
+                    )}
                   </div>
+
+                  {cs.execucao === 'restituicao' && (
+                    <div>
+                      <label className={labelCls}>Principal = restituição do cenário</label>
+                      <select
+                        className={inputCls}
+                        value={cs.baseCenario}
+                        onChange={(e) => setCsField('baseCenario', e.target.value as CenarioId)}
+                      >
+                        <option value="apenasConversao">Apenas conversão (simples)</option>
+                        <option value="conversaoDobro">Conversão + dobro</option>
+                        <option value="restituicaoTotal">Restituição total</option>
+                      </select>
+                    </div>
+                  )}
 
                   <div className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
                     <p className="mb-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
@@ -1004,10 +1185,11 @@ export default function CalculadoraRmcPage() {
                       <div>
                         <label className={labelCls}>Percentual (%)</label>
                         <input
-                          className={inputCls}
+                          className={`${inputCls} disabled:opacity-50`}
                           inputMode="decimal"
-                          placeholder="10"
-                          value={cs.sucPercentual}
+                          placeholder={cs.sucBase === 'valorFixado' ? '—' : '10'}
+                          value={cs.sucBase === 'valorFixado' ? '' : cs.sucPercentual}
+                          disabled={cs.sucBase === 'valorFixado'}
                           onChange={(e) => setCsField('sucPercentual', e.target.value)}
                         />
                       </div>
@@ -1016,13 +1198,54 @@ export default function CalculadoraRmcPage() {
                         <select
                           className={inputCls}
                           value={cs.sucBase}
-                          onChange={(e) => setCsField('sucBase', e.target.value as 'principal' | 'valorCausa')}
+                          onChange={(e) => setCsField('sucBase', e.target.value as typeof cs.sucBase)}
                         >
                           <option value="valorCausa">Valor da causa</option>
-                          <option value="principal">Principal (restituição)</option>
+                          {cs.execucao === 'restituicao' && (
+                            <option value="principal">Principal (restituição)</option>
+                          )}
+                          <option value="valorFixado">Valor fixado (R$)</option>
                         </select>
                       </div>
                     </div>
+                    {cs.sucBase === 'valorFixado' && (
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <label className={labelCls}>Honorários fixados (R$)</label>
+                          <input
+                            className={inputCls}
+                            inputMode="decimal"
+                            placeholder="1.175,87"
+                            value={cs.valorFixado}
+                            onChange={(e) => setCsField('valorFixado', e.target.value)}
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
+                            checked={cs.atualizarValorCausa}
+                            onChange={(e) => setCsField('atualizarValorCausa', e.target.checked)}
+                          />
+                          Corrigir o valor até a data-base
+                        </label>
+                        {cs.atualizarValorCausa && (
+                          <div>
+                            <label className={labelCls}>Data da fixação (sentença)</label>
+                            <input
+                              type="date"
+                              className={inputCls}
+                              value={cs.valorCausaData}
+                              onChange={(e) => setCsField('valorCausaData', e.target.value)}
+                            />
+                          </div>
+                        )}
+                        <p className="text-[10px] leading-tight text-zinc-400">
+                          Use quando não há condenação líquida e os honorários precisam ser fixados
+                          em valor certo.
+                        </p>
+                      </div>
+                    )}
                     {cs.sucBase === 'valorCausa' && (
                       <div className="mt-3 space-y-2">
                         <div>
@@ -1081,6 +1304,9 @@ export default function CalculadoraRmcPage() {
                       />
                       Honorários de 10%
                     </label>
+                    <p className="mt-1.5 text-[10px] leading-tight text-zinc-400">
+                      Só marque depois de esgotado o prazo de 15 dias do art. 523 sem pagamento.
+                    </p>
                   </div>
                 </div>
               )}
@@ -1222,15 +1448,19 @@ export default function CalculadoraRmcPage() {
                     <dl className="text-sm">
                       <ResRow label="Principal (repetição do indébito)" valor={res.cs.principal} />
                       <ResRow
-                        label={`Honorários sucumbenciais — ${pct(res.cs.sucumbencia.percentual)} ${
-                          res.cs.sucumbencia.base === 'valorCausa'
-                            ? `sobre o valor da causa (${brl(
-                                res.cs.sucumbencia.valorCausaAtualizado ?? res.cs.sucumbencia.valorCausa ?? 0,
-                              )}${res.cs.sucumbencia.valorCausaAtualizado != null ? ' atualizado' : ''})`
-                            : res.cs.sucumbencia.base === 'diferenca'
-                              ? 'sobre a diferença'
-                              : 'sobre o principal'
-                        }`}
+                        label={
+                          csInfo?.honFixado
+                            ? `Honorários sucumbenciais — valor fixado${res.cs.sucumbencia.valorCausaAtualizado != null ? ' (corrigido até a data-base)' : ''}`
+                            : `Honorários sucumbenciais — ${pct(res.cs.sucumbencia.percentual)} ${
+                                res.cs.sucumbencia.base === 'valorCausa'
+                                  ? `sobre o valor da causa (${brl(
+                                      res.cs.sucumbencia.valorCausaAtualizado ?? res.cs.sucumbencia.valorCausa ?? 0,
+                                    )}${res.cs.sucumbencia.valorCausaAtualizado != null ? ' atualizado' : ''})`
+                                  : res.cs.sucumbencia.base === 'diferenca'
+                                    ? 'sobre a diferença'
+                                    : 'sobre o principal'
+                              }`
+                        }
                         valor={res.cs.sucumbencia.valor}
                       />
                       {res.cs.multa523.moratoria > 0 && (
@@ -1240,6 +1470,39 @@ export default function CalculadoraRmcPage() {
                         <ResRow label="Honorários de 10% (art. 523, CPC)" valor={res.cs.multa523.honorarios} />
                       )}
                       <ResRow label="Total geral (execução)" valor={res.cs.total} destaque />
+                    </dl>
+                  </div>
+                )}
+
+                {/* Bloco "Execução da sucumbência" — obrigação de fazer (sem condenação líquida) */}
+                {res.csSuc && (
+                  <div className="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm dark:border-violet-500/30 dark:bg-zinc-900">
+                    <div className="flex items-center gap-2 border-b border-violet-100 bg-violet-50/60 px-5 py-3.5 dark:border-violet-500/20 dark:bg-violet-500/10">
+                      <Landmark className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      <div>
+                        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+                          Execução da sucumbência — obrigação de fazer
+                        </h2>
+                        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                          A restituição de {brl(cenarioView.resumo.restituicao)} vira{' '}
+                          <b>abatimento no recálculo do contrato</b> (não é executada em dinheiro) —
+                          executa-se só os honorários, atualizados até{' '}
+                          {res.csSuc.config.termoFinal.split('-').reverse().join('/')}.
+                        </p>
+                      </div>
+                    </div>
+                    <dl className="text-sm">
+                      <ResRow
+                        label="Honorários sucumbenciais corrigidos (principal da execução)"
+                        valor={res.csSuc.totais.principal}
+                      />
+                      {res.csSuc.totais.multa523Moratoria > 0 && (
+                        <ResRow label="Multa moratória de 10% (art. 523, CPC)" valor={res.csSuc.totais.multa523Moratoria} />
+                      )}
+                      {res.csSuc.totais.multa523Honorarios > 0 && (
+                        <ResRow label="Honorários de 10% (art. 523, CPC)" valor={res.csSuc.totais.multa523Honorarios} />
+                      )}
+                      <ResRow label="Total geral (execução)" valor={res.csSuc.totais.totalGeral} destaque />
                     </dl>
                   </div>
                 )}

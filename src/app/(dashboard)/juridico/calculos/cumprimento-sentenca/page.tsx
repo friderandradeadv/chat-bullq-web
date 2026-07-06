@@ -83,6 +83,7 @@ function gerarDescontosPosteriores(
 
 export default function CumprimentoSentencaPage() {
   const [form, setForm] = useState({
+    modo: 'condenacao' as 'condenacao' | 'obrigacaoFazer',
     nomeCalculo: '',
     indiceCorrecao: 'INPC' as IndiceCorrecao,
     termoFinal: hoje,
@@ -153,8 +154,8 @@ export default function CumprimentoSentencaPage() {
           e.honorarios?.base === 'fixa' && e.valorCausa
             ? String(e.valorCausa).replace('.', ',')
             : f.honQuantiaFixa,
-        multa523Mor: e.aplicarMulta523 ?? f.multa523Mor,
-        multa523Hon: e.aplicarMulta523 ?? f.multa523Hon,
+        // Multas do art. 523 NÃO são pré-marcadas pela IA: só incidem depois de
+        // esgotado o prazo de 15 dias sem pagamento — decisão do advogado.
       }));
       setIaAviso(r.aviso ?? `IA preencheu ${e.debitos?.length ?? 0} verba(s). Confira antes de calcular.`);
     },
@@ -182,11 +183,51 @@ export default function CumprimentoSentencaPage() {
     return gerarDescontosPosteriores(form.ultimoDesconto, form.termoFinal, v);
   }, [form.tutelaDeferida, form.descontoMensal, form.ultimoDesconto, form.termoFinal]);
 
-  const [calcInfo, setCalcInfo] = useState<{ honFixado: boolean; descontosExtras: number } | null>(null);
+  // Obrigação de fazer: o valor executável são os próprios honorários — eles
+  // viram o único "débito" (corrigido + juros), e a multa do 523 incide sobre eles.
+  const honExecucaoValor = useMemo(() => {
+    if (form.honBase === 'valorFixado') return parseValor(form.honValorFixado) || 0;
+    const p = parseValor(form.honPercentual) || 0;
+    const vc = parseValor(form.honQuantiaFixa) || 0;
+    return Math.round(((p / 100) * vc + Number.EPSILON) * 100) / 100;
+  }, [form.honBase, form.honValorFixado, form.honPercentual, form.honQuantiaFixa]);
+
+  const [calcInfo, setCalcInfo] = useState<{
+    honFixado: boolean;
+    descontosExtras: number;
+    modo: 'condenacao' | 'obrigacaoFazer';
+  } | null>(null);
   const calc = useMutation({
     mutationFn: () => {
       const lin = (l: Linha) => ({ descricao: l.descricao || 'Item', data: l.data, valor: parseValor(l.valor) });
       const jmInicial = /^\d{4}-\d{2}-\d{2}$/.test(form.jurosInicial) ? form.jurosInicial : 'vencimento';
+      if (form.modo === 'obrigacaoFazer') {
+        const payload: CalcularCsInput = {
+          nomeCalculo: form.nomeCalculo || undefined,
+          indiceCorrecao: form.indiceCorrecao,
+          termoFinal: form.termoFinal,
+          proRataDie: form.proRataDie,
+          jurosMora: parseValor(form.jurosMora) || 0,
+          jurosInicial: jmInicial,
+          multaPct: 0,
+          multaMoratoria523: form.multa523Mor,
+          honorarios523: form.multa523Hon,
+          debitos: [
+            {
+              descricao:
+                form.honBase === 'fixa'
+                  ? `Honorários sucumbenciais (${form.honPercentual}% sobre o valor da causa)`
+                  : 'Honorários sucumbenciais fixados',
+              data:
+                form.honAtualizar && form.honQuantiaData ? form.honQuantiaData : form.termoFinal,
+              valor: honExecucaoValor,
+            },
+          ],
+          creditos: [],
+        };
+        setCalcInfo({ honFixado: false, descontosExtras: 0, modo: 'obrigacaoFazer' });
+        return calculadoraCsService.calcular(payload);
+      }
       const payload: CalcularCsInput = {
         nomeCalculo: form.nomeCalculo || undefined,
         indiceCorrecao: form.indiceCorrecao,
@@ -225,12 +266,15 @@ export default function CumprimentoSentencaPage() {
         debitos: [...debitos.filter((d) => d.data && parseValor(d.valor) > 0).map(lin), ...descontosExtras],
         creditos: creditos.filter((c) => c.data && parseValor(c.valor) > 0).map(lin),
       };
-      setCalcInfo({ honFixado: form.honBase === 'valorFixado', descontosExtras: descontosExtras.length });
+      setCalcInfo({ honFixado: form.honBase === 'valorFixado', descontosExtras: descontosExtras.length, modo: 'condenacao' });
       return calculadoraCsService.calcular(payload);
     },
   });
   const res = calc.data;
-  const podeCalcular = debitosValidos.length > 0 && !!form.termoFinal;
+  const podeCalcular =
+    form.modo === 'obrigacaoFazer'
+      ? !!form.termoFinal && honExecucaoValor > 0
+      : debitosValidos.length > 0 && !!form.termoFinal;
 
   return (
     <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950">
@@ -291,6 +335,41 @@ export default function CumprimentoSentencaPage() {
               )}
             </div>
 
+            {/* Modo de execução */}
+            <div className={cardCls}>
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+                <Gavel className="h-4 w-4 text-zinc-400" /> O que será executado?
+              </h2>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => set('modo', 'condenacao')}
+                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${form.modo === 'condenacao' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  Condenação em dinheiro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    set('modo', 'obrigacaoFazer');
+                    if (form.honBase !== 'fixa' && form.honBase !== 'valorFixado') set('honBase', 'valorFixado');
+                  }}
+                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${form.modo === 'obrigacaoFazer' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
+                >
+                  Obrigação de fazer — só sucumbência
+                </button>
+              </div>
+              {form.modo === 'obrigacaoFazer' && (
+                <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  Sentença sem condenação líquida (ex.: conversão do contrato, com restituição por
+                  abatimento no recálculo): executa-se apenas os <b>honorários sucumbenciais</b>,
+                  que viram o principal — corrigidos, com juros e, se for o caso, multa do art. 523.
+                </p>
+              )}
+            </div>
+
+            {form.modo === 'condenacao' && (
+            <>
             {/* Débitos */}
             <div className={cardCls}>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
@@ -354,6 +433,8 @@ export default function CumprimentoSentencaPage() {
                 </div>
               )}
             </div>
+            </>
+            )}
 
             {/* Parâmetros */}
             <div className={cardCls}>
@@ -415,8 +496,12 @@ export default function CumprimentoSentencaPage() {
                     <div>
                       <label className={labelCls}>Base</label>
                       <select className={inputCls} value={form.honBase} onChange={(e) => set('honBase', e.target.value as HonorariosBase | 'valorFixado')}>
-                        <option value="diferenca">Sobre o principal corrigido</option>
-                        <option value="debitos">Sobre os débitos corrigidos</option>
+                        {form.modo === 'condenacao' && (
+                          <>
+                            <option value="diferenca">Sobre o principal corrigido</option>
+                            <option value="debitos">Sobre os débitos corrigidos</option>
+                          </>
+                        )}
                         <option value="fixa">Sobre o valor da causa (fixo)</option>
                         <option value="valorFixado">Valor fixado (R$)</option>
                       </select>
@@ -474,6 +559,9 @@ export default function CumprimentoSentencaPage() {
                     <input type="checkbox" className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600" checked={form.multa523Hon} onChange={(e) => set('multa523Hon', e.target.checked)} />
                     Honorários de 10%
                   </label>
+                  <p className="mt-1.5 text-[10px] leading-tight text-zinc-400">
+                    Só marque depois de esgotado o prazo de 15 dias do art. 523 sem pagamento.
+                  </p>
                 </div>
 
                 <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
@@ -484,18 +572,20 @@ export default function CumprimentoSentencaPage() {
             </div>
 
             {/* Créditos / amortizações */}
-            <div className={cardCls}>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-                <FileText className="h-4 w-4 text-zinc-400" /> Créditos / pagamentos <span className="text-xs font-normal text-zinc-400">(opcional)</span>
-              </h2>
-              {creditos.length === 0 ? (
-                <button type="button" onClick={() => setCreditos([linhaVazia('Pagamento')])} className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:underline dark:text-violet-400">
-                  <Plus className="h-3.5 w-3.5" /> Adicionar amortização
-                </button>
-              ) : (
-                <ItensEditor itens={creditos} setItens={setCreditos} upd={(i, k, v) => upd(creditos, setCreditos, i, k, v)} placeholderDesc="Pagamento parcial…" />
-              )}
-            </div>
+            {form.modo === 'condenacao' && (
+              <div className={cardCls}>
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+                  <FileText className="h-4 w-4 text-zinc-400" /> Créditos / pagamentos <span className="text-xs font-normal text-zinc-400">(opcional)</span>
+                </h2>
+                {creditos.length === 0 ? (
+                  <button type="button" onClick={() => setCreditos([linhaVazia('Pagamento')])} className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:underline dark:text-violet-400">
+                    <Plus className="h-3.5 w-3.5" /> Adicionar amortização
+                  </button>
+                ) : (
+                  <ItensEditor itens={creditos} setItens={setCreditos} upd={(i, k, v) => upd(creditos, setCreditos, i, k, v)} placeholderDesc="Pagamento parcial…" />
+                )}
+              </div>
+            )}
 
             <button
               type="button"
@@ -545,7 +635,14 @@ export default function CumprimentoSentencaPage() {
                     </p>
                   </div>
                   <dl className="text-sm">
-                    <ResRow label="Principal (débitos corrigidos − créditos)" valor={res.totais.principal} />
+                    <ResRow
+                      label={
+                        calcInfo?.modo === 'obrigacaoFazer'
+                          ? 'Honorários sucumbenciais corrigidos (principal da execução)'
+                          : 'Principal (débitos corrigidos − créditos)'
+                      }
+                      valor={res.totais.principal}
+                    />
                     {res.totais.jurosMora !== 0 && <ResRow label={`Juros de mora (${pct(res.config.jurosMora)} a.m.)`} valor={res.totais.jurosMora} />}
                     {res.totais.multa > 0 && <ResRow label={`Multa (${pct(res.config.multaPct)})`} valor={res.totais.multa} />}
                     {res.totais.honorarios > 0 && (
