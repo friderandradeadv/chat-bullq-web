@@ -66,6 +66,7 @@ import { aiAgentsService, type FeedRun } from '@/features/ai-agents/services/ai-
 import { AssignmentPopover } from './assignment-popover';
 import { departmentsService } from '@/features/settings/services/departments.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
+import { tasksService } from '@/features/tasks/services/tasks.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
@@ -373,6 +374,130 @@ function ClientResponsibleSection({ contactId }: { contactId: string }) {
         <p className="mt-1 text-[10px] text-zinc-400">
           Processo principal — os demais você ajusta em “Processos do cliente”.
         </p>
+      )}
+    </div>
+  );
+}
+
+/** Cria uma tarefa na Agenda direto do painel do cliente — opcionalmente
+ *  vinculada a um dos processos dele (ex.: "juntar documento no processo X"). */
+function QuickTaskSection({
+  contactId,
+  conversationId,
+}: {
+  contactId: string;
+  conversationId: string;
+}) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ['cases-by-contact', contactId],
+    queryFn: () => legalCasesService.casesByContact(contactId),
+    enabled: !!contactId,
+    staleTime: 60_000,
+  });
+  const cases = data?.cases ?? [];
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [dueAt, setDueAt] = useState('');
+  const [caseId, setCaseId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const criar = async () => {
+    const t = title.trim();
+    if (!t) return;
+    setSaving(true);
+    try {
+      await tasksService.create({
+        title: t,
+        dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+        contactId,
+        conversationId,
+        caseId: caseId || undefined,
+      });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Tarefa criada');
+      setTitle('');
+      setDueAt('');
+      setCaseId('');
+      setOpen(false);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao criar tarefa');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Tarefas</p>
+        <button
+          onClick={() => router.push('/tarefas')}
+          className="text-[11px] text-zinc-400 hover:text-primary"
+        >
+          Ver tarefas
+        </button>
+      </div>
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-sm text-zinc-500 transition-colors hover:border-primary/40 hover:text-primary dark:border-zinc-600"
+        >
+          <Plus className="h-4 w-4" /> Nova tarefa
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <input
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') criar(); }}
+            placeholder="O que fazer? (ex.: juntar documento no processo)"
+            className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-[11px] text-zinc-500">
+              Prazo
+              <input
+                type="date"
+                value={dueAt}
+                onChange={(e) => setDueAt(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+            <label className="block text-[11px] text-zinc-500">
+              Processo
+              <select
+                value={caseId}
+                onChange={(e) => setCaseId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              >
+                <option value="">— nenhum —</option>
+                {cases.map((c: ClientCaseRow) => (
+                  <option key={c.id} value={c.id}>
+                    {(c.produto || c.area || 'Processo')}{c.cnjNumber ? ` · ${c.cnjNumber}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => { setOpen(false); setTitle(''); }}
+              className="rounded-md px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={criar}
+              disabled={saving || !title.trim()}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? 'Criando…' : 'Criar tarefa'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -949,6 +1074,9 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
 
       {/* Processos do cliente — vínculo chat ↔ jurídico */}
       <ClientCasesSection contactId={contact.id} />
+
+      {/* Criar tarefa na agenda direto daqui (opcionalmente ligada a um processo) */}
+      <QuickTaskSection contactId={contact.id} conversationId={conversation.id} />
 
       {/* Notes */}
       {contact.notes && (
