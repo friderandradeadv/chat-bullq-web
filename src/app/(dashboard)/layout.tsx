@@ -138,11 +138,6 @@ export default function DashboardLayout({
         }
       >
         <div className="relative isolate flex h-full flex-col">
-          {/* Início: degradê roxo no TOPO, atrás da barra (que é translúcida) — o
-              roxo aparece através do menu, sem aquele bloco branco estático. */}
-          {pathname === '/inicio' && (
-            <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-gradient-to-b from-[#7048E8]/25 via-[#9775fa]/10 to-transparent dark:from-[#7048E8]/28 dark:via-[#7048E8]/12 dark:to-transparent" />
-          )}
           <ToolFailureBanner />
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
