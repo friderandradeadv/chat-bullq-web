@@ -155,10 +155,13 @@ export default function DashboardLayout({
               className="pointer-events-none absolute inset-0"
               style={{
                 backgroundColor: '#101316',
-                backgroundImage: "url('/topbar-bg.svg')",
+                backgroundImage: "url('/topbar-bg.jpg')",
                 backgroundSize: 'cover',
-                backgroundPosition: 'center 62%',
+                // 55% = a fatia do vale (parte mais clara da imagem). brightness
+                // clareia a imagem (que é bem escura) pro vidro ter o que revelar.
+                backgroundPosition: 'center 55%',
                 backgroundRepeat: 'no-repeat',
+                filter: 'brightness(2.2) contrast(1.06)',
               }}
             />
           <div className="topbar-glass dark relative z-10 flex h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">

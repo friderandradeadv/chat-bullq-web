@@ -380,7 +380,7 @@
    continua escura com controles claros (classe literal `dark`). !important pra
    vencer o `bg-[#1D2125]` utilitário. */
 .topbar-glass {
-  background: rgba(18, 21, 25, 0.3) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
-  backdrop-filter: blur(20px) saturate(1.3);
+  background: rgba(18, 21, 25, 0.28) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
 }
