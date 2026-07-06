@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 220" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b0c0e"/>
+      <stop offset="1" stop-color="#181a1e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="53%" cy="72%" r="62%">
+      <stop offset="0" stop-color="#b9bdc2" stop-opacity="1"/>
+      <stop offset="38%" stop-color="#565a60" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#42464c" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="16"/></filter>
+  </defs>
+  <rect width="1600" height="220" fill="url(#sky)"/>
+  <ellipse cx="840" cy="210" rx="620" ry="210" fill="url(#glow)"/>
+  <g filter="url(#soft)">
+    <path d="M0,110 C 300,50 520,150 780,88 C 1040,30 1270,140 1600,74 L1600,220 L0,220 Z" fill="#0e1013"/>
+    <path d="M0,150 C 250,112 540,175 820,132 C 1120,92 1360,165 1600,120 L1600,220 L0,220 Z" fill="#070809"/>
+    <path d="M0,90 C 240,140 430,66 660,108 L660,220 L0,220 Z" fill="#101216" opacity="0.85"/>
+    <path d="M1000,104 C 1220,54 1400,150 1600,96 L1600,220 L1000,220 Z" fill="#101216" opacity="0.85"/>
+  </g>
+</svg>

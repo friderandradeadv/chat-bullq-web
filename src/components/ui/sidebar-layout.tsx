@@ -70,10 +70,6 @@ export function SidebarLayout({
   return (
     <MobileNavContext.Provider value={{ openSidebar: () => setSidebarOpen(true) }}>
     <div className="relative isolate flex h-svh w-full bg-white max-lg:flex-col lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950">
-      {/* Wallpaper grafite (só no dark do desktop) — cobre a tela toda, atrás de
-          tudo. É ele que a barra/sidebar de vidro revelam borrado (efeito Trello).
-          No modo claro e no mobile fica escondido (nada muda). */}
-      <div aria-hidden className="app-wallpaper pointer-events-none fixed inset-0 -z-10 hidden lg:block" />
       {/* Menu lateral em overlay — no mobile (botão Menu do topo/barra) e também no
           desktop quando o MODO SIMPLES esconde a sidebar fixa (item "Menu" da barra). */}
       <Dialog open={sidebarOpen} onClose={setSidebarOpen}>
@@ -107,7 +103,7 @@ export function SidebarLayout({
         }`}
       >
         <div
-          className={`sidebar-glass dark flex h-full flex-col border-r border-zinc-200 bg-white w-64 transition-transform duration-200 ease-in-out dark:border-white/5 dark:bg-[#1D2125] ${
+          className={`dark flex h-full flex-col border-r border-zinc-200 bg-white w-64 transition-transform duration-200 ease-in-out dark:border-white/5 dark:bg-[#1D2125] ${
             collapsed ? "-translate-x-full" : "translate-x-0"
           }`}
         >
@@ -170,7 +166,7 @@ export function SidebarLayout({
         </div>
 
         {/* Page content */}
-        <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden lg:bg-transparent">
+        <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden lg:bg-white lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10">
           <SidebarCollapseContext.Provider value={{ collapsed, toggle: toggleCollapsed }}>
             {children}
           </SidebarCollapseContext.Provider>
