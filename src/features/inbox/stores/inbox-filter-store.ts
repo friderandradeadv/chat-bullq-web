@@ -25,6 +25,10 @@ interface InboxFilterStore {
   /** Responsáveis específicos (ids de user) + UNASSIGNED. OR. Quando
    *  preenchido, vence o scope ALL/MINE. */
   selectedAssigneeIds: string[];
+  /** "Meus clientes": filtra pelas conversas cujo CLIENTE tem processo do qual
+   *  VOCÊ é o advogado responsável (Case.responsibleId), independente de quem
+   *  responde a conversa (robô/humano). Aditivo, não mexe no filtro de cima. */
+  meusClientesOnly: boolean;
 
   setSearch: (v: string) => void;
   setScope: (v: InboxScope) => void;
@@ -36,6 +40,7 @@ interface InboxFilterStore {
   setSelectedTagIds: (v: string[]) => void;
   setSelectedStatusIds: (v: string[]) => void;
   setSelectedAssigneeIds: (v: string[]) => void;
+  setMeusClientesOnly: (v: boolean) => void;
   toggleTagId: (id: string) => void;
   clearFilters: () => void;
 }
@@ -52,6 +57,7 @@ export const useInboxFilterStore = create<InboxFilterStore>((set) => ({
   selectedTagIds: [],
   selectedStatusIds: [],
   selectedAssigneeIds: [],
+  meusClientesOnly: false,
 
   setSearch: (v) => set({ search: v }),
   setScope: (v) => set({ scope: v }),
@@ -63,6 +69,7 @@ export const useInboxFilterStore = create<InboxFilterStore>((set) => ({
   setSelectedTagIds: (v) => set({ selectedTagIds: v }),
   setSelectedStatusIds: (v) => set({ selectedStatusIds: v }),
   setSelectedAssigneeIds: (v) => set({ selectedAssigneeIds: v }),
+  setMeusClientesOnly: (v) => set({ meusClientesOnly: v }),
   toggleTagId: (id) =>
     set((s) => ({
       selectedTagIds: s.selectedTagIds.includes(id)
@@ -77,5 +84,6 @@ export const useInboxFilterStore = create<InboxFilterStore>((set) => ({
       selectedTagIds: [],
       selectedStatusIds: [],
       selectedAssigneeIds: [],
+      meusClientesOnly: false,
     }),
 }));

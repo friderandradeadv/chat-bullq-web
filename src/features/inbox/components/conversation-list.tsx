@@ -169,6 +169,7 @@ export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }:
   const selectedTagIds = useInboxFilterStore((s) => s.selectedTagIds);
   const selectedStatusIds = useInboxFilterStore((s) => s.selectedStatusIds);
   const selectedAssigneeIds = useInboxFilterStore((s) => s.selectedAssigneeIds);
+  const meusClientesOnly = useInboxFilterStore((s) => s.meusClientesOnly);
   const unreadOnly = useInboxFilterStore((s) => s.unreadOnly);
   const archivedOnly = useInboxFilterStore((s) => s.archivedOnly);
   const showGroups = useInboxFilterStore((s) => s.showGroups);
@@ -318,6 +319,7 @@ export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }:
     } else if (scope === 'MINE' && currentUserId) {
       params.assignedToId = currentUserId;
     }
+    if (meusClientesOnly && currentUserId) params.clientResponsibleId = currentUserId;
     return params;
   }, [
     unreadOnly,
@@ -326,6 +328,7 @@ export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }:
     selectedTagIds,
     selectedStatusIds,
     selectedAssigneeIds,
+    meusClientesOnly,
     scope,
     currentUserId,
   ]);
@@ -391,7 +394,7 @@ export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }:
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['conversations', orgId, viewId ?? null, filterKey, debouncedSearch, selectedChannelId, scope, statusTab, archivedOnly, currentUserId],
+    queryKey: ['conversations', orgId, viewId ?? null, filterKey, debouncedSearch, selectedChannelId, scope, statusTab, archivedOnly, currentUserId, meusClientesOnly],
     queryFn: ({ pageParam = 1 }) => {
       const params: Record<string, string> = { limit: '30', page: String(pageParam) };
       // Arquivados é seu próprio balde: mostra TODOS os arquivados, sem aplicar
@@ -424,6 +427,7 @@ export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }:
       } else if (scope === 'MINE' && currentUserId) {
         params.assignedToId = currentUserId;
       }
+      if (meusClientesOnly && currentUserId) params.clientResponsibleId = currentUserId;
       if (viewId) {
         return inboxViewsService.getConversations(viewId, params);
       }

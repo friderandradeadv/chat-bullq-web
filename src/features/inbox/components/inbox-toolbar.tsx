@@ -90,6 +90,8 @@ export function InboxToolbar() {
   const setShowGroups = useInboxFilterStore((s) => s.setShowGroups);
   const selectedTagIds = useInboxFilterStore((s) => s.selectedTagIds);
   const setSelectedTagIds = useInboxFilterStore((s) => s.setSelectedTagIds);
+  const meusClientesOnly = useInboxFilterStore((s) => s.meusClientesOnly);
+  const setMeusClientesOnly = useInboxFilterStore((s) => s.setMeusClientesOnly);
   const selectedStatusIds = useInboxFilterStore((s) => s.selectedStatusIds);
   const setSelectedStatusIds = useInboxFilterStore((s) => s.setSelectedStatusIds);
   const selectedAssigneeIds = useInboxFilterStore((s) => s.selectedAssigneeIds);
@@ -251,6 +253,18 @@ export function InboxToolbar() {
           </button>
         )}
       </div>
+
+      {/* Meus clientes — filtra pelo DONO DO PROCESSO (Case.responsibleId = você),
+          independente de quem responde a conversa. Toggle aditivo. */}
+      <button
+        type="button"
+        onClick={() => setMeusClientesOnly(!meusClientesOnly)}
+        title="Mostrar só os clientes cujos processos são meus (por advogado responsável do processo)"
+        className={`${pillBase} ${meusClientesOnly ? pillActive : pillIdle}`}
+      >
+        <User className="h-4 w-4 shrink-0" />
+        <span className="hidden sm:inline">Meus clientes</span>
+      </button>
 
       {/* Responsável — Todas/Minhas + multi-select de membros + sem responsável */}
       <Popover className="relative">
