@@ -46,6 +46,7 @@ import {
   type ResultadoCs as ResultadoCsAvulso,
 } from '@/features/calculadora-cs/services/calculadora-cs.service';
 import { gerarPdfRmc } from '@/features/calculadora-rmc/lib/pdf';
+import { classificarPdf } from '@/features/calculadora-rmc/lib/classificar-pdf';
 import { DropZone } from '@/components/drop-zone';
 
 const brl = (n: number | undefined) =>
@@ -212,6 +213,7 @@ export default function CalculadoraRmcPage() {
       // Sem condenação líquida (débitos vazios) = obrigação de fazer → a sentença
       // manda executar só a sucumbência; com condenação, restituição + sucumbência.
       const semCondenacao = !!e && !(e.debitos?.length);
+      const preenchidos: string[] = [];
       if (e) {
         setCs((c) => ({
           ...c,
@@ -219,16 +221,43 @@ export default function CalculadoraRmcPage() {
           sucBase: 'valorCausa',
           valorCausa: e.valorCausa != null ? String(e.valorCausa).replace('.', ',') : c.valorCausa,
           sucPercentual: e.honorarios ? String(e.honorarios.percentual).replace('.', ',') : c.sucPercentual,
+          // Data da sentença pré-carrega a correção do valor da causa/honorários.
+          valorCausaData: e.dataSentenca ?? c.valorCausaData,
           // Multas do art. 523 NÃO são pré-marcadas pela IA: só incidem depois de
           // esgotado o prazo de 15 dias sem pagamento — decisão do advogado.
         }));
+        // Parâmetros do CÁLCULO conforme a sentença: índice, juros, dobro/modulação.
+        setForm((f) => ({
+          ...f,
+          indiceCorrecao:
+            e.indiceCorrecao && e.indiceCorrecao !== 'SELIC'
+              ? (e.indiceCorrecao as IndiceCorrecao)
+              : f.indiceCorrecao,
+          jurosMora: e.jurosMora != null ? String(e.jurosMora).replace('.', ',') : f.jurosMora,
+          dobro: e.dobro ?? f.dobro,
+          modulacaoStj: e.modulacaoStj ?? f.modulacaoStj,
+        }));
+        if (e.indiceCorrecao && e.indiceCorrecao !== 'SELIC') preenchidos.push(`índice ${e.indiceCorrecao}`);
+        if (e.jurosMora != null) preenchidos.push(`juros ${String(e.jurosMora).replace('.', ',')}%`);
+        if (e.dobro != null) preenchidos.push(e.dobro ? 'em dobro' : 'restituição simples');
+        if (e.modulacaoStj != null && e.modulacaoStj) preenchidos.push('modulação Tema 929');
+        if (e.valorCausa != null) preenchidos.push('valor da causa');
+        if (e.honorarios) preenchidos.push(`sucumbência ${e.honorarios.percentual}%`);
+        // Tutela: a sentença/inicial dizem se os descontos foram suspensos.
+        if (e.tutelaDeferida != null) {
+          const deferida = e.tutelaDeferida;
+          setTutela((t) => ({ ...t, deferida }));
+          preenchidos.push(deferida ? 'tutela deferida' : 'tutela NÃO deferida (parcelas estendidas)');
+        }
       }
       setCsSentAviso(
         (semCondenacao
-          ? 'Sem condenação líquida na sentença → selecionei "Só a sucumbência (obrigação de fazer)". Confira. '
+          ? 'Sem condenação líquida na sentença → selecionei "Só a sucumbência (obrigação de fazer)". '
           : e
             ? 'Sentença com condenação em dinheiro → "Restituição + sucumbência". '
-            : '') + (e?.observacoes ? `IA: ${e.observacoes}` : (r.aviso ?? 'Sentença lida.')),
+            : '') +
+          (preenchidos.length ? `Preenchi pela sentença: ${preenchidos.join(', ')}. Confira. ` : '') +
+          (e?.observacoes ? `IA: ${e.observacoes}` : (r.aviso ?? 'Sentença lida.')),
       );
     },
     onError: (err) => setCsSentAviso((err as Error)?.message ?? 'Erro ao ler a sentença.'),
@@ -507,6 +536,74 @@ export default function CalculadoraRmcPage() {
     }
   };
 
+  // ── Área única: solta tudo (HISCON, HISCRE, sentença, inicial) de uma vez ──
+  // Classifica cada PDF no navegador (pdfjs + regex, sem custo de IA) e manda
+  // cada um pro extrator certo. Sentença/inicial mudam a fase p/ CS sozinhas.
+  const loteRef = useRef<HTMLInputElement>(null);
+  const [loteBusy, setLoteBusy] = useState(false);
+  const [loteAviso, setLoteAviso] = useState<string | null>(null);
+  const importarLote = async (files: File[]) => {
+    if (!files.length) return;
+    setLoteBusy(true);
+    setLoteAviso(`Identificando ${files.length} documento(s)…`);
+    try {
+      const cls = await Promise.all(files.map((f) => classificarPdf(f)));
+      const idx = (tipo: string) => cls.map((c, i) => (c.tipo === tipo ? i : -1)).filter((i) => i >= 0);
+      const hisconIdx = idx('hiscon');
+      const hiscreIdx = idx('hiscre');
+      const sentIniIdx = [...idx('sentenca'), ...idx('inicial')];
+      const calculoIdx = idx('calculo');
+      const desconhecidos = idx('desconhecido').map((i) => cls[i].nome);
+
+      const partes: string[] = [];
+      const jobs: Promise<unknown>[] = [];
+      if (hisconIdx.length) {
+        partes.push(`HISCON (${cls[hisconIdx[0]].nome})`);
+        setHisconAviso(null);
+        jobs.push(hisconMut.mutateAsync(files[hisconIdx[0]]));
+      }
+      if (hiscreIdx.length) {
+        partes.push(`HISCRE (${cls[hiscreIdx[0]].nome})`);
+        setHiscreAviso(null);
+        jobs.push(hiscreMut.mutateAsync(files[hiscreIdx[0]]));
+      }
+      if (sentIniIdx.length) {
+        partes.push(
+          sentIniIdx.map((i) => `${cls[i].tipo === 'sentenca' ? 'sentença' : 'inicial'} (${cls[i].nome})`).join(' + '),
+        );
+        // Sentença/inicial = fase de execução: liga o CS sozinho.
+        setFase('cs');
+        setCs((c) => ({ ...c, ativar: true }));
+        setCsSentAviso(null);
+        jobs.push(csSentMut.mutateAsync(sentIniIdx.map((i) => files[i])));
+      }
+      setLoteAviso(
+        partes.length
+          ? `Identifiquei: ${partes.join(' · ')}. Lendo com a IA…`
+          : 'Nenhum documento reconhecido.',
+      );
+      await Promise.allSettled(jobs);
+      const avisos: string[] = [];
+      if (partes.length) avisos.push(`Importados: ${partes.join(' · ')}.`);
+      if (calculoIdx.length)
+        avisos.push(
+          `"${cls[calculoIdx[0]].nome}" parece ser o cálculo da inicial — importação dele ainda não é suportada (use o HISCRE por enquanto).`,
+        );
+      if (desconhecidos.length)
+        avisos.push(`Não reconheci: ${desconhecidos.join(', ')} — use os botões específicos abaixo.`);
+      setLoteAviso(avisos.join(' ') || 'Nada importado.');
+    } catch (err) {
+      setLoteAviso((err as Error)?.message ?? 'Erro ao processar os documentos.');
+    } finally {
+      setLoteBusy(false);
+    }
+  };
+  const onPickLote = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fs = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    importarLote(fs);
+  };
+
   // Auto-carrega o HISCON/HISCRE que JÁ foram upados no card — evita re-upar. Quando
   // aberta pelo card (?case=), busca os arquivos guardados (metadata.docs), extrai e
   // aplica o contrato do produto pedido (?tipo). Roda uma vez no mount.
@@ -727,14 +824,33 @@ export default function CalculadoraRmcPage() {
               </p>
             </div>
 
-            {/* Importar documentos (HISCON + HISCRE) */}
+            {/* Importar documentos (área única + HISCON/HISCRE específicos) */}
             <div className={cardCls}>
               <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-                <FileSearch className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Importar do INSS
+                <FileSearch className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Importar documentos
               </h2>
               <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-                A IA lê o <b>HISCON</b> (dados do contrato) e o <b>HISCRE</b> (descontos mês a mês).
+                Solte <b>tudo de uma vez</b> — HISCON, HISCRE, sentença, inicial. Eu identifico
+                cada um e preencho o cálculo (fase, parâmetros, tutela, sucumbência).
               </p>
+
+              {/* Área única */}
+              <input ref={loteRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={onPickLote} />
+              <DropZone accept="application/pdf,.pdf" disabled={loteBusy} onFiles={importarLote} overlayLabel="Solte todos os PDFs aqui" className="mb-2">
+                <button
+                  type="button"
+                  onClick={() => loteRef.current?.click()}
+                  disabled={loteBusy}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-400 bg-blue-50/60 py-3 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-60 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/15"
+                >
+                  {loteBusy ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Identificando e lendo…</>
+                  ) : (
+                    <><Upload className="h-4 w-4" /> Enviar tudo (vários PDFs de uma vez)</>
+                  )}
+                </button>
+              </DropZone>
+              {loteAviso && <p className="mb-2 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">{loteAviso}</p>}
 
               {/* Seletor de tipo */}
               <div className="mb-3">

@@ -162,13 +162,19 @@ export default function CumprimentoSentencaPage() {
           e.valorCausa != null && (semCondenacao || e.honorarios?.base === 'fixa')
             ? String(e.valorCausa).replace('.', ',')
             : f.honQuantiaFixa,
+        // Tutela e data da sentença também vêm da leitura, quando existirem.
+        tutelaDeferida: e.tutelaDeferida ?? f.tutelaDeferida,
+        honQuantiaData: f.honQuantiaData || (e.dataSentenca ?? ''),
         // Multas do art. 523 NÃO são pré-marcadas pela IA: só incidem depois de
         // esgotado o prazo de 15 dias sem pagamento — decisão do advogado.
       }));
       setIaAviso(
-        semCondenacao
+        (semCondenacao
           ? 'Sem condenação líquida na sentença → selecionei "Obrigação de fazer — só sucumbência" (honorários como principal). Confira antes de calcular.'
-          : (r.aviso ?? `IA preencheu ${e.debitos?.length ?? 0} verba(s). Confira antes de calcular.`),
+          : (r.aviso ?? `IA preencheu ${e.debitos?.length ?? 0} verba(s). Confira antes de calcular.`)) +
+          (e.tutelaDeferida === false
+            ? ' Tutela NÃO deferida: os descontos continuaram — preencha o desconto mensal no card da tutela.'
+            : ''),
       );
     },
     onError: (err) => setIaAviso((err as Error)?.message ?? 'Erro ao ler os documentos.'),

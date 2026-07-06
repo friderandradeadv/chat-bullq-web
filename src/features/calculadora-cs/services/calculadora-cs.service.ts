@@ -87,6 +87,14 @@ export interface ExtracaoSentenca {
   honorarios?: { percentual: number; base: HonorariosBase };
   aplicarMulta523?: boolean;
   valorCausa?: number | null;
+  /** restituição em dobro (CDC 42, §ún.)? — casos de consumo/RMC/RCC */
+  dobro?: boolean | null;
+  /** modulação do Tema 929 STJ (dobro só ≥ 30/03/2021)? */
+  modulacaoStj?: boolean | null;
+  /** tutela p/ suspender os descontos foi deferida? (false → descontos continuaram) */
+  tutelaDeferida?: boolean | null;
+  /** data em que a sentença foi proferida */
+  dataSentenca?: string | null;
   observacoes?: string;
 }
 
