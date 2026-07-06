@@ -51,7 +51,7 @@ export function KanbanCard({ card, onClick }: Props) {
       ref={setNodeRef}
       style={style}
       onClick={onClick}
-      className={`group relative cursor-pointer rounded-lg border bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-zinc-900 ${
+      className={`group relative cursor-pointer rounded-lg border bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-[#1E2226] ${
         isClosed
           ? 'border-zinc-200 opacity-70 dark:border-zinc-800'
           : 'border-zinc-200 dark:border-zinc-800'

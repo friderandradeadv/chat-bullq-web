@@ -31,7 +31,7 @@ export function PhaseHeader({
 
   if (!canRename) {
     return (
-      <h2 className="truncate text-sm font-medium text-[#e11970] dark:text-[#f06595]">
+      <h2 className="truncate text-sm font-medium text-[#e11970]/90 dark:text-[#f06595]/75">
         {phase.label}
       </h2>
     );
@@ -64,7 +64,7 @@ export function PhaseHeader({
     <h2
       onClick={() => setEditing(true)}
       title="Clique pra renomear a fase (só sócios)"
-      className="cursor-text truncate text-sm font-medium text-[#e11970] hover:underline dark:text-[#f06595]"
+      className="cursor-text truncate text-sm font-medium text-[#e11970]/90 hover:underline dark:text-[#f06595]/75"
     >
       {phase.label}
     </h2>
