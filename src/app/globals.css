@@ -385,14 +385,14 @@
      ficar cinza lavado. */
   /* MODO CLARO: um pouco mais fechado pra continuar um tom ESCURO (translúcido
      demais sobre página branca vira cinza lavado). */
-  background: rgba(18, 21, 25, 0.62) !important;
+  background: rgba(18, 21, 25, 0.56) !important;
   -webkit-backdrop-filter: blur(30px) saturate(1.4);
   backdrop-filter: blur(30px) saturate(1.4);
 }
-/* MODO ESCURO: bem mais translúcido — o fundo já é escuro, então fica dark de
-   verdade E revela bastante o conteúdo borrado por baixo. */
+/* MODO ESCURO: BEM translúcido — o fundo já é escuro, então segue dark de verdade
+   e revela bastante o conteúdo borrado por baixo (o blur faz o trabalho). */
 .dark .topbar-glass {
-  background: rgba(18, 21, 25, 0.32) !important;
+  background: rgba(18, 21, 25, 0.26) !important;
 }
 @media (min-width: 1024px) {
   .under-bar > * {
