@@ -142,15 +142,24 @@ export default function DashboardLayout({
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
-          {/* Barra superior estilo Trello: tom escuro do modo escuro (#1D2125). A
-              classe `dark` faz TODOS os controles internos (busca, toggle, sino,
-              tema) herdarem o estilo escuro/translúcido — casam com a barra. */}
-          <div className="dark relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1D2125] px-4 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_0_rgba(0,0,0,0.25)] lg:flex">
-            {/* Camadas de "vidro fosco" (o dark mode não tem wallpaper pra borrar,
-                então simulamos a luz atravessando o vidro): realce no topo + leve
-                brilho central. pointer-events-none pra não roubar clique dos controles. */}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.07] via-white/[0.015] to-transparent" />
-            <div className="pointer-events-none absolute inset-y-0 left-1/4 right-1/4 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_70%)]" />
+          {/* Barra superior estilo Trello — VIDRO TRANSLÚCIDO DE VERDADE.
+              O dark mode não tem wallpaper, então a barra não teria o que borrar
+              (ficava chapada/opaca). Solução: um SUBSTRATO colorido (brilho
+              indigo/azul/magenta sobre quase-preto) fica ATRÁS da barra; a barra
+              é translúcida (40%) + blur forte e REVELA esse brilho borrado —
+              exatamente como o vidro do Trello revela a foto de fundo. A base
+              escura garante que não fica "leitoso" no modo claro. */}
+          <div className="relative hidden shrink-0 lg:block">
+            {/* Substrato: o brilho que a barra de vidro deixa transparecer. */}
+            <div aria-hidden className="pointer-events-none absolute inset-0 bg-[#15181b]">
+              <div className="absolute inset-0 bg-[radial-gradient(75%_200%_at_12%_-40%,rgba(99,102,241,0.60),transparent_55%),radial-gradient(75%_200%_at_88%_-40%,rgba(56,189,248,0.45),transparent_55%),radial-gradient(60%_170%_at_50%_150%,rgba(217,70,239,0.38),transparent_60%)]" />
+            </div>
+            {/* A barra de vidro em si — translúcida + blur, revela o substrato. A
+                classe `dark` faz os controles (busca, toggle, sino, tema) herdarem
+                o estilo escuro/glassy e casarem com a barra. */}
+            <div className="dark relative z-10 flex h-11 items-center justify-center border-b border-white/10 bg-[#1D2125]/40 px-4 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_0_rgba(0,0,0,0.25)]">
+            {/* Realce de luz batendo no topo do vidro. */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.06] to-transparent" />
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
                 canto superior esquerdo — versão clara pra contrastar na barra escura. */}
             {simples && (
@@ -167,6 +176,7 @@ export default function DashboardLayout({
               </div>
               <NotificationBell className="dark:border-white/15 dark:bg-white/10 dark:text-zinc-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] dark:backdrop-blur-md dark:hover:bg-white/20 dark:hover:text-white" />
               <ThemeToggle className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:bg-white/20 hover:text-white" />
+            </div>
             </div>
           </div>
           {/* Conteúdo — no mobile reserva espaço p/ a barra de abas (pb-tabbar). */}
