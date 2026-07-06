@@ -150,14 +150,26 @@ export default function DashboardLayout({
               exatamente como o vidro do Trello revela a foto de fundo. A base
               escura garante que não fica "leitoso" no modo claro. */}
           <div className="relative hidden shrink-0 lg:block">
-            {/* Substrato: o brilho que a barra de vidro deixa transparecer. */}
-            <div aria-hidden className="pointer-events-none absolute inset-0 bg-[#15181b]">
-              <div className="absolute inset-0 bg-[radial-gradient(75%_200%_at_12%_-40%,rgba(99,102,241,0.60),transparent_55%),radial-gradient(75%_200%_at_88%_-40%,rgba(56,189,248,0.45),transparent_55%),radial-gradient(60%_170%_at_50%_150%,rgba(217,70,239,0.38),transparent_60%)]" />
+            {/* Substrato: o brilho (facho de luz diagonal + tons frios indigo/teal)
+                que a barra de vidro deixa transparecer. Inline style pra garantir o
+                gradiente exato (validado em teste isolado). */}
+            <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: '#14181c' }}>
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'linear-gradient(103deg, transparent 18%, rgba(255,255,255,0.50) 40%, rgba(203,213,225,0.18) 52%, transparent 62%), linear-gradient(103deg, rgba(0,0,0,0.45) 6%, transparent 34%), radial-gradient(100% 300% at 82% -80%, rgba(129,140,248,0.48), transparent 55%), radial-gradient(80% 240% at 12% 160%, rgba(45,212,191,0.22), transparent 60%)',
+                }}
+              />
             </div>
-            {/* A barra de vidro em si — translúcida + blur, revela o substrato. A
-                classe `dark` faz os controles (busca, toggle, sino, tema) herdarem
-                o estilo escuro/glassy e casarem com a barra. */}
-            <div className="dark relative z-10 flex h-11 items-center justify-center border-b border-white/10 bg-[#1D2125]/40 px-4 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_0_rgba(0,0,0,0.25)]">
+            {/* A barra de vidro em si — TRANSLÚCIDA (rgba 0.34) + blur revela o
+                substrato. Inline style porque `bg-[#hex]/opacity` do Tailwind não
+                aplicava a opacidade e a barra ficava opaca. A classe `dark` faz os
+                controles (busca, toggle, sino, tema) herdarem o estilo glassy. */}
+            <div
+              className="dark relative z-10 flex h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_0_rgba(0,0,0,0.25)]"
+              style={{ background: 'rgba(20,23,27,0.34)', backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
+            >
             {/* Realce de luz batendo no topo do vidro. */}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.06] to-transparent" />
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
