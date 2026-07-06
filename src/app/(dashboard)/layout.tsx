@@ -142,8 +142,9 @@ export default function DashboardLayout({
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
-          {/* Barra superior estilo Trello: tom escuro + blur (frosted), nos dois modos. */}
-          <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1b1f23]/80 px-4 backdrop-blur-md lg:flex">
+          {/* Barra superior estilo Trello: MESMO tom escuro do modo escuro (#1D2125),
+              OPACO nos dois modos (translúcido ficava cinza no claro). */}
+          <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1D2125] px-4 lg:flex">
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
                 canto superior esquerdo — versão clara pra contrastar na barra escura. */}
             {simples && (
