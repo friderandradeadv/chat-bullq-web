@@ -142,53 +142,26 @@ export default function DashboardLayout({
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
-          {/* Barra superior estilo Trello — VIDRO TRANSLÚCIDO DE VERDADE.
-              O dark mode não tem wallpaper, então a barra não teria o que borrar
-              (ficava chapada/opaca). Solução: um SUBSTRATO colorido (brilho
-              indigo/azul/magenta sobre quase-preto) fica ATRÁS da barra; a barra
-              é translúcida (40%) + blur forte e REVELA esse brilho borrado —
-              exatamente como o vidro do Trello revela a foto de fundo. A base
-              escura garante que não fica "leitoso" no modo claro. */}
-          <div className="relative hidden shrink-0 lg:block">
-            {/* Substrato: o brilho (facho de luz diagonal + tons frios indigo/teal)
-                que a barra de vidro deixa transparecer. Inline style pra garantir o
-                gradiente exato (validado em teste isolado). */}
-            <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: '#14181c' }}>
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    'linear-gradient(103deg, transparent 18%, rgba(255,255,255,0.50) 40%, rgba(203,213,225,0.18) 52%, transparent 62%), linear-gradient(103deg, rgba(0,0,0,0.45) 6%, transparent 34%), radial-gradient(100% 300% at 82% -80%, rgba(129,140,248,0.48), transparent 55%), radial-gradient(80% 240% at 12% 160%, rgba(45,212,191,0.22), transparent 60%)',
-                }}
-              />
-            </div>
-            {/* A barra de vidro em si — TRANSLÚCIDA (rgba 0.34) + blur revela o
-                substrato. Inline style porque `bg-[#hex]/opacity` do Tailwind não
-                aplicava a opacidade e a barra ficava opaca. A classe `dark` faz os
-                controles (busca, toggle, sino, tema) herdarem o estilo glassy. */}
-            <div
-              className="dark relative z-10 flex h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_1px_0_rgba(0,0,0,0.25)]"
-              style={{ background: 'rgba(20,23,27,0.34)', backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
-            >
-            {/* Realce de luz batendo no topo do vidro. */}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.06] to-transparent" />
+          {/* Barra superior estilo Trello: tom escuro do modo escuro (#1D2125). A
+              classe `dark` faz TODOS os controles internos (busca, toggle, sino,
+              tema) herdarem o estilo escuro/translúcido — casam com a barra. */}
+          <div className="dark relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1D2125] px-4 backdrop-blur-md lg:flex">
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
                 canto superior esquerdo — versão clara pra contrastar na barra escura. */}
             {simples && (
-              <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 z-10 -translate-y-1/2">
+              <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
                 <img src="/favicon-dark.png" alt="Início" className="h-8 w-8 object-contain" />
               </Link>
             )}
             <GlobalSearch />
-            <div className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-2">
+            <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
               {/* Alternador Completo × Simples (simples = navegação na barra de baixo) */}
-              <div className="flex items-center rounded-lg bg-zinc-100 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-md dark:bg-white/10 dark:ring-1 dark:ring-inset dark:ring-white/10">
-                <button onClick={() => setModo('completo')} title="Menu lateral completo" className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${!simples ? 'bg-white text-zinc-800 shadow-sm dark:bg-white/20 dark:text-white' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-300 dark:hover:text-white'}`}><PanelLeft className="h-3.5 w-3.5" /> Completo</button>
-                <button onClick={() => setModo('simples')} title="Atalhos na barra de baixo (como no celular)" className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${simples ? 'bg-white text-zinc-800 shadow-sm dark:bg-white/20 dark:text-white' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-300 dark:hover:text-white'}`}><LayoutList className="h-3.5 w-3.5" /> Simples</button>
+              <div className="flex items-center rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+                <button onClick={() => setModo('completo')} title="Menu lateral completo" className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${!simples ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}><PanelLeft className="h-3.5 w-3.5" /> Completo</button>
+                <button onClick={() => setModo('simples')} title="Atalhos na barra de baixo (como no celular)" className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${simples ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}><LayoutList className="h-3.5 w-3.5" /> Simples</button>
               </div>
-              <NotificationBell className="dark:border-white/15 dark:bg-white/10 dark:text-zinc-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] dark:backdrop-blur-md dark:hover:bg-white/20 dark:hover:text-white" />
-              <ThemeToggle className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:bg-white/20 hover:text-white" />
-            </div>
+              <NotificationBell />
+              <ThemeToggle className={bellBtnCls} />
             </div>
           </div>
           {/* Conteúdo — no mobile reserva espaço p/ a barra de abas (pb-tabbar). */}
