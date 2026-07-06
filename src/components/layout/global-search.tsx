@@ -108,7 +108,7 @@ export function GlobalSearch() {
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder="Buscar processos, clientes…"
-        className="h-8 w-full rounded-lg border border-zinc-200 bg-zinc-50 pl-10 pr-16 text-sm text-zinc-700 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-300 focus:bg-white dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200 dark:focus:bg-zinc-900"
+        className="h-8 w-full rounded-lg border border-zinc-200 bg-zinc-50 pl-10 pr-16 text-sm text-zinc-700 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-300 focus:bg-white dark:border-white/15 dark:bg-white/10 dark:text-zinc-100 dark:backdrop-blur-sm dark:placeholder:text-zinc-300 dark:focus:border-white/25 dark:focus:bg-white/15"
       />
       {query ? (
         <button onClick={() => { setQuery(''); inputRef.current?.focus(); }} title="Limpar" className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
