@@ -148,6 +148,17 @@ export default function DashboardLayout({
               no topo de cada página vem do `.under-bar` (globals). A classe `dark`
               faz os controles (busca, toggle, sino, tema) herdarem o estilo escuro. */}
           <div className="topbar-glass dark absolute inset-x-0 top-0 z-30 hidden h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] lg:flex">
+            {/* Brilho de VIDRO próprio (luz atravessando o vidro): dá a impressão
+                de vidro mesmo nas páginas estáticas / no topo, onde não há conteúdo
+                por baixo pra revelar. Some com o conteúdo borrado quando rola. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.02) 45%, transparent 72%), linear-gradient(105deg, transparent 6%, rgba(255,255,255,0.06) 26%, transparent 52%)',
+              }}
+            />
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
                 canto superior esquerdo — versão clara pra contrastar na barra escura. */}
             {simples && (
