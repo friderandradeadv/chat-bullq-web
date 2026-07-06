@@ -380,22 +380,21 @@
    baixo. A barra fica escura (controles claros, classe literal `dark`) nos 2 modos.
    !important pra vencer o `bg-[#1D2125]` utilitário. */
 .topbar-glass {
-  /* tom ESCURO (igual barra dark do Trello): predominantemente dark, com leve
-     translucidez pro conteúdo revelar borrado ao rolar. No modo claro deixa de
-     ficar cinza lavado. */
-  /* MODO CLARO: precisa continuar um tom ESCURO pros controles/logo BRANCOS
-     ficarem visíveis (translúcido demais clarearia e sumiria com eles). */
-  background: rgba(18, 21, 25, 0.55) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(1.4);
-  backdrop-filter: blur(30px) saturate(1.4);
+  /* Tom escuro PADRÃO (#1D2125) + translúcido. MODO CLARO: mantém um tom escuro
+     pros controles/logo brancos ficarem visíveis, mas já mais aberto. */
+  background: rgba(29, 33, 37, 0.5) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.15);
+  backdrop-filter: blur(30px) saturate(1.15);
 }
 /* MODO ESCURO: BEM translúcido — o fundo já é escuro, então segue dark de verdade
    e o blur revela bastante o conteúdo borrado por baixo ao rolar. */
 .dark .topbar-glass {
-  background: rgba(18, 21, 25, 0.15) !important;
+  background: rgba(29, 33, 37, 0.14) !important;
 }
 @media (min-width: 1024px) {
+  /* respiro no topo de cada página: altura da barra (2.75rem) + folga (1rem) pra
+     o conteúdo não colar na barra sobreposta. */
   .under-bar > * {
-    padding-top: 2.75rem; /* h-11 = altura da barra sobreposta */
+    padding-top: 3.75rem;
   }
 }
