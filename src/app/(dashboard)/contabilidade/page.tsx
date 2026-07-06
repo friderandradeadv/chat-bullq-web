@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Calculator, LayoutDashboard, Receipt, Users, CalendarClock, FolderOpen, FileText,
-  Info, Landmark, TrendingUp, AlertTriangle, CheckCircle2, Clock, Download, Loader2, Upload, X, Database, Trash2, Plus,
+  Info, Landmark, TrendingUp, AlertTriangle, CheckCircle2, Clock, Download, Loader2, Upload, X, Trash2, Plus,
   ChevronLeft, ChevronRight, Calendar, Wallet,
 } from 'lucide-react';
 import { apurar, calcularInssProlabore, type AnexoId } from '@/features/contabilidade/lib/simples';
@@ -55,7 +55,7 @@ const declDe = (p: PainelContabil) =>
   p.competencias.flatMap((c) => (c.declaracoes ?? []).map((d) => ({ ...d, comp: c.comp })));
 
 export default function ContabilidadePage() {
-  const [view, setView] = useState<View>('visao');
+  const [view, setView] = useState<View>('imposto-real');
   const [importOpen, setImportOpen] = useState(false);
 
   const { data, isError } = useQuery({
@@ -84,28 +84,23 @@ export default function ContabilidadePage() {
               Impostos, notas e obrigações do escritório — apuração do Simples Nacional.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <button
-              onClick={() => setImportOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              <Upload className="h-4 w-4" /> Importar da Contabilizei
-            </button>
-            <div className="rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-right text-xs dark:border-zinc-800 dark:bg-zinc-900">
-              <p className="font-semibold text-zinc-800 dark:text-zinc-200">{painel.empresa.razaoSocial}</p>
-              <p className="text-zinc-500">
-                {painel.empresa.cnpj} · {painel.empresa.regime} · Anexo {painel.empresa.anexo} · ISS {painel.empresa.municipioISS}
-              </p>
-            </div>
+          <div className="rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-right text-xs dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="font-semibold text-zinc-800 dark:text-zinc-200">{painel.empresa.razaoSocial}</p>
+            <p className="text-zinc-500">
+              {painel.empresa.cnpj} · {painel.empresa.regime} · Anexo {painel.empresa.anexo} · ISS {painel.empresa.municipioISS}
+            </p>
           </div>
         </header>
 
-        {usandoFallback && (
-          <p className="mt-3 flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-            <Database className="h-3.5 w-3.5" />
-            Mostrando os dados capturados localmente — importe para persistir no hub (backend ainda não populado).
+        {/* Aviso permanente: aba é só controle, não substitui a Contabilizei */}
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+          <Landmark className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-500" />
+          <p>
+            <b>A contabilidade oficial fica na Contabilizei.</b> Aqui é só o seu controle — o imposto do mês
+            <b> aparece sozinho</b> a partir do que você lança no Financeiro. Você não precisa operar nada.
+            {' '}<button onClick={() => setImportOpen(true)} className="underline decoration-dotted underline-offset-2 hover:text-indigo-600">atualizar dados da Contabilizei</button>.
           </p>
-        )}
+        </div>
 
         <nav className="mt-5 flex flex-wrap gap-1.5">
           {TABS.map((t) => {
@@ -171,7 +166,6 @@ const ultimaComReceita = (p: PainelContabil): CompetenciaApurada | undefined =>
 
 // ─── Imposto do mês (apuração automática a partir do Financeiro) ────────────────
 function ImpostoReal({ painel }: { painel: PainelContabil }) {
-  const qc = useQueryClient();
   const anexo = painel.empresa.anexo;
   const inss = calcularInssProlabore(painel.empresa.proLabore);
   const inssMes = inss.total;
@@ -200,12 +194,6 @@ function ImpostoReal({ painel }: { painel: PainelContabil }) {
   const totalMesSel = (dasSel?.das ?? 0) + inssMes;
   const vencComp = shiftComp(mesSel, 1);
   const vencimento = `${vencComp}-20`;
-
-  const registrar = useMutation({
-    mutationFn: () => contabilidadeService.upsertCompetencia({ comp: mesSel, receita: receitaUsar }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['contabilidade', 'painel'] }); toast.success('Competência registrada no painel.'); },
-    onError: () => toast.error('Falha ao registrar (backend indisponível?).'),
-  });
 
   // meses REAIS (exclui projeções futuras) com receita
   const linhas = useMemo(() => {
@@ -251,10 +239,11 @@ function ImpostoReal({ painel }: { painel: PainelContabil }) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Faturamento do mês">
-            <MoneyInput value={receitaUsar} onChange={setReceitaEdit} />
-            {receitaEdit == null && receitaFin > 0 && <span className="mt-1 block text-[11px] text-zinc-400">puxado do Financeiro</span>}
-          </Field>
+          <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
+            <p className="text-xs text-zinc-500">Faturou no mês</p>
+            <p className="text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{brl(receitaUsar)}</p>
+            <p className="text-[11px] text-zinc-400">do seu Financeiro</p>
+          </div>
           <div className="rounded-lg bg-indigo-50/60 p-3 dark:bg-indigo-900/15">
             <p className="text-xs text-zinc-500">DAS (Simples)</p>
             <p className="text-lg font-bold tabular-nums text-indigo-700 dark:text-indigo-300">{brl(dasSel?.das ?? 0)}</p>
@@ -280,15 +269,9 @@ function ImpostoReal({ painel }: { painel: PainelContabil }) {
           </ul>
         )}
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-zinc-400">
-            Registrar deixa o mês salvo no painel e em Obrigações. Depois emita a DAS (Contabilizei/portal) e arquive a guia no cofre.
-          </p>
-          <button onClick={() => registrar.mutate()} disabled={registrar.isPending || receitaUsar <= 0}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
-            {registrar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Registrar competência
-          </button>
-        </div>
+        <p className="mt-3 text-xs text-zinc-400">
+          Atualiza sozinho conforme você lança no Financeiro. Estes são os valores que a Contabilizei deve gerar no mês — serve pra você conferir.
+        </p>
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-3">
