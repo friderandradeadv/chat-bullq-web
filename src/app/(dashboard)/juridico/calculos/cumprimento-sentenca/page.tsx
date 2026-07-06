@@ -139,8 +139,12 @@ export default function CumprimentoSentencaPage() {
           })),
         );
       }
+      // Sem condenação líquida (débitos vazios) = obrigação de fazer → o que se
+      // executa são só os honorários; com condenação, modo normal por débitos.
+      const semCondenacao = !(e.debitos?.length);
       setForm((f) => ({
         ...f,
+        modo: semCondenacao ? 'obrigacaoFazer' : 'condenacao',
         nomeCalculo: e.nomeCalculo || f.nomeCalculo,
         indiceCorrecao: e.indiceCorrecao || f.indiceCorrecao,
         jurosMora: e.jurosMora != null ? String(e.jurosMora).replace('.', ',') : f.jurosMora,
@@ -149,15 +153,23 @@ export default function CumprimentoSentencaPage() {
             ? e.jurosInicial
             : 'vencimento',
         honPercentual: e.honorarios ? String(e.honorarios.percentual).replace('.', ',') : f.honPercentual,
-        honBase: e.honorarios?.base ?? f.honBase,
+        honBase: semCondenacao
+          ? e.valorCausa != null
+            ? 'fixa'
+            : 'valorFixado'
+          : (e.honorarios?.base ?? f.honBase),
         honQuantiaFixa:
-          e.honorarios?.base === 'fixa' && e.valorCausa
+          e.valorCausa != null && (semCondenacao || e.honorarios?.base === 'fixa')
             ? String(e.valorCausa).replace('.', ',')
             : f.honQuantiaFixa,
         // Multas do art. 523 NÃO são pré-marcadas pela IA: só incidem depois de
         // esgotado o prazo de 15 dias sem pagamento — decisão do advogado.
       }));
-      setIaAviso(r.aviso ?? `IA preencheu ${e.debitos?.length ?? 0} verba(s). Confira antes de calcular.`);
+      setIaAviso(
+        semCondenacao
+          ? 'Sem condenação líquida na sentença → selecionei "Obrigação de fazer — só sucumbência" (honorários como principal). Confira antes de calcular.'
+          : (r.aviso ?? `IA preencheu ${e.debitos?.length ?? 0} verba(s). Confira antes de calcular.`),
+      );
     },
     onError: (err) => setIaAviso((err as Error)?.message ?? 'Erro ao ler os documentos.'),
   });

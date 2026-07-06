@@ -202,9 +202,13 @@ export default function CalculadoraRmcPage() {
     mutationFn: (files: File[]) => calculadoraCsService.extrairSentenca(files),
     onSuccess: (r) => {
       const e = r.extracao;
+      // Sem condenação líquida (débitos vazios) = obrigação de fazer → a sentença
+      // manda executar só a sucumbência; com condenação, restituição + sucumbência.
+      const semCondenacao = !!e && !(e.debitos?.length);
       if (e) {
         setCs((c) => ({
           ...c,
+          execucao: semCondenacao ? 'soSucumbencia' : 'restituicao',
           sucBase: 'valorCausa',
           valorCausa: e.valorCausa != null ? String(e.valorCausa).replace('.', ',') : c.valorCausa,
           sucPercentual: e.honorarios ? String(e.honorarios.percentual).replace('.', ',') : c.sucPercentual,
@@ -212,7 +216,13 @@ export default function CalculadoraRmcPage() {
           // esgotado o prazo de 15 dias sem pagamento — decisão do advogado.
         }));
       }
-      setCsSentAviso(e?.observacoes ? `IA: ${e.observacoes}` : (r.aviso ?? 'Sentença lida.'));
+      setCsSentAviso(
+        (semCondenacao
+          ? 'Sem condenação líquida na sentença → selecionei "Só a sucumbência (obrigação de fazer)". Confira. '
+          : e
+            ? 'Sentença com condenação em dinheiro → "Restituição + sucumbência". '
+            : '') + (e?.observacoes ? `IA: ${e.observacoes}` : (r.aviso ?? 'Sentença lida.')),
+      );
     },
     onError: (err) => setCsSentAviso((err as Error)?.message ?? 'Erro ao ler a sentença.'),
   });
