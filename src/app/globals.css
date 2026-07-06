@@ -385,7 +385,7 @@
      ficar cinza lavado. */
   /* MODO CLARO: um pouco mais fechado pra continuar um tom ESCURO (translúcido
      demais sobre página branca vira cinza lavado). */
-  background: rgba(18, 21, 25, 0.56) !important;
+  background: rgba(18, 21, 25, 0.44) !important;
   -webkit-backdrop-filter: blur(30px) saturate(1.4);
   backdrop-filter: blur(30px) saturate(1.4);
 }
