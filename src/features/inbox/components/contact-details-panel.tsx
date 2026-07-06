@@ -65,6 +65,7 @@ import {
 import { aiAgentsService, type FeedRun } from '@/features/ai-agents/services/ai-agents.service';
 import { AssignmentPopover } from './assignment-popover';
 import { departmentsService } from '@/features/settings/services/departments.service';
+import { membersService, type Member } from '@/features/settings/services/members.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
@@ -143,6 +144,12 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
     enabled: !!contactId,
     staleTime: 60_000,
   });
+  // Advogados atribuíveis, pra escolher o responsável PELO PROCESSO (Case.responsibleId).
+  const { data: members = [] } = useQuery({
+    queryKey: ['org-members'],
+    queryFn: () => membersService.list(),
+    staleTime: 300_000,
+  });
   const cases = data?.cases ?? [];
   // Painel limpo p/ leads: só aparece quando há processo vinculado.
   if (isLoading || cases.length === 0) return null;
@@ -182,9 +189,23 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
             </p>
             <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400">
               <span className="truncate font-mono">{c.cnjNumber || (c.lane === 'pre' ? 'pré-processual' : 'sem nº')}</span>
-              {c.responsavel && <span className="shrink-0 truncate">{c.responsavel.split(' ')[0]}</span>}
             </div>
           </button>
+          {/* Responsável PELO PROCESSO (advogado dono do caso) — editável. É quem
+              o robô aciona quando precisa transferir, e por onde o advogado sabe
+              que aquele cliente é dele. */}
+          <div className="mt-1 flex items-center gap-1.5 pl-1">
+            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+              Responsável
+            </span>
+            <CaseResponsibleChip
+              caseId={c.id}
+              contactId={contactId}
+              responsavelId={c.responsavelId}
+              responsavel={c.responsavel}
+              members={members}
+            />
+          </div>
           {/* Ações no hover: abrir em nova guia · ver no Kanban */}
           <div className="absolute right-1.5 top-1.5 hidden gap-0.5 group-hover:flex">
             <button
@@ -209,6 +230,150 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Chip editável do responsável PELO PROCESSO (Case.responsibleId). Mesmo modelo
+ *  do responsável da conversa, mas grava no caso — é o que o robô usa pra
+ *  transferir e o que diz a cada advogado quais clientes são dele. */
+function CaseResponsibleChip({
+  caseId,
+  contactId,
+  responsavelId,
+  responsavel,
+  members,
+}: {
+  caseId: string;
+  contactId: string;
+  responsavelId: string | null;
+  responsavel: string | null;
+  members: Member[];
+}) {
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const assignable = members.filter(
+    (m) => m.assignable !== false && m.user?.isActive !== false,
+  );
+
+  const setResponsible = async (userId: string | null, close: () => void) => {
+    if ((userId ?? null) === (responsavelId ?? null)) {
+      close();
+      return;
+    }
+    setSaving(true);
+    try {
+      // '' faz o backend limpar (responsibleId || null); assertResponsible ignora vazio.
+      await legalCasesService.update(caseId, { responsibleId: userId ?? '' });
+      qc.invalidateQueries({ queryKey: ['cases-by-contact', contactId] });
+      qc.invalidateQueries({ queryKey: ['legal-clients'] });
+      toast.success(userId ? 'Responsável do processo atualizado' : 'Responsável removido');
+      close();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao definir responsável');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const label = saving
+    ? 'Salvando…'
+    : responsavel
+      ? responsavel.split(' ').slice(0, 2).join(' ')
+      : 'Definir';
+
+  return (
+    <Popover className="relative">
+      <PopoverButton
+        disabled={saving}
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-60',
+          responsavel
+            ? 'border-primary/30 bg-primary/10 text-primary hover:bg-primary/15'
+            : 'border-dashed border-zinc-300 text-zinc-500 hover:border-primary/40 hover:text-primary dark:border-zinc-600',
+        )}
+      >
+        <User className="h-3 w-3 shrink-0" />
+        <span className="max-w-[120px] truncate">{label}</span>
+        <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+      </PopoverButton>
+      <PopoverPanel className="absolute right-0 z-30 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        {({ close }) => (
+          <>
+            {assignable.length === 0 && (
+              <div className="px-3 py-2 text-xs text-zinc-400">
+                Nenhum advogado disponível.
+              </div>
+            )}
+            {assignable.map((m) => {
+              const active = m.user.id === responsavelId;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => setResponsible(m.user.id, close)}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                >
+                  <span className="truncate text-zinc-700 dark:text-zinc-200">
+                    {m.user.name}
+                  </span>
+                  {active && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />}
+                </button>
+              );
+            })}
+            {responsavelId && (
+              <>
+                <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                <button
+                  onClick={() => setResponsible(null, close)}
+                  className="w-full px-3 py-1.5 text-left text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                >
+                  Remover responsável
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </PopoverPanel>
+    </Popover>
+  );
+}
+
+/** Bloco de topo "Responsável pelo cliente": mostra/edita o advogado dono do
+ *  processo principal (o mais recente). Some quando o cliente não tem processo.
+ *  Reusa a mesma query de casesByContact (cache compartilhado com a seção de
+ *  processos, sem fetch duplicado). */
+function ClientResponsibleSection({ contactId }: { contactId: string }) {
+  const { data } = useQuery({
+    queryKey: ['cases-by-contact', contactId],
+    queryFn: () => legalCasesService.casesByContact(contactId),
+    enabled: !!contactId,
+    staleTime: 60_000,
+  });
+  const { data: members = [] } = useQuery({
+    queryKey: ['org-members'],
+    queryFn: () => membersService.list(),
+    staleTime: 300_000,
+  });
+  const cases = data?.cases ?? [];
+  if (cases.length === 0) return null; // sem processo vinculado → nada a mostrar
+  const principal = cases[0]; // casesByContact já ordena (mais recente primeiro)
+  return (
+    <div className="mt-5 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
+      <p className="mb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+        Responsável pelo cliente
+      </p>
+      <CaseResponsibleChip
+        caseId={principal.id}
+        contactId={contactId}
+        responsavelId={principal.responsavelId}
+        responsavel={principal.responsavel}
+        members={members}
+      />
+      {cases.length > 1 && (
+        <p className="mt-1 text-[10px] text-zinc-400">
+          Processo principal — os demais você ajusta em “Processos do cliente”.
+        </p>
+      )}
     </div>
   );
 }
@@ -471,6 +636,10 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           <span className="truncate">{contact.email}</span>
         </p>
       )}
+
+      {/* Responsável PELO CLIENTE (advogado dono do caso) — fica acima do
+          responsável da CONVERSA. É o que o robô usa pra transferir. */}
+      <ClientResponsibleSection contactId={contact.id} />
 
       {/* Atendimento — clicar no card abre a troca de responsável */}
       <div className="mt-5 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">

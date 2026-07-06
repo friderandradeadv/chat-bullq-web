@@ -314,6 +314,7 @@ export interface ClientCaseRow {
   value: number | null;
   court: string | null;
   responsavel: string | null;
+  responsavelId: string | null;
   legalPhaseAt: string | null;
 }
 

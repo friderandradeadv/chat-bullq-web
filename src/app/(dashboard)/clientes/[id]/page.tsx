@@ -225,6 +225,17 @@ export default function ClienteDetailPage() {
             <ClienteFinanceiroCard nome={cliente.name} />
           </div>
 
+          {/* Cobrança ASAAS — gera boleto/pix e concilia com o caixa */}
+          <div className="mt-5">
+            <CobrancaAsaasCard
+              nome={cliente.name}
+              documento={cadastro?.cpf || cadastro?.cnpj || cliente.document || ''}
+              email={contact?.email || ''}
+              telefone={contact?.phone || ''}
+              contactId={contact?.id || undefined}
+            />
+          </div>
+
           {/* Pipefy: Fase 3 — falta o valor da causa por processo */}
           <div className="mt-5 rounded-lg border border-dashed border-[#DEE2E6] bg-white p-4 text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
             Valor da causa por processo (cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong>) — em breve.
@@ -428,6 +439,184 @@ function CopyBtn({ value }: { value: string }) {
     >
       {ok ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
+  );
+}
+
+/** Card de cobrança ASAAS: gera boleto/pix pro cliente e concilia com o caixa. */
+function CobrancaAsaasCard({
+  nome, documento, email, telefone, contactId,
+}: { nome: string; documento: string; email: string; telefone: string; contactId?: string }) {
+  const [open, setOpen] = useState(false);
+  const [doc, setDoc] = useState(documento || '');
+  const [valor, setValor] = useState('');
+  const hoje = new Date();
+  const venc0 = new Date(hoje.getTime() + 3 * 86400000).toISOString().slice(0, 10);
+  const [vencimento, setVencimento] = useState(venc0);
+  const [billingType, setBillingType] = useState<'UNDEFINED' | 'BOLETO' | 'PIX'>('UNDEFINED');
+  const [parcelas, setParcelas] = useState('1');
+  const [descricao, setDescricao] = useState('Honorários advocatícios');
+
+  const { data: statusAsaas } = useQuery({
+    queryKey: ['financeiro', 'asaas-status'],
+    queryFn: () => financeiroService.asaasStatus(),
+    staleTime: 300_000,
+  });
+
+  const gerar = useMutation({
+    mutationFn: () =>
+      financeiroService.criarCobrancaAsaas({
+        name: nome,
+        cpfCnpj: doc,
+        email: email || undefined,
+        phone: telefone || undefined,
+        value: Number(String(valor).replace(',', '.')),
+        dueDate: vencimento,
+        billingType,
+        description: descricao || undefined,
+        parcelas: Number(parcelas) > 1 ? Number(parcelas) : undefined,
+        contactId,
+      }),
+  });
+
+  const res = gerar.data;
+  const semDoc = doc.replace(/\D+/g, '').length < 11;
+
+  return (
+    <Card title="Cobrança (ASAAS)" icon={CircleDollarSign}>
+      {statusAsaas && !statusAsaas.configurado ? (
+        <p className="text-sm text-zinc-400">
+          Integração ASAAS não configurada (falta a chave <code>ASAAS_API_KEY</code> no servidor).
+        </p>
+      ) : !open ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-zinc-500">Gere um boleto ou pix para este cliente — cai direto no caixa.</p>
+          <button
+            onClick={() => setOpen(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#228BE6] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1c7ed6]"
+          >
+            <Plus className="h-4 w-4" /> Gerar cobrança
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {semDoc && (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              Este cliente está sem CPF/CNPJ na ficha — preencha o campo abaixo (obrigatório para emitir).
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="col-span-2 block text-xs text-zinc-500">
+              CPF/CNPJ
+              <input
+                value={doc}
+                onChange={(e) => setDoc(e.target.value)}
+                placeholder="Somente números"
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+            <label className="block text-xs text-zinc-500">
+              Valor (R$)
+              <input
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                inputMode="decimal"
+                placeholder="0,00"
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+            <label className="block text-xs text-zinc-500">
+              Vencimento
+              <input
+                type="date"
+                value={vencimento}
+                onChange={(e) => setVencimento(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+            <label className="block text-xs text-zinc-500">
+              Forma
+              <select
+                value={billingType}
+                onChange={(e) => setBillingType(e.target.value as 'UNDEFINED' | 'BOLETO' | 'PIX')}
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              >
+                <option value="UNDEFINED">Boleto + Pix (cliente escolhe)</option>
+                <option value="BOLETO">Boleto</option>
+                <option value="PIX">Pix</option>
+              </select>
+            </label>
+            <label className="block text-xs text-zinc-500">
+              Parcelas
+              <input
+                type="number"
+                min={1}
+                value={parcelas}
+                onChange={(e) => setParcelas(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+            <label className="col-span-2 block text-xs text-zinc-500">
+              Descrição
+              <input
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+          </div>
+
+          {gerar.isError && (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-950/40 dark:text-red-400">
+              {(gerar.error as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Falha ao gerar a cobrança.'}
+            </p>
+          )}
+
+          {res?.ok ? (
+            <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
+              <p className="font-medium text-emerald-700 dark:text-emerald-400">✅ Cobrança gerada e lançada no caixa.</p>
+              {res.invoiceUrl && (
+                <div className="flex items-center gap-2">
+                  <a href={res.invoiceUrl} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[#228BE6] hover:underline">
+                    Link da fatura (boleto/pix)
+                  </a>
+                  <CopyBtn value={res.invoiceUrl} />
+                </div>
+              )}
+              {res.bankSlipUrl && (
+                <div className="flex items-center gap-2">
+                  <a href={res.bankSlipUrl} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[#228BE6] hover:underline">
+                    Boleto em PDF
+                  </a>
+                  <CopyBtn value={res.bankSlipUrl} />
+                </div>
+              )}
+              {res.pix?.payload && (
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">Pix copia-e-cola</span>
+                  <CopyBtn value={res.pix.payload} />
+                </div>
+              )}
+              <button onClick={() => { gerar.reset(); setValor(''); }} className="text-xs text-zinc-500 hover:text-[#228BE6]">
+                Gerar outra
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => setOpen(false)} className="rounded-md px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                Cancelar
+              </button>
+              <button
+                onClick={() => gerar.mutate()}
+                disabled={gerar.isPending || !valor || semDoc}
+                className="inline-flex items-center gap-1.5 rounded-md bg-[#228BE6] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1c7ed6] disabled:opacity-50"
+              >
+                {gerar.isPending ? 'Gerando…' : 'Gerar cobrança'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 

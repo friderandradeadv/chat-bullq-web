@@ -274,6 +274,19 @@ export const financeiroService = {
     const { data } = await api.delete(`/financeiro/cobrancas/${id}`);
     return data.data ?? data;
   },
+  async criarCobrancaAsaas(input: {
+    name: string; cpfCnpj: string; email?: string; phone?: string;
+    value: number; dueDate: string;
+    billingType?: 'BOLETO' | 'PIX' | 'CREDIT_CARD' | 'UNDEFINED';
+    description?: string; parcelas?: number; contactId?: string; caseId?: string;
+  }): Promise<{
+    ok: boolean; paymentId: string; value: number; dueDate: string; billingType: string;
+    invoiceUrl: string | null; bankSlipUrl: string | null;
+    pix: { payload?: string; encodedImage?: string } | null;
+  }> {
+    const { data } = await api.post('/financeiro/integracao/asaas/cobrar', input);
+    return data.data ?? data;
+  },
   async pagarParcela(id: string, num: number, dataPagamento?: string): Promise<{ ok: boolean }> {
     const { data } = await api.post(`/financeiro/cobrancas/${id}/parcelas/${num}/pagar`, { dataPagamento });
     return data.data ?? data;
