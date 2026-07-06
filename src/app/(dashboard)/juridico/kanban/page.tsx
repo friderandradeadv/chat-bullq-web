@@ -439,7 +439,7 @@ function Column({
   const shown = items.length > limit ? items.slice(0, limit) : items;
   const rest = items.length - shown.length;
   return (
-    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/40'}`}>
+    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       {/* Header da fase — DENTRO do painel escuro (englobado, tom vai até o nome) */}
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} />

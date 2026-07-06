@@ -198,7 +198,7 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.dropId });
   return (
-    <div className={`flex min-h-0 w-[300px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5 dark:bg-[#7048e8]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/40'}`}>
+    <div className={`flex min-h-0 w-[300px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5 dark:bg-[#7048e8]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} />
         <h2 className="truncate text-sm font-medium" style={{ color: col.color }}>{col.label}</h2>

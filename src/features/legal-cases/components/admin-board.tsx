@@ -126,7 +126,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
       ) : (
         <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col) => (
-            <div key={col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/40">
+            <div key={col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
                 <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
                 <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>

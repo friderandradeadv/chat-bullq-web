@@ -178,7 +178,7 @@ function Column({ phase, items, onOpen, onProtocolar, onChanged, canRename, onRe
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
   return (
-    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/40'}`}>
+    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
