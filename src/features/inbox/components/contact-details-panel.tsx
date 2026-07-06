@@ -399,7 +399,9 @@ function QuickTaskSection({
   const cases = data?.cases ?? [];
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
-  const [dueAt, setDueAt] = useState('');
+  // Prazo padrão = HOJE. A agenda ignora tarefa sem data (não tem onde plotar),
+  // então nascer com data garante que ela apareça no calendário.
+  const [dueAt, setDueAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [caseId, setCaseId] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -410,15 +412,16 @@ function QuickTaskSection({
     try {
       await tasksService.create({
         title: t,
-        dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+        // 9h como a criação de tarefa da própria agenda (evita virar "dia todo").
+        dueAt: dueAt ? new Date(dueAt + 'T09:00:00').toISOString() : null,
         contactId,
         conversationId,
         caseId: caseId || undefined,
       });
       qc.invalidateQueries({ queryKey: ['tasks'] });
-      toast.success('Tarefa criada');
+      toast.success('Tarefa criada na agenda');
       setTitle('');
-      setDueAt('');
+      setDueAt(new Date().toISOString().slice(0, 10));
       setCaseId('');
       setOpen(false);
     } catch (err: any) {
