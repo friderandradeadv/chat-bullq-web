@@ -145,23 +145,28 @@ export default function DashboardLayout({
           {/* Barra superior estilo Trello: tom escuro do modo escuro (#1D2125). A
               classe `dark` faz TODOS os controles internos (busca, toggle, sino,
               tema) herdarem o estilo escuro/translúcido — casam com a barra. */}
-          <div className="dark relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1D2125] px-4 backdrop-blur-md lg:flex">
+          <div className="dark relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1D2125] px-4 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_1px_0_rgba(0,0,0,0.25)] lg:flex">
+            {/* Camadas de "vidro fosco" (o dark mode não tem wallpaper pra borrar,
+                então simulamos a luz atravessando o vidro): realce no topo + leve
+                brilho central. pointer-events-none pra não roubar clique dos controles. */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.07] via-white/[0.015] to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 left-1/4 right-1/4 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.06),transparent_70%)]" />
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
                 canto superior esquerdo — versão clara pra contrastar na barra escura. */}
             {simples && (
-              <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
+              <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 z-10 -translate-y-1/2">
                 <img src="/favicon-dark.png" alt="Início" className="h-8 w-8 object-contain" />
               </Link>
             )}
             <GlobalSearch />
-            <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
+            <div className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-2">
               {/* Alternador Completo × Simples (simples = navegação na barra de baixo) */}
-              <div className="flex items-center rounded-lg bg-zinc-100 p-0.5 backdrop-blur-sm dark:bg-white/10">
+              <div className="flex items-center rounded-lg bg-zinc-100 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-md dark:bg-white/10 dark:ring-1 dark:ring-inset dark:ring-white/10">
                 <button onClick={() => setModo('completo')} title="Menu lateral completo" className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${!simples ? 'bg-white text-zinc-800 shadow-sm dark:bg-white/20 dark:text-white' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-300 dark:hover:text-white'}`}><PanelLeft className="h-3.5 w-3.5" /> Completo</button>
                 <button onClick={() => setModo('simples')} title="Atalhos na barra de baixo (como no celular)" className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition ${simples ? 'bg-white text-zinc-800 shadow-sm dark:bg-white/20 dark:text-white' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-300 dark:hover:text-white'}`}><LayoutList className="h-3.5 w-3.5" /> Simples</button>
               </div>
-              <NotificationBell className="dark:border-white/15 dark:bg-white/10 dark:text-zinc-200 dark:backdrop-blur-sm dark:hover:bg-white/20 dark:hover:text-white" />
-              <ThemeToggle className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-zinc-200 backdrop-blur-sm transition hover:bg-white/20 hover:text-white" />
+              <NotificationBell className="dark:border-white/15 dark:bg-white/10 dark:text-zinc-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] dark:backdrop-blur-md dark:hover:bg-white/20 dark:hover:text-white" />
+              <ThemeToggle className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:bg-white/20 hover:text-white" />
             </div>
           </div>
           {/* Conteúdo — no mobile reserva espaço p/ a barra de abas (pb-tabbar). */}
