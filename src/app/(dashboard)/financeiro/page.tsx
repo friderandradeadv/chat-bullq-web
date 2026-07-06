@@ -1051,6 +1051,13 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 );
               })()}
 
+              {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && splitBase(editor) > 0 && (
+                <div className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2 text-xs text-indigo-900/90 dark:border-indigo-900/40 dark:bg-indigo-900/10 dark:text-indigo-200/90">
+                  <Landmark className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                  <span>Este recebimento gera <b className="tabular-nums">DAS ~{brl2(splitBase(editor) * 0.045)}</b> (Simples, 4,5%) — some no imposto do mês. Veja em Contabilidade.</span>
+                </div>
+              )}
+
               {editor.tipo === 'receita' && /honor/i.test(editor.categoria) && (
                 <Field label="Tipo de honorário">
                   <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
