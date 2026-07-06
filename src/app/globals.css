@@ -383,7 +383,7 @@
   /* tom ESCURO (igual barra dark do Trello): predominantemente dark, com leve
      translucidez pro conteúdo revelar borrado ao rolar. No modo claro deixa de
      ficar cinza lavado. */
-  background: rgba(20, 23, 27, 0.8) !important;
+  background: rgba(20, 23, 27, 0.62) !important;
   -webkit-backdrop-filter: blur(26px) saturate(1.35);
   backdrop-filter: blur(26px) saturate(1.35);
 }
