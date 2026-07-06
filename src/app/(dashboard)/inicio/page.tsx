@@ -1051,9 +1051,7 @@ export default function InicioPage() {
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-thin dark:bg-[#17191c]">
     <div className="relative flex min-h-full flex-col items-center justify-start px-4 py-8 lg:px-6">
-      {/* Hero escuro no topo (mesmo no claro) — pegada Trello: faixa dark que
-          funde pra baixo. O texto do hero fica claro pra ler em cima. */}
-      <div className="welcome-gradient pointer-events-none absolute inset-x-0 top-0 -z-10 h-[340px] bg-gradient-to-b from-[#1a1d21] via-[#1d2125]/90 to-transparent" />
+      <div className="welcome-gradient pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-black/[0.035] to-transparent dark:from-black/30 dark:to-transparent" />
 
       {mounted && (
         <div key={burst} className="pointer-events-none absolute inset-x-0 top-0 z-0 h-screen overflow-hidden">
@@ -1065,7 +1063,7 @@ export default function InicioPage() {
 
       <div className="relative z-10 w-full max-w-5xl text-center">
         {/* Saudação */}
-        <h1 className="welcome-pop text-3xl font-bold tracking-tight text-white sm:text-4xl" style={{ animationDelay: '0.05s' }}>
+        <h1 className="welcome-pop text-3xl font-bold tracking-tight text-[#202124] dark:text-zinc-50 sm:text-4xl" style={{ animationDelay: '0.05s' }}>
           {saud},{' '}
           <span className="bg-gradient-to-r from-[#228BE6] via-[#7048E8] to-[#E64980] bg-clip-text text-transparent">{dr} {first}</span>{' '}
           <span className="welcome-float inline-block">{GREET_EMOJI[emojiIdx]}</span>
@@ -1073,7 +1071,7 @@ export default function InicioPage() {
         {mounted && ctxPhrase && <p className="welcome-pop mt-2 text-sm font-medium text-zinc-400" style={{ animationDelay: '0.08s' }}>{ctxPhrase}</p>}
 
         {/* Incentivo rotativo */}
-        <p key={msgIdx} className="welcome-pop mx-auto mt-4 max-w-2xl text-lg font-medium leading-relaxed text-zinc-200 sm:text-xl" style={{ animationDelay: '0.1s' }}>
+        <p key={msgIdx} className="welcome-pop mx-auto mt-4 max-w-2xl text-lg font-medium leading-relaxed text-zinc-600 dark:text-zinc-300 sm:text-xl" style={{ animationDelay: '0.1s' }}>
           {mounted ? msg : ' '}
         </p>
 

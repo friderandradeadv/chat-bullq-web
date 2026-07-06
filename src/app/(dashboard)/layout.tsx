@@ -142,13 +142,13 @@ export default function DashboardLayout({
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
-          <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-zinc-200/50 bg-white/55 px-4 backdrop-blur-md dark:border-white/5 dark:bg-[#17191c]/55 lg:flex">
-            {/* Modo simples: sem sidebar, então a MARCA minimalista (FA., clicável →
-                Início) aparece no canto superior esquerdo. Versão clara/escura. */}
+          {/* Barra superior estilo Trello: tom escuro + blur (frosted), nos dois modos. */}
+          <div className="relative hidden h-11 shrink-0 items-center justify-center border-b border-white/10 bg-[#1b1f23]/80 px-4 backdrop-blur-md lg:flex">
+            {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) no
+                canto superior esquerdo — versão clara pra contrastar na barra escura. */}
             {simples && (
               <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
-                <img src="/favicon-light.png" alt="Início" className="h-8 w-8 object-contain dark:hidden" />
-                <img src="/favicon-dark.png" alt="Início" className="hidden h-8 w-8 object-contain dark:block" />
+                <img src="/favicon-dark.png" alt="Início" className="h-8 w-8 object-contain" />
               </Link>
             )}
             <GlobalSearch />
