@@ -70,6 +70,7 @@ export function gerarPdfCsExecucao(
 
   const resultado =
     kv('Principal (repetição do indébito)', brl(cs.principal)) +
+    kv('Base dos honorários', brl(s.baseCalculo)) +
     kv(`Honorários sucumbenciais — ${sucLabel}`, brl(s.valor)) +
     (cs.multa523.moratoria > 0 ? kv('Multa moratória 10% (art. 523, CPC)', brl(cs.multa523.moratoria)) : '') +
     (cs.multa523.honorarios > 0 ? kv('Honorários 10% (art. 523, CPC)', brl(cs.multa523.honorarios)) : '') +
