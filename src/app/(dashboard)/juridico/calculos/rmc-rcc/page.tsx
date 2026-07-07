@@ -568,7 +568,9 @@ export default function CalculadoraRmcPage() {
   // Trava um ciclo do auto-preenchimento da taxa BACEN: a taxa extraída do
   // cálculo original é a da sentença — não pode ser sobrescrita pela média.
   const taxaAutoSkip = useRef(false);
-  const aplicarCalculo = (c: CalculoExtraido) => {
+  // opts.execucao=true (fase CS): o cálculo é a peça da INICIAL (feita com dobro
+  // pedido) — NÃO deixa ele ditar dobro/índice, que valem só a SENTENÇA.
+  const aplicarCalculo = (c: CalculoExtraido, opts?: { execucao?: boolean }) => {
     const preenchidos: string[] = [];
     if (c.parcelas.length) {
       setParcelasTexto(c.parcelas.map((p) => `${p.data}\t${p.valor.toFixed(2)}`).join('\n'));
@@ -587,11 +589,15 @@ export default function CalculadoraRmcPage() {
       if (c.dataContratacao) taxaAutoSkip.current = true;
     }
     if (c.dataContratacao) set('dataContratacao', c.dataContratacao);
-    if (c.indiceCorrecao && ['INPC', 'IPCA-E', 'IPCA', 'IGP-M'].includes(c.indiceCorrecao)) {
-      set('indiceCorrecao', c.indiceCorrecao as IndiceCorrecao);
-      preenchidos.push(`índice ${c.indiceCorrecao}`);
+    // Índice/dobro: na execução vêm da SENTENÇA, não do cálculo (que reflete o
+    // que foi PEDIDO na inicial). Só aplica do cálculo fora da fase de execução.
+    if (!opts?.execucao) {
+      if (c.indiceCorrecao && ['INPC', 'IPCA-E', 'IPCA', 'IGP-M'].includes(c.indiceCorrecao)) {
+        set('indiceCorrecao', c.indiceCorrecao as IndiceCorrecao);
+        preenchidos.push(`índice ${c.indiceCorrecao}`);
+      }
+      if (c.dobro != null) set('dobro', c.dobro);
     }
-    if (c.dobro != null) set('dobro', c.dobro);
     if (!form.nomeCalculo) {
       const nome = [c.tipo, c.banco].filter(Boolean).join(' - ');
       if (nome) set('nomeCalculo', nome);
@@ -610,7 +616,8 @@ export default function CalculadoraRmcPage() {
     mutationFn: (file: File) => calculadoraRmcService.extrairCalculo(file),
     onSuccess: (r) => {
       if (r.calculo?.parcelas?.length) {
-        aplicarCalculo(r.calculo);
+        // O cálculo é a peça da inicial → não deixa ditar dobro/índice (execução).
+        aplicarCalculo(r.calculo, { execucao: true });
       } else {
         setCalcPdfAviso(r.aviso ?? 'Não identifiquei um cálculo de RMC/RCC nesse PDF.');
       }
@@ -670,57 +677,60 @@ export default function CalculadoraRmcPage() {
         `${rotulo(cls[i].tipo)}${cls[i].via === 'nome' ? ' (pelo nome)' : ''}: ${cls[i].nome}`;
 
       const partes: string[] = [];
-      const jobs: Promise<unknown>[] = [];
+      // FASE 1 — contrato + parcelas (HISCON, HISCRE, cálculo). Rodam juntas.
+      const jobs1: Promise<unknown>[] = [];
       let extraiuSentenca = false;
       if (hisconIdx.length) {
         partes.push(idDoc(hisconIdx[0]));
         setHisconAviso(null);
-        jobs.push(hisconMut.mutateAsync(files[hisconIdx[0]]));
+        jobs1.push(hisconMut.mutateAsync(files[hisconIdx[0]]));
       }
       if (hiscreIdx.length) {
         partes.push(idDoc(hiscreIdx[0]));
         setHiscreAviso(null);
-        jobs.push(hiscreMut.mutateAsync(files[hiscreIdx[0]]));
+        jobs1.push(hiscreMut.mutateAsync(files[hiscreIdx[0]]));
+      }
+      if (calculoIdx.length) {
+        partes.push(idDoc(calculoIdx[0]) + (calculoIdx.length > 1 ? ` (+${calculoIdx.length - 1} outro cálculo ignorado)` : ''));
+        setFase('cs');
+        setCs((c) => ({ ...c, ativar: true }));
+        setCalcPdfAviso(null);
+        jobs1.push(calcPdfMut.mutateAsync(files[calculoIdx[0]]));
+      }
+      // A inicial NÃO entra na extração dos parâmetros (ela pede dobro/danos).
+      if (iniIdx.length) {
+        partes.push(
+          extrairIdx.length
+            ? `inicial ignorada na extração (${cls[iniIdx[0]].nome}) — a sentença manda`
+            : `inicial recebida (${cls[iniIdx[0]].nome}), mas dobro/tutela/condenação vêm da SENTENÇA — suba a sentença`,
+        );
       }
       if (extrairIdx.length) {
-        extraiuSentenca = true;
         const ehIlegivel = extrairIdx === ilegivelIdx;
         partes.push(
           ehIlegivel
             ? extrairIdx.map((i) => `possível sentença (ilegível no navegador — lendo no servidor): ${cls[i].nome}`).join(' + ')
             : extrairIdx.map((i) => idDoc(i)).join(' + '),
         );
-        // Sentença = fase de execução: liga o CS sozinho.
-        setFase('cs');
-        setCs((c) => ({ ...c, ativar: true }));
-        setCsSentAviso(null);
-        jobs.push(csSentMut.mutateAsync(extrairIdx.map((i) => files[i])));
       }
-      // A inicial NÃO entra na extração dos parâmetros (ela pede dobro/danos).
-      if (iniIdx.length) {
-        partes.push(
-          sentIdx.length
-            ? `inicial ignorada na extração (${cls[iniIdx[0]].nome}) — a sentença manda`
-            : `inicial recebida (${cls[iniIdx[0]].nome}), mas dobro/tutela/condenação vêm da SENTENÇA — suba a sentença`,
-        );
-      }
-      if (calculoIdx.length) {
-        partes.push(idDoc(calculoIdx[0]));
-        // O PDF do cálculo só existe depois da inicial protocolada = execução.
-        setFase('cs');
-        setCs((c) => ({ ...c, ativar: true }));
-        setCalcPdfAviso(null);
-        jobs.push(calcPdfMut.mutateAsync(files[calculoIdx[0]]));
-      }
-      // Sem sentença nem candidato ilegível: avisa que a execução ficou manual.
       const faltaSentenca = !extrairIdx.length && (iniIdx.length > 0 || calculoIdx.length > 0);
       setLoteAviso(
         partes.length
           ? `Identifiquei — ${partes.join(' · ')}. Lendo com a IA…`
           : `Nenhum documento reconhecido (${files.length} PDF). Nomeie os arquivos (ex.: "sentença.pdf", "HISCRE.pdf") ou use "Prefere enviar um por um?".`,
       );
-      const resultados = await Promise.allSettled(jobs);
-      const houveFalha = resultados.some((r) => r.status === 'rejected');
+      const resultados1 = await Promise.allSettled(jobs1);
+      // FASE 2 — a SENTENÇA por ÚLTIMO, para os parâmetros de execução (dobro,
+      // tutela, índice, juros, sucumbência) ganharem de qualquer valor do cálculo.
+      const resultados2: PromiseSettledResult<unknown>[] = [];
+      if (extrairIdx.length) {
+        extraiuSentenca = true;
+        setFase('cs');
+        setCs((c) => ({ ...c, ativar: true }));
+        setCsSentAviso(null);
+        resultados2.push(...(await Promise.allSettled([csSentMut.mutateAsync(extrairIdx.map((i) => files[i]))])));
+      }
+      const houveFalha = [...resultados1, ...resultados2].some((r) => r.status === 'rejected');
       const avisos: string[] = [];
       if (partes.length) avisos.push(`Documentos: ${partes.join(' · ')}.`);
       if (extraiuSentenca && houveFalha)
