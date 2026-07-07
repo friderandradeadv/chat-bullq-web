@@ -381,6 +381,16 @@ export const legalCasesService = {
     const { data } = await api.post('/legal-cases/recurso/registrar', input);
     return data.data ?? data;
   },
+  // IA lê a sentença do prazo e sugere o motivo do recurso (1-2 frases).
+  async sugerirMotivoRecurso(deadlineId: string): Promise<{ motivo: string }> {
+    const { data } = await api.post('/legal-cases/recurso/sugerir-motivo', { deadlineId });
+    return data.data ?? data;
+  },
+  // Kanban vivo: conclui um prazo (nossa petição) e avança o card para targetPhase.
+  async avancarPrazo(input: { deadlineId: string; targetPhase: string; confirmFatal?: boolean }): Promise<{ ok: boolean; phase: string; aviso?: { enviado: boolean; motivo?: string } | null }> {
+    const { data } = await api.post('/legal-cases/prazo/avancar', input);
+    return data.data ?? data;
+  },
   async updateChecklist(id: string, items: Record<string, boolean>): Promise<{ ok: boolean; checklist: Record<string, boolean> }> {
     const { data } = await api.patch(`/legal-cases/${id}/checklist`, { items });
     return data.data ?? data;

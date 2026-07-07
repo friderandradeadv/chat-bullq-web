@@ -104,6 +104,55 @@ function isRecursoPrazo(a: Activity): boolean {
   return !!especieDoPrazo(a) || /contrarraz|contraminuta/i.test(`${a.title} ${a.description ?? ''}`);
 }
 
+// ── Kanban vivo: ao CONCLUIR um prazo (= protocolamos nossa petição), o card
+// avança pra fase correspondente ao que fizemos. Alguns avanços têm mais de um
+// destino (ex.: na especificação de provas, escolhemos perícia × instrução ×
+// julgamento antecipado). Recurso tem fluxo próprio (mini-form com espécie/motivo).
+type AvancoOpt = { label: string; phase: string };
+type Avanco =
+  | { kind: 'recurso' }
+  | { kind: 'move'; title: string; subtitle: string; options: AvancoOpt[] }
+  | null;
+
+function avancoDoPrazo(a: Activity): Avanco {
+  if (a.source !== 'prazo' || !a.caseId) return null;
+  if (isRecursoPrazo(a)) return { kind: 'recurso' };
+  const act = (a.djenAction ?? '').toLowerCase();
+  const txt = `${a.title} ${a.description ?? ''}`.toLowerCase();
+  // Réplica protocolada → Especificação de provas.
+  if (act === 'replica' || /r[ée]plica|impugna\w*[^.]{0,20}contesta/.test(txt)) {
+    return {
+      kind: 'move',
+      title: 'Concluir réplica',
+      subtitle: 'Protocolamos a réplica — o card vai para Especificação de provas.',
+      options: [{ label: 'Especificação de provas', phase: 'provas' }],
+    };
+  }
+  // Especificação de provas protocolada → conforme o que requeremos.
+  if (act === 'provas' || /especifica\w*[^.]{0,20}prova|prova\w*[^.]{0,20}especifica/.test(txt)) {
+    return {
+      kind: 'move',
+      title: 'Especificação de provas',
+      subtitle: 'O que requeremos? O card avança conforme.',
+      options: [
+        { label: 'Perícia', phase: 'pericia' },
+        { label: 'Audiência de instrução', phase: 'aud_instrucao' },
+        { label: 'Julgamento antecipado', phase: 'aguardando_sentenca' },
+      ],
+    };
+  }
+  // Alegações finais → aguardando sentença.
+  if (act === 'alegacoes' || /alega\w*[^.]{0,10}finais|memoria(l|is)|raz[õo]es finais/.test(txt)) {
+    return {
+      kind: 'move',
+      title: 'Alegações finais',
+      subtitle: 'Protocolamos as alegações finais — o processo fica concluso para sentença.',
+      options: [{ label: 'Aguardando sentença', phase: 'aguardando_sentenca' }],
+    };
+  }
+  return null;
+}
+
 // Extrai a EMENTA do acórdão (do marcador "EMENTA" em diante, ~3000 chars) —
 // espelha extractEmenta() do backend p/ exibir a tese quando a decisão é de 2º grau.
 function extractEmentaClient(texto?: string | null): string | null {
@@ -889,6 +938,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [respName, setRespName] = useState(activity.responsibleName);
   const [prazoBusy, setPrazoBusy] = useState(false);
   const [recursoForm, setRecursoForm] = useState(false); // mini-form "registrar recurso"
+  const [avancoForm, setAvancoForm] = useState<Avanco>(null); // modal de avanço de fase (kanban vivo)
   const [coIds, setCoIds] = useState<string[]>(activity.coResponsibleIds ?? []);
   const [coMenu, setCoMenu] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
@@ -1078,11 +1128,13 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     } finally { setPrazoBusy(false); }
   };
   const toggleDone = async () => {
-    // Concluir um PRAZO DE RECURSO (não reabrir) → abre o mini-form "registrar
-    // recurso" (move o card + cria o registro na aba Recursos) em vez de só marcar.
-    if (!done && activity.source === 'prazo' && activity.caseId && isRecursoPrazo(activity)) {
-      setRecursoForm(true);
-      return;
+    // Concluir um PRAZO (não reabrir) → kanban vivo: recurso abre o mini-form
+    // (espécie/motivo + aba Recursos); os demais avançam o card conforme a nossa
+    // petição (réplica → provas; provas → perícia/instrução/julgamento…).
+    if (!done && activity.source === 'prazo' && activity.caseId) {
+      const av = avancoDoPrazo(activity);
+      if (av?.kind === 'recurso') { setRecursoForm(true); return; }
+      if (av?.kind === 'move') { setAvancoForm(av); return; }
     }
     setBusy(true);
     try {
@@ -1362,6 +1414,61 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           onDone={() => { setRecursoForm(false); setDone(true); onRefetch(); }}
         />
       )}
+      {avancoForm?.kind === 'move' && (
+        <AvancarPrazoModal
+          activity={activity}
+          avanco={avancoForm}
+          onClose={() => setAvancoForm(null)}
+          onSoConcluir={() => { setAvancoForm(null); soConcluir(); }}
+          onDone={() => { setAvancoForm(null); setDone(true); onRefetch(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal de avanço de fase (kanban vivo): concluir a petição move o card. Com 1
+// destino → botão único; com vários (especificação de provas) → escolha o que
+// requeremos e o card avança conforme.
+function AvancarPrazoModal({ activity, avanco, onClose, onSoConcluir, onDone }: {
+  activity: Activity; avanco: Extract<Avanco, { kind: 'move' }>; onClose: () => void; onSoConcluir: () => void; onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const avancar = async (targetPhase: string) => {
+    setBusy(true);
+    try {
+      await legalCasesService.avancarPrazo({ deadlineId: activity.rawId, targetPhase, confirmFatal: activity.fatal });
+      const nome = avanco.options.find((o) => o.phase === targetPhase)?.label ?? 'próxima fase';
+      toast.success(`Prazo concluído — card movido para "${nome}"`);
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao avançar o processo');
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-[60] w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-[#202124] dark:text-zinc-100">{avanco.title}</h3>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="mb-4 text-sm text-zinc-500">{activity.caseTitle ? `${activity.caseTitle} — ` : ''}{avanco.subtitle}</p>
+
+        <div className="flex flex-col gap-2">
+          {avanco.options.map((o) => (
+            <button key={o.phase} disabled={busy} onClick={() => avancar(o.phase)} className="flex items-center justify-between rounded-lg border border-[#DEE2E6] px-4 py-3 text-left text-sm font-medium text-zinc-700 hover:border-[#02883C] hover:bg-[#02883C]/5 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200">
+              {o.label}
+              <span className="text-xs font-normal text-zinc-400">mover →</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-5 flex items-center justify-between gap-2">
+          <button onClick={onSoConcluir} disabled={busy} className="text-sm font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300">Só concluir o prazo</button>
+          <button onClick={onClose} disabled={busy} className="rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Cancelar</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1382,7 +1489,29 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
   );
   const [motivo, setMotivo] = useState<string>(sug?.motivo || '');
   const [busy, setBusy] = useState(false);
+  const [iaBusy, setIaBusy] = useState(false);
+  const [iaAuto, setIaAuto] = useState(false); // já tentou o auto-fill
   const custom = !ESPECIES_RECURSO.includes(especie);
+
+  // Sugere o motivo lendo a sentença (IA). Não sobrescreve o que você já digitou.
+  const sugerirMotivoIA = async (forcar = false) => {
+    if (iaBusy) return;
+    if (motivo.trim() && !forcar) return;
+    setIaBusy(true);
+    try {
+      const { motivo: m } = await legalCasesService.sugerirMotivoRecurso(activity.rawId);
+      if (m && (forcar || !motivo.trim())) setMotivo(m);
+      else if (!m && forcar) toast.info('A IA não encontrou base para sugerir o motivo.');
+    } catch { if (forcar) toast.error('Não consegui gerar a sugestão agora.'); }
+    finally { setIaBusy(false); }
+  };
+  // Auto-fill ao abrir: se o motivo veio vazio, a IA lê a sentença e preenche.
+  useEffect(() => {
+    if (iaAuto) return;
+    setIaAuto(true);
+    if (!motivo.trim() && parte === 'CLIENTE') void sugerirMotivoIA(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const confirmar = async () => {
     setBusy(true);
@@ -1426,8 +1555,16 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
           <button onClick={() => setParte('ADVERSA')} className={`px-3 py-1.5 text-sm font-medium ${parte === 'ADVERSA' ? 'bg-[#228BE6] text-white' : 'bg-white text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}>Parte adversa</button>
         </div>
 
-        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Motivo do recurso <span className="font-normal normal-case text-zinc-400">(opcional)</span></label>
-        <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder="Por que recorremos (ex.: sentença julgou improcedente a nulidade do RMC…)" className={`${inputCls} resize-none`} />
+        <div className="mb-1 flex items-center justify-between">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Motivo do recurso <span className="font-normal normal-case text-zinc-400">(a IA lê a sentença)</span></label>
+          <button type="button" onClick={() => sugerirMotivoIA(true)} disabled={iaBusy} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#7048e8] hover:underline disabled:opacity-50">
+            {iaBusy ? <><RefreshCw className="h-3 w-3 animate-spin" /> gerando…</> : <>✨ {motivo.trim() ? 'Refazer com IA' : 'Sugerir com IA'}</>}
+          </button>
+        </div>
+        <div className="relative">
+          <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder={iaBusy ? 'A IA está lendo a sentença…' : 'Por que recorremos (ex.: sentença julgou improcedente a nulidade do RMC…)'} className={`${inputCls} resize-none ${iaBusy ? 'opacity-60' : ''}`} />
+          {iaBusy && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-[#7048e8] shadow-sm dark:bg-zinc-800/90"><RefreshCw className="h-3 w-3 animate-spin" /> gerando sugestão…</span></div>}
+        </div>
         {activity.dispositivo && (
           <p className="mt-1 line-clamp-2 text-[11px] text-zinc-400" title={activity.dispositivo}>Dispositivo: {activity.dispositivo}</p>
         )}
