@@ -1576,7 +1576,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                           actions={[{ value: '', label: '— sem vertical —' }, { value: 'Escritório', label: 'Escritório (comum · rateia auto)' }]}
                           labelOf={(v) => v === '' ? '— sem vertical —' : v === 'Escritório' ? 'Escritório (comum)' : v}
                           placeholder="vertical…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
-                      ) : <span className="text-[11px] text-zinc-400">casa pelo cliente</span>}</td>
+                      ) : (
+                        <ComboBox className="w-44" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
+                          actions={[{ value: '', label: 'Honorário (casa pelo cliente)' }, { value: '__transfer', label: 'Transferência / cobertura (não é honorário)' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
+                          labelOf={(v) => v === '' ? 'casa pelo cliente' : v === '__transfer' ? 'transferência (não honorário)' : v === 'Escritório' ? 'Escritório (comum)' : v}
+                          placeholder="honorário…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
+                      )}</td>
                       <td className="px-2 py-1.5">{l.duplicado ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={l.motivo || ''}>Já existe</span> : <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Novo</span>}</td>
                     </tr>
                   ))}
