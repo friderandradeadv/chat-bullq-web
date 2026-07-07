@@ -338,6 +338,12 @@ export const inboxService = {
     return data.data ?? data;
   },
 
+  /** Dispara o robô AGORA pra responder a última mensagem da conversa. */
+  async aiRun(conversationId: string): Promise<{ ok: boolean; reason?: string }> {
+    const { data } = await api.post(`/conversations/${conversationId}/ai-run`);
+    return data.data ?? data;
+  },
+
   async closeConversation(conversationId: string): Promise<Conversation> {
     const { data } = await api.post(`/conversations/${conversationId}/close`);
     return data.data;

@@ -511,6 +511,44 @@ function QuickTaskSection({
   );
 }
 
+/** Botão "pedir resposta do robô": força o agente a reprocessar a ÚLTIMA
+ *  mensagem do cliente agora. Útil quando o robô já tinha passado a vez (ex.:
+ *  não achou o processo antes de corrigirmos o nome do contato). */
+function AskBotButton({ conversationId }: { conversationId: string }) {
+  const [loading, setLoading] = useState(false);
+  const run = async () => {
+    setLoading(true);
+    try {
+      const r = await inboxService.aiRun(conversationId);
+      if (r?.ok) {
+        toast.success('Pedi pro robô responder — ele já está processando a última mensagem.');
+      } else {
+        toast.error(
+          r?.reason === 'no-inbound'
+            ? 'Não há mensagem do cliente para o robô responder.'
+            : r?.reason === 'already-running'
+              ? 'O robô já está respondendo…'
+              : 'O robô não conseguiu responder agora.',
+        );
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao acionar o robô');
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <button
+      onClick={run}
+      disabled={loading}
+      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300"
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+      {loading ? 'Acionando…' : 'Pedir resposta do robô'}
+    </button>
+  );
+}
+
 function ProfileTab({ conversation }: { conversation: Conversation }) {
   const contact = conversation.contact;
   const state = getBrazilState(contact.phone);
@@ -785,6 +823,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
           }}
         />
+        <AskBotButton conversationId={conversation.id} />
       </div>
 
       {/* Propriedades */}
