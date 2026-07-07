@@ -918,9 +918,19 @@ export default function CalculadoraRmcPage() {
                 <FileSearch className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Importar documentos
               </h2>
               <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-                Solte <b>tudo de uma vez</b> — HISCON, HISCRE, sentença, inicial, cálculo da
-                inicial. Eu identifico cada um e preencho o cálculo (fase, parâmetros, tutela,
-                sucumbência, parcelas).
+                {fase === 'inicial' ? (
+                  <>
+                    Solte o <b>HISCON</b> (contrato) e o <b>HISCRE</b> (descontos) juntos — eu
+                    identifico cada um e preencho o contrato e as parcelas.
+                  </>
+                ) : (
+                  <>
+                    Solte <b>tudo de uma vez</b> — HISCON, HISCRE, <b>sentença</b>, inicial,
+                    cálculo da inicial. Eu identifico cada um e preencho a execução inteira:
+                    índice, juros, dobro/simples, tutela, valor da causa e sucumbência conforme a
+                    sentença.
+                  </>
+                )}
               </p>
 
               {/* Área única */}
