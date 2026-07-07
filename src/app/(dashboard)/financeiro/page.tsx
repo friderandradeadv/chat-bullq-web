@@ -1511,13 +1511,17 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       else texto = await f.text();
       let linhas = lerExtrato(texto);
       if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
-      // Detecta extrato de CARTÃO (tem pagamento de fatura ou compras típicas) e
-      // direciona sozinho pra conta-cartão — senão cairia no caixa por engano.
-      const pareceCartao = linhas.some((l) => /pagamento\s*(de\s*)?(fatura|recebid)|iof de compra|anthropic|assinatura|parcela\s*\d+\/\d+/i.test(l.descricao || ''));
+      // Detecta se é FATURA DE CARTÃO só com sinais ESTRUTURAIS de cartão (compras parceladas,
+      // IOF de compra, "pagamento recebido" = crédito da fatura). E NÃO troca se o arquivo tem
+      // cara de EXTRATO DE CONTA (transferências, Pix/TED, "pagamento de fatura" = você pagando o
+      // cartão PELA conta). Antes, "pagamento de fatura" (que é linha de CONTA) fazia trocar errado.
+      const sinalCartao = linhas.some((l) => /iof de compra|parcela\s*\d+\s*\/\s*\d+|pagamento\s*recebid/i.test(l.descricao || ''));
+      const sinalConta = linhas.some((l) => /transfer[eê]ncia|\bpix\b|\bted\b|\bdoc\b|pagamento\s*de\s*fatura|dep[óo]sito|sal[áa]rio|rendimento/i.test(l.descricao || ''));
+      const pareceCartao = sinalCartao && !sinalConta;
       const cardAcc = contas.find((c) => c.cartao);
       const contaAtualEhCartao = !!contas.find((c) => c.id === conta)?.cartao;
       let alvo = conta;
-      if (!contaFixa && pareceCartao && cardAcc && !contaAtualEhCartao) { alvo = cardAcc.id; setConta(cardAcc.id); toast(`Detectei extrato de cartão → conta "${cardAcc.nome}" (vai pra fatura, não pro caixa)`, { icon: '💳', duration: 5000 }); }
+      if (!contaFixa && pareceCartao && cardAcc && !contaAtualEhCartao) { alvo = cardAcc.id; setConta(cardAcc.id); toast(`Detectei fatura de cartão → conta "${cardAcc.nome}" (vai pra fatura, não pro caixa). Se for extrato da conta, troque acima.`, { icon: '💳', duration: 6000 }); }
       await conferir(linhas, alvo);
     } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setParsing(false); }
   };
