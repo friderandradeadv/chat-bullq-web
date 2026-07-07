@@ -236,21 +236,22 @@ export default function CalculadoraRmcPage() {
               ? (e.indiceCorrecao as IndiceCorrecao)
               : f.indiceCorrecao,
           jurosMora: e.jurosMora != null ? String(e.jurosMora).replace('.', ',') : f.jurosMora,
-          dobro: e.dobro ?? f.dobro,
-          modulacaoStj: e.modulacaoStj ?? f.modulacaoStj,
+          // Dobro/modulação SÓ se a sentença DEFERIU explicitamente (CDC 42 é
+          // exceção). Sentença lida = padrão SIMPLES, salvo dobro expresso.
+          dobro: e.dobro === true,
+          modulacaoStj: e.modulacaoStj === true,
         }));
         if (e.indiceCorrecao && e.indiceCorrecao !== 'SELIC') preenchidos.push(`índice ${e.indiceCorrecao}`);
         if (e.jurosMora != null) preenchidos.push(`juros ${String(e.jurosMora).replace('.', ',')}%`);
-        if (e.dobro != null) preenchidos.push(e.dobro ? 'em dobro' : 'restituição simples');
-        if (e.modulacaoStj != null && e.modulacaoStj) preenchidos.push('modulação Tema 929');
+        preenchidos.push(e.dobro === true ? 'restituição EM DOBRO' : 'restituição SIMPLES');
+        if (e.modulacaoStj === true) preenchidos.push('modulação Tema 929');
         if (e.valorCausa != null) preenchidos.push('valor da causa');
         if (e.honorarios) preenchidos.push(`sucumbência ${e.honorarios.percentual}%`);
-        // Tutela: a sentença/inicial dizem se os descontos foram suspensos.
-        if (e.tutelaDeferida != null) {
-          const deferida = e.tutelaDeferida;
-          setTutela((t) => ({ ...t, deferida }));
-          preenchidos.push(deferida ? 'tutela deferida' : 'tutela NÃO deferida (parcelas estendidas)');
-        }
+        // Tutela: só "deferida" se a sentença AFIRMA que suspendeu os descontos;
+        // caso contrário assume que continuaram (estende as parcelas).
+        const tutelaDeferida = e.tutelaDeferida === true;
+        setTutela((t) => ({ ...t, deferida: tutelaDeferida }));
+        preenchidos.push(tutelaDeferida ? 'tutela deferida' : 'tutela NÃO deferida (parcelas estendidas)');
       }
       setCsSentAviso(
         (semCondenacao
