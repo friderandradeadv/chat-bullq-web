@@ -649,9 +649,16 @@ export default function CalculadoraRmcPage() {
       // Só usamos a inicial p/ extrair se não houver nenhuma sentença no lote.
       const sentIdx = idx('sentenca');
       const iniIdx = idx('inicial');
-      const extrairIdx = sentIdx.length ? sentIdx : iniIdx;
+      // PDFs ilegíveis pelo pdfjs (peças do TJ) viram candidatos a sentença: o
+      // servidor lê e devolve vazio se não for. Sem sentença/inicial reconhecida,
+      // é a única forma de a execução puxar os parâmetros de um PDF "vazio".
+      const ilegivelIdx = cls.map((c, i) => (c.via === 'ilegivel' ? i : -1)).filter((i) => i >= 0);
+      const extrairIdx = sentIdx.length ? sentIdx : iniIdx.length ? iniIdx : ilegivelIdx;
       const calculoIdx = idx('calculo');
-      const desconhecidos = idx('desconhecido').map((i) => cls[i].nome);
+      const desconhecidos = cls
+        .map((c, i) => (c.tipo === 'desconhecido' && c.via !== 'ilegivel' ? i : -1))
+        .filter((i) => i >= 0)
+        .map((i) => cls[i].nome);
 
       // Resumo do que foi identificado (mostra se foi pelo conteúdo ou pelo nome).
       const rotulo = (tipo: string) =>
@@ -674,7 +681,12 @@ export default function CalculadoraRmcPage() {
       }
       if (extrairIdx.length) {
         extraiuSentenca = true;
-        partes.push(extrairIdx.map((i) => idDoc(i)).join(' + '));
+        const ehIlegivel = extrairIdx === ilegivelIdx;
+        partes.push(
+          ehIlegivel
+            ? extrairIdx.map((i) => `possível sentença (ilegível no navegador — lendo no servidor): ${cls[i].nome}`).join(' + ')
+            : extrairIdx.map((i) => idDoc(i)).join(' + '),
+        );
         // Sentença/inicial = fase de execução: liga o CS sozinho.
         setFase('cs');
         setCs((c) => ({ ...c, ativar: true }));

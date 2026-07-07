@@ -101,15 +101,18 @@ function porNome(nome: string): TipoDocCalc | null {
   return null;
 }
 
+export type ViaClassificacao = 'conteudo' | 'nome' | 'ilegivel' | 'desconhecido';
+
 export async function classificarPdf(
   file: File,
-): Promise<{ tipo: TipoDocCalc; nome: string; via: 'conteudo' | 'nome' | 'desconhecido' }> {
+): Promise<{ tipo: TipoDocCalc; nome: string; via: ViaClassificacao }> {
   const nome = file.name;
   let t = '';
+  let leu = true;
   try {
     t = norm(await textoPrimeirasPaginas(file));
   } catch {
-    /* pdfjs falhou de vez — cai no nome abaixo */
+    leu = false; // pdfjs falhou de vez
   }
   const porTexto = t ? porConteudo(t) : null;
   if (porTexto) return { tipo: porTexto, nome, via: 'conteudo' };
@@ -117,6 +120,13 @@ export async function classificarPdf(
   // Texto ilegível/insuficiente (WPTools, escaneado) → tenta pelo nome.
   const porArquivo = porNome(nome);
   if (porArquivo) return { tipo: porArquivo, nome, via: 'nome' };
+
+  // pdfjs não leu texto útil E o nome não ajuda. PDFs assim, neste fluxo, são
+  // quase sempre peças do TJ (sentença/inicial/despacho) — que o SERVIDOR lê bem.
+  // Marca como "ilegível" p/ a área única mandar ao extrator de sentença como
+  // candidato (o servidor devolve vazio se não for sentença — risco baixo, pois
+  // HISCON/HISCRE são legíveis pelo pdfjs e já teriam sido classificados acima).
+  if (!leu || t.length < 120) return { tipo: 'desconhecido', nome, via: 'ilegivel' };
 
   return { tipo: 'desconhecido', nome, via: 'desconhecido' };
 }
