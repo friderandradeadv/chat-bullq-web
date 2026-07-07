@@ -68,6 +68,7 @@ import { departmentsService } from '@/features/settings/services/departments.ser
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { tasksService } from '@/features/tasks/services/tasks.service';
 import { useAuthStore } from '@/stores/auth-store';
+import { useComposerDraftStore } from '../stores/composer-draft-store';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
@@ -516,19 +517,25 @@ function QuickTaskSection({
  *  não achou o processo antes de corrigirmos o nome do contato). */
 function AskBotButton({ conversationId }: { conversationId: string }) {
   const [loading, setLoading] = useState(false);
+  const setDraft = useComposerDraftStore((s) => s.setDraft);
   const run = async () => {
     setLoading(true);
     try {
-      const r = await inboxService.aiRun(conversationId);
-      if (r?.ok) {
-        toast.success('Pedi pro robô responder — ele já está processando a última mensagem.');
+      // Modo RASCUNHO: o robô gera a resposta mas NÃO envia — cai na caixa de
+      // mensagem pra você revisar/editar/enviar (seguro pra cliente irritado).
+      const r = await inboxService.aiRun(conversationId, { draft: true });
+      if (r?.ok && r.draft && r.draft.trim()) {
+        setDraft(conversationId, r.draft);
+        toast.success('Rascunho do robô na caixa de mensagem — revise e envie.');
+      } else if (r?.ok) {
+        toast.message('O robô não gerou uma resposta (pode ter decidido transferir para um humano ou não ter o que dizer).');
       } else {
         toast.error(
           r?.reason === 'no-inbound'
             ? 'Não há mensagem do cliente para o robô responder.'
             : r?.reason === 'already-running'
               ? 'O robô já está respondendo…'
-              : 'O robô não conseguiu responder agora.',
+              : 'O robô não conseguiu gerar o rascunho agora.',
         );
       }
     } catch (err: any) {
@@ -544,7 +551,7 @@ function AskBotButton({ conversationId }: { conversationId: string }) {
       className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300"
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-      {loading ? 'Acionando…' : 'Pedir resposta do robô'}
+      {loading ? 'Gerando…' : 'Gerar resposta do robô'}
     </button>
   );
 }

@@ -338,9 +338,16 @@ export const inboxService = {
     return data.data ?? data;
   },
 
-  /** Dispara o robô AGORA pra responder a última mensagem da conversa. */
-  async aiRun(conversationId: string): Promise<{ ok: boolean; reason?: string }> {
-    const { data } = await api.post(`/conversations/${conversationId}/ai-run`);
+  /** Dispara o robô AGORA. draft=true → gera rascunho (não envia), devolve o texto. */
+  async aiRun(
+    conversationId: string,
+    opts?: { draft?: boolean },
+  ): Promise<{ ok: boolean; reason?: string; draft?: string | null }> {
+    const { data } = await api.post(
+      `/conversations/${conversationId}/ai-run`,
+      {},
+      { params: opts?.draft ? { draft: 'true' } : undefined },
+    );
     return data.data ?? data;
   },
 

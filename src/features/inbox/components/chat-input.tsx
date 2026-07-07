@@ -22,6 +22,8 @@ const QR_ATT_ICON: Record<QuickReplyAttachment['type'], typeof FileText> = {
 export interface ChatInputHandle {
   /** Empilha arquivos no preview do compositor (usado pelo drag & drop). */
   addFiles: (files: File[]) => void;
+  /** Preenche o texto do compositor (usado pelo rascunho do robô). */
+  setText: (text: string) => void;
 }
 
 interface ChatInputProps {
@@ -227,7 +229,17 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     ]);
   }, []);
 
-  useImperativeHandle(ref, () => ({ addFiles }), [addFiles]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      addFiles,
+      setText: (t: string) => {
+        setText(t);
+        setTimeout(() => textareaRef.current?.focus(), 0);
+      },
+    }),
+    [addFiles],
+  );
 
   const removePending = (i: number) => {
     setPending((prev) => {

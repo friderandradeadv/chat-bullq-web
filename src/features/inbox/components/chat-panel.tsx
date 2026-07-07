@@ -8,6 +8,7 @@ import { inboxService, type Conversation, type Message } from '../services/inbox
 import { scheduledMessagesService } from '../services/scheduled-messages.service';
 import { ScheduledMessagesBar } from './scheduled-messages-bar';
 import { ChatInput, type ChatInputHandle } from './chat-input';
+import { useComposerDraftStore } from '../stores/composer-draft-store';
 import { ConversationSummaryModal } from './conversation-summary-modal';
 import { ForwardMessageModal } from './forward-message-modal';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -768,6 +769,16 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
 
   // ─── Arrastar e soltar arquivos no chat (drag & drop) ───────────────────
   const chatInputRef = useRef<ChatInputHandle>(null);
+
+  // Rascunho do robô ("pedir resposta do robô") → cai na caixa de mensagem.
+  const draftPending = useComposerDraftStore((s) => s.pending);
+  const clearDraft = useComposerDraftStore((s) => s.clear);
+  useEffect(() => {
+    if (draftPending && draftPending.conversationId === conversation.id) {
+      chatInputRef.current?.setText(draftPending.text);
+      clearDraft();
+    }
+  }, [draftPending, conversation.id, clearDraft]);
   const dragCounter = useRef(0);
   const [dragOver, setDragOver] = useState(false);
   const hasFiles = (e: React.DragEvent) =>
