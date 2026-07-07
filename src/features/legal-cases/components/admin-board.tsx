@@ -97,17 +97,19 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   }, [filtered, colDefs, columnsFromPhases, data]);
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto">
-      <div className="shrink-0 border-b border-[#dbeaf5] px-6 pb-4 pt-6 dark:border-zinc-800">
-        <div className="flex items-center gap-2">
-          <Icon className="h-5 w-5" style={{ color: accent }} />
-          <h1 className="text-xl font-bold text-[#101820] dark:text-zinc-100">{title}</h1>
+    // lg:!pt-12 encolhe o respiro global do topo (o `.under-bar > *` põe 3.75rem;
+    // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
+    // o quadro sobe e os cards ganham altura, sem esmagar nada.
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+      <div className="shrink-0 border-b border-[#dbeaf5] px-4 py-2 lg:px-6 dark:border-zinc-800">
+        {/* Título + dica + busca na MESMA linha (quebra se faltar espaço) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Icon className="h-5 w-5 shrink-0" style={{ color: accent }} />
+          <h1 className="text-lg font-bold text-[#101820] dark:text-zinc-100">{title}</h1>
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{filtered.length}</span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
-        </div>
-        <p className="mt-0.5 text-sm text-zinc-500">{subtitle}</p>
-        <div className="mt-3">
-          <div className="relative">
+          <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· {subtitle}</span>
+          <div className="relative ml-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, banco…"
               className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
@@ -124,7 +126,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
           </div>
         </div>
       ) : (
-        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col) => (
             <div key={col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">

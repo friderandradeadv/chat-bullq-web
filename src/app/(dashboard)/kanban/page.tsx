@@ -157,9 +157,12 @@ export default function KanbanPage() {
   const totalCards = board?.columns.reduce((a, c) => a + c.count, 0) ?? 0;
 
   return (
-    <div className="flex h-full flex-col min-h-0 max-lg:overflow-y-auto">
+    // lg:!pt-12 encolhe o respiro global do topo (o `.under-bar > *` põe 3.75rem;
+    // aqui 3rem basta pra passar a barra de vidro) — o quadro sobe e os cards
+    // ganham altura. O ! vence a regra do globals, igual ao lg:!pb-0 do layout.
+    <div className="flex h-full flex-col min-h-0 max-lg:overflow-y-auto lg:!pt-12">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
+      <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 px-5 py-2 dark:border-zinc-800">
         <h1 className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
             <KanbanSquare className="h-4 w-4" />
@@ -209,7 +212,7 @@ export default function KanbanPage() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className={cn('flex gap-3 p-4 lg:flex-1 lg:min-h-0', view === 'lista' ? 'flex-col lg:overflow-y-auto' : 'overflow-x-auto')}>
+          <div className={cn('flex gap-3 px-4 pb-4 pt-2.5 lg:flex-1 lg:min-h-0', view === 'lista' ? 'flex-col lg:overflow-y-auto' : 'overflow-x-auto')}>
             {board.columns.map((col) => (
               <Column
                 key={col.id}

@@ -124,16 +124,18 @@ export default function PreProcessualPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto">
-      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 pt-6 pb-4 lg:px-6">
-        <div className="flex items-center gap-2">
-          <Workflow className="h-5 w-5 text-[#e11970]" />
-          <h1 className="text-xl font-bold text-[#101820] dark:text-zinc-100">Pré-Processual</h1>
+    // lg:!pt-12 encolhe o respiro global do topo (o `.under-bar > *` põe 3.75rem;
+    // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
+    // o quadro sobe e os cards ganham altura, sem esmagar nada.
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-2 lg:px-6">
+        {/* Título + dica + busca + ações na MESMA linha (quebra se faltar espaço) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Workflow className="h-5 w-5 shrink-0 text-[#e11970]" />
+          <h1 className="text-lg font-bold text-[#101820] dark:text-zinc-100">Pré-Processual</h1>
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{filtered.length}</span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
-        </div>
-        <p className="mt-0.5 text-sm text-zinc-500">Do fechamento do contrato até o protocolo. Ao protocolar, o processo migra para a Fase Judicial.</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· do fechamento do contrato até o protocolo — ao protocolar, o processo migra para a Fase Judicial</span>
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
@@ -157,7 +159,7 @@ export default function PreProcessualPage() {
         <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto py-4 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} />

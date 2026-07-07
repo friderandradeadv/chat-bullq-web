@@ -204,18 +204,6 @@ export default function AgendaPage() {
     // Sincroniza "já visto" entre aparelhos (leu na web → some no celular).
     patchAgendaPrefs({ seenNew: arr });
   };
-  // Marca VÁRIOS de uma vez (uma só gravação no servidor) — usado quando o usuário
-  // simplesmente visualiza a agenda: ver a lista já conta como "li", sem precisar
-  // abrir item por item. É o que faz o "já li na web" refletir no celular.
-  const markSeenBulk = (ids: string[]) => {
-    const fresh = ids.filter((id) => !seenRef.current.has(id));
-    if (!fresh.length) return;
-    const next = new Set(seenRef.current); for (const id of fresh) next.add(id);
-    seenRef.current = next; setSeenNew(next);
-    const arr = [...next].slice(-500);
-    try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify(arr)); } catch { /* */ }
-    patchAgendaPrefs({ seenNew: arr });
-  };
 
   // Por padrão a agenda abre nas atribuições do usuário logado (não "Todas"),
   // igual ao Astrea. Aplica uma única vez quando o usuário fica disponível;
@@ -403,19 +391,9 @@ export default function AgendaPage() {
       if (a) renderEventStrip(el, a, isCreatedToday(a) && !seenNew.has(a.id));
     }
   }, [byId, seenNew]);
-  // Ver a agenda já conta como "li": alguns segundos depois de a lista aparecer, as
-  // bolinhas de "novo" que estão na tela são marcadas como vistas de uma vez (uma só
-  // gravação) e somem em todos os aparelhos — sem abrir item por item. Resolve o
-  // "no celular aparece tudo como não lido mesmo eu já tendo visto na web".
-  useEffect(() => {
-    if (!filtered.length) return;
-    const t = setTimeout(() => {
-      const ids = filtered.filter((a) => isCreatedToday(a) && !seenRef.current.has(a.id)).map((a) => a.id);
-      if (ids.length) markSeenBulk(ids);
-    }, 2000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered]);
+  // A bolinha de "novo" só some quando o usuário ABRE a atividade (openDetail →
+  // markSeen). Nada de auto-marcar por "só ter olhado a agenda": o Matheus quer que
+  // a bolinha fique até ele clicar na tarefa.
   const fcEvents = useMemo<EventInput[]>(() => filtered.map((a) => {
     const c = a.done || a.cancelled ? EV_DONE : a.source === 'evento' ? EV_TIMED : EV_PENDING;
     // Eventos com hora precisam de FIM pra ter altura no timeGrid — sem isso o
@@ -481,7 +459,10 @@ export default function AgendaPage() {
   const isMonth = mode === 'dayGridMonth';
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
+    // A PÁGINA INTEIRA rola (estilo Astrea): o scroll fica neste root, o
+    // calendário rende na altura natural (height auto) e o conteúdo passa por
+    // baixo da barra de vidro — nada de scroll preso dentro da grade de dias.
+    <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">Agenda</h1>
         <div className="flex items-center gap-2">
@@ -583,8 +564,8 @@ export default function AgendaPage() {
       </div>
 
       {/* Conteúdo */}
-      <div className="mt-4 flex min-h-0 flex-1 gap-4">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#DEE2E6] bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mt-4 flex flex-1 gap-4">
+        <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-[#DEE2E6] bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center justify-between border-b border-[#DEE2E6] px-4 py-3 dark:border-zinc-800">
             <div className="relative">
               {mode === 'list' ? (
@@ -603,7 +584,7 @@ export default function AgendaPage() {
               </div>
             )}
           </div>
-          <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${isMonth ? 'agenda-month' : ''}`}>
+          <div className={`flex-1 p-3 ${isMonth ? 'agenda-month' : ''}`}>
             {mode === 'list' ? (
               <ActivityList activities={filtered} onOpen={openDetail} isUnseenNew={isUnseenNew} />
             ) : (
@@ -611,7 +592,9 @@ export default function AgendaPage() {
                 key={mode} ref={calRef}
                 plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                 initialView={mode} locale={ptBrLocale} headerToolbar={false}
-                height={isMonth ? 'auto' : '100%'} nowIndicator dayMaxEvents={isMonth ? 4 : true}
+                // height auto = a grade rende INTEIRA (06h–22h) e quem rola é a
+                // página (root), como no Astrea — sem scroll interno no calendário.
+                height="auto" nowIndicator dayMaxEvents={isMonth ? 4 : true}
                 slotMinTime="06:00:00" slotMaxTime="22:00:00" scrollTime="08:00:00"
                 allDaySlot allDayText="Dia todo" eventDisplay="block" expandRows={!isMonth}
                 // Mostra o horário só nos eventos COM hora (audiências/perícias) — igual
@@ -638,7 +621,7 @@ export default function AgendaPage() {
             )}
           </div>
         </div>
-        {showSidePanel && (<div className="hidden w-[360px] shrink-0 overflow-y-auto lg:block"><SidePanel activities={filtered} mode={mode} onOpen={openDetail} isUnseenNew={isUnseenNew} /></div>)}
+        {showSidePanel && (<div className="hidden w-[360px] shrink-0 self-start lg:block"><SidePanel activities={filtered} mode={mode} onOpen={openDetail} isUnseenNew={isUnseenNew} /></div>)}
       </div>
 
       {chooser && (
