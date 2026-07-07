@@ -92,11 +92,12 @@ export default function CumprimentoSentencaPage() {
     jurosInicial: 'vencimento', // 'vencimento' | data
     multaPct: '0',
     honPercentual: '10',
-    honBase: 'diferenca' as HonorariosBase | 'valorFixado',
+    honBase: 'diferenca' as HonorariosBase | 'valorFixado' | 'condenacao',
     honQuantiaFixa: '',
     honAtualizar: false,
     honQuantiaData: '',
     honValorFixado: '',
+    honValorCondenacao: '',
     multa523Mor: false,
     multa523Hon: false,
     tutelaDeferida: true,
@@ -206,9 +207,12 @@ export default function CumprimentoSentencaPage() {
   const honExecucaoValor = useMemo(() => {
     if (form.honBase === 'valorFixado') return parseValor(form.honValorFixado) || 0;
     const p = parseValor(form.honPercentual) || 0;
-    const vc = parseValor(form.honQuantiaFixa) || 0;
-    return Math.round(((p / 100) * vc + Number.EPSILON) * 100) / 100;
-  }, [form.honBase, form.honValorFixado, form.honPercentual, form.honQuantiaFixa]);
+    const base =
+      form.honBase === 'condenacao'
+        ? parseValor(form.honValorCondenacao) || 0
+        : parseValor(form.honQuantiaFixa) || 0;
+    return Math.round(((p / 100) * base + Number.EPSILON) * 100) / 100;
+  }, [form.honBase, form.honValorFixado, form.honPercentual, form.honQuantiaFixa, form.honValorCondenacao]);
 
   const [calcInfo, setCalcInfo] = useState<{
     honFixado: boolean;
@@ -235,7 +239,9 @@ export default function CumprimentoSentencaPage() {
               descricao:
                 form.honBase === 'fixa'
                   ? `Honorários sucumbenciais (${form.honPercentual}% sobre o valor da causa)`
-                  : 'Honorários sucumbenciais fixados',
+                  : form.honBase === 'condenacao'
+                    ? `Honorários sucumbenciais (${form.honPercentual}% sobre a condenação)`
+                    : 'Honorários sucumbenciais fixados',
               data:
                 form.honAtualizar && form.honQuantiaData ? form.honQuantiaData : form.termoFinal,
               valor: honExecucaoValor,
@@ -270,7 +276,9 @@ export default function CumprimentoSentencaPage() {
             : parseValor(form.honPercentual) > 0
               ? {
                   percentual: parseValor(form.honPercentual),
-                  base: form.honBase,
+                  // 'condenacao' só existe no modo obrigação de fazer; se sobrou no
+                  // estado, cai no padrão (sobre o principal corrigido).
+                  base: form.honBase === 'condenacao' ? 'diferenca' : form.honBase,
                   quantiaFixa: form.honBase === 'fixa' ? parseValor(form.honQuantiaFixa) || 0 : undefined,
                   atualizarQuantia: form.honBase === 'fixa' ? form.honAtualizar : undefined,
                   quantiaData:
@@ -374,7 +382,10 @@ export default function CumprimentoSentencaPage() {
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => set('modo', 'condenacao')}
+                  onClick={() => {
+                    set('modo', 'condenacao');
+                    if (form.honBase === 'condenacao') set('honBase', 'diferenca');
+                  }}
                   className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${form.modo === 'condenacao' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
                 >
                   Condenação em dinheiro
@@ -383,7 +394,7 @@ export default function CumprimentoSentencaPage() {
                   type="button"
                   onClick={() => {
                     set('modo', 'obrigacaoFazer');
-                    if (form.honBase !== 'fixa' && form.honBase !== 'valorFixado') set('honBase', 'valorFixado');
+                    if (form.honBase === 'diferenca' || form.honBase === 'debitos') set('honBase', 'valorFixado');
                   }}
                   className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${form.modo === 'obrigacaoFazer' ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
                 >
@@ -526,18 +537,48 @@ export default function CumprimentoSentencaPage() {
                     </div>
                     <div>
                       <label className={labelCls}>Base</label>
-                      <select className={inputCls} value={form.honBase} onChange={(e) => set('honBase', e.target.value as HonorariosBase | 'valorFixado')}>
+                      <select className={inputCls} value={form.honBase} onChange={(e) => set('honBase', e.target.value as typeof form.honBase)}>
                         {form.modo === 'condenacao' && (
                           <>
-                            <option value="diferenca">Sobre o principal corrigido</option>
+                            <option value="diferenca">Sobre o principal corrigido (condenação)</option>
                             <option value="debitos">Sobre os débitos corrigidos</option>
                           </>
+                        )}
+                        {form.modo === 'obrigacaoFazer' && (
+                          <option value="condenacao">Sobre a condenação (informe o valor)</option>
                         )}
                         <option value="fixa">Sobre o valor da causa (fixo)</option>
                         <option value="valorFixado">Valor fixado (R$)</option>
                       </select>
                     </div>
                   </div>
+                  {form.honBase === 'condenacao' && (
+                    <div className="mt-3 space-y-2">
+                      <div>
+                        <label className={labelCls}>Valor da condenação (R$)</label>
+                        <input className={inputCls} inputMode="decimal" placeholder="ex.: valor apurado no recálculo" value={form.honValorCondenacao} onChange={(e) => set('honValorCondenacao', e.target.value)} />
+                      </div>
+                      <p className="text-[10px] leading-tight text-zinc-400">
+                        Honorários = percentual × condenação (o proveito econômico apurado — ex.:
+                        o abatimento no recálculo do contrato).
+                      </p>
+                      {honExecucaoValor > 0 && (
+                        <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                          = {brl(honExecucaoValor)} de honorários
+                        </p>
+                      )}
+                      <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                        <input type="checkbox" className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600" checked={form.honAtualizar} onChange={(e) => set('honAtualizar', e.target.checked)} />
+                        Corrigir o valor até o termo final
+                      </label>
+                      {form.honAtualizar && (
+                        <div>
+                          <label className={labelCls}>Data da fixação (sentença)</label>
+                          <input type="date" className={inputCls} value={form.honQuantiaData} onChange={(e) => set('honQuantiaData', e.target.value)} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {form.honBase === 'valorFixado' && (
                     <div className="mt-3 space-y-2">
                       <div>

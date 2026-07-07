@@ -370,11 +370,18 @@ export default function CalculadoraRmcPage() {
       // (motor de atualização de débitos), com os honorários como principal.
       if (csAtivo && cs.execucao === 'soSucumbencia') {
         const pctSuc = parseValor(cs.sucPercentual) || 0;
+        const round2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100;
+        // "Sobre a condenação" = restituição (+ danos) do cenário escolhido,
+        // que a própria calculadora acabou de apurar — já atualizada até a data-base.
+        const cenBase = r.cenarios.find((c) => c.id === cs.baseCenario) ?? r.cenarios[0];
+        const condenacao = cenBase ? cenBase.resumo.restituicao + cenBase.resumo.danosMorais : 0;
         const vc = parseValor(cs.valorCausa) || 0;
         const valor =
           cs.sucBase === 'valorFixado'
             ? parseValor(cs.valorFixado) || 0
-            : Math.round(((pctSuc / 100) * vc + Number.EPSILON) * 100) / 100;
+            : cs.sucBase === 'principal'
+              ? round2((pctSuc / 100) * condenacao)
+              : round2((pctSuc / 100) * vc);
         if (valor > 0) {
           const csSuc = await calculadoraCsService.calcular({
             indiceCorrecao: form.indiceCorrecao,
@@ -389,9 +396,14 @@ export default function CalculadoraRmcPage() {
                 descricao:
                   cs.sucBase === 'valorFixado'
                     ? 'Honorários sucumbenciais fixados'
-                    : `Honorários sucumbenciais (${cs.sucPercentual}% sobre o valor da causa)`,
+                    : cs.sucBase === 'principal'
+                      ? `Honorários sucumbenciais (${cs.sucPercentual}% sobre a condenação de ${condenacao.toFixed(2).replace('.', ',')})`
+                      : `Honorários sucumbenciais (${cs.sucPercentual}% sobre o valor da causa)`,
                 data:
-                  cs.atualizarValorCausa && cs.valorCausaData ? cs.valorCausaData : form.dataBase,
+                  // condenação já vem atualizada até a data-base (sem nova correção)
+                  cs.sucBase !== 'principal' && cs.atualizarValorCausa && cs.valorCausaData
+                    ? cs.valorCausaData
+                    : form.dataBase,
                 valor,
               },
             ],
@@ -1500,9 +1512,13 @@ export default function CalculadoraRmcPage() {
                     )}
                   </div>
 
-                  {cs.execucao === 'restituicao' && (
+                  {(cs.execucao === 'restituicao' || cs.sucBase === 'principal') && (
                     <div>
-                      <label className={labelCls}>Principal = restituição do cenário</label>
+                      <label className={labelCls}>
+                        {cs.execucao === 'restituicao'
+                          ? 'Principal = restituição do cenário'
+                          : 'Condenação = restituição do cenário'}
+                      </label>
                       <select
                         className={inputCls}
                         value={cs.baseCenario}
@@ -1539,9 +1555,7 @@ export default function CalculadoraRmcPage() {
                           onChange={(e) => setCsField('sucBase', e.target.value as typeof cs.sucBase)}
                         >
                           <option value="valorCausa">Valor da causa</option>
-                          {cs.execucao === 'restituicao' && (
-                            <option value="principal">Principal (restituição)</option>
-                          )}
+                          <option value="principal">Sobre a condenação (restituição do cálculo)</option>
                           <option value="valorFixado">Valor fixado (R$)</option>
                         </select>
                       </div>
@@ -1797,7 +1811,7 @@ export default function CalculadoraRmcPage() {
                                     )}${res.cs.sucumbencia.valorCausaAtualizado != null ? ' atualizado' : ''})`
                                   : res.cs.sucumbencia.base === 'diferenca'
                                     ? 'sobre a diferença'
-                                    : 'sobre o principal'
+                                    : 'sobre a condenação (restituição)'
                               }`
                         }
                         valor={res.cs.sucumbencia.valor}
