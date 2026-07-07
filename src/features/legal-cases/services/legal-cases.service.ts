@@ -369,6 +369,18 @@ export const legalCasesService = {
     const { data } = await api.patch(`/legal-cases/${id}/phase`, { phase });
     return data.data ?? data;
   },
+  // Registrar recurso a partir de um prazo: conclui o prazo, move o card p/ RECURSO
+  // e cria/preenche o registro na aba Recursos (espécie/quem recorreu/motivo).
+  async registrarRecurso(input: {
+    deadlineId: string;
+    especie?: string;
+    parteRecorrente?: 'CLIENTE' | 'ADVERSA';
+    motivo?: string;
+    confirmFatal?: boolean;
+  }): Promise<{ ok: boolean; phase: string; recursoId: string | null; aviso?: { enviado: boolean; motivo?: string } | null }> {
+    const { data } = await api.post('/legal-cases/recurso/registrar', input);
+    return data.data ?? data;
+  },
   async updateChecklist(id: string, items: Record<string, boolean>): Promise<{ ok: boolean; checklist: Record<string, boolean> }> {
     const { data } = await api.patch(`/legal-cases/${id}/checklist`, { items });
     return data.data ?? data;

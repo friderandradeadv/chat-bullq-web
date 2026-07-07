@@ -67,6 +67,41 @@ interface Activity {
   priorityLabel: string | null; completedAt: string | null; description: string | null;
   prazoFatal: string | null; recorte: string | null; tipoPublicacao: string | null;
   faseMovida: { de: string; para: string } | null; dispositivo: string | null;
+  // Ação DJEN + sugestão de recurso (espécie/quem/motivo) já extraída pela IA —
+  // pré-preenche o mini-form de "registrar recurso" ao concluir o prazo.
+  djenAction: string | null;
+  recursoSugestao: { especie: string | null; parteRecorrente: string | null; motivo: string | null } | null;
+}
+
+// Espécies de recurso (para o dropdown do mini-form). Texto livre no backend.
+const ESPECIES_RECURSO = ['Apelação', 'Agravo de Instrumento', 'Agravo Interno', 'Embargos de Declaração', 'Recurso Especial', 'Recurso Extraordinário', 'Recurso Inominado', 'Recurso Ordinário', 'Agravo em REsp'];
+
+// Deduz a espécie do recurso a partir do título/descrição do prazo (fallback quando
+// a IA não gravou a sugestão — ex.: prazos antigos). Devolve '' se não reconhecer.
+function especieDoPrazo(a: Activity): string {
+  const s = `${a.title} ${a.description ?? ''} ${a.djenAction ?? ''}`.toLowerCase();
+  if (/agravo de instrumento/.test(s)) return 'Agravo de Instrumento';
+  if (/agravo interno/.test(s)) return 'Agravo Interno';
+  if (/agravo em resp|agravo em recurso especial/.test(s)) return 'Agravo em REsp';
+  if (/agravo/.test(s)) return 'Agravo de Instrumento';
+  if (/embargos de declara|embargo de declara/.test(s)) return 'Embargos de Declaração';
+  if (/recurso especial|\bresp\b/.test(s)) return 'Recurso Especial';
+  if (/recurso extraordin|\bre\b/.test(s)) return 'Recurso Extraordinário';
+  if (/inominado/.test(s)) return 'Recurso Inominado';
+  if (/recurso ordinario/.test(s)) return 'Recurso Ordinário';
+  if (/apela/.test(s)) return 'Apelação';
+  return '';
+}
+
+// Um prazo é "de recurso" (abre o mini-form ao concluir) quando é uma intimação
+// DJEN cuja ação/rótulo indica interposição de recurso. Contrarrazões conta como
+// recurso da parte ADVERSA (quem recorreu = adversa).
+function isRecursoPrazo(a: Activity): boolean {
+  if (a.source !== 'prazo') return false;
+  const act = (a.djenAction ?? '').toLowerCase();
+  if (['apelacao', 'agravo', 'embargos', 'recurso', 'contrarrazoes'].includes(act)) return true;
+  // fallback por texto (prazos antigos sem `action` gravada)
+  return !!especieDoPrazo(a) || /contrarraz|contraminuta/i.test(`${a.title} ${a.description ?? ''}`);
 }
 
 // Extrai a EMENTA do acórdão (do marcador "EMENTA" em diante, ~3000 chars) —
@@ -323,6 +358,7 @@ export default function AgendaPage() {
         priorityLabel: PRIORITY_LABEL[t.priority] ?? null, completedAt: t.completedAt, description: t.description,
         prazoFatal: dj?.prazoFatal ?? null, recorte: dj?.recorte ?? null, tipoPublicacao: dj?.tipoPublicacao ?? null,
         faseMovida: dj?.faseMovida ?? null, dispositivo: dj?.dispositivo ?? null,
+        djenAction: (dj as any)?.action ?? null, recursoSugestao: (dj as any)?.recurso ?? null,
       });
     }
     for (const d of dlQ.data ?? []) {
@@ -341,6 +377,7 @@ export default function AgendaPage() {
         createdName: null, priorityLabel: null, completedAt: null, description: ddj?.descricao ?? null,
         prazoFatal: d.dueDate, recorte: ddj?.recorte ?? null, tipoPublicacao: ddj?.tipoPublicacao ?? null,
         faseMovida: ddj?.faseMovida ?? null, dispositivo: ddj?.dispositivo ?? null,
+        djenAction: (ddj as any)?.action ?? null, recursoSugestao: (ddj as any)?.recurso ?? null,
       });
     }
     for (const e of evQ.data ?? []) {
@@ -357,6 +394,7 @@ export default function AgendaPage() {
         createdName: null, priorityLabel: null, completedAt: (e.metadata?.completedAt as string) ?? null, description: e.location,
         prazoFatal: null, recorte: null, tipoPublicacao: null,
         faseMovida: null, dispositivo: null,
+        djenAction: null, recursoSugestao: null,
       });
     }
     return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
@@ -850,6 +888,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [respId, setRespId] = useState(activity.responsibleId);
   const [respName, setRespName] = useState(activity.responsibleName);
   const [prazoBusy, setPrazoBusy] = useState(false);
+  const [recursoForm, setRecursoForm] = useState(false); // mini-form "registrar recurso"
   const [coIds, setCoIds] = useState<string[]>(activity.coResponsibleIds ?? []);
   const [coMenu, setCoMenu] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
@@ -1039,6 +1078,12 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     } finally { setPrazoBusy(false); }
   };
   const toggleDone = async () => {
+    // Concluir um PRAZO DE RECURSO (não reabrir) → abre o mini-form "registrar
+    // recurso" (move o card + cria o registro na aba Recursos) em vez de só marcar.
+    if (!done && activity.source === 'prazo' && activity.caseId && isRecursoPrazo(activity)) {
+      setRecursoForm(true);
+      return;
+    }
     setBusy(true);
     try {
       if (activity.source === 'tarefa') { await tasksService.update(activity.rawId, { status: done ? 'TODO' : 'DONE' }); toast.success(done ? 'Tarefa reaberta' : 'Tarefa concluída'); setDone(!done); }
@@ -1046,6 +1091,12 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
       else { if (done) { await deadlinesService.update(activity.rawId, { status: 'OPEN' }); toast.success('Prazo reaberto'); setDone(false); } else { await deadlinesService.complete(activity.rawId, activity.fatal); toast.success('Prazo concluído'); setDone(true); } }
       onRefetch();
     } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
+  };
+  // "Só concluir o prazo" — escape do mini-form quando você fechou o prazo sem recorrer.
+  const soConcluir = async () => {
+    setRecursoForm(false); setBusy(true);
+    try { await deadlinesService.complete(activity.rawId, activity.fatal); toast.success('Prazo concluído'); setDone(true); onRefetch(); }
+    catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
   };
 
   const headerType = activity.source === 'evento' ? 'Evento' : 'Tarefa';
@@ -1301,6 +1352,92 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {done
             ? <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Reabrir</button>
             : <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Check className="h-4 w-4" /> Concluir</button>}
+        </div>
+      </div>
+      {recursoForm && (
+        <RegistrarRecursoModal
+          activity={activity}
+          onClose={() => setRecursoForm(false)}
+          onSoConcluir={soConcluir}
+          onDone={() => { setRecursoForm(false); setDone(true); onRefetch(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Mini-form de 1 clique: ao concluir um prazo de recurso, confirma espécie + quem
+// recorreu + motivo. Ao confirmar, o backend conclui o prazo, move o card p/ RECURSO
+// e cria/preenche o registro na aba Recursos.
+function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
+  activity: Activity; onClose: () => void; onSoConcluir: () => void; onDone: () => void;
+}) {
+  const sug = activity.recursoSugestao;
+  const [especie, setEspecie] = useState<string>(sug?.especie || especieDoPrazo(activity) || 'Apelação');
+  // Contrarrazões = a parte ADVERSA recorreu; os demais = nós (autor).
+  const contrarrazoes = (activity.djenAction ?? '').toLowerCase() === 'contrarrazoes'
+    || /contrarraz|contraminuta/i.test(`${activity.title} ${activity.description ?? ''}`);
+  const [parte, setParte] = useState<'CLIENTE' | 'ADVERSA'>(
+    (sug?.parteRecorrente?.toUpperCase() as 'CLIENTE' | 'ADVERSA') || (contrarrazoes ? 'ADVERSA' : 'CLIENTE'),
+  );
+  const [motivo, setMotivo] = useState<string>(sug?.motivo || '');
+  const [busy, setBusy] = useState(false);
+  const custom = !ESPECIES_RECURSO.includes(especie);
+
+  const confirmar = async () => {
+    setBusy(true);
+    try {
+      await legalCasesService.registrarRecurso({
+        deadlineId: activity.rawId,
+        especie: especie.trim() || undefined,
+        parteRecorrente: parte,
+        motivo: motivo.trim() || undefined,
+        confirmFatal: activity.fatal,
+      });
+      toast.success('Recurso registrado — card movido para "14. RECURSO"');
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao registrar o recurso');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-[60] w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-[#202124] dark:text-zinc-100">Registrar recurso</h3>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="mb-4 text-sm text-zinc-500">
+          {activity.caseTitle ?? 'Processo'} — o card vai para <b>14. RECURSO</b> e entra na aba Recursos.
+        </p>
+
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Espécie</label>
+        <select value={custom ? '__custom' : especie} onChange={(e) => setEspecie(e.target.value === '__custom' ? '' : e.target.value)} className={`${inputCls} mb-1`}>
+          {ESPECIES_RECURSO.map((x) => <option key={x} value={x}>{x}</option>)}
+          <option value="__custom">Outro…</option>
+        </select>
+        {custom && <input autoFocus value={especie} onChange={(e) => setEspecie(e.target.value)} placeholder="Digite a espécie do recurso" className={`${inputCls} mb-3`} />}
+
+        <label className="mb-1 mt-3 block text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Quem recorreu</label>
+        <div className="mb-3 inline-flex overflow-hidden rounded-lg border border-[#DEE2E6] dark:border-zinc-700">
+          <button onClick={() => setParte('CLIENTE')} className={`px-3 py-1.5 text-sm font-medium ${parte === 'CLIENTE' ? 'bg-[#228BE6] text-white' : 'bg-white text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}>Nós (autor)</button>
+          <button onClick={() => setParte('ADVERSA')} className={`px-3 py-1.5 text-sm font-medium ${parte === 'ADVERSA' ? 'bg-[#228BE6] text-white' : 'bg-white text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}>Parte adversa</button>
+        </div>
+
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Motivo do recurso <span className="font-normal normal-case text-zinc-400">(opcional)</span></label>
+        <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder="Por que recorremos (ex.: sentença julgou improcedente a nulidade do RMC…)" className={`${inputCls} resize-none`} />
+        {activity.dispositivo && (
+          <p className="mt-1 line-clamp-2 text-[11px] text-zinc-400" title={activity.dispositivo}>Dispositivo: {activity.dispositivo}</p>
+        )}
+
+        <div className="mt-5 flex items-center justify-between gap-2">
+          <button onClick={onSoConcluir} disabled={busy} className="text-sm font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300">Só concluir o prazo</button>
+          <div className="flex gap-2">
+            <button onClick={onClose} disabled={busy} className="rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Cancelar</button>
+            <button onClick={confirmar} disabled={busy} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Check className="h-4 w-4" /> Registrar recurso</button>
+          </div>
         </div>
       </div>
     </div>
