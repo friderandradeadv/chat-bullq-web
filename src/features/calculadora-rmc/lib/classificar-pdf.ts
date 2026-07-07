@@ -1,7 +1,9 @@
 /**
  * Classifica um PDF NO NAVEGADOR (pdfjs, primeiras páginas) para a área única
  * de upload da calculadora: HISCON, HISCRE, sentença, inicial ou cálculo do
- * escritório. Sem custo de IA — só regex sobre o texto extraído.
+ * escritório. Sem custo de IA — regex sobre o texto extraído, com FALLBACK pelo
+ * NOME do arquivo quando o pdfjs não consegue ler o texto (PDFs "WPTools" do
+ * TJ, escaneados, etc. — extração vazia deixaria tudo como "desconhecido").
  */
 export type TipoDocCalc =
   | 'hiscon'
@@ -39,25 +41,15 @@ const norm = (s: string) =>
     .replace(/[̀-ͯ]/g, '')
     .toUpperCase();
 
-export async function classificarPdf(
-  file: File,
-): Promise<{ tipo: TipoDocCalc; nome: string }> {
-  const nome = file.name;
-  let t = '';
-  try {
-    t = norm(await textoPrimeirasPaginas(file));
-  } catch {
-    return { tipo: 'desconhecido', nome };
-  }
-  if (!t) return { tipo: 'desconhecido', nome };
-
+/** Classifica pelo CONTEÚDO (texto extraído). null = não deu p/ decidir. */
+function porConteudo(t: string): TipoDocCalc | null {
   // HISCON — Histórico de Empréstimo Consignado (Meu INSS): metadados dos contratos
   if (
     t.includes('HISTORICO DE EMPRESTIMO CONSIGNADO') ||
     t.includes('EMPRESTIMOS BANCARIOS') ||
     (t.includes('RESERVADO ATUALIZADO') && t.includes('VALOR LIMITE'))
   )
-    return { tipo: 'hiscon', nome };
+    return 'hiscon';
 
   // HISCRE — Histórico de Créditos (rubricas 217 RMC / 268 cartão, mês a mês)
   if (
@@ -66,32 +58,65 @@ export async function classificarPdf(
     t.includes('CONSIGNACAO - CARTAO') ||
     t.includes('CONSIGNACAO CARTAO')
   )
-    return { tipo: 'hiscre', nome };
+    return 'hiscre';
 
-  // Cálculo da inicial — relatório da calculadora (escritório/CJ) ou memorial
-  // equivalente. Guarda de EXCELENTISSIMO: petição que cita a tabela não é o cálculo.
+  // Cálculo da inicial — relatório da calculadora (escritório/CJ) ou memorial.
   if (
     !t.includes('EXCELENTISSIMO') &&
     (t.includes('EVOLUCAO DO SALDO DEVEDOR') ||
       t.includes('EVOLUCAO DAS PARCELAS') ||
       t.includes('MEMORIAL DE CALCULO'))
   )
-    return { tipo: 'calculo', nome };
+    return 'calculo';
 
   // Sentença / acórdão (o dispositivo "julgo…" é a assinatura mais confiável)
   if (
-    /JULGO (PARCIALMENTE )?(IM)?PROCEDENTE/.test(t) ||
+    /JULG\w* (PARCIALMENTE )?(IM)?PROCEDENTE/.test(t) ||
     /\bACORDAO\b/.test(t) ||
-    (/\bSENTENCA\b/.test(t) && (t.includes('VISTOS') || t.includes('DISPOSITIVO')))
+    /ANTE O EXPOSTO/.test(t) ||
+    /DISPOSITIVO/.test(t) ||
+    (/\bSENTENCA\b/.test(t) && (t.includes('VISTOS') || t.includes('JULGO')))
   )
-    return { tipo: 'sentenca', nome };
+    return 'sentenca';
 
   // Petição inicial (endereçamento + pedidos/valor da causa)
   if (
     t.includes('EXCELENTISSIMO') ||
     (t.includes('VALOR DA CAUSA') && (t.includes('DOS PEDIDOS') || t.includes('REQUERIMENTOS')))
   )
-    return { tipo: 'inicial', nome };
+    return 'inicial';
 
-  return { tipo: 'desconhecido', nome };
+  return null;
+}
+
+/** Classifica pelo NOME do arquivo (fallback quando o texto falha). */
+function porNome(nome: string): TipoDocCalc | null {
+  const n = norm(nome);
+  if (n.includes('HISCON')) return 'hiscon';
+  if (n.includes('HISCRE')) return 'hiscre';
+  if (n.includes('MEMORIAL') || n.includes('CALCULO') || n.includes('PLANILHA')) return 'calculo';
+  // sentença tem prioridade sobre acórdão/ED; "SENT" pega "SENTENCA"/"SENTENÇA"
+  if (n.includes('SENTENC') || n.includes('ACORDAO') || n.includes('SENT ')) return 'sentenca';
+  if (n.includes('INICIAL') || n.includes('PETICAO')) return 'inicial';
+  return null;
+}
+
+export async function classificarPdf(
+  file: File,
+): Promise<{ tipo: TipoDocCalc; nome: string; via: 'conteudo' | 'nome' | 'desconhecido' }> {
+  const nome = file.name;
+  let t = '';
+  try {
+    t = norm(await textoPrimeirasPaginas(file));
+  } catch {
+    /* pdfjs falhou de vez — cai no nome abaixo */
+  }
+  const porTexto = t ? porConteudo(t) : null;
+  if (porTexto) return { tipo: porTexto, nome, via: 'conteudo' };
+
+  // Texto ilegível/insuficiente (WPTools, escaneado) → tenta pelo nome.
+  const porArquivo = porNome(nome);
+  if (porArquivo) return { tipo: porArquivo, nome, via: 'nome' };
+
+  return { tipo: 'desconhecido', nome, via: 'desconhecido' };
 }

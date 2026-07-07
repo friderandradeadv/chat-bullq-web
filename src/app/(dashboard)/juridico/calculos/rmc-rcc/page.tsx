@@ -653,22 +653,28 @@ export default function CalculadoraRmcPage() {
       const calculoIdx = idx('calculo');
       const desconhecidos = idx('desconhecido').map((i) => cls[i].nome);
 
+      // Resumo do que foi identificado (mostra se foi pelo conteúdo ou pelo nome).
+      const rotulo = (tipo: string) =>
+        ({ hiscon: 'HISCON', hiscre: 'HISCRE', sentenca: 'sentença', inicial: 'inicial', calculo: 'cálculo' } as Record<string, string>)[tipo] ?? tipo;
+      const idDoc = (i: number) =>
+        `${rotulo(cls[i].tipo)}${cls[i].via === 'nome' ? ' (pelo nome)' : ''}: ${cls[i].nome}`;
+
       const partes: string[] = [];
       const jobs: Promise<unknown>[] = [];
+      let extraiuSentenca = false;
       if (hisconIdx.length) {
-        partes.push(`HISCON (${cls[hisconIdx[0]].nome})`);
+        partes.push(idDoc(hisconIdx[0]));
         setHisconAviso(null);
         jobs.push(hisconMut.mutateAsync(files[hisconIdx[0]]));
       }
       if (hiscreIdx.length) {
-        partes.push(`HISCRE (${cls[hiscreIdx[0]].nome})`);
+        partes.push(idDoc(hiscreIdx[0]));
         setHiscreAviso(null);
         jobs.push(hiscreMut.mutateAsync(files[hiscreIdx[0]]));
       }
       if (extrairIdx.length) {
-        partes.push(
-          extrairIdx.map((i) => `${cls[i].tipo === 'sentenca' ? 'sentença' : 'inicial'} (${cls[i].nome})`).join(' + '),
-        );
+        extraiuSentenca = true;
+        partes.push(extrairIdx.map((i) => idDoc(i)).join(' + '));
         // Sentença/inicial = fase de execução: liga o CS sozinho.
         setFase('cs');
         setCs((c) => ({ ...c, ativar: true }));
@@ -680,7 +686,7 @@ export default function CalculadoraRmcPage() {
         partes.push(`inicial ignorada na extração (${cls[iniIdx[0]].nome}) — a sentença manda`);
       }
       if (calculoIdx.length) {
-        partes.push(`cálculo da inicial (${cls[calculoIdx[0]].nome})`);
+        partes.push(idDoc(calculoIdx[0]));
         // O PDF do cálculo só existe depois da inicial protocolada = execução.
         setFase('cs');
         setCs((c) => ({ ...c, ativar: true }));
@@ -689,14 +695,17 @@ export default function CalculadoraRmcPage() {
       }
       setLoteAviso(
         partes.length
-          ? `Identifiquei: ${partes.join(' · ')}. Lendo com a IA…`
-          : 'Nenhum documento reconhecido.',
+          ? `Identifiquei — ${partes.join(' · ')}. Lendo com a IA…`
+          : `Nenhum documento reconhecido (${files.length} PDF). Nomeie os arquivos (ex.: "sentença.pdf", "HISCRE.pdf") ou use "Prefere enviar um por um?".`,
       );
-      await Promise.allSettled(jobs);
+      const resultados = await Promise.allSettled(jobs);
+      const houveFalha = resultados.some((r) => r.status === 'rejected');
       const avisos: string[] = [];
-      if (partes.length) avisos.push(`Importados: ${partes.join(' · ')}.`);
+      if (partes.length) avisos.push(`Documentos: ${partes.join(' · ')}.`);
+      if (extraiuSentenca && houveFalha)
+        avisos.push('⚠️ Falhei ao ler a sentença com a IA — confira o aviso na seção de Cumprimento de Sentença.');
       if (desconhecidos.length)
-        avisos.push(`Não reconheci: ${desconhecidos.join(', ')} — abra "Prefere enviar um por um?" e mande pelo botão certo.`);
+        avisos.push(`Não reconheci: ${desconhecidos.join(', ')} — renomeie ou envie um por um.`);
       setLoteAviso(avisos.join(' ') || 'Nada importado.');
     } catch (err) {
       setLoteAviso((err as Error)?.message ?? 'Erro ao processar os documentos.');
