@@ -644,7 +644,12 @@ export default function CalculadoraRmcPage() {
       const idx = (tipo: string) => cls.map((c, i) => (c.tipo === tipo ? i : -1)).filter((i) => i >= 0);
       const hisconIdx = idx('hiscon');
       const hiscreIdx = idx('hiscre');
-      const sentIniIdx = [...idx('sentenca'), ...idx('inicial')];
+      // A execução é ditada pela SENTENÇA/acórdão. A inicial NÃO entra na extração
+      // (ela PEDE dobro/danos — poluía a leitura, marcando dobro e virando "condenação").
+      // Só usamos a inicial p/ extrair se não houver nenhuma sentença no lote.
+      const sentIdx = idx('sentenca');
+      const iniIdx = idx('inicial');
+      const extrairIdx = sentIdx.length ? sentIdx : iniIdx;
       const calculoIdx = idx('calculo');
       const desconhecidos = idx('desconhecido').map((i) => cls[i].nome);
 
@@ -660,15 +665,19 @@ export default function CalculadoraRmcPage() {
         setHiscreAviso(null);
         jobs.push(hiscreMut.mutateAsync(files[hiscreIdx[0]]));
       }
-      if (sentIniIdx.length) {
+      if (extrairIdx.length) {
         partes.push(
-          sentIniIdx.map((i) => `${cls[i].tipo === 'sentenca' ? 'sentença' : 'inicial'} (${cls[i].nome})`).join(' + '),
+          extrairIdx.map((i) => `${cls[i].tipo === 'sentenca' ? 'sentença' : 'inicial'} (${cls[i].nome})`).join(' + '),
         );
         // Sentença/inicial = fase de execução: liga o CS sozinho.
         setFase('cs');
         setCs((c) => ({ ...c, ativar: true }));
         setCsSentAviso(null);
-        jobs.push(csSentMut.mutateAsync(sentIniIdx.map((i) => files[i])));
+        jobs.push(csSentMut.mutateAsync(extrairIdx.map((i) => files[i])));
+      }
+      // A inicial que ficou de fora (quando há sentença) só serve de nota ao usuário.
+      if (sentIdx.length && iniIdx.length) {
+        partes.push(`inicial ignorada na extração (${cls[iniIdx[0]].nome}) — a sentença manda`);
       }
       if (calculoIdx.length) {
         partes.push(`cálculo da inicial (${cls[calculoIdx[0]].nome})`);
