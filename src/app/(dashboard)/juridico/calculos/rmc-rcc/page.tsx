@@ -1847,7 +1847,12 @@ export default function CalculadoraRmcPage() {
                             numeroContrato: form.numeroContrato,
                             nomeCalculo: form.nomeCalculo,
                             indiceCorrecao: res.config.indiceCorrecao,
+                            taxaConversao: res.config.taxaConversao,
+                            dataBase: res.config.dataBase,
+                            valorEmprestimo: res.config.valorEmprestimo,
+                            dataContratacao: form.dataContratacao,
                             sucumbenciaLabel: csInfo?.honFixado ? 'valor fixado' : undefined,
+                            cenario: cenarios.find((c) => c.id === res.cs!.baseCenario) ?? cenarioView,
                           })
                         }
                         className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-medium text-violet-700 shadow-sm transition-colors hover:bg-violet-50 dark:border-violet-500/40 dark:bg-zinc-900 dark:text-violet-300 dark:hover:bg-violet-500/10"

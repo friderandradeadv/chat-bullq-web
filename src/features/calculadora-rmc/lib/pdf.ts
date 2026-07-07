@@ -42,13 +42,50 @@ function imprimirHtml(html: string) {
  */
 export function gerarPdfCsExecucao(
   cs: ResultadoCs,
-  meta: MetaRmc & { indiceCorrecao?: string; sucumbenciaLabel?: string },
+  meta: MetaRmc & {
+    indiceCorrecao?: string;
+    taxaConversao?: number;
+    dataBase?: string;
+    valorEmprestimo?: number;
+    dataContratacao?: string;
+    sucumbenciaLabel?: string;
+    cenario?: Cenario;
+  },
 ) {
   const nome = meta.nomeCalculo || [meta.tipo, meta.banco].filter(Boolean).join(' - ') || 'Cumprimento de Sentença';
   const gerado = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const s = cs.sucumbencia;
   const kv = (k: string, v: string, cls = '') =>
     `<div class="kv ${cls}"><span>${esc(k)}</span><span>${v}</span></div>`;
+  const taxa = pctBr(meta.taxaConversao);
+
+  // Evolução do Saldo Devedor — a memória mês a mês que prova a restituição.
+  const c = meta.cenario;
+  let evolucao = '';
+  if (c && c.linhas.length) {
+    const cols = [
+      'Nº', 'Data', `Valor ${meta.tipo} debitado`, 'Saldo devedor anterior (base juros)',
+      'Taxa juros', 'Juros mensais', '(−) Amortização', '(+) Saques', 'Saldo devedor atual',
+      'Valor a restituir', 'Correção', 'Juros', 'Valor atualizado a restituir',
+    ];
+    const head = `<tr>${cols.map((h) => `<th>${esc(h)}</th>`).join('')}</tr>`;
+    const body = c.linhas
+      .map(
+        (l) =>
+          `<tr class="${l.valorRestituir > 0 ? 'r' : ''}">` +
+          `<td>${l.numero}</td><td class="ct">${dm(l.data)}</td>` +
+          `<td>${brl(l.valorDebitado)}</td><td>${brl(l.saldoAnterior)}</td>` +
+          `<td class="ct">${taxa}</td><td>${brl(l.juros)}</td><td>${brl(l.amortizacao)}</td>` +
+          `<td>${brl(l.saque)}</td><td>${brl(l.saldoAtual)}</td>` +
+          `<td>${l.valorRestituir ? brl(l.valorRestituir) : '—'}${l.dobroAplicado ? ' <b>2×</b>' : ''}</td>` +
+          `<td>${l.fatorCorrecao.toFixed(6).replace('.', ',')}</td>` +
+          `<td>${l.valorRestituir ? pctBr(l.jurosMoraPct * 100) : '—'}</td>` +
+          `<td>${l.valorAtualizado ? brl(l.valorAtualizado) : '—'}</td></tr>`,
+      )
+      .join('');
+    evolucao = `<div class="sec secfull"><h2>Evolução do Saldo Devedor — ${c.linhas.length} competências</h2>
+      <table><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  }
 
   const sucLabel =
     meta.sucumbenciaLabel ??
@@ -65,6 +102,9 @@ export function gerarPdfCsExecucao(
     kv('Tipo de contrato', meta.tipo) +
     (meta.banco ? kv('Banco', esc(meta.banco)) : '') +
     (meta.numeroContrato ? kv('Nº do contrato', esc(meta.numeroContrato)) : '') +
+    (meta.valorEmprestimo != null ? kv('Valor do empréstimo', brl(meta.valorEmprestimo)) : '') +
+    (meta.dataContratacao ? kv('Data da contratação', dm(meta.dataContratacao)) : '') +
+    (meta.taxaConversao != null ? kv('Taxa de conversão', `${taxa} a.m.`) : '') +
     (meta.indiceCorrecao ? kv('Índice de correção', meta.indiceCorrecao) : '') +
     kv('Principal atualizado até', dm(cs.termoFinal));
 
@@ -96,8 +136,16 @@ export function gerarPdfCsExecucao(
   .kv span:last-child{font-weight:700;text-align:right}
   .res .kv.total{background:#ede9fe;border-top:1px solid #ddd6fe}
   .res .kv.total span{color:#4c1d95;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:7.6px;margin-top:4px}
+  thead{display:table-header-group}
+  th{background:#6d28d9;color:#fff;font-weight:700;padding:5px 3px;text-align:right;vertical-align:bottom;line-height:1.1}
+  td{padding:3px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap}
+  th:first-child,td.ct{text-align:center}
+  tr.r td{background:#ecfdf5}
+  .secfull{margin-top:14px;border:none;border-radius:0;overflow:visible;break-inside:auto}
+  .secfull>h2{border:1px solid #e5e7eb;border-bottom:none;border-radius:8px 8px 0 0}
   .foot{margin-top:18px;padding-top:8px;border-top:1px solid #e5e7eb;text-align:center;font-size:9px;color:#9ca3af}
-  @page{size:A4 portrait;margin:12mm}
+  @page{size:A4 landscape;margin:11mm}
   @media print{body{padding:0}}
 </style></head>
 <body>
@@ -111,6 +159,7 @@ export function gerarPdfCsExecucao(
     <div class="sec"><h2>Dados</h2>${dados}</div>
     <div class="sec res"><h2>Execução</h2>${resultado}</div>
   </div>
+  ${evolucao}
   <div class="foot">Frider Andrade | Advogados · cálculo gerado eletronicamente · ${gerado}</div>
 </body></html>`;
   imprimirHtml(html);
