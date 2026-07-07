@@ -46,7 +46,8 @@ import {
   calculadoraCsService,
   type ResultadoCs as ResultadoCsAvulso,
 } from '@/features/calculadora-cs/services/calculadora-cs.service';
-import { gerarPdfRmc } from '@/features/calculadora-rmc/lib/pdf';
+import { gerarPdfRmc, gerarPdfCsExecucao } from '@/features/calculadora-rmc/lib/pdf';
+import { gerarPdfCs } from '@/features/calculadora-cs/lib/pdf';
 import { classificarPdf } from '@/features/calculadora-rmc/lib/classificar-pdf';
 import { DropZone } from '@/components/drop-zone';
 
@@ -650,10 +651,12 @@ export default function CalculadoraRmcPage() {
       const sentIdx = idx('sentenca');
       const iniIdx = idx('inicial');
       // PDFs ilegíveis pelo pdfjs (peças do TJ) viram candidatos a sentença: o
-      // servidor lê e devolve vazio se não for. Sem sentença/inicial reconhecida,
-      // é a única forma de a execução puxar os parâmetros de um PDF "vazio".
+      // servidor lê e devolve vazio se não for.
       const ilegivelIdx = cls.map((c, i) => (c.via === 'ilegivel' ? i : -1)).filter((i) => i >= 0);
-      const extrairIdx = sentIdx.length ? sentIdx : iniIdx.length ? iniIdx : ilegivelIdx;
+      // Os PARÂMETROS da execução (dobro, tutela, condenação) vêm SÓ da sentença
+      // (ou de um candidato ilegível). A INICIAL nunca entra — ela PEDE dobro/danos
+      // e induziria valores errados. Se só houver inicial, avisamos que falta a sentença.
+      const extrairIdx = sentIdx.length ? sentIdx : ilegivelIdx;
       const calculoIdx = idx('calculo');
       const desconhecidos = cls
         .map((c, i) => (c.tipo === 'desconhecido' && c.via !== 'ilegivel' ? i : -1))
@@ -687,15 +690,19 @@ export default function CalculadoraRmcPage() {
             ? extrairIdx.map((i) => `possível sentença (ilegível no navegador — lendo no servidor): ${cls[i].nome}`).join(' + ')
             : extrairIdx.map((i) => idDoc(i)).join(' + '),
         );
-        // Sentença/inicial = fase de execução: liga o CS sozinho.
+        // Sentença = fase de execução: liga o CS sozinho.
         setFase('cs');
         setCs((c) => ({ ...c, ativar: true }));
         setCsSentAviso(null);
         jobs.push(csSentMut.mutateAsync(extrairIdx.map((i) => files[i])));
       }
-      // A inicial que ficou de fora (quando há sentença) só serve de nota ao usuário.
-      if (sentIdx.length && iniIdx.length) {
-        partes.push(`inicial ignorada na extração (${cls[iniIdx[0]].nome}) — a sentença manda`);
+      // A inicial NÃO entra na extração dos parâmetros (ela pede dobro/danos).
+      if (iniIdx.length) {
+        partes.push(
+          sentIdx.length
+            ? `inicial ignorada na extração (${cls[iniIdx[0]].nome}) — a sentença manda`
+            : `inicial recebida (${cls[iniIdx[0]].nome}), mas dobro/tutela/condenação vêm da SENTENÇA — suba a sentença`,
+        );
       }
       if (calculoIdx.length) {
         partes.push(idDoc(calculoIdx[0]));
@@ -705,6 +712,8 @@ export default function CalculadoraRmcPage() {
         setCalcPdfAviso(null);
         jobs.push(calcPdfMut.mutateAsync(files[calculoIdx[0]]));
       }
+      // Sem sentença nem candidato ilegível: avisa que a execução ficou manual.
+      const faltaSentenca = !extrairIdx.length && (iniIdx.length > 0 || calculoIdx.length > 0);
       setLoteAviso(
         partes.length
           ? `Identifiquei — ${partes.join(' · ')}. Lendo com a IA…`
@@ -716,6 +725,8 @@ export default function CalculadoraRmcPage() {
       if (partes.length) avisos.push(`Documentos: ${partes.join(' · ')}.`);
       if (extraiuSentenca && houveFalha)
         avisos.push('⚠️ Falhei ao ler a sentença com a IA — confira o aviso na seção de Cumprimento de Sentença.');
+      if (faltaSentenca)
+        avisos.push('⚠️ Não recebi a SENTENÇA — dobro, tutela e condenação vêm dela. Suba a sentença ou ajuste esses campos na mão.');
       if (desconhecidos.length)
         avisos.push(`Não reconheci: ${desconhecidos.join(', ')} — renomeie ou envie um por um.`);
       setLoteAviso(avisos.join(' ') || 'Nada importado.');
@@ -1827,6 +1838,22 @@ export default function CalculadoraRmcPage() {
                           {res.cs.termoFinal.split('-').reverse().join('/')}
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          gerarPdfCsExecucao(res.cs!, {
+                            tipo: form.tipo,
+                            banco: form.banco,
+                            numeroContrato: form.numeroContrato,
+                            nomeCalculo: form.nomeCalculo,
+                            indiceCorrecao: res.config.indiceCorrecao,
+                            sucumbenciaLabel: csInfo?.honFixado ? 'valor fixado' : undefined,
+                          })
+                        }
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-medium text-violet-700 shadow-sm transition-colors hover:bg-violet-50 dark:border-violet-500/40 dark:bg-zinc-900 dark:text-violet-300 dark:hover:bg-violet-500/10"
+                      >
+                        <FileDown className="h-3.5 w-3.5" /> Baixar PDF
+                      </button>
                     </div>
                     <dl className="text-sm">
                       <ResRow label="Principal (repetição do indébito)" valor={res.cs.principal} />
@@ -1873,6 +1900,17 @@ export default function CalculadoraRmcPage() {
                           {res.csSuc.config.termoFinal.split('-').reverse().join('/')}.
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          gerarPdfCs(res.csSuc!, {
+                            honorariosLabel: 'Honorários sucumbenciais — valor da execução',
+                          })
+                        }
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-medium text-violet-700 shadow-sm transition-colors hover:bg-violet-50 dark:border-violet-500/40 dark:bg-zinc-900 dark:text-violet-300 dark:hover:bg-violet-500/10"
+                      >
+                        <FileDown className="h-3.5 w-3.5" /> Baixar PDF
+                      </button>
                     </div>
                     <dl className="text-sm">
                       <ResRow
