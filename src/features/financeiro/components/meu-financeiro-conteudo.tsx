@@ -499,7 +499,9 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Resultado do mês — casa ENTRADAS (seus casos) com SAÍDAS (da vertical) = resultado real */}
         {subtab === 'lancamentos' && (() => {
-          const entradasMes = txs.filter((t) => !t.minhaFatiaRateio && t.valor > 0).reduce((s, t) => s + t.valor, 0);
+          // "seus casos" = só o que é seu de fato (mine !== false) e honorário — não conta as
+          // movimentações da vertical que aparecem por paridade, nem transferências/adiantamentos.
+          const entradasMes = txs.filter((t) => !t.minhaFatiaRateio && t.valor > 0 && t.mine !== false && !/transfer/i.test(t.categoria || '')).reduce((s, t) => s + t.valor, 0);
           const svAll = data.saidasVerticais ?? [];
           const svCur = svAll.find((x) => x.area === (vertF || vertSaidaSel)) ?? svAll[0];
           const saidasMes = svCur ? svCur.lancamentos.filter((l) => !mesSel || l.mes === mesSel).reduce((s, l) => s + l.valor, 0) : 0;
@@ -516,7 +518,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Lançamentos — filtrável (aba Lançamentos) */}
         {subtab === 'lancamentos' && (
-        <Card title={<>{deArea ? <>Lançamentos da área · {areaNome}</> : 'Seus lançamentos'} <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub={deArea ? `entradas e saídas ligadas à vertical ${areaNome} (inclui o que você lançar) — os honorários iniciais e parcelados custeiam a vertical; a sua remuneração é o rateio no êxito.` : 'movimentações dos seus casos — honorários iniciais e parcelados custeiam a vertical; a sua remuneração é o rateio no êxito.'} action={criar && <button onClick={() => setNovo(true)} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo</button>}>
+        <Card title={<>{deArea ? <>Lançamentos da área · {areaNome}</> : 'Seus lançamentos'} <span className="font-normal text-zinc-400">· {txs.length}</span></>} sub={deArea ? `entradas e saídas ligadas à vertical ${areaNome} (inclui o que você lançar) — os honorários iniciais e parcelados custeiam a vertical; a sua remuneração é o rateio no êxito.` : 'espelha o livro-razão da(s) sua(s) vertical(is): honorários dos seus casos, movimentações da vertical e transferências/adiantamentos. O que é seu de fato entra no resultado; o resto é marcado (vertical/adiantamento).'} action={criar && <button onClick={() => setNovo(true)} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo</button>}>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
               <Calendar className="h-3.5 w-3.5 text-zinc-400" />
@@ -546,6 +548,8 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     <span className="flex items-center gap-1">
                       <span className="truncate">{t.pagador || t.recebedor || t.party || t.categoria}</span>
                       {fatia && <span className="shrink-0 rounded bg-[#7048E8]/10 px-1 text-[9px] font-semibold text-[#7048E8]" title="sua parte do rateio (definida no RH)">sua fatia</span>}
+                      {!fatia && /transfer/i.test(t.categoria || '') && <span className="shrink-0 rounded bg-sky-100 px-1 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300" title="dinheiro passado entre o time (ex.: cota da agência que a pessoa adiantou) — não é honorário; vira custo no holerite só quando a agência for paga">adiantamento</span>}
+                      {t.mine === false && !/transfer/i.test(t.categoria || '') && <span className="shrink-0 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" title="movimentação da sua vertical — aparece aqui por paridade com o livro-razão (não entra no seu resultado pessoal)">vertical</span>}
                       {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
                     </span>
                     {fatia && <span className="block truncate text-[11px] text-zinc-400">{fatia.itens.map((x) => `${x.pct}% de ${brl2(x.base)}${x.label ? ` (${x.label})` : ` · ${x.area}`}`).join(' + ')}</span>}

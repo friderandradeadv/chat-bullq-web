@@ -52,6 +52,7 @@ export interface FinTransacao {
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null; // rateio de despesa entre verticais
   verticais?: string[]; // verticais que o lançamento toca (centro de custos) — vazio = comum/escritório
   vertical?: string | null; // vertical resolvida do lançamento (visão Meu Espaço — p/ filtro das entradas)
+  mine?: boolean; // no espelho do livro-razão: true = lançamento seu (casos/custeio); false = movimentação da vertical/transferência que aparece por paridade
   // fatia DESTA pessoa numa despesa rateada (Meu Espaço) — conforme os % do RH (custosPessoa)
   minhaFatiaRateio?: { valor: number; itens: { area: string; label: string | null; base: number; pct: number; valor: number }[] } | null;
 }
@@ -432,8 +433,8 @@ export interface ClienteResumo {
   cobrancas: { id: string; descricao?: string; valorTotal: number; saldoDevedor: number; pagas: number; nParcelas: number; statusCalc: string; proximaParcela: { num: number; vencimento: string; valor: number } | null; fonte?: string | null }[];
 }
 
-export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; motivo: string | null; verticalSugerida?: string }
-export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; linhas: ExtratoLinhaConf[] }
+export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; revisar?: boolean; motivo: string | null; verticalSugerida?: string }
+export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; revisar?: number; linhas: ExtratoLinhaConf[] }
 
 export interface AsaasPreview {
   configurado: boolean;

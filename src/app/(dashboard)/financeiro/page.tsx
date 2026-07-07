@@ -1497,9 +1497,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       const r = await financeiroService.conferirExtrato((contaArg ?? conta) || null, linhas);
       setConf(r);
       setAreas(Object.fromEntries(r.linhas.map((l, i) => [i, l.verticalSugerida || '']))); // pré-preenche com a sugestão
-      setSel(new Set(r.linhas.map((l, i) => (!l.duplicado ? i : -1)).filter((i) => i >= 0))); // novos marcados
-      if (r.novos === 0) toast('Tudo nesse extrato já está lançado — nada novo.', { icon: '✅' });
-      else toast.success(`${r.novos} novo(s) · ${r.duplicados} já existem`);
+      setSel(new Set(r.linhas.map((l, i) => (!l.duplicado && !l.revisar ? i : -1)).filter((i) => i >= 0))); // novos marcados; suspeitas ficam DESMARCADAS pra revisão
+      const rev = r.revisar ?? r.linhas.filter((l) => l.revisar).length;
+      if (r.novos === 0 && !rev) toast('Tudo nesse extrato já está lançado — nada novo.', { icon: '✅' });
+      else toast.success(`${r.novos} novo(s) · ${r.duplicados} já existe(m)${rev ? ` · ${rev} pra revisar` : ''}`);
     } catch (e: any) { toast.error(e?.message || 'Erro ao conferir'); }
   };
   const onArquivo = async (f: File) => {
@@ -1554,7 +1555,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
           </label>
           {nome && <span className="text-xs text-zinc-400">{nome}</span>}
         </div>
-        <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, <strong>sugere a vertical</strong> de cada despesa (você ajusta na coluna) e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (valor+data) e contra reenvio do mesmo arquivo. Comum do escritório → "Escritório" (rateia auto).</p>
+        <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, <strong>sugere a vertical</strong> de cada despesa (você ajusta na coluna) e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (valor+data) e contra reenvio do mesmo arquivo. Linhas <span className="font-semibold text-amber-700 dark:text-amber-300">⚠️ Revisar</span> têm mesmo valor+data de um lançamento existente mas <strong>nome diferente</strong> (ex.: sucumbência paga pelo tribunal no caso de um cliente) — vêm <strong>desmarcadas</strong>; marque só se for mesmo um lançamento novo. Comum do escritório → "Escritório" (rateia auto).</p>
         {contas.find((c) => c.id === conta)?.cartao
           ? <p className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] text-violet-700 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-300">💳 <strong>Fatura de cartão:</strong> as compras entram como <strong>"a pagar"</strong> (fora do caixa) e a linha de <strong>pagamento de fatura é ignorada</strong>. Só entram no caixa quando você clicar em <strong>Pagar fatura</strong>.</p>
           : <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Importando pra uma <strong>conta bancária</strong> (vira caixa). Se este for o <strong>extrato do cartão</strong>, troque a conta acima pra <strong>"Nubank cartão"</strong>.</p>}
@@ -1562,7 +1563,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         {conf && (
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-zinc-500">{conf.novos} novo(s) · <span className="text-amber-600">{conf.duplicados} já existe(m)</span></span>
+              <span className="text-zinc-500">{conf.novos - (conf.revisar ?? conf.linhas.filter((l) => l.revisar).length)} novo(s) · <span className="text-amber-600">{conf.duplicados} já existe(m)</span>{(conf.revisar ?? conf.linhas.filter((l) => l.revisar).length) > 0 && <> · <span className="font-semibold text-amber-700 dark:text-amber-300">{conf.revisar ?? conf.linhas.filter((l) => l.revisar).length} pra revisar ⚠️</span></>}</span>
               <span className="text-xs text-zinc-400">{sel.size} selecionado(s)</span>
             </div>
             <div className="max-h-72 overflow-x-auto overflow-y-auto rounded-lg border border-zinc-200/70 scrollbar-thin dark:border-zinc-800">
@@ -1570,10 +1571,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                 <thead className="sticky top-0 bg-white dark:bg-zinc-900"><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium"></th><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 font-medium">Status</th></tr></thead>
                 <tbody>
                   {conf.linhas.map((l, i) => (
-                    <tr key={i} className={`border-t border-zinc-100 dark:border-zinc-800 ${l.duplicado ? 'opacity-60' : ''}`}>
+                    <tr key={i} className={`border-t border-zinc-100 dark:border-zinc-800 ${l.duplicado ? 'opacity-60' : l.revisar ? 'bg-amber-50/70 dark:bg-amber-900/10' : ''}`}>
                       <td className="px-2 py-1.5"><input type="checkbox" checked={sel.has(i)} onChange={() => toggle(i)} className="accent-[#02883C]" /></td>
                       <td className="px-2 py-1.5 tabular-nums text-zinc-500">{l.data}</td>
-                      <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{l.descricao || '—'}</td>
+                      <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{l.descricao || '—'}{l.revisar && l.motivo && <span className="mt-0.5 block text-[10px] font-medium leading-tight text-amber-700 dark:text-amber-300">⚠️ {l.motivo}</span>}</td>
                       <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</td>
                       <td className="px-2 py-1.5">{l.valor < 0 ? (
                         <ComboBox className="w-40" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
@@ -1586,7 +1587,11 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                           labelOf={(v) => v === '' ? 'casa pelo cliente' : v === '__transfer' ? 'transferência (não honorário)' : v === 'Escritório' ? 'Escritório (comum)' : v}
                           placeholder="honorário…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
                       )}</td>
-                      <td className="px-2 py-1.5">{l.duplicado ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={l.motivo || ''}>Já existe</span> : <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Novo</span>}</td>
+                      <td className="px-2 py-1.5">{l.duplicado
+                        ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={l.motivo || ''}>Já existe</span>
+                        : l.revisar
+                        ? <span className="cursor-help rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" title={l.motivo || ''}>⚠️ Revisar</span>
+                        : <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Novo</span>}</td>
                     </tr>
                   ))}
                 </tbody>
