@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -63,7 +64,10 @@ function groupLetter(name: string | null): string {
 
 export default function ContactsPage() {
   const qc = useQueryClient();
-  const [search, setSearch] = useState('');
+  // Deep-link do chat ("Abrir nos Contatos"): pré-preenche a busca pelo telefone
+  // ou nome do cliente pra a ficha dele já aparecer filtrada.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
   const [sort, setSort] = useState('recent');
   const [tagId, setTagId] = useState('');
   const [statusId, setStatusId] = useState('');
