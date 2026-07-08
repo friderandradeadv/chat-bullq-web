@@ -115,4 +115,17 @@ export const calculadoraCsService = {
     });
     return data.data ?? data;
   },
+
+  // Lê a petição de cumprimento de sentença (PDF) e extrai o valor exequendo + nº dos autos.
+  async extrairCumprimento(
+    files: File[],
+  ): Promise<{ valorCalculo: number | null; numeroCs: string | null; aviso?: string }> {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    const { data } = await api.post('/calculadora-cs/extrair-cumprimento', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    });
+    return data.data ?? data;
+  },
 };

@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { X, Check, RefreshCw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { X, Check, RefreshCw, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '../services/legal-cases.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
+import { calculadoraCsService } from '@/features/calculadora-cs/services/calculadora-cs.service';
 
 // Fases suportadas pelo "kanban vivo com preenchimento".
 export type AvancoFase = 'cumprimento' | 'prestacao_contas' | 'transito' | 'acoes_vencidas' | 'acoes_perdidas';
@@ -61,6 +62,8 @@ export function AvancoFaseModal({
   const [valorCalculo, setValorCalculo] = useState('');
   const [numeroCs, setNumeroCs] = useState('');
   const [protocolado, setProtocolado] = useState('Sim');
+  const [extraindo, setExtraindo] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   // Prestação de contas
   const [valorAlvara, setValorAlvara] = useState('');
   const [honorarios, setHonorarios] = useState('');
@@ -112,6 +115,23 @@ export function AvancoFaseModal({
     if (!cliTocado) { const cli = Math.round((alv - hon) * 100) / 100; setValorCliente(alv ? String(cli) : ''); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valorAlvara, honorarios, honTocado, cliTocado, pct, phase]);
+
+  // Sobe a petição de CS (PDF) → IA extrai o valor exequendo + nº dos autos.
+  const subirPeticaoCs = async (files: FileList | null) => {
+    const arr = files ? Array.from(files) : [];
+    if (!arr.length) return;
+    setExtraindo(true);
+    try {
+      const r = await calculadoraCsService.extrairCumprimento(arr);
+      if (r.valorCalculo) setValorCalculo(String(r.valorCalculo));
+      if (r.numeroCs) setNumeroCs(r.numeroCs);
+      toast[r.valorCalculo ? 'success' : 'info'](r.valorCalculo
+        ? `Extraí o valor exequendo (${brl(r.valorCalculo)}) da petição`
+        : (r.aviso || 'Não encontrei o valor na petição — preencha à mão.'));
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui ler a petição de CS.');
+    } finally { setExtraindo(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
 
   const confirmar = async () => {
     setBusy(true);
@@ -177,7 +197,11 @@ export function AvancoFaseModal({
           <div className="flex items-center gap-2 py-6 text-sm text-zinc-400"><RefreshCw className="h-4 w-4 animate-spin" /> carregando sugestões…</div>
         ) : phase === 'cumprimento' ? (
           <>
-            <label className={lbl}>Valor do cálculo (execução) <span className="font-normal normal-case text-zinc-400">— do cálculo salvo</span></label>
+            <input ref={fileRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => subirPeticaoCs(e.target.files)} />
+            <button onClick={() => fileRef.current?.click()} disabled={extraindo} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#7048e8]/50 bg-[#7048e8]/5 px-3 py-2.5 text-sm font-medium text-[#7048e8] hover:bg-[#7048e8]/10 disabled:opacity-60">
+              {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo a petição com IA…</> : <><Paperclip className="h-4 w-4" /> Subir petição de CS (extrai o valor com IA)</>}
+            </button>
+            <label className={lbl}>Valor do cálculo (execução) <span className="font-normal normal-case text-zinc-400">— do cálculo salvo / da petição</span></label>
             <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorCalculo} onChange={(e) => setValorCalculo(e.target.value)} placeholder="0,00" className={inp} /></div>
             <label className={lbl}>Número dos autos de cumprimento</label>
             <input value={numeroCs} onChange={(e) => setNumeroCs(e.target.value)} placeholder="0000000-00.0000.0.00.0000" className={inp} />
