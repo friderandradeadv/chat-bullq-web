@@ -12,6 +12,7 @@ import { legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase }
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { useDragScroll } from '@/lib/use-drag-scroll';
+import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 // inss_admin está na trilha 'pre' — escopa a busca por lane (mesma key/cache do
 // board Pré-processual, que puxa os mesmos cards).
@@ -184,7 +185,7 @@ export function InssBoard() {
         </DndContext>
       )}
 
-      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={data?.phases ?? []} onClose={() => setOpenCaseId(null)} />}
+      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phasesOfBoard(data?.phases ?? [], 'inss')} onClose={() => setOpenCaseId(null)} />}
     </div>
   );
 }

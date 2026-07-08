@@ -202,7 +202,8 @@ export default function PreProcessualPage() {
         </DndContext>
       )}
 
-      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={data?.phases ?? []} onClose={() => setOpenCaseId(null)} />}
+      {/* Só as fases do Pré-Processual no seletor de mover (nunca de outro quadro). */}
+      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />}
       {protocolarId && <ProtocolarDialog caseId={protocolarId} onClose={() => setProtocolarId(null)} onDone={() => { setProtocolarId(null); qc.invalidateQueries({ queryKey: KEY }); }} />}
       {novo && <NovoCasoDialog targetPhase="novos_clientes" phases={phases} onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
     </div>

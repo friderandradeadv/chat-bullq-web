@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { useDragScroll } from '@/lib/use-drag-scroll';
+import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -142,7 +143,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
         </div>
       )}
 
-      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={data?.phases ?? []} onClose={() => setOpenCaseId(null)} />}
+      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phasesOfBoard(data?.phases ?? [], 'banco')} onClose={() => setOpenCaseId(null)} />}
     </div>
   );
 }

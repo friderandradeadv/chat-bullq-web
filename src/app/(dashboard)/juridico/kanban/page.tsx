@@ -18,6 +18,7 @@ import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits'
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
+import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 // queryKey por lane: cada board escopa a busca no servidor à sua trilha; keys
 // distintas evitam que o cache de um board sirva os cards de outro.
@@ -186,6 +187,10 @@ export default function FaseJudicialKanbanPage() {
     if (phaseSel.length) ph = ph.filter((p) => phaseSel.includes(p.key));
     return ph;
   }, [phases, showFora, phaseSel]);
+  // Fases DESTE quadro (Judicial) — o seletor de mover fase só mostra estas, nunca
+  // fases de outro kanban (Pré/Bancária/INSS). Transferência entre quadros é por
+  // ação (ex.: protocolar), não pelo dropdown.
+  const boardPhases = useMemo(() => phasesOfBoard(phases, 'judicial'), [phases]);
 
   const active = cards.find((c) => c.id === activeId) ?? null;
 
@@ -348,15 +353,15 @@ export default function FaseJudicialKanbanPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={phases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} />
             ))}
           </div>
-          <DragOverlay>{active ? <Card c={active} phases={phases} onMove={move} overlay /> : null}</DragOverlay>
+          <DragOverlay>{active ? <Card c={active} phases={boardPhases} onMove={move} overlay /> : null}</DragOverlay>
         </DndContext>
       )}
 
       {openCaseId && (
-        <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />
+        <CaseDetailDrawer caseId={openCaseId} phases={boardPhases} onClose={() => setOpenCaseId(null)} />
       )}
       {novo && <NovoCasoDialog targetPhase="admissao" phases={visiblePhases} onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
     </div>

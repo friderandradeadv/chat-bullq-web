@@ -24,6 +24,7 @@ import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { CommentsSection } from '@/features/activities/components/comments-section';
+import { MoverFaseManual } from '@/features/legal-cases/components/mover-fase-manual';
 import { preferencesService } from '@/features/inbox/services/preferences.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -1355,11 +1356,17 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.prazoFatal && <Row label="Prazo fatal"><span className="font-medium text-rose-600 dark:text-rose-400">{new Date(activity.prazoFatal).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span></Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.faseMovida && (
             <div className="flex flex-col gap-1">
-              <dt className="font-medium text-[#6C757D]">Movimentação de fase:</dt>
+              <dt className="font-medium text-[#6C757D]">Movimentação de fase <span className="font-normal normal-case text-zinc-400">(registro desta publicação)</span>:</dt>
               <dd className="m-0 font-normal leading-relaxed text-zinc-400 dark:text-zinc-500">
                 Card movido de <span className="font-normal text-zinc-500 dark:text-zinc-400">{activity.faseMovida.de}</span> para{' '}
-                <span className="font-medium text-emerald-600 dark:text-emerald-400">{activity.faseMovida.para}</span> — fase judicial
+                <span className="font-medium text-emerald-600 dark:text-emerald-400">{activity.faseMovida.para}</span>
               </dd>
+            </div>
+          )}
+          {activity.caseId && (
+            <div className="flex flex-col gap-1">
+              <dt className="font-medium text-[#6C757D]">Fase do processo:</dt>
+              <dd className="m-0"><MoverFaseManual caseId={activity.caseId} onMoved={onRefetch} /></dd>
             </div>
           )}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && ementaAcordao && (
