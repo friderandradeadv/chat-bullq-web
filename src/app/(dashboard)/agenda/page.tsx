@@ -952,6 +952,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [recursoForm, setRecursoForm] = useState(false); // mini-form "registrar recurso"
   const [avancoForm, setAvancoForm] = useState<Avanco>(null); // modal de avanço de fase (kanban vivo)
   const [faseForm, setFaseForm] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | null>(null);
+  // Fase encadeada (ex.: trânsito → ações vencidas/perdidas) — SEM prazo, só caseId.
+  const [faseExtra, setFaseExtra] = useState<'acoes_vencidas' | 'acoes_perdidas' | null>(null);
   const { isSocio: souSocio } = usePermissions();
   const [coIds, setCoIds] = useState<string[]>(activity.coResponsibleIds ?? []);
   const [coMenu, setCoMenu] = useState(false);
@@ -1448,7 +1450,17 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           podeLancarFinanceiro={souSocio}
           onClose={() => setFaseForm(null)}
           onSoConcluir={() => { setFaseForm(null); soConcluir(); }}
-          onDone={() => { setFaseForm(null); setDone(true); onRefetch(); }}
+          onDone={(next) => { setFaseForm(null); setDone(true); onRefetch(); if (next === 'acoes_vencidas' || next === 'acoes_perdidas') setFaseExtra(next); }}
+        />
+      )}
+      {faseExtra && activity.caseId && (
+        <AvancoFaseModal
+          phase={faseExtra}
+          caseId={activity.caseId}
+          caseTitle={activity.caseTitle}
+          podeLancarFinanceiro={souSocio}
+          onClose={() => setFaseExtra(null)}
+          onDone={() => { setFaseExtra(null); onRefetch(); }}
         />
       )}
     </div>

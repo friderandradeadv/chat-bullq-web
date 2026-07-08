@@ -7,12 +7,14 @@ import { legalCasesService } from '../services/legal-cases.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 
 // Fases suportadas pelo "kanban vivo com preenchimento".
-export type AvancoFase = 'cumprimento' | 'prestacao_contas' | 'transito';
+export type AvancoFase = 'cumprimento' | 'prestacao_contas' | 'transito' | 'acoes_vencidas' | 'acoes_perdidas';
 
 const FASE_LABEL: Record<AvancoFase, string> = {
   cumprimento: '16. Cumprimento de Sentença',
   prestacao_contas: '17. Prestação de Contas',
   transito: '15. Trânsito em Julgado',
+  acoes_vencidas: '18. Ações Vencidas',
+  acoes_perdidas: '19. Ações Perdidas',
 };
 
 const inp =
@@ -43,12 +45,17 @@ export function AvancoFaseModal({
   fatal?: boolean;
   podeLancarFinanceiro?: boolean;
   onClose: () => void;
-  onDone: () => void;
+  onDone: (next?: AvancoFase) => void;
   onSoConcluir?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pct, setPct] = useState(40);
+  // Desfecho terminal (ações vencidas/perdidas)
+  const [resultado, setResultado] = useState('Procedente');
+  const [valorRecebido, setValorRecebido] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [recorremos, setRecorremos] = useState('Não');
 
   // Cumprimento
   const [valorCalculo, setValorCalculo] = useState('');
@@ -83,6 +90,11 @@ export function AvancoFaseModal({
         } else if (phase === 'transito') {
           if (c.transitou) setTransitou(String(c.transitou));
           if (c.vencemos) setVencemos(String(c.vencemos));
+        } else if (phase === 'acoes_vencidas') {
+          if (c.resultado) setResultado(String(c.resultado));
+          if (c.valor_recebido) setValorRecebido(String(num(c.valor_recebido) || ''));
+        } else if (phase === 'acoes_perdidas') {
+          if (c.recorremos) setRecorremos(String(c.recorremos));
         }
       })
       .catch(() => { /* segue com defaults */ })
@@ -115,8 +127,12 @@ export function AvancoFaseModal({
           valor_sucumbencia: sucumbencia === 'Sim' ? num(valorSucumbencia) : 0,
           valor_cliente: num(valorCliente),
         };
-      } else {
+      } else if (phase === 'transito') {
         campos = { transitou, vencemos, obs: obs.trim() };
+      } else if (phase === 'acoes_vencidas') {
+        campos = { resultado, valor_recebido: num(valorRecebido), obs: obs.trim() };
+      } else {
+        campos = { motivo: motivo.trim(), recorremos, obs: obs.trim() };
       }
       await legalCasesService.avancarFaseComCampos({
         deadlineId, caseId, targetPhase: phase, campos, confirmFatal: fatal,
@@ -134,7 +150,12 @@ export function AvancoFaseModal({
       } else {
         toast.success(`Card movido para "${FASE_LABEL[phase]}"`);
       }
-      onDone();
+      // Kanban vivo: após o TRÂNSITO, encadeia o desfecho conforme "vencemos"
+      // (Não → Ações Perdidas; Sim/Parcial → Ações Vencidas) — pré-preenchido.
+      const next: AvancoFase | undefined = phase === 'transito'
+        ? (vencemos === 'Não' ? 'acoes_perdidas' : (vencemos === 'Sim' || vencemos === 'Parcial') ? 'acoes_vencidas' : undefined)
+        : undefined;
+      onDone(next);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || 'Erro ao avançar o processo');
     } finally { setBusy(false); }
@@ -185,12 +206,31 @@ export function AvancoFaseModal({
               </label>
             )}
           </>
-        ) : (
+        ) : phase === 'transito' ? (
           <>
             <label className={lbl}>Transitou em julgado?</label>
             <Radio value={transitou} onChange={setTransitou} options={['Sim', 'Não']} />
             <label className={lbl}>Vencemos a ação?</label>
             <Radio value={vencemos} onChange={setVencemos} options={['Sim', 'Não', 'Parcial']} />
+            <p className="mt-1 text-[11px] text-zinc-400">Ao confirmar, abro o desfecho ({vencemos === 'Não' ? 'Ações Perdidas' : 'Ações Vencidas'}) já preenchido.</p>
+            <label className={lbl}>Anotações</label>
+            <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className={`${inp} resize-none`} />
+          </>
+        ) : phase === 'acoes_vencidas' ? (
+          <>
+            <label className={lbl}>Resultado</label>
+            <Radio value={resultado} onChange={setResultado} options={['Procedente', 'Parcialmente procedente']} />
+            <label className={lbl}>Valor recebido <span className="font-normal normal-case text-zinc-400">(estimado)</span></label>
+            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorRecebido} onChange={(e) => setValorRecebido(e.target.value)} placeholder="0,00" className={inp} /></div>
+            <label className={lbl}>Anotações</label>
+            <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className={`${inp} resize-none`} />
+          </>
+        ) : (
+          <>
+            <label className={lbl}>Motivo da derrota</label>
+            <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} className={`${inp} resize-none`} />
+            <label className={lbl}>Recorremos?</label>
+            <Radio value={recorremos} onChange={setRecorremos} options={['Sim', 'Não', 'Não cabível']} />
             <label className={lbl}>Anotações</label>
             <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className={`${inp} resize-none`} />
           </>

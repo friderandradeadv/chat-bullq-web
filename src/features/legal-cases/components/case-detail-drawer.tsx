@@ -91,7 +91,7 @@ export function CaseDetailDrawer({
   const [tab, setTab] = useState<TabKey>('dados');
   const [picker, setPicker] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(true);
-  const [faseAvanco, setFaseAvanco] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | null>(null);
+  const [faseAvanco, setFaseAvanco] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | 'acoes_vencidas' | 'acoes_perdidas' | null>(null);
   const { isSocio } = usePermissions();
 
   const { data: c, isLoading } = useQuery({
@@ -405,6 +405,8 @@ export function CaseDetailDrawer({
                   <button onClick={() => setFaseAvanco('transito')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#02883C] hover:bg-[#02883C]/5 dark:border-zinc-700 dark:text-zinc-200">Trânsito em julgado</button>
                   <button onClick={() => setFaseAvanco('cumprimento')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#02883C] hover:bg-[#02883C]/5 dark:border-zinc-700 dark:text-zinc-200">Cumprimento de sentença</button>
                   <button onClick={() => setFaseAvanco('prestacao_contas')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#02883C] hover:bg-[#02883C]/5 dark:border-zinc-700 dark:text-zinc-200">Prestação de contas</button>
+                  <button onClick={() => setFaseAvanco('acoes_vencidas')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#2f9e44] hover:bg-[#2f9e44]/5 dark:border-zinc-700 dark:text-zinc-200">Ações vencidas</button>
+                  <button onClick={() => setFaseAvanco('acoes_perdidas')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#e03131] hover:bg-[#e03131]/5 dark:border-zinc-700 dark:text-zinc-200">Ações perdidas</button>
                 </div>
               </div>
             )}
@@ -415,7 +417,7 @@ export function CaseDetailDrawer({
                 caseTitle={c.title}
                 podeLancarFinanceiro={isSocio}
                 onClose={() => setFaseAvanco(null)}
-                onDone={() => { setFaseAvanco(null); qc.invalidateQueries({ queryKey: ['legal-cases'] }); }}
+                onDone={(next) => { qc.invalidateQueries({ queryKey: ['legal-cases'] }); setFaseAvanco(next ?? null); }}
               />
             )}
 
