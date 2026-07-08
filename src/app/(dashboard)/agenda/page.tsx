@@ -949,6 +949,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [respId, setRespId] = useState(activity.responsibleId);
   const [respName, setRespName] = useState(activity.responsibleName);
   const [prazoBusy, setPrazoBusy] = useState(false);
+  const [naoRecorrerOpen, setNaoRecorrerOpen] = useState(false); // "não vamos recorrer" (decisão)
+  const [motivoNR, setMotivoNR] = useState('');
   const [recursoForm, setRecursoForm] = useState(false); // mini-form "registrar recurso"
   const [avancoForm, setAvancoForm] = useState<Avanco>(null); // modal de avanço de fase (kanban vivo)
   const [faseForm, setFaseForm] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | null>(null);
@@ -1098,6 +1100,37 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // Cria o prazo do recurso a partir da sentença. O backend conta os dias úteis
   // (CPC 219/224/220, feriados + recesso) a partir da disponibilização e leva
   // TODAS as infos da publicação (recorte, dispositivo, fase) pro prazo.
+  // "Não vamos recorrer" (regra global p/ acórdão/sentença): move o card p/ 15.
+  // Trânsito em Julgado gravando o MOTIVO de não recorrer + o vencemos (do resultado
+  // real) e conclui o prazo da decisão. Tudo linkado no kanban (faseData.transito).
+  const confirmarNaoRecorrer = async () => {
+    if (!activity.caseId) { toast.error('Sem processo vinculado'); return; }
+    if (!motivoNR.trim()) { toast.error('Escreva o motivo de não recorrer'); return; }
+    setPrazoBusy(true);
+    try {
+      // puxa o vencemos sugerido (resultado real do processo) p/ preencher o card.
+      const sug = await legalCasesService.avancoSugestao(activity.caseId, 'transito').catch(() => ({ campos: {} as Record<string, unknown> }));
+      await legalCasesService.avancarFaseComCampos({
+        caseId: activity.caseId,
+        targetPhase: 'transito',
+        campos: {
+          ...(sug.campos ?? {}),
+          transitou: 'Sim',
+          motivo_nao_recorrer: motivoNR.trim(),
+          obs: `Não vamos recorrer: ${motivoNR.trim()}`,
+        },
+      });
+      // conclui o prazo/tarefa da decisão (analisada — decidimos não recorrer).
+      if (activity.source === 'prazo') await deadlinesService.complete(activity.rawId, activity.fatal).catch(() => {});
+      else if (activity.source === 'tarefa') await tasksService.update(activity.rawId, { status: 'DONE' }).catch(() => {});
+      toast.success('Não vamos recorrer — card movido para "15. Trânsito em Julgado"');
+      onRefetch();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao mover para trânsito');
+    } finally { setPrazoBusy(false); }
+  };
+
   const criarPrazoRecurso = async (tipo: 'apelacao' | 'embargos' | 'resp' | 'agravo_interno') => {
     if (!activity.caseId) { toast.error('Sem processo vinculado'); return; }
     setPrazoBusy(true);
@@ -1387,6 +1420,26 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
                     <CalendarClock className="h-4 w-4" /> Embargos (5 dias úteis)
                   </button>
                 </>
+              )}
+            </div>
+
+            {/* Não vamos recorrer → 15. Trânsito em Julgado + motivo (linkado no kanban). */}
+            <div className="mt-3 border-t border-[#DEE2E6] pt-3 dark:border-zinc-700">
+              {!naoRecorrerOpen ? (
+                <button onClick={() => setNaoRecorrerOpen(true)} className="text-sm font-medium text-[#495057] hover:text-[#02883C] dark:text-zinc-300">
+                  Não vamos recorrer →&nbsp;<span className="font-semibold">trânsito em julgado</span>
+                </button>
+              ) : (
+                <div>
+                  <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Não vamos recorrer — motivo</p>
+                  <textarea autoFocus value={motivoNR} onChange={(e) => setMotivoNR(e.target.value)} rows={2} placeholder="Ex.: a parte usou o cartão para compras, difícil reverter em 2º grau" className={`${inputCls} resize-none`} />
+                  <div className="mt-2 flex items-center gap-2">
+                    <button disabled={prazoBusy} onClick={confirmarNaoRecorrer} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+                      <Check className="h-4 w-4" /> {prazoBusy ? 'Movendo…' : 'Confirmar (mover p/ trânsito)'}
+                    </button>
+                    <button disabled={prazoBusy} onClick={() => { setNaoRecorrerOpen(false); setMotivoNR(''); }} className="text-sm font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300">Cancelar</button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

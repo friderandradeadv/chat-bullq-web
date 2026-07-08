@@ -104,6 +104,7 @@ export const FASE_FORMS: Record<string, Field[]> = {
   transito: [
     { key: 'transitou', label: 'Transitou em julgado?', type: 'radio', options: ['Sim', 'Não'] },
     { key: 'vencemos', label: 'Vencemos a ação?', type: 'radio', options: ['Sim', 'Não', 'Parcial'] },
+    { key: 'motivo_nao_recorrer', label: 'Motivo (se não recorremos)', type: 'textarea' },
     { key: 'obs', label: 'Anotações importantes', type: 'textarea' },
   ],
   cumprimento: [
