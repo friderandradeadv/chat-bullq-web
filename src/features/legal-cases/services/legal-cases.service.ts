@@ -391,6 +391,17 @@ export const legalCasesService = {
     const { data } = await api.post('/legal-cases/prazo/avancar', input);
     return data.data ?? data;
   },
+  // Kanban vivo com preenchimento: avança (por prazo OU botão no card) e grava os
+  // campos da fase (cumprimento/prestação/trânsito) — que alimentam Financeiro/Meu Espaço.
+  async avancarFaseComCampos(input: { deadlineId?: string; caseId?: string; targetPhase: string; campos?: Record<string, unknown>; confirmFatal?: boolean }): Promise<{ ok: boolean; phase: string; aviso?: { enviado: boolean; motivo?: string } | null }> {
+    const { data } = await api.post('/legal-cases/fase/avancar-com-campos', input);
+    return data.data ?? data;
+  },
+  // Sugere os campos de uma fase a partir do cálculo/valor/resultado do processo.
+  async avancoSugestao(caseId: string, phase: string): Promise<{ campos: Record<string, unknown>; honorariosPct?: number }> {
+    const { data } = await api.get(`/legal-cases/${caseId}/avanco-sugestao`, { params: { phase } });
+    return data.data ?? data;
+  },
   async updateChecklist(id: string, items: Record<string, boolean>): Promise<{ ok: boolean; checklist: Record<string, boolean> }> {
     const { data } = await api.patch(`/legal-cases/${id}/checklist`, { items });
     return data.data ?? data;

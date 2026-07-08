@@ -223,6 +223,12 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/transacoes', input);
     return data.data ?? data;
   },
+  // Lança o honorário de êxito (prestação/cumprimento) do card, vinculado ao processo,
+  // com rateio sugerido, como "a receber" — pronto pro sócio conferir e realizar.
+  async lancarHonorarioCaso(caseId: string): Promise<{ ok: boolean; valor: number; area: string | null; split: unknown[] | null; transacao: FinTransacao | null }> {
+    const { data } = await api.post('/financeiro/lancar-honorario-caso', { caseId });
+    return data.data ?? data;
+  },
   async updateTransacao(id: string, input: UpdateTransacaoInput): Promise<{ atualizados: number }> {
     const { data } = await api.patch(`/financeiro/transacoes/${id}`, input);
     return data.data ?? data;

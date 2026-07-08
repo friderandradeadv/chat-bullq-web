@@ -14,6 +14,8 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
+import { AvancoFaseModal } from './avanco-fase-modals';
+import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
@@ -89,6 +91,8 @@ export function CaseDetailDrawer({
   const [tab, setTab] = useState<TabKey>('dados');
   const [picker, setPicker] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(true);
+  const [faseAvanco, setFaseAvanco] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | null>(null);
+  const { isSocio } = usePermissions();
 
   const { data: c, isLoading } = useQuery({
     queryKey: ['legal-cases', 'detail', caseId],
@@ -389,6 +393,30 @@ export function CaseDetailDrawer({
               <div className="mt-5">
                 <FaseFields caseId={c.id} phase={phaseKey} data={faseData} />
               </div>
+            )}
+
+            {/* Avanço rápido pós-sentença (kanban vivo): move o card e preenche os
+                campos da fase (que alimentam Financeiro/Meu Espaço). O gatilho normal
+                é concluir o prazo na agenda; aqui é o botão pra quando não há prazo. */}
+            {c && phaseKey && ['sentenca', 'sentenca_favoravel', 'sentenca_desfavoravel', 'recurso', 'aguardando_arquivamento', 'transito', 'cumprimento', 'prestacao_contas'].includes(phaseKey) && (
+              <div className="mt-4 rounded-lg border border-[#cfe0ed] p-3 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Avançar fase</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button onClick={() => setFaseAvanco('transito')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#02883C] hover:bg-[#02883C]/5 dark:border-zinc-700 dark:text-zinc-200">Trânsito em julgado</button>
+                  <button onClick={() => setFaseAvanco('cumprimento')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#02883C] hover:bg-[#02883C]/5 dark:border-zinc-700 dark:text-zinc-200">Cumprimento de sentença</button>
+                  <button onClick={() => setFaseAvanco('prestacao_contas')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#02883C] hover:bg-[#02883C]/5 dark:border-zinc-700 dark:text-zinc-200">Prestação de contas</button>
+                </div>
+              </div>
+            )}
+            {c && faseAvanco && (
+              <AvancoFaseModal
+                phase={faseAvanco}
+                caseId={c.id}
+                caseTitle={c.title}
+                podeLancarFinanceiro={isSocio}
+                onClose={() => setFaseAvanco(null)}
+                onDone={() => { setFaseAvanco(null); qc.invalidateQueries({ queryKey: ['legal-cases'] }); }}
+              />
             )}
 
             {c && c.deadlines.length > 0 && (

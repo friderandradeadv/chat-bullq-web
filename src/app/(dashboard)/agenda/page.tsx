@@ -22,6 +22,7 @@ import { deadlinesService, type Deadline } from '@/features/deadlines/services/d
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { preferencesService } from '@/features/inbox/services/preferences.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -112,6 +113,7 @@ type AvancoOpt = { label: string; phase: string };
 type Avanco =
   | { kind: 'recurso' }
   | { kind: 'move'; title: string; subtitle: string; options: AvancoOpt[] }
+  | { kind: 'fase'; phase: 'cumprimento' | 'prestacao_contas' | 'transito' }
   | null;
 
 function avancoDoPrazo(a: Activity): Avanco {
@@ -119,6 +121,16 @@ function avancoDoPrazo(a: Activity): Avanco {
   if (isRecursoPrazo(a)) return { kind: 'recurso' };
   const act = (a.djenAction ?? '').toLowerCase();
   const txt = `${a.title} ${a.description ?? ''}`.toLowerCase();
+  // Fases pós-sentença com preenchimento (cumprimento/prestação/trânsito).
+  if (act === 'cumprimento' || /cumprimento de senten|inicie o cumprimento|iniciar o cumprimento/.test(txt)) {
+    return { kind: 'fase', phase: 'cumprimento' };
+  }
+  if (act === 'alvara' || /alvar[áa]|levantament/.test(txt)) {
+    return { kind: 'fase', phase: 'prestacao_contas' };
+  }
+  if (/certid[ãa]o de tr[âa]nsito|transit(?:ou|ada|ado) em julgado/.test(txt)) {
+    return { kind: 'fase', phase: 'transito' };
+  }
   // Réplica protocolada → Especificação de provas.
   if (act === 'replica' || /r[ée]plica|impugna\w*[^.]{0,20}contesta/.test(txt)) {
     return {
@@ -939,6 +951,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [prazoBusy, setPrazoBusy] = useState(false);
   const [recursoForm, setRecursoForm] = useState(false); // mini-form "registrar recurso"
   const [avancoForm, setAvancoForm] = useState<Avanco>(null); // modal de avanço de fase (kanban vivo)
+  const [faseForm, setFaseForm] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | null>(null);
+  const { isSocio: souSocio } = usePermissions();
   const [coIds, setCoIds] = useState<string[]>(activity.coResponsibleIds ?? []);
   const [coMenu, setCoMenu] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
@@ -1135,6 +1149,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
       const av = avancoDoPrazo(activity);
       if (av?.kind === 'recurso') { setRecursoForm(true); return; }
       if (av?.kind === 'move') { setAvancoForm(av); return; }
+      if (av?.kind === 'fase') { setFaseForm(av.phase); return; }
     }
     setBusy(true);
     try {
@@ -1421,6 +1436,19 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           onClose={() => setAvancoForm(null)}
           onSoConcluir={() => { setAvancoForm(null); soConcluir(); }}
           onDone={() => { setAvancoForm(null); setDone(true); onRefetch(); }}
+        />
+      )}
+      {faseForm && activity.caseId && (
+        <AvancoFaseModal
+          phase={faseForm}
+          caseId={activity.caseId}
+          caseTitle={activity.caseTitle}
+          deadlineId={activity.rawId}
+          fatal={activity.fatal}
+          podeLancarFinanceiro={souSocio}
+          onClose={() => setFaseForm(null)}
+          onSoConcluir={() => { setFaseForm(null); soConcluir(); }}
+          onDone={() => { setFaseForm(null); setDone(true); onRefetch(); }}
         />
       )}
     </div>

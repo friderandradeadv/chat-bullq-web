@@ -1,0 +1,221 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { X, Check, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { legalCasesService } from '../services/legal-cases.service';
+import { financeiroService } from '@/features/financeiro/services/financeiro.service';
+
+// Fases suportadas pelo "kanban vivo com preenchimento".
+export type AvancoFase = 'cumprimento' | 'prestacao_contas' | 'transito';
+
+const FASE_LABEL: Record<AvancoFase, string> = {
+  cumprimento: '16. Cumprimento de Sentença',
+  prestacao_contas: '17. Prestação de Contas',
+  transito: '15. Trânsito em Julgado',
+};
+
+const inp =
+  'w-full rounded-lg border border-[#DEE2E6] bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
+const lbl = 'mb-1 mt-3 block text-xs font-semibold uppercase tracking-wide text-[#6C757D]';
+
+const num = (v: unknown): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const s = String(v ?? '').replace(/[R$\s.]/g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+};
+const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/**
+ * Mini-form que MOVE o card para a fase e PREENCHE os campos dela (que o Financeiro
+ * e o Meu Espaço já leem). Dispara por um PRAZO concluído (deadlineId) ou por BOTÃO
+ * na ficha do processo (só caseId). Na prestação de contas, oferece lançar o
+ * honorário de êxito no financeiro (só sócios).
+ */
+export function AvancoFaseModal({
+  phase, caseId, caseTitle, deadlineId, fatal, podeLancarFinanceiro, onClose, onDone, onSoConcluir,
+}: {
+  phase: AvancoFase;
+  caseId: string;
+  caseTitle?: string | null;
+  deadlineId?: string;
+  fatal?: boolean;
+  podeLancarFinanceiro?: boolean;
+  onClose: () => void;
+  onDone: () => void;
+  onSoConcluir?: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [pct, setPct] = useState(40);
+
+  // Cumprimento
+  const [valorCalculo, setValorCalculo] = useState('');
+  const [numeroCs, setNumeroCs] = useState('');
+  const [protocolado, setProtocolado] = useState('Sim');
+  // Prestação de contas
+  const [valorAlvara, setValorAlvara] = useState('');
+  const [honorarios, setHonorarios] = useState('');
+  const [honTocado, setHonTocado] = useState(false);
+  const [sucumbencia, setSucumbencia] = useState('Não');
+  const [valorSucumbencia, setValorSucumbencia] = useState('');
+  const [valorCliente, setValorCliente] = useState('');
+  const [cliTocado, setCliTocado] = useState(false);
+  const [lancar, setLancar] = useState(!!podeLancarFinanceiro);
+  // Trânsito
+  const [transitou, setTransitou] = useState('Sim');
+  const [vencemos, setVencemos] = useState('');
+  const [obs, setObs] = useState('');
+
+  // Pré-preenche a partir da sugestão do backend (cálculo/valor/pipefy/resultado).
+  useEffect(() => {
+    let vivo = true;
+    legalCasesService.avancoSugestao(caseId, phase)
+      .then((s) => {
+        if (!vivo) return;
+        const c = s.campos ?? {};
+        if (typeof s.honorariosPct === 'number') setPct(s.honorariosPct);
+        if (phase === 'cumprimento') {
+          if (c.valor_calculo) setValorCalculo(String(num(c.valor_calculo) || ''));
+          if (c.numero_cs) setNumeroCs(String(c.numero_cs));
+          if (c.protocolado) setProtocolado(String(c.protocolado));
+        } else if (phase === 'transito') {
+          if (c.transitou) setTransitou(String(c.transitou));
+          if (c.vencemos) setVencemos(String(c.vencemos));
+        }
+      })
+      .catch(() => { /* segue com defaults */ })
+      .finally(() => { if (vivo) setLoading(false); });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Prestação: honorários = alvará × pct e cliente = alvará − honorários (até você editar).
+  useEffect(() => {
+    if (phase !== 'prestacao_contas') return;
+    const alv = num(valorAlvara);
+    const hon = honTocado ? num(honorarios) : Math.round(alv * (pct / 100) * 100) / 100;
+    if (!honTocado) setHonorarios(hon ? String(hon) : '');
+    if (!cliTocado) { const cli = Math.round((alv - hon) * 100) / 100; setValorCliente(alv ? String(cli) : ''); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorAlvara, honorarios, honTocado, cliTocado, pct, phase]);
+
+  const confirmar = async () => {
+    setBusy(true);
+    try {
+      let campos: Record<string, unknown> = {};
+      if (phase === 'cumprimento') {
+        campos = { protocolado, valor_calculo: num(valorCalculo), numero_cs: numeroCs.trim() };
+      } else if (phase === 'prestacao_contas') {
+        campos = {
+          valor_alvara: num(valorAlvara),
+          honorarios_contratuais: num(honorarios),
+          sucumbencia,
+          valor_sucumbencia: sucumbencia === 'Sim' ? num(valorSucumbencia) : 0,
+          valor_cliente: num(valorCliente),
+        };
+      } else {
+        campos = { transitou, vencemos, obs: obs.trim() };
+      }
+      await legalCasesService.avancarFaseComCampos({
+        deadlineId, caseId, targetPhase: phase, campos, confirmFatal: fatal,
+      });
+
+      // Prestação: opcionalmente lança o honorário de êxito no financeiro.
+      if (phase === 'prestacao_contas' && lancar && podeLancarFinanceiro) {
+        try {
+          const r = await financeiroService.lancarHonorarioCaso(caseId);
+          toast.success(`Movido para Prestação de Contas + honorário de ${brl(r.valor)} lançado nos Recebíveis`);
+        } catch (e: any) {
+          toast.success('Movido para Prestação de Contas');
+          toast.error(e?.response?.data?.message || 'Não consegui lançar o honorário no financeiro — lance manualmente.');
+        }
+      } else {
+        toast.success(`Card movido para "${FASE_LABEL[phase]}"`);
+      }
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao avançar o processo');
+    } finally { setBusy(false); }
+  };
+
+  const aReceber = num(honorarios) + (sucumbencia === 'Sim' ? num(valorSucumbencia) : 0);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-[70] max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-[#202124] dark:text-zinc-100">{FASE_LABEL[phase]}</h3>
+          <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
+        </div>
+        <p className="mb-3 text-sm text-zinc-500">{caseTitle ? `${caseTitle} — ` : ''}move o card e preenche os campos da fase (aparece no Financeiro e no Meu Espaço).</p>
+
+        {loading ? (
+          <div className="flex items-center gap-2 py-6 text-sm text-zinc-400"><RefreshCw className="h-4 w-4 animate-spin" /> carregando sugestões…</div>
+        ) : phase === 'cumprimento' ? (
+          <>
+            <label className={lbl}>Valor do cálculo (execução) <span className="font-normal normal-case text-zinc-400">— do cálculo salvo</span></label>
+            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorCalculo} onChange={(e) => setValorCalculo(e.target.value)} placeholder="0,00" className={inp} /></div>
+            <label className={lbl}>Número dos autos de cumprimento</label>
+            <input value={numeroCs} onChange={(e) => setNumeroCs(e.target.value)} placeholder="0000000-00.0000.0.00.0000" className={inp} />
+            <label className={lbl}>Cumprimento protocolado?</label>
+            <Radio value={protocolado} onChange={setProtocolado} options={['Sim', 'Ainda não']} />
+          </>
+        ) : phase === 'prestacao_contas' ? (
+          <>
+            <label className={lbl}>Valor bruto do alvará</label>
+            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorAlvara} onChange={(e) => setValorAlvara(e.target.value)} placeholder="0,00" className={inp} /></div>
+            <label className={lbl}>Honorários contratuais <span className="font-normal normal-case text-zinc-400">— {pct}% do alvará</span></label>
+            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={honorarios} onChange={(e) => { setHonTocado(true); setHonorarios(e.target.value); }} placeholder="0,00" className={inp} /></div>
+            <label className={lbl}>Honorários de sucumbência?</label>
+            <Radio value={sucumbencia} onChange={setSucumbencia} options={['Sim', 'Não']} />
+            {sucumbencia === 'Sim' && (
+              <><label className={lbl}>Valor da sucumbência</label>
+                <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorSucumbencia} onChange={(e) => setValorSucumbencia(e.target.value)} placeholder="0,00" className={inp} /></div></>
+            )}
+            <label className={lbl}>Valor do cliente <span className="font-normal normal-case text-zinc-400">— alvará − honorários</span></label>
+            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorCliente} onChange={(e) => { setCliTocado(true); setValorCliente(e.target.value); }} placeholder="0,00" className={inp} /></div>
+            <div className="mt-3 rounded-lg bg-[#02883C]/5 px-3 py-2 text-sm text-[#02883C] dark:bg-[#02883C]/10">Nosso a receber (honorários + sucumbência): <b>{brl(aReceber)}</b></div>
+            {podeLancarFinanceiro && (
+              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input type="checkbox" checked={lancar} onChange={(e) => setLancar(e.target.checked)} className="accent-[#02883C]" />
+                Lançar o honorário no financeiro (a receber, com rateio sugerido)
+              </label>
+            )}
+          </>
+        ) : (
+          <>
+            <label className={lbl}>Transitou em julgado?</label>
+            <Radio value={transitou} onChange={setTransitou} options={['Sim', 'Não']} />
+            <label className={lbl}>Vencemos a ação?</label>
+            <Radio value={vencemos} onChange={setVencemos} options={['Sim', 'Não', 'Parcial']} />
+            <label className={lbl}>Anotações</label>
+            <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className={`${inp} resize-none`} />
+          </>
+        )}
+
+        <div className="mt-5 flex items-center justify-between gap-2">
+          {onSoConcluir ? (
+            <button onClick={onSoConcluir} disabled={busy} className="text-sm font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300">Só concluir o prazo</button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <button onClick={onClose} disabled={busy} className="rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Cancelar</button>
+            <button onClick={confirmar} disabled={busy || loading} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Check className="h-4 w-4" /> Confirmar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Radio({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div className="inline-flex overflow-hidden rounded-lg border border-[#DEE2E6] dark:border-zinc-700">
+      {options.map((o) => (
+        <button key={o} onClick={() => onChange(o)} className={`px-3 py-1.5 text-sm font-medium ${value === o ? 'bg-[#228BE6] text-white' : 'bg-white text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'}`}>{o}</button>
+      ))}
+    </div>
+  );
+}
