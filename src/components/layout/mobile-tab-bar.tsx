@@ -7,6 +7,9 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
 import { useUnreadConversations } from '@/features/notifications/use-unread-conversations';
+import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks-count';
+import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
+import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
 
 // Barra de abas inferior — só no mobile (lg:hidden). Dá a navegação principal
 // com toque de app nativo; respeita a barra de gestos do iPhone (pb-safe).
@@ -25,6 +28,9 @@ export function MobileTabBar() {
   const pathname = usePathname();
   const nav = useMobileNav();
   const unreadConversations = useUnreadConversations();
+  const pendingTasks = usePendingTasksCount();
+  const payslipUnread = usePayslipUnreadCount();
+  const preUnseen = usePreUnseenCount();
   const { user, organizations, activeOrgId } = useAuthStore();
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
@@ -68,21 +74,30 @@ export function MobileTabBar() {
         href="/agenda"
         className={linkCls(isActive(['/agenda', '/juridico', '/processos', '/caixa-djen', '/clientes']))}
       >
-        <Scale className="h-5 w-5" />
+        <span className="relative">
+          <Scale className="h-5 w-5" />
+          <Badge count={pendingTasks + preUnseen} />
+        </span>
         <span>Jurídico</span>
       </Link>
 
       {isAdmin && (
         <Link href="/financeiro" className={linkCls(isActive(['/financeiro']))}>
-          <CircleDollarSign className="h-5 w-5" />
+          <span className="relative">
+            <CircleDollarSign className="h-5 w-5" />
+            <Badge count={payslipUnread} />
+          </span>
           <span>Financeiro</span>
         </Link>
       )}
 
       <Link href="/escritorio" className={linkCls(isActive(['/escritorio']))}>
-        {user?.avatarUrl
-          ? <img src={user.avatarUrl} alt="" className={`h-5 w-5 rounded-full object-cover ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`} />
-          : <span className={`flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200 text-[8px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`}>{iniciais}</span>}
+        <span className="relative">
+          {user?.avatarUrl
+            ? <img src={user.avatarUrl} alt="" className={`h-5 w-5 rounded-full object-cover ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`} />
+            : <span className={`flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200 text-[8px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 ${isActive(['/escritorio']) ? 'ring-2 ring-primary' : ''}`}>{iniciais}</span>}
+          <Badge count={payslipUnread} />
+        </span>
         <span>Você</span>
       </Link>
     </nav>

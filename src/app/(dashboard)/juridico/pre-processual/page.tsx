@@ -16,6 +16,7 @@ import { CasesListView } from '@/features/legal-cases/components/cases-list-view
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits';
 import { useAuthStore } from '@/stores/auth-store';
+import { usePreSeenStore } from '@/stores/pre-seen-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
 const KEY = ['legal-cases', 'kanban', 'pre'];
@@ -55,6 +56,23 @@ export default function PreProcessualPage() {
     if (cid) setOpenCaseId(cid);
   }, []);
   const [protocolarId, setProtocolarId] = useState<string | null>(null);
+
+  // "Novos clientes" no board: captura o marcador de VISTO no momento em que a
+  // pessoa abre o quadro (baseline/última visita) e, em seguida, avança o marcador
+  // para agora — some a bolinha da barra inferior e limpa as próximas visitas. Os
+  // cards que entraram depois do marcador de entrada ganham a bolinha "novo".
+  const preHydrate = usePreSeenStore((s) => s.hydrate);
+  const preMarkSeen = usePreSeenStore((s) => s.markSeen);
+  const [seenAtEntry, setSeenAtEntry] = useState<string | null>(null);
+  const capturedRef = useRef(false);
+  useEffect(() => {
+    if (capturedRef.current) return;
+    capturedRef.current = true;
+    preHydrate();
+    setSeenAtEntry(usePreSeenStore.getState().lastSeenAt);
+    preMarkSeen();
+  }, [preHydrate, preMarkSeen]);
+
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
@@ -90,6 +108,18 @@ export default function PreProcessualPage() {
     for (const c of filtered) (map[c.phase] ??= []).push(c);
     return map;
   }, [filtered]);
+
+  // Ids dos cards "novos" (entraram na fase depois do marcador de entrada).
+  const novoIds = useMemo(() => {
+    const s = new Set<string>();
+    const seenMs = seenAtEntry ? new Date(seenAtEntry).getTime() : null;
+    if (seenMs == null) return s;
+    for (const c of filtered) {
+      const t = c.legalPhaseAt ?? c.createdAt;
+      if (t && new Date(t).getTime() > seenMs) s.add(c.id);
+    }
+    return s;
+  }, [filtered, seenAtEntry]);
 
   const active = cards.find((c) => c.id === activeId) ?? null;
 
@@ -162,7 +192,7 @@ export default function PreProcessualPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} novoIds={novoIds} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} />
             ))}
           </div>
           <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
@@ -176,7 +206,7 @@ export default function PreProcessualPage() {
   );
 }
 
-function Column({ phase, items, onOpen, onProtocolar, onChanged, canRename, onRename }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void }) {
+function Column({ phase, items, novoIds, onOpen, onProtocolar, onChanged, canRename, onRename }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
   return (
@@ -187,13 +217,13 @@ function Column({ phase, items, onOpen, onProtocolar, onChanged, canRename, onRe
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {items.map((c) => <Card key={c.id} c={c} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
+        {items.map((c) => <Card key={c.id} c={c} novo={novoIds.has(c.id)} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, onOpen, onProtocolar, onChanged }: { c: KanbanCard; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void }) {
+function Card({ c, novo, onOpen, onProtocolar, onChanged }: { c: KanbanCard; novo?: boolean; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const down = useRef<{ x: number; y: number } | null>(null);
   const prod = produtoColor(c.produto);
@@ -204,7 +234,9 @@ function Card({ c, onOpen, onProtocolar, onChanged }: { c: KanbanCard; onOpen?: 
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id); }}
-      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      {/* Cliente novo (entrou depois da última visita ao board) — bolinha vermelha */}
+      {novo && <span className="absolute -right-1.5 -top-1.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" title="Novo cliente" />}
       {/* Etiquetas: produto (cor) + área (cinza) */}
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}

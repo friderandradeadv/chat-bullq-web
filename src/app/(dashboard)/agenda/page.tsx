@@ -376,7 +376,7 @@ export default function AgendaPage() {
   const mbQ = useQuery({ queryKey: ['members', 'agenda'], queryFn: () => membersService.list() });
   const tagsQ = useQuery({ queryKey: ['activity-tags-index'], queryFn: () => activitiesService.tagsIndex() });
   const legalTagsQ = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
-  const refetchAll = () => { evQ.refetch(); dlQ.refetch(); tkQ.refetch(); tagsQ.refetch(); legalTagsQ.refetch(); };
+  const refetchAll = () => { evQ.refetch(); dlQ.refetch(); tkQ.refetch(); tagsQ.refetch(); legalTagsQ.refetch(); qcPrefs.invalidateQueries({ queryKey: ['tasks', 'pending-count'] }); };
 
   const userMap = useMemo(() => new Map((mbQ.data ?? []).map((m) => [m.user.id, m.user.name])), [mbQ.data]);
   // entityType:entityId → etiquetas, montado do índice (1 request p/ a agenda toda).

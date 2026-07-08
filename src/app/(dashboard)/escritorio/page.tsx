@@ -22,6 +22,7 @@ import { ComboBox } from '@/features/financeiro/components/combo-box';
 import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { DropZone } from '@/components/drop-zone';
 import { useAuthStore } from '@/stores/auth-store';
+import { useMarkPayslipSeen } from '@/features/notifications/use-payslip-notifications';
 
 const rid = () => `c_${Math.round(Math.random() * 1e9)}`;
 const EMPTY: Escritorio = { cultura: { missao: '', visao: '', valores: [], cultura: '' }, cargos: [], pessoas: {}, manuais: [], onboarding: [], canEdit: false };
@@ -129,6 +130,27 @@ export default function EscritorioPage() {
   const alvoCargo = cargoById[alvoInfo?.cargoId ?? ''];
   const alvoMember = alvoUserId ? memberByUser[alvoUserId] : undefined;
   const vendoOutro = !!(verComo && data.canEdit && verComo !== user?.id);
+
+  // Notificação de holerite leva a /escritorio?tab=financeiro — honra o parâmetro
+  // ao abrir (uma vez), caindo direto na aba do holerite.
+  const tabDeepLinked = useRef(false);
+  useEffect(() => {
+    if (tabDeepLinked.current) return;
+    tabDeepLinked.current = true;
+    try {
+      const t = new URLSearchParams(window.location.search).get('tab');
+      if (t && ['perfil', 'financeiro', 'estrutura', 'manuais', 'onboarding'].includes(t)) setTab(t);
+    } catch { /* sem window/params — ignora */ }
+  }, []);
+
+  // Abrir a aba Financeiro (holerite) no PRÓPRIO espaço marca as movimentações do
+  // holerite como vistas → zera a bolinha em "Você"/"Financeiro".
+  const markPayslipSeen = useMarkPayslipSeen();
+  useEffect(() => {
+    if (tab === 'financeiro' && !vendoOutro) void markPayslipSeen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, vendoOutro]);
+
   // Caminho (ids dos ancestrais) até o meu cargo — o organograma já abre por aqui.
   const meuCaminho = useMemo(() => {
     const ids = new Set<string>();

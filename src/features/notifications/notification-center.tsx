@@ -19,6 +19,7 @@ import {
   AtSign,
   Cog,
   FileSignature,
+  CircleDollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from './use-notifications';
@@ -58,6 +59,7 @@ function iconFor(n: AppNotification): React.ElementType {
   // Contrato (assinado/gerado) vem como SYSTEM com data.kind — usa ícone próprio.
   const kind = n.data?.kind;
   if (kind === 'contract_signed' || kind === 'contract_generated') return FileSignature;
+  if (kind === 'payslip_updated') return CircleDollarSign;
   return ICONS[n.type] ?? Cog;
 }
 

@@ -34,8 +34,10 @@ export const notificationsService = {
     return data.data;
   },
 
-  async unreadCount(): Promise<number> {
-    const { data } = await api.get('/notifications/unread-count');
+  async unreadCount(kind?: string): Promise<number> {
+    const { data } = await api.get('/notifications/unread-count', {
+      params: kind ? { kind } : undefined,
+    });
     // O endpoint devolve o número puro (envelopado em { data }).
     return typeof data.data === 'number' ? data.data : (data.data?.count ?? 0);
   },
@@ -44,8 +46,11 @@ export const notificationsService = {
     await api.patch(`/notifications/${id}/read`);
   },
 
-  async markAllRead(): Promise<void> {
-    await api.patch('/notifications/read-all');
+  /** Marca lidas todas as notificações (ou só as de um `kind`, ex.: 'payslip_updated'). */
+  async markAllRead(kind?: string): Promise<void> {
+    await api.patch('/notifications/read-all', undefined, {
+      params: kind ? { kind } : undefined,
+    });
   },
 };
 

@@ -43,6 +43,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUnreadConversations } from '@/features/notifications/use-unread-conversations';
+import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks-count';
+import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
+import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
 import { Avatar } from '@/components/ui/avatar';
 import { Logo } from '@/components/brand/logo';
 import {
@@ -208,6 +211,9 @@ export function AppSidebar() {
   const orgRole = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
   const unreadConversations = useUnreadConversations();
+  const pendingTasks = usePendingTasksCount();
+  const payslipUnread = usePayslipUnreadCount();
+  const preUnseen = usePreUnseenCount();
 
   return (
     <Sidebar>
@@ -273,7 +279,7 @@ export function AppSidebar() {
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
                 <NavSection label="Geral" storageKey="Geral-juridico" variant="sub" defaultOpen={false}>
                   <NavItem href="/juridico" icon={LayoutList} label="Dashboard" />
-                  <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
+                  <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" badge={pendingTasks} />
                   <NavItem href="/caixa-djen" icon={Newspaper} label="Publicações" />
                   <NavItem href="/processos" icon={Folder} label="Processos" />
                 </NavSection>
@@ -282,7 +288,7 @@ export function AppSidebar() {
               {/* Kanbans — subaba (fluxos por fase) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
                 <NavSection label="Kanbans" variant="sub" defaultOpen={false}>
-                  <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" />
+                  <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" badge={preUnseen} />
                   <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
                   <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
                   <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
@@ -319,7 +325,7 @@ export function AppSidebar() {
           {isAdmin && (
             <div className="mt-3">
               <NavSection label="Administrativo" defaultOpen={false}>
-                <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" />
+                <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" badge={payslipUnread} />
                 <NavItem href="/rh" icon={Users} label="RH & Seleção" />
                 <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
               </NavSection>
@@ -344,7 +350,7 @@ export function AppSidebar() {
         </div>
         {/* Meu Espaço — fixa, acima de Configurações (perfil, organograma, cargos, cultura, manuais) */}
         <div className="mb-1">
-          <NavItem href="/escritorio" icon={UserCircle} label="Meu Espaço" />
+          <NavItem href="/escritorio" icon={UserCircle} label="Meu Espaço" badge={payslipUnread} />
         </div>
         {/* Configurações — fixa logo abaixo do alternador de tema */}
         <div className="mb-1">

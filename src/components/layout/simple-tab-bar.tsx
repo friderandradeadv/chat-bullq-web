@@ -5,6 +5,9 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUnreadConversations } from '@/features/notifications/use-unread-conversations';
+import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks-count';
+import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
+import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
 import { useNavMode, barItemById, DEFAULT_SIMPLE_BAR } from '@/stores/nav-mode-store';
 
@@ -24,6 +27,9 @@ function Badge({ count }: { count: number }) {
 export function SimpleTabBar() {
   const pathname = usePathname();
   const unread = useUnreadConversations();
+  const pendingTasks = usePendingTasksCount();
+  const payslipUnread = usePayslipUnreadCount();
+  const preUnseen = usePreUnseenCount();
   const nav = useMobileNav();
   const { barItems, hydrated } = useNavMode();
   const { user, organizations, activeOrgId } = useAuthStore();
@@ -54,14 +60,15 @@ export function SimpleTabBar() {
     >
       {items.map((it) => {
         const Icon = it.icon;
-        const iconEl =
-          it.id === 'conversas' ? (
-            <span className="relative"><Icon className="h-5 w-5" /><Badge count={unread} /></span>
-          ) : it.id === 'espaco' ? (
-            avatarEl(isActive('/escritorio'))
-          ) : (
-            <Icon className="h-5 w-5" />
-          );
+        // Contagem do badge por atalho: conversas (não lidas), agenda (tarefas a
+        // concluir hoje), financeiro/espaço (movimentações do holerite).
+        const count =
+          it.id === 'conversas' ? unread :
+          it.id === 'agenda' ? pendingTasks :
+          it.id === 'pre-processual' ? preUnseen :
+          it.id === 'financeiro' || it.id === 'espaco' ? payslipUnread : 0;
+        const baseIcon = it.id === 'espaco' ? avatarEl(isActive('/escritorio')) : <Icon className="h-5 w-5" />;
+        const iconEl = <span className="relative">{baseIcon}<Badge count={count} /></span>;
         if (it.action === 'menu') {
           return (
             <button key={it.id} type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>
