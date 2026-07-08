@@ -101,7 +101,11 @@ const getInstancia = (c: CaseDetail): string | null => {
 // o resto no quadro Fase Judicial. Ambos abrem a ficha via ?case=<id>.
 const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
 const kanbanHref = (c: CaseDetail): string => {
-  const base = c.legalPhase && PRE_PHASES.has(c.legalPhase) ? '/juridico/pre-processual' : '/juridico/kanban';
+  const base = c.legalPhase?.startsWith('plan_')
+    ? '/juridico/planejamento'
+    : c.legalPhase?.startsWith('banco_')
+      ? '/juridico/fase-bancaria'
+      : c.legalPhase && PRE_PHASES.has(c.legalPhase) ? '/juridico/pre-processual' : '/juridico/kanban';
   return `${base}?case=${c.id}`;
 };
 

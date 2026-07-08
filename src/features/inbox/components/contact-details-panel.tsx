@@ -367,7 +367,9 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                const board = c.lane === 'pre' ? '/juridico/pre-processual' : '/juridico/kanban';
+                const board = c.legalPhase?.startsWith('plan_')
+                  ? '/juridico/planejamento'
+                  : c.lane === 'pre' ? '/juridico/pre-processual' : '/juridico/kanban';
                 window.open(`${board}?case=${c.id}`, '_blank', 'noopener');
               }}
               title="Ver no Kanban"
