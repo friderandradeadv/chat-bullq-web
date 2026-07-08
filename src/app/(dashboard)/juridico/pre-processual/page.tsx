@@ -109,17 +109,20 @@ export default function PreProcessualPage() {
     return map;
   }, [filtered]);
 
-  // Ids dos cards "novos" (entraram na fase depois do marcador de entrada).
+  // Ids dos cards "novos" (entraram na fase depois do marcador de entrada). Só marca
+  // os cards em que EU sou o responsável — o aviso é pessoal, do dono do caso.
+  const meuId = useAuthStore((s) => s.user?.id);
   const novoIds = useMemo(() => {
     const s = new Set<string>();
     const seenMs = seenAtEntry ? new Date(seenAtEntry).getTime() : null;
-    if (seenMs == null) return s;
+    if (seenMs == null || !meuId) return s;
     for (const c of filtered) {
+      if (c.responsible?.id !== meuId) continue;
       const t = c.legalPhaseAt ?? c.createdAt;
       if (t && new Date(t).getTime() > seenMs) s.add(c.id);
     }
     return s;
-  }, [filtered, seenAtEntry]);
+  }, [filtered, seenAtEntry, meuId]);
 
   const active = cards.find((c) => c.id === activeId) ?? null;
 
