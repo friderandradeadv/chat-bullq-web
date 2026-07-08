@@ -45,8 +45,6 @@ import {
   Pencil,
   Trash2,
   Scale,
-  IdCard,
-  MapPin,
   Copy,
   KeyRound,
   Eye,
@@ -78,7 +76,6 @@ import { useComposerDraftStore } from '../stores/composer-draft-store';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { contactsService } from '@/features/contacts/services/contacts.service';
-import { maskCpfCnpj } from '@/lib/masks';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useSocket } from '../hooks/use-socket';
 import { cn } from '@/lib/utils';
@@ -161,7 +158,6 @@ function ClientRegistrationSection({
   name: string | null;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(true);
   const [showSenha, setShowSenha] = useState(false);
   const { data: full } = useQuery({
     queryKey: ['contact-full', contactId],
@@ -171,27 +167,9 @@ function ClientRegistrationSection({
   });
 
   const cad = ((full?.metadata as any)?.cadastro ?? {}) as {
-    cpf?: string | null;
-    cnpj?: string | null;
-    rg?: string | null;
-    estadoCivil?: string | null;
-    profissao?: string | null;
-    endereco?: string | null;
-    representadoCpf?: string | null;
     login?: string | null;
     senha?: string | null;
   };
-  const doc = cad.cnpj || cad.cpf;
-  const fields = [
-    doc ? { label: cad.cnpj ? 'CNPJ' : 'CPF', value: maskCpfCnpj(doc), copy: true } : null,
-    cad.rg ? { label: 'RG', value: cad.rg, copy: true } : null,
-    cad.estadoCivil ? { label: 'Estado civil', value: cad.estadoCivil } : null,
-    cad.profissao ? { label: 'Profissão', value: cad.profissao } : null,
-    cad.representadoCpf
-      ? { label: 'CPF do representado', value: maskCpfCnpj(cad.representadoCpf), copy: true }
-      : null,
-  ].filter(Boolean) as { label: string; value: string; copy?: boolean }[];
-  const hasData = fields.length > 0 || !!cad.endereco || !!cad.login || !!cad.senha;
 
   const copy = async (value: string, label: string) => {
     try {
@@ -202,121 +180,74 @@ function ClientRegistrationSection({
     }
   };
 
-  // "Abrir nos Contatos" — leva pra ficha do cliente já filtrada (a página lê
-  // ?search= do URL). Prioriza o telefone (busca exata) e cai no nome.
+  // "Nos Contatos" — abre a ficha cadastral COMPLETA do cliente (CPF/RG/endereço/
+  // profissão…) já filtrada (a página lê ?search= do URL). No chat deixamos só o
+  // acesso ao Meu INSS pra não poluir. Prioriza o telefone e cai no nome.
   const goToContacts = () => {
     const q = phone || name || '';
     router.push(`/contacts${q ? `?search=${encodeURIComponent(q)}` : ''}`);
   };
 
+  // Sem login/senha salvos → nada aqui (painel limpo pra leads).
+  if (!cad.login && !cad.senha) return null;
+
   return (
     <div className="mt-4 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
       <div className="mb-2 flex items-center gap-2">
-        <IdCard className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+        <KeyRound className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
         <p className="flex-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-          Dados cadastrais
+          Meu INSS / gov.br
         </p>
         <button
           onClick={goToContacts}
-          title="Abrir a ficha do cliente na aba Contatos"
+          title="Abrir a ficha cadastral completa do cliente na aba Contatos"
           className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-primary hover:underline"
         >
-          Nos Contatos <ExternalLink className="h-3 w-3" />
+          Ficha completa <ExternalLink className="h-3 w-3" />
         </button>
-        {hasData && (
-          <button
-            onClick={() => setOpen((o) => !o)}
-            title={open ? 'Recolher' : 'Expandir'}
-            className="shrink-0 text-zinc-400 hover:text-zinc-600"
-          >
-            <ChevronDown className={cn('h-4 w-4 transition-transform', !open && '-rotate-90')} />
-          </button>
-        )}
       </div>
 
-      {!hasData ? (
-        <p className="text-[11px] leading-relaxed text-zinc-400">
-          Sem dados cadastrais ainda — preencha na ficha do cliente (Abrir nos Contatos) ou pela IA
-          dentro do processo.
-        </p>
-      ) : open ? (
-        <div className="space-y-1.5">
-          {fields.map((f) => (
-            <div key={f.label} className="flex items-center justify-between gap-2">
-              <span className="shrink-0 text-[11px] text-zinc-400">{f.label}</span>
-              <span className="inline-flex items-center gap-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                <span className="truncate">{f.value}</span>
-                {f.copy && (
-                  <button
-                    onClick={() => copy(f.value, f.label)}
-                    title={`Copiar ${f.label}`}
-                    className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
-                  >
-                    <Copy className="h-3 w-3" />
-                  </button>
-                )}
+      <div className="space-y-1.5">
+        {cad.login && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="shrink-0 text-[11px] text-zinc-400">Login</span>
+            <span className="inline-flex items-center gap-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              <span className="truncate">{cad.login}</span>
+              <button
+                onClick={() => copy(cad.login!, 'Login')}
+                title="Copiar login"
+                className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
+              >
+                <Copy className="h-3 w-3" />
+              </button>
+            </span>
+          </div>
+        )}
+        {cad.senha && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="shrink-0 text-[11px] text-zinc-400">Senha</span>
+            <span className="inline-flex items-center gap-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              <span className="truncate">
+                {showSenha ? cad.senha : '•'.repeat(Math.min(cad.senha.length, 12))}
               </span>
-            </div>
-          ))}
-          {cad.endereco && (
-            <div className="flex flex-col gap-0.5 pt-0.5">
-              <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
-                <MapPin className="h-3 w-3 shrink-0" /> Endereço
-              </span>
-              <span className="text-xs text-zinc-700 dark:text-zinc-300">{cad.endereco}</span>
-            </div>
-          )}
-
-          {/* Acesso ao Meu INSS / gov.br — login copiável, senha mascarada (olho
-              revela) + copiar. É o que a equipe usa pra puxar HISCRE/extrato. */}
-          {(cad.login || cad.senha) && (
-            <div className="mt-1.5 space-y-1.5 rounded-lg bg-zinc-50 px-2.5 py-2 dark:bg-zinc-900">
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-400">
-                <KeyRound className="h-3 w-3 shrink-0" /> Meu INSS / gov.br
-              </span>
-              {cad.login && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="shrink-0 text-[11px] text-zinc-400">Login</span>
-                  <span className="inline-flex items-center gap-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                    <span className="truncate">{cad.login}</span>
-                    <button
-                      onClick={() => copy(cad.login!, 'Login')}
-                      title="Copiar login"
-                      className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
-                  </span>
-                </div>
-              )}
-              {cad.senha && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="shrink-0 text-[11px] text-zinc-400">Senha</span>
-                  <span className="inline-flex items-center gap-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                    <span className="truncate">
-                      {showSenha ? cad.senha : '•'.repeat(Math.min(cad.senha.length, 12))}
-                    </span>
-                    <button
-                      onClick={() => setShowSenha((v) => !v)}
-                      title={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
-                      className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
-                    >
-                      {showSenha ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                    </button>
-                    <button
-                      onClick={() => copy(cad.senha!, 'Senha')}
-                      title="Copiar senha"
-                      className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ) : null}
+              <button
+                onClick={() => setShowSenha((v) => !v)}
+                title={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
+              >
+                {showSenha ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+              </button>
+              <button
+                onClick={() => copy(cad.senha!, 'Senha')}
+                title="Copiar senha"
+                className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
+              >
+                <Copy className="h-3 w-3" />
+              </button>
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
