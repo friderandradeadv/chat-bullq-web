@@ -23,6 +23,7 @@ import { tasksService, type Task } from '@/features/tasks/services/tasks.service
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
+import { CommentsSection } from '@/features/activities/components/comments-section';
 import { preferencesService } from '@/features/inbox/services/preferences.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -1022,22 +1023,14 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [titleVal, setTitleVal] = useState(activity.title);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(activity.title);
-  const [commentBody, setCommentBody] = useState('');
   const [tagPicker, setTagPicker] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#E03131');
-  const commentsQ = useQuery({ queryKey: ['activity-comments', activity.id], queryFn: () => activitiesService.listComments(entityType, activity.rawId) });
+  const meId = useAuthStore((s) => s.user?.id) ?? null;
   const etagsQ = useQuery({ queryKey: ['activity-tags', activity.id], queryFn: () => activitiesService.listTags(entityType, activity.rawId) });
   const availTagsQ = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
   const attachedIds = new Set((etagsQ.data ?? []).map((t) => t.tagId));
 
-  const postComment = async () => {
-    if (!commentBody.trim()) return;
-    setBusy(true);
-    try { await activitiesService.addComment(entityType, activity.rawId, commentBody.trim()); setCommentBody(''); commentsQ.refetch(); }
-    catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
-  };
-  const removeComment = async (id: string) => { try { await activitiesService.deleteComment(id); commentsQ.refetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
   const attachTag = async (tagId: string) => { try { await activitiesService.attachTag(entityType, activity.rawId, tagId); setTagPicker(false); etagsQ.refetch(); onRefetch(); } catch (e: any) { toast.error(e?.message || 'Erro'); } };
   const createAndAttach = async () => {
     const name = newTagName.trim();
@@ -1448,26 +1441,10 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         {/* Geração de peças por IA saiu do BullQ (réplica/especificação/recurso usam
             o Cowork). No kanban pré-judicial fica só a geração de iniciais de RMC/RCC. */}
 
-        {/* Comentários */}
+        {/* Comentários — multi-linha, @menção (com notificação), editar e foto do autor. */}
         <div className="mt-5 border-t border-[#DEE2E6] pt-4 dark:border-zinc-800">
           <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Comentários</p>
-          <div className="mb-3 space-y-3">
-            {(commentsQ.data ?? []).length === 0 && !commentsQ.isLoading && <p className="text-sm text-zinc-400">Nenhum comentário ainda.</p>}
-            {(commentsQ.data ?? []).map((c) => (
-              <div key={c.id} className="group flex gap-2.5 text-sm">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{initials(c.author?.name ?? null)}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="whitespace-pre-wrap break-words text-zinc-700 dark:text-zinc-200">{c.body}</p>
-                  <p className="mt-0.5 text-[11px] text-zinc-400">{c.author?.name ?? 'Você'} · {new Date(c.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</p>
-                </div>
-                <button onClick={() => removeComment(c.id)} title="Remover" className="self-start text-zinc-300 opacity-0 transition-opacity hover:text-[#CE0000] group-hover:opacity-100"><X className="h-3.5 w-3.5" /></button>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 rounded-lg border border-[#DEE2E6] px-3 py-1.5 focus-within:border-[#228BE6] dark:border-zinc-700">
-            <input value={commentBody} onChange={(e) => setCommentBody(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') postComment(); }} placeholder="Escreva um comentário…" className="flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100" />
-            <button disabled={busy || !commentBody.trim()} onClick={postComment} className="rounded-md px-3 py-1 text-xs font-bold uppercase text-[#228BE6] disabled:opacity-40">Comentar</button>
-          </div>
+          <CommentsSection entityType={entityType} entityId={activity.rawId} activityId={activity.id} meId={meId} />
         </div>
 
         <div className="mt-4 flex justify-end">

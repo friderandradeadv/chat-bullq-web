@@ -14,6 +14,7 @@ export interface ActivityComment {
   entityId: string;
   body: string;
   createdAt: string;
+  updatedAt?: string;
   author: { id: string; name: string; avatarUrl: string | null } | null;
 }
 
@@ -42,8 +43,12 @@ export const activitiesService = {
     const { data } = await api.get(`/activities/${entityType}/${entityId}/comments`);
     return data.data ?? data;
   },
-  async addComment(entityType: string, entityId: string, body: string): Promise<ActivityComment> {
-    const { data } = await api.post(`/activities/${entityType}/${entityId}/comments`, { body });
+  async addComment(entityType: string, entityId: string, body: string, mentions?: string[]): Promise<ActivityComment> {
+    const { data } = await api.post(`/activities/${entityType}/${entityId}/comments`, { body, mentions });
+    return data.data ?? data;
+  },
+  async updateComment(commentId: string, body: string): Promise<ActivityComment> {
+    const { data } = await api.put(`/activities/comments/${commentId}`, { body });
     return data.data ?? data;
   },
   async deleteComment(commentId: string): Promise<void> {
