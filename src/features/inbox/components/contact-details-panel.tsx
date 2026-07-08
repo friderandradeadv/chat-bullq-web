@@ -48,6 +48,9 @@ import {
   IdCard,
   MapPin,
   Copy,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -159,6 +162,7 @@ function ClientRegistrationSection({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
+  const [showSenha, setShowSenha] = useState(false);
   const { data: full } = useQuery({
     queryKey: ['contact-full', contactId],
     queryFn: () => contactsService.getById(contactId),
@@ -174,6 +178,8 @@ function ClientRegistrationSection({
     profissao?: string | null;
     endereco?: string | null;
     representadoCpf?: string | null;
+    login?: string | null;
+    senha?: string | null;
   };
   const doc = cad.cnpj || cad.cpf;
   const fields = [
@@ -185,7 +191,7 @@ function ClientRegistrationSection({
       ? { label: 'CPF do representado', value: maskCpfCnpj(cad.representadoCpf), copy: true }
       : null,
   ].filter(Boolean) as { label: string; value: string; copy?: boolean }[];
-  const hasData = fields.length > 0 || !!cad.endereco;
+  const hasData = fields.length > 0 || !!cad.endereco || !!cad.login || !!cad.senha;
 
   const copy = async (value: string, label: string) => {
     try {
@@ -258,6 +264,55 @@ function ClientRegistrationSection({
                 <MapPin className="h-3 w-3 shrink-0" /> Endereço
               </span>
               <span className="text-xs text-zinc-700 dark:text-zinc-300">{cad.endereco}</span>
+            </div>
+          )}
+
+          {/* Acesso ao Meu INSS / gov.br — login copiável, senha mascarada (olho
+              revela) + copiar. É o que a equipe usa pra puxar HISCRE/extrato. */}
+          {(cad.login || cad.senha) && (
+            <div className="mt-1.5 space-y-1.5 rounded-lg bg-zinc-50 px-2.5 py-2 dark:bg-zinc-900">
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-400">
+                <KeyRound className="h-3 w-3 shrink-0" /> Meu INSS / gov.br
+              </span>
+              {cad.login && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="shrink-0 text-[11px] text-zinc-400">Login</span>
+                  <span className="inline-flex items-center gap-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    <span className="truncate">{cad.login}</span>
+                    <button
+                      onClick={() => copy(cad.login!, 'Login')}
+                      title="Copiar login"
+                      className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </span>
+                </div>
+              )}
+              {cad.senha && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="shrink-0 text-[11px] text-zinc-400">Senha</span>
+                  <span className="inline-flex items-center gap-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    <span className="truncate">
+                      {showSenha ? cad.senha : '•'.repeat(Math.min(cad.senha.length, 12))}
+                    </span>
+                    <button
+                      onClick={() => setShowSenha((v) => !v)}
+                      title={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                      className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
+                    >
+                      {showSenha ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
+                    <button
+                      onClick={() => copy(cad.senha!, 'Senha')}
+                      title="Copiar senha"
+                      className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
