@@ -705,6 +705,34 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
   }, []);
   const cancelReply = useCallback(() => setReplyingTo(null), []);
 
+  // Respondeu numa conversa ARQUIVADA → desarquiva na hora ("voltei a falar com
+  // o cliente"). O backend já desarquiva no envio, mas fazemos o flip otimista
+  // aqui pra sair de "Arquivados" sem esperar o socket/refetch, e chamamos o
+  // /unarchive como garantia. Pula a intervenção pontual (oneOff), igual ao back.
+  const ensureUnarchivedOnSend = () => {
+    const oneOff = pontual && !isMine;
+    if (oneOff || !conversation.isArchived) return;
+    queryClient.setQueryData<Conversation>(
+      ['conversation', conversation.id],
+      (old) => (old ? { ...old, isArchived: false, archivedAt: null } : old),
+    );
+    queryClient.setQueriesData<any>({ queryKey: ['conversations'] }, (old: any) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((p: any) => ({
+          ...p,
+          conversations: p.conversations.map((c: Conversation) =>
+            c.id === conversation.id
+              ? { ...c, isArchived: false, archivedAt: null }
+              : c,
+          ),
+        })),
+      };
+    });
+    inboxService.unarchive(conversation.id).catch(() => undefined);
+  };
+
   const handleSend = async (text: string) => {
     // The server broadcasts message:new with the QUEUED row immediately, so we
     // don't need to invalidate — the socket handler above will insert the row.
@@ -718,6 +746,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         // Intervenção pontual: manda sem assumir a conversa nem pausar a IA.
         ...(pontual && !isMine ? { oneOff: true } : {}),
       });
+      ensureUnarchivedOnSend();
       setReplyingTo(null);
     } catch (err) {
       // Fallback: if send fails before the socket event arrives, force a refresh.
@@ -729,6 +758,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
   const handleSendAudio = async (blob: Blob) => {
     try {
       await inboxService.sendAudioMessage(conversation.id, blob);
+      ensureUnarchivedOnSend();
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
       throw err;
@@ -738,6 +768,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
   const handleSendMedia = async (file: File, caption?: string) => {
     try {
       await inboxService.sendMediaMessage(conversation.id, file, caption);
+      ensureUnarchivedOnSend();
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
       throw err;
@@ -761,6 +792,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         },
         ...(pontual && !isMine ? { oneOff: true } : {}),
       });
+      ensureUnarchivedOnSend();
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
       throw err;

@@ -267,6 +267,16 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
     staleTime: 300_000,
   });
   const cases = data?.cases ?? [];
+
+  const copyCnj = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success('Número do processo copiado');
+    } catch {
+      toast.error('Não foi possível copiar');
+    }
+  };
+
   // Painel limpo p/ leads: só aparece quando há processo vinculado.
   if (isLoading || cases.length === 0) return null;
 
@@ -284,10 +294,20 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
       <div className="space-y-1.5">
         {cases.map((c: ClientCaseRow) => (
           <div key={c.id} className="group relative">
-          <button
+          {/* Card clicável (div, não button) pra permitir o botão de copiar
+              o nº do processo aninhado sem <button> dentro de <button>. */}
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => router.push(`/processos/${c.id}`)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                router.push(`/processos/${c.id}`);
+              }
+            }}
             title="Abrir processo"
-            className="block w-full rounded-lg border border-zinc-200/70 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/60"
+            className="block w-full cursor-pointer rounded-lg border border-zinc-200/70 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/60"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-1.5 truncate text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
@@ -305,8 +325,21 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
             </p>
             <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400">
               <span className="truncate font-mono">{c.cnjNumber || (c.lane === 'pre' ? 'pré-processual' : 'sem nº')}</span>
+              {c.cnjNumber && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    copyCnj(c.cnjNumber!);
+                  }}
+                  title="Copiar número do processo"
+                  className="shrink-0 text-zinc-300 transition-colors hover:text-primary dark:text-zinc-600"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              )}
             </div>
-          </button>
+          </div>
           {/* Responsável PELO PROCESSO (advogado dono do caso) — editável. É quem
               o robô aciona quando precisa transferir, e por onde o advogado sabe
               que aquele cliente é dele. */}
