@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { tagsService, type Tag } from '@/features/settings/services/tags.service';
+import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useInboxFilterStore } from '../stores/inbox-filter-store';
@@ -44,7 +45,8 @@ type View =
   | 'inbox-views'
   | 'pipeline'
   | 'assign'
-  | 'ai';
+  | 'ai'
+  | 'contact-status';
 
 interface BulkActionsMenuProps {
   conversationIds: string[];
@@ -91,6 +93,11 @@ export function BulkActionsMenu({
     queryKey: ['tags', orgId],
     queryFn: () => tagsService.list(),
     enabled: open && (view === 'tag-conversation' || view === 'tag-contact'),
+  });
+  const { data: contactStatuses = [], isLoading: statusesLoading } = useQuery({
+    queryKey: ['contact-statuses'],
+    queryFn: () => contactStatusesService.list(),
+    enabled: open && view === 'contact-status',
   });
   const { data: pipelines = [], isLoading: pipelinesLoading } = useQuery({
     queryKey: ['pipelines', orgId],
@@ -234,6 +241,22 @@ export function BulkActionsMenu({
       `Robô responsável de ${count} conversa${plural(count)} → ${name}`,
     );
 
+  /** Muda o STATUS do funil (Recepção, RMC/RCC, …) dos contatos selecionados. */
+  const setStatusAll = (statusId: string | null, name: string) =>
+    run(
+      `status-${statusId ?? 'none'}`,
+      async () => {
+        await Promise.all(
+          contactIds.map((cid) =>
+            contactStatusesService.setContactStatus(cid, statusId),
+          ),
+        );
+      },
+      statusId
+        ? `Status de ${count} conversa${plural(count)} → ${name}`
+        : `Status removido de ${count} conversa${plural(count)}`,
+    );
+
   const markUnreadAll = () =>
     run(
       'unread',
@@ -341,6 +364,11 @@ export function BulkActionsMenu({
                 <button onClick={() => setView('pipeline')} className={itemClass}>
                   <KanbanSquare className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
                   <span className="flex-1">Adicionar a pipeline</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
+                </button>
+                <button onClick={() => setView('contact-status')} className={itemClass}>
+                  <ListChecks className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+                  <span className="flex-1">Alterar status</span>
                   <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
                 </button>
                 <button onClick={() => setView('assign')} className={itemClass}>
@@ -470,6 +498,32 @@ export function BulkActionsMenu({
                         <KanbanSquare className="h-3.5 w-3.5 shrink-0 text-primary" />
                         <span className="flex-1 truncate">{p.name}</span>
                         {busy === `pipe-${p.id}` && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+
+            {view === 'contact-status' && (
+              <>
+                {backButton('Alterar status')}
+                <div className={submenuScroll} style={{ maxHeight: MENU_MAX_HEIGHT - 80 }}>
+                  <button onClick={() => setStatusAll(null, '')} disabled={busy === 'status-none'} className={`${itemClass} text-zinc-500 dark:text-zinc-400`}>
+                    <X className="h-3.5 w-3.5 shrink-0" />
+                    <span className="flex-1">Remover status</span>
+                    {busy === 'status-none' && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
+                  </button>
+                  {statusesLoading ? (
+                    <div className="flex items-center justify-center py-4"><Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" /></div>
+                  ) : contactStatuses.length === 0 ? (
+                    <p className="py-4 text-center text-[11px] text-zinc-400">Nenhum status</p>
+                  ) : (
+                    contactStatuses.map((s) => (
+                      <button key={s.id} onClick={() => setStatusAll(s.id, s.name)} disabled={busy === `status-${s.id}`} className={itemClass}>
+                        <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                        <span className="flex-1 truncate">{s.name}</span>
+                        {busy === `status-${s.id}` && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
                       </button>
                     ))
                   )}
