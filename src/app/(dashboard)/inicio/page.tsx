@@ -1093,8 +1093,7 @@ export default function InicioPage() {
         {/* Aniversariantes do escritório — confete no dia + próximos */}
         {mounted && <Aniversariantes onCelebrate={() => setBurst((b) => b + 1)} />}
 
-        {/* Seu financeiro (visão pessoal do advogado — sócio e associado) */}
-        {mounted && <MeuFinanceiro on={statOn} enabled={!!user?.id} />}
+        {/* Bloco "Seu financeiro" removido do Início a pedido do Matheus (fica em /financeiro). */}
 
         {/* Painel — 2 colunas em telas largas: mensagens | agenda + compromissos */}
         {mounted && (
