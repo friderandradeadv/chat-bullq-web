@@ -10,9 +10,9 @@ async function fetchPendingTasksCount(): Promise<number> {
 }
 
 /**
- * Total de TAREFAS a concluir HOJE do usuário (em aberto, vencimento até hoje —
- * inclui atrasadas). Alimenta o badge vermelho do item "Agenda" (sidebar) e da
- * aba "Jurídico" (barra inferior). Some quando não sobra nada pendente.
+ * Total de compromissos de HOJE do usuário (prazos+tarefas+eventos em aberto com
+ * vencimento HOJE — SEM atrasados). Alimenta o badge vermelho do item "Agenda".
+ * Some quando não sobra nada pendente hoje.
  *
  * Fica vivo por dois caminhos: (1) refetch de rede a cada 60s; (2) a Agenda
  * invalida a queryKey ['tasks','pending-count'] no seu refetchAll sempre que uma
