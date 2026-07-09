@@ -398,9 +398,10 @@
   backdrop-filter: none;
 }
 @media (min-width: 1024px) {
-  /* respiro no topo de cada página: altura da barra (2.75rem) + folga (1rem) pra
-     o conteúdo não colar na barra sobreposta. */
+  /* respiro no topo de cada página = EXATAMENTE a altura da barra (2.75rem). Como
+     a barra agora é sólida e da mesma cor, o conteúdo encosta logo abaixo dela
+     sem folga (antes tinha +1rem de respiro que virava um vão desnecessário). */
   .under-bar > * {
-    padding-top: 3.75rem;
+    padding-top: 2.75rem;
   }
 }
