@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Fragment, useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip, Eye, EyeOff, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
@@ -188,6 +188,49 @@ function matchSingleUrl(text: string): string | null {
   return m ? m[1] : null;
 }
 
+// Formatação estilo WhatsApp: *negrito*  _itálico_  ~tachado~  ```monoespaçado```
+// (delimitador só vale colado ao conteúdo, sem espaço logo após a abertura nem
+// antes do fechamento — igual ao WhatsApp; espaço adjacente = texto literal)
+const WA_TOKEN_REGEX = /(```[\s\S]+?```|\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~)/g;
+
+function renderWhatsappFormatting(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const regex = new RegExp(WA_TOKEN_REGEX.source, 'g');
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > lastIndex) nodes.push(text.slice(lastIndex, m.index));
+    const token = m[0];
+    const key = `${keyPrefix}-f${i++}`;
+    const mono = token.startsWith('```');
+    const inner = mono ? token.slice(3, -3) : token.slice(1, -1);
+    // espaço logo após a abertura ou antes do fechamento → não formata (igual WhatsApp)
+    if (!mono && (/^\s/.test(inner) || /\s$/.test(inner))) {
+      nodes.push(token);
+    } else if (mono) {
+      nodes.push(
+        <code key={key} className="rounded bg-black/10 px-1 font-mono text-[0.85em] dark:bg-white/10">
+          {inner}
+        </code>,
+      );
+    } else if (token.startsWith('*')) {
+      nodes.push(
+        <strong key={key} className="font-semibold">
+          {renderWhatsappFormatting(inner, key)}
+        </strong>,
+      );
+    } else if (token.startsWith('_')) {
+      nodes.push(<em key={key}>{renderWhatsappFormatting(inner, key)}</em>);
+    } else {
+      nodes.push(<del key={key}>{renderWhatsappFormatting(inner, key)}</del>);
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
 function renderInlineTextWithLinks(text: string, isOutbound: boolean) {
   const parts = text.split(URL_REGEX);
   return parts.map((part, i) => {
@@ -207,7 +250,7 @@ function renderInlineTextWithLinks(text: string, isOutbound: boolean) {
         </a>
       );
     }
-    return <span key={i}>{part}</span>;
+    return <Fragment key={i}>{renderWhatsappFormatting(part, String(i))}</Fragment>;
   });
 }
 
