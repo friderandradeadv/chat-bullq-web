@@ -89,13 +89,20 @@ export function AssignmentPopover({
     return new Set([...fromContact, ...fromConv]);
   }, [conversation.contact?.tags, conversation.tags]);
 
-  // Robôs candidatos: ativos, top-level (não subagentes), que atendem a área.
+  // Robôs candidatos: ativos, top-level (não subagentes).
+  // - SEM busca: só os que atendem a área da conversa (tag do robô bate com a da
+  //   conversa, ou robô sem tag = atende todo mundo) — mantém a lista enxuta.
+  // - BUSCANDO por nome: mostra QUALQUER robô ativo, mesmo que a tag dele não
+  //   bata com a conversa. Assim dá pra atribuir manualmente um agente de uma
+  //   área específica (ex.: Camila RMC/RCC) numa conversa ainda SEM etiqueta —
+  //   antes ela ficava invisível e não dava pra pôr como responsável.
   const robots = useMemo(() => {
     const q = search.trim().toLowerCase();
     return agents
       .filter((a) => a.isActive && !a.parentAgentId)
       .filter(
         (a) =>
+          !!q ||
           (a.tagIds?.length ?? 0) === 0 ||
           a.tagIds.some((t) => ctxTagIds.has(t)),
       )
