@@ -19,6 +19,14 @@ export interface Channel {
    * PRIVATE = só membros com grant explícito enxergam, mesmo OWNER/ADMIN.
    */
   visibility: ChannelVisibility;
+  /** Área (workspace/departamento) fixa deste número — trava global LíderHub. */
+  departmentId: string | null;
+  /** Responsável humano padrão do número (vazio = só robô/fila). */
+  defaultAssigneeId: string | null;
+  /** Enriquecido pelo backend no list: nome/cor da área vinculada. */
+  department?: { id: string; name: string; color: string } | null;
+  /** Enriquecido pelo backend no list: nome/foto do responsável padrão. */
+  defaultAssignee?: { id: string; name: string; avatarUrl: string | null } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,6 +37,8 @@ export interface CreateChannelPayload {
   config: Record<string, any>;
   webhookSecret?: string;
   visibility?: ChannelVisibility;
+  departmentId?: string;
+  defaultAssigneeId?: string;
 }
 
 export interface UpdateChannelPayload {
@@ -38,6 +48,10 @@ export interface UpdateChannelPayload {
   isActive?: boolean;
   aiEnabled?: boolean | null;
   visibility?: ChannelVisibility;
+  /** `null` desvincula o número da área. */
+  departmentId?: string | null;
+  /** `null` remove o responsável padrão. */
+  defaultAssigneeId?: string | null;
 }
 
 export interface TestConnectionResult {

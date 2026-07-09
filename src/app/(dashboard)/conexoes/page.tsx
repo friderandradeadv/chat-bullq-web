@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Cable,
   Plus,
@@ -13,8 +13,12 @@ import {
   Settings as SettingsIcon,
   ExternalLink,
   Check,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { channelsService, type Channel } from '@/features/channels/services/channels.service';
+import { departmentsService } from '@/features/settings/services/departments.service';
+import { membersService } from '@/features/settings/services/members.service';
 import { ZappfyIcon, MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
 import { useOrgId } from '@/hooks/use-org-query-key';
 
@@ -53,11 +57,21 @@ type ColKey = 'defaultStatus' | 'department' | 'responsible';
 
 export default function ConexoesPage() {
   const orgId = useOrgId();
+  const queryClient = useQueryClient();
   const { data: channels = [], isLoading } = useQuery({
     queryKey: ['channels', orgId],
     queryFn: () => channelsService.list(),
   });
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', orgId],
+    queryFn: () => departmentsService.list(),
+  });
+  const { data: members = [] } = useQuery({
+    queryKey: ['members', orgId],
+    queryFn: () => membersService.list(),
+  });
 
+  const [editing, setEditing] = useState<Channel | null>(null);
   const [search, setSearch] = useState('');
   const [colsOpen, setColsOpen] = useState(false);
   const [cols, setCols] = useState<Record<ColKey, boolean>>({
@@ -222,8 +236,30 @@ export default function ConexoesPage() {
                       </div>
                     </td>
                     {cols.defaultStatus && <td className="px-4 py-3 text-zinc-400">—</td>}
-                    {cols.department && <td className="px-4 py-3 text-zinc-400">—</td>}
-                    {cols.responsible && <td className="px-4 py-3 text-zinc-400">—</td>}
+                    {cols.department && (
+                      <td className="px-4 py-3">
+                        {ch.department ? (
+                          <span className="inline-flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200">
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: ch.department.color }}
+                            />
+                            {ch.department.name}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                      </td>
+                    )}
+                    {cols.responsible && (
+                      <td className="px-4 py-3 text-zinc-700 dark:text-zinc-200">
+                        {ch.defaultAssignee ? (
+                          ch.defaultAssignee.name
+                        ) : (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex items-center gap-1.5 text-xs font-medium ${
@@ -251,12 +287,21 @@ export default function ConexoesPage() {
                         {menuFor === ch.id && (
                           <>
                             <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
-                            <div className="absolute right-0 top-9 z-20 w-40 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                            <div className="absolute right-0 top-9 z-20 w-52 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                              <button
+                                onClick={() => {
+                                  setMenuFor(null);
+                                  setEditing(ch);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                              >
+                                <Pencil className="h-3.5 w-3.5" /> Editar área/responsável
+                              </button>
                               <Link
                                 href="/settings/channels"
                                 className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
                               >
-                                <SettingsIcon className="h-3.5 w-3.5" /> Gerenciar
+                                <SettingsIcon className="h-3.5 w-3.5" /> Gerenciar conexão
                               </Link>
                             </div>
                           </>
@@ -285,6 +330,126 @@ export default function ConexoesPage() {
           </span>
         </div>
       )}
+
+      {editing && (
+        <EditRoutingModal
+          channel={editing}
+          departments={departments}
+          members={members}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ['channels', orgId] });
+            setEditing(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Modal que vincula uma conexão a uma Área (workspace) + Responsável padrão. */
+function EditRoutingModal({
+  channel,
+  departments,
+  members,
+  onClose,
+  onSaved,
+}: {
+  channel: Channel;
+  departments: { id: string; name: string; color: string }[];
+  members: { userId: string; assignable?: boolean; user: { name: string } }[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [departmentId, setDepartmentId] = useState(channel.departmentId ?? '');
+  const [assigneeId, setAssigneeId] = useState(channel.defaultAssigneeId ?? '');
+
+  const save = useMutation({
+    mutationFn: () =>
+      channelsService.update(channel.id, {
+        departmentId: departmentId || null,
+        defaultAssigneeId: assigneeId || null,
+      }),
+    onSuccess: onSaved,
+  });
+
+  const selectableMembers = members.filter((m) => m.assignable !== false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Área da conexão
+            </h2>
+            <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+              {channel.name} — toda conversa que entrar por este número cai nesta frente.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Departamento (frente)
+        </label>
+        <select
+          value={departmentId}
+          onChange={(e) => setDepartmentId(e.target.value)}
+          className="mb-4 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+        >
+          <option value="">— Sem área (fila geral) —</option>
+          {departments.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Responsável padrão (opcional)
+        </label>
+        <select
+          value={assigneeId}
+          onChange={(e) => setAssigneeId(e.target.value)}
+          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+        >
+          <option value="">— Só robô / fila da área —</option>
+          {selectableMembers.map((m) => (
+            <option key={m.userId} value={m.userId}>
+              {m.user.name}
+            </option>
+          ))}
+        </select>
+
+        {save.isError && (
+          <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+            Não deu pra salvar. Tente de novo.
+          </p>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => save.mutate()}
+            disabled={save.isPending}
+            className="rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            {save.isPending ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
