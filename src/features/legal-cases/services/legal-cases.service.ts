@@ -20,6 +20,15 @@ export interface PartyInput {
   role: PartyRole;
   contactId?: string;
   document?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Detalhe do banco réu (REPB), guardado em Party.metadata. */
+export interface BancoReuMeta {
+  operacao?: string;
+  saldoDevedor?: string;
+  situacao?: string;
+  obs?: string;
 }
 
 export interface ConversationRef {
@@ -34,6 +43,7 @@ export interface PartyDetail {
   role: PartyRole;
   document: string | null;
   contactId: string | null;
+  metadata?: BancoReuMeta & Record<string, unknown>;
   contact: {
     id: string;
     name: string | null;

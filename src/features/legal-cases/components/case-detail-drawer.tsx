@@ -15,6 +15,7 @@ import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
 import { RepbMalote } from './repb-malote';
+import { BancosReusEditor } from './bancos-reus-editor';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
@@ -276,8 +277,10 @@ export function CaseDetailDrawer({
                   );
                 })()}
 
-                {/* Parte adversa (editável) */}
-                <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                {/* Parte adversa (editável). REPB = vários bancos réus; demais = 1 adversa. */}
+                {phaseKey?.startsWith('repb_')
+                  ? <BancosReusEditor caseId={c.id} parties={c.parties} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                  : <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
 
                 {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
                     doc. faltantes) mostra o desmembramento em cards por banco réu; nas
