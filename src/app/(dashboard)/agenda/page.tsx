@@ -63,6 +63,9 @@ interface Activity {
   triggerDate: string | null; // disponibilização (base p/ contar prazo de recurso da sentença)
   tags: { id: string; name: string; color: string }[];
   coResponsibleIds: string[]; // responsáveis extras (metadata.coResponsibleIds)
+  // Antecedências dos lembretes (min). null = não configurado (usa padrão 1 dia +
+  // 1 hora); [] = sem aviso; só eventos têm. Prazos/tarefas ficam null.
+  reminders: number[] | null;
   createdAt: string | null; // p/ marcar como "novo" (adicionado hoje)
   hasTime: boolean; done: boolean; cancelled: boolean; fatal: boolean;
   caseId: string | null; caseTitle: string | null; cnj: string | null;
@@ -412,6 +415,7 @@ export default function AgendaPage() {
         triggerDate: null,
         tags: tagMap.get('task:' + t.id) ?? [],
         coResponsibleIds: (t.metadata as any)?.coResponsibleIds ?? [],
+        reminders: null,
         createdAt: t.createdAt ?? null,
         hasTime: !taskAllDay,
         done: t.status === 'DONE', cancelled: false, fatal: t.priority === 'HIGH',
@@ -433,6 +437,7 @@ export default function AgendaPage() {
         triggerDate: d.triggerDate ?? null,
         tags: tagMap.get('deadline:' + d.id) ?? [],
         coResponsibleIds: (d.metadata as any)?.coResponsibleIds ?? [],
+        reminders: null,
         createdAt: d.createdAt ?? null,
         hasTime: false, done: d.status === 'DONE', cancelled: d.status === 'CANCELLED', fatal: d.type === 'FATAL',
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
@@ -450,6 +455,7 @@ export default function AgendaPage() {
         triggerDate: null,
         tags: tagMap.get('event:' + e.id) ?? [],
         coResponsibleIds: (e as any).metadata?.coResponsibleIds ?? [],
+        reminders: (e.metadata?.reminders as number[] | undefined) ?? null,
         createdAt: e.createdAt ?? null,
         hasTime: true, done: !!e.metadata?.completedAt, cancelled: false, fatal: false,
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
@@ -1056,6 +1062,19 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
   };
 
+  // Lembretes do evento (só source === 'evento'). null = usa o padrão (1 dia + 1
+  // hora) → mostro esse padrão pré-selecionado; salvar grava a lista explícita.
+  const [remEditing, setRemEditing] = useState(false);
+  const [remVal, setRemVal] = useState<number[]>(activity.reminders ?? [1440, 60]);
+  const [remBusy, setRemBusy] = useState(false);
+  const saveReminders = async () => {
+    setRemBusy(true);
+    try {
+      await calendarService.update(activity.rawId, { reminders: remVal });
+      setRemEditing(false); toast.success('Lembretes salvos'); onRefetch();
+    } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setRemBusy(false); }
+  };
+
   const del = async () => {
     // Prazo é CANCELADO (soft, dá pra reabrir), não excluído de vez — deixa isso claro.
     const isPrazo = activity.source === 'prazo';
@@ -1351,6 +1370,29 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {done && activity.completedAt && <Row label=""><span className="text-zinc-500">{activity.source === 'tarefa' ? 'Tarefa concluída' : 'Prazo concluído'} em {new Date(activity.completedAt).toLocaleDateString('pt-BR')}{activity.responsibleName ? ` por ${activity.responsibleName}` : ''}</span></Row>}
           {activity.priorityLabel && <Row label="Prioridade">{activity.priorityLabel}</Row>}
           {activity.description && activity.source === 'evento' && <Row label="Local">{activity.description}</Row>}
+          {activity.source === 'evento' && (
+            <Row label="Lembretes">
+              {remEditing ? (
+                <div className="w-full space-y-2">
+                  <RemindersField value={remVal} onChange={setRemVal} />
+                  <div className="flex items-center gap-1">
+                    <button disabled={remBusy} onClick={saveReminders} className="rounded px-3 py-1 text-xs font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-40">{remBusy ? 'Salvando…' : 'Salvar'}</button>
+                    <button onClick={() => { setRemEditing(false); setRemVal(activity.reminders ?? [1440, 60]); }} className="rounded px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {(activity.reminders ?? [1440, 60]).length === 0
+                    ? <span className="text-zinc-400">Sem lembrete</span>
+                    : (activity.reminders ?? [1440, 60]).map((m) => (
+                      <span key={m} className="inline-flex items-center gap-1 rounded-full bg-[#228BE6]/10 px-2 py-0.5 text-xs font-medium text-[#228BE6]"><CalendarClock className="h-3 w-3" />{reminderLabel(m)}</span>
+                    ))}
+                  {activity.reminders == null && <span className="text-[11px] text-zinc-400">(padrão)</span>}
+                  <button onClick={() => { setRemVal(activity.reminders ?? [1440, 60]); setRemEditing(true); }} className="text-xs font-medium text-[#228BE6] hover:underline">Editar</button>
+                </span>
+              )}
+            </Row>
+          )}
           {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.description && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Descrição da tarefa:</dt>

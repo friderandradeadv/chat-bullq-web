@@ -10,6 +10,7 @@ import { useUnreadConversations } from '@/features/notifications/use-unread-conv
 import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks-count';
 import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
 import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
+import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 
 // Barra de abas inferior — só no mobile (lg:hidden). Dá a navegação principal
 // com toque de app nativo; respeita a barra de gestos do iPhone (pb-safe).
@@ -18,7 +19,7 @@ import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#1D2125]">
+    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#182028]">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -31,6 +32,7 @@ export function MobileTabBar() {
   const pendingTasks = usePendingTasksCount();
   const payslipUnread = usePayslipUnreadCount();
   const preUnseen = usePreUnseenCount();
+  const disconnected = useDisconnectedChannels();
   const { user, organizations, activeOrgId } = useAuthStore();
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
@@ -50,10 +52,13 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="Navegação principal"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#1D2125]/95 lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#182028]/95 lg:hidden"
     >
       <button type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>
-        <Menu className="h-5 w-5" />
+        <span className="relative">
+          <Menu className="h-5 w-5" />
+          <Badge count={disconnected} />
+        </span>
         <span>Menu</span>
       </button>
 
