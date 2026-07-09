@@ -35,6 +35,7 @@ import { useInboxFilterStore } from '../stores/inbox-filter-store';
 import { pipelinesService } from '@/features/pipelines/services/pipelines.service';
 import { inboxViewsService, type InboxView } from '@/features/inbox-views/services/inbox-views.service';
 import { inboxService, type Conversation } from '../services/inbox.service';
+import { aiAgentsService } from '@/features/ai-agents/services/ai-agents.service';
 
 type View =
   | 'root'
@@ -106,6 +107,17 @@ export function BulkActionsMenu({
     queryFn: () => membersService.list(),
     enabled: open && view === 'assign',
   });
+  const { data: aiAgents = [] } = useQuery({
+    queryKey: ['ai-agents'],
+    queryFn: () => aiAgentsService.list(),
+    enabled: open && view === 'assign',
+  });
+  // Robôs atribuíveis: ativos e top-level (não subagentes). Poucos na org, então
+  // listamos todos — inclui a Camila (RMC/RCC) pra dar pra pôr como responsável.
+  const assignableRobots = useMemo(
+    () => aiAgents.filter((a) => a.isActive && !a.parentAgentId),
+    [aiAgents],
+  );
 
   const inboxViews = useMemo(
     () => inboxViewsRaw.filter((v) => v.metadata?.builtin !== true),
@@ -208,6 +220,18 @@ export function BulkActionsMenu({
       userId
         ? `Responsável de ${count} conversa${plural(count)} → ${name}`
         : `Responsável removido de ${count} conversa${plural(count)}`,
+    );
+
+  /** Define um ROBÔ (IA) como responsável de todas as conversas selecionadas. */
+  const assignAgentAll = (agentId: string, name: string) =>
+    run(
+      `assign-agent-${agentId}`,
+      async () => {
+        await Promise.all(
+          conversationIds.map((id) => inboxService.assignAgent(id, agentId)),
+        );
+      },
+      `Robô responsável de ${count} conversa${plural(count)} → ${name}`,
     );
 
   const markUnreadAll = () =>
@@ -476,6 +500,21 @@ export function BulkActionsMenu({
                         {busy === `assign-${m.user.id}` && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
                       </button>
                     ))
+                  )}
+                  {assignableRobots.length > 0 && (
+                    <>
+                      <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                      <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                        Robôs (IA)
+                      </p>
+                      {assignableRobots.map((a) => (
+                        <button key={a.id} onClick={() => assignAgentAll(a.id, a.name)} disabled={busy === `assign-agent-${a.id}`} className={itemClass}>
+                          <Bot className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                          <span className="flex-1 truncate">{a.name}</span>
+                          {busy === `assign-agent-${a.id}` && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
+                        </button>
+                      ))}
+                    </>
                   )}
                 </div>
               </>
