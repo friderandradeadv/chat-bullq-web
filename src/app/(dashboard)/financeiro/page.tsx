@@ -2027,7 +2027,7 @@ function CumprimentoTab() {
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
   if (!cs) return <Card><p className="py-8 text-center text-sm text-zinc-400">Não foi possível carregar os processos.</p></Card>;
 
-  const allCs = [...cs.cumprimento, ...cs.prestacao, ...cs.favoraveis];
+  const allCs = [...cs.cumprimento, ...cs.prestacao, ...cs.favoraveis, ...(cs.repb ?? [])];
   const areas = Array.from(new Set(allCs.map((x) => areaJuridica(x.area)))).sort() as string[];
   const resps = Array.from(new Set(allCs.map((x) => x.responsavel).filter(Boolean))).sort() as string[];
   const match = (x: { area: string | null; responsavel: string | null }) => (!areaF || areaJuridica(x.area) === areaF) && (!respF || x.responsavel === respF);
@@ -2036,6 +2036,8 @@ function CumprimentoTab() {
   const cumprimento = cs.cumprimento.filter(match);
   const prestacao = cs.prestacao.filter(match);
   const favoraveis = cs.favoraveis.filter(match);
+  const repb = (cs.repb ?? []).filter(match);
+  const repbCheio = repb.filter((x) => x.aReceberNosso > 0);
   const prestacaoCheia = prestacao.filter((x) => x.aReceberNosso > 0);
   const cumpCheio = cumprimento.filter((x) => x.valorCalculo > 0);
   const cumpVazio = cumprimento.length - cumpCheio.length;
@@ -2045,6 +2047,8 @@ function CumprimentoTab() {
     nPrestacao: prestacao.length, aReceberPrestacao: r2(prestacao.reduce((s, x) => s + (x.aReceberNosso || 0), 0)),
     nCumprimento: cumprimento.length, brutoEmCumprimento: brutoCump, nossoEmCumprimento: r2(brutoCump * 0.4),
     nFavoraveis: favoraveis.length, estimadoFavoraveis: r2(favoraveis.reduce((s, x) => s + (x.estimado || 0), 0)),
+    nRepb: repbCheio.length, aReceberRepb: r2(repbCheio.reduce((s, x) => s + (x.aReceberNosso || 0), 0)),
+    acordadoRepb: r2(repbCheio.reduce((s, x) => s + (x.valorAcordo || 0), 0)), descontoRepb: r2(repbCheio.reduce((s, x) => s + (x.desconto || 0), 0)),
   };
 
   return (
@@ -2065,11 +2069,12 @@ function CumprimentoTab() {
         </div>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`mt-4 grid gap-3 sm:grid-cols-2 ${t.nRepb > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         <MiniStat label="A receber (nosso) — prestação" value={brl(t.aReceberPrestacao)} hint={`${t.nPrestacao} processo(s)`} accent="#2F9E44" />
         <MiniStat label="Em cumprimento (nosso ~40%)" value={brl(t.nossoEmCumprimento)} hint={`${t.nCumprimento} caso(s) · ${brl(t.brutoEmCumprimento)} bruto`} accent="#228BE6" />
         <MiniStat label="Sentenças favoráveis (estimado)" value={brl(t.estimadoFavoraveis)} hint={`${t.nFavoraveis} caso(s) · maior risco`} accent="#F59F00" />
-        <MiniStat label="Total a receber (nosso)" value={brl(t.aReceberPrestacao + t.nossoEmCumprimento + t.estimadoFavoraveis)} hint="prestação + 40% cumprimento + sentenças" accent="#7048E8" />
+        {t.nRepb > 0 && <MiniStat label="Acordos REPB (honorários)" value={brl(t.aReceberRepb)} hint={`${t.nRepb} acordo(s) · ${brl(t.acordadoRepb)} acordado`} accent="#B7791F" />}
+        <MiniStat label="Total a receber (nosso)" value={brl(t.aReceberPrestacao + t.nossoEmCumprimento + t.estimadoFavoraveis + t.aReceberRepb)} hint="prestação + 40% cumprimento + sentenças + REPB" accent="#7048E8" />
       </div>
 
       {/* Prestação de contas — nosso */}
@@ -2138,6 +2143,30 @@ function CumprimentoTab() {
                 <td className="px-2 py-1.5 text-right text-xs text-zinc-500">{/parcial/i.test(x.resultado || '') ? 'Parcial' : /procedente/i.test(x.resultado || '') ? 'Procedente' : (x.resultado || '—')}</td>
                 <td className="px-2 py-1.5 text-right text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.exito != null ? `êxito ${x.exito}%` : '—')}</td>
                 <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-amber-600">{x.estimado != null ? brl2(x.estimado) : '—'}</td>
+              </tr>
+            ))}
+          </CsTabela>
+        </Card>
+      )}
+
+      {/* Acordos REPB — êxito extrajudicial (honorários já são caixa nosso) */}
+      {repbCheio.length > 0 && (
+        <Card title="Acordos REPB — reestruturação de passivo (caixa nosso)" sub="acordos fechados na trilha REPB. Honorários do escritório = nosso; o desconto obtido é o ganho do cliente. Preenchido no card (fase Acordo/Concluído).">
+          <CsTabela cols={['Cliente', 'Dívida original', 'Acordo', 'Desconto', 'Honorários (nosso)']} widths={['28%', '18%', '18%', '18%', '18%']}
+            foot={<tr className="font-bold text-zinc-700 dark:text-zinc-100">
+              <td className="px-2 py-1.5">Total ({repbCheio.length})</td>
+              <td className="px-2 py-1.5" />
+              <td className="px-2 py-1.5 text-right tabular-nums text-[#B7791F]">{brl2(t.acordadoRepb)}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{brl2(t.descontoRepb)}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{brl2(t.aReceberRepb)}</td>
+            </tr>}>
+            {repbCheio.map((x) => (
+              <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="px-2 py-1.5"><VerProcesso id={x.caseId}>{titleCase(x.cliente || x.title)}</VerProcesso></td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{x.dividaOriginal ? brl2(x.dividaOriginal) : '—'}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-[#B7791F]">{x.valorAcordo ? brl2(x.valorAcordo) : '—'}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{x.desconto ? brl2(x.desconto) : '—'}</td>
+                <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-emerald-600">{brl2(x.honorariosNossos)}</td>
               </tr>
             ))}
           </CsTabela>
