@@ -25,6 +25,7 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
 import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { CommentsSection } from '@/features/activities/components/comments-section';
 import { MoverFaseManual } from '@/features/legal-cases/components/mover-fase-manual';
+import { DisponibilidadeModal } from '@/features/calendar/components/disponibilidade-modal';
 import { preferencesService } from '@/features/inbox/services/preferences.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -40,7 +41,7 @@ const TYPE_TAG: Record<Src, { label: string; bg: string }> = {
   tarefa: { label: 'Tarefa', bg: '#23CBFF' },
   evento: { label: 'Evento', bg: '#02883C' },
 };
-const KIND_LABEL: Record<EventKind, string> = { audiencia: 'Audiência', reuniao: 'Reunião', pericia: 'Perícia', tarefa: 'Tarefa', outro: 'Outro' };
+const KIND_LABEL: Record<EventKind, string> = { audiencia: 'Audiência', reuniao: 'Reunião', pericia: 'Perícia', tarefa: 'Tarefa', atendimento: 'Atendimento', outro: 'Outro' };
 const PRIORITY_LABEL: Record<string, string> = { LOW: 'Baixa', MEDIUM: 'Média', HIGH: 'Alta' };
 
 type ViewMode = 'list' | 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth';
@@ -254,6 +255,7 @@ export default function AgendaPage() {
   // Filtros (Astrea): Exibir tipo + Status + Pessoa
   const [fAtiv, setFAtiv] = useState(false);
   const [fAtrib, setFAtrib] = useState(false);
+  const [dispOpen, setDispOpen] = useState(false);
   const [exibir, setExibir] = useState({ tarefas: true, eventos: true });
   const [status, setStatus] = useState<'todas' | 'aconcluir' | 'concluidas' | 'canceladas'>('todas');
   const [personId, setPersonId] = useState<string>('all');
@@ -583,6 +585,7 @@ export default function AgendaPage() {
                 <button onClick={() => { setMoreMenu(false); router.push('/prazos'); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarClock className="h-4 w-4 text-zinc-400" /> Ver prazos</button>
               </div></>)}
           </div>
+          <button onClick={() => setDispOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800" title="Configurar meus horários de atendimento"><CalendarClock className="h-4 w-4 text-[#02883C]" /><span className="hidden sm:inline">Disponibilidade</span></button>
           <div className="relative">
             <button onClick={() => setAddMenu((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-md text-white hover:opacity-90" style={{ backgroundColor: ASTREA_BLUE }} title="Adicionar"><Plus className="h-5 w-5" /></button>
             {addMenu && (<><div className="fixed inset-0 z-10" onClick={() => setAddMenu(false)} />
@@ -743,6 +746,7 @@ export default function AgendaPage() {
       {dialog?.type === 'evento' && <CreateEventDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {dialog?.type === 'tarefa' && <CreateTaskDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {detail && <ActivityDetailModal activity={detail} onClose={() => setDetail(null)} onRefetch={refetchAll} onOpenCase={(id) => window.open(`/processos/${id}`, '_blank', 'noopener')} onOpenConversation={(id) => router.push(`/inbox?conversationId=${id}`)} />}
+      {dispOpen && <DisponibilidadeModal onClose={() => setDispOpen(false)} />}
     </div>
   );
 

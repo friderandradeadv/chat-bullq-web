@@ -1,6 +1,18 @@
 import { api } from '@/lib/api';
 
-export type EventKind = 'audiencia' | 'reuniao' | 'pericia' | 'tarefa' | 'outro';
+export type EventKind = 'audiencia' | 'reuniao' | 'pericia' | 'tarefa' | 'atendimento' | 'outro';
+
+// ── Agenda de atendimentos ──────────────────────────────────────────────
+export interface DisponibilidadeConfig {
+  enabled: boolean;
+  slotMinutes: number;
+  dias: Record<string, [string, string][]>; // { seg: [["09:00","12:00"]], ... }
+}
+export interface AtendimentoSlot { start: string; end: string }
+export const DIAS_SEMANA: { key: string; label: string }[] = [
+  { key: 'seg', label: 'Segunda' }, { key: 'ter', label: 'Terça' }, { key: 'qua', label: 'Quarta' },
+  { key: 'qui', label: 'Quinta' }, { key: 'sex', label: 'Sexta' }, { key: 'sab', label: 'Sábado' }, { key: 'dom', label: 'Domingo' },
+];
 
 export interface CalendarEvent {
   id: string;
@@ -65,5 +77,23 @@ export const calendarService = {
   },
   async remove(id: string): Promise<void> {
     await api.delete(`/calendar/${id}`);
+  },
+
+  // ── Atendimentos ──
+  async getDisponibilidade(userId?: string): Promise<DisponibilidadeConfig> {
+    const { data } = await api.get(`/calendar/atendimento/disponibilidade${userId ? `?userId=${userId}` : ''}`);
+    return data.data ?? data;
+  },
+  async setDisponibilidade(input: { userId?: string; enabled?: boolean; slotMinutes?: number; dias?: Record<string, [string, string][]> }): Promise<DisponibilidadeConfig> {
+    const { data } = await api.put('/calendar/atendimento/disponibilidade', input);
+    return data.data ?? data;
+  },
+  async slots(query: { userId: string; from?: string; to?: string; durationMin?: number }): Promise<AtendimentoSlot[]> {
+    const { data } = await api.get(`/calendar/atendimento/slots${qs(query)}`);
+    return data.data ?? data;
+  },
+  async agendarAtendimento(input: { userId: string; startsAt: string; durationMin?: number; title?: string; nome?: string; telefone?: string; caseId?: string; obs?: string }): Promise<CalendarEvent> {
+    const { data } = await api.post('/calendar/atendimento', input);
+    return data.data ?? data;
   },
 };
