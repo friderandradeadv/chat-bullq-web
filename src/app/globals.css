@@ -212,8 +212,11 @@
    cabeçalho já mostra — os dois passam a ter exatamente o mesmo tom. O destaque do
    "hoje" é reaplicado com especificidade maior pra não sumir. */
 .dark .fc .fc-daygrid-day,
-.dark .fc .fc-daygrid-day-frame { background-color: transparent; }
-.dark .fc .fc-daygrid-day.fc-day-today { background-color: var(--fc-today-bg-color); }
+.dark .fc .fc-daygrid-day-frame,
+.dark .fc .fc-col-header-cell,
+.dark .fc .fc-scrollgrid-section-header > *,
+.dark .fc thead { background-color: transparent !important; }
+.dark .fc .fc-daygrid-day.fc-day-today { background-color: var(--fc-today-bg-color) !important; }
 .dark .fc .fc-day-other .fc-daygrid-day-number { color: #52525b; }
 .dark .fc .fc-daygrid-more-link { color: #a1a1aa; }
 .dark .fc .fc-list-event:hover td { background: #1F2325; }

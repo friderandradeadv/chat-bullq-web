@@ -572,34 +572,9 @@ export default function AgendaPage() {
     // calendário rende na altura natural (height auto) e o conteúdo passa por
     // baixo da barra de vidro — nada de scroll preso dentro da grade de dias.
     <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">Agenda</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { refetchAll(); toast.success('Agenda atualizada'); }} className="flex h-9 w-9 items-center justify-center rounded-md border border-[#E9ECEF] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Atualizar"><RefreshCw className={`h-4 w-4 ${(evQ.isFetching || dlQ.isFetching || tkQ.isFetching || tagsQ.isFetching) ? 'animate-spin' : ''}`} /></button>
-          <div className="relative">
-            <button onClick={() => setMoreMenu((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-md border border-[#E9ECEF] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Mais"><MoreVertical className="h-4 w-4" /></button>
-            {moreMenu && (<><div className="fixed inset-0 z-10" onClick={() => setMoreMenu(false)} />
-              <div className="absolute right-0 top-11 z-20 w-52 overflow-hidden rounded-lg border border-[#E9ECEF] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                <button onClick={() => { refetchAll(); toast.success('Agenda atualizada'); setMoreMenu(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><RefreshCw className="h-4 w-4 text-zinc-400" /> Atualizar agenda</button>
-                <button onClick={() => { setMoreMenu(false); window.print(); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><List className="h-4 w-4 text-zinc-400" /> Imprimir</button>
-                <button onClick={() => { setMoreMenu(false); router.push('/prazos'); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarClock className="h-4 w-4 text-zinc-400" /> Ver prazos</button>
-              </div></>)}
-          </div>
-          <button onClick={() => setDispOpen(true)} className="flex h-9 items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800" title="Configurar meus horários de atendimento"><CalendarClock className="h-4 w-4 text-[#02883C]" /><span className="hidden sm:inline">Disponibilidade</span></button>
-          <div className="relative">
-            <button onClick={() => setAddMenu((v) => !v)} className="flex h-9 w-9 items-center justify-center rounded-md text-white hover:opacity-90" style={{ backgroundColor: ASTREA_BLUE }} title="Adicionar"><Plus className="h-5 w-5" /></button>
-            {addMenu && (<><div className="fixed inset-0 z-10" onClick={() => setAddMenu(false)} />
-              <div className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                <button onClick={() => openCreate('tarefa')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><ClipboardList className="h-4 w-4 text-[#23CBFF]" /> Tarefa</button>
-                <button onClick={() => openCreate('evento')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarDays className="h-4 w-4 text-[#02883C]" /> Evento</button>
-                <button onClick={() => openCreate('atendimento')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarClock className="h-4 w-4 text-[#B7791F]" /> Atendimento</button>
-              </div></>)}
-          </div>
-        </div>
-      </div>
-
-      {/* Barra de filtros */}
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+      {/* Barra superior ÚNICA (limpa, alinhada): filtros à esquerda, ações à direita.
+          Sem o título "Agenda" — a aba de navegação já indica onde estamos. */}
+      <div className="flex flex-wrap items-center gap-2 lg:gap-3">
         <div className="relative">
           <FilterBtn onClick={() => setViewMenu((v) => !v)}>{VIEW_LABEL[mode]}<ChevronDown className="h-3.5 w-3.5" /></FilterBtn>
           {viewMenu && (<><div className="fixed inset-0 z-10" onClick={() => setViewMenu(false)} />
@@ -672,6 +647,30 @@ export default function AgendaPage() {
         ) : (
           <button onClick={() => setSearchOpen(true)} className={`flex h-[38px] w-[38px] items-center justify-center rounded-lg border bg-white hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 ${searchQuery ? 'border-[#228BE6] text-[#228BE6]' : 'border-[#E9ECEF] text-zinc-500'}`} title="Buscar"><Search className="h-4 w-4" /></button>
         )}
+
+        {/* Ações — na MESMA linha dos filtros, empurradas pra direita (barra única, alinhada). */}
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => { refetchAll(); toast.success('Agenda atualizada'); }} className="flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-[#E9ECEF] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Atualizar"><RefreshCw className={`h-4 w-4 ${(evQ.isFetching || dlQ.isFetching || tkQ.isFetching || tagsQ.isFetching) ? 'animate-spin' : ''}`} /></button>
+          <div className="relative">
+            <button onClick={() => setMoreMenu((v) => !v)} className="flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-[#E9ECEF] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Mais"><MoreVertical className="h-4 w-4" /></button>
+            {moreMenu && (<><div className="fixed inset-0 z-10" onClick={() => setMoreMenu(false)} />
+              <div className="absolute right-0 top-11 z-20 w-52 overflow-hidden rounded-lg border border-[#E9ECEF] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                <button onClick={() => { refetchAll(); toast.success('Agenda atualizada'); setMoreMenu(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><RefreshCw className="h-4 w-4 text-zinc-400" /> Atualizar agenda</button>
+                <button onClick={() => { setMoreMenu(false); window.print(); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><List className="h-4 w-4 text-zinc-400" /> Imprimir</button>
+                <button onClick={() => { setMoreMenu(false); router.push('/prazos'); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarClock className="h-4 w-4 text-zinc-400" /> Ver prazos</button>
+              </div></>)}
+          </div>
+          <button onClick={() => setDispOpen(true)} className="flex h-[38px] items-center gap-1.5 rounded-lg border border-[#DEE2E6] px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800" title="Configurar meus horários de atendimento"><CalendarClock className="h-4 w-4 text-[#02883C]" /><span className="hidden sm:inline">Disponibilidade</span></button>
+          <div className="relative">
+            <button onClick={() => setAddMenu((v) => !v)} className="flex h-[38px] w-[38px] items-center justify-center rounded-lg text-white hover:opacity-90" style={{ backgroundColor: ASTREA_BLUE }} title="Adicionar"><Plus className="h-5 w-5" /></button>
+            {addMenu && (<><div className="fixed inset-0 z-10" onClick={() => setAddMenu(false)} />
+              <div className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                <button onClick={() => openCreate('tarefa')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><ClipboardList className="h-4 w-4 text-[#23CBFF]" /> Tarefa</button>
+                <button onClick={() => openCreate('evento')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarDays className="h-4 w-4 text-[#02883C]" /> Evento</button>
+                <button onClick={() => openCreate('atendimento')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarClock className="h-4 w-4 text-[#B7791F]" /> Atendimento</button>
+              </div></>)}
+          </div>
+        </div>
       </div>
 
       {/* Conteúdo */}
