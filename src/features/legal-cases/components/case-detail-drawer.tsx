@@ -164,7 +164,7 @@ export function CaseDetailDrawer({
       toast.success('Processo excluído');
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
       onClose();
-    } catch { toast.error('Erro ao excluir'); }
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao excluir'); }
   };
 
   return (
