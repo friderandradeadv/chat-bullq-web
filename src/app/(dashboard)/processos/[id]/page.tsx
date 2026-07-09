@@ -101,11 +101,13 @@ const getInstancia = (c: CaseDetail): string | null => {
 // o resto no quadro Fase Judicial. Ambos abrem a ficha via ?case=<id>.
 const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
 const kanbanHref = (c: CaseDetail): string => {
-  const base = c.legalPhase?.startsWith('plan_')
-    ? '/juridico/planejamento'
-    : c.legalPhase?.startsWith('banco_')
-      ? '/juridico/fase-bancaria'
-      : c.legalPhase && PRE_PHASES.has(c.legalPhase) ? '/juridico/pre-processual' : '/juridico/kanban';
+  const base = c.legalPhase?.startsWith('repb_')
+    ? '/juridico/repb'
+    : c.legalPhase?.startsWith('plan_')
+      ? '/juridico/planejamento'
+      : c.legalPhase?.startsWith('banco_')
+        ? '/juridico/fase-bancaria'
+        : c.legalPhase && PRE_PHASES.has(c.legalPhase) ? '/juridico/pre-processual' : '/juridico/kanban';
   return `${base}?case=${c.id}`;
 };
 
@@ -143,7 +145,7 @@ export default function ProcessoDetailPage() {
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       {/* Cabeçalho */}
-      <div className="px-4 pt-6 lg:px-6">
+      <div className="px-4 pt-3 lg:px-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{c.title}</h1>
