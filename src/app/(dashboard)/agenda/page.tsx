@@ -943,6 +943,7 @@ function Modal({ title, children, onClose, wide, headerRight }: { title: string;
 function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenConversation }: { activity: Activity; onClose: () => void; onRefetch: () => void; onOpenCase: (id: string) => void; onOpenConversation: (convId: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(activity.done);
+  const [cancelled, setCancelled] = useState(activity.cancelled);
   const [dateISO, setDateISO] = useState(activity.date);
   const [reMenu, setReMenu] = useState(false);
   const [miniCal, setMiniCal] = useState(false);
@@ -1056,13 +1057,15 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   };
 
   const del = async () => {
-    if (!confirm('Excluir esta atividade?')) return;
+    // Prazo é CANCELADO (soft, dá pra reabrir), não excluído de vez — deixa isso claro.
+    const isPrazo = activity.source === 'prazo';
+    if (!confirm(isPrazo ? 'Cancelar este prazo? (dá pra reabrir depois)' : 'Excluir esta atividade?')) return;
     setBusy(true);
     try {
-      if (activity.source === 'tarefa') await tasksService.remove(activity.rawId);
-      else if (activity.source === 'prazo') await deadlinesService.cancel(activity.rawId);
-      else await calendarService.remove(activity.rawId);
-      toast.success('Excluída'); onRefetch(); onClose();
+      if (activity.source === 'tarefa') { await tasksService.remove(activity.rawId); toast.success('Excluída'); onClose(); }
+      else if (activity.source === 'prazo') { await deadlinesService.cancel(activity.rawId); toast.success('Prazo cancelado'); setCancelled(true); setOptMenu(false); }
+      else { await calendarService.remove(activity.rawId); toast.success('Excluída'); onClose(); }
+      onRefetch();
     } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
   };
 
@@ -1174,7 +1177,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     // Concluir um PRAZO (não reabrir) → kanban vivo: recurso abre o mini-form
     // (espécie/motivo + aba Recursos); os demais avançam o card conforme a nossa
     // petição (réplica → provas; provas → perícia/instrução/julgamento…).
-    if (!done && activity.source === 'prazo' && activity.caseId) {
+    if (!done && !cancelled && activity.source === 'prazo' && activity.caseId) {
       const av = avancoDoPrazo(activity);
       if (av?.kind === 'recurso') { setRecursoForm(true); return; }
       if (av?.kind === 'move') { setAvancoForm(av); return; }
@@ -1184,7 +1187,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     try {
       if (activity.source === 'tarefa') { await tasksService.update(activity.rawId, { status: done ? 'TODO' : 'DONE' }); toast.success(done ? 'Tarefa reaberta' : 'Tarefa concluída'); setDone(!done); }
       else if (activity.source === 'evento') { await calendarService.update(activity.rawId, { completedAt: done ? null : new Date().toISOString() }); toast.success(done ? 'Compromisso reaberto' : 'Compromisso concluído'); setDone(!done); }
-      else { if (done) { await deadlinesService.update(activity.rawId, { status: 'OPEN' }); toast.success('Prazo reaberto'); setDone(false); } else { await deadlinesService.complete(activity.rawId, activity.fatal); toast.success('Prazo concluído'); setDone(true); } }
+      // Prazo: concluído OU cancelado → REABRE (status OPEN, volta pra agenda). Aberto → conclui.
+      else { if (done || cancelled) { await deadlinesService.update(activity.rawId, { status: 'OPEN' }); toast.success('Prazo reaberto'); setDone(false); setCancelled(false); } else { await deadlinesService.complete(activity.rawId, activity.fatal); toast.success('Prazo concluído'); setDone(true); } }
       onRefetch();
     } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
   };
@@ -1212,7 +1216,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             {clientConv && <button onClick={() => onOpenConversation(clientConv.id)} title="Abrir conversa do cliente" className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><MessageCircle className="h-4 w-4 text-[#25D366]" /></button>}
             <div className="relative">
               <button onClick={() => setOptMenu((v) => !v)} title="Opções" className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><MoreVertical className="h-4 w-4" /></button>
-              {optMenu && (<><div className="fixed inset-0 z-10" onClick={() => setOptMenu(false)} /><div className="absolute right-0 top-9 z-20 w-40 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"><button onClick={() => { setEditTitle(titleVal); setEditing(true); setOptMenu(false); }} className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">Editar</button><button disabled={busy} onClick={del} className="block w-full px-4 py-2 text-left text-sm text-[#CE0000] hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800">Excluir</button></div></>)}
+              {optMenu && (<><div className="fixed inset-0 z-10" onClick={() => setOptMenu(false)} /><div className="absolute right-0 top-9 z-20 w-40 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"><button onClick={() => { setEditTitle(titleVal); setEditing(true); setOptMenu(false); }} className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">Editar</button><button disabled={busy} onClick={del} className="block w-full px-4 py-2 text-left text-sm text-[#CE0000] hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800">{activity.source === 'prazo' ? 'Cancelar prazo' : 'Excluir'}</button></div></>)}
             </div>
             <button onClick={onClose} className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
           </div>
@@ -1455,8 +1459,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         </div>
 
         <div className="mt-4 flex justify-end">
-          {done
-            ? <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">Reabrir</button>
+          {done || cancelled
+            ? <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{cancelled ? 'Reabrir prazo' : 'Reabrir'}</button>
             : <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Check className="h-4 w-4" /> Concluir</button>}
         </div>
       </div>
