@@ -148,7 +148,7 @@ export default function DashboardLayout({
               no topo de cada página vem do `.under-bar` (globals). A classe `dark`
               mantém os controles (busca, toggle, sino, tema) e o logo SEMPRE claros
               (barra escura clássica). */}
-          <div className="topbar-glass dark absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center border-b border-white/10 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] lg:flex">
+          <div className="topbar-glass dark absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center px-4 lg:flex">
             {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início). */}
             {simples && (
               <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
