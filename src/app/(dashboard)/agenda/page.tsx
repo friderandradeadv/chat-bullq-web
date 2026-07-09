@@ -573,8 +573,9 @@ export default function AgendaPage() {
     // baixo da barra de vidro — nada de scroll preso dentro da grade de dias.
     <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
       {/* Barra superior ÚNICA (limpa, alinhada): filtros à esquerda, ações à direita.
-          Sem o título "Agenda" — a aba de navegação já indica onde estamos. */}
-      <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+          Sem o título "Agenda" — a aba de navegação já indica onde estamos. Todos os
+          controles com a MESMA altura (38px), borda e raio, pra ficar coeso. */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <FilterBtn onClick={() => setViewMenu((v) => !v)}>{VIEW_LABEL[mode]}<ChevronDown className="h-3.5 w-3.5" /></FilterBtn>
           {viewMenu && (<><div className="fixed inset-0 z-10" onClick={() => setViewMenu(false)} />
@@ -660,7 +661,7 @@ export default function AgendaPage() {
                 <button onClick={() => { setMoreMenu(false); router.push('/prazos'); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarClock className="h-4 w-4 text-zinc-400" /> Ver prazos</button>
               </div></>)}
           </div>
-          <button onClick={() => setDispOpen(true)} className="flex h-[38px] items-center gap-1.5 rounded-lg border border-[#DEE2E6] px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800" title="Configurar meus horários de atendimento"><CalendarClock className="h-4 w-4 text-[#02883C]" /><span className="hidden sm:inline">Disponibilidade</span></button>
+          <button onClick={() => setDispOpen(true)} className="flex h-[38px] items-center gap-1.5 rounded-lg border border-[#E9ECEF] bg-white px-3 text-[13px] font-medium text-[#495057] hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800" title="Configurar meus horários de atendimento"><CalendarClock className="h-4 w-4 text-[#02883C]" /><span className="hidden sm:inline">Disponibilidade</span></button>
           <div className="relative">
             <button onClick={() => setAddMenu((v) => !v)} className="flex h-[38px] w-[38px] items-center justify-center rounded-lg text-white hover:opacity-90" style={{ backgroundColor: ASTREA_BLUE }} title="Adicionar"><Plus className="h-5 w-5" /></button>
             {addMenu && (<><div className="fixed inset-0 z-10" onClick={() => setAddMenu(false)} />

@@ -193,10 +193,10 @@
 /* Dark mode da agenda (FullCalendar): cinza escuro (NÃO preto puro) + eventos
    com preenchimento escuro de baixo contraste — sem "estourar" em branco. */
 .dark .fc {
-  --fc-page-bg-color: #101315;            /* Agenda mais escura (cinza neutro, +escuro que o resto) */
-  --fc-neutral-bg-color: #1B1F21;         /* all-day / desabilitado */
-  --fc-border-color: #2A2F31;             /* divisórias discretas */
-  --fc-today-bg-color: rgba(34, 139, 230, 0.10);
+  --fc-page-bg-color: #050607;            /* grade BEM escura (quase preto) — máximo contraste com os eventos */
+  --fc-neutral-bg-color: #0d1012;         /* all-day / desabilitado */
+  --fc-border-color: #24282b;             /* divisórias discretas sobre o fundo escuro */
+  --fc-today-bg-color: rgba(34, 139, 230, 0.12);
   color: #e4e4e7;                          /* zinc-200 */
 }
 .dark .fc .fc-col-header-cell-cushion,
@@ -207,16 +207,16 @@
 .dark .fc .fc-list-day-side-text {
   color: #a1a1aa;                          /* zinc-400 */
 }
-/* Igualar o fundo das células dos dias ao tom escuro do cabeçalho (DOM/SEG/TER…):
-   as células ficam TRANSPARENTES e mostram o mesmo fundo escuro do container que o
-   cabeçalho já mostra — os dois passam a ter exatamente o mesmo tom. O destaque do
-   "hoje" é reaplicado com especificidade maior pra não sumir. */
+/* Grade e cabeçalho (DOM/SEG/TER…) no MESMO tom bem escuro (#050607) — dá contraste
+   forte com os eventos coloridos. O destaque do "hoje" é reaplicado com
+   especificidade maior pra não sumir sob o fundo escuro. */
 .dark .fc .fc-daygrid-day,
 .dark .fc .fc-daygrid-day-frame,
 .dark .fc .fc-col-header-cell,
 .dark .fc .fc-scrollgrid-section-header > *,
-.dark .fc thead { background-color: transparent !important; }
-.dark .fc .fc-daygrid-day.fc-day-today { background-color: var(--fc-today-bg-color) !important; }
+.dark .fc thead { background-color: #050607 !important; }
+.dark .fc .fc-day-today,
+.dark .fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-frame { background-color: var(--fc-today-bg-color) !important; }
 .dark .fc .fc-day-other .fc-daygrid-day-number { color: #52525b; }
 .dark .fc .fc-daygrid-more-link { color: #a1a1aa; }
 .dark .fc .fc-list-event:hover td { background: #1F2325; }
