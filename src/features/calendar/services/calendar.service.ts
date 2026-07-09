@@ -13,7 +13,12 @@ export interface CalendarEvent {
   assignedTo: { id: string; name: string; avatarUrl: string | null } | null;
   case: { id: string; title: string; cnjNumber: string | null } | null;
   createdAt?: string | null;
-  metadata?: { completedAt?: string | null; coResponsibleIds?: string[] } & Record<string, unknown>;
+  metadata?: {
+    completedAt?: string | null;
+    coResponsibleIds?: string[];
+    /** Antecedências dos lembretes, em MINUTOS (ex.: [1440, 60]). */
+    reminders?: number[];
+  } & Record<string, unknown>;
 }
 
 export interface CreateEventInput {
@@ -24,6 +29,8 @@ export interface CreateEventInput {
   location?: string;
   caseId?: string;
   assignedToId?: string;
+  /** Antecedências dos lembretes, em MINUTOS. Omitir = padrão (1 dia + 1 hora). */
+  reminders?: number[];
 }
 
 export interface ListEventsQuery {
