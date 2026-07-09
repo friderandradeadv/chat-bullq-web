@@ -19,7 +19,7 @@ import { useDisconnectedChannels } from '@/features/notifications/use-disconnect
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#182028]">
+    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#15181A]">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -52,7 +52,7 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label="Navegação principal"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#182028]/95 lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-zinc-200 bg-white/95 pb-safe backdrop-blur-md dark:border-white/10 dark:bg-[#15181A]/95 lg:hidden"
     >
       <button type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>
         <span className="relative">

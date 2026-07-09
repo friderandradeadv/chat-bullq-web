@@ -33,42 +33,42 @@
 }
 
 .dark {
-  /* Dark "WhatsApp" — azul-carvão frio e equilibrado (nem preto, nem cinza
-     leitoso). Segue o tom do WhatsApp Web, com o fundo da página levemente mais
-     claro que o do app (#111b21) pra não ficar escuro demais. Hierarquia de
+  /* Dark "WhatsApp" — cinza-ardósia NEUTRO (quase sem matiz), no tom do app
+     mobile: escuro e sóbrio, NADA de azul. A sensação de equilíbrio vem das
+     CAMADAS (card mais claro que o fundo), não de uma cor puxada. Hierarquia de
      superfícies: fundo < card < elevado. */
-  --color-background: #182028;          /* fundo da página */
+  --color-background: #15181A;          /* fundo da página */
   --color-foreground: oklch(0.985 0 0);
-  --color-card: #202C33;                /* cards / colunas / painéis (tom WhatsApp) */
+  --color-card: #1F2325;                /* cards / colunas / painéis */
   --color-card-foreground: oklch(0.985 0 0);
-  --color-popover: #202C33;
+  --color-popover: #1F2325;
   --color-popover-foreground: oklch(0.985 0 0);
   --color-primary: oklch(0.708 0.165 254.624);
   --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: #2A3942;           /* elevado / hover (tom WhatsApp) */
+  --color-secondary: #2A2F31;           /* elevado / hover */
   --color-secondary-foreground: oklch(0.985 0 0);
-  --color-muted: #2A3942;
+  --color-muted: #2A2F31;
   --color-muted-foreground: oklch(0.708 0 0);
-  --color-accent: #2A3942;
+  --color-accent: #2A2F31;
   --color-accent-foreground: oklch(0.985 0 0);
   --color-destructive: oklch(0.577 0.245 27.325);
-  --color-border: #2F3B44;
-  --color-input: #2F3B44;
+  --color-border: #2E3335;
+  --color-input: #2E3335;
   --color-ring: oklch(0.708 0.165 254.624);
-  --color-sidebar: #182028;
+  --color-sidebar: #15181A;
   --color-sidebar-foreground: oklch(0.985 0 0);
-  --color-sidebar-border: #2F3B44;
-  --color-sidebar-accent: #2A3942;
+  --color-sidebar-border: #2E3335;
+  --color-sidebar-accent: #2A2F31;
   --color-sidebar-accent-foreground: oklch(0.985 0 0);
 
-  /* Vira a escala zinc de preto → azul-carvão WhatsApp numa tacada (a plataforma
+  /* Vira a escala zinc de preto → cinza-ardósia neutro numa tacada (a plataforma
      usa muito dark:bg-zinc-900/800/950 e dark:border-zinc-800). Como no Tailwind
      v4 essas cores são var(), redefini-las aqui reflete em TODA a plataforma
      (kanban, agenda, financeiro, sidebar…) sem mexer arquivo por arquivo. */
-  --color-zinc-950: #182028;   /* era #09090b (quase preto) → fundo */
-  --color-zinc-900: #202C33;   /* era #18181b → cards/colunas/painéis */
-  --color-zinc-800: #2A3942;   /* era #27272a → hover/bordas/secundário */
-  --color-zinc-700: #374750;   /* era #3f3f46 → bordas/divisores mais fortes */
+  --color-zinc-950: #15181A;   /* era #09090b (quase preto) → fundo */
+  --color-zinc-900: #1F2325;   /* era #18181b → cards/colunas/painéis */
+  --color-zinc-800: #2A2F31;   /* era #27272a → hover/bordas/secundário */
+  --color-zinc-700: #3A4042;   /* era #3f3f46 → bordas/divisores mais fortes */
 }
 
 @layer base {
@@ -193,9 +193,9 @@
 /* Dark mode da agenda (FullCalendar): cinza escuro (NÃO preto puro) + eventos
    com preenchimento escuro de baixo contraste — sem "estourar" em branco. */
 .dark .fc {
-  --fc-page-bg-color: #182028;            /* azul-carvão WhatsApp (não preto) */
-  --fc-neutral-bg-color: #202C33;         /* all-day / desabilitado */
-  --fc-border-color: #2F3B44;             /* divisórias discretas */
+  --fc-page-bg-color: #101315;            /* Agenda mais escura (cinza neutro, +escuro que o resto) */
+  --fc-neutral-bg-color: #1B1F21;         /* all-day / desabilitado */
+  --fc-border-color: #2A2F31;             /* divisórias discretas */
   --fc-today-bg-color: rgba(34, 139, 230, 0.10);
   color: #e4e4e7;                          /* zinc-200 */
 }
@@ -209,9 +209,9 @@
 }
 .dark .fc .fc-day-other .fc-daygrid-day-number { color: #52525b; }
 .dark .fc .fc-daygrid-more-link { color: #a1a1aa; }
-.dark .fc .fc-list-event:hover td { background: #202C33; }
-.dark .fc .fc-popover { background: #182028; border-color: #2F3B44; }
-.dark .fc .fc-popover-header { background: #202C33; color: #e4e4e7; }
+.dark .fc .fc-list-event:hover td { background: #1F2325; }
+.dark .fc .fc-popover { background: #101315; border-color: #2A2F31; }
+.dark .fc .fc-popover-header { background: #1F2325; color: #e4e4e7; }
 /* Preenchimento dos eventos no escuro — sobrescreve as cores CLARAS inline
    (#DAF3FF / #D3F8E5 / #F1F3F4) por tons escuros. As tirinhas coloridas do topo
    (tipo/etiqueta, estilo Astrea) são REAPLICADAS depois, com a mesma
@@ -226,8 +226,8 @@
   border-color: #1a6043 !important;
 }
 .dark .fc .ag-done {
-  background-color: #202C33 !important;      /* azul-carvão — cumprido/cancelado */
-  border-color: #202C33 !important;
+  background-color: #1F2325 !important;      /* cinza neutro — cumprido/cancelado */
+  border-color: #1F2325 !important;
   opacity: 0.5 !important;                    /* recua o chip inteiro (some o "branco") */
 }
 .dark .fc .ag-tarefa .fc-event-title, .dark .fc .ag-tarefa .fc-event-time,
@@ -346,7 +346,7 @@
   pointer-events: none;
   z-index: 4;
 }
-.dark .ag-newdot { box-shadow: 0 0 0 1.5px #182028; }
+.dark .ag-newdot { box-shadow: 0 0 0 1.5px #15181A; }
 
 /* ── Hub / página de boas-vindas (/inicio) — "sempre uma festa" ── */
 @keyframes confetti-fall {
@@ -382,19 +382,20 @@
    baixo. A barra fica escura (controles claros, classe literal `dark`) nos 2 modos.
    !important pra vencer o `bg-[#1D2125]` utilitário. */
 .topbar-glass {
-  /* MODO CLARO: MESMA cor do modo escuro (#182028). Sobre página branca, pra
+  /* MODO CLARO: MESMA cor do modo escuro (#15181A). Sobre página branca, pra
      ficar exatamente nesse tom, o vidro precisa ser quase sólido (translucidez
      de verdade no claro só existe clareando a cor). Prioriza a cor igual ao dark. */
-  background: rgba(24, 32, 40, 0.96) !important;
+  background: rgba(21, 24, 26, 0.96) !important;
   -webkit-backdrop-filter: blur(30px) saturate(1.15);
   backdrop-filter: blur(30px) saturate(1.15);
 }
-/* MODO ESCURO: BEM translúcido, sem escurecer (o fundo já é escuro) — o blur
-   revela bastante o conteúdo borrado por baixo ao rolar. */
+/* MODO ESCURO: cabeçalho SÓLIDO (estilo WhatsApp) — antes era bem translúcido e
+   o conteúdo borrado por baixo "vazava" pro corpo ao rolar. Agora é uma faixa
+   sólida e limpa, com borda inferior nítida separando do conteúdo. */
 .dark .topbar-glass {
-  background: rgba(24, 32, 40, 0.14) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(1.2);
-  backdrop-filter: blur(30px) saturate(1.2);
+  background: #15181A !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 @media (min-width: 1024px) {
   /* respiro no topo de cada página: altura da barra (2.75rem) + folga (1rem) pra
