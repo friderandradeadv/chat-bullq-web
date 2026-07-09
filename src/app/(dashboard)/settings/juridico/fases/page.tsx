@@ -7,16 +7,17 @@ import { toast } from 'sonner';
 import { ArrowLeft, ArrowUp, ArrowDown, Eye, EyeOff, Trash2, Plus, Save, Columns3, RotateCcw } from 'lucide-react';
 import { legalCasesService, type PhaseConfig } from '@/features/legal-cases/services/legal-cases.service';
 
-type Bucket = 'pre' | 'banco' | 'plan' | 'judicial';
+type Bucket = 'pre' | 'banco' | 'plan' | 'repb' | 'judicial';
 interface Item { key: string; label: string; lane: 'pre' | 'judicial'; bucket: Bucket; custom: boolean; hidden: boolean }
 
 const BUCKETS: { id: Bucket; title: string; hint: string; accent: string }[] = [
   { id: 'pre', title: 'Pré-Processual', hint: 'Do contrato ao protocolo', accent: '#e11970' },
   { id: 'banco', title: 'Fase Bancária Investigativa', hint: 'Investigação RMC/RCC × bancos', accent: '#228BE6' },
   { id: 'plan', title: 'Planejamento Previdenciário', hint: 'Do contrato à entrega do planejamento', accent: '#12B886' },
+  { id: 'repb', title: 'REPB — Reestruturação de Passivo', hint: 'Auditoria + provisionamento até o acordo', accent: '#B7791F' },
   { id: 'judicial', title: 'Fase Judicial', hint: 'Do ajuizamento ao arquivamento', accent: '#7048e8' },
 ];
-const bucketOf = (key: string, lane: 'pre' | 'judicial'): Bucket => (key.startsWith('plan_') ? 'plan' : key.startsWith('banco_') ? 'banco' : lane === 'pre' ? 'pre' : 'judicial');
+const bucketOf = (key: string, lane: 'pre' | 'judicial'): Bucket => (key.startsWith('repb_') ? 'repb' : key.startsWith('plan_') ? 'plan' : key.startsWith('banco_') ? 'banco' : lane === 'pre' ? 'pre' : 'judicial');
 const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24);
 
 export default function FasesSettingsPage() {
@@ -68,7 +69,7 @@ export default function FasesSettingsPage() {
   };
   const addPhase = (bucket: Bucket) => {
     const lane: 'pre' | 'judicial' = bucket === 'judicial' ? 'judicial' : 'pre';
-    const prefix = bucket === 'banco' ? 'banco_' : 'custom_';
+    const prefix = bucket === 'banco' ? 'banco_' : bucket === 'repb' ? 'repb_' : bucket === 'plan' ? 'plan_' : 'custom_';
     const key = `${prefix}${slug('nova fase')}_${Math.random().toString(36).slice(2, 7)}`;
     const novo: Item = { key, label: 'Nova fase', lane, bucket, custom: true, hidden: false };
     setItems((xs) => {

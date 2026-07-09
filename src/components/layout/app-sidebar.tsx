@@ -35,6 +35,7 @@ import {
   Users,
   BarChart3,
   Landmark,
+  Banknote,
   Stethoscope,
   Sparkles,
   HelpCircle,
@@ -291,6 +292,7 @@ export function AppSidebar() {
                 <NavSection label="Kanbans" variant="sub" defaultOpen={false}>
                   <NavItem href="/juridico/pre-processual" icon={Workflow} label="Pré-Processual" badge={preUnseen} />
                   <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
+                  <NavItem href="/juridico/repb" icon={Banknote} label="REPB — Reestruturação de Passivo" />
                   <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
                   <NavItem href="/juridico/planejamento" icon={TrendingUp} label="Planejamento Previdenciário" />
                   <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />

@@ -324,7 +324,7 @@ export const legalCasesService = {
     return data.data ?? data;
   },
   async kanban(
-    query: { responsibleId?: string; area?: string; search?: string; lane?: 'pre' | 'judicial' | 'banco' | 'plan' } = {},
+    query: { responsibleId?: string; area?: string; search?: string; lane?: 'pre' | 'judicial' | 'banco' | 'plan' | 'repb' } = {},
   ): Promise<KanbanData> {
     const { data } = await api.get(`/legal-cases/kanban${qs(query)}`);
     const kb: KanbanData = data.data ?? data;
