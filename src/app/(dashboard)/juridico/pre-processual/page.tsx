@@ -15,6 +15,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits';
+import { boardOfPhase } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePreSeenStore } from '@/stores/pre-seen-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -81,10 +82,13 @@ export default function PreProcessualPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'pre' }), refetchInterval: 60_000 });
-  // Exclui a trilha bancária (banco_*), o planejamento previdenciário (plan_*) e o
-  // Processo Administrativo INSS (inss_admin): cada um tem board próprio (Fase
-  // Bancária / Planejamento Previdenciário / INSS Administrativo).
-  const phases = (data?.phases ?? []).filter((p) => p.lane === 'pre' && !p.key.startsWith('banco_') && !p.key.startsWith('plan_') && p.key !== 'inss_admin');
+  // Só as fases DESTE quadro. `boardOfPhase` isola cada trilha por prefixo — banco_*
+  // (Fase Bancária), plan_* (Planejamento), repb_* (REPB) e inss_admin (INSS) têm
+  // board próprio e NÃO podem aparecer aqui. Usar o helper (em vez de listar prefixo
+  // a prefixo) evita que uma trilha nova volte a vazar no Pré-Processual — foi o que
+  // aconteceu com o REPB, cujas fases (03. FASE BANCÁRIA INVESTIGATIVA / 04. EM
+  // PROVISIONAMENTO) apareciam repetidas depois do protocolo.
+  const phases = (data?.phases ?? []).filter((p) => boardOfPhase(p.key, p.lane) === 'pre');
   const cards = data?.cards ?? [];
 
   const resps = useMemo(() => {
