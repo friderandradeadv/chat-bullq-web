@@ -165,8 +165,10 @@ export function SidebarLayout({
           </div>
         </div>
 
-        {/* Page content */}
-        <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden lg:bg-white lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10">
+        {/* Page content — no ESCURO usa a MESMA cor da página (#15181A) e sem anel
+            claro: o "card" mais claro (#1F2325) criava uma faixa clara vazando no
+            vão entre o cabeçalho e os filtros. No claro mantém o card branco. */}
+        <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden lg:bg-white lg:shadow-sm lg:ring-1 lg:ring-zinc-950/5 dark:lg:bg-zinc-950 dark:lg:ring-transparent">
           <SidebarCollapseContext.Provider value={{ collapsed, toggle: toggleCollapsed }}>
             {children}
           </SidebarCollapseContext.Provider>
