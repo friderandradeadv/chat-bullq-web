@@ -399,7 +399,17 @@ export function CaseDetailDrawer({
             {/* REPB: acompanhamento dos malotes/protocolos (bucket estável, todas as
                 fases repb_). Fica visível em qualquer fase da trilha de reestruturação. */}
             {c && phaseKey?.startsWith('repb_') && (
-              <RepbMalote caseId={c.id} lista={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} />
+              <>
+                <a
+                  href={`/juridico/calculos/provisionamento?case=${c.id}&cliente=${encodeURIComponent(cliente?.name ?? c.title ?? '')}&banco=${encodeURIComponent(adversa?.name ?? '')}`}
+                  target="_blank" rel="noreferrer"
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-[#B7791F]/10"
+                  style={{ borderColor: '#B7791F55', color: '#B7791F' }}
+                >
+                  <Calculator className="h-4 w-4" /> Calculadora de provisionamento
+                </a>
+                <RepbMalote caseId={c.id} lista={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} />
+              </>
             )}
 
             {/* Avanço rápido pós-sentença (kanban vivo): move o card e preenche os

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import {
   ArrowRight,
+  Banknote,
   Briefcase,
   Calculator,
   Gavel,
@@ -45,12 +46,12 @@ const CALCULADORAS: Calc[] = [
     disponivel: false,
   },
   {
-    href: '#',
-    titulo: 'Provisionamento Bancário',
+    href: '/juridico/calculos/provisionamento',
+    titulo: 'Provisionamento Bancário (REPB)',
     descricao:
-      'Provisão de risco/êxito da carteira de ações bancárias para planejamento financeiro do escritório.',
-    icon: Calculator,
-    disponivel: false,
+      'Estima quanto o banco já provisionou a dívida (Res. CMN 4.966/21, por atraso × carteira) e sugere a proposta de acordo. Linkado aos cards do REPB.',
+    icon: Banknote,
+    disponivel: true,
   },
   {
     href: '#',
