@@ -19,7 +19,7 @@ import { useNavMode, barItemById, DEFAULT_SIMPLE_BAR } from '@/stores/nav-mode-s
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#1D2125]">
+    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#182028]">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -58,7 +58,7 @@ export function SimpleTabBar() {
   return (
     <nav
       aria-label="Atalhos"
-      className="fixed inset-x-0 bottom-0 z-30 hidden items-stretch border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-white/10 dark:bg-[#1D2125]/95 lg:flex"
+      className="fixed inset-x-0 bottom-0 z-30 hidden items-stretch border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-white/10 dark:bg-[#182028]/95 lg:flex"
     >
       {items.map((it) => {
         const Icon = it.icon;

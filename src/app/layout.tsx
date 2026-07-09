@@ -51,7 +51,7 @@ export const viewport: Viewport = {
   // Cor da barra de status/tema no PWA instalado — acompanha o tema do SO.
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#1D2125' },
+    { media: '(prefers-color-scheme: dark)', color: '#182028' },
   ],
 };
 
