@@ -135,6 +135,64 @@ export const FASE_FORMS: Record<string, Field[]> = {
   abandonado: [{ key: 'motivo', label: 'Motivo', type: 'textarea' }],
   perdidos_valeska: [{ key: 'motivo', label: 'Motivo', type: 'textarea' }],
   jackson: [{ key: 'obs', label: 'Observações', type: 'textarea' }],
+
+  // ── Trilha REPB (reestruturação de passivo bancário) — espelha o Fluxo REPB ──
+  repb_novo_cliente: [
+    { key: 'onboarding', label: 'Onboarding', type: 'checklist', options: ['Senha GOV solicitada', 'Formulário de dívidas preenchido', 'Reunião de apresentação agendada', 'Análise documental iniciada'] },
+    { key: 'tipo_pessoa', label: 'Pessoa', type: 'radio', options: ['Pessoa Física', 'Pessoa Jurídica'] },
+    { key: 'obs', label: 'Observações', type: 'textarea' },
+  ],
+  repb_docs_faltantes: [
+    { key: 'levantamento', label: 'Levantamento das dívidas — documentos', type: 'checklist', options: ['Extratos bancários (5 anos)', 'Contratos bancários', 'Boletos / planilhas de cobrança', 'SCR + Registrato (BACEN)', 'Histórico bancário (10 anos)', 'Demonstrativo de evolução da dívida', 'Protestos / cartórios', 'Serasa / SPC / Boa Vista'] },
+    { key: 'adimplencia', label: 'Situação do cliente', type: 'radio', options: ['Adimplente', 'Inadimplente'] },
+    { key: 'obs', label: 'Documentos ainda faltantes', type: 'textarea' },
+  ],
+  repb_investigativa: [
+    { key: 'auditoria', label: 'Auditoria contratual — pontos verificados', type: 'checklist', options: ['Taxa de juros × séries temporais BACEN', 'Capitalização (periodicidade pactuada?)', 'Seguro (autorização expressa?)', 'Tarifas', 'Vendas casadas'] },
+    { key: 'abusividade', label: 'Encontrou abusividade?', type: 'radio', options: ['Sim', 'Não'] },
+    { key: 'dossie', label: 'Dossiê (parecer técnico + contábil)', type: 'radio', options: ['Em produção', 'Concluído'] },
+    { key: 'obs', label: 'Anotações da investigação', type: 'textarea' },
+  ],
+  repb_provisionamento: [
+    { key: 'saldo_devedor', label: 'Saldo devedor (dívida)', type: 'currency' },
+    { key: 'valor_provisionado', label: 'Valor provisionado pelo banco', type: 'currency' },
+    { key: 'pct_provisionado', label: '% provisionado', type: 'text' },
+    { key: 'proposta_acordo', label: 'Proposta de acordo (alvo)', type: 'currency' },
+    { key: 'janela', label: 'Janela de negociação', type: 'radio', options: ['Aguardando janela', 'Fechamento de balanço (Out–Dez)', '100% provisionado', 'Arrasto', 'Mudança para Estágio 3'] },
+    { key: 'obs', label: 'Anotações do provisionamento', type: 'textarea' },
+  ],
+  repb_negociacao: [
+    { key: 'interlocutor', label: 'Interlocutor (banco / assessoria / advogado)', type: 'text' },
+    { key: 'proposta_enviada', label: 'Proposta enviada', type: 'currency' },
+    { key: 'contraproposta', label: 'Contraproposta do banco', type: 'currency' },
+    { key: 'status', label: 'Status da negociação', type: 'radio', options: ['Em negociação', 'Acordo aceito', 'Recusado'] },
+    { key: 'obs', label: 'Anotações da negociação', type: 'textarea' },
+  ],
+  repb_acao_judicial: [
+    { key: 'tipo_acao', label: 'Tipo de ação', type: 'select', options: ['Ação revisional', 'Superendividamento (Lei 14.181/21)', 'Ação de exibição de documento', 'Embargos à execução', 'Ação declaratória de nulidade', 'Produção antecipada de prova', 'Defesa (banco × cliente)'] },
+    { key: 'cnj', label: 'Número do processo (CNJ)', type: 'text' },
+    { key: 'retorna_repb', label: 'Volta ao REPB ao obter os contratos?', type: 'radio', options: ['Sim', 'Não'] },
+    { key: 'obs', label: 'Anotações da ação', type: 'textarea' },
+  ],
+  repb_acordo: [
+    { key: 'valor_acordo', label: 'Valor do acordo', type: 'currency' },
+    { key: 'forma', label: 'Forma de pagamento', type: 'radio', options: ['À vista', 'Parcelado'] },
+    { key: 'parcelas', label: 'Parcelas (se parcelado)', type: 'text' },
+    { key: 'homologado', label: 'Acordo homologado?', type: 'radio', options: ['Sim', 'Não', 'Não aplicável'] },
+    { key: 'obs', label: 'Cumprimento / obrigações', type: 'textarea' },
+  ],
+  // CONCLUÍDO — valores do acordo fechado (fonte para o Financeiro/rateio de êxito).
+  repb_concluido: [
+    { key: 'valor_divida_original', label: 'Valor original da dívida', type: 'currency' },
+    { key: 'valor_acordo', label: 'Valor do acordo', type: 'currency' },
+    { key: 'valor_desconto', label: 'Valor do desconto obtido', type: 'currency' },
+    { key: 'pct_desconto', label: '% de desconto', type: 'text' },
+    { key: 'honorarios', label: 'Honorários do escritório', type: 'currency' },
+    { key: 'parte_cliente', label: 'Parte do cliente', type: 'currency' },
+    { key: 'parte_escritorio', label: 'Parte do escritório', type: 'currency' },
+    { key: 'obs', label: 'Anotações do encerramento', type: 'textarea' },
+  ],
+  repb_inviavel: [{ key: 'motivo', label: 'Motivo da inviabilidade', type: 'textarea' }],
 };
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';

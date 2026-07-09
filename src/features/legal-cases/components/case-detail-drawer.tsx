@@ -14,6 +14,7 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
+import { RepbMalote } from './repb-malote';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
@@ -393,6 +394,12 @@ export function CaseDetailDrawer({
               <div className="mt-5">
                 <FaseFields caseId={c.id} phase={phaseKey} data={faseData} />
               </div>
+            )}
+
+            {/* REPB: acompanhamento dos malotes/protocolos (bucket estável, todas as
+                fases repb_). Fica visível em qualquer fase da trilha de reestruturação. */}
+            {c && phaseKey?.startsWith('repb_') && (
+              <RepbMalote caseId={c.id} lista={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} />
             )}
 
             {/* Avanço rápido pós-sentença (kanban vivo): move o card e preenche os
