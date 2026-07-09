@@ -14,7 +14,7 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
-import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits';
+import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
@@ -86,6 +86,19 @@ export default function PlanejamentoPage() {
       toast.error(err?.response?.data?.message || 'Só sócios podem renomear fases');
     }
   };
+  const deletePhase = async (phase: KanbanPhase) => {
+    const msg = phase.custom
+      ? `Excluir a fase "${phase.label}"? Só é possível se não houver processos nela.`
+      : `Esconder a fase "${phase.label}" do quadro? Os processos nela continuam existindo — você reexibe em Configurações › Fases.`;
+    if (!confirm(msg)) return;
+    try {
+      const res = await legalCasesService.deletePhase(phase.key);
+      toast.success(res.mode === 'hidden' ? 'Fase escondida' : 'Fase excluída');
+      qc.invalidateQueries({ queryKey: KEY });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao remover fase');
+    }
+  };
 
   const move = async (card: KanbanCard, to: string) => {
     if (card.phase === to) return;
@@ -136,8 +149,9 @@ export default function PlanejamentoPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} canRename={canRename} onRename={renamePhase} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} />
             ))}
+            {!isLoading && canRename && <AddPhaseColumn board="plan" accent={ACCENT} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
           </div>
           <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
         </DndContext>
@@ -150,12 +164,12 @@ export default function PlanejamentoPage() {
   );
 }
 
-function Column({ phase, items, onOpen, canRename, onRename }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; canRename: boolean; onRename: (key: string, label: string) => void }) {
+function Column({ phase, items, onOpen, canRename, onRename, onDelete }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   return (
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#12B886] bg-[#12B886]/5 dark:bg-[#12B886]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">

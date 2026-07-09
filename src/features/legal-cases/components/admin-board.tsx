@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
+import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/legal-cases/components/kanban-card-bits';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
+import { useAuthStore } from '@/stores/auth-store';
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -48,6 +50,8 @@ export interface AdminBoardProps {
   columnsFromPhases?: (p: KanbanPhase) => boolean;
   /** trilha do board — escopa a busca no servidor (performance). */
   lane?: 'pre' | 'judicial' | 'banco';
+  /** habilita gerência de fases inline (renomear/excluir/criar) neste quadro — só sócios. */
+  manageBoard?: KanbanBoardId;
 }
 
 /**
@@ -55,12 +59,32 @@ export interface AdminBoardProps {
  * os cards do kanban jurídico, filtra pela trilha e agrupa por PRODUTO em colunas.
  * Cards clicáveis abrem a ficha (sem drag — a trilha não é uma fase movível).
  */
-export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases, lane }: AdminBoardProps) {
+export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases, lane, manageBoard }: AdminBoardProps) {
   // queryKey por lane (mesma convenção dos demais boards) — evita colisão de cache.
   const KEY = ['legal-cases', 'kanban', lane ?? 'all'];
+  const qc = useQueryClient();
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const dragScroll = useDragScroll();
+
+  // Gerência de fases inline (só sócios) — mesma capacidade dos demais quadros.
+  const activeOrg = useAuthStore((s) => s.organizations.find((o) => o.id === s.activeOrgId));
+  const canManage = !!manageBoard && (activeOrg?.role === 'OWNER' || activeOrg?.role === 'ADMIN');
+  const renamePhase = async (key: string, label: string) => {
+    try { await legalCasesService.renamePhaseLabel(key, label); toast.success('Fase renomeada'); qc.invalidateQueries({ queryKey: KEY }); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Só sócios podem renomear fases'); }
+  };
+  const deletePhase = async (phase: { key: string; label: string; custom?: boolean }) => {
+    const msg = phase.custom
+      ? `Excluir a fase "${phase.label}"? Só é possível se não houver processos nela.`
+      : `Esconder a fase "${phase.label}" do quadro? Os processos nela continuam existindo — você reexibe em Configurações › Fases.`;
+    if (!confirm(msg)) return;
+    try {
+      const res = await legalCasesService.deletePhase(phase.key);
+      toast.success(res.mode === 'hidden' ? 'Fase escondida' : 'Fase excluída');
+      qc.invalidateQueries({ queryKey: KEY });
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao remover fase'); }
+  };
 
   useEffect(() => {
     const cid = new URLSearchParams(window.location.search).get('case');
@@ -79,15 +103,15 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     });
   }, [data, search, filter, preKeys]);
 
-  const columns = useMemo(() => {
+  const columns = useMemo<{ nome: string; cards: KanbanCard[]; key?: string; custom?: boolean }[]>(() => {
     // Colunas derivadas das fases do endpoint (respeita Configurações › Fases).
     if (columnsFromPhases) {
       const phs = (data?.phases ?? []).filter(columnsFromPhases).sort((a, b) => a.order - b.order);
-      if (phs.length) return phs.map((p) => ({ nome: p.label, cards: filtered.filter((c) => c.phase === p.key) }));
+      if (phs.length) return phs.map((p) => ({ nome: p.label, key: p.key, custom: !!p.custom, cards: filtered.filter((c) => c.phase === p.key) }));
       // fallback (API ainda sem as fases): usa as colunas estáticas se houver.
     }
     // Colunas fixas por FASE (pipe fiel): mantém a ordem e mostra até as vazias.
-    if (colDefs) return colDefs.map((cd) => ({ nome: cd.label, cards: filtered.filter((c) => c.phase === cd.key) }));
+    if (colDefs) return colDefs.map((cd) => ({ nome: cd.label, key: cd.key, cards: filtered.filter((c) => c.phase === cd.key) }));
     // Senão, agrupa por produto (INSS, bancária por área).
     const map = new Map<string, KanbanCard[]>();
     for (const c of filtered) {
@@ -129,9 +153,13 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
       ) : (
         <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col) => (
-            <div key={col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
+            <div key={col.key ?? col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-                <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
+                {canManage && col.key ? (
+                  <PhaseHeader phase={{ key: col.key, label: col.nome, custom: col.custom }} canRename onRename={renamePhase} onDelete={deletePhase} />
+                ) : (
+                  <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
+                )}
                 <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
               </div>
               <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
@@ -140,6 +168,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
               </div>
             </div>
           ))}
+          {canManage && manageBoard && <AddPhaseColumn board={manageBoard} accent={accent} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
         </div>
       )}
 

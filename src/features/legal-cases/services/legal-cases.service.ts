@@ -433,6 +433,15 @@ export const legalCasesService = {
     const { data } = await api.patch('/legal-cases/phases/config', config);
     return data.data ?? data;
   },
+  // Criar/excluir fase inline no kanban (só sócios — gate no backend).
+  async addPhase(board: 'pre' | 'banco' | 'plan' | 'repb' | 'judicial', label: string): Promise<PhaseConfigResponse> {
+    const { data } = await api.post('/legal-cases/phases', { board, label });
+    return data.data ?? data;
+  },
+  async deletePhase(key: string): Promise<PhaseConfigResponse & { mode?: 'deleted' | 'hidden' }> {
+    const { data } = await api.delete(`/legal-cases/phases/${key}`);
+    return data.data ?? data;
+  },
   async get(id: string): Promise<CaseDetail> {
     const { data } = await api.get(`/legal-cases/${id}`);
     return data.data ?? data;

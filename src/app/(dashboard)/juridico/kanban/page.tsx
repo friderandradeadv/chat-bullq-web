@@ -14,7 +14,7 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
-import { PhaseHeader } from '@/features/legal-cases/components/kanban-card-bits';
+import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -215,6 +215,20 @@ export default function FaseJudicialKanbanPage() {
     }
   }, [qc]);
 
+  const deletePhase = useCallback(async (phase: KanbanPhase) => {
+    const msg = phase.custom
+      ? `Excluir a fase "${phase.label}"? Só é possível se não houver processos nela.`
+      : `Esconder a fase "${phase.label}" do quadro? Os processos nela continuam existindo — você reexibe em Configurações › Fases.`;
+    if (!confirm(msg)) return;
+    try {
+      const res = await legalCasesService.deletePhase(phase.key);
+      toast.success(res.mode === 'hidden' ? 'Fase escondida' : 'Fase excluída');
+      qc.invalidateQueries({ queryKey: KEY });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao remover fase');
+    }
+  }, [qc]);
+
   const move = useCallback(async (card: KanbanCard, toPhase: string) => {
     if (card.phase === toPhase) return;
     qc.setQueryData<KanbanData>(KEY, (old) =>
@@ -353,8 +367,9 @@ export default function FaseJudicialKanbanPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} />
             ))}
+            {!isLoading && isOwner && <AddPhaseColumn board="judicial" accent="#e11970" onAdded={onChanged} />}
           </div>
           <DragOverlay>{active ? <Card c={active} phases={boardPhases} onMove={move} overlay /> : null}</DragOverlay>
         </DndContext>
@@ -432,11 +447,12 @@ function MultiSelect({
 const COLUNA_INICIAL = 20;
 
 function Column({
-  phase, items, phases, onMove, onOpen, onChanged, canRename, onRename,
+  phase, items, phases, onMove, onOpen, onChanged, canRename, onRename, onDelete,
 }: {
   phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[];
   onMove: (c: KanbanCard, to: string) => void; onOpen: (id: string) => void;
   onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void;
+  onDelete: (phase: KanbanPhase) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const [limit, setLimit] = useState(COLUNA_INICIAL);
@@ -448,7 +464,7 @@ function Column({
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       {/* Header da fase — DENTRO do painel escuro (englobado, tom vai até o nome) */}
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
           {items.length}
         </span>

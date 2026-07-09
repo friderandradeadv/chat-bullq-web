@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Pencil, Trash2, Check, Tag as TagIcon } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type LegalTag } from '../services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
@@ -20,10 +20,13 @@ export function PhaseHeader({
   phase,
   canRename,
   onRename,
+  onDelete,
 }: {
-  phase: { key: string; label: string };
+  phase: { key: string; label: string; custom?: boolean };
   canRename: boolean;
   onRename: (key: string, label: string) => void;
+  /** Sócios: excluir (fase própria) ou esconder (fase padrão) direto no board. */
+  onDelete?: (phase: { key: string; label: string; custom?: boolean }) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(phase.label);
@@ -61,13 +64,92 @@ export function PhaseHeader({
   }
 
   return (
-    <h2
-      onClick={() => setEditing(true)}
-      title="Clique pra renomear a fase (só sócios)"
-      className="cursor-text truncate text-sm font-medium text-[#e11970]/90 hover:underline dark:text-[#f06595]/75"
-    >
-      {phase.label}
-    </h2>
+    <div className="group/ph flex min-w-0 flex-1 items-center gap-1">
+      <h2
+        onClick={() => setEditing(true)}
+        title="Clique pra renomear a fase (só sócios)"
+        className="min-w-0 cursor-text truncate text-sm font-medium text-[#e11970]/90 hover:underline dark:text-[#f06595]/75"
+      >
+        {phase.label}
+      </h2>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(phase)}
+          title={phase.custom ? 'Excluir fase' : 'Esconder fase do quadro'}
+          className="shrink-0 rounded p-0.5 text-zinc-300 opacity-0 transition hover:bg-zinc-100 hover:text-rose-600 focus:opacity-100 group-hover/ph:opacity-100 dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-rose-400"
+        >
+          {phase.custom ? <Trash2 className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Quadros com fases gerenciáveis inline (add/excluir). */
+export type KanbanBoardId = 'pre' | 'banco' | 'plan' | 'repb' | 'judicial';
+
+/**
+ * Coluna-fantasma "＋ Nova fase" no fim do board (estilo Pipefy). Só sócios veem
+ * (o gate real é no backend). Cria a fase no FIM do quadro e chama `onAdded`.
+ */
+export function AddPhaseColumn({
+  board,
+  accent,
+  onAdded,
+}: {
+  board: KanbanBoardId;
+  accent: string;
+  onAdded: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const create = async () => {
+    const t = label.trim();
+    if (!t) { setAdding(false); setLabel(''); return; }
+    setBusy(true);
+    try {
+      await legalCasesService.addPhase(board, t);
+      toast.success('Fase criada');
+      setLabel(''); setAdding(false); onAdded();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Só sócios podem criar fases');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="flex w-[240px] shrink-0 flex-col pt-1">
+      {adding ? (
+        <div className="rounded-xl border border-dashed p-2" style={{ borderColor: accent }}>
+          <input
+            autoFocus
+            value={label}
+            disabled={busy}
+            maxLength={60}
+            onChange={(e) => setLabel(e.target.value)}
+            onBlur={create}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); create(); }
+              else if (e.key === 'Escape') { setAdding(false); setLabel(''); }
+            }}
+            placeholder="Nome da fase e Enter…"
+            className="w-full rounded-lg border bg-transparent px-2 py-1.5 text-sm text-[#101820] outline-none dark:text-zinc-100"
+            style={{ borderColor: accent }}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          title="Adicionar fase neste quadro"
+          className="flex h-10 items-center justify-center gap-1 rounded-xl border border-dashed border-[#cfd4da] text-sm font-medium text-zinc-400 transition hover:border-zinc-400 hover:text-zinc-600 dark:border-zinc-700 dark:hover:text-zinc-300"
+        >
+          <Plus className="h-4 w-4" /> Nova fase
+        </button>
+      )}
+    </div>
   );
 }
 

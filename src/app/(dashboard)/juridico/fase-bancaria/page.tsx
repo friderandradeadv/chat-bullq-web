@@ -29,6 +29,7 @@ export default function FaseBancariaPage() {
       columnsFromPhases={(p) => p.key.startsWith('banco_')}
       columns={COLUNAS}
       lane="banco"
+      manageBoard="banco"
     />
   );
 }
