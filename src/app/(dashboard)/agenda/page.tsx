@@ -572,6 +572,10 @@ export default function AgendaPage() {
     // calendário rende na altura natural (height auto) e o conteúdo passa por
     // baixo da barra de vidro — nada de scroll preso dentro da grade de dias.
     <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
+      {/* Barra superior "glassy" (iOS): sticky no topo, vidro fosco translúcido —
+          o conteúdo rola por baixo. -mx/-mt sangram até as bordas do padding do
+          root; px/pt repõem o alinhamento interno. */}
+      <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-1 px-4 pb-3 pt-4 lg:-mx-6 lg:-mt-6 lg:px-6 lg:pt-6 bg-white/70 dark:bg-zinc-950/55 backdrop-blur-xl backdrop-saturate-150 border-b border-black/5 dark:border-white/10">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">Agenda</h1>
         <div className="flex items-center gap-2">
@@ -672,6 +676,7 @@ export default function AgendaPage() {
         ) : (
           <button onClick={() => setSearchOpen(true)} className={`flex h-[38px] w-[38px] items-center justify-center rounded-lg border bg-white hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 ${searchQuery ? 'border-[#228BE6] text-[#228BE6]' : 'border-[#E9ECEF] text-zinc-500'}`} title="Buscar"><Search className="h-4 w-4" /></button>
         )}
+      </div>
       </div>
 
       {/* Conteúdo */}
