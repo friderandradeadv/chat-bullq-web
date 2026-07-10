@@ -9,6 +9,7 @@ import {
   Gavel,
   Landmark,
   Percent,
+  Scale,
   Wrench,
 } from 'lucide-react';
 
@@ -59,6 +60,14 @@ const CALCULADORAS: Calc[] = [
     descricao:
       'Acha a taxa real do contrato (empréstimo, consignado, financiamento, capital de giro, cartão) e compara com a taxa média do BACEN na época. Monta a planilha de restituição.',
     icon: Percent,
+    disponivel: true,
+  },
+  {
+    href: '/juridico/calculos/superendividamento',
+    titulo: 'Superendividamento (mínimo existencial)',
+    descricao:
+      'Análise segmentada da renda (Lei 14.181/21): renda líquida, comprometimento, renda livre e capacidade para o plano de pagamento. Triagem do superendividamento.',
+    icon: Scale,
     disponivel: true,
   },
 ];

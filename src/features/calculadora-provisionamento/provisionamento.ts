@@ -11,45 +11,15 @@
 // Quanto mais provisionado, mais o banco aceita descontar (o crédito "já morreu"
 // na contabilidade dele). Tetos de acordo: cooperativas ~50%, fundos ~30%.
 
+import { PROVISAO } from './normas-repb';
+
 export type Carteira = 'C1' | 'C2' | 'C3' | 'C4' | 'C5';
 export type Instituicao = 'banco' | 'cooperativa' | 'fundo';
 
-// ── ANEXO I — Provisão para perdas incorridas (ativos inadimplidos) ──
-// Linha 0 = "menor que um mês" (a partir do inadimplemento) … 21 = "≥ 21 meses".
-// Colunas [C1, C2, C3, C4, C5], em %. Res. BCB 352, Anexo I (idêntico ao .xls + C5).
-const ANEXO_I: [number, number, number, number, number][] = [
-  [5.5, 30.0, 45.0, 35.0, 50.0],
-  [10.0, 33.4, 48.7, 39.5, 53.4],
-  [14.5, 36.8, 52.4, 44.0, 56.8],
-  [19.0, 40.2, 56.1, 48.5, 60.2],
-  [23.5, 43.6, 59.8, 53.0, 63.6],
-  [28.0, 47.0, 63.5, 57.5, 67.0],
-  [32.5, 50.4, 67.2, 62.0, 70.4],
-  [37.0, 53.8, 70.9, 66.5, 73.8],
-  [41.5, 57.2, 74.6, 71.0, 77.2],
-  [46.0, 60.6, 78.3, 75.5, 80.6],
-  [50.5, 64.0, 82.0, 80.0, 84.0],
-  [55.0, 67.4, 85.7, 84.5, 87.4],
-  [59.5, 70.8, 89.4, 89.0, 90.8],
-  [64.0, 74.2, 93.1, 93.5, 94.2],
-  [68.5, 77.6, 96.8, 98.0, 97.6],
-  [73.0, 81.0, 100.0, 100.0, 100.0],
-  [77.5, 84.4, 100.0, 100.0, 100.0],
-  [82.0, 87.8, 100.0, 100.0, 100.0],
-  [86.5, 91.2, 100.0, 100.0, 100.0],
-  [91.0, 94.6, 100.0, 100.0, 100.0],
-  [95.5, 98.0, 100.0, 100.0, 100.0],
-  [100.0, 100.0, 100.0, 100.0, 100.0],
-];
-
-// ── ANEXO II — Provisão adicional para perda esperada (0–90 dias) ──
-// Faixa de dias de atraso × carteira [C1, C2, C3, C4, C5], em %. Res. BCB 352, Anexo II.
-const ANEXO_II: { maxDias: number; label: string; p: [number, number, number, number, number] }[] = [
-  { maxDias: 14, label: '0 a 14 dias', p: [1.4, 1.4, 1.9, 1.9, 1.9] },
-  { maxDias: 30, label: '15 a 30 dias', p: [3.5, 3.5, 3.5, 3.5, 7.5] },
-  { maxDias: 60, label: '31 a 60 dias', p: [4.5, 6.0, 13.0, 13.0, 15.0] },
-  { maxDias: 90, label: '61 a 90 dias', p: [5.0, 17.0, 32.0, 32.0, 38.0] },
-];
+// Tabelas oficiais vêm da SAFEZONE versionada (normas-repb.ts) — mudou a lei,
+// mexe lá; aqui é só a lógica de cálculo.
+const ANEXO_I = PROVISAO.valores.anexoI;
+const ANEXO_II = PROVISAO.valores.anexoII;
 
 const COL: Record<Carteira, number> = { C1: 0, C2: 1, C3: 2, C4: 3, C5: 4 };
 
