@@ -16,6 +16,7 @@ import { financeiroService } from '@/features/financeiro/services/financeiro.ser
 import { FaseFields } from './fase-fields';
 import { BancosReusEditor, RepbFasePorBanco, ResumoClienteRepb } from './bancos-reus-editor';
 import { GerarPecaRepb } from './gerar-inicial-superendiv';
+import { RepbModelosMalote } from './repb-modelos-malote';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
@@ -287,7 +288,8 @@ export function CaseDetailDrawer({
                   ? <BancosReusEditor caseId={c.id} parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} focusBankId={focusBankId} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                   : <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
 
-                {/* REPB: gerar peças por IA (inicial de superendividamento / parecer de auditoria). */}
+                {/* REPB: modelos de malote copiáveis + gerar peças por IA. */}
+                {phaseKey?.startsWith('repb_') && <div className="mt-3"><RepbModelosMalote /></div>}
                 {phaseKey?.startsWith('repb_') && <div className="mt-3"><GerarPecaRepb caseId={c.id} /></div>}
 
                 {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
