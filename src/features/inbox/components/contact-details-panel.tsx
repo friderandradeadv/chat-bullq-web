@@ -158,6 +158,8 @@ function ClientRegistrationSection({
   name: string | null;
 }) {
   const router = useRouter();
+  const qc = useQueryClient();
+  const { on } = useSocket();
   const [showSenha, setShowSenha] = useState(false);
   const { data: full } = useQuery({
     queryKey: ['contact-full', contactId],
@@ -165,6 +167,18 @@ function ClientRegistrationSection({
     enabled: !!contactId,
     staleTime: 60_000,
   });
+
+  // Captura automática de login/senha gov.br: o backend grava em
+  // contact.metadata.cadastro e emite 'conversation:updated' com cadastroUpdated.
+  // Invalida a ficha na hora pra o campo Meu INSS aparecer sem F5.
+  useEffect(() => {
+    const unsub = on('conversation:updated', (payload: any) => {
+      if (payload?.contactId === contactId && payload?.cadastroUpdated) {
+        qc.invalidateQueries({ queryKey: ['contact-full', contactId] });
+      }
+    });
+    return () => unsub();
+  }, [on, qc, contactId]);
 
   const cad = ((full?.metadata as any)?.cadastro ?? {}) as {
     login?: string | null;
