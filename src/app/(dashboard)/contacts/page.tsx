@@ -232,8 +232,8 @@ export default function ContactsPage() {
     'rounded-lg border border-zinc-200 bg-white py-2.5 px-3 text-sm text-zinc-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 
   return (
-    <div className="flex h-full flex-col min-h-0 min-w-0 p-4 lg:p-6">
-      <div className="w-full shrink-0">
+    <div className="h-full overflow-y-auto min-w-0 p-4 lg:p-6">
+      <div className="w-full">
         {/* Cabeçalho */}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -328,8 +328,8 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* Lista */}
-      <div className="mt-5 flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      {/* Lista — altura natural; a PÁGINA inteira rola (root overflow-y-auto). */}
+      <div className="mt-5 flex w-full flex-col rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         {/* Barra de seleção / ações em massa */}
         {contacts.length > 0 && (
           <div className={cn(
@@ -420,7 +420,7 @@ export default function ContactsPage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div>
           {isLoading ? (
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {Array.from({ length: 8 }).map((_, i) => (
