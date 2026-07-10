@@ -382,13 +382,11 @@
    baixo. A barra fica escura (controles claros, classe literal `dark`) nos 2 modos.
    !important pra vencer o `bg-[#1D2125]` utilitário. */
 .topbar-glass {
-  /* MODO CLARO (app light): CINZA AZULADO do Trello/Atlassian (#1D2125 =
-     DarkNeutral, um dark levemente puxado pro azul) translúcido sobre a página
-     branca. Alpha 0.72 mantém o tom e o contraste dos controles claros; o blur
-     ainda revela o conteúdo por baixo. */
-  background: rgba(29, 33, 37, 0.72) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
-  backdrop-filter: blur(24px) saturate(1.6);
+  /* MODO CLARO (app light): tom EXATO do Trello/Atlassian = #1D2125 (DarkNeutral,
+     dark levemente azulado). SÓLIDO de propósito — sobre página branca a
+     translucidez lavava a cor pra um cinza médio/claro; solidez faz o tom azulado
+     aparecer de verdade. (Vidro glassy fica só no modo escuro, onde funciona.) */
+  background: #1D2125 !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 /* MODO ESCURO (app dark): vidro fosco iOS de verdade — translúcido (0.55) sobre o
