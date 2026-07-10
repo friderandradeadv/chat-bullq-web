@@ -81,6 +81,11 @@ export interface ChannelSyncJob {
   updatedAt: string;
 }
 
+export interface LiveStatus {
+  status: 'connected' | 'disconnected' | 'unknown';
+  profilePicUrl: string | null;
+}
+
 export interface BusinessProfile {
   about?: string;
   address?: string;
@@ -136,6 +141,12 @@ export const channelsService = {
   async cancelSync(id: string): Promise<ChannelSyncJob | null> {
     const { data } = await api.post<{ data: { job: ChannelSyncJob | null } }>(`/channels/${id}/sync/cancel`);
     return data.data.job;
+  },
+
+  // ─── Status real + foto (pro card ficar fiel) ────────────────────
+  async getLiveStatus(id: string): Promise<LiveStatus> {
+    const { data } = await api.get<{ data: LiveStatus }>(`/channels/${id}/live-status`);
+    return data.data;
   },
 
   // ─── Perfil comercial (WhatsApp Cloud API) ───────────────────────

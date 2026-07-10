@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   MessageSquare,
   MoreVertical,
@@ -19,7 +19,7 @@ import {
   Contact,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Channel } from '../services/channels.service';
+import type { Channel, LiveStatus } from '../services/channels.service';
 import { channelsService } from '../services/channels.service';
 import { useChannelSync } from '../hooks/use-channel-sync';
 import { ZappfyIcon, MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
@@ -43,6 +43,18 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [live, setLive] = useState<LiveStatus | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    channelsService
+      .getLiveStatus(channel.id)
+      .then((s) => alive && setLive(s))
+      .catch(() => alive && setLive({ status: 'unknown', profilePicUrl: null }));
+    return () => {
+      alive = false;
+    };
+  }, [channel.id]);
   const meta = channelTypeMap[channel.type] || { label: channel.type, icon: MessageSquare, color: 'bg-gray-500' };
   const Icon = meta.icon;
   const sync = useChannelSync({ channelId: channel.id, channelType: channel.type });
@@ -143,23 +155,65 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
 
   return (
     <div className="relative flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-zinc-200/60 dark:border-zinc-700/60 ${meta.color}`}>
-        <Icon className="h-7 w-7" />
+      <div className="relative h-12 w-12 shrink-0">
+        {live?.profilePicUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={live.profilePicUrl}
+            alt=""
+            className="h-12 w-12 rounded-lg border border-zinc-200/60 object-cover dark:border-zinc-700/60"
+          />
+        ) : (
+          <div className={`flex h-12 w-12 items-center justify-center rounded-lg border border-zinc-200/60 dark:border-zinc-700/60 ${meta.color}`}>
+            <Icon className="h-7 w-7" />
+          </div>
+        )}
+        {live && (
+          <span
+            title={
+              live.status === 'connected'
+                ? 'Conectado'
+                : live.status === 'disconnected'
+                  ? 'Desconectado'
+                  : 'Status desconhecido'
+            }
+            className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-zinc-900 ${
+              live.status === 'connected'
+                ? 'bg-green-500'
+                : live.status === 'disconnected'
+                  ? 'bg-red-500'
+                  : 'bg-zinc-400'
+            }`}
+          />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {channel.name}
           </h3>
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              channel.isActive
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
-            }`}
-          >
-            {channel.isActive ? 'Ativo' : 'Inativo'}
-          </span>
+          {!channel.isActive ? (
+            <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+              Inativo
+            </span>
+          ) : !live ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-400 dark:bg-zinc-800">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Verificando…
+            </span>
+          ) : live.status === 'connected' ? (
+            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              Conectado
+            </span>
+          ) : live.status === 'disconnected' ? (
+            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+              Desconectado
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              Status desconhecido
+            </span>
+          )}
           {channel.visibility === 'PRIVATE' && (
             <span
               title="Canal privado — só membros com permissão explícita enxergam, mesmo OWNER/ADMIN"
