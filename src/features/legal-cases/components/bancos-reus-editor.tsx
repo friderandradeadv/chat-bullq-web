@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { legalCasesService, type PartyDetail } from '@/features/legal-cases/services/legal-cases.service';
 import { maskCurrencyBR } from '@/lib/masks';
 import { maskCpfCnpj } from '@/lib/masks';
+import { BANCOS_DIRETORIO, acharBancoContato } from '@/features/legal-cases/lib/bancos-diretorio';
 
 // Bancos RÉUS do caso REPB = múltiplas partes OPPONENT (viram parte adversa de
 // verdade → alimentam Jurimetria/Partes Adversas). Cada banco carrega o detalhe
@@ -54,6 +55,7 @@ export function BancosReusEditor({ caseId, parties, onChanged }: { caseId: strin
 
       {reus.length === 0 && <p className="mt-3 rounded-lg border border-dashed border-[#dcdfe5] py-4 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum banco réu cadastrado</p>}
 
+      <datalist id="bancos-repb-dir">{BANCOS_DIRETORIO.map((b) => <option key={b.nome} value={b.nome} />)}</datalist>
       <div className="mt-2 space-y-2.5">
         {reus.map((p) => <BancoRow key={p.id} party={p} onChanged={onChanged} />)}
       </div>
@@ -88,10 +90,15 @@ function BancoRow({ party, onChanged }: { party: PartyDetail; onChanged: () => v
   return (
     <div className="rounded-lg border border-[#e3e8ef] bg-white p-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
       <div className="flex items-center gap-2">
-        <input value={d.name} onChange={(e) => save({ ...d, name: e.target.value })} placeholder="Banco / instituição" className={`${INPUT} font-medium`} />
+        <input value={d.name} list="bancos-repb-dir" onChange={(e) => save({ ...d, name: e.target.value })} placeholder="Banco / instituição" className={`${INPUT} font-medium`} />
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${SIT_COR[d.situacao] ?? ''}`}>{d.situacao}</span>
         <button onClick={remove} title="Remover" className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
       </div>
+      {(() => { const c = acharBancoContato(d.name); return c ? (
+        <p className="mt-1 text-[11px] text-zinc-400">
+          📇 {c.escritorio}{c.telefone ? ` · ${c.telefone}` : ''}{c.email ? ` · ${c.email}` : ''}
+        </p>
+      ) : null; })()}
       <div className="mt-2 grid grid-cols-2 gap-2">
         <label className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">CNPJ
           <input value={d.document} onChange={(e) => save({ ...d, document: maskCpfCnpj(e.target.value) })} className={INPUT} />
