@@ -8,6 +8,7 @@ import {
   Calculator,
   Gavel,
   Landmark,
+  ListChecks,
   Percent,
   Scale,
   Sigma,
@@ -69,6 +70,14 @@ const CALCULADORAS: Calc[] = [
     descricao:
       'Análise segmentada da renda (Lei 14.181/21): renda líquida, comprometimento, renda livre e capacidade para o plano de pagamento. Triagem do superendividamento.',
     icon: Scale,
+    disponivel: true,
+  },
+  {
+    href: '/juridico/calculos/plano-repactuacao',
+    titulo: 'Plano de repactuação (superendividamento)',
+    descricao:
+      'Gera o plano de pagamento do art. 104-A/B: distribui os 35% da renda entre os credores, readequa a cada dívida quitada e checa a viabilidade nos 60 meses. Método do PLANO da mentoria.',
+    icon: ListChecks,
     disponivel: true,
   },
   {
