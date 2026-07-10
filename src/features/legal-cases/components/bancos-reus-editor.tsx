@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Gavel, ChevronDown, Landmark, Calculator, Handshake } from 'lucide-react';
+import { Plus, Trash2, Gavel, ChevronDown, Landmark, Calculator, Handshake, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type PartyDetail } from '@/features/legal-cases/services/legal-cases.service';
 import { maskCurrencyBR, maskCpfCnpj } from '@/lib/masks';
@@ -24,6 +24,10 @@ const SIT_COR: Record<string, string> = {
   'Acordo fechado': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
   Judicializado: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400',
   'Sem acordo': 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
+};
+const SIT_DOT: Record<string, string> = {
+  'Em análise': 'bg-zinc-400', 'Malote enviado': 'bg-amber-500', Negociando: 'bg-sky-500',
+  'Acordo fechado': 'bg-emerald-500', Judicializado: 'bg-violet-500', 'Sem acordo': 'bg-red-500',
 };
 const MAL_CANAIS = ['Consumidor.gov', 'BACEN (RDR)', 'AR / Correios', 'E-mail', 'Ouvidoria', 'Ação de exibição'];
 const MAL_STATUS = ['Aguardando', 'Deferido', 'Indeferido', 'Parcial'];
@@ -57,6 +61,17 @@ const guessOperacao = (op: string): string => {
   return 'Empréstimo pessoal';
 };
 
+/** Provisão calculada dos inputs salvos do banco (null se ainda sem dados). */
+function provValorDoBanco(p: PartyDetail): number | null {
+  const m: any = p.metadata ?? {};
+  const saldo = parseBRL(m.saldoDevedor ?? '');
+  if (saldo <= 0 || (!m.provDias && !m.provOperacao)) return null;
+  const carteira: Carteira = OPERACOES.find((o) => o.label === (m.provOperacao ?? guessOperacao(m.operacao ?? '')))?.carteira ?? 'C5';
+  const dias = Math.max(0, Number(String(m.provDias ?? '').replace(/\D/g, '')) || 0);
+  const inst: Instituicao = m.provInstituicao ?? guessInstituicao(p.name ?? '');
+  return calcularProvisao({ saldoDevedor: saldo, carteira, dias, instituicao: inst }).valorProvisionado;
+}
+
 type Draft = {
   name: string; document: string; operacao: string; saldoDevedor: string; situacao: string; obs: string;
   provInstituicao: Instituicao; provOperacao: string; provDias: string;
@@ -81,6 +96,7 @@ export function BancosReusEditor({ caseId, parties, malotes, onChanged }: { case
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<string>('Todos');
+  const [view, setView] = useState<'kanban' | 'lista'>('kanban');
 
   // Malotes: lista global mantida aqui; cada banco filtra a sua fatia.
   const [malRows, setMalRows] = useState<Malote[]>(malotes ?? []);
@@ -110,9 +126,19 @@ export function BancosReusEditor({ caseId, parties, malotes, onChanged }: { case
     setAdding(true);
     try {
       const novo = await legalCasesService.addParty(caseId, { name: 'Novo banco', role: 'OPPONENT', metadata: { situacao: 'Em análise' } });
-      setFiltro('Todos'); setOpenId(novo.id); onChanged();
+      setFiltro('Todos'); setOpenId(novo.id); setView('lista'); onChanged();
     } catch { toast.error('Erro ao adicionar banco'); } finally { setAdding(false); }
   };
+
+  // Arrastar um banco entre colunas do mini-kanban = trocar a situação (preserva o resto do metadata).
+  const moverSituacao = async (p: PartyDetail, situacao: string) => {
+    if ((p.metadata?.situacao ?? 'Em análise') === situacao) return;
+    try {
+      await legalCasesService.updateParty(p.id, { name: p.name || 'Banco', role: 'OPPONENT', document: p.document ?? undefined, metadata: { ...(p.metadata ?? {}), situacao } });
+      onChanged();
+    } catch { toast.error('Erro ao mover banco'); }
+  };
+  const abrirBanco = (id: string) => { setView('lista'); setOpenId(id); };
 
   return (
     <div className="rounded-lg border border-[#e3e8ef] bg-[#fafbfc] p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
@@ -121,39 +147,55 @@ export function BancosReusEditor({ caseId, parties, malotes, onChanged }: { case
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Bancos réus</p>
         <span className="rounded bg-[#edeff3] px-1.5 text-[12px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{reus.length}</span>
         {saldoTotal > 0 && <span className="text-[11px] text-zinc-400">· {brl(saldoTotal)}</span>}
-        <button onClick={addBanco} disabled={adding} className="ml-auto inline-flex items-center gap-1 rounded-md border border-[#B7791F]/40 px-2 py-1 text-[12px] font-semibold text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-50">
-          <Plus className="h-3.5 w-3.5" /> Banco
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          {reus.length > 0 && (
+            <div className="inline-flex overflow-hidden rounded-md border border-[#e3e8ef] dark:border-zinc-700">
+              <button onClick={() => setView('kanban')} title="Kanban por situação" className={`inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold ${view === 'kanban' ? 'bg-[#B7791F]/10 text-[#B7791F]' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}><LayoutGrid className="h-3.5 w-3.5" /> Kanban</button>
+              <button onClick={() => setView('lista')} title="Lista / dossiê" className={`inline-flex items-center gap-1 border-l border-[#e3e8ef] px-2 py-1 text-[11px] font-semibold dark:border-zinc-700 ${view === 'lista' ? 'bg-[#B7791F]/10 text-[#B7791F]' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}><List className="h-3.5 w-3.5" /> Lista</button>
+            </div>
+          )}
+          <button onClick={addBanco} disabled={adding} className="inline-flex items-center gap-1 rounded-md border border-[#B7791F]/40 px-2 py-1 text-[12px] font-semibold text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-50">
+            <Plus className="h-3.5 w-3.5" /> Banco
+          </button>
+        </div>
       </div>
 
       {reus.length === 0 && <p className="mt-3 rounded-lg border border-dashed border-[#dcdfe5] py-4 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum banco réu cadastrado</p>}
 
-      {reus.length > 1 && (
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          <FiltroChip label="Todos" count={reus.length} ativo={filtro === 'Todos'} onClick={() => setFiltro('Todos')} />
-          {situacoesPresentes.map((s) => (
-            <FiltroChip key={s} label={s} count={cont(s)} ativo={filtro === s} onClick={() => setFiltro(s)} />
-          ))}
-        </div>
+      <datalist id="bancos-repb-dir">{BANCOS_DIRETORIO.map((b) => <option key={b.nome} value={b.nome} />)}</datalist>
+
+      {view === 'kanban' && reus.length > 0 && (
+        <BancosMiniKanban reus={reus} malotesCount={(p) => malotesDoBanco(p).length} onSelect={abrirBanco} onMove={moverSituacao} />
       )}
 
-      <datalist id="bancos-repb-dir">{BANCOS_DIRETORIO.map((b) => <option key={b.nome} value={b.nome} />)}</datalist>
-      <div className="mt-2 space-y-1.5">
-        {lista.map((p) => (
-          <BancoDossie
-            key={p.id} party={p} open={openId === p.id}
-            onToggle={() => setOpenId(openId === p.id ? null : p.id)}
-            onChanged={onChanged}
-            malotes={malotesDoBanco(p)}
-            onAddMalote={() => persistMalotes([...malRows, { id: novoId(), bancoId: p.id, banco: p.name, canal: 'Consumidor.gov', numero: '', dataEnvio: '', prazo: '', tentativa: '1', status: 'Aguardando', obs: '' }])}
-            onUpdMalote={(id, patch) => persistMalotes(malRows.map((m) => (m.id === id ? { ...m, ...patch } : m)))}
-            onDelMalote={(id) => persistMalotes(malRows.filter((m) => m.id !== id))}
-          />
-        ))}
-        {reus.length > 0 && lista.length === 0 && (
-          <p className="rounded-lg border border-dashed border-[#dcdfe5] py-3 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum banco em “{filtro}”</p>
-        )}
-      </div>
+      {view === 'lista' && (
+        <>
+          {reus.length > 1 && (
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              <FiltroChip label="Todos" count={reus.length} ativo={filtro === 'Todos'} onClick={() => setFiltro('Todos')} />
+              {situacoesPresentes.map((s) => (
+                <FiltroChip key={s} label={s} count={cont(s)} ativo={filtro === s} onClick={() => setFiltro(s)} />
+              ))}
+            </div>
+          )}
+          <div className="mt-2 space-y-1.5">
+            {lista.map((p) => (
+              <BancoDossie
+                key={p.id} party={p} open={openId === p.id}
+                onToggle={() => setOpenId(openId === p.id ? null : p.id)}
+                onChanged={onChanged}
+                malotes={malotesDoBanco(p)}
+                onAddMalote={() => persistMalotes([...malRows, { id: novoId(), bancoId: p.id, banco: p.name, canal: 'Consumidor.gov', numero: '', dataEnvio: '', prazo: '', tentativa: '1', status: 'Aguardando', obs: '' }])}
+                onUpdMalote={(id, patch) => persistMalotes(malRows.map((m) => (m.id === id ? { ...m, ...patch } : m)))}
+                onDelMalote={(id) => persistMalotes(malRows.filter((m) => m.id !== id))}
+              />
+            ))}
+            {reus.length > 0 && lista.length === 0 && (
+              <p className="rounded-lg border border-dashed border-[#dcdfe5] py-3 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum banco em “{filtro}”</p>
+            )}
+          </div>
+        </>
+      )}
 
       {malotesOrfaos.length > 0 && (
         <div className="mt-3 rounded-lg border border-dashed border-[#dcdfe5] p-2 dark:border-zinc-800">
@@ -178,6 +220,72 @@ function FiltroChip({ label, count, ativo, onClick }: { label: string; count: nu
       {label}
       <span className={`rounded-full px-1 text-[10px] ${ativo ? 'bg-[#B7791F]/15' : 'bg-[#edeff3] dark:bg-zinc-800'}`}>{count}</span>
     </button>
+  );
+}
+
+// Mini-kanban dos bancos DENTRO do card do cliente: colunas = situação. Arrasta
+// pra mudar a situação, clica pra abrir o dossiê. Dá o "onde está cada um" num relance.
+function BancosMiniKanban({ reus, malotesCount, onSelect, onMove }: {
+  reus: PartyDetail[];
+  malotesCount: (p: PartyDetail) => number;
+  onSelect: (id: string) => void;
+  onMove: (p: PartyDetail, situacao: string) => void;
+}) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<string | null>(null);
+  const byId = new Map(reus.map((p) => [p.id, p]));
+  return (
+    <div className="mt-2">
+      <p className="mb-1.5 text-[10px] text-zinc-400">Arraste um banco entre as colunas para mudar a situação · clique para abrir o dossiê.</p>
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {SITUACOES.map((sit) => {
+          const items = reus.filter((p) => (p.metadata?.situacao ?? 'Em análise') === sit);
+          const total = items.reduce((a, p) => a + parseBRL(p.metadata?.saldoDevedor ?? ''), 0);
+          return (
+            <div
+              key={sit}
+              onDragOver={(e) => { e.preventDefault(); setOverCol(sit); }}
+              onDragLeave={() => setOverCol((c) => (c === sit ? null : c))}
+              onDrop={() => { const p = dragId ? byId.get(dragId) : null; if (p) onMove(p, sit); setDragId(null); setOverCol(null); }}
+              className={`flex w-[150px] shrink-0 flex-col rounded-lg border p-1.5 ${overCol === sit ? 'border-[#B7791F] bg-[#B7791F]/5' : 'border-[#e3e8ef] bg-[#fafbfc] dark:border-zinc-800 dark:bg-zinc-900/40'}`}
+            >
+              <div className="flex items-center gap-1 px-0.5">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${SIT_DOT[sit] ?? 'bg-zinc-300'}`} />
+                <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-[#48626f]" title={sit}>{sit}</p>
+                <span className="ml-auto rounded bg-[#edeff3] px-1 text-[10px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+              </div>
+              {total > 0 && <p className="px-0.5 text-[9px] text-zinc-400">{brl(total)}</p>}
+              <div className="mt-1 flex flex-1 flex-col gap-1">
+                {items.map((p) => {
+                  const prov = provValorDoBanco(p);
+                  const nMal = malotesCount(p);
+                  return (
+                    <button
+                      key={p.id}
+                      draggable
+                      onDragStart={() => setDragId(p.id)}
+                      onDragEnd={() => { setDragId(null); setOverCol(null); }}
+                      onClick={() => onSelect(p.id)}
+                      className={`cursor-grab rounded-md border border-[#e3e8ef] bg-white p-1.5 text-left hover:border-[#B7791F]/50 active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900/60 ${dragId === p.id ? 'opacity-40' : ''}`}
+                    >
+                      <p className="truncate text-[11px] font-medium text-[#101820] dark:text-zinc-100" title={p.name}>{p.name}</p>
+                      {p.metadata?.saldoDevedor && <p className="text-[10px] tabular-nums text-zinc-500 dark:text-zinc-400">{p.metadata.saldoDevedor}</p>}
+                      {(nMal > 0 || prov != null) && (
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[9px] text-zinc-400">
+                          {nMal > 0 && <span>📋 {nMal}</span>}
+                          {prov != null && <span title="Provisionado">🏦 {brl(prov)}</span>}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+                {items.length === 0 && <div className="rounded-md border border-dashed border-[#e3e8ef] py-2 text-center text-[9px] text-zinc-300 dark:border-zinc-800">—</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
