@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { maskCurrencyBR } from '@/lib/masks';
 import {
-  calcularProvisao, mesesDesde, CARTEIRAS, OPERACOES, INSTITUICOES,
+  calcularProvisao, diasDesde, CARTEIRAS, OPERACOES, INSTITUICOES,
   type Carteira, type Instituicao,
 } from '@/features/calculadora-provisionamento/provisionamento';
 
@@ -23,7 +23,7 @@ export default function ProvisionamentoPage() {
   const [operacao, setOperacao] = useState(OPERACOES[0].label);
   const [carteira, setCarteira] = useState<Carteira>(OPERACOES[0].carteira);
   const [dataPgto, setDataPgto] = useState('');
-  const [mesesManual, setMesesManual] = useState('');
+  const [diasManual, setDiasManual] = useState('');
   const [instituicao, setInstituicao] = useState<Instituicao>('banco');
   const [salvando, setSalvando] = useState(false);
   const [salvouOk, setSalvouOk] = useState(false);
@@ -39,12 +39,12 @@ export default function ProvisionamentoPage() {
   }, []);
 
   const saldo = parseBRL(saldoStr);
-  const meses = useMemo(() => {
-    if (mesesManual.trim() !== '') { const m = Number(mesesManual.replace(',', '.')); return Number.isFinite(m) ? Math.max(0, m) : 0; }
-    return mesesDesde(dataPgto) ?? 0;
-  }, [mesesManual, dataPgto]);
+  const dias = useMemo(() => {
+    if (diasManual.trim() !== '') { const d = Number(diasManual.replace(/\D/g, '')); return Number.isFinite(d) ? Math.max(0, d) : 0; }
+    return diasDesde(dataPgto) ?? 0;
+  }, [diasManual, dataPgto]);
 
-  const r = useMemo(() => calcularProvisao({ saldoDevedor: saldo, carteira, meses, instituicao }), [saldo, carteira, meses, instituicao]);
+  const r = useMemo(() => calcularProvisao({ saldoDevedor: saldo, carteira, dias, instituicao }), [saldo, carteira, dias, instituicao]);
 
   const onOperacao = (label: string) => {
     setOperacao(label);
@@ -110,22 +110,23 @@ export default function ProvisionamentoPage() {
             </select>
           </Field>
           <Field label="Data do último pagamento">
-            <input type="date" value={dataPgto} onChange={(e) => { setDataPgto(e.target.value); setMesesManual(''); }} className={INPUT} />
+            <input type="date" value={dataPgto} onChange={(e) => { setDataPgto(e.target.value); setDiasManual(''); }} className={INPUT} />
           </Field>
-          <Field label="Ou meses de atraso (manual)">
-            <input value={mesesManual} onChange={(e) => setMesesManual(e.target.value)} inputMode="decimal" placeholder={dataPgto ? `${meses.toFixed(1)} (calculado)` : 'ex.: 8'} className={INPUT} />
+          <Field label="Ou dias de atraso (manual)">
+            <input value={diasManual} onChange={(e) => setDiasManual(e.target.value)} inputMode="numeric" placeholder={dataPgto ? `${dias} dias (calculado)` : 'ex.: 240'} className={INPUT} />
           </Field>
         </div>
 
         {/* Resultado */}
         <div className="mt-6 rounded-2xl border border-[#e3e8ef] bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-            <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">Atraso: {r.faixaLabel}</span>
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">{r.dias} dias de atraso</span>
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">{r.faixaLabel}</span>
             <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">{r.estagio.label}</span>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <Stat label="Provisionado" value={pct(r.provisaoAplicadaPct)} sub={capAtinge ? `matriz ${pct(r.provisaoBasePct)} · teto ${instituicao}` : brl(r.valorProvisionado)} accent={ACCENT} big />
+            <Stat label="Provisionado" value={brl(r.valorProvisionado)} sub={capAtinge ? `${pct(r.provisaoAplicadaPct)} (teto ${instituicao}) · tabela ${pct(r.provisaoBasePct)}` : `${pct(r.provisaoAplicadaPct)} do saldo`} accent={ACCENT} big />
             <Stat label="Proposta de acordo" value={brl(r.propostaAcordo)} sub={`${pct(r.propostaPct)} do saldo`} accent="#2F9E44" big />
             <Stat label="Desconto p/ o cliente" value={brl(r.descontoValor)} sub={pct(r.descontoPct)} accent="#228BE6" big />
           </div>
