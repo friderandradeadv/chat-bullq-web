@@ -15,6 +15,7 @@ import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
 import { BancosReusEditor, RepbFasePorBanco, ResumoClienteRepb } from './bancos-reus-editor';
+import { GerarInicialSuperendiv } from './gerar-inicial-superendiv';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
@@ -283,6 +284,9 @@ export function CaseDetailDrawer({
                 {phaseKey?.startsWith('repb_')
                   ? <BancosReusEditor caseId={c.id} parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} focusBankId={focusBankId} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                   : <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
+
+                {/* REPB: gerar a inicial de superendividamento por IA (lista todos os bancos réus). */}
+                {phaseKey?.startsWith('repb_') && <div className="mt-3"><GerarInicialSuperendiv caseId={c.id} /></div>}
 
                 {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
                     doc. faltantes) mostra o desmembramento em cards por banco réu; nas

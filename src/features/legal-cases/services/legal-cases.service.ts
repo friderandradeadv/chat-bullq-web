@@ -557,7 +557,7 @@ export const legalCasesService = {
   async gerarPeca(
     id: string,
     payload: {
-      tipo: 'replica' | 'especificacao' | 'recurso';
+      tipo: 'replica' | 'especificacao' | 'recurso' | 'superendividamento';
       produto?: string;
       docBase64?: string;
       docNome?: string;
