@@ -426,8 +426,8 @@ export const financeiroService = {
     return data.data ?? data;
   },
   // ── Resumo financeiro de um cliente (ficha em Processos) ──
-  async clienteResumo(nome: string): Promise<ClienteResumo> {
-    const { data } = await api.get('/financeiro/cliente', { params: { nome } });
+  async clienteResumo(nome: string, contactId?: string | null): Promise<ClienteResumo> {
+    const { data } = await api.get('/financeiro/cliente', { params: { nome, ...(contactId ? { contactId } : {}) } });
     return data.data ?? data;
   },
 };
