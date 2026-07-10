@@ -575,7 +575,10 @@ export default function AgendaPage() {
       {/* Barra superior "glassy" (iOS): sticky no topo, vidro fosco translúcido —
           o conteúdo rola por baixo. -mx/-mt sangram até as bordas do padding do
           root; px/pt repõem o alinhamento interno. */}
-      <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-1 px-4 pb-3 pt-4 lg:-mx-6 lg:-mt-11 lg:px-6 lg:pt-6 bg-white/70 dark:bg-zinc-950/55 backdrop-blur-xl backdrop-saturate-150 border-b border-black/5 dark:border-white/10">
+      {/* Barra sticky deve colar FLUSH no topo do scroll (neg-margin = padding-top
+          do root: 1rem mobile / 4rem lg) — se sobrar fresta acima, o calendário
+          vaza por cima ao rolar. pt interno repõe o respiro do título. */}
+      <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-1 px-4 pb-3 pt-4 lg:-mx-6 lg:-mt-16 lg:px-6 lg:pt-5 bg-white/70 dark:bg-zinc-950/55 backdrop-blur-xl backdrop-saturate-150 border-b border-black/5 dark:border-white/10">
       <div className="flex items-center justify-between">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100"><CalendarDays className="h-6 w-6" style={{ color: '#228BE6' }} /> Agenda</h1>
         <div className="flex items-center gap-2">
