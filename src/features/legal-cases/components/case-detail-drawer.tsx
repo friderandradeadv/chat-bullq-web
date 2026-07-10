@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, FileText,
+  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, FileText, AlertTriangle, Loader2, ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -217,6 +217,8 @@ export function CaseDetailDrawer({
             {isLoading && <p className="py-6 text-sm text-zinc-400">Carregando…</p>}
             {c && tab === 'dados' && (
               <>
+                <AcoesExistentesCard caseId={c.id} metadata={c.metadata} onDone={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+
                 <DadosForm c={c} pf={pf} showJuizo={showJuizo} onSaved={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
 
                 <ResumoAtendimento
@@ -1079,6 +1081,77 @@ function ResumoAtendimento({ caseId, resumo, geradoEm, onDone }: { caseId: strin
         </article>
       ) : (
         <p className="mt-1.5 text-xs italic text-zinc-400">Sem resumo. Clique em “Gerar resumo” — a IA lê a conversa do cliente no WhatsApp e destaca bancos, benefício, valores e pendências.</p>
+      )}
+    </div>
+  );
+}
+
+// Alerta de AÇÕES PRÉ-EXISTENTES: pesquisa (DJEN/Escavador) se o cliente já tem
+// ação em curso por nome/CPF, pra o advogado conferir ANTES de montar a inicial
+// (risco de litispendência/duplicidade). Mostra o resultado já gravado em
+// metadata.acoesExistentes e permite re-verificar sob demanda.
+function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; metadata: unknown; onDone: () => void }) {
+  const salvo = ((metadata as any)?.acoesExistentes ?? null) as
+    | { verificadoEm?: string; fonte?: string; confianca?: 'alta' | 'media' | 'nenhuma'; total?: number; acoes?: Array<{ numeroProcesso: string; tribunal: string; tipo: string; data: string; temCpf?: boolean }> }
+    | null;
+  const [busy, setBusy] = useState(false);
+  const [resultado, setResultado] = useState(salvo);
+
+  const verificar = async () => {
+    setBusy(true);
+    try {
+      const r = await legalCasesService.verificarAcoesExistentes(caseId);
+      setResultado({ verificadoEm: new Date().toISOString(), fonte: r.fonte, confianca: r.confianca, total: r.acoes.length, acoes: r.acoes });
+      if (r.encontrou) toast.warning(`Encontrei ${r.acoes.length} possível(is) ação(ões) desta pessoa — confira antes de montar a inicial.`);
+      else toast.success('Nenhuma ação em curso encontrada por nome/CPF.');
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao verificar ações existentes');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tem = (resultado?.total ?? 0) > 0;
+  const alta = resultado?.confianca === 'alta';
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Ações pré-existentes</p>
+        <button onClick={verificar} disabled={busy} className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+          {busy ? 'Pesquisando…' : resultado ? 'Verificar de novo' : 'Verificar ações do cliente'}
+        </button>
+      </div>
+
+      {!resultado && (
+        <p className="mt-1.5 text-xs italic text-zinc-400">Clique em “Verificar” pra pesquisar (por nome/CPF) se o cliente já tem ação em curso — evita litispendência/duplicidade antes de montar a inicial.</p>
+      )}
+
+      {resultado && !tem && (
+        <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">✓ Nenhuma ação em curso encontrada ({resultado.fonte}{resultado.verificadoEm ? `, ${new Date(resultado.verificadoEm).toLocaleDateString('pt-BR')}` : ''}).</p>
+      )}
+
+      {resultado && tem && (
+        <article className="mt-1.5 rounded border border-amber-300 bg-amber-50 p-3 dark:border-amber-700/60 dark:bg-amber-950/30">
+          <p className="flex items-start gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Encontrei <b>{resultado.total}</b> processo(s) em nome do cliente — CONFIRA antes de montar a inicial.
+              <br />
+              <span className="font-normal">Confiança: {alta ? 'CPF confirmado no texto' : 'só por nome (pode ser homônimo)'} · Fonte: {resultado.fonte}.</span>
+            </span>
+          </p>
+          <ul className="mt-2 space-y-1 border-t border-amber-200 pt-2 dark:border-amber-800/50">
+            {(resultado.acoes ?? []).slice(0, 8).map((a, i) => (
+              <li key={i} className="text-[11px] text-amber-900 dark:text-amber-200">
+                <span className="font-mono">{a.numeroProcesso}</span>{a.tribunal ? ` · ${a.tribunal}` : ''}{a.tipo ? ` · ${a.tipo}` : ''}{a.data ? ` · ${a.data}` : ''}
+              </li>
+            ))}
+            {(resultado.total ?? 0) > 8 && <li className="text-[11px] italic text-amber-700 dark:text-amber-300">… e mais {(resultado.total ?? 0) - 8}.</li>}
+          </ul>
+        </article>
       )}
     </div>
   );

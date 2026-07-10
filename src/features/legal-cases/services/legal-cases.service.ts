@@ -393,6 +393,18 @@ export const legalCasesService = {
     const { data } = await api.post('/legal-cases/recurso/registrar', input);
     return data.data ?? data;
   },
+  // Verifica se o cliente do card já tem ação em curso (nome/CPF, fonte DJEN/Escavador).
+  // Grava o resultado em metadata.acoesExistentes e deixa nota interna. Usar ANTES de montar a inicial.
+  async verificarAcoesExistentes(id: string): Promise<{
+    encontrou: boolean;
+    confianca: 'alta' | 'media' | 'nenhuma';
+    fonte: string;
+    acoes: Array<{ numeroProcesso: string; tribunal: string; orgao: string; tipo: string; data: string; temCpf: boolean }>;
+    totalBruto: number;
+  }> {
+    const { data } = await api.post(`/legal-cases/${id}/verificar-acoes`);
+    return data.data ?? data;
+  },
   // IA lê a sentença do prazo e sugere o motivo do recurso (1-2 frases).
   async sugerirMotivoRecurso(deadlineId: string): Promise<{ motivo: string }> {
     const { data } = await api.post('/legal-cases/recurso/sugerir-motivo', { deadlineId });
