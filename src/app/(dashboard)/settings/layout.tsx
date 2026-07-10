@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
+import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 import {
   Radio,
   Users,
@@ -76,6 +77,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   const { organizations, activeOrgId } = useAuthStore();
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
+  // Conexões WhatsApp caídas agora → bolinha vermelha no item "Canais".
+  const disconnectedChannels = useDisconnectedChannels();
   // Associados (AGENT) só veem "Conta" (o próprio perfil); o resto é do escritório.
   const visibleGroups = groups.filter((g) => isAdmin || !g.adminOnly);
 
@@ -99,6 +102,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                   <div className="flex flex-col gap-0.5">
                     {group.items.map((item) => {
                       const isActive = pathname === item.href;
+                      const showDisconnected =
+                        item.href === '/settings/channels' && disconnectedChannels > 0;
                       return (
                         <Link
                           key={item.href}
@@ -110,7 +115,12 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                           }`}
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
-                          {item.label}
+                          <span className="flex-1">{item.label}</span>
+                          {showDisconnected && (
+                            <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                              {disconnectedChannels > 99 ? '99+' : disconnectedChannels}
+                            </span>
+                          )}
                         </Link>
                       );
                     })}

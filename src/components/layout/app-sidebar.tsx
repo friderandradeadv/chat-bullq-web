@@ -48,6 +48,7 @@ import { useUnreadConversations } from '@/features/notifications/use-unread-conv
 import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks-count';
 import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
 import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
+import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 import { Avatar } from '@/components/ui/avatar';
 import { Logo } from '@/components/brand/logo';
 import {
@@ -177,11 +178,13 @@ function NavItem({
   icon: Icon,
   label,
   badge,
+  badgeTone = 'default',
 }: {
   href: string;
   icon: React.ElementType;
   label: string;
   badge?: number;
+  badgeTone?: 'default' | 'danger';
 }) {
   const pathname = usePathname();
   const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
@@ -198,7 +201,12 @@ function NavItem({
       <Icon className="h-4 w-4 shrink-0" />
       <span className="flex-1 truncate">{label}</span>
       {badge !== undefined && badge > 0 && (
-        <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-white">
+        <span
+          className={cn(
+            'rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white',
+            badgeTone === 'danger' ? 'bg-red-500' : 'bg-primary',
+          )}
+        >
           {badge > 99 ? '99+' : badge}
         </span>
       )}
@@ -216,6 +224,7 @@ export function AppSidebar() {
   const pendingTasks = usePendingTasksCount();
   const payslipUnread = usePayslipUnreadCount();
   const preUnseen = usePreUnseenCount();
+  const disconnectedChannels = useDisconnectedChannels();
 
   return (
     <Sidebar>
@@ -257,7 +266,7 @@ export function AppSidebar() {
                 <NavItem href="/settings/quick-replies" icon={Zap} label="Mensagens rápidas" />
                 <NavItem href="/settings/statuses" icon={CircleDot} label="Status" />
                 <NavItem href="/settings/tags" icon={Tags} label="Etiquetas" />
-                <NavItem href="/conexoes" icon={Cable} label="Conexões" />
+                <NavItem href="/conexoes" icon={Cable} label="Conexões" badge={disconnectedChannels} badgeTone="danger" />
               </NavSection>
             </div>
 
@@ -358,7 +367,7 @@ export function AppSidebar() {
         </div>
         {/* Configurações — fixa logo abaixo do alternador de tema */}
         <div className="mb-1">
-          <NavItem href="/settings" icon={Settings} label="Configurações" />
+          <NavItem href="/settings" icon={Settings} label="Configurações" badge={disconnectedChannels} badgeTone="danger" />
         </div>
         <Dropdown>
           <DropdownButton className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-950/5 dark:hover:bg-white/5">

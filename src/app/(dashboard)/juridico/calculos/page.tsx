@@ -54,12 +54,12 @@ const CALCULADORAS: Calc[] = [
     disponivel: true,
   },
   {
-    href: '#',
-    titulo: 'Juros Abusivos',
+    href: '/juridico/calculos/revisional',
+    titulo: 'Revisional de Juros',
     descricao:
-      'Revisão de contrato: compara a taxa pactuada com a taxa média de mercado do BACEN na época.',
+      'Acha a taxa real do contrato (empréstimo, consignado, financiamento, capital de giro, cartão) e compara com a taxa média do BACEN na época. Monta a planilha de restituição.',
     icon: Percent,
-    disponivel: false,
+    disponivel: true,
   },
 ];
 
