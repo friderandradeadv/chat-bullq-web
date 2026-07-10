@@ -16,6 +16,7 @@ import { financeiroService } from '@/features/financeiro/services/financeiro.ser
 import { FaseFields } from './fase-fields';
 import { RepbMalote } from './repb-malote';
 import { BancosReusEditor } from './bancos-reus-editor';
+import { RepbProvisaoInline } from './repb-provisao-inline';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
@@ -403,14 +404,13 @@ export function CaseDetailDrawer({
                 fases repb_). Fica visível em qualquer fase da trilha de reestruturação. */}
             {c && phaseKey?.startsWith('repb_') && (
               <>
-                <a
-                  href={`/juridico/calculos/provisionamento?case=${c.id}&cliente=${encodeURIComponent(cliente?.name ?? c.title ?? '')}&banco=${encodeURIComponent(adversa?.name ?? '')}`}
-                  target="_blank" rel="noreferrer"
-                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-[#B7791F]/10"
-                  style={{ borderColor: '#B7791F55', color: '#B7791F' }}
-                >
-                  <Calculator className="h-4 w-4" /> Calculadora de provisionamento
-                </a>
+                <RepbProvisaoInline
+                  caseId={c.id}
+                  cliente={cliente?.name ?? c.title ?? ''}
+                  banco={c.parties.find((p) => p.role === 'OPPONENT')?.name ?? adversa?.name ?? ''}
+                  saldoInicial={(c.metadata as any)?.faseData?.repb_provisionamento?.saldo_devedor
+                    ?? c.parties.find((p) => p.role === 'OPPONENT')?.metadata?.saldoDevedor}
+                />
                 <RepbMalote caseId={c.id} lista={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} />
               </>
             )}
