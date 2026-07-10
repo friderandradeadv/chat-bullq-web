@@ -10,6 +10,7 @@ import {
   Landmark,
   Percent,
   Scale,
+  Sigma,
   Wrench,
 } from 'lucide-react';
 
@@ -68,6 +69,14 @@ const CALCULADORAS: Calc[] = [
     descricao:
       'Análise segmentada da renda (Lei 14.181/21): renda líquida, comprometimento, renda livre e capacidade para o plano de pagamento. Triagem do superendividamento.',
     icon: Scale,
+    disponivel: true,
+  },
+  {
+    href: '/juridico/calculos/perda-esperada',
+    titulo: 'Perda Esperada (PE) — bancões S1–S3',
+    descricao:
+      'PE = PD × LGD × EAD (metodologia completa, Res. 4.966/21) com arrasto e 3 cenários. Estima o provisionamento dos grandes bancos para a negociação. Complementa a de Provisionamento (S4/S5).',
+    icon: Sigma,
     disponivel: true,
   },
 ];
