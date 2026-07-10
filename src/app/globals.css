@@ -399,10 +399,11 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 @media (min-width: 1024px) {
-  /* respiro no topo de cada página = EXATAMENTE a altura da barra (2.75rem). Como
-     a barra agora é sólida e da mesma cor, o conteúdo encosta logo abaixo dela
-     sem folga (antes tinha +1rem de respiro que virava um vão desnecessário). */
+  /* Respiro no topo de cada página = altura da barra (2.75rem) + folga padrão
+     (1.25rem) = 4rem. Isso dá um respiro UNIFORME abaixo da barra de vidro em
+     TODO o hub (esta regra sobrescreve o padding-top do root de cada página, então
+     é a única fonte do respiro do topo — páginas NÃO devem pôr pt-* no root). */
   .under-bar > * {
-    padding-top: 2.75rem;
+    padding-top: 4rem;
   }
 }

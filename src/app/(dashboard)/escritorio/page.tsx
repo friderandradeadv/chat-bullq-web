@@ -185,7 +185,7 @@ export default function EscritorioPage() {
           <div className="flex items-center gap-2">
             <UserCircle className="h-6 w-6 text-[#7048E8]" />
             <div>
-              <h1 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">Meu Espaço</h1>
+              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Meu Espaço</h1>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Seu perfil, seu financeiro, o organograma e a cultura — o seu lugar na Frider Andrade.</p>
             </div>
           </div>
