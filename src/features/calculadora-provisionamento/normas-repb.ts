@@ -80,7 +80,8 @@ export const PRAZOS: BlocoNorma<Record<string, { dias: number; uteis?: boolean; 
   vigencia: '2025-01-01', versao: 1, status: 'pendente', // default/superendiv seguem 'pendente'; busca e apreensão VALIDADO (ver notas)
   valores: {
     default_inadimplemento: { dias: 90, nota: 'marco do ativo problemático (Res. BCB 352, art. 3º) — VALIDADO' },
-    superendiv_primeira_parcela: { dias: 180, nota: '1ª parcela do plano de superendividamento (a conferir na Lei 14.181)' },
+    superendiv_plano_max: { dias: 1825, nota: 'plano de pagamento: prazo MÁXIMO 5 anos/60 meses (CDC art. 104-A) — VALIDADO' },
+    superendiv_primeira_parcela: { dias: 180, nota: '1ª parcela em até 180 dias — plano COMPULSÓRIO (CDC art. 104-B), a confirmar; não é do 104-A' },
     // VALIDADO (STJ + DL 911/69 art. 3º §§1º/2º): 5 dias CORRIDOS da EXECUÇÃO da
     // liminar p/ pagar a INTEGRALIDADE da dívida (direito material); 15 dias da
     // juntada do mandado p/ contestar.
@@ -112,13 +113,13 @@ export const REFERENCIAS: RefLegal[] = [
   { id: 'res_2682', label: 'Res. CMN 2.682/1999', tema: 'regime antigo (referência histórica)', status: 'pendente' },
   { id: 'res_3919', label: 'Res. CMN 3.919/2010', tema: 'tarifas bancárias', status: 'pendente' },
   { id: 'lei_14181', label: 'Lei 14.181/2021', tema: 'superendividamento (altera o CDC)', status: 'validado' },
-  { id: 'cdc_54a', label: 'CDC art. 54-A', tema: 'conceito de superendividamento / mínimo existencial', status: 'pendente' },
-  { id: 'cdc_42', label: 'CDC art. 42 § único', tema: 'repetição do indébito em dobro', status: 'pendente' },
+  { id: 'cdc_54a', label: 'CDC art. 54-A', tema: 'conceito de superendividamento (PF de boa-fé, dívidas de consumo, mínimo existencial) — Lei 14.181/21', status: 'validado' },
+  { id: 'cdc_42', label: 'CDC art. 42 § único', tema: 'repetição em dobro — independe de má-fé (basta violar a boa-fé objetiva); modulação: pagamentos após 30/03/2021', status: 'validado' },
   { id: 'cdc_6v', label: 'CDC art. 6º, V', tema: 'revisão de cláusulas / modificação', status: 'pendente' },
   { id: 'sum_530', label: 'Súmula 530 STJ', tema: 'taxa média BACEN quando a taxa contratada não é comprovada (salvo mais vantajosa ao devedor)', status: 'validado' },
   { id: 'sum_72', label: 'Súmula 72 STJ', tema: 'comprovação da mora é pressuposto da busca e apreensão (v. Tema 1.132)', status: 'validado' },
   { id: 'tema_28', label: 'Tema 28 STJ', tema: 'abusividade nos encargos da NORMALIDADE (juros/capitalização) descaracteriza a mora — se causou o inadimplemento', status: 'validado' },
-  { id: 'aresp_676608', label: 'AgRg no AREsp 676.608', tema: 'repetição em dobro independe de má-fé', status: 'pendente' },
+  { id: 'aresp_676608', label: 'EAREsp 676.608/RS (Corte Especial)', tema: 'repetição em dobro independe de má-fé — modulação: vale p/ pagamentos após 30/03/2021', status: 'validado' },
   { id: 'dl_911', label: 'DL 911/1969, art. 3º', tema: 'busca e apreensão: 5 dias (integralidade, corridos, da execução) / 15 dias contestar', status: 'validado' },
   { id: 'lei_10931', label: 'Lei 10.931/2004', tema: 'CCB — cédula de crédito bancário', status: 'pendente' },
   { id: 'cpc_914', label: 'CPC art. 914 e ss.', tema: 'embargos à execução', status: 'pendente' },
