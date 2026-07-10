@@ -81,6 +81,16 @@ export interface ChannelSyncJob {
   updatedAt: string;
 }
 
+export interface BusinessProfile {
+  about?: string;
+  address?: string;
+  description?: string;
+  email?: string;
+  websites?: string[];
+  vertical?: string;
+  profile_picture_url?: string;
+}
+
 export const channelsService = {
   async list(): Promise<Channel[]> {
     const { data } = await api.get<{ data: Channel[] }>('/channels');
@@ -126,5 +136,27 @@ export const channelsService = {
   async cancelSync(id: string): Promise<ChannelSyncJob | null> {
     const { data } = await api.post<{ data: { job: ChannelSyncJob | null } }>(`/channels/${id}/sync/cancel`);
     return data.data.job;
+  },
+
+  // ─── Perfil comercial (WhatsApp Cloud API) ───────────────────────
+  async getBusinessProfile(id: string): Promise<BusinessProfile> {
+    const { data } = await api.get<{ data: BusinessProfile }>(`/channels/${id}/whatsapp-profile`);
+    return data.data;
+  },
+
+  async updateBusinessProfile(id: string, payload: Partial<BusinessProfile>): Promise<BusinessProfile> {
+    const { data } = await api.patch<{ data: BusinessProfile }>(`/channels/${id}/whatsapp-profile`, payload);
+    return data.data;
+  },
+
+  async uploadBusinessProfilePicture(id: string, file: File): Promise<BusinessProfile> {
+    const form = new FormData();
+    form.append('file', file);
+    const { data } = await api.post<{ data: BusinessProfile }>(
+      `/channels/${id}/whatsapp-profile/picture`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data.data;
   },
 };
