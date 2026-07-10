@@ -103,10 +103,10 @@ export default function ClientesPage() {
   });
 
   return (
-    <div className="flex h-full flex-col bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="h-full overflow-y-auto bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pb-1 pt-8 lg:px-8">
-        <h1 className="flex items-center gap-2 text-2xl font-normal text-zinc-700 dark:text-zinc-200">
+      <div className="flex items-center justify-between px-4 pb-1 pt-6 lg:px-8">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
           <Users className="h-6 w-6" style={{ color: '#228BE6' }} /> Clientes
         </h1>
       </div>
@@ -210,8 +210,8 @@ export default function ClientesPage() {
         <PageSizeSelect value={pageSize} onChange={setPageSize} />
       </div>
 
-      {/* Lista */}
-      <div className="mt-2 flex-1 overflow-auto px-4 pb-6 lg:px-8">
+      {/* Lista — altura natural; a PÁGINA inteira rola (root overflow-y-auto). */}
+      <div className="mt-2 px-4 pb-6 lg:px-8">
         <div className="overflow-hidden rounded-lg border border-[#DEE2E6] bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-left">

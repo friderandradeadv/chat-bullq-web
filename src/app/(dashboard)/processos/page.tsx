@@ -277,10 +277,10 @@ export default function ProcessosPage() {
   });
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
+    <div className="h-full overflow-y-auto bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pb-1 pt-9 lg:px-8">
-        <h1 className="text-2xl font-normal text-zinc-700 dark:text-zinc-100">Processos e casos</h1>
+      <div className="flex items-center justify-between px-4 pb-1 pt-6 lg:px-8">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Processos e casos</h1>
         <div className="flex items-center gap-2">
           <IconBtn title="Imprimir">
             <Printer className="h-4 w-4" />
@@ -371,7 +371,7 @@ export default function ProcessosPage() {
       </div>
 
       {/* Tabela */}
-      <div className="mt-2 flex-1 overflow-y-auto px-4 pb-6 lg:px-8">
+      <div className="mt-2 px-4 pb-6 lg:px-8">
         <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left">

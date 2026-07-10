@@ -577,7 +577,7 @@ export default function AgendaPage() {
           root; px/pt repõem o alinhamento interno. */}
       <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-1 px-4 pb-3 pt-4 lg:-mx-6 lg:-mt-6 lg:px-6 lg:pt-6 bg-white/70 dark:bg-zinc-950/55 backdrop-blur-xl backdrop-saturate-150 border-b border-black/5 dark:border-white/10">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">Agenda</h1>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Agenda</h1>
         <div className="flex items-center gap-2">
           <button onClick={() => { refetchAll(); toast.success('Agenda atualizada'); }} className="flex h-9 w-9 items-center justify-center rounded-md border border-[#E9ECEF] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Atualizar"><RefreshCw className={`h-4 w-4 ${(evQ.isFetching || dlQ.isFetching || tkQ.isFetching || tagsQ.isFetching) ? 'animate-spin' : ''}`} /></button>
           <div className="relative">

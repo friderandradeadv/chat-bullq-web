@@ -72,7 +72,7 @@ export default function CalculosHubPage() {
           <Calculator className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-white">Calculadoras</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Calculadoras</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Ferramentas de cálculo jurídico do escritório
           </p>
