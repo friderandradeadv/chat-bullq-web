@@ -9,7 +9,7 @@ import {
 import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
+  legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase, type PartyDetail,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
@@ -25,6 +25,29 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.floor(d / 365)}a` : d >= 30 ? `${Math.floor(d / 30)}m` : `${d}d`);
 
+// ── Visão POR BANCO: cada banco réu (Party OPPONENT) vira um card distribuído nas
+// colunas de fase conforme a SITUAÇÃO dele. Mapa situação↔fase (arrastar o card =
+// mudar a situação do banco). Fases sem situação natural caem no default.
+const SIT_TO_PHASE: Record<string, string> = {
+  'Em análise': 'repb_investigativa', 'Malote enviado': 'repb_provisionamento', Negociando: 'repb_negociacao',
+  'Acordo fechado': 'repb_concluido', Judicializado: 'repb_acao_judicial', 'Sem acordo': 'repb_inviavel',
+};
+const PHASE_TO_SIT: Record<string, string> = {
+  repb_novo_cliente: 'Em análise', repb_docs_faltantes: 'Em análise', repb_investigativa: 'Em análise',
+  repb_provisionamento: 'Malote enviado', repb_negociacao: 'Negociando', repb_acao_judicial: 'Judicializado',
+  repb_acordo: 'Acordo fechado', repb_concluido: 'Acordo fechado', repb_inviavel: 'Sem acordo',
+};
+const SIT_BADGE: Record<string, string> = {
+  'Em análise': 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+  'Malote enviado': 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+  Negociando: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400',
+  'Acordo fechado': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+  Judicializado: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400',
+  'Sem acordo': 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
+};
+const normNome = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const parseBRL = (s: string | null | undefined) => { let t = String(s ?? '').replace(/[^\d,.-]/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); const n = Number(t); return Number.isFinite(n) ? n : 0; };
+
 export default function RepbPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -37,6 +60,7 @@ export default function RepbPage() {
 
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
+  const [foco, setFoco] = useState(''); // caseId do cliente p/ ver os bancos distribuídos no board
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
   const dragScroll = useDragScroll();
@@ -51,6 +75,11 @@ export default function RepbPage() {
     for (const c of cards) if (c.responsible) m.set(c.responsible.id, c.responsible.name);
     return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [cards]);
+  const clientes = useMemo(
+    () => cards.filter((c) => c.phase?.startsWith('repb_')).map((c) => ({ id: c.id, nome: (c.client ?? c.title ?? 'Cliente') })).sort((a, b) => a.nome.localeCompare(b.nome)),
+    [cards],
+  );
+  const focoNome = clientes.find((c) => c.id === foco)?.nome ?? '';
 
   const repbKeys = new Set(phases.map((p) => p.key));
   const filtered = useMemo(() => {
@@ -132,6 +161,12 @@ export default function RepbPage() {
             <option value="">Todos os responsáveis</option>
             {resps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
+          <select value={foco} onChange={(e) => setFoco(e.target.value)} title="Distribui os bancos de um cliente nas colunas por situação" className={`h-9 max-w-[220px] rounded-lg border px-2 text-sm dark:bg-zinc-900 ${foco ? 'border-[#B7791F] bg-[#B7791F]/10 font-semibold text-[#B7791F]' : 'border-[#cfe0ed] bg-white text-[#101820] dark:border-zinc-700 dark:text-zinc-300'}`}>
+            <option value="">Visão por cliente (1 card)</option>
+            <optgroup label="Ver bancos de um cliente">
+              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </optgroup>
+          </select>
           <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
             <Plus className="h-4 w-4" /> Novo cliente
           </button>
@@ -142,8 +177,17 @@ export default function RepbPage() {
         </div>
       </div>
 
+      {foco && view === 'kanban' && (
+        <div className="shrink-0 border-b border-[#dbeaf5] bg-[#B7791F]/5 px-4 py-1.5 text-[12px] text-[#48626f] dark:border-zinc-800 dark:text-zinc-400 lg:px-6">
+          Mostrando os <b>bancos</b> de <b className="text-[#B7791F]">{focoNome}</b> distribuídos por situação — arraste um banco entre as colunas p/ mudar a situação.
+          <button onClick={() => setFoco('')} className="ml-2 font-semibold text-[#B7791F] hover:underline">← voltar à visão por cliente</button>
+        </div>
+      )}
+
       {view === 'lista' ? (
         <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent={ACCENT} />
+      ) : foco ? (
+        <BancoBoard caseId={foco} phases={phases} onOpenCase={setOpenCaseId} scroll={dragScroll} />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
@@ -212,6 +256,92 @@ function Card({ c, onOpen }: { c: KanbanCard; onOpen?: (id: string) => void }) {
           ? <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
           : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>)}
       </div>
+    </div>
+  );
+}
+
+// ── Visão POR BANCO: distribui os bancos réus de UM cliente nas colunas de fase,
+// pela situação de cada banco. Arrastar = mudar a situação (updateParty). Clicar
+// abre a ficha do cliente. Não cria Cases — os "cards" são as partes OPPONENT.
+function BancoBoard({ caseId, phases, onOpenCase, scroll }: { caseId: string; phases: KanbanPhase[]; onOpenCase: (id: string) => void; scroll: ReturnType<typeof useDragScroll> }) {
+  const qc = useQueryClient();
+  const { data: detail, isLoading } = useQuery({ queryKey: ['legal-cases', 'detail', caseId], queryFn: () => legalCasesService.get(caseId) });
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const reus = useMemo(() => (detail?.parties ?? []).filter((p) => p.role === 'OPPONENT'), [detail]);
+  const malotes = ((detail?.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[];
+  const malCount = (p: PartyDetail) => malotes.filter((mm: any) => (mm.bancoId ? mm.bancoId === p.id : (normNome(mm.banco) && (normNome(p.name).includes(normNome(mm.banco)) || normNome(mm.banco).includes(normNome(p.name)))))).length;
+
+  const byPhase = useMemo(() => {
+    const map: Record<string, PartyDetail[]> = {};
+    for (const p of reus) { const ph = SIT_TO_PHASE[(p.metadata as any)?.situacao ?? 'Em análise'] ?? 'repb_investigativa'; (map[ph] ??= []).push(p); }
+    return map;
+  }, [reus]);
+
+  const moveBank = async (party: PartyDetail, phaseKey: string) => {
+    const sit = PHASE_TO_SIT[phaseKey]; if (!sit) return;
+    if (((party.metadata as any)?.situacao ?? 'Em análise') === sit) return;
+    qc.setQueryData<any>(['legal-cases', 'detail', caseId], (old: any) => (old ? { ...old, parties: old.parties.map((x: any) => (x.id === party.id ? { ...x, metadata: { ...(x.metadata ?? {}), situacao: sit } } : x)) } : old));
+    try {
+      await legalCasesService.updateParty(party.id, { name: party.name || 'Banco', role: 'OPPONENT', document: party.document ?? undefined, metadata: { ...((party.metadata as any) ?? {}), situacao: sit } });
+      qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
+    } catch { qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] }); toast.error('Erro ao mover banco'); }
+  };
+  const onDragEnd = (e: DragEndEvent) => { setActiveId(null); const to = e.over?.id as string | undefined; const party = reus.find((x) => x.id === e.active.id); if (to && party) moveBank(party, to); };
+  const activeParty = reus.find((p) => p.id === activeId) ?? null;
+
+  if (isLoading) return <p className="px-6 pt-3 text-sm text-zinc-400">Carregando bancos…</p>;
+  if (!reus.length) return <p className="px-6 pt-3 text-sm text-zinc-400">Este cliente não tem bancos réus cadastrados.</p>;
+
+  return (
+    <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+      <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+        {phases.map((phase) => <BancoColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} malCount={malCount} onOpen={() => onOpenCase(caseId)} />)}
+      </div>
+      <DragOverlay>{activeParty ? <BancoCard party={activeParty} malCount={malCount} /> : null}</DragOverlay>
+    </DndContext>
+  );
+}
+
+function BancoColumn({ phase, items, malCount, onOpen }: { phase: KanbanPhase; items: PartyDetail[]; malCount: (p: PartyDetail) => number; onOpen: () => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: phase.key });
+  const total = items.reduce((a, p) => a + parseBRL((p.metadata as any)?.saldoDevedor), 0);
+  return (
+    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+      <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
+        <span className="truncate text-[13px] font-semibold text-[#101820] dark:text-zinc-200">{phase.label}</span>
+        {total > 0 && <span className="text-[11px] text-zinc-400">{fmtMoney(total)}</span>}
+        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+      </div>
+      <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
+        {items.map((p) => <BancoCard key={p.id} party={p} malCount={malCount} onOpen={onOpen} />)}
+      </div>
+    </div>
+  );
+}
+
+function BancoCard({ party, malCount, onOpen }: { party: PartyDetail; malCount: (p: PartyDetail) => number; onOpen?: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: party.id });
+  const m: any = party.metadata ?? {};
+  const nMal = malCount(party);
+  const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {};
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={onOpen}
+      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      <div className="flex items-start gap-2">
+        <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-[#101820] dark:text-zinc-100">{party.name}</p>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${SIT_BADGE[m.situacao ?? 'Em análise'] ?? ''}`}>{m.situacao ?? 'Em análise'}</span>
+      </div>
+      {m.saldoDevedor && <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{m.saldoDevedor}</p>}
+      {m.operacao && <p className="mt-0.5 truncate text-[11px] text-[#48626f] dark:text-zinc-500">{m.operacao}</p>}
+      {(nMal > 0 || m.acordoFez === 'Sim') && (
+        <div className="mt-2 flex items-center gap-2 border-t border-[#eef2f8] pt-1.5 text-[10px] text-[#4b5863] dark:border-zinc-800 dark:text-zinc-400">
+          {nMal > 0 && <span>📋 {nMal} malote{nMal === 1 ? '' : 's'}</span>}
+          {m.acordoFez === 'Sim' && <span className="text-emerald-600 dark:text-emerald-400">✓ acordo</span>}
+        </div>
+      )}
     </div>
   );
 }
