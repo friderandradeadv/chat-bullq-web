@@ -14,7 +14,7 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
-import { BancosReusEditor } from './bancos-reus-editor';
+import { BancosReusEditor, RepbFasePorBanco } from './bancos-reus-editor';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
@@ -394,7 +394,9 @@ export function CaseDetailDrawer({
 
             {c && phaseKey && (
               <div className="mt-5">
-                <FaseFields caseId={c.id} phase={phaseKey} data={faseData} />
+                {phaseKey === 'repb_negociacao' || phaseKey === 'repb_provisionamento'
+                  ? <RepbFasePorBanco parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} />
+                  : <FaseFields caseId={c.id} phase={phaseKey} data={faseData} />}
               </div>
             )}
 

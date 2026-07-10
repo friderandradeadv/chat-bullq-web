@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Gavel, ChevronDown, Landmark, Calculator, Handshake, LayoutGrid, List } from 'lucide-react';
+import { Plus, Trash2, Gavel, ChevronDown, Landmark, Calculator, Handshake, LayoutGrid, List, MessagesSquare, Maximize2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type PartyDetail } from '@/features/legal-cases/services/legal-cases.service';
 import { maskCurrencyBR, maskCpfCnpj } from '@/lib/masks';
@@ -72,9 +72,11 @@ function provValorDoBanco(p: PartyDetail): number | null {
   return calcularProvisao({ saldoDevedor: saldo, carteira, dias, instituicao: inst }).valorProvisionado;
 }
 
+const NEG_STATUS = ['Não iniciada', 'Em negociação', 'Acordo aceito', 'Recusado'];
 type Draft = {
   name: string; document: string; operacao: string; saldoDevedor: string; situacao: string; obs: string;
   provInstituicao: Instituicao; provOperacao: string; provDias: string;
+  negInterlocutor: string; negProposta: string; negContraproposta: string; negStatus: string;
   acordoFez: string; acordoValor: string; acordoDesconto: string; acordoHonorarios: string;
 };
 const toDraft = (p: PartyDetail): Draft => {
@@ -85,6 +87,8 @@ const toDraft = (p: PartyDetail): Draft => {
     provInstituicao: m.provInstituicao ?? guessInstituicao(p.name ?? ''),
     provOperacao: m.provOperacao ?? guessOperacao(m.operacao ?? ''),
     provDias: m.provDias ?? '',
+    negInterlocutor: m.negInterlocutor ?? '', negProposta: m.negProposta ?? '', negContraproposta: m.negContraproposta ?? '',
+    negStatus: m.negStatus ?? (m.situacao === 'Negociando' ? 'Em negociação' : m.situacao === 'Acordo fechado' ? 'Acordo aceito' : 'Não iniciada'),
     acordoFez: m.acordoFez ?? (m.situacao === 'Acordo fechado' ? 'Sim' : ''),
     acordoValor: m.acordoValor ?? '', acordoDesconto: m.acordoDesconto ?? '', acordoHonorarios: m.acordoHonorarios ?? '',
   };
@@ -97,6 +101,7 @@ export function BancosReusEditor({ caseId, parties, malotes, onChanged }: { case
   const [openId, setOpenId] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<string>('Todos');
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
+  const [fullscreen, setFullscreen] = useState(false);
 
   // Malotes: lista global mantida aqui; cada banco filtra a sua fatia.
   const [malRows, setMalRows] = useState<Malote[]>(malotes ?? []);
@@ -141,10 +146,10 @@ export function BancosReusEditor({ caseId, parties, malotes, onChanged }: { case
   const abrirBanco = (id: string) => { setView('lista'); setOpenId(id); };
 
   return (
-    <div className="rounded-lg border border-[#e3e8ef] bg-[#fafbfc] p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-      <div className="flex items-center gap-2">
+    <div className={fullscreen ? 'fixed inset-0 z-[60] overflow-auto bg-white p-4 dark:bg-zinc-950' : 'rounded-lg border border-[#e3e8ef] bg-[#fafbfc] p-3 dark:border-zinc-800 dark:bg-zinc-900/40'}>
+      <div className={`flex items-center gap-2 ${fullscreen ? 'mx-auto max-w-[1400px]' : ''}`}>
         <Gavel className="h-4 w-4 text-[#B7791F]" />
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Bancos réus</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Bancos réus{fullscreen ? ' — visão ampliada' : ''}</p>
         <span className="rounded bg-[#edeff3] px-1.5 text-[12px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{reus.length}</span>
         {saldoTotal > 0 && <span className="text-[11px] text-zinc-400">· {brl(saldoTotal)}</span>}
         <div className="ml-auto flex items-center gap-1.5">
@@ -154,18 +159,24 @@ export function BancosReusEditor({ caseId, parties, malotes, onChanged }: { case
               <button onClick={() => setView('lista')} title="Lista / dossiê" className={`inline-flex items-center gap-1 border-l border-[#e3e8ef] px-2 py-1 text-[11px] font-semibold dark:border-zinc-700 ${view === 'lista' ? 'bg-[#B7791F]/10 text-[#B7791F]' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}><List className="h-3.5 w-3.5" /> Lista</button>
             </div>
           )}
+          {reus.length > 0 && (
+            <button onClick={() => setFullscreen((v) => !v)} title={fullscreen ? 'Sair da tela cheia' : 'Abrir em tela cheia'} className="inline-flex items-center rounded-md border border-[#e3e8ef] p-1.5 text-zinc-500 hover:border-[#B7791F]/40 hover:text-[#B7791F] dark:border-zinc-700">
+              {fullscreen ? <X className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            </button>
+          )}
           <button onClick={addBanco} disabled={adding} className="inline-flex items-center gap-1 rounded-md border border-[#B7791F]/40 px-2 py-1 text-[12px] font-semibold text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-50">
             <Plus className="h-3.5 w-3.5" /> Banco
           </button>
         </div>
       </div>
+      <div className={fullscreen ? 'mx-auto max-w-[1400px]' : ''}>
 
       {reus.length === 0 && <p className="mt-3 rounded-lg border border-dashed border-[#dcdfe5] py-4 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum banco réu cadastrado</p>}
 
       <datalist id="bancos-repb-dir">{BANCOS_DIRETORIO.map((b) => <option key={b.nome} value={b.nome} />)}</datalist>
 
       {view === 'kanban' && reus.length > 0 && (
-        <BancosMiniKanban reus={reus} malotesCount={(p) => malotesDoBanco(p).length} onSelect={abrirBanco} onMove={moverSituacao} />
+        <BancosMiniKanban reus={reus} malotesCount={(p) => malotesDoBanco(p).length} onSelect={abrirBanco} onMove={moverSituacao} wide={fullscreen} />
       )}
 
       {view === 'lista' && (
@@ -210,6 +221,7 @@ export function BancosReusEditor({ caseId, parties, malotes, onChanged }: { case
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -225,11 +237,12 @@ function FiltroChip({ label, count, ativo, onClick }: { label: string; count: nu
 
 // Mini-kanban dos bancos DENTRO do card do cliente: colunas = situação. Arrasta
 // pra mudar a situação, clica pra abrir o dossiê. Dá o "onde está cada um" num relance.
-function BancosMiniKanban({ reus, malotesCount, onSelect, onMove }: {
+function BancosMiniKanban({ reus, malotesCount, onSelect, onMove, wide }: {
   reus: PartyDetail[];
   malotesCount: (p: PartyDetail) => number;
   onSelect: (id: string) => void;
   onMove: (p: PartyDetail, situacao: string) => void;
+  wide?: boolean;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
@@ -247,7 +260,7 @@ function BancosMiniKanban({ reus, malotesCount, onSelect, onMove }: {
               onDragOver={(e) => { e.preventDefault(); setOverCol(sit); }}
               onDragLeave={() => setOverCol((c) => (c === sit ? null : c))}
               onDrop={() => { const p = dragId ? byId.get(dragId) : null; if (p) onMove(p, sit); setDragId(null); setOverCol(null); }}
-              className={`flex w-[150px] shrink-0 flex-col rounded-lg border p-1.5 ${overCol === sit ? 'border-[#B7791F] bg-[#B7791F]/5' : 'border-[#e3e8ef] bg-[#fafbfc] dark:border-zinc-800 dark:bg-zinc-900/40'}`}
+              className={`flex shrink-0 flex-col rounded-lg border p-1.5 ${wide ? 'w-[240px] min-h-[60vh]' : 'w-[150px]'} ${overCol === sit ? 'border-[#B7791F] bg-[#B7791F]/5' : 'border-[#e3e8ef] bg-[#fafbfc] dark:border-zinc-800 dark:bg-zinc-900/40'}`}
             >
               <div className="flex items-center gap-1 px-0.5">
                 <span className={`h-2 w-2 shrink-0 rounded-full ${SIT_DOT[sit] ?? 'bg-zinc-300'}`} />
@@ -307,6 +320,7 @@ function BancoDossie({ party, open, onToggle, onChanged, malotes, onAddMalote, o
           metadata: {
             operacao: next.operacao, saldoDevedor: next.saldoDevedor, situacao: next.situacao, obs: next.obs,
             provInstituicao: next.provInstituicao, provOperacao: next.provOperacao, provDias: next.provDias,
+            negInterlocutor: next.negInterlocutor, negProposta: next.negProposta, negContraproposta: next.negContraproposta, negStatus: next.negStatus,
             acordoFez: next.acordoFez, acordoValor: next.acordoValor, acordoDesconto: next.acordoDesconto, acordoHonorarios: next.acordoHonorarios,
           },
         });
@@ -375,6 +389,17 @@ function BancoDossie({ party, open, onToggle, onChanged, malotes, onAddMalote, o
             )}
           </section>
 
+          {/* ── Negociação (por banco) ── */}
+          <section className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <div className="flex items-center gap-1.5"><MessagesSquare className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Negociação</p></div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <label className={`${LABEL} col-span-2`}>Interlocutor (gerente / assessoria)<input value={d.negInterlocutor} onChange={(e) => save({ ...d, negInterlocutor: e.target.value })} placeholder="Quem negocia neste banco" className={INPUT} /></label>
+              <label className={LABEL}>Proposta enviada<input value={d.negProposta} onChange={(e) => save({ ...d, negProposta: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+              <label className={LABEL}>Contraproposta do banco<input value={d.negContraproposta} onChange={(e) => save({ ...d, negContraproposta: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+              <label className={`${LABEL} col-span-2`}>Status<select value={d.negStatus} onChange={(e) => save({ ...d, negStatus: e.target.value })} className={INPUT}>{NEG_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+            </div>
+          </section>
+
           {/* ── Acordo (fez / não fez) ── */}
           <section className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
             <div className="flex items-center gap-1.5"><Handshake className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Acordo</p></div>
@@ -435,6 +460,71 @@ function Metric({ label, value, sub }: { label: string; value: string; sub?: str
       <p className="text-[9px] uppercase tracking-wide text-zinc-400">{label}</p>
       <p className="text-[12px] font-semibold text-[#101820] dark:text-zinc-100">{value}</p>
       {sub && <p className="text-[9px] text-zinc-400">{sub}</p>}
+    </div>
+  );
+}
+
+// Painel "Fase atual" do REPB, POR BANCO: em vez de despejar os campos da fase no
+// nível do caso (confuso: "de quem é essa proposta?"), o advogado SELECIONA o banco
+// e vê a situação daquele banco (negociação, provisionamento, acordo, malotes). A
+// edição fina fica no dossiê (aba Dados). Só leitura aqui — visão de acompanhamento.
+const ORDEM_SIT = ['Acordo fechado', 'Negociando', 'Malote enviado', 'Em análise', 'Judicializado', 'Sem acordo'];
+export function RepbFasePorBanco({ parties, malotes }: { parties: PartyDetail[]; malotes?: Malote[] }) {
+  const reus = parties.filter((p) => p.role === 'OPPONENT');
+  const sorted = [...reus].sort((a, b) => ORDEM_SIT.indexOf(a.metadata?.situacao ?? 'Em análise') - ORDEM_SIT.indexOf(b.metadata?.situacao ?? 'Em análise'));
+  const [sel, setSel] = useState<string>('');
+  const p = reus.find((x) => x.id === sel) ?? sorted[0];
+
+  if (!reus.length) return <p className="text-sm text-zinc-400">Nenhum banco réu cadastrado ainda — adicione no dossiê (aba Dados).</p>;
+
+  const m: any = p?.metadata ?? {};
+  const prov = p ? provValorDoBanco(p) : null;
+  const nMal = malotes && p ? malotes.filter((x) => (x.bancoId ? x.bancoId === p.id : (norm(x.banco) && (norm(p.name).includes(norm(x.banco)) || norm(x.banco).includes(norm(p.name)))))).length : 0;
+  const Linha = ({ k, v }: { k: string; v?: string }) => (v ? <div className="flex items-baseline justify-between gap-3 py-0.5 text-[13px]"><span className="text-zinc-500 dark:text-zinc-400">{k}</span><span className="text-right font-medium text-[#101820] dark:text-zinc-100">{v}</span></div> : null);
+
+  return (
+    <div>
+      <label className="text-[11px] font-medium uppercase tracking-wide text-[#6C757D]">Banco em foco</label>
+      <select value={p?.id ?? ''} onChange={(e) => setSel(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#B7791F] dark:border-zinc-700 dark:text-zinc-200">
+        {sorted.map((b) => <option key={b.id} value={b.id}>{b.name} — {b.metadata?.situacao ?? 'Em análise'}</option>)}
+      </select>
+
+      {p && (
+        <div className="mt-3 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SIT_COR[m.situacao ?? 'Em análise'] ?? ''}`}>{m.situacao ?? 'Em análise'}</span>
+            {m.saldoDevedor && <span className="ml-auto text-sm font-semibold tabular-nums text-[#101820] dark:text-zinc-100">{m.saldoDevedor}</span>}
+          </div>
+
+          <div className="rounded-lg border border-[#e3e8ef] p-2.5 dark:border-zinc-800">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Negociação</p>
+            <Linha k="Interlocutor" v={m.negInterlocutor} />
+            <Linha k="Proposta enviada" v={m.negProposta} />
+            <Linha k="Contraproposta do banco" v={m.negContraproposta} />
+            <Linha k="Status" v={m.negStatus} />
+            {!m.negInterlocutor && !m.negProposta && !m.negContraproposta && <p className="text-[12px] text-zinc-400">Sem dados de negociação ainda.</p>}
+          </div>
+
+          <div className="rounded-lg border border-[#e3e8ef] p-2.5 dark:border-zinc-800">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Provisionamento</p>
+            {prov != null ? <Linha k="Provisionado (estimado)" v={brl(prov)} /> : <p className="text-[12px] text-zinc-400">Preencha modalidade + dias de atraso no dossiê.</p>}
+          </div>
+
+          <div className="rounded-lg border border-[#e3e8ef] p-2.5 dark:border-zinc-800">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Acordo</p>
+            {m.acordoFez === 'Sim' ? (
+              <>
+                <Linha k="Valor do acordo" v={m.acordoValor} />
+                <Linha k="Desconto obtido" v={m.acordoDesconto} />
+                <Linha k="Honorários" v={m.acordoHonorarios} />
+              </>
+            ) : <p className="text-[12px] text-zinc-400">{m.acordoFez === 'Em andamento' ? 'Acordo em andamento.' : 'Sem acordo fechado.'}</p>}
+          </div>
+
+          {malotes && <p className="text-[12px] text-zinc-500 dark:text-zinc-400">📋 {nMal} malote{nMal === 1 ? '' : 's'} / protocolo{nMal === 1 ? '' : 's'} deste banco</p>}
+          <p className="text-[11px] text-zinc-400">Edite os detalhes deste banco no dossiê (aba Dados → Bancos réus).</p>
+        </div>
+      )}
     </div>
   );
 }
