@@ -571,14 +571,15 @@ export default function AgendaPage() {
     // A PÁGINA INTEIRA rola (estilo Astrea): o scroll fica neste root, o
     // calendário rende na altura natural (height auto) e o conteúdo passa por
     // baixo da barra de vidro — nada de scroll preso dentro da grade de dias.
-    <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
+    <div className="flex h-full flex-col overflow-y-auto bg-white dark:bg-zinc-950 p-4 lg:p-6 lg:!pt-11 text-zinc-800 dark:text-zinc-200">
       {/* Barra superior "glassy" (iOS): sticky no topo, vidro fosco translúcido —
           o conteúdo rola por baixo. -mx/-mt sangram até as bordas do padding do
           root; px/pt repõem o alinhamento interno. */}
-      {/* Barra sticky deve colar FLUSH no topo do scroll (neg-margin = padding-top
-          do root: 1rem mobile / 4rem lg) — se sobrar fresta acima, o calendário
-          vaza por cima ao rolar. pt interno repõe o respiro do título. */}
-      <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-1 px-4 pb-3 pt-4 lg:-mx-6 lg:-mt-16 lg:px-6 lg:pt-5 bg-white/70 dark:bg-zinc-950/55 backdrop-blur-xl backdrop-saturate-150 border-b border-black/5 dark:border-white/10">
+      {/* Barra sticky: gruda LOGO ABAIXO da barra de vidro global (h-11 = 2.75rem),
+          por isso lg:top-11 (não top-0, que ficaria ATRÁS do vidro). SEM margem
+          negativa vertical no desktop (ela puxava o calendário e causava vazamento);
+          só -mx pra sangrar até as bordas. Mobile (sem barra global) fica flush. */}
+      <div className="sticky top-0 z-30 -mx-4 -mt-4 mb-1 px-4 pb-3 pt-4 lg:top-11 lg:-mx-6 lg:mt-0 lg:px-6 lg:pt-5 bg-white/70 dark:bg-zinc-950/55 backdrop-blur-xl backdrop-saturate-150 border-b border-black/5 dark:border-white/10">
       <div className="flex items-center justify-between">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100"><CalendarDays className="h-6 w-6" style={{ color: '#228BE6' }} /> Agenda</h1>
         <div className="flex items-center gap-2">
