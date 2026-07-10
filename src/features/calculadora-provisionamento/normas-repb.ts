@@ -74,26 +74,32 @@ export const ESTAGIOS: BlocoNorma<{ s1: string; s2: string; s3: string }> = {
   valores: { s1: 'em dia / ≤ 30 dias — perda esperada 12 meses', s2: '> 30 dias — aumento significativo de risco', s3: '> 90 dias — ativo problemático (default)' },
 };
 
-// ── Prazos operacionais (a validar na fonte antes de automatizar) ──
+// ── Prazos operacionais ──
 export const PRAZOS: BlocoNorma<Record<string, { dias: number; uteis?: boolean; nota: string }>> = {
-  fonte: 'Método TABM + normas citadas', vigencia: '2025-01-01', versao: 1, status: 'pendente',
+  fonte: 'DL 911/69 art. 3º (busca e apreensão) + Res. BCB 352 (default) + método TABM',
+  vigencia: '2025-01-01', versao: 1, status: 'pendente', // default/superendiv seguem 'pendente'; busca e apreensão VALIDADO (ver notas)
   valores: {
-    default_inadimplemento: { dias: 90, nota: 'marco do default / perda incorrida (Anexo II 4966)' },
-    superendiv_primeira_parcela: { dias: 180, nota: '1ª parcela do plano de superendividamento' },
-    busca_apreensao_purgar: { dias: 5, nota: 'purgar a mora após a liminar (DL 911/69)' },
-    busca_apreensao_contestar: { dias: 15, nota: 'contestar a busca e apreensão' },
-    embargos_execucao: { dias: 15, uteis: true, nota: 'embargos à execução (CPC 914 e ss.)' },
+    default_inadimplemento: { dias: 90, nota: 'marco do ativo problemático (Res. BCB 352, art. 3º) — VALIDADO' },
+    superendiv_primeira_parcela: { dias: 180, nota: '1ª parcela do plano de superendividamento (a conferir na Lei 14.181)' },
+    // VALIDADO (STJ + DL 911/69 art. 3º §§1º/2º): 5 dias CORRIDOS da EXECUÇÃO da
+    // liminar p/ pagar a INTEGRALIDADE da dívida (direito material); 15 dias da
+    // juntada do mandado p/ contestar.
+    busca_apreensao_pagar_integral: { dias: 5, nota: 'pagar a INTEGRALIDADE (corridos, da execução da liminar) — VALIDADO' },
+    busca_apreensao_contestar: { dias: 15, nota: 'contestar (da juntada do mandado) — VALIDADO' },
+    embargos_execucao: { dias: 15, uteis: true, nota: 'embargos à execução (CPC 914 e ss.) — a validar' },
   },
 };
 
 // ── Mínimo existencial / superendividamento ──
-// ⚠️ 35% é a posição ADOTADA no curso, NÃO um percentual pacificado em lei.
-// A lei fala em "mínimo existencial" (Lei 14.181/21; Decreto 11.150/22 controverso).
-// Parâmetro editável na calculadora; status 'pendente' até validar.
-export const MINIMO_EXISTENCIAL: BlocoNorma<{ comprometimentoPct: number }> = {
-  fonte: 'Lei 14.181/2021 (CDC art. 54-A) + posição do método TABM',
-  vigencia: '2025-01-01', versao: 1, status: 'pendente',
-  valores: { comprometimentoPct: 0.35 },
+// ✅ VALIDADO (com ressalva): o mínimo existencial legal é um VALOR FIXO —
+// R$ 600 pelo Decreto 11.567/2023 (que alterou o 11.150/2022, o qual fixava 25%
+// do salário mínimo = R$ 303). ⚠️ CONTESTADO no STF (ADPF 1006) — pode mudar.
+// O `comprometimentoTriagem` (35%) NÃO é lei — é heurística do método TABM para
+// SINALIZAR superendividamento (não confundir com o mínimo existencial).
+export const MINIMO_EXISTENCIAL: BlocoNorma<{ valorFixo: number; comprometimentoTriagem: number }> = {
+  fonte: 'Decreto 11.567/2023 (mín. existencial R$ 600) — contestado no STF (ADPF 1006). Triagem 35% = método TABM.',
+  vigencia: '2023-06-16', versao: 2, status: 'validado',
+  valores: { valorFixo: 600, comprometimentoTriagem: 0.35 },
 };
 
 // ── Registro de referências legais citadas no método (para fundamentar peças) ──
@@ -102,18 +108,18 @@ export interface RefLegal { id: string; label: string; tema: string; status: Sta
 export const REFERENCIAS: RefLegal[] = [
   { id: 'res_4966', label: 'Res. CMN 4.966/2021', tema: 'perda esperada (substitui a 2.682)', status: 'validado' },
   { id: 'res_352', label: 'Res. BCB 352/2023', tema: 'metodologia + Anexos I/II de provisão', status: 'validado' },
-  { id: 'res_309', label: 'Res. BCB 309/2023', tema: 'metodologia simplificada (S4/S5), prazos', status: 'pendente' },
+  { id: 'res_309', label: 'Res. BCB 309/2023', tema: 'metodologia simplificada (S4/S5): perda incorrida + provisão adicional esperada', status: 'validado' },
   { id: 'res_2682', label: 'Res. CMN 2.682/1999', tema: 'regime antigo (referência histórica)', status: 'pendente' },
   { id: 'res_3919', label: 'Res. CMN 3.919/2010', tema: 'tarifas bancárias', status: 'pendente' },
-  { id: 'lei_14181', label: 'Lei 14.181/2021', tema: 'superendividamento (altera o CDC)', status: 'pendente' },
+  { id: 'lei_14181', label: 'Lei 14.181/2021', tema: 'superendividamento (altera o CDC)', status: 'validado' },
   { id: 'cdc_54a', label: 'CDC art. 54-A', tema: 'conceito de superendividamento / mínimo existencial', status: 'pendente' },
   { id: 'cdc_42', label: 'CDC art. 42 § único', tema: 'repetição do indébito em dobro', status: 'pendente' },
   { id: 'cdc_6v', label: 'CDC art. 6º, V', tema: 'revisão de cláusulas / modificação', status: 'pendente' },
-  { id: 'sum_530', label: 'Súmula 530 STJ', tema: 'taxa média de mercado (juros)', status: 'pendente' },
-  { id: 'sum_72', label: 'Súmula 72 STJ', tema: 'busca e apreensão / comprovação da mora', status: 'pendente' },
-  { id: 'tema_28', label: 'Tema 28 STJ', tema: 'afastamento/descaracterização da mora', status: 'pendente' },
+  { id: 'sum_530', label: 'Súmula 530 STJ', tema: 'taxa média BACEN quando a taxa contratada não é comprovada (salvo mais vantajosa ao devedor)', status: 'validado' },
+  { id: 'sum_72', label: 'Súmula 72 STJ', tema: 'comprovação da mora é pressuposto da busca e apreensão (v. Tema 1.132)', status: 'validado' },
+  { id: 'tema_28', label: 'Tema 28 STJ', tema: 'abusividade nos encargos da NORMALIDADE (juros/capitalização) descaracteriza a mora — se causou o inadimplemento', status: 'validado' },
   { id: 'aresp_676608', label: 'AgRg no AREsp 676.608', tema: 'repetição em dobro independe de má-fé', status: 'pendente' },
-  { id: 'dl_911', label: 'DL 911/1969', tema: 'busca e apreensão (alienação fiduciária)', status: 'pendente' },
+  { id: 'dl_911', label: 'DL 911/1969, art. 3º', tema: 'busca e apreensão: 5 dias (integralidade, corridos, da execução) / 15 dias contestar', status: 'validado' },
   { id: 'lei_10931', label: 'Lei 10.931/2004', tema: 'CCB — cédula de crédito bancário', status: 'pendente' },
   { id: 'cpc_914', label: 'CPC art. 914 e ss.', tema: 'embargos à execução', status: 'pendente' },
   { id: 'cc_205', label: 'CC art. 205', tema: 'prescrição decenal (revisional)', status: 'pendente' },

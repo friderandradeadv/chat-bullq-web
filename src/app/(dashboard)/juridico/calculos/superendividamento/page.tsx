@@ -18,12 +18,14 @@ export default function SuperendividamentoPage() {
   const [naoConsignado, setNaoConsignado] = useState('');
   const [outras, setOutras] = useState('');
   const [thrPct, setThrPct] = useState('35');
+  const [minEx, setMinEx] = useState('600');
 
   const r = useMemo(() => calcularSuperendiv({
     rendaBruta: parseBRL(rendaBruta), descontos: parseBRL(descontos),
     consignado: parseBRL(consignado), naoConsignado: parseBRL(naoConsignado), outras: parseBRL(outras),
-    comprometimentoPct: (Number(thrPct.replace(/\D/g, '')) || 35) / 100,
-  }), [rendaBruta, descontos, consignado, naoConsignado, outras, thrPct]);
+    comprometimentoTriagem: (Number(thrPct.replace(/\D/g, '')) || 35) / 100,
+    minimoExistencialValor: parseBRL(minEx) || 600,
+  }), [rendaBruta, descontos, consignado, naoConsignado, outras, thrPct, minEx]);
 
   return (
     <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950">
@@ -43,7 +45,8 @@ export default function SuperendividamentoPage() {
           <Field label="Parcelas consignadas (mês)"><input value={consignado} onChange={(e) => setConsignado(maskCurrencyBR(e.target.value))} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></Field>
           <Field label="Não consignadas — cartão/empréstimo/cheque especial (mês)"><input value={naoConsignado} onChange={(e) => setNaoConsignado(maskCurrencyBR(e.target.value))} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></Field>
           <Field label="Fora do plano — financ. imóvel/veículo, pensão, tributo (mês)"><input value={outras} onChange={(e) => setOutras(maskCurrencyBR(e.target.value))} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></Field>
-          <Field label="Teto de comprometimento (%)"><input value={thrPct} onChange={(e) => setThrPct(e.target.value)} inputMode="numeric" placeholder="35" className={INPUT} /></Field>
+          <Field label="Triagem — comprometimento (%)"><input value={thrPct} onChange={(e) => setThrPct(e.target.value)} inputMode="numeric" placeholder="35" className={INPUT} /></Field>
+          <Field label="Mínimo existencial (R$ — Decreto 11.567/23)"><input value={minEx} onChange={(e) => setMinEx(maskCurrencyBR(e.target.value))} inputMode="decimal" placeholder="R$ 600,00" className={INPUT} /></Field>
         </div>
 
         <div className="mt-6 rounded-2xl border border-[#e3e8ef] bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
@@ -55,15 +58,15 @@ export default function SuperendividamentoPage() {
             <Stat label="Renda líquida" value={brl(r.rendaLiquida)} accent="#64748b" />
             <Stat label="Total comprometido" value={brl(r.totalComprometido)} sub={pct(r.pctComprometido)} accent={ACCENT} />
             <Stat label="Renda livre" value={brl(r.rendaLivre)} accent={r.rendaLivre < 0 ? '#b3271e' : '#166534'} />
-            <Stat label="Capacidade p/ plano" value={brl(r.capacidadePlano)} sub={`mín. existencial: ${brl(r.minimoExistencial)}`} accent="#228BE6" />
+            <Stat label="Disponível acima do mínimo" value={brl(r.disponivelAcimaMinimo)} sub={`mín. existencial: ${brl(r.minimoExistencial)}`} accent="#228BE6" />
           </div>
           <p className="mt-4 flex items-start gap-1.5 text-[12px] leading-5 text-zinc-500 dark:text-zinc-400">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Entram no <b>plano</b> só as dívidas de consumo (consignado + não consignado = {brl(r.dividasNoPlano)}); financiamento de imóvel/veículo, pensão e tributos ficam de fora do plano, mas contam no comprometimento. Plano: até <b>60 meses</b>, 1ª parcela em até <b>180 dias</b>.
+            Entram no <b>plano</b> só as dívidas de consumo (consignado + não consignado = {brl(r.dividasNoPlano)}); financiamento de imóvel/veículo, pensão e tributos ficam de fora do plano, mas contam no comprometimento. Plano: até <b>60 meses</b>, 1ª parcela em até <b>180 dias</b> (a validar).
           </p>
           <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-4 text-amber-600">
             <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-            O teto de 35% é a posição adotada no método (não é percentual fixado em lei) — está editável. Triagem/estimativa, não decisão jurídica.
+            São coisas diferentes: o <b>comprometimento de 35%</b> é só uma triagem do método (não é lei); o <b>mínimo existencial</b> é um valor fixo — R$ 600 pelo Decreto 11.567/2023 (contestado no STF, ADPF 1006). Ambos editáveis. Triagem/estimativa, não decisão jurídica.
           </p>
         </div>
       </div>
