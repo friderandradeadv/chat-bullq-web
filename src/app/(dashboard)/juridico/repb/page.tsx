@@ -12,7 +12,7 @@ import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase, type PartyDetail,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
-import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
+import { tagCor } from '@/features/legal-cases/components/bancos-reus-editor';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { useAuthStore } from '@/stores/auth-store';
@@ -61,6 +61,7 @@ export default function RepbPage() {
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
   const [foco, setFoco] = useState(''); // caseId do cliente p/ ver os bancos distribuídos no board
+  const [focoBanco, setFocoBanco] = useState<string | null>(null); // bankId clicado → abre o drawer nele
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
   const dragScroll = useDragScroll();
@@ -161,12 +162,6 @@ export default function RepbPage() {
             <option value="">Todos os responsáveis</option>
             {resps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
-          <select value={foco} onChange={(e) => setFoco(e.target.value)} title="Distribui os bancos de um cliente nas colunas por situação" className={`h-9 max-w-[220px] rounded-lg border px-2 text-sm dark:bg-zinc-900 ${foco ? 'border-[#B7791F] bg-[#B7791F]/10 font-semibold text-[#B7791F]' : 'border-[#cfe0ed] bg-white text-[#101820] dark:border-zinc-700 dark:text-zinc-300'}`}>
-            <option value="">Visão por cliente (1 card)</option>
-            <optgroup label="Ver bancos de um cliente">
-              {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </optgroup>
-          </select>
           <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
             <Plus className="h-4 w-4" /> Novo cliente
           </button>
@@ -179,15 +174,15 @@ export default function RepbPage() {
 
       {foco && view === 'kanban' && (
         <div className="shrink-0 border-b border-[#dbeaf5] bg-[#B7791F]/5 px-4 py-1.5 text-[12px] text-[#48626f] dark:border-zinc-800 dark:text-zinc-400 lg:px-6">
-          Mostrando os <b>bancos</b> de <b className="text-[#B7791F]">{focoNome}</b> distribuídos por situação — arraste um banco entre as colunas p/ mudar a situação.
-          <button onClick={() => setFoco('')} className="ml-2 font-semibold text-[#B7791F] hover:underline">← voltar à visão por cliente</button>
+          Kanban dos <b>bancos</b> de <b className="text-[#B7791F]">{focoNome}</b> por situação — arraste um banco entre as colunas p/ mudar a situação · clique p/ abrir o dossiê.
+          <button onClick={() => { setFoco(''); setView('lista'); }} className="ml-2 font-semibold text-[#B7791F] hover:underline">← voltar à lista de clientes</button>
         </div>
       )}
 
       {view === 'lista' ? (
-        <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent={ACCENT} />
+        <ClienteListView clientes={filtered} onOpen={(id) => { setFoco(id); setView('kanban'); }} accent={ACCENT} />
       ) : foco ? (
-        <BancoBoard caseId={foco} phases={phases} onOpenCase={setOpenCaseId} scroll={dragScroll} />
+        <BancoBoard caseId={foco} phases={phases} onOpenBank={(cid, bid) => { setFocoBanco(bid); setOpenCaseId(cid); }} scroll={dragScroll} />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
@@ -202,7 +197,7 @@ export default function RepbPage() {
       )}
 
       {/* Só as fases do REPB no seletor de mover (nunca de outro quadro). */}
-      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />}
+      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phases} focusBankId={focoBanco} onClose={() => { setOpenCaseId(null); setFocoBanco(null); }} />}
       {novo && <NovoCasoDialog targetPhase="repb_novo_cliente" phases={phases} onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
     </div>
   );
@@ -263,7 +258,7 @@ function Card({ c, onOpen }: { c: KanbanCard; onOpen?: (id: string) => void }) {
 // ── Visão POR BANCO: distribui os bancos réus de UM cliente nas colunas de fase,
 // pela situação de cada banco. Arrastar = mudar a situação (updateParty). Clicar
 // abre a ficha do cliente. Não cria Cases — os "cards" são as partes OPPONENT.
-function BancoBoard({ caseId, phases, onOpenCase, scroll }: { caseId: string; phases: KanbanPhase[]; onOpenCase: (id: string) => void; scroll: ReturnType<typeof useDragScroll> }) {
+function BancoBoard({ caseId, phases, onOpenBank, scroll }: { caseId: string; phases: KanbanPhase[]; onOpenBank: (caseId: string, bankId: string) => void; scroll: ReturnType<typeof useDragScroll> }) {
   const qc = useQueryClient();
   const { data: detail, isLoading } = useQuery({ queryKey: ['legal-cases', 'detail', caseId], queryFn: () => legalCasesService.get(caseId) });
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -297,14 +292,14 @@ function BancoBoard({ caseId, phases, onOpenCase, scroll }: { caseId: string; ph
   return (
     <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
       <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
-        {phases.map((phase) => <BancoColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} malCount={malCount} onOpen={() => onOpenCase(caseId)} />)}
+        {phases.map((phase) => <BancoColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} malCount={malCount} onOpen={(bid) => onOpenBank(caseId, bid)} />)}
       </div>
       <DragOverlay>{activeParty ? <BancoCard party={activeParty} malCount={malCount} /> : null}</DragOverlay>
     </DndContext>
   );
 }
 
-function BancoColumn({ phase, items, malCount, onOpen }: { phase: KanbanPhase; items: PartyDetail[]; malCount: (p: PartyDetail) => number; onOpen: () => void }) {
+function BancoColumn({ phase, items, malCount, onOpen }: { phase: KanbanPhase; items: PartyDetail[]; malCount: (p: PartyDetail) => number; onOpen: (bankId: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const total = items.reduce((a, p) => a + parseBRL((p.metadata as any)?.saldoDevedor), 0);
   return (
@@ -322,13 +317,14 @@ function BancoColumn({ phase, items, malCount, onOpen }: { phase: KanbanPhase; i
   );
 }
 
-function BancoCard({ party, malCount, onOpen }: { party: PartyDetail; malCount: (p: PartyDetail) => number; onOpen?: () => void }) {
+function BancoCard({ party, malCount, onOpen }: { party: PartyDetail; malCount: (p: PartyDetail) => number; onOpen?: (bankId: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: party.id });
   const m: any = party.metadata ?? {};
   const nMal = malCount(party);
+  const tags: string[] = Array.isArray(m.tags) ? m.tags : [];
   const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {};
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={onOpen}
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={() => onOpen?.(party.id)}
       className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
       <div className="flex items-start gap-2">
         <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-[#101820] dark:text-zinc-100">{party.name}</p>
@@ -336,12 +332,42 @@ function BancoCard({ party, malCount, onOpen }: { party: PartyDetail; malCount: 
       </div>
       {m.saldoDevedor && <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{m.saldoDevedor}</p>}
       {m.operacao && <p className="mt-0.5 truncate text-[11px] text-[#48626f] dark:text-zinc-500">{m.operacao}</p>}
+      {tags.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {tags.slice(0, 4).map((t) => <span key={t} className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${tagCor(t)}`}>{t}</span>)}
+          {tags.length > 4 && <span className="text-[9px] text-zinc-400">+{tags.length - 4}</span>}
+        </div>
+      )}
       {(nMal > 0 || m.acordoFez === 'Sim') && (
         <div className="mt-2 flex items-center gap-2 border-t border-[#eef2f8] pt-1.5 text-[10px] text-[#4b5863] dark:border-zinc-800 dark:text-zinc-400">
           {nMal > 0 && <span>📋 {nMal} malote{nMal === 1 ? '' : 's'}</span>}
           {m.acordoFez === 'Sim' && <span className="text-emerald-600 dark:text-emerald-400">✓ acordo</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+// Lista de CLIENTES (view "Lista"): cada linha é um cliente; clicar abre o kanban
+// de bancos dele. Filtrada pela barra de busca do topo.
+function ClienteListView({ clientes, onOpen, accent }: { clientes: KanbanCard[]; onOpen: (id: string) => void; accent: string }) {
+  const ordenados = [...clientes].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-3 lg:px-6">
+      {ordenados.length === 0 && <p className="py-10 text-center text-sm text-zinc-400">Nenhum cliente. Use a busca acima ou “+ Novo cliente”.</p>}
+      <div className="mx-auto max-w-3xl divide-y divide-[#eef2f8] overflow-hidden rounded-xl border border-[#e3e8ef] bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/40">
+        {ordenados.map((c) => (
+          <button key={c.id} onClick={() => onOpen(c.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#B7791F]/5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white" style={{ background: accent }}><Banknote className="h-4 w-4" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+              <p className="text-[11px] text-zinc-400">{c.responsible?.name ?? 'Sem responsável'}</p>
+            </div>
+            {c.value != null && c.value > 0 && <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</span>}
+            <span className="shrink-0 text-xs font-medium text-[#B7791F]">ver bancos →</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

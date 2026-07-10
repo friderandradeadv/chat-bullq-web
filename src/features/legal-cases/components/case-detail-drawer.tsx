@@ -14,7 +14,7 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
-import { BancosReusEditor, RepbFasePorBanco } from './bancos-reus-editor';
+import { BancosReusEditor, RepbFasePorBanco, ResumoClienteRepb } from './bancos-reus-editor';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
@@ -84,9 +84,9 @@ const movLabel = (s: string | null) =>
   : { t: 'Manual', c: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' };
 
 export function CaseDetailDrawer({
-  caseId, phases, onClose,
+  caseId, phases, onClose, focusBankId,
 }: {
-  caseId: string; phases: KanbanPhase[]; onClose: () => void;
+  caseId: string; phases: KanbanPhase[]; onClose: () => void; focusBankId?: string | null;
 }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabKey>('dados');
@@ -276,9 +276,12 @@ export function CaseDetailDrawer({
                   );
                 })()}
 
+                {/* REPB: panorama financeiro do cliente (dívida × recuperado) no topo. */}
+                {phaseKey?.startsWith('repb_') && <div className="mb-3"><ResumoClienteRepb parties={c.parties} /></div>}
+
                 {/* Parte adversa (editável). REPB = vários bancos réus; demais = 1 adversa. */}
                 {phaseKey?.startsWith('repb_')
-                  ? <BancosReusEditor caseId={c.id} parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                  ? <BancosReusEditor caseId={c.id} parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} focusBankId={focusBankId} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                   : <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
 
                 {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
@@ -395,7 +398,7 @@ export function CaseDetailDrawer({
             {c && phaseKey && (
               <div className="mt-5">
                 {phaseKey === 'repb_negociacao' || phaseKey === 'repb_provisionamento'
-                  ? <RepbFasePorBanco parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} />
+                  ? <RepbFasePorBanco parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} focusId={focusBankId} />
                   : <FaseFields caseId={c.id} phase={phaseKey} data={faseData} />}
               </div>
             )}
