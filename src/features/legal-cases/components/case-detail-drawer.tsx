@@ -14,9 +14,7 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
-import { RepbMalote } from './repb-malote';
 import { BancosReusEditor } from './bancos-reus-editor';
-import { RepbProvisaoInline } from './repb-provisao-inline';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ProdutoTags } from './kanban-card-bits';
@@ -273,14 +271,14 @@ export function CaseDetailDrawer({
                           </ul>
                         )}
                       </article>
-                      <ClienteFinanceiro nome={cliente.name} />
+                      <ClienteFinanceiro nome={cliente.name} contactId={cliente.contactId} />
                     </div>
                   );
                 })()}
 
                 {/* Parte adversa (editável). REPB = vários bancos réus; demais = 1 adversa. */}
                 {phaseKey?.startsWith('repb_')
-                  ? <BancosReusEditor caseId={c.id} parties={c.parties} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                  ? <BancosReusEditor caseId={c.id} parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                   : <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
 
                 {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
@@ -400,20 +398,8 @@ export function CaseDetailDrawer({
               </div>
             )}
 
-            {/* REPB: acompanhamento dos malotes/protocolos (bucket estável, todas as
-                fases repb_). Fica visível em qualquer fase da trilha de reestruturação. */}
-            {c && phaseKey?.startsWith('repb_') && (
-              <>
-                <RepbProvisaoInline
-                  caseId={c.id}
-                  cliente={cliente?.name ?? c.title ?? ''}
-                  banco={c.parties.find((p) => p.role === 'OPPONENT')?.name ?? adversa?.name ?? ''}
-                  saldoInicial={(c.metadata as any)?.faseData?.repb_provisionamento?.saldo_devedor
-                    ?? c.parties.find((p) => p.role === 'OPPONENT')?.metadata?.saldoDevedor}
-                />
-                <RepbMalote caseId={c.id} lista={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} />
-              </>
-            )}
+            {/* REPB: provisionamento, acordo e malotes agora vivem POR BANCO no dossiê
+                BancosReusEditor (acima) — sem seções globais soltas. */}
 
             {/* Avanço rápido pós-sentença (kanban vivo): move o card e preenche os
                 campos da fase (que alimentam Financeiro/Meu Espaço). O gatilho normal
@@ -529,8 +515,8 @@ function EditField({ label, children }: { label: string; children: ReactNode }) 
 }
 
 // Cruza o financeiro com o cliente: recebido, a receber e parcelamentos (inclui ASAAS).
-function ClienteFinanceiro({ nome }: { nome: string }) {
-  const { data } = useQuery({ queryKey: ['financeiro', 'cliente', nome], queryFn: () => financeiroService.clienteResumo(nome), enabled: !!nome, staleTime: 60_000 });
+function ClienteFinanceiro({ nome, contactId }: { nome: string; contactId?: string | null }) {
+  const { data } = useQuery({ queryKey: ['financeiro', 'cliente', nome, contactId], queryFn: () => financeiroService.clienteResumo(nome, contactId), enabled: !!nome, staleTime: 60_000 });
   if (!data) return null;
   const brl = (n: number) => 'R$ ' + Math.round(n).toLocaleString('pt-BR');
   if (!data.recebido && !data.aReceber && !data.cobrancas.length) return null;
