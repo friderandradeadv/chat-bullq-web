@@ -382,20 +382,22 @@
    baixo. A barra fica escura (controles claros, classe literal `dark`) nos 2 modos.
    !important pra vencer o `bg-[#1D2125]` utilitário. */
 .topbar-glass {
-  /* MODO CLARO: MESMA cor do modo escuro (#15181A). Sobre página branca, pra
-     ficar exatamente nesse tom, o vidro precisa ser quase sólido (translucidez
-     de verdade no claro só existe clareando a cor). Prioriza a cor igual ao dark. */
-  background: rgba(21, 24, 26, 0.96) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(1.15);
-  backdrop-filter: blur(30px) saturate(1.15);
+  /* MODO CLARO (app light): barra escura translúcida sobre página branca. Alpha
+     mais alto (0.72) pra o vidro NÃO clarear demais e os controles claros (texto
+     branco) manterem contraste — o blur ainda revela o conteúdo por baixo. */
+  background: rgba(21, 24, 26, 0.72) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-/* MODO ESCURO: cabeçalho SÓLIDO (estilo WhatsApp) — antes era bem translúcido e
-   o conteúdo borrado por baixo "vazava" pro corpo ao rolar. Agora é uma faixa
-   sólida e limpa, com borda inferior nítida separando do conteúdo. */
+/* MODO ESCURO (app dark): vidro fosco iOS de verdade — translúcido (0.55) sobre o
+   conteúdo escuro, blur + saturação revelam o corpo borrado por baixo ao rolar.
+   Hairline claro embaixo pra separar sem peso. */
 .dark .topbar-glass {
-  background: #15181A !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  background: rgba(21, 24, 26, 0.55) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 @media (min-width: 1024px) {
   /* respiro no topo de cada página = EXATAMENTE a altura da barra (2.75rem). Como
