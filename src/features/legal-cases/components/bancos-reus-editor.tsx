@@ -8,6 +8,7 @@ import { legalCasesService, type PartyDetail } from '@/features/legal-cases/serv
 import { maskCurrencyBR, maskCpfCnpj } from '@/lib/masks';
 import { BANCOS_DIRETORIO, acharBancoContato } from '@/features/legal-cases/lib/bancos-diretorio';
 import { calcularProvisao, diasDesde, OPERACOES, INSTITUICOES, type Carteira, type Instituicao } from '@/features/calculadora-provisionamento/provisionamento';
+import { calculadoraRevisionalService, type ResultadoRevisional } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
 
 // DOSSIÊ POR BANCO do caso REPB. Cada banco RÉU (Party OPPONENT) é a unidade: dados
 // → provisionamento → negociação → acordo → etiquetas → malotes daquele banco.
@@ -225,6 +226,7 @@ function BancoDossie({ party, open, onToggle, onChanged, malotes, onAddMalote, o
         await legalCasesService.updateParty(party.id, {
           name: next.name.trim() || 'Banco', role: 'OPPONENT', document: next.document.trim() || undefined,
           metadata: {
+            ...((party.metadata as any) ?? {}), // preserva chaves que este form não gerencia (ex.: revisional)
             operacao: next.operacao, saldoDevedor: next.saldoDevedor, situacao: next.situacao, obs: next.obs, tags: next.tags,
             provInstituicao: next.provInstituicao, provOperacao: next.provOperacao, provDias: next.provDias,
             negInterlocutor: next.negInterlocutor, negProposta: next.negProposta, negContraproposta: next.negContraproposta, negStatus: next.negStatus,
@@ -547,8 +549,8 @@ const TAB_POR_SIT: Record<string, string> = {
   'Acordo fechado': 'acordo', Judicializado: 'acordo', 'Sem acordo': 'calculo',
 };
 const FOCO_TABS = [
-  { k: 'dados', label: 'Dados' }, { k: 'calculo', label: 'Cálculo' }, { k: 'negociacao', label: 'Negociação' },
-  { k: 'acordo', label: 'Acordo' }, { k: 'solicitacoes', label: 'Solicitações' },
+  { k: 'dados', label: 'Dados' }, { k: 'calculo', label: 'Cálculo' }, { k: 'revisional', label: 'Revisional' },
+  { k: 'negociacao', label: 'Negociação' }, { k: 'acordo', label: 'Acordo' }, { k: 'solicitacoes', label: 'Solicitações' },
 ];
 
 export function BankFocusModal({ caseId, bankId, onClose }: { caseId: string; bankId: string; onClose: () => void }) {
@@ -610,6 +612,7 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
         await legalCasesService.updateParty(party.id, {
           name: next.name.trim() || 'Banco', role: 'OPPONENT', document: next.document.trim() || undefined,
           metadata: {
+            ...((party.metadata as any) ?? {}), // preserva chaves que este form não gerencia (ex.: revisional)
             operacao: next.operacao, saldoDevedor: next.saldoDevedor, situacao: next.situacao, obs: next.obs, tags: next.tags,
             provInstituicao: next.provInstituicao, provOperacao: next.provOperacao, provDias: next.provDias,
             negInterlocutor: next.negInterlocutor, negProposta: next.negProposta, negContraproposta: next.negContraproposta, negStatus: next.negStatus,
@@ -715,6 +718,9 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
           </div>
         )}
 
+        {/* ── REVISIONAL (recalcula o contrato sem juros abusivos → economia da ação) ── */}
+        {tab === 'revisional' && <RevisionalTab party={party} onChanged={onChanged} />}
+
         {/* ── NEGOCIAÇÃO ── */}
         {tab === 'negociacao' && (
           <div className="grid grid-cols-2 gap-2">
@@ -776,6 +782,80 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Aba REVISIONAL: recalcula o contrato tirando os juros abusivos (taxa média BACEN
+// da modalidade) → mostra a ECONOMIA e a restituição. Chama o backend
+// /calculadora-revisional/calcular (reusa o motor da outra sessão). Persiste os
+// inputs + resultado em Party.metadata.revisional.
+const IND_CORRECAO = ['INPC', 'IPCA-E', 'IPCA', 'IGP-M'] as const;
+function RevisionalTab({ party, onChanged }: { party: PartyDetail; onChanged: () => void }) {
+  const rev0: any = (party.metadata as any)?.revisional ?? {};
+  const [f, setF] = useState({
+    modalidade: rev0.modalidade ?? '', valorLiberado: rev0.valorLiberado ?? '', valorParcela: rev0.valorParcela ?? '',
+    numeroParcelas: rev0.numeroParcelas ?? '', parcelasPagas: rev0.parcelasPagas ?? '', dataContratacao: rev0.dataContratacao ?? '',
+    indiceCorrecao: (rev0.indiceCorrecao ?? 'INPC') as (typeof IND_CORRECAO)[number], dobro: rev0.dobro ?? false, modulacaoStj: rev0.modulacaoStj ?? true,
+  });
+  useEffect(() => { const r: any = (party.metadata as any)?.revisional ?? {}; setF((prev) => ({ ...prev, ...r })); }, [party.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { data: modalidades = [] } = useQuery({ queryKey: ['revisional', 'modalidades'], queryFn: () => calculadoraRevisionalService.listarModalidades(), staleTime: Infinity });
+  const [res, setRes] = useState<ResultadoRevisional | null>(rev0.resultado ?? null);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState('');
+  const upd = (patch: Partial<typeof f>) => setF((prev) => ({ ...prev, ...patch }));
+
+  const salvar = async (extra: Record<string, any>) => {
+    try { await legalCasesService.updateParty(party.id, { name: party.name || 'Banco', role: 'OPPONENT', document: party.document ?? undefined, metadata: { ...((party.metadata as any) ?? {}), revisional: { ...f, ...extra } } }); onChanged(); } catch { /* best-effort */ }
+  };
+  const calcular = async () => {
+    if (!f.modalidade || !f.dataContratacao) { setErro('Selecione a modalidade e a data de contratação.'); return; }
+    setLoading(true); setErro('');
+    try {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const r = await calculadoraRevisionalService.calcular({
+        modalidade: f.modalidade, valorLiberado: parseBRL(f.valorLiberado), valorParcela: parseBRL(f.valorParcela),
+        numeroParcelas: Number(String(f.numeroParcelas).replace(/\D/g, '')) || 0, parcelasPagas: Number(String(f.parcelasPagas).replace(/\D/g, '')) || 0,
+        dataContratacao: f.dataContratacao, dataBase: hoje, indiceCorrecao: f.indiceCorrecao, corrigir: true, dobro: f.dobro, modulacaoStj: f.modulacaoStj,
+      });
+      setRes(r); salvar({ resultado: r, economia: r.resumo.economiaTotal });
+    } catch (e: any) { setErro(e?.response?.data?.message || 'Erro ao calcular (confira os campos).'); } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex items-center gap-1.5"><Calculator className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Ação revisional — recálculo pela taxa média BACEN</p></div>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <label className={`${LABEL} col-span-2 sm:col-span-3`}>Modalidade (série BACEN)
+          <select value={f.modalidade} onChange={(e) => { upd({ modalidade: e.target.value }); }} onBlur={() => salvar({})} className={INPUT}>
+            <option value="">Selecione…</option>
+            {modalidades.map((mo) => <option key={mo.key} value={mo.key}>{mo.label}</option>)}
+          </select>
+        </label>
+        <label className={LABEL}>Valor liberado<input value={f.valorLiberado} onChange={(e) => upd({ valorLiberado: maskCurrencyBR(e.target.value) })} onBlur={() => salvar({})} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+        <label className={LABEL}>Valor da parcela<input value={f.valorParcela} onChange={(e) => upd({ valorParcela: maskCurrencyBR(e.target.value) })} onBlur={() => salvar({})} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+        <label className={LABEL}>Nº de parcelas<input value={f.numeroParcelas} onChange={(e) => upd({ numeroParcelas: e.target.value.replace(/\D/g, '') })} onBlur={() => salvar({})} inputMode="numeric" placeholder="0" className={INPUT} /></label>
+        <label className={LABEL}>Parcelas pagas<input value={f.parcelasPagas} onChange={(e) => upd({ parcelasPagas: e.target.value.replace(/\D/g, '') })} onBlur={() => salvar({})} inputMode="numeric" placeholder="0" className={INPUT} /></label>
+        <label className={LABEL}>Data da contratação<input type="date" value={f.dataContratacao} onChange={(e) => upd({ dataContratacao: e.target.value })} onBlur={() => salvar({})} className={INPUT} /></label>
+        <label className={LABEL}>Índice de correção<select value={f.indiceCorrecao} onChange={(e) => { upd({ indiceCorrecao: e.target.value as any }); }} onBlur={() => salvar({})} className={INPUT}>{IND_CORRECAO.map((i) => <option key={i} value={i}>{i}</option>)}</select></label>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <label className="inline-flex items-center gap-1.5 text-[12px] text-zinc-600 dark:text-zinc-300"><input type="checkbox" checked={f.dobro} onChange={(e) => { upd({ dobro: e.target.checked }); }} /> Repetição em dobro (CDC 42)</label>
+        <label className="inline-flex items-center gap-1.5 text-[12px] text-zinc-600 dark:text-zinc-300"><input type="checkbox" checked={f.modulacaoStj} onChange={(e) => { upd({ modulacaoStj: e.target.checked }); }} /> Modulação STJ</label>
+        <button onClick={calcular} disabled={loading} className="ml-auto inline-flex items-center gap-1 rounded-md bg-[#B7791F] px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">{loading ? 'Calculando…' : 'Calcular revisional'}</button>
+      </div>
+      {erro && <p className="mt-2 text-[12px] text-red-600">{erro}</p>}
+      {res && (
+        <div className="mt-3 border-t border-[#eef1f5] pt-2 dark:border-zinc-800">
+          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+            <Metric label="Parcela recalculada" value={brl(res.resumo.parcelaRecalculada)} sub={`de ${brl(res.resumo.parcelaContrato)}`} />
+            <Metric label="Economia total" value={brl(res.resumo.economiaTotal)} sub="vs. contrato" />
+            <Metric label="Pago a mais" value={brl(res.resumo.totalPagoAMais)} />
+            <Metric label="Restituição atualizada" value={brl(res.resumo.restituicaoAtualizada)} sub={f.dobro ? 'em dobro' : 'simples'} />
+          </div>
+          <p className="mt-1.5 text-[10px] text-zinc-400">Recálculo pela taxa média de mercado (BACEN) da modalidade na data. Compare com o acordo/provisionamento pra decidir: ação revisional × negociação.</p>
+        </div>
+      )}
     </div>
   );
 }
