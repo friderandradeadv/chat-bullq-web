@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon, MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type LegalTag } from '../services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
@@ -29,6 +29,7 @@ export function PhaseHeader({
   onDelete?: (phase: { key: string; label: string; custom?: boolean }) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [menu, setMenu] = useState(false);
   const [text, setText] = useState(phase.label);
   useEffect(() => setText(phase.label), [phase.label]);
 
@@ -64,7 +65,7 @@ export function PhaseHeader({
   }
 
   return (
-    <div className="group/ph flex min-w-0 flex-1 items-center gap-1">
+    <div className="group/ph relative flex min-w-0 flex-1 items-center gap-1">
       <h2
         onClick={() => setEditing(true)}
         title="Clique pra renomear a fase (só sócios)"
@@ -72,15 +73,38 @@ export function PhaseHeader({
       >
         {phase.label}
       </h2>
-      {onDelete && (
-        <button
-          type="button"
-          onClick={() => onDelete(phase)}
-          title={phase.custom ? 'Excluir fase' : 'Esconder fase do quadro'}
-          className="shrink-0 rounded p-0.5 text-zinc-300 opacity-0 transition hover:bg-zinc-100 hover:text-rose-600 focus:opacity-100 group-hover/ph:opacity-100 dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-rose-400"
-        >
-          {phase.custom ? <Trash2 className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-        </button>
+      {/* ⋮ aparece ao passar o mouse na fase (estilo Pipefy) → abre opções */}
+      <button
+        type="button"
+        onClick={() => setMenu((v) => !v)}
+        title="Opções da fase"
+        className={`shrink-0 rounded p-0.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 focus:opacity-100 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 ${menu ? 'opacity-100' : 'opacity-0 group-hover/ph:opacity-100'}`}
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {menu && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
+          <div className="absolute left-0 top-6 z-30 w-48 overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <button
+              type="button"
+              onClick={() => { setMenu(false); setEditing(true); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              <Pencil className="h-3.5 w-3.5 shrink-0" /> Renomear fase
+            </button>
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => { setMenu(false); onDelete(phase); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+              >
+                {phase.custom ? <Trash2 className="h-3.5 w-3.5 shrink-0" /> : <EyeOff className="h-3.5 w-3.5 shrink-0" />}
+                {phase.custom ? 'Excluir fase' : 'Esconder fase do quadro'}
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
