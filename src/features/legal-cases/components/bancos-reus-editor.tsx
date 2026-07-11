@@ -62,15 +62,19 @@ const guessOperacao = (op: string): string => {
   return 'Empréstimo pessoal';
 };
 
-/** Provisão calculada dos inputs salvos do banco (null se ainda sem dados). */
-export function provValorDoBanco(p: PartyDetail): number | null {
+/** Resultado COMPLETO do provisionamento dos inputs salvos do banco (null se sem dados). */
+export function provResultado(p: PartyDetail) {
   const m: any = p.metadata ?? {};
   const saldo = parseBRL(m.saldoDevedor ?? '');
   if (saldo <= 0 || (!m.provDias && !m.provOperacao)) return null;
   const carteira: Carteira = OPERACOES.find((o) => o.label === (m.provOperacao ?? guessOperacao(m.operacao ?? '')))?.carteira ?? 'C5';
   const dias = Math.max(0, Number(String(m.provDias ?? '').replace(/\D/g, '')) || 0);
   const inst: Instituicao = m.provInstituicao ?? guessInstituicao(p.name ?? '');
-  return calcularProvisao({ saldoDevedor: saldo, carteira, dias, instituicao: inst }).valorProvisionado;
+  return { ...calcularProvisao({ saldoDevedor: saldo, carteira, dias, instituicao: inst }), saldo };
+}
+/** Só o valor provisionado (compat.). */
+export function provValorDoBanco(p: PartyDetail): number | null {
+  return provResultado(p)?.valorProvisionado ?? null;
 }
 
 const NEG_STATUS = ['Não iniciada', 'Em negociação', 'Acordo aceito', 'Recusado'];
@@ -301,15 +305,23 @@ function BancoDossie({ party, open, onToggle, onChanged, malotes, onAddMalote, o
               <label className={LABEL}>Dias de atraso<input value={d.provDias} onChange={(e) => save({ ...d, provDias: e.target.value.replace(/\D/g, '') })} inputMode="numeric" placeholder="0" className={INPUT} /></label>
             </div>
             {prov ? (
-              <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-                <Metric label="Provisionado" value={brl(prov.valorProvisionado)} sub={pct(prov.provisaoAplicadaPct)} />
-                <Metric label="Proposta alvo" value={brl(prov.propostaAcordo)} sub={`desc. ${pct(prov.descontoPct)}`} />
-                <Metric label="Estágio" value={`S${prov.estagio.n}`} sub={prov.anexo === 'I' ? 'ativo probl.' : 'em curso'} />
+              <div className="mt-2">
+                {/* Estágio + faixa/anexo (Res. BCB 352) — o "porquê" do cálculo */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${prov.estagio.n === 3 ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400' : prov.estagio.n === 2 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'}`}>Estágio S{prov.estagio.n}</span>
+                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{prov.estagio.label}</span>
+                </div>
+                <p className="mt-1 text-[10px] text-zinc-400">{prov.faixaLabel} · {prov.dias} dia{prov.dias === 1 ? '' : 's'} de atraso</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                  <Metric label="Saldo devedor" value={brl(saldo)} />
+                  <Metric label="% provisão" value={pct(prov.provisaoAplicadaPct)} sub={prov.provisaoAplicadaPct < prov.provisaoBasePct ? `base ${pct(prov.provisaoBasePct)} · teto` : 'tabela oficial'} />
+                  <Metric label="Provisionado" value={brl(prov.valorProvisionado)} sub="perda do banco" />
+                  <Metric label="Proposta alvo" value={brl(prov.propostaAcordo)} sub={`desc. ${brl(prov.descontoValor)} (${pct(prov.descontoPct)})`} />
+                </div>
+                <p className="mt-1.5 text-[10px] text-zinc-400">Lógica: o banco já “perdeu” o provisionado → aceita acordo perto do residual (proposta). Res. CMN 4.966/21 + BCB 352/23.</p>
+                <button onClick={() => save({ ...d, acordoValor: brl(prov.propostaAcordo) })} className="mt-1.5 text-[11px] font-medium text-[#B7791F] hover:underline">↳ usar proposta como valor de acordo</button>
               </div>
             ) : <p className="mt-2 text-[11px] text-zinc-400">Preencha saldo + dias de atraso para calcular o provisionamento.</p>}
-            {prov && (
-              <button onClick={() => save({ ...d, acordoValor: brl(prov.propostaAcordo) })} className="mt-2 text-[11px] font-medium text-[#B7791F] hover:underline">↳ usar proposta como valor de acordo</button>
-            )}
           </section>
 
           {/* ── Negociação (por banco) ── */}
@@ -407,7 +419,7 @@ export function RepbFasePorBanco({ parties, malotes, focusId }: { parties: Party
   if (!reus.length) return <p className="text-sm text-zinc-400">Nenhum banco réu cadastrado ainda — adicione no dossiê (aba Dados).</p>;
 
   const m: any = p?.metadata ?? {};
-  const prov = p ? provValorDoBanco(p) : null;
+  const prov = p ? provResultado(p) : null;
   const tags: string[] = Array.isArray(m.tags) ? m.tags : [];
   const nMal = malotes && p ? malotes.filter((x) => (x.bancoId ? x.bancoId === p.id : (norm(x.banco) && (norm(p.name).includes(norm(x.banco)) || norm(x.banco).includes(norm(p.name)))))).length : 0;
   const Linha = ({ k, v }: { k: string; v?: string }) => (v ? <div className="flex items-baseline justify-between gap-3 py-0.5 text-[13px]"><span className="text-zinc-500 dark:text-zinc-400">{k}</span><span className="text-right font-medium text-[#101820] dark:text-zinc-100">{v}</span></div> : null);
@@ -438,8 +450,20 @@ export function RepbFasePorBanco({ parties, malotes, focusId }: { parties: Party
           </div>
 
           <div className="rounded-lg border border-[#e3e8ef] p-2.5 dark:border-zinc-800">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Provisionamento</p>
-            {prov != null ? <Linha k="Provisionado (estimado)" v={brl(prov)} /> : <p className="text-[12px] text-zinc-400">Preencha modalidade + dias de atraso no dossiê.</p>}
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Provisionamento (Res. BCB 352)</p>
+            {prov ? (
+              <>
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${prov.estagio.n === 3 ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400' : prov.estagio.n === 2 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'}`}>Estágio S{prov.estagio.n}</span>
+                  <span className="text-[11px] text-zinc-400">{prov.faixaLabel} · {prov.dias}d</span>
+                </div>
+                <Linha k="Saldo devedor" v={brl(prov.saldo)} />
+                <Linha k="% provisionado" v={`${pct(prov.provisaoAplicadaPct)}${prov.provisaoAplicadaPct < prov.provisaoBasePct ? ` (base ${pct(prov.provisaoBasePct)} · teto)` : ''}`} />
+                <Linha k="Provisionado (perda do banco)" v={brl(prov.valorProvisionado)} />
+                <Linha k="Proposta de acordo (alvo)" v={brl(prov.propostaAcordo)} />
+                <Linha k="Desconto potencial" v={`${brl(prov.descontoValor)} (${pct(prov.descontoPct)})`} />
+              </>
+            ) : <p className="text-[12px] text-zinc-400">Preencha modalidade + dias de atraso no dossiê.</p>}
           </div>
 
           <div className="rounded-lg border border-[#e3e8ef] p-2.5 dark:border-zinc-800">
