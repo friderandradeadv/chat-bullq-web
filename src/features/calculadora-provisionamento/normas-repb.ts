@@ -67,11 +67,15 @@ export function validarNormas(): { ok: boolean; falhas: string[] } {
   return { ok: falhas.length === 0, falhas };
 }
 
-// ── Estágios de risco (Res. 4.966/2021) ──
+// ── Estágios de risco (Res. 4.966/2021 + BCB 352) — VALIDADO na fonte ──
+// S2: Res. BCB 352, art. 20 §7º — atraso > 30 dias = aumento significativo do
+// risco, independentemente de outros fatores (salvo comprovação em contrário, §8º).
+// S3 (>90d): art. 3º. ARRASTO: art. 20 §5º — um instrumento no 3º estágio leva
+// TODOS os da mesma contraparte ao 3º estágio.
 export const ESTAGIOS: BlocoNorma<{ s1: string; s2: string; s3: string }> = {
-  fonte: 'Res. CMN 4.966/2021 (modelo de perda esperada)',
-  vigencia: '2025-01-01', versao: 1, status: 'pendente', // critério literal do "> 30 dias" a conferir
-  valores: { s1: 'em dia / ≤ 30 dias — perda esperada 12 meses', s2: '> 30 dias — aumento significativo de risco', s3: '> 90 dias — ativo problemático (default)' },
+  fonte: 'Res. CMN 4.966/2021 + Res. BCB 352/2023 (art. 3º; art. 20 §5º/§7º/§8º)',
+  vigencia: '2025-01-01', versao: 1, status: 'validado',
+  valores: { s1: 'em dia / ≤ 30 dias — perda esperada 12 meses', s2: '> 30 dias — aumento significativo de risco (Res. 352 §7º)', s3: '> 90 dias — ativo problemático (default); arrasto leva toda a contraparte' },
 };
 
 // ── Prazos operacionais ──
@@ -114,7 +118,7 @@ export const REFERENCIAS: RefLegal[] = [
   { id: 'lei_14467', label: 'Lei 14.467/2022', tema: 'dedução fiscal das perdas (créditos inadimplidos) — a ALAVANCA: torna o acordo vantajoso p/ o banco (perda vira despesa dedutível); em vigor 01/01/2025', status: 'validado' },
   { id: 'res_219', label: 'Res. BCB 219/2022', tema: 'mesmos temas p/ instituições de pagamento e administradoras de consórcio (abordagem simplificada)', status: 'validado' },
   { id: 'res_2682', label: 'Res. CMN 2.682/1999', tema: 'regime ANTIGO (perda incorrida, rating AA–H) — substituído pela 4.966; referência histórica', status: 'validado' },
-  { id: 'res_3919', label: 'Res. CMN 3.919/2010', tema: 'tarifas bancárias', status: 'pendente' },
+  { id: 'res_3919', label: 'Res. CMN 3.919/2010', tema: 'padroniza as tarifas bancárias (vigente) — o que não está tipificado é indevido; TAC vedada (Tema 618 STJ, contratos pós 30/4/2008); tarifa de cadastro válida só 1× no início (Tema 620 STJ)', status: 'validado' },
   { id: 'lei_14181', label: 'Lei 14.181/2021', tema: 'superendividamento (altera o CDC)', status: 'validado' },
   { id: 'cdc_54a', label: 'CDC art. 54-A', tema: 'conceito de superendividamento (PF de boa-fé, dívidas de consumo, mínimo existencial) — Lei 14.181/21', status: 'validado' },
   { id: 'cdc_42', label: 'CDC art. 42 § único', tema: 'repetição em dobro — independe de má-fé (basta violar a boa-fé objetiva); modulação: pagamentos após 30/03/2021', status: 'validado' },
