@@ -37,6 +37,7 @@ import {
   ExternalLink,
   Columns3,
   Building2,
+  LayoutGrid,
   Mail,
   StickyNote,
   Check,
@@ -737,6 +738,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
   const [photoExpanded, setPhotoExpanded] = useState(false);
 
   const [pendingTagId, setPendingTagId] = useState<string | null>(null);
+  const [movingWorkspace, setMovingWorkspace] = useState(false);
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments', orgId],
@@ -877,6 +879,55 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
     }
     return [...map.values()];
   })();
+
+  // ── Workspace switcher ────────────────────────────────────────────
+  // Workspaces (inbox-views) são definidas por TAG. "Mover de workspace"
+  // = trocar a tag de área. Estes ids batem com os tagIds das views de
+  // área/Clientes/Outros (e com o excludeTagIds da Recepção). Single-tenant:
+  // se criar/alterar uma workspace, atualize esta lista.
+  const WORKSPACES: { tagId: string; label: string }[] = [
+    { tagId: 'lhtag_rmc_rcc', label: 'RMC/RCC' },
+    { tagId: 'lhtag_trabalhista', label: 'Trabalhista' },
+    { tagId: 'cmqbqd3dd000a2cbfk6zj6wfa', label: 'Previdenciário' },
+    { tagId: 'lhtag_bpc_loas', label: 'BPC/LOAS' },
+    { tagId: 'lhtag_salario_maternidade', label: 'Salário-Maternidade' },
+    { tagId: 'cmqbqd3f5000b2cbff83zxs93', label: 'REPB' },
+    { tagId: 'tag_cliente', label: 'Cliente' },
+    { tagId: 'tag_outros', label: 'Parceiros / Outros' },
+  ];
+  const wsColor = (tagId: string) =>
+    allAvailableTags.find((t) => t.id === tagId)?.color ?? '#a1a1aa';
+  const currentWorkspace =
+    WORKSPACES.find((w) => allTags.some((t) => t.tag.id === w.tagId)) ?? null;
+
+  // Move a conversa entre workspaces = TROCA a tag de área: remove todas as
+  // outras tags de workspace (da conversa E do contato) e aplica a do destino.
+  // Alvo null = "Recepção (sem área)": só remove, volta pro firehose.
+  const handleMoveWorkspace = async (
+    targetTagId: string | null,
+    close?: () => void,
+  ) => {
+    setMovingWorkspace(true);
+    try {
+      for (const ws of WORKSPACES) {
+        if (ws.tagId === targetTagId) continue;
+        if ((conversation.tags ?? []).some((t) => t.tag.id === ws.tagId))
+          await tagsService.removeFromConversation(conversation.id, ws.tagId);
+        if ((contact.tags ?? []).some((t) => t.tag.id === ws.tagId))
+          await tagsService.removeFromContact(contact.id, ws.tagId);
+      }
+      if (targetTagId && !allTags.some((t) => t.tag.id === targetTagId)) {
+        await tagsService.addToConversation(conversation.id, targetTagId);
+      }
+      queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      close?.();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao mover de workspace');
+    } finally {
+      setMovingWorkspace(false);
+    }
+  };
 
   // Ring do avatar = cor do STATUS do contato (não mais da etiqueta) —
   // mesma regra da lista de conversas.
@@ -1072,6 +1123,74 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                         Nenhum status criado — crie em Configurações → Status
                       </p>
                     )}
+                  </>
+                )}
+              </PopoverPanel>
+            </Popover>
+          </div>
+
+          {/* Workspace — move a conversa entre workspaces (troca a tag de área) */}
+          <div className="order-4 flex min-h-6 items-center gap-2.5">
+            <LayoutGrid className="h-4 w-4 shrink-0 text-zinc-400" />
+            <Popover className="relative flex items-center">
+              <PopoverButton
+                disabled={movingWorkspace}
+                title="Mover para outra workspace"
+                className={cn(
+                  'inline-flex h-5 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium leading-none outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
+                  !currentWorkspace &&
+                    'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
+                )}
+                style={
+                  currentWorkspace
+                    ? {
+                        backgroundColor: wsColor(currentWorkspace.tagId),
+                        color: chipTextColor(wsColor(currentWorkspace.tagId)),
+                        borderColor: wsColor(currentWorkspace.tagId),
+                      }
+                    : undefined
+                }
+              >
+                {movingWorkspace && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                {currentWorkspace ? currentWorkspace.label : 'Recepção (sem área)'}
+                <ChevronDown className="h-2.5 w-2.5 opacity-50" />
+              </PopoverButton>
+              <PopoverPanel
+                anchor="bottom start"
+                transition
+                className="z-50 mt-1 w-56 rounded-lg border border-zinc-200/80 bg-white p-1 shadow-lg outline-none transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-zinc-800 dark:bg-zinc-900 [--anchor-gap:0.25rem]"
+              >
+                {({ close }) => (
+                  <>
+                    <button
+                      onClick={() => handleMoveWorkspace(null, close)}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-500 transition-colors hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+                    >
+                      <X className="h-3.5 w-3.5 shrink-0" />
+                      Recepção (sem área)
+                    </button>
+                    {WORKSPACES.map((ws) => {
+                      const isActive = currentWorkspace?.tagId === ws.tagId;
+                      return (
+                        <button
+                          key={ws.tagId}
+                          onClick={() => handleMoveWorkspace(ws.tagId, close)}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors',
+                            isActive
+                              ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
+                              : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60',
+                          )}
+                        >
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: wsColor(ws.tagId) }}
+                          />
+                          <span className="flex-1 truncate">{ws.label}</span>
+                          {isActive && <Check className="h-3.5 w-3.5 text-primary" />}
+                        </button>
+                      );
+                    })}
                   </>
                 )}
               </PopoverPanel>
