@@ -568,7 +568,7 @@ const Card = memo(function Card({
       </div>
 
       {/* Cliente (título, CAPS) × parte adversa */}
-      <p className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
       {c.opponent && <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
 
       {/* Nº processo (copiável) */}

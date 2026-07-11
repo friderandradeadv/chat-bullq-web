@@ -250,7 +250,7 @@ function Card({ c, onOpen }: { c: KanbanCard; onOpen?: (id: string) => void }) {
           <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>
         )}
       </div>
-      <p className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
       {c.opponent && <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
       {c.cnj && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500">
@@ -582,10 +582,10 @@ function UnifiedBankCard({ it, onOpen }: { it: Extract<UItem, { kind: 'bank' }>;
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{prodLabel}</span>
         <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3 ${SIT_BADGE[m.situacao ?? 'Em análise'] ?? ''}`}>{m.situacao ?? 'Em análise'}</span>
       </div>
-      <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{it.cliente.toUpperCase()}</p>
-      <p className="mt-1 break-words text-xs text-[#48626f] dark:text-zinc-400">× {it.party.name}</p>
+      <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{it.cliente.toUpperCase()}</p>
+      <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {it.party.name}</p>
       {m.saldoDevedor && <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{m.saldoDevedor}</p>}
-      {tags.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{tags.slice(0, 3).map((t) => <span key={t} className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${tagCor(t)}`}>{t}</span>)}{tags.length > 3 && <span className="text-[9px] text-zinc-400">+{tags.length - 3}</span>}</div>}
+      {tags.length > 0 && <div className="mt-1.5 flex gap-1 overflow-hidden">{tags.slice(0, 3).map((t) => <span key={t} className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-medium ${tagCor(t)}`}>{t}</span>)}{tags.length > 3 && <span className="shrink-0 text-[9px] text-zinc-400">+{tags.length - 3}</span>}</div>}
     </div>
   );
 }

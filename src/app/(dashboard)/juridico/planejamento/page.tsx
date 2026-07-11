@@ -202,7 +202,7 @@ function Card({ c, onOpen }: { c: KanbanCard; onOpen?: (id: string) => void }) {
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: ACCENT, color: '#fff' }}>Planejamento</span>
       </div>
-      <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
       {c.cnj && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500">
           <span className="truncate">{c.cnj}</span>
