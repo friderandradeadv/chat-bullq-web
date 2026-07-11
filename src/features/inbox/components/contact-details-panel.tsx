@@ -892,9 +892,10 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
     { tagId: 'lhtag_bpc_loas', label: 'BPC/LOAS' },
     { tagId: 'lhtag_salario_maternidade', label: 'Salário-Maternidade' },
     { tagId: 'cmqbqd3f5000b2cbff83zxs93', label: 'REPB' },
-    { tagId: 'tag_cliente', label: 'Cliente' },
     { tagId: 'tag_outros', label: 'Parceiros / Outros' },
   ];
+  // "Clientes" NÃO entra aqui: é definido pelo STATUS do contato (pill de
+  // status), não por tag. Este botão é só pra rotear ÁREA/Outros de leads.
   const wsColor = (tagId: string) =>
     allAvailableTags.find((t) => t.id === tagId)?.color ?? '#a1a1aa';
   const currentWorkspace =
