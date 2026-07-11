@@ -503,3 +503,99 @@ function Big({ label, value, sub, tone }: { label: string; value: string; sub?: 
     </div>
   );
 }
+
+// "Nesta fase" — o card exibe o conteúdo CERTO conforme a fase do caso (arquitetura
+// por fase). Lê metadata.faseData + as partes (bancos). Read-only (a edição fina
+// fica no dossiê/formulários). Cobre as 9 fases repb_.
+const FASE_TITULO: Record<string, string> = {
+  repb_novo_cliente: '01. Novos clientes — onboarding', repb_docs_faltantes: '02. Documentos faltantes — levantamento',
+  repb_investigativa: '03. Fase investigativa — auditoria', repb_provisionamento: '04. Em provisionamento',
+  repb_negociacao: '05. Negociação', repb_acao_judicial: '06. Ação judicial', repb_acordo: '07. Acordo / cumprimento',
+  repb_concluido: 'Concluído', repb_inviavel: 'Inviável',
+};
+const CHECKLISTS: Record<string, { key: string; options: string[] }> = {
+  repb_novo_cliente: { key: 'onboarding', options: ['Senha GOV solicitada', 'Formulário de dívidas preenchido', 'Reunião de apresentação agendada', 'Análise documental iniciada'] },
+  repb_docs_faltantes: { key: 'levantamento', options: ['Extratos bancários (5 anos)', 'Contratos bancários', 'Boletos / planilhas de cobrança', 'SCR + Registrato (BACEN)', 'Histórico bancário (10 anos)', 'Demonstrativo de evolução da dívida', 'Protestos / cartórios', 'Serasa / SPC / Boa Vista'] },
+  repb_investigativa: { key: 'auditoria', options: ['Taxa de juros × séries temporais BACEN', 'Capitalização (periodicidade pactuada?)', 'Seguro (autorização expressa?)', 'Tarifas', 'Vendas casadas'] },
+};
+
+export function RepbFaseCard({ phase, faseData, parties }: { phase: string | null | undefined; faseData: any; parties: PartyDetail[] }) {
+  if (!phase || !phase.startsWith('repb_')) return null;
+  const fd = (faseData ?? {})[phase] ?? {};
+  const reus = parties.filter((p) => p.role === 'OPPONENT');
+  let body: React.ReactNode = null;
+
+  const cl = CHECKLISTS[phase];
+  if (cl) {
+    const done: string[] = Array.isArray(fd[cl.key]) ? fd[cl.key] : [];
+    const extra = phase === 'repb_novo_cliente' ? fd.tipo_pessoa : phase === 'repb_docs_faltantes' ? fd.adimplencia : fd.abusividade ? `Abusividade: ${fd.abusividade}` : null;
+    body = (
+      <>
+        <div className="mb-1.5 flex items-center gap-2 text-[12px] text-zinc-500 dark:text-zinc-400"><span className="font-semibold text-[#101820] dark:text-zinc-200">{done.length}/{cl.options.length}</span> concluídos{extra && <span className="ml-auto rounded-full bg-[#edeff3] px-2 py-0.5 text-[10px] font-medium text-[#48626f] dark:bg-zinc-800 dark:text-zinc-300">{extra}</span>}</div>
+        <ul className="space-y-1">
+          {cl.options.map((o) => { const ok = done.includes(o); return <li key={o} className={`flex items-center gap-2 text-[12px] ${ok ? 'text-[#101820] dark:text-zinc-200' : 'text-zinc-400'}`}><span className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full text-[9px] ${ok ? 'bg-emerald-500 text-white' : 'border border-[#dcdfe5] dark:border-zinc-700'}`}>{ok ? '✓' : ''}</span>{o}</li>; })}
+        </ul>
+        {fd.obs && <p className="mt-2 rounded bg-[#fafbfc] p-1.5 text-[12px] text-zinc-500 dark:bg-zinc-900/40 dark:text-zinc-400">{fd.obs}</p>}
+      </>
+    );
+  } else if (phase === 'repb_provisionamento') {
+    const provs = reus.map((p) => provValorDoBanco(p)).filter((v): v is number => v != null);
+    const total = provs.reduce((a, v) => a + v, 0);
+    const saldo = reus.reduce((a, p) => a + parseBRL((p.metadata as any)?.saldoDevedor ?? ''), 0);
+    body = (
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <Metric label="Saldo total" value={brl(saldo)} />
+        <Metric label="Provisionado" value={brl(total)} sub={`${provs.length}/${reus.length} bancos`} />
+        <Metric label="Proposta alvo" value={brl(Math.max(0, saldo - total))} />
+      </div>
+    );
+  } else if (phase === 'repb_negociacao') {
+    const negs = reus.filter((p) => (p.metadata as any)?.negProposta || (p.metadata as any)?.negContraproposta || (p.metadata as any)?.situacao === 'Negociando');
+    body = negs.length ? (
+      <div className="space-y-1.5">
+        {negs.map((p) => { const m: any = p.metadata ?? {}; return (
+          <div key={p.id} className="flex items-center gap-2 text-[12px]">
+            <span className="min-w-0 flex-1 truncate font-medium text-[#101820] dark:text-zinc-200">{p.name}</span>
+            {m.negProposta && <span className="shrink-0 text-zinc-500">env. {m.negProposta}</span>}
+            {m.negContraproposta && <span className="shrink-0 text-zinc-400">↔ {m.negContraproposta}</span>}
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${SIT_COR[m.situacao ?? 'Em análise'] ?? ''}`}>{m.negStatus ?? m.situacao}</span>
+          </div>
+        ); })}
+      </div>
+    ) : <p className="text-[12px] text-zinc-400">Sem bancos em negociação ativa.</p>;
+  } else if (phase === 'repb_acao_judicial') {
+    const jud = reus.filter((p) => (p.metadata as any)?.situacao === 'Judicializado' || (Array.isArray((p.metadata as any)?.tags) && (p.metadata as any).tags.some((t: string) => TAGS_ACAO.includes(t))));
+    body = jud.length ? (
+      <div className="space-y-1.5">
+        {jud.map((p) => { const tags: string[] = ((p.metadata as any)?.tags ?? []).filter((t: string) => TAGS_ACAO.includes(t)); return (
+          <div key={p.id} className="text-[12px]">
+            <span className="font-medium text-[#101820] dark:text-zinc-200">{p.name}</span>
+            <span className="ml-1.5 flex flex-wrap gap-1">{tags.map((t) => <span key={t} className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${tagCor(t)}`}>{t}</span>)}</span>
+          </div>
+        ); })}
+      </div>
+    ) : <p className="text-[12px] text-zinc-400">Marque a ação cabível nas etiquetas de cada banco (Exibição de docs, Revisional, Superendividamento…).</p>;
+  } else if (phase === 'repb_acordo' || phase === 'repb_concluido') {
+    const fechados = reus.filter((p) => (p.metadata as any)?.acordoFez === 'Sim' || (p.metadata as any)?.situacao === 'Acordo fechado');
+    body = fechados.length ? (
+      <div className="space-y-1.5">
+        {fechados.map((p) => { const m: any = p.metadata ?? {}; return (
+          <div key={p.id} className="flex items-center gap-2 text-[12px]">
+            <span className="min-w-0 flex-1 truncate font-medium text-[#101820] dark:text-zinc-200">{p.name}</span>
+            {m.acordoValor && <span className="shrink-0 text-emerald-600 dark:text-emerald-400">{m.acordoValor}</span>}
+            {m.acordoDesconto && <span className="shrink-0 text-zinc-400">desc. {m.acordoDesconto}</span>}
+          </div>
+        ); })}
+      </div>
+    ) : <p className="text-[12px] text-zinc-400">Nenhum acordo fechado ainda.</p>;
+  } else {
+    return null; // repb_inviavel: sem card específico
+  }
+
+  return (
+    <section className="rounded-xl border border-[#e3e8ef] bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Nesta fase · {FASE_TITULO[phase] ?? phase}</p>
+      {body}
+    </section>
+  );
+}
