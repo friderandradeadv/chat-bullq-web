@@ -1623,10 +1623,12 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
     (sug?.parteRecorrente?.toUpperCase() as 'CLIENTE' | 'ADVERSA') || (contrarrazoes ? 'ADVERSA' : 'CLIENTE'),
   );
   const [motivo, setMotivo] = useState<string>(sug?.motivo || '');
+  const [numeroRecurso, setNumeroRecurso] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [iaBusy, setIaBusy] = useState(false);
   const [iaAuto, setIaAuto] = useState(false); // já tentou o auto-fill
   const custom = !ESPECIES_RECURSO.includes(especie);
+  const ehAgravo = /agravo/i.test(especie);
 
   // Sugere o motivo lendo a sentença (IA). Não sobrescreve o que você já digitou.
   const sugerirMotivoIA = async (forcar = false) => {
@@ -1656,9 +1658,14 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
         especie: especie.trim() || undefined,
         parteRecorrente: parte,
         motivo: motivo.trim() || undefined,
+        numeroRecurso: numeroRecurso.trim() || undefined,
         confirmFatal: activity.fatal,
       });
-      toast.success('Recurso registrado — card movido para "14. RECURSO"');
+      toast.success(
+        numeroRecurso.trim()
+          ? 'Recurso registrado + número apensado ao processo — card em "14. RECURSO"'
+          : 'Recurso registrado — card movido para "14. RECURSO"',
+      );
       onDone();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || 'Erro ao registrar o recurso');
@@ -1683,6 +1690,22 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
           <option value="__custom">Outro…</option>
         </select>
         {custom && <input autoFocus value={especie} onChange={(e) => setEspecie(e.target.value)} placeholder="Digite a espécie do recurso" className={`${inputCls} mb-3`} />}
+
+        <label className="mb-1 mt-3 block text-xs font-semibold uppercase tracking-wide text-[#6C757D]">
+          Nº do recurso {ehAgravo && <span className="text-[#f51f7e]">(autuação do agravo no tribunal)</span>}
+          <span className="font-normal normal-case text-zinc-400"> — opcional</span>
+        </label>
+        <input
+          value={numeroRecurso}
+          onChange={(e) => setNumeroRecurso(e.target.value)}
+          placeholder={ehAgravo ? 'Ex.: 2001234-56.2026.8.16.0000 (número próprio do agravo)' : 'Se o recurso tiver número próprio no tribunal'}
+          className={`${inputCls} mb-1`}
+        />
+        <p className="mb-3 text-[11px] text-zinc-400">
+          {ehAgravo
+            ? 'O agravo é autuado com número próprio. Preenchendo aqui, ele fica APENSADO ao processo principal — as publicações do agravo caem neste card, sem virar processo órfão.'
+            : 'Preencha se o recurso ganhar número próprio, pra apensar ao processo principal.'}
+        </p>
 
         <label className="mb-1 mt-3 block text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Quem recorreu</label>
         <div className="mb-3 inline-flex overflow-hidden rounded-lg border border-[#DEE2E6] dark:border-zinc-700">

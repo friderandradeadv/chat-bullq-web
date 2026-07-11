@@ -388,6 +388,7 @@ export const legalCasesService = {
     especie?: string;
     parteRecorrente?: 'CLIENTE' | 'ADVERSA';
     motivo?: string;
+    numeroRecurso?: string;
     confirmFatal?: boolean;
   }): Promise<{ ok: boolean; phase: string; recursoId: string | null; aviso?: { enviado: boolean; motivo?: string } | null }> {
     const { data } = await api.post('/legal-cases/recurso/registrar', input);
