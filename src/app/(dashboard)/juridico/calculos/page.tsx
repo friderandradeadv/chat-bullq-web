@@ -11,6 +11,7 @@ import {
   ListChecks,
   Percent,
   Scale,
+  ShieldCheck,
   Sigma,
   Wrench,
 } from 'lucide-react';
@@ -70,6 +71,14 @@ const CALCULADORAS: Calc[] = [
     descricao:
       'Análise segmentada da renda (Lei 14.181/21): renda líquida, comprometimento, renda livre e capacidade para o plano de pagamento. Triagem do superendividamento.',
     icon: Scale,
+    disponivel: true,
+  },
+  {
+    href: '/juridico/calculos/base-juridica',
+    titulo: 'Base jurídica do REPB',
+    descricao:
+      'A fonte versionada de tudo que é lei no módulo: tabelas de provisão (Res. 352), estágios, prazos, mínimo existencial e todas as súmulas/temas — com status validado e a nuance de cada uma.',
+    icon: ShieldCheck,
     disponivel: true,
   },
   {
