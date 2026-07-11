@@ -1104,8 +1104,8 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
     try {
       const r = await legalCasesService.verificarAcoesExistentes(caseId);
       setResultado({ verificadoEm: new Date().toISOString(), fonte: r.fonte, confianca: r.confianca, total: r.acoes.length, acoes: r.acoes });
-      if (r.encontrou) toast.warning(`Encontrei ${r.acoes.length} possível(is) ação(ões) desta pessoa — confira antes de montar a inicial.`);
-      else toast.success('Nenhuma ação em curso encontrada por nome/CPF.');
+      if (r.encontrou) toast.warning(`Encontrei ${r.acoes.length} processo(s) em nome desta pessoa — confira antes de montar a inicial.`);
+      else toast.success('Nenhum processo encontrado por nome/CPF.');
       onDone();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao verificar ações existentes');
@@ -1128,11 +1128,11 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
       </div>
 
       {!resultado && (
-        <p className="mt-1.5 text-xs italic text-zinc-400">Clique em “Verificar” pra pesquisar (por nome/CPF) se o cliente já tem ação em curso — evita litispendência/duplicidade antes de montar a inicial.</p>
+        <p className="mt-1.5 text-xs italic text-zinc-400">Clique em “Verificar” pra pesquisar (por nome/CPF) se o cliente já entrou com ação — nova, arquivada ou em curso —, evitando litispendência/duplicidade antes de montar a inicial.</p>
       )}
 
       {resultado && !tem && (
-        <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">✓ Nenhuma ação em curso encontrada ({resultado.fonte}{resultado.verificadoEm ? `, ${new Date(resultado.verificadoEm).toLocaleDateString('pt-BR')}` : ''}).</p>
+        <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">✓ Nenhum processo encontrado por nome/CPF ({resultado.fonte}{resultado.verificadoEm ? `, ${new Date(resultado.verificadoEm).toLocaleDateString('pt-BR')}` : ''}). <span className="text-zinc-400">Cobre publicações dos últimos ~2 anos; ações antigas sem movimentação podem não aparecer.</span></p>
       )}
 
       {resultado && tem && (
