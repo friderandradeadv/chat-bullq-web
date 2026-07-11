@@ -7,7 +7,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus, FileText, Scale, Users, Landmark } from 'lucide-react';
+import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus, FileText, Scale } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase, type PartyDetail,
@@ -67,13 +67,11 @@ function produtoColor(p: string | null): { bg: string; fg: string } {
 export default function RepbPage() {
   const qc = useQueryClient();
   const router = useRouter();
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
-  const [board, setBoard] = useState<'clientes' | 'bancos'>('clientes'); // 2 boards: funil de clientes × todos os bancos por fase
-  const [foco, setFoco] = useState(''); // caseId do cliente p/ ver os bancos distribuídos no board
+  const [foco, setFoco] = useState(''); // filtro por cliente ('' = todos): mostra só os cards daquele cliente
   const [focoBanco, setFocoBanco] = useState<string | null>(null); // bankId clicado → abre o drawer nele
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
 
@@ -87,7 +85,6 @@ export default function RepbPage() {
   }, []);
   const [novo, setNovo] = useState(false);
   const dragScroll = useDragScroll();
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'repb' }), refetchInterval: 60_000 });
   const phases = (data?.phases ?? []).filter((p) => p.key.startsWith('repb_')).sort((a, b) => a.order - b.order);
@@ -114,14 +111,6 @@ export default function RepbPage() {
       return true;
     });
   }, [cards, search, resp, phases]);
-
-  const byPhase = useMemo(() => {
-    const map: Record<string, KanbanCard[]> = {};
-    for (const c of filtered) (map[c.phase] ??= []).push(c);
-    return map;
-  }, [filtered]);
-
-  const active = cards.find((c) => c.id === activeId) ?? null;
 
   // Só sócios (OWNER/ADMIN) renomeiam as fases — igual aos demais quadros.
   const activeOrg = useAuthStore((s) => s.organizations.find((o) => o.id === s.activeOrgId));
@@ -152,20 +141,6 @@ export default function RepbPage() {
     }
   };
 
-  const move = async (card: KanbanCard, to: string) => {
-    if (card.phase === to) return;
-    qc.setQueryData<KanbanData>(KEY, (old) => old ? { ...old, cards: old.cards.map((x) => x.id === card.id ? { ...x, phase: to } : x) } : old);
-    try { await legalCasesService.movePhase(card.id, to); qc.invalidateQueries({ queryKey: KEY }); }
-    catch { qc.invalidateQueries({ queryKey: KEY }); toast.error('Erro ao mover'); }
-  };
-
-  const onDragEnd = (e: DragEndEvent) => {
-    setActiveId(null);
-    const to = e.over?.id as string | undefined;
-    const card = cards.find((x) => x.id === e.active.id);
-    if (to && card && repbKeys.has(to)) move(card, to);
-  };
-
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-2 lg:px-6">
@@ -187,44 +162,36 @@ export default function RepbPage() {
           <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
             <Plus className="h-4 w-4" /> Novo cliente
           </button>
-          {/* Board: funil de Clientes × todos os Bancos por fase */}
+          {/* Filtro por cliente: '' = todos os cards; escolher um = visão EXCLUSIVA daquele cliente */}
+          <select value={foco} onChange={(e) => setFoco(e.target.value)} title="Filtrar o kanban por cliente" className={`h-9 max-w-[220px] rounded-lg border px-2 text-sm dark:bg-zinc-900 ${foco ? 'border-[#B7791F] bg-[#B7791F]/10 font-semibold text-[#B7791F]' : 'border-[#cfe0ed] bg-white text-[#101820] dark:border-zinc-700 dark:text-zinc-300'}`}>
+            <option value="">Todos os clientes</option>
+            {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
           <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
-            <button onClick={() => { setBoard('clientes'); }} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${board === 'clientes' ? 'text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`} style={board === 'clientes' ? { background: ACCENT } : undefined}><Users className="h-4 w-4" /> Clientes</button>
-            <button onClick={() => { setBoard('bancos'); setFoco(''); }} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${board === 'bancos' ? 'text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`} style={board === 'bancos' ? { background: ACCENT } : undefined}><Landmark className="h-4 w-4" /> Bancos</button>
+            <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`} style={view === 'kanban' ? { background: ACCENT } : undefined}><LayoutGrid className="h-4 w-4" /> Kanban</button>
+            <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`} style={view === 'lista' ? { background: ACCENT } : undefined}><List className="h-4 w-4" /> Lista</button>
           </div>
-          {board === 'clientes' && (
-            <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
-              <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`} style={view === 'kanban' ? { background: ACCENT } : undefined}><LayoutGrid className="h-4 w-4" /> Kanban</button>
-              <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`} style={view === 'lista' ? { background: ACCENT } : undefined}><List className="h-4 w-4" /> Lista</button>
-            </div>
-          )}
         </div>
       </div>
 
-      {board === 'clientes' && foco && view === 'kanban' && (
+      {foco && view === 'kanban' && (
         <div className="shrink-0 border-b border-[#dbeaf5] bg-[#B7791F]/5 px-4 py-1.5 text-[12px] text-[#48626f] dark:border-zinc-800 dark:text-zinc-400 lg:px-6">
-          Kanban dos <b>bancos</b> de <b className="text-[#B7791F]">{focoNome}</b> por situação — arraste um banco entre as colunas p/ mudar a situação · clique p/ abrir o dossiê.
-          <button onClick={() => { setFoco(''); setView('lista'); }} className="ml-2 font-semibold text-[#B7791F] hover:underline">← voltar à lista de clientes</button>
+          Visão exclusiva de <b className="text-[#B7791F]">{focoNome}</b> — só os cards (cliente × banco) deste cliente.
+          <button onClick={() => setFoco('')} className="ml-2 font-semibold text-[#B7791F] hover:underline">← ver todos os clientes</button>
         </div>
       )}
 
-      {board === 'bancos' ? (
-        <BancosGlobalBoard clientes={filtered} phases={phases} onOpenBank={(cid, bid) => { setFocoBanco(bid); setOpenCaseId(cid); }} scroll={dragScroll} />
-      ) : view === 'lista' ? (
+      {view === 'lista' ? (
         <ClienteListView clientes={filtered} phases={phases} onOpenKanban={(id) => { setFoco(id); setView('kanban'); }} onOpenFicha={(id) => router.push(`/juridico/repb/${id}`)} accent={ACCENT} />
-      ) : foco ? (
-        <BancoBoard caseId={foco} phases={phases} onOpenBank={(cid, bid) => { setFocoBanco(bid); setOpenCaseId(cid); }} scroll={dragScroll} />
       ) : (
-        <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
-            {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
-            {!isLoading && phases.map((phase) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} />
-            ))}
-            {!isLoading && canRename && <AddPhaseColumn board="repb" accent={ACCENT} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
-          </div>
-          <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
-        </DndContext>
+        <UnifiedRepbBoard
+          clientes={filtered} foco={foco} phases={phases}
+          onOpenBank={(cid, bid) => { setFocoBanco(bid); setOpenCaseId(cid); }}
+          onOpenCase={(cid) => setOpenCaseId(cid)}
+          onMovedCase={() => qc.invalidateQueries({ queryKey: KEY })}
+          canRename={canRename} onRename={renamePhase} onDelete={deletePhase}
+          scroll={dragScroll}
+        />
       )}
 
       {/* Só as fases do REPB no seletor de mover (nunca de outro quadro). */}
@@ -481,6 +448,115 @@ function BancoGlobalCard({ b, onOpen }: { b: BancoGlobal; onOpen?: (caseId: stri
           {tags.length > 4 && <span className="text-[9px] text-zinc-400">+{tags.length - 4}</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── KANBAN UNIFICADO: 1 board, card = CLIENTE × BANCO RÉU (estilo Fase Judicial),
+// posicionado pela fase (situação do banco). Cliente SEM bancos ainda = 1 card do
+// cliente na fase do caso. `foco` (filtro por cliente) = visão exclusiva. Arrastar
+// card de banco muda a situação; card de cliente muda a fase do caso.
+type UItem =
+  | { kind: 'bank'; id: string; caseId: string; cliente: string; produto: string | null; area: string | null; party: PartyDetail }
+  | { kind: 'case'; id: string; caseId: string; card: KanbanCard };
+
+function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMovedCase, canRename, onRename, onDelete, scroll }: {
+  clientes: KanbanCard[]; foco: string; phases: KanbanPhase[];
+  onOpenBank: (caseId: string, bankId: string) => void; onOpenCase: (caseId: string) => void; onMovedCase: () => void;
+  canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void;
+  scroll: ReturnType<typeof useDragScroll>;
+}) {
+  const qc = useQueryClient();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const alvo = foco ? clientes.filter((c) => c.id === foco) : clientes;
+  const results = useQueries({ queries: alvo.map((c) => ({ queryKey: ['legal-cases', 'detail', c.id], queryFn: () => legalCasesService.get(c.id), staleTime: 30_000 })) });
+
+  const items = useMemo(() => {
+    const arr: UItem[] = [];
+    alvo.forEach((c, i) => {
+      const d: any = results[i]?.data;
+      const cliente = (c.client ?? c.title ?? 'Cliente');
+      const banks = d ? (d.parties as PartyDetail[]).filter((p) => p.role === 'OPPONENT') : [];
+      if (banks.length) { for (const p of banks) arr.push({ kind: 'bank', id: p.id, caseId: c.id, cliente, produto: c.produto, area: c.areaJuridica, party: p }); }
+      else arr.push({ kind: 'case', id: c.id, caseId: c.id, card: c });
+    });
+    return arr;
+  }, [alvo, results]);
+
+  const byPhase = useMemo(() => {
+    const map: Record<string, UItem[]> = {};
+    for (const it of items) { const ph = it.kind === 'bank' ? (SIT_TO_PHASE[(it.party.metadata as any)?.situacao ?? 'Em análise'] ?? 'repb_investigativa') : it.card.phase; (map[ph] ??= []).push(it); }
+    return map;
+  }, [items]);
+
+  const moveItem = async (it: UItem, to: string) => {
+    if (it.kind === 'bank') {
+      const sit = PHASE_TO_SIT[to]; if (!sit || ((it.party.metadata as any)?.situacao ?? 'Em análise') === sit) return;
+      qc.setQueryData<any>(['legal-cases', 'detail', it.caseId], (old: any) => (old ? { ...old, parties: old.parties.map((x: any) => (x.id === it.party.id ? { ...x, metadata: { ...(x.metadata ?? {}), situacao: sit } } : x)) } : old));
+      try { await legalCasesService.updateParty(it.party.id, { name: it.party.name || 'Banco', role: 'OPPONENT', document: it.party.document ?? undefined, metadata: { ...((it.party.metadata as any) ?? {}), situacao: sit } }); qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', it.caseId] }); }
+      catch { qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', it.caseId] }); toast.error('Erro ao mover banco'); }
+    } else {
+      if (it.card.phase === to) return;
+      try { await legalCasesService.movePhase(it.card.id, to); onMovedCase(); } catch { toast.error('Erro ao mover'); }
+    }
+  };
+  const onDragEnd = (e: DragEndEvent) => { setActiveId(null); const to = e.over?.id as string | undefined; const it = items.find((x) => x.id === e.active.id); if (to && it) moveItem(it, to); };
+  const activeItem = items.find((x) => x.id === activeId) ?? null;
+  const loading = results.some((r) => r.isLoading);
+
+  return (
+    <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+      <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+        {loading && !items.length && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
+        {phases.map((phase) => <UnifiedColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpenBank={onOpenBank} onOpenCase={onOpenCase} canRename={canRename} onRename={onRename} onDelete={onDelete} />)}
+        {canRename && <AddPhaseColumn board="repb" accent={ACCENT} onAdded={onMovedCase} />}
+      </div>
+      <DragOverlay>{activeItem ? (activeItem.kind === 'bank' ? <UnifiedBankCard it={activeItem} /> : <Card c={activeItem.card} />) : null}</DragOverlay>
+    </DndContext>
+  );
+}
+
+function UnifiedColumn({ phase, items, onOpenBank, onOpenCase, canRename, onRename, onDelete }: {
+  phase: KanbanPhase; items: UItem[]; onOpenBank: (caseId: string, bankId: string) => void; onOpenCase: (caseId: string) => void;
+  canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: phase.key });
+  const total = items.reduce((a, it) => a + (it.kind === 'bank' ? parseBRL((it.party.metadata as any)?.saldoDevedor) : (it.card.value ?? 0)), 0);
+  return (
+    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+      <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} />
+        {total > 0 && <span className="text-[11px] text-zinc-400">{fmtMoney(total)}</span>}
+        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+      </div>
+      <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
+        {items.map((it) => it.kind === 'bank'
+          ? <UnifiedBankCard key={it.id} it={it} onOpen={() => onOpenBank(it.caseId, it.party.id)} />
+          : <Card key={it.id} c={it.card} onOpen={() => onOpenCase(it.card.id)} />)}
+      </div>
+    </div>
+  );
+}
+
+function UnifiedBankCard({ it, onOpen }: { it: Extract<UItem, { kind: 'bank' }>; onOpen?: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: it.id });
+  const m: any = it.party.metadata ?? {};
+  const tags: string[] = Array.isArray(m.tags) ? m.tags : [];
+  const prod = produtoColor(it.produto ?? 'REPB'); const prodLabel = cleanProduto(it.produto) ?? 'REPB';
+  const style: React.CSSProperties = { borderLeftWidth: 4, borderLeftColor: areaDot(it.area ?? 'Bancário'), ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}) };
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={onOpen}
+      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      <div className="-ml-1 flex flex-wrap items-center gap-1">
+        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{prodLabel}</span>
+        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3 ${SIT_BADGE[m.situacao ?? 'Em análise'] ?? ''}`}>{m.situacao ?? 'Em análise'}</span>
+      </div>
+      <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{it.cliente.toUpperCase()}</p>
+      <p className="mt-1 break-words text-xs text-[#48626f] dark:text-zinc-400">× {it.party.name}</p>
+      {m.saldoDevedor && <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{m.saldoDevedor}</p>}
+      {tags.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{tags.slice(0, 3).map((t) => <span key={t} className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${tagCor(t)}`}>{t}</span>)}{tags.length > 3 && <span className="text-[9px] text-zinc-400">+{tags.length - 3}</span>}</div>}
     </div>
   );
 }
