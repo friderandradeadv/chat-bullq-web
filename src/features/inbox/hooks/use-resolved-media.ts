@@ -117,9 +117,17 @@ function pickInitialUrl(message: Message): string | undefined {
 }
 
 /**
- * The webhook from Uazapi stores a .enc URL on `mmg.whatsapp.net`. Browsers
- * can't decrypt it — treating it as unplayable forces a backend resolve.
+ * URLs que o NAVEGADOR não consegue abrir sozinho → força o resolve no backend:
+ *  - `.enc` / `mmg.whatsapp.net`: mídia cifrada da Uazapi/Baileys.
+ *  - `lookaside.fbsbx.com` / `graph.facebook.com`: mídia da WhatsApp Cloud API
+ *    (Meta) — exige Authorization: Bearer <token>, que o browser não manda (dava
+ *    401 "Authentication Error" ao abrir direto). O backend baixa com o token e
+ *    re-hospeda numa URL /uploads/ estável.
  */
 function looksUnplayable(u: string): boolean {
-  return /\.enc(\?|$)/i.test(u) || /mmg\.whatsapp\.net/i.test(u);
+  return (
+    /\.enc(\?|$)/i.test(u) ||
+    /mmg\.whatsapp\.net/i.test(u) ||
+    /lookaside\.fbsbx\.com|graph\.facebook\.com/i.test(u)
+  );
 }
