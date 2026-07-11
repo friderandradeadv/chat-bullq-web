@@ -78,7 +78,7 @@ type Draft = {
   name: string; document: string; operacao: string; saldoDevedor: string; situacao: string; obs: string; tags: string[];
   provInstituicao: Instituicao; provOperacao: string; provDias: string;
   negInterlocutor: string; negProposta: string; negContraproposta: string; negStatus: string;
-  acordoFez: string; acordoValor: string; acordoDesconto: string; acordoHonorarios: string;
+  acordoFez: string; acordoValor: string; acordoDesconto: string; acordoHonorarios: string; acordoHonorariosTerceiros: string;
 };
 const toDraft = (p: PartyDetail): Draft => {
   const m: any = p.metadata ?? {};
@@ -91,7 +91,7 @@ const toDraft = (p: PartyDetail): Draft => {
     negInterlocutor: m.negInterlocutor ?? '', negProposta: m.negProposta ?? '', negContraproposta: m.negContraproposta ?? '',
     negStatus: m.negStatus ?? (m.situacao === 'Negociando' ? 'Em negociação' : m.situacao === 'Acordo fechado' ? 'Acordo aceito' : 'Não iniciada'),
     acordoFez: m.acordoFez ?? (m.situacao === 'Acordo fechado' ? 'Sim' : ''),
-    acordoValor: m.acordoValor ?? '', acordoDesconto: m.acordoDesconto ?? '', acordoHonorarios: m.acordoHonorarios ?? '',
+    acordoValor: m.acordoValor ?? '', acordoDesconto: m.acordoDesconto ?? '', acordoHonorarios: m.acordoHonorarios ?? '', acordoHonorariosTerceiros: m.acordoHonorariosTerceiros ?? '',
   };
 };
 
@@ -221,7 +221,7 @@ function BancoDossie({ party, open, onToggle, onChanged, malotes, onAddMalote, o
             operacao: next.operacao, saldoDevedor: next.saldoDevedor, situacao: next.situacao, obs: next.obs, tags: next.tags,
             provInstituicao: next.provInstituicao, provOperacao: next.provOperacao, provDias: next.provDias,
             negInterlocutor: next.negInterlocutor, negProposta: next.negProposta, negContraproposta: next.negContraproposta, negStatus: next.negStatus,
-            acordoFez: next.acordoFez, acordoValor: next.acordoValor, acordoDesconto: next.acordoDesconto, acordoHonorarios: next.acordoHonorarios,
+            acordoFez: next.acordoFez, acordoValor: next.acordoValor, acordoDesconto: next.acordoDesconto, acordoHonorarios: next.acordoHonorarios, acordoHonorariosTerceiros: next.acordoHonorariosTerceiros,
           },
         });
         onChanged();
@@ -329,10 +329,11 @@ function BancoDossie({ party, open, onToggle, onChanged, malotes, onAddMalote, o
               ))}
             </div>
             {d.acordoFez === 'Sim' && (
-              <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 <label className={LABEL}>Valor do acordo<input value={d.acordoValor} onChange={(e) => save({ ...d, acordoValor: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
                 <label className={LABEL}>Desconto obtido<input value={d.acordoDesconto} onChange={(e) => save({ ...d, acordoDesconto: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
-                <label className={LABEL}>Honorários<input value={d.acordoHonorarios} onChange={(e) => save({ ...d, acordoHonorarios: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                <label className={LABEL}>Honorários (nossa parte)<input value={d.acordoHonorarios} onChange={(e) => save({ ...d, acordoHonorarios: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                <label className={LABEL}>Honorários parceiros (terceiros)<input value={d.acordoHonorariosTerceiros} onChange={(e) => save({ ...d, acordoHonorariosTerceiros: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
               </div>
             )}
           </section>
@@ -463,12 +464,21 @@ export function RepbFasePorBanco({ parties, malotes, focusId }: { parties: Party
 export function ResumoClienteRepb({ parties, recebido }: { parties: PartyDetail[]; recebido?: number }) {
   const reus = parties.filter((p) => p.role === 'OPPONENT');
   if (!reus.length) return null;
-  const divida = reus.reduce((a, p) => a + parseBRL((p.metadata as any)?.saldoDevedor ?? ''), 0);
-  const fechados = reus.filter((p) => (p.metadata as any)?.acordoFez === 'Sim' || (p.metadata as any)?.situacao === 'Acordo fechado');
-  const recuperado = fechados.reduce((a, p) => a + parseBRL((p.metadata as any)?.acordoDesconto ?? ''), 0);
-  const honorarios = fechados.reduce((a, p) => a + parseBRL((p.metadata as any)?.acordoHonorarios ?? ''), 0);
-  const acordoTotal = fechados.reduce((a, p) => a + parseBRL((p.metadata as any)?.acordoValor ?? ''), 0);
-  const nFechados = reus.filter((p) => (p.metadata as any)?.situacao === 'Acordo fechado').length;
+  const meta = (p: PartyDetail) => (p.metadata as any) ?? {};
+  const divida = reus.reduce((a, p) => a + parseBRL(meta(p).saldoDevedor ?? ''), 0);
+  const provisionado = reus.reduce((a, p) => a + (provValorDoBanco(p) ?? 0), 0);
+  const fechados = reus.filter((p) => meta(p).acordoFez === 'Sim' || meta(p).situacao === 'Acordo fechado');
+  // Recuperado (economia do cliente) = desconto informado OU, se vazio, dívida − valor do acordo.
+  const recuperado = fechados.reduce((a, p) => {
+    const desc = parseBRL(meta(p).acordoDesconto ?? '');
+    if (desc > 0) return a + desc;
+    const saldo = parseBRL(meta(p).saldoDevedor ?? ''); const acordo = parseBRL(meta(p).acordoValor ?? '');
+    return a + (saldo > 0 && acordo > 0 ? Math.max(0, saldo - acordo) : 0);
+  }, 0);
+  const honNossa = fechados.reduce((a, p) => a + parseBRL(meta(p).acordoHonorarios ?? ''), 0);
+  const honTerceiros = fechados.reduce((a, p) => a + parseBRL(meta(p).acordoHonorariosTerceiros ?? ''), 0);
+  const acordoTotal = fechados.reduce((a, p) => a + parseBRL(meta(p).acordoValor ?? ''), 0);
+  const nFechados = reus.filter((p) => meta(p).situacao === 'Acordo fechado').length;
   const progresso = reus.length ? Math.round((nFechados / reus.length) * 100) : 0;
   const pctRecuperado = divida > 0 ? Math.round((recuperado / divida) * 100) : 0;
 
@@ -478,17 +488,18 @@ export function ResumoClienteRepb({ parties, recebido }: { parties: PartyDetail[
         <TrendingDown className="h-4 w-4 text-[#B7791F]" />
         <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Reestruturação — panorama do cliente</p>
       </div>
-      <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Big label="Dívida mapeada" value={brl(divida)} tone="ink" />
+        <Big label="Provisionado (est.)" value={brl(provisionado)} sub={divida > 0 ? `${Math.round((provisionado / divida) * 100)}% da dívida` : undefined} tone="ink" />
         <Big label="Já recuperado" value={brl(recuperado)} sub={`${pctRecuperado}% da dívida`} tone="emerald" />
-        <Big label="Honorários gerados" value={brl(honorarios)} sub={recebido != null ? `recebido ${brl(recebido)}` : undefined} tone="gold" />
+        <Big label="Honorários (nossa parte)" value={brl(honNossa)} sub={honTerceiros > 0 ? `+ ${brl(honTerceiros)} parceiros` : recebido != null ? `recebido ${brl(recebido)}` : undefined} tone="gold" />
         <Big label="Acordos fechados" value={`${nFechados}/${reus.length}`} sub={acordoTotal > 0 ? `pago ${brl(acordoTotal)}` : undefined} tone="ink" />
       </div>
       <div className="mt-3">
         <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-400"><span>Progresso da reestruturação</span><span>{progresso}%</span></div>
         <div className="h-2 overflow-hidden rounded-full bg-[#edeff3] dark:bg-zinc-800"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progresso}%` }} /></div>
       </div>
-      <p className="mt-2 text-[10px] text-zinc-400">Honorários e descontos alimentam o Financeiro (A receber judicial › Acordos REPB) quando o caso é concluído.</p>
+      <p className="mt-2 text-[10px] text-zinc-400">Recuperado = economia do cliente (desconto). Honorários (nossa parte) alimentam o Financeiro; a parte de parceiros fica registrada à parte.</p>
     </div>
   );
 }

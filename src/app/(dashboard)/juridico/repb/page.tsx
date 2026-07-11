@@ -7,7 +7,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus, FileText } from 'lucide-react';
+import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus, FileText, Scale } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase, type PartyDetail,
@@ -48,6 +48,21 @@ const SIT_BADGE: Record<string, string> = {
 };
 const normNome = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const parseBRL = (s: string | null | undefined) => { let t = String(s ?? '').replace(/[^\d,.-]/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); const n = Number(t); return Number.isFinite(n) ? n : 0; };
+
+// ── Estilo dos cards espelhando o Fase Judicial: borda esquerda 4px por área +
+// etiquetas produto (cor)/área (cinza). Helpers copiados do kanban judicial.
+const AREA_DOT: Record<string, string> = { 'Bancário': '#228BE6', 'Previdenciário': '#7048e8', 'Trabalhista': '#f08c00', 'Consumidor': '#e64980', 'Cível': '#868e96', REPB: '#B7791F' };
+const areaDot = (a: string | null) => AREA_DOT[a ?? 'Cível'] ?? '#B7791F';
+const cleanProduto = (s: string | null): string | null => { if (!s) return s; const t = s.trim(); if (t.startsWith('[')) { try { const a = JSON.parse(t); if (Array.isArray(a)) return a.join(' · '); } catch { /* */ } } return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim(); };
+function produtoColor(p: string | null): { bg: string; fg: string } {
+  const s = (p ?? '').toUpperCase();
+  if (/REPB|REESTRUT|PASSIVO/.test(s)) return { bg: 'rgb(183,121,31)', fg: '#fff' };
+  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
+  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
+  if (/REVISIONAL|CONSIGNAD|PORTABIL/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
+  if (/SEGURO|TARIFA/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
+  return { bg: 'rgb(209,209,209)', fg: '#101820' };
+}
 
 export default function RepbPage() {
   const qc = useQueryClient();
@@ -229,17 +244,26 @@ function Card({ c, onOpen }: { c: KanbanCard; onOpen?: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
-  const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {};
+  const slaEstourado = c.slaDias > 0 && c.diasNaFase != null && c.diasNaFase > c.slaDias;
+  const prod = produtoColor(c.produto ?? 'REPB');
+  const prodLabel = cleanProduto(c.produto) ?? 'REPB';
+  const style: React.CSSProperties = { borderLeftWidth: 4, borderLeftColor: areaDot(c.areaJuridica ?? 'Bancário'), ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}) };
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onClick={() => onOpen?.(c.id)}
-      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      {/* Etiquetas: produto (cor) + área (cinza) */}
       <div className="-ml-1 flex flex-wrap items-center gap-1">
-        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: ACCENT, color: '#fff' }}>REPB</span>
+        <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{prodLabel}</span>
+        {c.areaJuridica && prodLabel.toLowerCase().trim() !== c.areaJuridica.toLowerCase().trim() && (
+          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>
+        )}
       </div>
-      <p className="mt-2 break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      <p className="mt-2 break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+      {c.opponent && <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
       {c.cnj && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500">
+          <Scale className="h-3 w-3 shrink-0" />
           <span className="truncate">{c.cnj}</span>
           <button onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(c.cnj!); toast.success('Nº copiado'); }} onPointerDown={(e) => e.stopPropagation()} title="Copiar" className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"><Copy className="h-3 w-3" /></button>
         </p>
@@ -250,12 +274,17 @@ function Card({ c, onOpen }: { c: KanbanCard; onOpen?: (id: string) => void }) {
           <CalendarClock className="h-3.5 w-3.5" /> {overdue ? 'Venc' : 'Vence'} {fmtDate(c.proximoPrazo.dueDate)}{c.proximoPrazo.type === 'FATAL' && <span className="font-semibold">· fatal</span>}
         </span>
       )}
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#eef2f8] pt-1.5 dark:border-zinc-800">
-        <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4b5863] dark:text-zinc-400" title="Tempo na fase atual"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNaFase)}</span>
+      {/* Rodapé: 3 relógios + avatar (igual Fase Judicial) */}
+      <div className="mt-1.5 flex items-center justify-between border-t border-[#eef2f8] pt-1.5 dark:border-zinc-800">
+        <div className="flex items-center text-[10px] font-semibold text-[#4b5863] dark:text-zinc-400">
+          <span className="mr-1.5 inline-flex items-center gap-0.5" title="Tempo no caso"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNoProcesso)}</span>
+          <span className={`mr-1.5 inline-flex items-center gap-0.5 ${slaEstourado ? 'text-[#c22e00]' : ''}`} title="Tempo na fase"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNaFase)}</span>
+          {c.slaDias > 0 && <span className={`inline-flex items-center gap-0.5 ${slaEstourado ? 'text-[#c22e00]' : 'opacity-60'}`} title="SLA da fase"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {c.slaDias}d</span>}
+        </div>
         {c.responsible && (c.responsible.avatarUrl
           // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
-          : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>)}
+          ? <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover ring-2 ring-white dark:ring-zinc-900" />
+          : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white ring-2 ring-white dark:ring-zinc-900">{iniciais}</span>)}
       </div>
     </div>
   );

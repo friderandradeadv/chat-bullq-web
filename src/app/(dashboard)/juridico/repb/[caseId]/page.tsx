@@ -33,7 +33,7 @@ export default function RepbFichaPage() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
 
   return (
-    <div className="min-h-full bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="h-full overflow-y-auto bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200">
       {/* Cabeçalho */}
       <div className="border-b border-[#dbeaf5] bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900 lg:px-6 lg:pt-12">
         <div className="mx-auto max-w-6xl">
