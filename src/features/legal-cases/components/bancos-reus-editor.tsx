@@ -542,39 +542,235 @@ const FOCO_SIT: Record<string, string> = {
   Judicializado: 'Nesta fase: ação judicial cabível (exibição, revisional, superendividamento…).',
   'Sem acordo': 'Nesta fase: reavaliar estratégia (novo malote, ação, provisionamento).',
 };
+const TAB_POR_SIT: Record<string, string> = {
+  'Em análise': 'calculo', 'Malote enviado': 'solicitacoes', Negociando: 'negociacao',
+  'Acordo fechado': 'acordo', Judicializado: 'acordo', 'Sem acordo': 'calculo',
+};
+const FOCO_TABS = [
+  { k: 'dados', label: 'Dados' }, { k: 'calculo', label: 'Cálculo' }, { k: 'negociacao', label: 'Negociação' },
+  { k: 'acordo', label: 'Acordo' }, { k: 'solicitacoes', label: 'Solicitações' },
+];
+
 export function BankFocusModal({ caseId, bankId, onClose }: { caseId: string; bankId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const { data: c, isLoading } = useQuery({ queryKey: ['legal-cases', 'detail', caseId], queryFn: () => legalCasesService.get(caseId) });
   const party = c?.parties.find((p) => p.id === bankId);
   const cliente = (c?.parties.find((p) => p.role === 'CLIENT')?.name ?? c?.title ?? 'Cliente');
-  const malotes = ((c?.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as Malote[];
+  const malotesAll = ((c?.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as Malote[];
   const m: any = party?.metadata ?? {};
   const tags: string[] = Array.isArray(m.tags) ? m.tags : [];
   const foco = FOCO_SIT[m.situacao ?? 'Em análise'] ?? '';
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-2">
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-2 border-b border-[#eef1f5] p-4 dark:border-zinc-800">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-400">{cliente.toUpperCase()}</p>
             <h3 className="break-words text-lg font-bold text-[#101820] dark:text-zinc-100">{party?.name ?? 'Banco'}</h3>
+            {party && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SIT_COR[m.situacao ?? 'Em análise'] ?? ''}`}>{m.situacao ?? 'Em análise'}</span>
+                {m.saldoDevedor && <span className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{m.saldoDevedor}</span>}
+                {tags.slice(0, 4).map((t) => <span key={t} className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${tagCor(t)}`}>{t}</span>)}
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
         </div>
-        {isLoading && <p className="py-6 text-center text-sm text-zinc-400">Carregando banco…</p>}
-        {!isLoading && !party && <p className="py-6 text-center text-sm text-zinc-400">Banco não encontrado.</p>}
-        {party && c && (
+        <div className="p-4">
+          {isLoading && <p className="py-6 text-center text-sm text-zinc-400">Carregando banco…</p>}
+          {!isLoading && !party && <p className="py-6 text-center text-sm text-zinc-400">Banco não encontrado.</p>}
+          {party && c && (
+            <>
+              {foco && <p className="mb-3 rounded-lg bg-[#B7791F]/10 px-3 py-2 text-[12px] font-medium text-[#8a5a12] dark:text-[#e0b060]">{foco}</p>}
+              <BancoFocado caseId={caseId} party={party} malotesAll={malotesAll} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] })} />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Editor de UM banco em SUBABAS (Dados · Cálculo · Negociação · Acordo · Solicitações).
+// Abre na aba certa pela situação. Persiste banco em Party.metadata (updateParty) e
+// os malotes na lista global faseData.repb_malotes.lista (saveFaseField).
+function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string; party: PartyDetail; malotesAll: Malote[]; onChanged: () => void }) {
+  const qc = useQueryClient();
+  const [d, setD] = useState<Draft>(toDraft(party));
+  const debRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setD(toDraft(party)); }, [party.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [tab, setTab] = useState<string>(TAB_POR_SIT[(party.metadata as any)?.situacao ?? 'Em análise'] ?? 'dados');
+
+  const save = (next: Draft) => {
+    setD(next);
+    if (debRef.current) clearTimeout(debRef.current);
+    debRef.current = setTimeout(async () => {
+      try {
+        await legalCasesService.updateParty(party.id, {
+          name: next.name.trim() || 'Banco', role: 'OPPONENT', document: next.document.trim() || undefined,
+          metadata: {
+            operacao: next.operacao, saldoDevedor: next.saldoDevedor, situacao: next.situacao, obs: next.obs, tags: next.tags,
+            provInstituicao: next.provInstituicao, provOperacao: next.provOperacao, provDias: next.provDias,
+            negInterlocutor: next.negInterlocutor, negProposta: next.negProposta, negContraproposta: next.negContraproposta, negStatus: next.negStatus,
+            acordoFez: next.acordoFez, acordoValor: next.acordoValor, acordoDesconto: next.acordoDesconto, acordoHonorarios: next.acordoHonorarios, acordoHonorariosTerceiros: next.acordoHonorariosTerceiros,
+          },
+        });
+        onChanged();
+      } catch { toast.error('Erro ao salvar banco'); }
+    }, 600);
+  };
+  const toggleTag = (t: string) => save({ ...d, tags: d.tags.includes(t) ? d.tags.filter((x) => x !== t) : [...d.tags, t] });
+
+  // Malotes deste banco (lista global; filtra + persiste).
+  const [malRows, setMalRows] = useState<Malote[]>(malotesAll ?? []);
+  const malDeb = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setMalRows(malotesAll ?? []); }, [party.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const persistMal = (next: Malote[]) => {
+    setMalRows(next);
+    if (malDeb.current) clearTimeout(malDeb.current);
+    malDeb.current = setTimeout(async () => {
+      try { await legalCasesService.saveFaseField(caseId, 'repb_malotes', 'lista', next as any); qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] }); }
+      catch { toast.error('Erro ao salvar protocolo'); }
+    }, 600);
+  };
+  const nB = norm(party.name);
+  const meusMal = malRows.filter((mm) => (mm.bancoId ? mm.bancoId === party.id : (norm(mm.banco) && (nB.includes(norm(mm.banco)) || norm(mm.banco).includes(nB)))));
+
+  const contato = acharBancoContato(d.name);
+  const saldo = parseBRL(d.saldoDevedor);
+  const carteira: Carteira = OPERACOES.find((o) => o.label === d.provOperacao)?.carteira ?? 'C5';
+  const diasProv = Math.max(0, Number(d.provDias.replace(/\D/g, '')) || 0);
+  const prov = useMemo(() => (saldo > 0 ? calcularProvisao({ saldoDevedor: saldo, carteira, dias: diasProv, instituicao: d.provInstituicao }) : null), [saldo, carteira, diasProv, d.provInstituicao]);
+
+  return (
+    <div>
+      {/* Subabas */}
+      <div className="flex flex-wrap gap-1 border-b border-[#eef1f5] dark:border-zinc-800">
+        {FOCO_TABS.map((t) => {
+          const n = t.k === 'solicitacoes' ? meusMal.length : undefined;
+          return (
+            <button key={t.k} onClick={() => setTab(t.k)} className={`-mb-px border-b-2 px-3 py-1.5 text-[13px] font-medium ${tab === t.k ? 'border-[#B7791F] text-[#B7791F]' : 'border-transparent text-zinc-500 hover:text-[#B7791F] dark:text-zinc-400'}`}>
+              {t.label}{n != null && n > 0 ? ` · ${n}` : ''}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 space-y-3">
+        {/* ── DADOS ── */}
+        {tab === 'dados' && (
           <>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SIT_COR[m.situacao ?? 'Em análise'] ?? ''}`}>{m.situacao ?? 'Em análise'}</span>
-              {m.saldoDevedor && <span className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{m.saldoDevedor}</span>}
-              {tags.map((t) => <span key={t} className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${tagCor(t)}`}>{t}</span>)}
+            <div className="flex items-center gap-2">
+              <input value={d.name} list="bancos-repb-dir" onChange={(e) => save({ ...d, name: e.target.value })} placeholder="Banco / instituição" className={`${INPUT} font-medium`} />
             </div>
-            {foco && <p className="mt-2 rounded-lg bg-[#B7791F]/10 px-3 py-2 text-[12px] font-medium text-[#8a5a12] dark:text-[#e0b060]">{foco}</p>}
-            <div className="mt-3">
-              <BancosReusEditor caseId={caseId} parties={c.parties} malotes={malotes} onlyBankId={bankId} focusBankId={bankId} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] })} />
+            {contato && <p className="text-[11px] text-zinc-400">📇 {contato.escritorio}{contato.telefone ? ` · ${contato.telefone}` : ''}{contato.email ? ` · ${contato.email}` : ''}</p>}
+            <datalist id="bancos-repb-dir">{BANCOS_DIRETORIO.map((b) => <option key={b.nome} value={b.nome} />)}</datalist>
+            <div className="grid grid-cols-2 gap-2">
+              <label className={LABEL}>CNPJ<input value={d.document} onChange={(e) => save({ ...d, document: maskCpfCnpj(e.target.value) })} className={INPUT} /></label>
+              <label className={LABEL}>Operação<input value={d.operacao} onChange={(e) => save({ ...d, operacao: e.target.value })} placeholder="Cartão, empréstimo…" className={INPUT} /></label>
+              <label className={LABEL}>Saldo devedor<input value={d.saldoDevedor} onChange={(e) => save({ ...d, saldoDevedor: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+              <label className={LABEL}>Situação<select value={d.situacao} onChange={(e) => save({ ...d, situacao: e.target.value })} className={INPUT}>{SITUACOES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
             </div>
+            <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Etiquetas</p></div>
+              <p className="mt-1.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-500">Produto</p>
+              <div className="mt-1 flex flex-wrap gap-1">{TAGS_PRODUTO.map((t) => <TagToggle key={t} t={t} on={d.tags.includes(t)} onClick={() => toggleTag(t)} />)}</div>
+              <p className="mt-2 text-[9px] font-semibold uppercase tracking-wide text-rose-500">Ação judicial cabível</p>
+              <div className="mt-1 flex flex-wrap gap-1">{TAGS_ACAO.map((t) => <TagToggle key={t} t={t} on={d.tags.includes(t)} onClick={() => toggleTag(t)} />)}</div>
+            </div>
+            <input value={d.obs} onChange={(e) => save({ ...d, obs: e.target.value })} placeholder="Observações do banco" className={INPUT} />
           </>
+        )}
+
+        {/* ── CÁLCULO (provisionamento) ── */}
+        {tab === 'calculo' && (
+          <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <div className="flex items-center gap-1.5"><Calculator className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Provisionamento (Res. BCB 352)</p></div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <label className={LABEL}>Instituição<select value={d.provInstituicao} onChange={(e) => save({ ...d, provInstituicao: e.target.value as Instituicao })} className={INPUT}>{INSTITUICOES.map((i) => <option key={i.id} value={i.id}>{i.label.split(' (')[0]}</option>)}</select></label>
+              <label className={LABEL}>Modalidade<select value={d.provOperacao} onChange={(e) => save({ ...d, provOperacao: e.target.value })} className={INPUT}>{OPERACOES.map((o) => <option key={o.label} value={o.label}>{o.label}</option>)}</select></label>
+              <label className={LABEL}>Dias de atraso<input value={d.provDias} onChange={(e) => save({ ...d, provDias: e.target.value.replace(/\D/g, '') })} inputMode="numeric" placeholder="0" className={INPUT} /></label>
+            </div>
+            {prov ? (
+              <div className="mt-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${prov.estagio.n === 3 ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400' : prov.estagio.n === 2 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'}`}>Estágio S{prov.estagio.n}</span>
+                  <span className="text-[12px] text-zinc-500 dark:text-zinc-400">{prov.estagio.label}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-400">{prov.faixaLabel} · {prov.dias} dia{prov.dias === 1 ? '' : 's'} de atraso</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                  <Metric label="Saldo devedor" value={brl(saldo)} />
+                  <Metric label="% provisão" value={pct(prov.provisaoAplicadaPct)} sub={prov.provisaoAplicadaPct < prov.provisaoBasePct ? `base ${pct(prov.provisaoBasePct)} · teto` : 'tabela oficial'} />
+                  <Metric label="Provisionado" value={brl(prov.valorProvisionado)} sub="perda do banco" />
+                  <Metric label="Proposta alvo" value={brl(prov.propostaAcordo)} sub={`desc. ${brl(prov.descontoValor)} (${pct(prov.descontoPct)})`} />
+                </div>
+                <p className="mt-2 text-[11px] text-zinc-400">O banco já “perdeu” o provisionado → aceita acordo perto do residual (proposta). Res. CMN 4.966/21 + BCB 352/23. Tetos: cooperativa 50% · fundo 30% · banco piso 10%.</p>
+                <button onClick={() => { save({ ...d, acordoValor: brl(prov.propostaAcordo) }); }} className="mt-1.5 text-[12px] font-medium text-[#B7791F] hover:underline">↳ usar proposta como valor de acordo</button>
+              </div>
+            ) : <p className="mt-2 text-[12px] text-zinc-400">Preencha saldo (aba Dados) + dias de atraso para calcular.</p>}
+          </div>
+        )}
+
+        {/* ── NEGOCIAÇÃO ── */}
+        {tab === 'negociacao' && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className={`${LABEL} col-span-2`}>Interlocutor (gerente / assessoria)<input value={d.negInterlocutor} onChange={(e) => save({ ...d, negInterlocutor: e.target.value })} placeholder="Quem negocia neste banco" className={INPUT} /></label>
+            <label className={LABEL}>Proposta enviada<input value={d.negProposta} onChange={(e) => save({ ...d, negProposta: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+            <label className={LABEL}>Contraproposta do banco<input value={d.negContraproposta} onChange={(e) => save({ ...d, negContraproposta: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+            <label className={`${LABEL} col-span-2`}>Status<select value={d.negStatus} onChange={(e) => save({ ...d, negStatus: e.target.value })} className={INPUT}>{NEG_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+          </div>
+        )}
+
+        {/* ── ACORDO ── */}
+        {tab === 'acordo' && (
+          <div>
+            <div className="flex flex-wrap gap-1.5">
+              {['Não', 'Em andamento', 'Sim'].map((o) => (
+                <button key={o} onClick={() => save({ ...d, acordoFez: o })} className={`rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition ${d.acordoFez === o ? 'border-[#B7791F] bg-[#B7791F]/10 text-[#B7791F]' : 'border-[#e3e8ef] text-zinc-500 hover:border-[#B7791F]/40 dark:border-zinc-700 dark:text-zinc-400'}`}>{o === 'Sim' ? 'Fechou acordo' : o === 'Não' ? 'Sem acordo' : 'Em andamento'}</button>
+              ))}
+            </div>
+            {d.acordoFez === 'Sim' && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <label className={LABEL}>Valor do acordo<input value={d.acordoValor} onChange={(e) => save({ ...d, acordoValor: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                <label className={LABEL}>Desconto obtido<input value={d.acordoDesconto} onChange={(e) => save({ ...d, acordoDesconto: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                <label className={LABEL}>Honorários (nossa parte)<input value={d.acordoHonorarios} onChange={(e) => save({ ...d, acordoHonorarios: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                <label className={LABEL}>Honorários parceiros (terceiros)<input value={d.acordoHonorariosTerceiros} onChange={(e) => save({ ...d, acordoHonorariosTerceiros: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SOLICITAÇÕES (malotes: Consumidor.gov, BACEN, etc.) ── */}
+        {tab === 'solicitacoes' && (
+          <div>
+            <div className="flex items-center gap-1.5">
+              <Landmark className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Solicitações / malotes</p>
+              <span className="rounded bg-[#edeff3] px-1.5 text-[11px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{meusMal.length}</span>
+              <button onClick={() => persistMal([...malRows, { id: novoId(), bancoId: party.id, banco: party.name, canal: 'Consumidor.gov', numero: '', dataEnvio: '', prazo: '', tentativa: '1', status: 'Aguardando', obs: '' }])} className="ml-auto inline-flex items-center gap-1 text-[12px] font-semibold text-[#B7791F] hover:underline"><Plus className="h-3 w-3" /> Nova</button>
+            </div>
+            <p className="mt-1 text-[11px] text-zinc-400">Funil: Consumidor.gov → BACEN (RDR) → AR/Ouvidoria. Indeferido 3× → ação de exibição.</p>
+            {meusMal.length === 0 && <p className="mt-2 text-[12px] text-zinc-400">Nenhuma solicitação para este banco.</p>}
+            <div className="mt-2 space-y-2">
+              {meusMal.map((mm) => (
+                <div key={mm.id} className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+                  <div className="flex items-center gap-2">
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${MAL_COR[mm.status] ?? ''}`}>{mm.status}</span>
+                    <input value={mm.numero} onChange={(e) => persistMal(malRows.map((x) => (x.id === mm.id ? { ...x, numero: e.target.value } : x)))} placeholder="Nº protocolo" className={`${INPUT} font-medium`} />
+                    <button onClick={() => persistMal(malRows.filter((x) => x.id !== mm.id))} title="Remover" className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <label className={LABEL}>Canal<select value={mm.canal} onChange={(e) => persistMal(malRows.map((x) => (x.id === mm.id ? { ...x, canal: e.target.value } : x)))} className={INPUT}>{MAL_CANAIS.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
+                    <label className={LABEL}>Status<select value={mm.status} onChange={(e) => persistMal(malRows.map((x) => (x.id === mm.id ? { ...x, status: e.target.value } : x)))} className={INPUT}>{MAL_STATUS.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
+                    <label className={LABEL}>Tentativa<select value={mm.tentativa} onChange={(e) => persistMal(malRows.map((x) => (x.id === mm.id ? { ...x, tentativa: e.target.value } : x)))} className={INPUT}><option value="1">1ª</option><option value="2">2ª</option><option value="3">3ª</option></select></label>
+                    <label className={LABEL}>Enviado em<input type="date" value={mm.dataEnvio} onChange={(e) => persistMal(malRows.map((x) => (x.id === mm.id ? { ...x, dataEnvio: e.target.value } : x)))} className={INPUT} /></label>
+                  </div>
+                  <label className={`${LABEL} mt-2 block`}>Prazo p/ resposta<input type="date" value={mm.prazo} onChange={(e) => persistMal(malRows.map((x) => (x.id === mm.id ? { ...x, prazo: e.target.value } : x)))} className={INPUT} /></label>
+                  <input value={mm.obs} onChange={(e) => persistMal(malRows.map((x) => (x.id === mm.id ? { ...x, obs: e.target.value } : x)))} placeholder="Observações / resposta do banco" className={`${INPUT} mt-2`} />
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
