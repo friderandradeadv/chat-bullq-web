@@ -13,7 +13,7 @@ import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase, type PartyDetail,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
-import { tagCor } from '@/features/legal-cases/components/bancos-reus-editor';
+import { tagCor, BankFocusModal } from '@/features/legal-cases/components/bancos-reus-editor';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { useAuthStore } from '@/stores/auth-store';
@@ -73,6 +73,7 @@ export default function RepbPage() {
   const [resp, setResp] = useState('');
   const [foco, setFoco] = useState(''); // filtro por cliente ('' = todos): mostra só os cards daquele cliente
   const [focoBanco, setFocoBanco] = useState<string | null>(null); // bankId clicado → abre o drawer nele
+  const [bankModal, setBankModal] = useState<{ caseId: string; bankId: string } | null>(null); // modal focado num banco
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
 
   // ?case=<id> abre a ficha do card (link do chat); ?foco=<id> entra no kanban de bancos daquele cliente.
@@ -186,7 +187,7 @@ export default function RepbPage() {
       ) : (
         <UnifiedRepbBoard
           clientes={filtered} foco={foco} phases={phases}
-          onOpenBank={(cid, bid) => { setFocoBanco(bid); setOpenCaseId(cid); }}
+          onOpenBank={(cid, bid) => setBankModal({ caseId: cid, bankId: bid })}
           onOpenCase={(cid) => setOpenCaseId(cid)}
           onMovedCase={() => qc.invalidateQueries({ queryKey: KEY })}
           canRename={canRename} onRename={renamePhase} onDelete={deletePhase}
@@ -196,6 +197,7 @@ export default function RepbPage() {
 
       {/* Só as fases do REPB no seletor de mover (nunca de outro quadro). */}
       {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phases} focusBankId={focoBanco} onClose={() => { setOpenCaseId(null); setFocoBanco(null); }} />}
+      {bankModal && <BankFocusModal caseId={bankModal.caseId} bankId={bankModal.bankId} onClose={() => setBankModal(null)} />}
       {novo && <NovoCasoDialog targetPhase="repb_novo_cliente" phases={phases} onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
     </div>
   );

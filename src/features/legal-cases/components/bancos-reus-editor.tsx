@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Gavel, ChevronDown, Landmark, Calculator, Handshake, MessagesSquare, Tag, TrendingDown } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, Trash2, Gavel, ChevronDown, Landmark, Calculator, Handshake, MessagesSquare, Tag, TrendingDown, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type PartyDetail } from '@/features/legal-cases/services/legal-cases.service';
 import { maskCurrencyBR, maskCpfCnpj } from '@/lib/masks';
@@ -95,13 +95,14 @@ const toDraft = (p: PartyDetail): Draft => {
   };
 };
 
-export function BancosReusEditor({ caseId, parties, malotes, focusBankId, onChanged }: { caseId: string; parties: PartyDetail[]; malotes?: Malote[]; focusBankId?: string | null; onChanged: () => void }) {
+export function BancosReusEditor({ caseId, parties, malotes, focusBankId, onlyBankId, onChanged }: { caseId: string; parties: PartyDetail[]; malotes?: Malote[]; focusBankId?: string | null; onlyBankId?: string | null; onChanged: () => void }) {
   const qc = useQueryClient();
-  const reus = parties.filter((p) => p.role === 'OPPONENT');
+  const reusAll = parties.filter((p) => p.role === 'OPPONENT');
+  const reus = onlyBankId ? reusAll.filter((p) => p.id === onlyBankId) : reusAll; // modo foco: só o banco clicado
   const [adding, setAdding] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(focusBankId ?? null);
+  const [openId, setOpenId] = useState<string | null>(onlyBankId ?? focusBankId ?? null);
   const [filtro, setFiltro] = useState<string>('Todos');
-  useEffect(() => { if (focusBankId) setOpenId(focusBankId); }, [focusBankId]);
+  useEffect(() => { if (onlyBankId) setOpenId(onlyBankId); else if (focusBankId) setOpenId(focusBankId); }, [focusBankId, onlyBankId]);
 
   // Malotes: lista global mantida aqui; cada banco filtra a sua fatia.
   const [malRows, setMalRows] = useState<Malote[]>(malotes ?? []);
@@ -136,18 +137,20 @@ export function BancosReusEditor({ caseId, parties, malotes, focusBankId, onChan
   };
 
   return (
-    <div className="rounded-lg border border-[#e3e8ef] bg-[#fafbfc] p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-      <div className="flex items-center gap-2">
-        <Gavel className="h-4 w-4 text-[#B7791F]" />
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Bancos réus</p>
-        <span className="rounded bg-[#edeff3] px-1.5 text-[12px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{reus.length}</span>
-        {saldoTotal > 0 && <span className="text-[11px] text-zinc-400">· {brl(saldoTotal)}</span>}
-        <button onClick={addBanco} disabled={adding} className="ml-auto inline-flex items-center gap-1 rounded-md border border-[#B7791F]/40 px-2 py-1 text-[12px] font-semibold text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-50">
-          <Plus className="h-3.5 w-3.5" /> Banco
-        </button>
-      </div>
+    <div className={onlyBankId ? '' : 'rounded-lg border border-[#e3e8ef] bg-[#fafbfc] p-3 dark:border-zinc-800 dark:bg-zinc-900/40'}>
+      {!onlyBankId && (
+        <div className="flex items-center gap-2">
+          <Gavel className="h-4 w-4 text-[#B7791F]" />
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Bancos réus</p>
+          <span className="rounded bg-[#edeff3] px-1.5 text-[12px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{reus.length}</span>
+          {saldoTotal > 0 && <span className="text-[11px] text-zinc-400">· {brl(saldoTotal)}</span>}
+          <button onClick={addBanco} disabled={adding} className="ml-auto inline-flex items-center gap-1 rounded-md border border-[#B7791F]/40 px-2 py-1 text-[12px] font-semibold text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-50">
+            <Plus className="h-3.5 w-3.5" /> Banco
+          </button>
+        </div>
+      )}
 
-      {reus.length === 0 && <p className="mt-3 rounded-lg border border-dashed border-[#dcdfe5] py-4 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum banco réu cadastrado</p>}
+      {!onlyBankId && reus.length === 0 && <p className="mt-3 rounded-lg border border-dashed border-[#dcdfe5] py-4 text-center text-xs text-zinc-400 dark:border-zinc-800">Nenhum banco réu cadastrado</p>}
 
       {reus.length > 1 && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -176,7 +179,7 @@ export function BancosReusEditor({ caseId, parties, malotes, focusBankId, onChan
         )}
       </div>
 
-      {malotesOrfaos.length > 0 && (
+      {!onlyBankId && malotesOrfaos.length > 0 && (
         <div className="mt-3 rounded-lg border border-dashed border-[#dcdfe5] p-2 dark:border-zinc-800">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Protocolos sem banco vinculado ({malotesOrfaos.length})</p>
           <div className="mt-1.5 space-y-1">
@@ -500,6 +503,56 @@ export function ResumoClienteRepb({ parties, recebido }: { parties: PartyDetail[
         <div className="h-2 overflow-hidden rounded-full bg-[#edeff3] dark:bg-zinc-800"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progresso}%` }} /></div>
       </div>
       <p className="mt-2 text-[10px] text-zinc-400">Recuperado = economia do cliente (desconto). Honorários (nossa parte) alimentam o Financeiro; a parte de parceiros fica registrada à parte.</p>
+    </div>
+  );
+}
+
+// Modal FOCADO num banco só: abre ao clicar num card cliente×banco no kanban.
+// Mostra o dossiê APENAS daquele contrato (dados, provisão, negociação, acordo,
+// malotes DELE) + um lembrete do que importa na fase — sem o resto do cliente.
+const FOCO_SIT: Record<string, string> = {
+  'Em análise': 'Nesta fase: auditoria contratual + cálculo de provisionamento.',
+  'Malote enviado': 'Nesta fase: os malotes/protocolos enviados e o retorno de cada canal.',
+  Negociando: 'Nesta fase: proposta enviada × contraproposta do banco.',
+  'Acordo fechado': 'Nesta fase: valores do acordo (quitação, desconto, honorários).',
+  Judicializado: 'Nesta fase: ação judicial cabível (exibição, revisional, superendividamento…).',
+  'Sem acordo': 'Nesta fase: reavaliar estratégia (novo malote, ação, provisionamento).',
+};
+export function BankFocusModal({ caseId, bankId, onClose }: { caseId: string; bankId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { data: c, isLoading } = useQuery({ queryKey: ['legal-cases', 'detail', caseId], queryFn: () => legalCasesService.get(caseId) });
+  const party = c?.parties.find((p) => p.id === bankId);
+  const cliente = (c?.parties.find((p) => p.role === 'CLIENT')?.name ?? c?.title ?? 'Cliente');
+  const malotes = ((c?.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as Malote[];
+  const m: any = party?.metadata ?? {};
+  const tags: string[] = Array.isArray(m.tags) ? m.tags : [];
+  const foco = FOCO_SIT[m.situacao ?? 'Em análise'] ?? '';
+  return (
+    <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl bg-white p-4 shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-400">{cliente.toUpperCase()}</p>
+            <h3 className="break-words text-lg font-bold text-[#101820] dark:text-zinc-100">{party?.name ?? 'Banco'}</h3>
+          </div>
+          <button onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
+        </div>
+        {isLoading && <p className="py-6 text-center text-sm text-zinc-400">Carregando banco…</p>}
+        {!isLoading && !party && <p className="py-6 text-center text-sm text-zinc-400">Banco não encontrado.</p>}
+        {party && c && (
+          <>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SIT_COR[m.situacao ?? 'Em análise'] ?? ''}`}>{m.situacao ?? 'Em análise'}</span>
+              {m.saldoDevedor && <span className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{m.saldoDevedor}</span>}
+              {tags.map((t) => <span key={t} className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${tagCor(t)}`}>{t}</span>)}
+            </div>
+            {foco && <p className="mt-2 rounded-lg bg-[#B7791F]/10 px-3 py-2 text-[12px] font-medium text-[#8a5a12] dark:text-[#e0b060]">{foco}</p>}
+            <div className="mt-3">
+              <BancosReusEditor caseId={caseId} parties={c.parties} malotes={malotes} onlyBankId={bankId} focusBankId={bankId} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] })} />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
