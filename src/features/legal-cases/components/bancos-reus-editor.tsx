@@ -749,6 +749,7 @@ function BancoFocado({ caseId, party, malotesAll, driveUrl, onChanged }: { caseI
             ) : <p className="mt-2 text-[12px] text-zinc-400">Preencha saldo (aba Dados) + dias de atraso para calcular.</p>}
           </div>
           <PerdaEsperadaBlock party={party} saldo={saldo} estagioN={prov?.estagio.n ?? 3} onChanged={onChanged} />
+          <AnaliseContratoIA caseId={caseId} partyId={party.id} driveUrl={driveUrl} onChanged={onChanged} />
           </>
         )}
 
@@ -824,8 +825,8 @@ function BancoFocado({ caseId, party, malotesAll, driveUrl, onChanged }: { caseI
               <p className="mt-1.5 text-[10px] text-zinc-400">Dica: a economia da aba <b>Revisional</b> (juros) e o provisionamento já entram no alvo acima — aqui vão os EXTRAS (tarifas, seguro, IOF, venda casada…).</p>
             </div>
 
-            {/* Contratos — upload + auditoria (irregularidades → créditos) */}
-            <ContratosUpload caseId={caseId} partyId={party.id} driveUrl={driveUrl} onChanged={onChanged} />
+            {/* A análise do contrato (IA) fica na aba Cálculo → alimenta os créditos acima */}
+            <p className="text-[11px] text-zinc-400">💡 Suba o contrato e rode a varredura da IA na aba <b>Cálculo</b> — as irregularidades encontradas viram créditos aqui.</p>
 
             {/* Registro do acordo fechado */}
             <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
@@ -1050,42 +1051,58 @@ function PerdaEsperadaBlock({ party, saldo, estagioN, onChanged }: { party: Part
   );
 }
 
-// Upload de contrato do banco → auditoria (endpoint em §SPEC-repb-upload-auditoria).
-// UI pronta: sobe o PDF, chama /legal-cases/:id/parties/:pid/contrato-auditoria; as
-// irregularidades voltam e caem sozinhas no cockpit. Enquanto o endpoint não existe,
-// trata 404 com aviso "aguardando backend" (nada quebra).
-function ContratosUpload({ caseId, partyId, driveUrl, onChanged }: { caseId: string; partyId: string; driveUrl?: string; onChanged: () => void }) {
+// Análise do contrato por IA (aba Cálculo): sobe o PDF → a IA faz a VARREDURA
+// COMPLETA (revisional/juros, capitalização, tarifas, seguro/venda casada, IOF,
+// comissão…) e gera o Parecer Técnico (docx, baixável) via gerarPeca('parecer') —
+// que JÁ funciona. Em paralelo, tenta o endpoint estruturado (§SPEC) que auto-lança
+// as irregularidades como crédito no cockpit; se ainda não existe, ignora (best-effort).
+const SWEEP_PROMPT = 'Faça a VARREDURA COMPLETA deste contrato bancário e aponte, item a item, o que é cabível, com fundamento (súmula/tema/artigo) e impacto/valor estimado: (1) juros remuneratórios acima da taxa média de mercado do BACEN → ação revisional; (2) capitalização de juros / anatocismo sem pactuação expressa; (3) tarifas ilegais (TAC, TEC, cadastro, avaliação, registro de contrato); (4) seguro / venda casada sem autorização expressa; (5) IOF diluído ou indevido; (6) comissão de permanência cumulada; (7) demais abusividades (CDC 51). Ao final, resuma o total estimado a abater e a estratégia (revisional × negociação).';
+function AnaliseContratoIA({ caseId, partyId, driveUrl, onChanged }: { caseId: string; partyId: string; driveUrl?: string; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [parecer, setParecer] = useState<{ label: string; fileName: string; docxBase64: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const baixar = () => {
+    if (!parecer) return;
+    const bytes = atob(parecer.docxBase64); const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+    const a = document.createElement('a'); a.href = url; a.download = parecer.fileName || 'parecer.docx'; a.click(); URL.revokeObjectURL(url);
+  };
+
   const onFile = async (file?: File) => {
     if (!file) return;
-    setBusy(true); setMsg(null);
+    setBusy(true); setMsg(null); setParecer(null);
     try {
       const b64 = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1] ?? ''); fr.onerror = rej; fr.readAsDataURL(file); });
-      const { data } = await api.post(`/legal-cases/${caseId}/parties/${partyId}/contrato-auditoria`, { pdfBase64: b64, nome: file.name }, { timeout: 240_000 });
-      const n = ((data?.data ?? data)?.irregularidades ?? []).length;
-      setMsg({ ok: true, text: `“${file.name}” auditado — ${n} irregularidade(s) lançada(s) como crédito.` });
+      // 1) Parecer técnico (varredura completa) — funciona hoje.
+      const r = await legalCasesService.gerarPeca(caseId, { tipo: 'parecer', docBase64: b64, docNome: file.name, instrucoes: SWEEP_PROMPT });
+      setParecer({ label: r.label, fileName: r.fileName, docxBase64: r.docxBase64 });
+      setMsg({ ok: true, text: 'Varredura concluída — parecer técnico gerado e salvo nos anexos.' });
       onChanged();
+      // 2) Auto-lançamento estruturado dos créditos (endpoint futuro) — best-effort.
+      try { await api.post(`/legal-cases/${caseId}/parties/${partyId}/contrato-auditoria`, { pdfBase64: b64, nome: file.name }, { timeout: 240_000 }); onChanged(); } catch { /* endpoint em implementação — o parecer já saiu */ }
     } catch (e: any) {
-      const st = e?.response?.status;
-      if (st === 404 || st === 405 || st === 501) setMsg({ ok: false, text: 'Auditoria automática ainda não disponível (endpoint do backend em implementação). Assim que subir, o upload já funciona aqui.' });
-      else setMsg({ ok: false, text: e?.response?.data?.message || 'Falha ao enviar o contrato.' });
+      setMsg({ ok: false, text: e?.response?.data?.message || 'Falha na análise do contrato. Tente de novo.' });
     } finally { setBusy(false); if (inputRef.current) inputRef.current.value = ''; }
   };
+
   return (
-    <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
-      <div className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Contratos deste banco — subir + auditar</p></div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+    <section className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Análise do contrato (IA) — varredura completa</p></div>
+      <p className="mt-1 text-[11px] text-zinc-400">Sobe o contrato (PDF) e a IA aponta tudo que cabe: revisional (juros), capitalização, tarifas, seguro/venda casada, IOF, comissão — com fundamento e valor estimado.</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <input ref={inputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-        <button onClick={() => inputRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md bg-[#B7791F] px-2.5 py-1 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
-          <Plus className="h-3.5 w-3.5" /> {busy ? 'Auditando…' : 'Subir contrato (PDF)'}
+        <button onClick={() => inputRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md bg-[#B7791F] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          <Plus className="h-3.5 w-3.5" /> {busy ? 'Analisando… (1–2 min)' : 'Subir contrato + analisar (IA)'}
         </button>
-        {driveUrl && <a href={driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-[#e3e8ef] px-2 py-1 text-[12px] font-medium text-[#48626f] hover:border-[#B7791F]/40 hover:text-[#B7791F] dark:border-zinc-700 dark:text-zinc-400"><FolderOpen className="h-3.5 w-3.5" /> Abrir no Drive</a>}
+        {parecer && <button onClick={baixar} className="inline-flex items-center gap-1 rounded-md border border-[#B7791F]/40 px-2 py-1.5 text-[12px] font-semibold text-[#B7791F] hover:bg-[#B7791F]/10"><FileText className="h-3.5 w-3.5" /> Baixar parecer</button>}
+        {driveUrl && <a href={driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-[#e3e8ef] px-2 py-1.5 text-[12px] font-medium text-[#48626f] hover:border-[#B7791F]/40 hover:text-[#B7791F] dark:border-zinc-700 dark:text-zinc-400"><FolderOpen className="h-3.5 w-3.5" /> Drive</a>}
       </div>
       {msg && <p className={`mt-1.5 text-[11px] ${msg.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>{msg.text}</p>}
-      <p className="mt-1 text-[10px] text-zinc-400">A auditoria lê o contrato, acha as irregularidades (juros, capitalização, tarifas, seguro…) e lança cada uma como crédito na tabela acima — abatendo a dívida na proposta.</p>
-    </div>
+      {parecer && <p className="mt-1 text-[10px] text-zinc-400">O parecer lista o que é cabível e o impacto — lance os créditos na aba <b>Acordo</b> (ou serão auto-lançados quando o backend estruturado subir).</p>}
+    </section>
   );
 }
 
