@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { legalCasesService, type PartyDetail } from '@/features/legal-cases/services/legal-cases.service';
 import { maskCurrencyBR, maskCpfCnpj } from '@/lib/masks';
 import { BANCOS_DIRETORIO, acharBancoContato } from '@/features/legal-cases/lib/bancos-diretorio';
-import { calcularProvisao, OPERACOES, INSTITUICOES, type Carteira, type Instituicao } from '@/features/calculadora-provisionamento/provisionamento';
+import { calcularProvisao, diasDesde, OPERACOES, INSTITUICOES, type Carteira, type Instituicao } from '@/features/calculadora-provisionamento/provisionamento';
 
 // DOSSIÊ POR BANCO do caso REPB. Cada banco RÉU (Party OPPONENT) é a unidade: dados
 // → provisionamento → negociação → acordo → etiquetas → malotes daquele banco.
@@ -562,8 +562,8 @@ export function BankFocusModal({ caseId, bankId, onClose }: { caseId: string; ba
   const foco = FOCO_SIT[m.situacao ?? 'Em análise'] ?? '';
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-2 border-b border-[#eef1f5] p-4 dark:border-zinc-800">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 items-start gap-2 border-b border-[#eef1f5] p-4 dark:border-zinc-800">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-400">{cliente.toUpperCase()}</p>
             <h3 className="break-words text-lg font-bold text-[#101820] dark:text-zinc-100">{party?.name ?? 'Banco'}</h3>
@@ -577,7 +577,7 @@ export function BankFocusModal({ caseId, bankId, onClose }: { caseId: string; ba
           </div>
           <button onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
         </div>
-        <div className="p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {isLoading && <p className="py-6 text-center text-sm text-zinc-400">Carregando banco…</p>}
           {!isLoading && !party && <p className="py-6 text-center text-sm text-zinc-400">Banco não encontrado.</p>}
           {party && c && (
@@ -638,6 +638,7 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
   const meusMal = malRows.filter((mm) => (mm.bancoId ? mm.bancoId === party.id : (norm(mm.banco) && (nB.includes(norm(mm.banco)) || norm(mm.banco).includes(nB)))));
 
   const contato = acharBancoContato(d.name);
+  const [dataPgto, setDataPgto] = useState(''); // data do último pagamento → calcula dias de atraso
   const saldo = parseBRL(d.saldoDevedor);
   const carteira: Carteira = OPERACOES.find((o) => o.label === d.provOperacao)?.carteira ?? 'C5';
   const diasProv = Math.max(0, Number(d.provDias.replace(/\D/g, '')) || 0);
@@ -687,11 +688,13 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
         {tab === 'calculo' && (
           <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
             <div className="flex items-center gap-1.5"><Calculator className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Provisionamento (Res. BCB 352)</p></div>
-            <div className="mt-2 grid grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <label className={LABEL}>Saldo devedor (dívida)<input value={d.saldoDevedor} onChange={(e) => save({ ...d, saldoDevedor: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
               <label className={LABEL}>Instituição<select value={d.provInstituicao} onChange={(e) => save({ ...d, provInstituicao: e.target.value as Instituicao })} className={INPUT}>{INSTITUICOES.map((i) => <option key={i.id} value={i.id}>{i.label.split(' (')[0]}</option>)}</select></label>
               <label className={LABEL}>Modalidade<select value={d.provOperacao} onChange={(e) => save({ ...d, provOperacao: e.target.value })} className={INPUT}>{OPERACOES.map((o) => <option key={o.label} value={o.label}>{o.label}</option>)}</select></label>
-              <label className={LABEL}>Dias de atraso<input value={d.provDias} onChange={(e) => save({ ...d, provDias: e.target.value.replace(/\D/g, '') })} inputMode="numeric" placeholder="0" className={INPUT} /></label>
+              <label className={LABEL}>Dias de atraso<input value={d.provDias} onChange={(e) => { setDataPgto(''); save({ ...d, provDias: e.target.value.replace(/\D/g, '') }); }} inputMode="numeric" placeholder="0" className={INPUT} /></label>
             </div>
+            <label className={`${LABEL} mt-2 block`}>… ou data do último pagamento (calcula os dias)<input type="date" value={dataPgto} onChange={(e) => { setDataPgto(e.target.value); const dd = diasDesde(e.target.value); if (dd != null) save({ ...d, provDias: String(dd) }); }} className={`${INPUT} sm:max-w-[220px]`} /></label>
             {prov ? (
               <div className="mt-3">
                 <div className="flex flex-wrap items-center gap-2">
