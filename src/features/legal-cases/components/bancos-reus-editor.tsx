@@ -11,6 +11,7 @@ import { calcularProvisao, diasDesde, OPERACOES, INSTITUICOES, type Carteira, ty
 import { calculadoraRevisionalService, type ResultadoRevisional } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
 import { calcularPE } from '@/features/calculadora-perda-esperada/perda-esperada';
 import { calcularPlano, type Credor } from '@/features/calculadora-superendividamento/plano-repactuacao';
+import { api } from '@/lib/api';
 
 // DOSSIÊ POR BANCO do caso REPB. Cada banco RÉU (Party OPPONENT) é a unidade: dados
 // → provisionamento → negociação → acordo → etiquetas → malotes daquele banco.
@@ -823,14 +824,8 @@ function BancoFocado({ caseId, party, malotesAll, driveUrl, onChanged }: { caseI
               <p className="mt-1.5 text-[10px] text-zinc-400">Dica: a economia da aba <b>Revisional</b> (juros) e o provisionamento já entram no alvo acima — aqui vão os EXTRAS (tarifas, seguro, IOF, venda casada…).</p>
             </div>
 
-            {/* Contratos (auditoria) */}
-            <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
-              <div className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Contratos deste banco</p></div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                {driveUrl && <a href={driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-[#e3e8ef] px-2 py-1 text-[12px] font-medium text-[#48626f] hover:border-[#B7791F]/40 hover:text-[#B7791F] dark:border-zinc-700 dark:text-zinc-400"><FolderOpen className="h-3.5 w-3.5" /> Abrir contratos no Drive</a>}
-                <span className="text-[11px] text-zinc-400">A auditoria por IA (Parecer Técnico) roda na ficha do cliente. Upload direto no banco: em breve (falta endpoint).</span>
-              </div>
-            </div>
+            {/* Contratos — upload + auditoria (irregularidades → créditos) */}
+            <ContratosUpload caseId={caseId} partyId={party.id} driveUrl={driveUrl} onChanged={onChanged} />
 
             {/* Registro do acordo fechado */}
             <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
@@ -1052,6 +1047,45 @@ function PerdaEsperadaBlock({ party, saldo, estagioN, onChanged }: { party: Part
       ) : <p className="mt-2 text-[12px] text-zinc-400">Preencha o saldo devedor (aba Dados).</p>}
       <p className="mt-1.5 text-[10px] text-zinc-400">Modelo forward-looking (Res. CMN 4.966). PD sugerida pelo estágio; ajuste a LGD conforme garantia/histórico. Compare com o provisionamento por atraso acima.</p>
     </section>
+  );
+}
+
+// Upload de contrato do banco → auditoria (endpoint em §SPEC-repb-upload-auditoria).
+// UI pronta: sobe o PDF, chama /legal-cases/:id/parties/:pid/contrato-auditoria; as
+// irregularidades voltam e caem sozinhas no cockpit. Enquanto o endpoint não existe,
+// trata 404 com aviso "aguardando backend" (nada quebra).
+function ContratosUpload({ caseId, partyId, driveUrl, onChanged }: { caseId: string; partyId: string; driveUrl?: string; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const onFile = async (file?: File) => {
+    if (!file) return;
+    setBusy(true); setMsg(null);
+    try {
+      const b64 = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1] ?? ''); fr.onerror = rej; fr.readAsDataURL(file); });
+      const { data } = await api.post(`/legal-cases/${caseId}/parties/${partyId}/contrato-auditoria`, { pdfBase64: b64, nome: file.name }, { timeout: 240_000 });
+      const n = ((data?.data ?? data)?.irregularidades ?? []).length;
+      setMsg({ ok: true, text: `“${file.name}” auditado — ${n} irregularidade(s) lançada(s) como crédito.` });
+      onChanged();
+    } catch (e: any) {
+      const st = e?.response?.status;
+      if (st === 404 || st === 405 || st === 501) setMsg({ ok: false, text: 'Auditoria automática ainda não disponível (endpoint do backend em implementação). Assim que subir, o upload já funciona aqui.' });
+      else setMsg({ ok: false, text: e?.response?.data?.message || 'Falha ao enviar o contrato.' });
+    } finally { setBusy(false); if (inputRef.current) inputRef.current.value = ''; }
+  };
+  return (
+    <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Contratos deste banco — subir + auditar</p></div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <input ref={inputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
+        <button onClick={() => inputRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md bg-[#B7791F] px-2.5 py-1 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          <Plus className="h-3.5 w-3.5" /> {busy ? 'Auditando…' : 'Subir contrato (PDF)'}
+        </button>
+        {driveUrl && <a href={driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-[#e3e8ef] px-2 py-1 text-[12px] font-medium text-[#48626f] hover:border-[#B7791F]/40 hover:text-[#B7791F] dark:border-zinc-700 dark:text-zinc-400"><FolderOpen className="h-3.5 w-3.5" /> Abrir no Drive</a>}
+      </div>
+      {msg && <p className={`mt-1.5 text-[11px] ${msg.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>{msg.text}</p>}
+      <p className="mt-1 text-[10px] text-zinc-400">A auditoria lê o contrato, acha as irregularidades (juros, capitalização, tarifas, seguro…) e lança cada uma como crédito na tabela acima — abatendo a dívida na proposta.</p>
+    </div>
   );
 }
 
