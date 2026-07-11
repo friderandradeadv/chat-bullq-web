@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Gavel, ChevronDown, Landmark, Calculator, Handshake, MessagesSquare, Tag, TrendingDown, X } from 'lucide-react';
+import { Plus, Trash2, Gavel, ChevronDown, Landmark, Calculator, Handshake, MessagesSquare, Tag, TrendingDown, X, FolderOpen, Scale, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type PartyDetail } from '@/features/legal-cases/services/legal-cases.service';
 import { maskCurrencyBR, maskCpfCnpj } from '@/lib/masks';
@@ -52,6 +52,8 @@ const norm = (s: string | null | undefined) => (s ?? '').normalize('NFD').replac
 const novoId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `m_${Date.now()}_${Math.round(Math.random() * 1e6)}`);
 
 export interface Malote { id: string; bancoId?: string; banco: string; canal: string; numero: string; dataEnvio: string; prazo: string; tentativa: string; status: string; obs: string; }
+export interface Irregularidade { id: string; tipo: string; valor: string; fundamento: string; }
+const IRREG_TIPOS = ['Juros abusivos (> taxa média BACEN)', 'Capitalização indevida (anatocismo)', 'Tarifas ilegais (TAC/TEC/cadastro)', 'Seguro sem autorização (venda casada)', 'IOF diluído/indevido', 'Comissão de permanência cumulada', 'Registro de contrato/avaliação', 'Outro'];
 
 const guessInstituicao = (nome: string): Instituicao => /cresol|sicoob|sicredi|unicred|coop/i.test(nome) ? 'cooperativa' : /fundo/i.test(nome) ? 'fundo' : 'banco';
 const guessOperacao = (op: string): string => {
@@ -587,7 +589,7 @@ export function BankFocusModal({ caseId, bankId, onClose }: { caseId: string; ba
           {party && c && (
             <>
               {foco && <p className="mb-3 rounded-lg bg-[#B7791F]/10 px-3 py-2 text-[12px] font-medium text-[#8a5a12] dark:text-[#e0b060]">{foco}</p>}
-              <BancoFocado caseId={caseId} party={party} malotesAll={malotesAll} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] })} />
+              <BancoFocado caseId={caseId} party={party} malotesAll={malotesAll} driveUrl={(c.metadata as any)?.driveUrl} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] })} />
             </>
           )}
         </div>
@@ -599,7 +601,7 @@ export function BankFocusModal({ caseId, bankId, onClose }: { caseId: string; ba
 // Editor de UM banco em SUBABAS (Dados · Cálculo · Negociação · Acordo · Solicitações).
 // Abre na aba certa pela situação. Persiste banco em Party.metadata (updateParty) e
 // os malotes na lista global faseData.repb_malotes.lista (saveFaseField).
-function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string; party: PartyDetail; malotesAll: Malote[]; onChanged: () => void }) {
+function BancoFocado({ caseId, party, malotesAll, driveUrl, onChanged }: { caseId: string; party: PartyDetail; malotesAll: Malote[]; driveUrl?: string; onChanged: () => void }) {
   const qc = useQueryClient();
   const [d, setD] = useState<Draft>(toDraft(party));
   const debRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -648,6 +650,23 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
   const carteira: Carteira = OPERACOES.find((o) => o.label === d.provOperacao)?.carteira ?? 'C5';
   const diasProv = Math.max(0, Number(d.provDias.replace(/\D/g, '')) || 0);
   const prov = useMemo(() => (saldo > 0 ? calcularProvisao({ saldoDevedor: saldo, carteira, dias: diasProv, instituicao: d.provInstituicao }) : null), [saldo, carteira, diasProv, d.provInstituicao]);
+
+  // Irregularidades achadas na revisão do contrato = "créditos" pra abater a dívida.
+  const [irreg, setIrreg] = useState<Irregularidade[]>(((party.metadata as any)?.irregularidades ?? []) as Irregularidade[]);
+  const irregDeb = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setIrreg(((party.metadata as any)?.irregularidades ?? []) as Irregularidade[]); }, [party.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const persistIrreg = (next: Irregularidade[]) => {
+    setIrreg(next);
+    if (irregDeb.current) clearTimeout(irregDeb.current);
+    irregDeb.current = setTimeout(async () => {
+      try { await legalCasesService.updateParty(party.id, { name: party.name || 'Banco', role: 'OPPONENT', document: party.document ?? undefined, metadata: { ...((party.metadata as any) ?? {}), irregularidades: next } }); onChanged(); }
+      catch { toast.error('Erro ao salvar'); }
+    }, 700);
+  };
+  const creditos = irreg.reduce((a, i) => a + parseBRL(i.valor), 0);
+  const provVal = prov?.valorProvisionado ?? 0;
+  const revEconomia = Number((party.metadata as any)?.revisional?.economia) || 0;
+  const propostaAlvo = Math.max(0, saldo - provVal - revEconomia - creditos);
 
   return (
     <div>
@@ -736,22 +755,72 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
           </div>
         )}
 
-        {/* ── ACORDO ── */}
+        {/* ── ACORDO — cockpit "A LIMPA": usa TUDO pra abater a dívida ── */}
         {tab === 'acordo' && (
-          <div>
-            <div className="flex flex-wrap gap-1.5">
-              {['Não', 'Em andamento', 'Sim'].map((o) => (
-                <button key={o} onClick={() => save({ ...d, acordoFez: o })} className={`rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition ${d.acordoFez === o ? 'border-[#B7791F] bg-[#B7791F]/10 text-[#B7791F]' : 'border-[#e3e8ef] text-zinc-500 hover:border-[#B7791F]/40 dark:border-zinc-700 dark:text-zinc-400'}`}>{o === 'Sim' ? 'Fechou acordo' : o === 'Não' ? 'Sem acordo' : 'Em andamento'}</button>
-              ))}
-            </div>
-            {d.acordoFez === 'Sim' && (
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <label className={LABEL}>Valor do acordo<input value={d.acordoValor} onChange={(e) => save({ ...d, acordoValor: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
-                <label className={LABEL}>Desconto obtido<input value={d.acordoDesconto} onChange={(e) => save({ ...d, acordoDesconto: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
-                <label className={LABEL}>Honorários (nossa parte)<input value={d.acordoHonorarios} onChange={(e) => save({ ...d, acordoHonorarios: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
-                <label className={LABEL}>Honorários parceiros (terceiros)<input value={d.acordoHonorariosTerceiros} onChange={(e) => save({ ...d, acordoHonorariosTerceiros: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+          <div className="space-y-3">
+            {/* Waterfall: dívida − provisionado − revisional − créditos = proposta alvo */}
+            <div className="rounded-md border border-[#B7791F]/30 bg-gradient-to-br from-[#B7791F]/5 to-transparent p-2.5 dark:border-[#B7791F]/25">
+              <div className="flex items-center gap-1.5"><TrendingDown className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Alvo da negociação — usar tudo pra abater</p></div>
+              <div className="mt-2 space-y-1 text-[13px]">
+                <div className="flex justify-between"><span className="text-zinc-500 dark:text-zinc-400">Dívida atual</span><span className="font-semibold tabular-nums text-[#101820] dark:text-zinc-100">{brl(saldo)}</span></div>
+                <div className="flex justify-between text-zinc-500 dark:text-zinc-400"><span>− Provisionado (o banco já perdeu)</span><span className="tabular-nums">{provVal > 0 ? `− ${brl(provVal)}` : '—'}</span></div>
+                <div className="flex justify-between text-zinc-500 dark:text-zinc-400"><span>− Economia revisional (juros)</span><span className="tabular-nums">{revEconomia > 0 ? `− ${brl(revEconomia)}` : '—'}</span></div>
+                <div className="flex justify-between text-zinc-500 dark:text-zinc-400"><span>− Créditos de irregularidades</span><span className="tabular-nums">{creditos > 0 ? `− ${brl(creditos)}` : '—'}</span></div>
+                <div className="mt-1 flex justify-between border-t border-[#eef1f5] pt-1 dark:border-zinc-800"><span className="font-semibold text-[#101820] dark:text-zinc-100">Proposta alvo (a buscar)</span><span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{brl(propostaAlvo)}</span></div>
+                <p className="text-right text-[10px] text-zinc-400">{saldo > 0 ? `${Math.round(((saldo - propostaAlvo) / saldo) * 100)}% de abatimento potencial` : ''}</p>
               </div>
-            )}
+              {(revEconomia > 0 || creditos > 0) && <button onClick={() => save({ ...d, negProposta: brl(propostaAlvo) })} className="mt-1.5 text-[11px] font-medium text-[#B7791F] hover:underline">↳ lançar como proposta na negociação</button>}
+            </div>
+
+            {/* Irregularidades = créditos (revisão do contrato) */}
+            <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="flex items-center gap-1.5">
+                <Scale className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Irregularidades / créditos</p>
+                {creditos > 0 && <span className="rounded bg-emerald-100 px-1.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">{brl(creditos)}</span>}
+                <button onClick={() => persistIrreg([...irreg, { id: novoId(), tipo: IRREG_TIPOS[0], valor: '', fundamento: '' }])} className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-[#B7791F] hover:underline"><Plus className="h-3 w-3" /> Achado</button>
+              </div>
+              {irreg.length === 0 && <p className="mt-1.5 text-[11px] text-zinc-400">Revise o contrato e lance cada irregularidade como um crédito pra abater a dívida.</p>}
+              <div className="mt-2 space-y-2">
+                {irreg.map((ir) => (
+                  <div key={ir.id} className="rounded-md border border-[#e3e8ef] bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <div className="flex items-center gap-2">
+                      <select value={ir.tipo} onChange={(e) => persistIrreg(irreg.map((x) => (x.id === ir.id ? { ...x, tipo: e.target.value } : x)))} className={`${INPUT} font-medium`}>{IRREG_TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+                      <input value={ir.valor} onChange={(e) => persistIrreg(irreg.map((x) => (x.id === ir.id ? { ...x, valor: maskCurrencyBR(e.target.value) } : x)))} inputMode="decimal" placeholder="R$ crédito" className={`${INPUT} max-w-[130px]`} />
+                      <button onClick={() => persistIrreg(irreg.filter((x) => x.id !== ir.id))} title="Remover" className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                    <input value={ir.fundamento} onChange={(e) => persistIrreg(irreg.map((x) => (x.id === ir.id ? { ...x, fundamento: e.target.value } : x)))} placeholder="Fundamento (CDC 51, Súmula, laudo…)" className={`${INPUT} mt-2`} />
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[10px] text-zinc-400">Dica: a economia da aba <b>Revisional</b> (juros) e o provisionamento já entram no alvo acima — aqui vão os EXTRAS (tarifas, seguro, IOF, venda casada…).</p>
+            </div>
+
+            {/* Contratos (auditoria) */}
+            <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Contratos deste banco</p></div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                {driveUrl && <a href={driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-[#e3e8ef] px-2 py-1 text-[12px] font-medium text-[#48626f] hover:border-[#B7791F]/40 hover:text-[#B7791F] dark:border-zinc-700 dark:text-zinc-400"><FolderOpen className="h-3.5 w-3.5" /> Abrir contratos no Drive</a>}
+                <span className="text-[11px] text-zinc-400">A auditoria por IA (Parecer Técnico) roda na ficha do cliente. Upload direto no banco: em breve (falta endpoint).</span>
+              </div>
+            </div>
+
+            {/* Registro do acordo fechado */}
+            <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="flex items-center gap-1.5"><Handshake className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Acordo fechado?</p></div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {['Não', 'Em andamento', 'Sim'].map((o) => (
+                  <button key={o} onClick={() => save({ ...d, acordoFez: o })} className={`rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition ${d.acordoFez === o ? 'border-[#B7791F] bg-[#B7791F]/10 text-[#B7791F]' : 'border-[#e3e8ef] text-zinc-500 hover:border-[#B7791F]/40 dark:border-zinc-700 dark:text-zinc-400'}`}>{o === 'Sim' ? 'Fechou acordo' : o === 'Não' ? 'Sem acordo' : 'Em andamento'}</button>
+                ))}
+              </div>
+              {d.acordoFez === 'Sim' && (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <label className={LABEL}>Valor do acordo<input value={d.acordoValor} onChange={(e) => save({ ...d, acordoValor: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                  <label className={LABEL}>Desconto obtido<input value={d.acordoDesconto} onChange={(e) => save({ ...d, acordoDesconto: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                  <label className={LABEL}>Honorários (nossa parte)<input value={d.acordoHonorarios} onChange={(e) => save({ ...d, acordoHonorarios: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                  <label className={LABEL}>Honorários parceiros (terceiros)<input value={d.acordoHonorariosTerceiros} onChange={(e) => save({ ...d, acordoHonorariosTerceiros: maskCurrencyBR(e.target.value) })} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
