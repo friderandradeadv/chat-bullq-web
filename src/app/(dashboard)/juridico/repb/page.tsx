@@ -16,6 +16,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { tagCor, BankFocusModal } from '@/features/legal-cases/components/bancos-reus-editor';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
+import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort, type SortKeys } from '@/features/legal-cases/lib/kanban-sort';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 
@@ -531,23 +532,36 @@ function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMo
   );
 }
 
+// Ordenação para os itens mistos do REPB (banco × caso): banco usa o nome do
+// cliente e as datas da parte; caso reaproveita as chaves do KanbanCard.
+function uItemKeys(it: UItem): SortKeys {
+  if (it.kind === 'bank') {
+    const p: any = it.party;
+    const t = (s?: string | null) => (s ? new Date(s).getTime() || 0 : 0);
+    return { title: it.cliente ?? '', created: t(p?.createdAt), updated: t(p?.updatedAt), due: null };
+  }
+  return kanbanCardKeys(it.card);
+}
+
 function UnifiedColumn({ phase, items, onOpenBank, onOpenCase, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: {
   phase: KanbanPhase; items: UItem[]; onOpenBank: (caseId: string, bankId: string) => void; onOpenCase: (caseId: string) => void;
   canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void;
   onMoveLeft?: () => void; onMoveRight?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
+  const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
+  const sorted = useMemo(() => applyCardSort(items, sort, uItemKeys), [items, sort]);
   const total = items.reduce((a, it) => a + (it.kind === 'bank' ? parseBRL((it.party.metadata as any)?.saldoDevedor) : (it.card.value ?? 0)), 0);
   return (
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
         {total > 0 && <span className="text-[11px] text-zinc-400">{fmtMoney(total)}</span>}
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-        {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {items.map((it) => it.kind === 'bank'
+        {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
+        {sorted.map((it) => it.kind === 'bank'
           ? <UnifiedBankCard key={it.id} it={it} onOpen={() => onOpenBank(it.caseId, it.party.id)} />
           : <Card key={it.id} c={it.card} onOpen={() => onOpenCase(it.card.id)} />)}
       </div>

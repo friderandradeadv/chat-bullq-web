@@ -15,6 +15,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
+import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -465,15 +466,17 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const [limit, setLimit] = useState(COLUNA_INICIAL);
+  const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
   // Reseta o limite quando o conjunto de cards muda (filtro/refetch/troca de fase).
   useEffect(() => { setLimit(COLUNA_INICIAL); }, [phase.key, items.length]);
-  const shown = items.length > limit ? items.slice(0, limit) : items;
-  const rest = items.length - shown.length;
+  const sortedItems = useMemo(() => applyCardSort(items, sort, kanbanCardKeys), [items, sort]);
+  const shown = sortedItems.length > limit ? sortedItems.slice(0, limit) : sortedItems;
+  const rest = sortedItems.length - shown.length;
   return (
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       {/* Header da fase — DENTRO do painel escuro (englobado, tom vai até o nome) */}
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
           {items.length}
         </span>

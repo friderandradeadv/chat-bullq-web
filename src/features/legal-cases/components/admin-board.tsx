@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/legal-cases/components/kanban-card-bits';
+import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
@@ -92,6 +93,10 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     try { await legalCasesService.reorderPhase(key, nb.key); qc.invalidateQueries({ queryKey: KEY }); }
     catch (e: any) { toast.error(e?.response?.data?.message || 'Só sócios podem reordenar fases'); }
   };
+  // Ordenação dos cards por coluna (preferência de visualização, no localStorage).
+  const [sorts, setSorts] = useState<Record<string, CardSort>>({});
+  const sortOf = (key: string): CardSort => sorts[key] ?? loadPhaseSort(key);
+  const setSortFor = (key: string, s: CardSort) => { setSorts((p) => ({ ...p, [key]: s })); savePhaseSort(key, s); };
 
   useEffect(() => {
     const cid = new URLSearchParams(window.location.search).get('case');
@@ -159,17 +164,21 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
         </div>
       ) : (
         <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
-          {columns.map((col, i) => (
+          {columns.map((col, i) => {
+            const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys) : col.cards;
+            return (
             <div key={col.key ?? col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-                {canManage && col.key ? (
+                {col.key ? (
                   <PhaseHeader
                     phase={{ key: col.key, label: col.nome, custom: col.custom }}
-                    canRename
+                    canRename={canManage}
                     onRename={renamePhase}
                     onDelete={deletePhase}
-                    onMoveLeft={i > 0 && columns[i - 1]?.key ? () => reorderPhaseCol(col.key!, 'left') : undefined}
-                    onMoveRight={i < columns.length - 1 && columns[i + 1]?.key ? () => reorderPhaseCol(col.key!, 'right') : undefined}
+                    onMoveLeft={canManage && i > 0 && columns[i - 1]?.key ? () => reorderPhaseCol(col.key!, 'left') : undefined}
+                    onMoveRight={canManage && i < columns.length - 1 && columns[i + 1]?.key ? () => reorderPhaseCol(col.key!, 'right') : undefined}
+                    sort={sortOf(col.key)}
+                    onSort={(s) => setSortFor(col.key!, s)}
                   />
                 ) : (
                   <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
@@ -177,11 +186,12 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                 <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
               </div>
               <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-                {col.cards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-                {col.cards.map((c) => <AdminCard key={c.id} c={c} onOpen={setOpenCaseId} />)}
+                {sortedCards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
+                {sortedCards.map((c) => <AdminCard key={c.id} c={c} onOpen={setOpenCaseId} />)}
               </div>
             </div>
-          ))}
+            );
+          })}
           {canManage && manageBoard && <AddPhaseColumn board={manageBoard} accent={accent} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
         </div>
       )}

@@ -15,6 +15,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
+import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { boardOfPhase } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePreSeenStore } from '@/stores/pre-seen-store';
@@ -239,15 +240,17 @@ export default function PreProcessualPage() {
 function Column({ phase, items, novoIds, onOpen, onProtocolar, onChanged, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; onMoveLeft?: () => void; onMoveRight?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
+  const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
+  const sorted = useMemo(() => applyCardSort(items, sort, kanbanCardKeys), [items, sort]);
   return (
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-        {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {items.map((c) => <Card key={c.id} c={c} novo={novoIds.has(c.id)} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
+        {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
+        {sorted.map((c) => <Card key={c.id} c={c} novo={novoIds.has(c.id)} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
       </div>
     </div>
   );
