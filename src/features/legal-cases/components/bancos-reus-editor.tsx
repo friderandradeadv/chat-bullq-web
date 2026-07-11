@@ -9,6 +9,7 @@ import { maskCurrencyBR, maskCpfCnpj } from '@/lib/masks';
 import { BANCOS_DIRETORIO, acharBancoContato } from '@/features/legal-cases/lib/bancos-diretorio';
 import { calcularProvisao, diasDesde, OPERACOES, INSTITUICOES, type Carteira, type Instituicao } from '@/features/calculadora-provisionamento/provisionamento';
 import { calculadoraRevisionalService, type ResultadoRevisional } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
+import { calcularPE } from '@/features/calculadora-perda-esperada/perda-esperada';
 
 // DOSSIÊ POR BANCO do caso REPB. Cada banco RÉU (Party OPPONENT) é a unidade: dados
 // → provisionamento → negociação → acordo → etiquetas → malotes daquele banco.
@@ -687,8 +688,9 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
           </>
         )}
 
-        {/* ── CÁLCULO (provisionamento) ── */}
+        {/* ── CÁLCULO (provisionamento Res. 352 + Perda Esperada) ── */}
         {tab === 'calculo' && (
+          <>
           <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
             <div className="flex items-center gap-1.5"><Calculator className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Provisionamento (Res. BCB 352)</p></div>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -716,6 +718,8 @@ function BancoFocado({ caseId, party, malotesAll, onChanged }: { caseId: string;
               </div>
             ) : <p className="mt-2 text-[12px] text-zinc-400">Preencha saldo (aba Dados) + dias de atraso para calcular.</p>}
           </div>
+          <PerdaEsperadaBlock party={party} saldo={saldo} estagioN={prov?.estagio.n ?? 3} onChanged={onChanged} />
+          </>
         )}
 
         {/* ── REVISIONAL (recalcula o contrato sem juros abusivos → economia da ação) ── */}
@@ -857,6 +861,37 @@ function RevisionalTab({ party, onChanged }: { party: PartyDetail; onChanged: ()
         </div>
       )}
     </div>
+  );
+}
+
+// Perda Esperada (PE = PD × LGD × EAD) — modelo forward-looking (Res. CMN 4.966),
+// complementar ao provisionamento por atraso. PD sugerida pelo estágio; persiste em
+// Party.metadata.pe. Reusa calcularPE() da outra sessão.
+function PerdaEsperadaBlock({ party, saldo, estagioN, onChanged }: { party: PartyDetail; saldo: number; estagioN: number; onChanged: () => void }) {
+  const pe0: any = (party.metadata as any)?.pe ?? {};
+  const defaultPd = estagioN === 3 ? '100' : estagioN === 2 ? '30' : '5';
+  const [pd, setPd] = useState<string>(pe0.pd ?? defaultPd);
+  const [lgd, setLgd] = useState<string>(pe0.lgd ?? '45');
+  useEffect(() => { const p: any = (party.metadata as any)?.pe ?? {}; if (p.pd != null) setPd(p.pd); if (p.lgd != null) setLgd(p.lgd); }, [party.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const persist = async (npd: string, nlgd: string) => { try { await legalCasesService.updateParty(party.id, { name: party.name || 'Banco', role: 'OPPONENT', document: party.document ?? undefined, metadata: { ...((party.metadata as any) ?? {}), pe: { pd: npd, lgd: nlgd } } }); onChanged(); } catch { /* best-effort */ } };
+  const r = calcularPE({ ead: saldo, pd: (Number(pd) || 0) / 100, lgd: (Number(lgd) || 0) / 100 });
+  return (
+    <section className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex items-center gap-1.5"><Calculator className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Perda Esperada (PE = PD × LGD × EAD)</p></div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <label className={LABEL}>PD — prob. default (%)<input value={pd} onChange={(e) => setPd(e.target.value.replace(/[^\d]/g, ''))} onBlur={() => persist(pd, lgd)} inputMode="numeric" className={INPUT} /></label>
+        <label className={LABEL}>LGD — perda no default (%)<input value={lgd} onChange={(e) => setLgd(e.target.value.replace(/[^\d]/g, ''))} onBlur={() => persist(pd, lgd)} inputMode="numeric" className={INPUT} /></label>
+        <label className={LABEL}>EAD — exposição<input value={brl(saldo)} readOnly className={`${INPUT} opacity-70`} /></label>
+      </div>
+      {saldo > 0 ? (
+        <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+          <Metric label="PE moderado" value={brl(r.peModerado)} sub={pct(r.pctModerado)} />
+          <Metric label="Cenário otimista" value={brl(r.peOtimista)} />
+          <Metric label="Cenário pessimista" value={brl(r.pePessimista)} />
+        </div>
+      ) : <p className="mt-2 text-[12px] text-zinc-400">Preencha o saldo devedor (aba Dados).</p>}
+      <p className="mt-1.5 text-[10px] text-zinc-400">Modelo forward-looking (Res. CMN 4.966). PD sugerida pelo estágio; ajuste a LGD conforme garantia/histórico. Compare com o provisionamento por atraso acima.</p>
+    </section>
   );
 }
 
