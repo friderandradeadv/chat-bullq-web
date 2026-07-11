@@ -20,7 +20,6 @@ import {
   Mail,
   X,
   UserCog,
-  Eraser,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { tagsService, type Tag } from '@/features/settings/services/tags.service';
@@ -60,7 +59,6 @@ export function ConversationContextMenu({
   const [pendingPipelineId, setPendingPipelineId] = useState<string | null>(null);
   const [pendingViewId, setPendingViewId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
-  const [resetting, setResetting] = useState(false);
   const [markingUnread, setMarkingUnread] = useState(false);
   const [markingRead, setMarkingRead] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -284,26 +282,6 @@ export function ConversationContextMenu({
     }
   };
 
-  const handleReset = async () => {
-    const name = conversation.contact?.name || 'esta conversa';
-    if (
-      !window.confirm(
-        `Zerar ${name}?\n\nA conversa some de todas as abas e a memória da IA é limpa. A próxima mensagem do número começa uma conversa nova e limpa. (É reversível, mas some da vista.)`,
-      )
-    )
-      return;
-    setResetting(true);
-    try {
-      await inboxService.resetConversation(conversation.id);
-      toast.success('Conversa zerada');
-      invalidate();
-      onClose();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Erro ao zerar a conversa');
-    } finally {
-      setResetting(false);
-    }
-  };
 
   const addToPipeline = async (pipelineId: string, pipelineName: string) => {
     setPendingPipelineId(pipelineId);
@@ -490,19 +468,6 @@ export function ConversationContextMenu({
               <Archive className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
             )}
             <span className="flex-1">{isArchived ? 'Desarquivar' : 'Arquivar'}</span>
-          </button>
-          <button
-            onClick={handleReset}
-            disabled={resetting}
-            title="Zera a conversa (some das abas + limpa memória da IA). Ideal pra testar do zero."
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-950/40"
-          >
-            {resetting ? (
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-            ) : (
-              <Eraser className="h-3.5 w-3.5 shrink-0" />
-            )}
-            <span className="flex-1">Zerar conversa (teste)</span>
           </button>
         </>
       )}
