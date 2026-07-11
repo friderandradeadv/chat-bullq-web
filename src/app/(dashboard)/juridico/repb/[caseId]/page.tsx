@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, LayoutGrid, Banknote, FileText, Clock, Building2, User, Phone, Mail, MapPin, IdCard, Users, Download, ExternalLink } from 'lucide-react';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
-import { ResumoClienteRepb, BancosReusEditor, RepbFaseCard } from '@/features/legal-cases/components/bancos-reus-editor';
+import { ResumoClienteRepb, BancosReusEditor, RepbFaseCard, PlanoRepactuacaoBlock } from '@/features/legal-cases/components/bancos-reus-editor';
 
 const ACCENT = '#B7791F';
 const FASE_LABEL: Record<string, string> = {
@@ -63,6 +63,7 @@ export default function RepbFichaPage() {
         <div className="min-w-0 space-y-4">
           <RepbFaseCard phase={c.legalPhase} faseData={(c.metadata as any)?.faseData} parties={c.parties} />
           <ResumoClienteRepb parties={c.parties} />
+          <PlanoRepactuacaoBlock caseId={c.id} parties={c.parties} initialRenda={(c.metadata as any)?.faseData?.repb_plano?.renda} initialComprometimento={(c.metadata as any)?.faseData?.repb_plano?.comprometimento} onChanged={refresh} />
           <BancosReusEditor caseId={c.id} parties={c.parties} malotes={malotes} onChanged={refresh} />
         </div>
 

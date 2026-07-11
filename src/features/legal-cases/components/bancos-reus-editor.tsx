@@ -10,6 +10,7 @@ import { BANCOS_DIRETORIO, acharBancoContato } from '@/features/legal-cases/lib/
 import { calcularProvisao, diasDesde, OPERACOES, INSTITUICOES, type Carteira, type Instituicao } from '@/features/calculadora-provisionamento/provisionamento';
 import { calculadoraRevisionalService, type ResultadoRevisional } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
 import { calcularPE } from '@/features/calculadora-perda-esperada/perda-esperada';
+import { calcularPlano, type Credor } from '@/features/calculadora-superendividamento/plano-repactuacao';
 
 // DOSSIÊ POR BANCO do caso REPB. Cada banco RÉU (Party OPPONENT) é a unidade: dados
 // → provisionamento → negociação → acordo → etiquetas → malotes daquele banco.
@@ -861,6 +862,68 @@ function RevisionalTab({ party, onChanged }: { party: PartyDetail; onChanged: ()
         </div>
       )}
     </div>
+  );
+}
+
+// Plano de Repactuação (superendividamento · CDC 104-A/B) — NÍVEL DO CLIENTE:
+// pega as dívidas (bancos réus) como credores + renda × comprometimento e simula o
+// plano de pagamento em até 60 meses. Reusa calcularPlano() da outra sessão.
+// Persiste renda/comprometimento em faseData.repb_plano.
+export function PlanoRepactuacaoBlock({ caseId, parties, initialRenda, initialComprometimento, onChanged }: { caseId: string; parties: PartyDetail[]; initialRenda?: string; initialComprometimento?: string; onChanged?: () => void }) {
+  const qc = useQueryClient();
+  const reus = parties.filter((p) => p.role === 'OPPONENT');
+  const credores: Credor[] = reus.map((p) => ({ nome: p.name, valor: parseBRL((p.metadata as any)?.saldoDevedor ?? '') })).filter((c) => c.valor > 0);
+  const [renda, setRenda] = useState(initialRenda ?? '');
+  const [compr, setCompr] = useState(initialComprometimento ?? '30');
+  const deb = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persist = (r: string, cp: string) => {
+    if (deb.current) clearTimeout(deb.current);
+    deb.current = setTimeout(async () => {
+      try {
+        await legalCasesService.saveFaseField(caseId, 'repb_plano', 'renda', r);
+        await legalCasesService.saveFaseField(caseId, 'repb_plano', 'comprometimento', cp);
+        qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] }); onChanged?.();
+      } catch { /* best-effort */ }
+    }, 700);
+  };
+  if (!credores.length) return null;
+  const plano = calcularPlano({ rendaLiquida: parseBRL(renda), comprometimentoPct: (Number(compr) || 0) / 100, credores });
+
+  return (
+    <section className="rounded-xl border border-[#e3e8ef] bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="flex items-center gap-1.5"><Calculator className="h-4 w-4 text-[#B7791F]" /><p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Plano de repactuação (superendividamento · CDC 104-A/B)</p></div>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <label className={LABEL}>Renda líquida mensal<input value={renda} onChange={(e) => { const v = maskCurrencyBR(e.target.value); setRenda(v); persist(v, compr); }} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} /></label>
+        <label className={LABEL}>% de comprometimento<input value={compr} onChange={(e) => { const v = e.target.value.replace(/[^\d]/g, ''); setCompr(v); persist(renda, v); }} inputMode="numeric" placeholder="30" className={INPUT} /></label>
+        <div className="flex flex-col justify-end"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Total a repactuar</p><p className="text-[14px] font-bold text-[#101820] dark:text-zinc-100">{brl(plano.totalRepactuar)}</p></div>
+      </div>
+      {parseBRL(renda) > 0 ? (
+        <>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
+            <Metric label="Disponível / mês" value={brl(plano.disponivelMensal)} />
+            <Metric label="Prazo total" value={`${plano.mesesTotais} meses`} sub={plano.dentroDoTeto ? '≤ 60m ✓' : 'acima de 60m'} />
+            <Metric label="Fases (readequações)" value={String(plano.fases)} />
+          </div>
+          {!plano.dentroDoTeto && <p className="mt-1.5 rounded bg-red-50 px-2 py-1 text-[11px] text-red-600 dark:bg-red-500/10 dark:text-red-400">Excede o teto de 60 meses do plano — aumente a renda comprometida ou negocie desconto antes.</p>}
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-left text-[12px]">
+              <thead className="text-[10px] uppercase tracking-wide text-zinc-400"><tr><th className="py-1">Credor</th><th className="py-1 text-right">Dívida</th><th className="py-1 text-right">1ª parcela</th><th className="py-1 text-right">Quita em</th></tr></thead>
+              <tbody>
+                {plano.credores.map((c, i) => (
+                  <tr key={i} className="border-t border-[#eef2f8] dark:border-zinc-800">
+                    <td className="py-1 pr-2 text-[#101820] dark:text-zinc-200">{c.nome}</td>
+                    <td className="py-1 text-right tabular-nums text-zinc-500">{brl(c.valor)}</td>
+                    <td className="py-1 text-right tabular-nums font-medium text-[#101820] dark:text-zinc-100">{brl(c.parcelaInicial)}</td>
+                    <td className="py-1 text-right tabular-nums text-zinc-500">{c.meses > 0 ? `${c.meses}m` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : <p className="mt-2 text-[12px] text-zinc-400">Informe a renda líquida mensal para simular o plano.</p>}
+      <p className="mt-1.5 text-[10px] text-zinc-400">Distribui o valor comprometido entre as dívidas mês a mês (realoca ao quitar). Base para a repactuação global (Lei 14.181/21).</p>
+    </section>
   );
 }
 
