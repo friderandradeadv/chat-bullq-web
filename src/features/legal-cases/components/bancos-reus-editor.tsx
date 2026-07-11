@@ -666,7 +666,16 @@ function BancoFocado({ caseId, party, malotesAll, driveUrl, onChanged }: { caseI
   const creditos = irreg.reduce((a, i) => a + parseBRL(i.valor), 0);
   const provVal = prov?.valorProvisionado ?? 0;
   const revEconomia = Number((party.metadata as any)?.revisional?.economia) || 0;
-  const propostaAlvo = Math.max(0, saldo - provVal - revEconomia - creditos);
+  // Cenários de proposta = quais "alavancas" incluir. Dá a escada de negociação.
+  const [lever, setLever] = useState({ prov: true, rev: true, irreg: true });
+  const abater = (l: { prov: boolean; rev: boolean; irreg: boolean }) => (l.prov ? provVal : 0) + (l.rev ? revEconomia : 0) + (l.irreg ? creditos : 0);
+  const propostaDe = (l: { prov: boolean; rev: boolean; irreg: boolean }) => Math.max(0, saldo - abater(l));
+  const propostaAlvo = propostaDe(lever);
+  const CENARIOS = [
+    { nome: 'Só provisionamento', l: { prov: true, rev: false, irreg: false } },
+    { nome: '+ Revisional', l: { prov: true, rev: true, irreg: false } },
+    { nome: '+ Irregularidades (a limpa)', l: { prov: true, rev: true, irreg: true } },
+  ];
 
   return (
     <div>
@@ -758,18 +767,37 @@ function BancoFocado({ caseId, party, malotesAll, driveUrl, onChanged }: { caseI
         {/* ── ACORDO — cockpit "A LIMPA": usa TUDO pra abater a dívida ── */}
         {tab === 'acordo' && (
           <div className="space-y-3">
-            {/* Waterfall: dívida − provisionado − revisional − créditos = proposta alvo */}
+            {/* Alavancas selecionáveis → waterfall da proposta escolhida */}
             <div className="rounded-md border border-[#B7791F]/30 bg-gradient-to-br from-[#B7791F]/5 to-transparent p-2.5 dark:border-[#B7791F]/25">
-              <div className="flex items-center gap-1.5"><TrendingDown className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Alvo da negociação — usar tudo pra abater</p></div>
+              <div className="flex items-center gap-1.5"><TrendingDown className="h-3.5 w-3.5 text-[#B7791F]" /><p className={LABEL}>Montar a proposta — escolha as alavancas</p></div>
               <div className="mt-2 space-y-1 text-[13px]">
                 <div className="flex justify-between"><span className="text-zinc-500 dark:text-zinc-400">Dívida atual</span><span className="font-semibold tabular-nums text-[#101820] dark:text-zinc-100">{brl(saldo)}</span></div>
-                <div className="flex justify-between text-zinc-500 dark:text-zinc-400"><span>− Provisionado (o banco já perdeu)</span><span className="tabular-nums">{provVal > 0 ? `− ${brl(provVal)}` : '—'}</span></div>
-                <div className="flex justify-between text-zinc-500 dark:text-zinc-400"><span>− Economia revisional (juros)</span><span className="tabular-nums">{revEconomia > 0 ? `− ${brl(revEconomia)}` : '—'}</span></div>
-                <div className="flex justify-between text-zinc-500 dark:text-zinc-400"><span>− Créditos de irregularidades</span><span className="tabular-nums">{creditos > 0 ? `− ${brl(creditos)}` : '—'}</span></div>
-                <div className="mt-1 flex justify-between border-t border-[#eef1f5] pt-1 dark:border-zinc-800"><span className="font-semibold text-[#101820] dark:text-zinc-100">Proposta alvo (a buscar)</span><span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{brl(propostaAlvo)}</span></div>
-                <p className="text-right text-[10px] text-zinc-400">{saldo > 0 ? `${Math.round(((saldo - propostaAlvo) / saldo) * 100)}% de abatimento potencial` : ''}</p>
+                <label className={`flex cursor-pointer items-center justify-between rounded px-1 py-0.5 ${lever.prov ? '' : 'opacity-40'} hover:bg-[#B7791F]/5`}><span className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><input type="checkbox" checked={lever.prov} onChange={(e) => setLever({ ...lever, prov: e.target.checked })} /> − Provisionado (o banco já perdeu)</span><span className="tabular-nums text-zinc-500">{provVal > 0 ? `− ${brl(provVal)}` : '—'}</span></label>
+                <label className={`flex cursor-pointer items-center justify-between rounded px-1 py-0.5 ${lever.rev ? '' : 'opacity-40'} hover:bg-[#B7791F]/5`}><span className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><input type="checkbox" checked={lever.rev} onChange={(e) => setLever({ ...lever, rev: e.target.checked })} /> − Economia revisional (juros)</span><span className="tabular-nums text-zinc-500">{revEconomia > 0 ? `− ${brl(revEconomia)}` : '—'}</span></label>
+                <label className={`flex cursor-pointer items-center justify-between rounded px-1 py-0.5 ${lever.irreg ? '' : 'opacity-40'} hover:bg-[#B7791F]/5`}><span className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><input type="checkbox" checked={lever.irreg} onChange={(e) => setLever({ ...lever, irreg: e.target.checked })} /> − Créditos de irregularidades</span><span className="tabular-nums text-zinc-500">{creditos > 0 ? `− ${brl(creditos)}` : '—'}</span></label>
+                <div className="mt-1 flex justify-between border-t border-[#eef1f5] pt-1 dark:border-zinc-800"><span className="font-semibold text-[#101820] dark:text-zinc-100">Proposta (a buscar)</span><span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{brl(propostaAlvo)}</span></div>
+                <p className="text-right text-[10px] text-zinc-400">{saldo > 0 ? `${Math.round(((saldo - propostaAlvo) / saldo) * 100)}% de abatimento` : ''}</p>
               </div>
-              {(revEconomia > 0 || creditos > 0) && <button onClick={() => save({ ...d, negProposta: brl(propostaAlvo) })} className="mt-1.5 text-[11px] font-medium text-[#B7791F] hover:underline">↳ lançar como proposta na negociação</button>}
+              <button onClick={() => save({ ...d, negProposta: brl(propostaAlvo) })} className="mt-1.5 text-[11px] font-medium text-[#B7791F] hover:underline">↳ lançar esta proposta na negociação</button>
+            </div>
+
+            {/* Escada de cenários — poder de negociação (abre alto, cede até o piso) */}
+            <div className="rounded-md border border-[#e3e8ef] bg-[#fafbfc] p-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <p className={LABEL}>Cenários de negociação (do conservador ao agressivo)</p>
+              <table className="mt-2 w-full text-left text-[12px]">
+                <thead className="text-[10px] uppercase tracking-wide text-zinc-400"><tr><th className="py-1">Cenário</th><th className="py-1 text-right">Proposta</th><th className="py-1 text-right">Abatimento</th><th></th></tr></thead>
+                <tbody>
+                  {CENARIOS.map((c) => { const p = propostaDe(c.l); const desc = saldo > 0 ? Math.round(((saldo - p) / saldo) * 100) : 0; const ativo = lever.prov === c.l.prov && lever.rev === c.l.rev && lever.irreg === c.l.irreg; return (
+                    <tr key={c.nome} className={`border-t border-[#eef2f8] dark:border-zinc-800 ${ativo ? 'bg-[#B7791F]/5' : ''}`}>
+                      <td className="py-1 pr-2 text-[#101820] dark:text-zinc-200">{c.nome}</td>
+                      <td className="py-1 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{brl(p)}</td>
+                      <td className="py-1 text-right tabular-nums text-zinc-500">{desc}%</td>
+                      <td className="py-1 pl-2 text-right"><button onClick={() => setLever(c.l)} className="text-[11px] font-medium text-[#B7791F] hover:underline">{ativo ? '✓' : 'usar'}</button></td>
+                    </tr>
+                  ); })}
+                </tbody>
+              </table>
+              <p className="mt-1.5 text-[10px] text-zinc-400">Estratégia: abra pelo cenário mais agressivo (a limpa) e ceda até o piso do banco (só provisionamento). Cada linha reflete provisionado + revisional + irregularidades já lançados.</p>
             </div>
 
             {/* Irregularidades = créditos (revisão do contrato) */}
