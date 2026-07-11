@@ -527,22 +527,22 @@ function ClientResponsibleSection({ contactId }: { contactId: string }) {
   if (cases.length === 0) return null; // sem processo vinculado → nada a mostrar
   const principal = cases[0]; // casesByContact já ordena (mais recente primeiro)
   return (
-    <div className="mt-5 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
-      <p className="mb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-        Responsável pelo cliente
+    <div className="mt-4 flex items-center gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+      <p
+        className="shrink-0 text-xs font-semibold text-zinc-500 dark:text-zinc-400"
+        title={cases.length > 1 ? 'Responsável pelo processo principal — os demais você ajusta em “Processos do cliente”.' : 'Responsável pelo processo do cliente'}
+      >
+        Responsável
       </p>
-      <CaseResponsibleChip
-        caseId={principal.id}
-        contactId={contactId}
-        responsavelId={principal.responsavelId}
-        responsavel={principal.responsavel}
-        members={members}
-      />
-      {cases.length > 1 && (
-        <p className="mt-1 text-[10px] text-zinc-400">
-          Processo principal — os demais você ajusta em “Processos do cliente”.
-        </p>
-      )}
+      <div className="min-w-0 flex-1">
+        <CaseResponsibleChip
+          caseId={principal.id}
+          contactId={contactId}
+          responsavelId={principal.responsavelId}
+          responsavel={principal.responsavel}
+          members={members}
+        />
+      </div>
     </div>
   );
 }
