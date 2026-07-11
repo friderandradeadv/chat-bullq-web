@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus } from 'lucide-react';
+import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase, type PartyDetail,
@@ -50,19 +51,24 @@ const parseBRL = (s: string | null | undefined) => { let t = String(s ?? '').rep
 
 export default function RepbPage() {
   const qc = useQueryClient();
+  const router = useRouter();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
-  // Abre direto a ficha quando vier ?case=<id> (link "Ver no Kanban" do chat).
-  useEffect(() => {
-    const cid = new URLSearchParams(window.location.search).get('case');
-    if (cid) setOpenCaseId(cid);
-  }, []);
 
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
   const [foco, setFoco] = useState(''); // caseId do cliente p/ ver os bancos distribuídos no board
   const [focoBanco, setFocoBanco] = useState<string | null>(null); // bankId clicado → abre o drawer nele
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
+
+  // ?case=<id> abre a ficha do card (link do chat); ?foco=<id> entra no kanban de bancos daquele cliente.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const cid = q.get('case');
+    if (cid) setOpenCaseId(cid);
+    const f = q.get('foco');
+    if (f) { setFoco(f); setView('kanban'); }
+  }, []);
   const [novo, setNovo] = useState(false);
   const dragScroll = useDragScroll();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -180,7 +186,7 @@ export default function RepbPage() {
       )}
 
       {view === 'lista' ? (
-        <ClienteListView clientes={filtered} onOpen={(id) => { setFoco(id); setView('kanban'); }} accent={ACCENT} />
+        <ClienteListView clientes={filtered} phases={phases} onOpenKanban={(id) => { setFoco(id); setView('kanban'); }} onOpenFicha={(id) => router.push(`/juridico/repb/${id}`)} accent={ACCENT} />
       ) : foco ? (
         <BancoBoard caseId={foco} phases={phases} onOpenBank={(cid, bid) => { setFocoBanco(bid); setOpenCaseId(cid); }} scroll={dragScroll} />
       ) : (
@@ -350,23 +356,66 @@ function BancoCard({ party, malCount, onOpen }: { party: PartyDetail; malCount: 
 
 // Lista de CLIENTES (view "Lista"): cada linha é um cliente; clicar abre o kanban
 // de bancos dele. Filtrada pela barra de busca do topo.
-function ClienteListView({ clientes, onOpen, accent }: { clientes: KanbanCard[]; onOpen: (id: string) => void; accent: string }) {
-  const ordenados = [...clientes].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+// Lista rica de CLIENTES (tipo lista de contatos): filtro por fase, ordenação, e
+// 2 ações por linha — ▸ Kanban (bancos daquele cliente) e 📄 Ficha completa.
+function ClienteListView({ clientes, phases, onOpenKanban, onOpenFicha, accent }: {
+  clientes: KanbanCard[]; phases: KanbanPhase[]; onOpenKanban: (id: string) => void; onOpenFicha: (id: string) => void; accent: string;
+}) {
+  const [faseF, setFaseF] = useState('');
+  const [ordem, setOrdem] = useState<'valor' | 'nome' | 'recente'>('valor');
+  const contFase = (k: string) => clientes.filter((c) => c.phase === k).length;
+  const fasesComCards = phases.filter((p) => contFase(p.key) > 0);
+
+  const lista = useMemo(() => {
+    const arr = faseF ? clientes.filter((c) => c.phase === faseF) : [...clientes];
+    arr.sort((a, b) =>
+      ordem === 'nome' ? (a.client ?? a.title ?? '').localeCompare(b.client ?? b.title ?? '')
+        : ordem === 'recente' ? new Date(b.legalPhaseAt ?? 0).getTime() - new Date(a.legalPhaseAt ?? 0).getTime()
+          : (b.value ?? 0) - (a.value ?? 0),
+    );
+    return arr;
+  }, [clientes, faseF, ordem]);
+  const faseLabel = (k: string) => phases.find((p) => p.key === k)?.label ?? k;
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-3 lg:px-6">
-      {ordenados.length === 0 && <p className="py-10 text-center text-sm text-zinc-400">Nenhum cliente. Use a busca acima ou “+ Novo cliente”.</p>}
-      <div className="mx-auto max-w-3xl divide-y divide-[#eef2f8] overflow-hidden rounded-xl border border-[#e3e8ef] bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/40">
-        {ordenados.map((c) => (
-          <button key={c.id} onClick={() => onOpen(c.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#B7791F]/5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white" style={{ background: accent }}><Banknote className="h-4 w-4" /></span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
-              <p className="text-[11px] text-zinc-400">{c.responsible?.name ?? 'Sem responsável'}</p>
+      <div className="mx-auto max-w-3xl">
+        {/* Barra de filtro/ordenação */}
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <button onClick={() => setFaseF('')} className={`rounded-full border px-2.5 py-0.5 text-[12px] font-medium ${faseF === '' ? 'border-[#B7791F] bg-[#B7791F]/10 text-[#B7791F]' : 'border-[#e3e8ef] text-zinc-500 hover:border-[#B7791F]/40 dark:border-zinc-700 dark:text-zinc-400'}`}>Todas as fases <span className="opacity-60">{clientes.length}</span></button>
+          {fasesComCards.map((p) => (
+            <button key={p.key} onClick={() => setFaseF(p.key)} className={`rounded-full border px-2.5 py-0.5 text-[12px] font-medium ${faseF === p.key ? 'border-[#B7791F] bg-[#B7791F]/10 text-[#B7791F]' : 'border-[#e3e8ef] text-zinc-500 hover:border-[#B7791F]/40 dark:border-zinc-700 dark:text-zinc-400'}`}>{p.label} <span className="opacity-60">{contFase(p.key)}</span></button>
+          ))}
+          <select value={ordem} onChange={(e) => setOrdem(e.target.value as any)} className="ml-auto h-7 rounded-md border border-[#cfe0ed] bg-white px-1.5 text-[12px] text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+            <option value="valor">Maior dívida</option>
+            <option value="nome">Nome (A–Z)</option>
+            <option value="recente">Movimentado recente</option>
+          </select>
+        </div>
+
+        {lista.length === 0 && <p className="py-10 text-center text-sm text-zinc-400">Nenhum cliente. Use a busca acima ou “+ Novo cliente”.</p>}
+
+        <div className="divide-y divide-[#eef2f8] overflow-hidden rounded-xl border border-[#e3e8ef] bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/40">
+          {lista.map((c) => (
+            <div key={c.id} className="group flex items-center gap-3 px-3 py-2.5 hover:bg-[#B7791F]/5 sm:px-4">
+              <button onClick={() => onOpenFicha(c.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white" style={{ background: accent }}><Banknote className="h-4 w-4" /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+                    <span className="rounded-full bg-[#edeff3] px-1.5 py-px text-[10px] font-medium text-[#48626f] dark:bg-zinc-800 dark:text-zinc-300">{faseLabel(c.phase)}</span>
+                    <span>{c.responsible?.name ?? 'Sem responsável'}</span>
+                  </p>
+                </div>
+                {c.value != null && c.value > 0 && <span className="hidden shrink-0 text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 sm:block">{fmtMoney(c.value)}</span>}
+              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button onClick={() => onOpenKanban(c.id)} title="Ver kanban dos bancos" className="inline-flex items-center gap-1 rounded-md border border-[#e3e8ef] px-2 py-1 text-[12px] font-medium text-[#48626f] hover:border-[#B7791F]/40 hover:text-[#B7791F] dark:border-zinc-700 dark:text-zinc-400"><LayoutGrid className="h-3.5 w-3.5" /><span className="hidden sm:inline">Kanban</span></button>
+                <button onClick={() => onOpenFicha(c.id)} title="Abrir ficha completa" className="inline-flex items-center gap-1 rounded-md bg-[#B7791F] px-2 py-1 text-[12px] font-semibold text-white hover:opacity-90"><FileText className="h-3.5 w-3.5" /><span className="hidden sm:inline">Ficha</span></button>
+              </div>
             </div>
-            {c.value != null && c.value > 0 && <span className="shrink-0 text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</span>}
-            <span className="shrink-0 text-xs font-medium text-[#B7791F]">ver bancos →</span>
-          </button>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
