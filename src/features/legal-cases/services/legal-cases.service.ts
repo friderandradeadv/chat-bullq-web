@@ -456,6 +456,28 @@ export const legalCasesService = {
     const { data } = await api.patch('/legal-cases/phases/config', config);
     return data.data ?? data;
   },
+  // Reordena uma fase trocando de lugar com a vizinha (inline no kanban, estilo
+  // Pipefy "Mover fase"). Reaproveita savePhaseConfig: reconstrói a ordem global
+  // (base + custom, incluindo escondidas) como a tela de Configurações e troca só
+  // os dois valores de `order`. Preserva renomeações, escondidas e fases próprias.
+  async reorderPhase(key: string, neighborKey: string): Promise<PhaseConfigResponse> {
+    const cfg = await this.getPhaseConfig();
+    const ord0 = cfg.config.order ?? {};
+    const all = [
+      ...cfg.defaults.map((d) => ({ key: d.key, o: ord0[d.key] ?? d.order })),
+      ...(cfg.config.custom ?? []).map((c, i) => ({ key: c.key, o: ord0[c.key] ?? 400 + i })),
+    ].sort((a, b) => a.o - b.o);
+    const order: Record<string, number> = {};
+    all.forEach((p, i) => { order[p.key] = (i + 1) * 10; });
+    if (order[key] == null || order[neighborKey] == null) return cfg;
+    const t = order[key]; order[key] = order[neighborKey]; order[neighborKey] = t;
+    return this.savePhaseConfig({
+      labels: cfg.config.labels ?? {},
+      order,
+      hidden: cfg.config.hidden ?? [],
+      custom: cfg.config.custom ?? [],
+    });
+  },
   // Criar/excluir fase inline no kanban (só sócios — gate no backend).
   async addPhase(board: 'pre' | 'banco' | 'plan' | 'repb' | 'judicial', label: string): Promise<PhaseConfigResponse> {
     const { data } = await api.post('/legal-cases/phases', { board, label });

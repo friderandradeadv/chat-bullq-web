@@ -85,6 +85,13 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
       qc.invalidateQueries({ queryKey: KEY });
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao remover fase'); }
   };
+  const reorderPhaseCol = async (key: string, dir: 'left' | 'right') => {
+    const i = columns.findIndex((c) => c.key === key);
+    const nb = columns[dir === 'left' ? i - 1 : i + 1];
+    if (!nb?.key) return;
+    try { await legalCasesService.reorderPhase(key, nb.key); qc.invalidateQueries({ queryKey: KEY }); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Só sócios podem reordenar fases'); }
+  };
 
   useEffect(() => {
     const cid = new URLSearchParams(window.location.search).get('case');
@@ -152,11 +159,18 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
         </div>
       ) : (
         <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
-          {columns.map((col) => (
+          {columns.map((col, i) => (
             <div key={col.key ?? col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
                 {canManage && col.key ? (
-                  <PhaseHeader phase={{ key: col.key, label: col.nome, custom: col.custom }} canRename onRename={renamePhase} onDelete={deletePhase} />
+                  <PhaseHeader
+                    phase={{ key: col.key, label: col.nome, custom: col.custom }}
+                    canRename
+                    onRename={renamePhase}
+                    onDelete={deletePhase}
+                    onMoveLeft={i > 0 && columns[i - 1]?.key ? () => reorderPhaseCol(col.key!, 'left') : undefined}
+                    onMoveRight={i < columns.length - 1 && columns[i + 1]?.key ? () => reorderPhaseCol(col.key!, 'right') : undefined}
+                  />
                 ) : (
                   <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
                 )}

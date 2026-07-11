@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon, MoreVertical } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type LegalTag } from '../services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
@@ -21,12 +21,17 @@ export function PhaseHeader({
   canRename,
   onRename,
   onDelete,
+  onMoveLeft,
+  onMoveRight,
 }: {
   phase: { key: string; label: string; custom?: boolean };
   canRename: boolean;
   onRename: (key: string, label: string) => void;
   /** Sócios: excluir (fase própria) ou esconder (fase padrão) direto no board. */
   onDelete?: (phase: { key: string; label: string; custom?: boolean }) => void;
+  /** Reordenar a fase no quadro — undefined quando já está no extremo. */
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -93,6 +98,31 @@ export function PhaseHeader({
             >
               <Pencil className="h-3.5 w-3.5 shrink-0" /> Renomear fase
             </button>
+            {(onMoveLeft || onMoveRight) && (
+              <>
+                {onMoveLeft && (
+                  <button
+                    type="button"
+                    onClick={() => { setMenu(false); onMoveLeft(); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5 shrink-0" /> Mover para a esquerda
+                  </button>
+                )}
+                {onMoveRight && (
+                  <button
+                    type="button"
+                    onClick={() => { setMenu(false); onMoveRight(); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0" /> Mover para a direita
+                  </button>
+                )}
+              </>
+            )}
+            {onDelete && (onMoveLeft || onMoveRight) && (
+              <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+            )}
             {onDelete && (
               <button
                 type="button"
