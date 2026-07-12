@@ -227,6 +227,12 @@ export interface KanbanCard {
   ultimoAndamento: { date: string; description: string } | null;
   createdAt: string;
   updatedAt: string;
+  // Funil REPB (repbc_*) — card rico do lead comercial.
+  leadResumo?: string | null;
+  reuniaoEm?: string | null;
+  leadBancos?: string | null;
+  leadValor?: string | null;
+  leadSituacao?: string | null;
 }
 export interface KanbanData {
   phases: KanbanPhase[];

@@ -6,7 +6,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Megaphone, Search, RefreshCw, LayoutGrid, List, Clock, Plus, ArrowRightCircle } from 'lucide-react';
+import { Megaphone, Search, RefreshCw, LayoutGrid, List, Clock, Plus, ArrowRightCircle, CalendarClock, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -23,6 +23,11 @@ const KEY = ['legal-cases', 'kanban', 'repbc'];
 const ACCENT = '#E8590C'; // laranja — funil comercial (leads de campanha) do REPB
 
 const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.floor(d / 365)}a` : d >= 30 ? `${Math.floor(d / 30)}m` : `${d}d`);
+const fmtReuniao = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
 
 export default function RepbFunilPage() {
   const qc = useQueryClient();
@@ -208,7 +213,19 @@ function Card({ c, onOpen, onFechou }: { c: KanbanCard; onOpen?: (id: string) =>
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
       </div>
       <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
-      {c.opponent && <p className="mt-1 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
+      {(c.leadBancos || c.leadValor) && (
+        <p className="mt-1 flex items-center gap-1 truncate text-xs text-[#48626f] dark:text-zinc-400">
+          <Landmark className="h-3 w-3 shrink-0" />
+          <span className="truncate">{[c.leadBancos, c.leadValor].filter(Boolean).join(' · ')}</span>
+        </p>
+      )}
+      {c.leadSituacao && <p className="mt-1 truncate text-[11px] text-[#8a6d3b] dark:text-amber-400/80">{c.leadSituacao}</p>}
+      {c.leadResumo && <p className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">{c.leadResumo}</p>}
+      {c.reuniaoEm && (
+        <span className="mt-2 inline-flex items-center gap-1 rounded bg-[#E8590C]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#E8590C]">
+          <CalendarClock className="h-3.5 w-3.5" /> Reunião {fmtReuniao(c.reuniaoEm)}
+        </span>
+      )}
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#eef2f8] pt-1.5 dark:border-zinc-800">
         <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4b5863] dark:text-zinc-400" title="Tempo na fase atual"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNaFase)}</span>
         {c.responsible && (c.responsible.avatarUrl

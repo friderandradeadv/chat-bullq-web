@@ -193,6 +193,31 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'obs', label: 'Anotações do encerramento', type: 'textarea' },
   ],
   repb_inviavel: [{ key: 'motivo', label: 'Motivo da inviabilidade', type: 'textarea' }],
+
+  // ── Funil REPB (comercial / pré-contrato) ──────────────────────────────────
+  repbc_novos_leads: [
+    { key: 'resumo', label: 'Resumo do caso (do robô — edite se precisar)', type: 'textarea' },
+    { key: 'bancos', label: 'Bancos / financeiras', type: 'text' },
+    { key: 'valor', label: 'Valor total aproximado da dívida', type: 'text' },
+    { key: 'situacao', label: 'Situação (em dia/atraso, judicial, PF/PJ)', type: 'text' },
+    { key: 'objetivo', label: 'O que o cliente mais quer resolver', type: 'text' },
+  ],
+  repbc_reuniao_agendada: [
+    { key: 'data', label: 'Data e hora da reunião', type: 'datetime' },
+    { key: 'advogado', label: 'Advogado que vai atender', type: 'text' },
+    { key: 'docs_recebidos', label: 'Documentos recebidos para a reunião', type: 'checklist', options: ['Contrato(s)', 'Fatura(s)', 'Extrato Meu INSS', 'Extratos bancários', 'SCR / Registrato'] },
+    { key: 'obs', label: 'Observações para a reunião', type: 'textarea' },
+  ],
+  repbc_contrato_fechado: [
+    { key: 'produto', label: 'Produto contratado (REPB / Revisional / Superendiv.)', type: 'text' },
+    { key: 'data_fechamento', label: 'Data do fechamento', type: 'date' },
+    { key: 'obs', label: 'Observações do fechamento', type: 'textarea' },
+  ],
+  repbc_repescagem: [
+    { key: 'motivo', label: 'Por que não fechou na reunião', type: 'text' },
+    { key: 'proximo_followup', label: 'Próximo follow-up (data)', type: 'date' },
+    { key: 'obs', label: 'Histórico de follow-ups', type: 'textarea' },
+  ],
 };
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
