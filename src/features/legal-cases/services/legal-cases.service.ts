@@ -336,7 +336,7 @@ export const legalCasesService = {
     return data.data ?? data;
   },
   async kanban(
-    query: { responsibleId?: string; area?: string; search?: string; lane?: 'pre' | 'judicial' | 'banco' | 'plan' | 'repb' } = {},
+    query: { responsibleId?: string; area?: string; search?: string; lane?: 'pre' | 'judicial' | 'banco' | 'plan' | 'repb' | 'repbc' } = {},
   ): Promise<KanbanData> {
     const { data } = await api.get(`/legal-cases/kanban${qs(query)}`);
     const kb: KanbanData = data.data ?? data;
@@ -479,7 +479,7 @@ export const legalCasesService = {
     });
   },
   // Criar/excluir fase inline no kanban (só sócios — gate no backend).
-  async addPhase(board: 'pre' | 'banco' | 'plan' | 'repb' | 'judicial', label: string): Promise<PhaseConfigResponse> {
+  async addPhase(board: 'pre' | 'banco' | 'plan' | 'repb' | 'repbc' | 'judicial', label: string): Promise<PhaseConfigResponse> {
     const { data } = await api.post('/legal-cases/phases', { board, label });
     return data.data ?? data;
   },

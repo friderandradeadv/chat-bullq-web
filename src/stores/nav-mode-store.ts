@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import {
   Menu, Sparkles, MessageSquare, CalendarCheck, Folder, Newspaper, Workflow,
   Landmark, Banknote, Columns3, Stethoscope, Calculator, Users, CircleDollarSign, UserCircle,
-  Bot, HelpCircle, Settings, TrendingUp, type LucideIcon,
+  Bot, HelpCircle, Settings, TrendingUp, Megaphone, type LucideIcon,
 } from 'lucide-react';
 
 // ── Modo da navegação (desktop) ────────────────────────────────────────────────
@@ -35,6 +35,7 @@ export const SIMPLE_BAR_CATALOG: SimpleBarItem[] = [
   { id: 'pre-processual', label: 'Pré-Processual', icon: Workflow, href: '/juridico/pre-processual' },
   { id: 'fase-bancaria', label: 'Fase Bancária', icon: Landmark, href: '/juridico/fase-bancaria' },
   { id: 'repb', label: 'REPB', icon: Banknote, href: '/juridico/repb' },
+  { id: 'repb-funil', label: 'Funil REPB', icon: Megaphone, href: '/juridico/repb-funil' },
   { id: 'fase-judicial', label: 'Fase Judicial', icon: Columns3, href: '/juridico/kanban' },
   { id: 'planejamento', label: 'Planejamento', icon: TrendingUp, href: '/juridico/planejamento' },
   { id: 'inss', label: 'INSS Adm.', icon: Stethoscope, href: '/juridico/inss-administrativo' },

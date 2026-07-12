@@ -164,7 +164,7 @@ export function PhaseHeader({
 }
 
 /** Quadros com fases gerenciáveis inline (add/excluir). */
-export type KanbanBoardId = 'pre' | 'banco' | 'plan' | 'repb' | 'judicial';
+export type KanbanBoardId = 'pre' | 'banco' | 'plan' | 'repb' | 'repbc' | 'judicial';
 
 /**
  * Coluna-fantasma "＋ Nova fase" no fim do board (estilo Pipefy). Só sócios veem
