@@ -7,7 +7,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus, FileText, Scale } from 'lucide-react';
+import { Banknote, Search, RefreshCw, LayoutGrid, List, Copy, CalendarClock, Clock, Plus, FileText, Scale, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase, type PartyDetail,
@@ -19,6 +19,7 @@ import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/k
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort, type SortKeys } from '@/features/legal-cases/lib/kanban-sort';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
+import { FunilRepbBoard } from '@/features/legal-cases/components/funil-repb-board';
 
 const KEY = ['legal-cases', 'kanban', 'repb'];
 const ACCENT = '#B7791F'; // gold/âmbar — trilha REPB (reestruturação de passivo bancário)
@@ -76,6 +77,7 @@ export default function RepbPage() {
   const [focoBanco, setFocoBanco] = useState<string | null>(null); // bankId clicado → abre o drawer nele
   const [bankModal, setBankModal] = useState<{ caseId: string; bankId: string } | null>(null); // modal focado num banco
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
+  const [tab, setTab] = useState<'passivo' | 'funil'>('passivo');
 
   // ?case=<id> abre a ficha do card (link do chat); ?foco=<id> entra no kanban de bancos daquele cliente.
   useEffect(() => {
@@ -156,6 +158,15 @@ export default function RepbPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+      {/* Toggle Passivo | Funil de vendas — o Funil é a fase comercial pré-contrato. */}
+      <div className="shrink-0 border-b border-[#dbeaf5] px-4 pt-2 dark:border-zinc-800 lg:px-6">
+        <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
+          <button onClick={() => setTab('passivo')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-semibold ${tab === 'passivo' ? 'bg-[#B7791F] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Banknote className="h-4 w-4" /> Passivo</button>
+          <button onClick={() => setTab('funil')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-semibold ${tab === 'funil' ? 'bg-[#E8590C] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Megaphone className="h-4 w-4" /> Funil de vendas</button>
+        </div>
+      </div>
+
+      {tab === 'funil' ? <FunilRepbBoard embedded /> : (<>
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-2 lg:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <Banknote className="h-5 w-5 shrink-0" style={{ color: ACCENT }} />
@@ -211,6 +222,7 @@ export default function RepbPage() {
       {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phases} focusBankId={focoBanco} onClose={() => { setOpenCaseId(null); setFocoBanco(null); }} />}
       {bankModal && <BankFocusModal caseId={bankModal.caseId} bankId={bankModal.bankId} onClose={() => setBankModal(null)} />}
       {novo && <NovoCasoDialog targetPhase="repb_novo_cliente" phases={phases} onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
+      </>)}
     </div>
   );
 }
