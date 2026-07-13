@@ -1271,6 +1271,22 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                         >
                           <Reply className="h-3.5 w-3.5" />
                         </button>
+                        {/* Editar mensagem enviada — visível ao passar o mouse (além do
+                            botão direito). Só texto, não-nota, e dentro da janela de ~15min
+                            do WhatsApp (depois disso o próprio WhatsApp bloqueia a edição). */}
+                        {msg.type === 'TEXT' &&
+                          !msg.metadata?.isInternal &&
+                          Date.now() - new Date(msg.createdAt).getTime() < 15 * 60 * 1000 && (
+                            <button
+                              type="button"
+                              onClick={() => startEditMessage(msg)}
+                              className="rounded-full bg-white p-1.5 text-zinc-400 shadow-sm ring-1 ring-zinc-200 hover:text-[#228BE6] dark:bg-zinc-800 dark:ring-zinc-700 dark:hover:text-[#228BE6]"
+                              title="Editar (até 15 min do envio)"
+                              aria-label="Editar esta mensagem"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         <button
                           type="button"
                           onClick={() => handleRevoke(msg)}
