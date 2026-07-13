@@ -9,6 +9,7 @@ import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks
 import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
 import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
+import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
 import { useNavMode, barItemById, DEFAULT_SIMPLE_BAR } from '@/stores/nav-mode-store';
 
@@ -32,6 +33,7 @@ export function SimpleTabBar() {
   const payslipUnread = usePayslipUnreadCount();
   const preUnseen = usePreUnseenCount();
   const disconnected = useDisconnectedChannels();
+  const { alert: creditAlert } = useAiCreditHealth();
   const nav = useMobileNav();
   const { barItems, hydrated } = useNavMode();
   const { user, organizations, activeOrgId } = useAuthStore();
@@ -68,7 +70,7 @@ export function SimpleTabBar() {
           it.id === 'conversas' ? unread :
           it.id === 'agenda' ? pendingTasks :
           it.id === 'pre-processual' ? preUnseen :
-          it.id === 'config' ? disconnected :
+          it.id === 'config' ? disconnected + (creditAlert ? 1 : 0) :
           it.id === 'financeiro' || it.id === 'espaco' ? payslipUnread : 0;
         const baseIcon = it.id === 'espaco' ? avatarEl(isActive('/escritorio')) : <Icon className="h-5 w-5" />;
         const iconEl = <span className="relative">{baseIcon}<Badge count={count} /></span>;

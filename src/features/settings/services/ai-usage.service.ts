@@ -54,9 +54,36 @@ export const USAGE_SOURCE_LABELS: Record<string, string> = {
   'agent-test': 'Teste de agente',
 };
 
+/** Saúde do saldo da IA (Anthropic). A API não expõe saldo, então o "restante" é
+ *  estimado do saldo declarado (registerReload) menos o gasto rastreado; o campo
+ *  `exhausted` vem do erro real de "credit balance too low". */
+export type AiCreditStatus = 'ok' | 'low' | 'empty' | 'unset';
+
+export interface AiCreditHealth {
+  status: AiCreditStatus;
+  loadedUsd: number | null;
+  loadedAt: string | null;
+  spentUsd: number;
+  remainingUsd: number | null;
+  remainingPct: number | null;
+  usdBrlRate: number;
+  exhausted: boolean;
+  exhaustedAt: string | null;
+}
+
 export const aiUsageService = {
   async get(range: UsageRange = {}): Promise<UsageReport> {
     const { data } = await api.get('/ai-usage', { params: range });
     return (data.data ?? data) as UsageReport;
+  },
+
+  async creditHealth(): Promise<AiCreditHealth> {
+    const { data } = await api.get('/ai-usage/credit-health');
+    return (data.data ?? data) as AiCreditHealth;
+  },
+
+  async registerReload(loadedUsd: number): Promise<AiCreditHealth> {
+    const { data } = await api.post('/ai-usage/credit-reload', { loadedUsd });
+    return (data.data ?? data) as AiCreditHealth;
   },
 };

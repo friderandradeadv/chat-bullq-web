@@ -11,6 +11,7 @@ import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks
 import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
 import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
+import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
 
 // Barra de abas inferior — só no mobile (lg:hidden). Dá a navegação principal
 // com toque de app nativo; respeita a barra de gestos do iPhone (pb-safe).
@@ -33,6 +34,7 @@ export function MobileTabBar() {
   const payslipUnread = usePayslipUnreadCount();
   const preUnseen = usePreUnseenCount();
   const disconnected = useDisconnectedChannels();
+  const { alert: creditAlert } = useAiCreditHealth();
   const { user, organizations, activeOrgId } = useAuthStore();
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
@@ -57,7 +59,7 @@ export function MobileTabBar() {
       <button type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>
         <span className="relative">
           <Menu className="h-5 w-5" />
-          <Badge count={disconnected} />
+          <Badge count={disconnected + (creditAlert ? 1 : 0)} />
         </span>
         <span>Menu</span>
       </button>

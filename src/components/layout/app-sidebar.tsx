@@ -49,6 +49,7 @@ import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks
 import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
 import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
+import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
 import { Avatar } from '@/components/ui/avatar';
 import { Logo } from '@/components/brand/logo';
 import {
@@ -225,6 +226,7 @@ export function AppSidebar() {
   const payslipUnread = usePayslipUnreadCount();
   const preUnseen = usePreUnseenCount();
   const disconnectedChannels = useDisconnectedChannels();
+  const { alert: creditAlert } = useAiCreditHealth();
 
   return (
     <Sidebar>
@@ -367,7 +369,7 @@ export function AppSidebar() {
         </div>
         {/* Configurações — fixa logo abaixo do alternador de tema */}
         <div className="mb-1">
-          <NavItem href="/settings" icon={Settings} label="Configurações" badge={disconnectedChannels} badgeTone="danger" />
+          <NavItem href="/settings" icon={Settings} label="Configurações" badge={disconnectedChannels + (creditAlert ? 1 : 0)} badgeTone="danger" />
         </div>
         <Dropdown>
           <DropdownButton className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-950/5 dark:hover:bg-white/5">
