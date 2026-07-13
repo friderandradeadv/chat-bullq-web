@@ -10,13 +10,14 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Megaphone, Search, RefreshCw, LayoutGrid, List, Clock, Plus, ArrowRightCircle, CalendarClock, Landmark, Presentation, MessageCircle } from 'lucide-react';
+import { Megaphone, Search, RefreshCw, LayoutGrid, List, Clock, Plus, ArrowRightCircle, CalendarClock, CalendarPlus, Landmark, Presentation, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { ApresentacaoVendasRepb } from '@/features/legal-cases/components/repb-apresentacao-vendas';
+import { AgendarReuniaoRepb } from '@/features/legal-cases/components/repb-agendar-reuniao';
 import { RepescagemFollowupModal } from '@/features/legal-cases/components/repb-repescagem-followup';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
@@ -40,6 +41,7 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const [apresentar, setApresentar] = useState<KanbanCard | null>(null);
+  const [agendar, setAgendar] = useState<KanbanCard | null>(null);
   const [followup, setFollowup] = useState<KanbanCard | null>(null);
   useEffect(() => {
     const cid = new URLSearchParams(window.location.search).get('case');
@@ -179,7 +181,7 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onAgendar={setAgendar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && canRename && <AddPhaseColumn board="repbc" accent={ACCENT} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
           </div>
@@ -189,13 +191,14 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
 
       {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phases} onClose={() => setOpenCaseId(null)} />}
       {apresentar && <ApresentacaoVendasRepb card={apresentar} onClose={() => setApresentar(null)} />}
+      {agendar && <AgendarReuniaoRepb card={agendar} onClose={() => setAgendar(null)} onDone={() => { setAgendar(null); qc.invalidateQueries({ queryKey: KEY }); }} />}
       {followup && <RepescagemFollowupModal card={followup} onClose={() => setFollowup(null)} />}
       {novo && <NovoCasoDialog targetPhase="repbc_novos_leads" phases={phases} onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
     </div>
   );
 }
 
-function Column({ phase, items, onOpen, onFechou, onApresentar, onFollowup, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onFechou: (c: KanbanCard) => void; onApresentar: (c: KanbanCard) => void; onFollowup: (c: KanbanCard) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; onMoveLeft?: () => void; onMoveRight?: () => void }) {
+function Column({ phase, items, onOpen, onFechou, onApresentar, onAgendar, onFollowup, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onFechou: (c: KanbanCard) => void; onApresentar: (c: KanbanCard) => void; onAgendar: (c: KanbanCard) => void; onFollowup: (c: KanbanCard) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; onMoveLeft?: () => void; onMoveRight?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
   const sorted = useMemo(() => applyCardSort(items, sort, kanbanCardKeys), [items, sort]);
@@ -203,6 +206,8 @@ function Column({ phase, items, onOpen, onFechou, onApresentar, onFollowup, canR
   const isRepescagem = phase.key === 'repbc_repescagem';
   // Apresentação de vendas: leads qualificados / com reunião marcada.
   const podeApresentar = phase.key === 'repbc_reuniao_agendada' || phase.key === 'repbc_novos_leads';
+  // Agendar reunião: só antes de estar agendado (Novos Leads).
+  const podeAgendar = phase.key === 'repbc_novos_leads';
   return (
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#E8590C] bg-[#E8590C]/5 dark:bg-[#E8590C]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
@@ -211,13 +216,13 @@ function Column({ phase, items, onOpen, onFechou, onApresentar, onFollowup, canR
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {sorted.map((c) => <Card key={c.id} c={c} onOpen={onOpen} onFechou={isFechado ? onFechou : undefined} onApresentar={podeApresentar ? onApresentar : undefined} onFollowup={isRepescagem ? onFollowup : undefined} staleFollowup={isRepescagem && (c.diasNaFase ?? 0) >= 7} />)}
+        {sorted.map((c) => <Card key={c.id} c={c} onOpen={onOpen} onFechou={isFechado ? onFechou : undefined} onApresentar={podeApresentar ? onApresentar : undefined} onAgendar={podeAgendar ? onAgendar : undefined} onFollowup={isRepescagem ? onFollowup : undefined} staleFollowup={isRepescagem && (c.diasNaFase ?? 0) >= 7} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, onOpen, onFechou, onApresentar, onFollowup, staleFollowup }: { c: KanbanCard; onOpen?: (id: string) => void; onFechou?: (c: KanbanCard) => void; onApresentar?: (c: KanbanCard) => void; onFollowup?: (c: KanbanCard) => void; staleFollowup?: boolean }) {
+function Card({ c, onOpen, onFechou, onApresentar, onAgendar, onFollowup, staleFollowup }: { c: KanbanCard; onOpen?: (id: string) => void; onFechou?: (c: KanbanCard) => void; onApresentar?: (c: KanbanCard) => void; onAgendar?: (c: KanbanCard) => void; onFollowup?: (c: KanbanCard) => void; staleFollowup?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {};
@@ -250,6 +255,17 @@ function Card({ c, onOpen, onFechou, onApresentar, onFollowup, staleFollowup }: 
           ? <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
           : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>)}
       </div>
+      {onAgendar && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAgendar(c); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="Abrir a agenda, marcar a reunião e mover pra Reunião Agendada"
+          className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+          style={{ background: ACCENT }}
+        >
+          <CalendarPlus className="h-3.5 w-3.5" /> Agendar reunião
+        </button>
+      )}
       {onApresentar && (
         <button
           onClick={(e) => { e.stopPropagation(); onApresentar(c); }}
