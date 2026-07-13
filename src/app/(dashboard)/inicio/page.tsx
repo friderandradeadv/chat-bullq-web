@@ -1039,7 +1039,7 @@ export default function InicioPage() {
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden scrollbar-thin dark:bg-[#17191c]">
-    <div className="relative flex min-h-full flex-col items-center justify-start px-4 pb-8 pt-2 lg:px-6">
+    <div className="relative flex min-h-full flex-col items-center justify-start px-4 pb-8 lg:px-6">
       <div className="welcome-gradient pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-black/[0.035] to-transparent dark:from-black/30 dark:to-transparent" />
 
       {mounted && (
