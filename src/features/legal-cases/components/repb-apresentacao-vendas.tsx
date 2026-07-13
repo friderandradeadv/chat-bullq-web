@@ -1,13 +1,14 @@
 'use client';
 
-// Gerador de APRESENTAÇÃO DE VENDAS específica do caso REPB (mostrada na reunião
-// de fechamento). Puxa os dados do lead (dívida, bancos, resumo), calcula os
-// honorários no modelo do escritório (entrada % sobre a dívida + êxito % sobre a
-// economia) e a economia projetada, e monta slides imprimíveis (PDF via imprimir).
-// Tudo é ESTIMATIVA para negociação — nunca promessa de resultado (OAB art. 41).
+// Apresentação de vendas REPB (mostrada na reunião de fechamento). Estrutura de
+// ANCORAGEM DE PREÇO (modelo da proposta revisional do escritório): value stack
+// com preços de tabela (âncora alta) → proposta especial (queda) → oferta para
+// fechar NA reunião (irrecusável, com parcelamento + urgência) → casos reais.
+// Visual sóbrio/requintado. Tudo é ESTIMATIVA — nunca promessa de resultado
+// (OAB art. 41); os disclaimers ficam explícitos.
 
 import { useMemo, useRef, useState } from 'react';
-import { X, Printer, Sliders, ShieldCheck, Upload, Loader2 } from 'lucide-react';
+import { X, Printer, Sliders, ShieldCheck, Upload, Loader2, Check, Landmark, Clock, Scale, TrendingDown, Award } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard } from '../services/legal-cases.service';
 
@@ -20,8 +21,8 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
 
 const fmtBRL = (v: number) => (Number.isFinite(v) ? v : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const pct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+const round100 = (v: number) => Math.round(v / 100) * 100;
 
-// Melhor esforço pra extrair um número de "R$ 240.000", "240 mil", "240000"…
 function parseValor(s?: string | null): number {
   if (!s) return 0;
   const t = s.toLowerCase().replace(/\s+/g, ' ');
@@ -32,24 +33,88 @@ function parseValor(s?: string | null): number {
   return Math.round(num);
 }
 
+// Value stack: serviços do trabalho REPB com preço de mercado individual (âncora).
+const SERVICOS: [string, number][] = [
+  ['Auditoria técnica dos contratos e extratos bancários', 3800],
+  ['Levantamento completo (SCR / Registrato / BACEN)', 1500],
+  ['Dossiê técnico + parecer de provisionamento', 4500],
+  ['Malotes extrajudiciais (protocolos BACEN / Consumidor.gov)', 2500],
+  ['Negociação estratégica banco a banco', 6000],
+  ['Elaboração e formalização dos acordos', 3500],
+  ['Ações judiciais quando necessário (revisional / superendividamento)', 5000],
+  ['Acompanhamento completo até a quitação', 4000],
+];
+const SERVICOS_BASE = SERVICOS.reduce((a, [, v]) => a + v, 0); // 30.800
+function porteMult(d: number): number {
+  if (d >= 1_000_000) return 2.8;
+  if (d >= 500_000) return 2.0;
+  if (d >= 300_000) return 1.6;
+  if (d >= 100_000) return 1.3;
+  return 1.0;
+}
+
+const CASOS_DEFAULT = 'Empresa do setor alimentício (PR) · dívida de aproximadamente R$ 243 mil com uma cooperativa de crédito, renegociada e quitada por R$ 150 mil — economia de cerca de R$ 93 mil para o cliente.';
+
 export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; onClose: () => void }) {
   const nome = (card.client ?? card.title ?? 'Cliente').toUpperCase();
-  const [divida, setDivida] = useState<number>(() => parseValor(card.leadValor));
-  const [pctEntrada, setPctEntrada] = useState(6);
-  const [pctExito, setPctExito] = useState(10);
-  const [pctDesconto, setPctDesconto] = useState(40); // desconto ALVO estimado no acordo
+  const d0 = parseValor(card.leadValor);
+  const vt0 = round100(SERVICOS_BASE * porteMult(d0));
+
+  const [divida, setDivida] = useState(d0);
+  const [pctDesconto, setPctDesconto] = useState(40);
+  const [valorTabela, setValorTabela] = useState(vt0);
+  const [pctExitoTabela, setPctExitoTabela] = useState(30);
+  const [entradaPadrao, setEntradaPadrao] = useState(round100(vt0 * 0.25));
+  const [pctExitoPadrao, setPctExitoPadrao] = useState(20);
+  const [entradaHoje, setEntradaHoje] = useState(round100(vt0 * 0.14));
+  const [parcelasHoje, setParcelasHoje] = useState(4);
+  const [pctExitoHoje, setPctExitoHoje] = useState(15);
   const [bancos, setBancos] = useState(card.leadBancos ?? '');
   const [resumo, setResumo] = useState(card.leadResumo ?? '');
+  const [casos, setCasos] = useState(CASOS_DEFAULT);
   const [salvando, setSalvando] = useState(false);
   const [extraindo, setExtraindo] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const c = useMemo(() => {
+    const D = Math.max(0, divida);
+    const acordo = round100(D * (1 - pctDesconto / 100));
+    const economia = D - acordo;
+    const exitoTabela = Math.round((economia * pctExitoTabela) / 100);
+    const exitoPadrao = Math.round((economia * pctExitoPadrao) / 100);
+    const exitoHoje = Math.round((economia * pctExitoHoje) / 100);
+    const anchor = valorTabela + exitoTabela;
+    const padrao = entradaPadrao + exitoPadrao;
+    const oferta = entradaHoje + exitoHoje;
+    const liquido = economia - oferta;
+    const economizaVsPadrao = Math.max(0, padrao - oferta);
+    const descTabela = valorTabela > 0 ? Math.round((1 - entradaPadrao / valorTabela) * 100) : 0;
+    const parcela = parcelasHoje > 0 ? Math.round(entradaHoje / parcelasHoje) : entradaHoje;
+    return { D, acordo, economia, exitoTabela, exitoPadrao, exitoHoje, anchor, padrao, oferta, liquido, economizaVsPadrao, descTabela, parcela };
+  }, [divida, pctDesconto, valorTabela, pctExitoTabela, entradaPadrao, pctExitoPadrao, entradaHoje, pctExitoHoje, parcelasHoje]);
+
+  const stack = useMemo(() => {
+    const f = SERVICOS_BASE > 0 ? valorTabela / SERVICOS_BASE : 1;
+    return SERVICOS.map(([n, base]) => ({ n, v: round100(base * f) }));
+  }, [valorTabela]);
+
+  const casosList = casos.split('\n').map((s) => s.trim()).filter(Boolean);
+
+  const salvar = async () => {
+    setSalvando(true);
+    try {
+      await legalCasesService.saveFaseField(card.id, 'repbc_reuniao_agendada', 'apresentacao',
+        { divida, pctDesconto, valorTabela, pctExitoTabela, entradaPadrao, pctExitoPadrao, entradaHoje, parcelasHoje, pctExitoHoje, bancos, resumo, casos, geradoEm: new Date().toISOString() });
+      toast.success('Dados salvos');
+    } catch { toast.error('Não consegui salvar'); } finally { setSalvando(false); }
+  };
 
   const extrairDePdf = async (file: File) => {
     setExtraindo(true);
     try {
       const b64 = await fileToBase64(file);
       const r = await legalCasesService.extrairDividaRepb(card.id, b64);
-      if (r.dividaTotal != null) setDivida(r.dividaTotal);
+      if (r.dividaTotal != null) { setDivida(r.dividaTotal); const nv = round100(SERVICOS_BASE * porteMult(r.dividaTotal)); setValorTabela(nv); setEntradaPadrao(round100(nv * 0.25)); setEntradaHoje(round100(nv * 0.14)); }
       if (r.bancos?.length) setBancos(r.bancos.map((b) => b.valor != null ? `${b.nome} (${fmtBRL(b.valor)})` : b.nome).join(', '));
       if (r.resumo) setResumo(r.resumo);
       toast.success('Dados extraídos do documento');
@@ -58,144 +123,223 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
     } finally { setExtraindo(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
-  const calc = useMemo(() => {
-    const D = Math.max(0, divida);
-    const acordo = Math.round(D * (1 - pctDesconto / 100));
-    const economia = D - acordo;
-    const entrada = Math.round(D * (pctEntrada / 100));
-    const exito = Math.round(economia * (pctExito / 100));
-    const honorarios = entrada + exito;
-    const liquidoCliente = economia - honorarios; // quanto o cliente economiza líquido
-    return { D, acordo, economia, entrada, exito, honorarios, liquidoCliente };
-  }, [divida, pctEntrada, pctExito, pctDesconto]);
-
-  const salvarConfig = async () => {
-    setSalvando(true);
-    try {
-      await legalCasesService.saveFaseField(card.id, 'repbc_reuniao_agendada', 'apresentacao',
-        { divida, pctEntrada, pctExito, pctDesconto, bancos, resumo, geradoEm: new Date().toISOString() });
-    } catch { /* silencioso — a apresentação funciona mesmo sem salvar */ } finally { setSalvando(false); }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-zinc-100 dark:bg-zinc-950">
       {/* Barra de topo — some na impressão */}
       <div className="no-print flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-800 dark:bg-zinc-900">
-        <Sliders className="h-4 w-4 text-[#E8590C]" />
+        <Sliders className="h-4 w-4 text-[#B7791F]" />
         <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Apresentação de vendas — {nome}</span>
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => { salvarConfig(); window.print(); }} className="inline-flex items-center gap-1 rounded-lg bg-[#E8590C] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
-            <Printer className="h-4 w-4" /> Imprimir / PDF
-          </button>
-          <button onClick={salvarConfig} disabled={salvando} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
-            {salvando ? 'Salvando…' : 'Salvar dados'}
-          </button>
+          <button onClick={() => { salvar(); window.print(); }} className="inline-flex items-center gap-1 rounded-lg bg-[#B7791F] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"><Printer className="h-4 w-4" /> Imprimir / PDF</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{salvando ? 'Salvando…' : 'Salvar dados'}</button>
           <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
         </div>
       </div>
 
       {/* Painel de ajuste — some na impressão */}
       <div className="no-print shrink-0 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-6">
           <Field label="Dívida total (R$)"><input type="number" value={divida || ''} onChange={(e) => setDivida(Number(e.target.value))} className={INPUT} /></Field>
-          <Field label="Desconto alvo (%)"><input type="number" value={pctDesconto} onChange={(e) => setPctDesconto(Number(e.target.value))} className={INPUT} /></Field>
-          <Field label="Entrada (% da dívida)"><input type="number" value={pctEntrada} onChange={(e) => setPctEntrada(Number(e.target.value))} className={INPUT} /></Field>
-          <Field label="Êxito (% da economia)"><input type="number" value={pctExito} onChange={(e) => setPctExito(Number(e.target.value))} className={INPUT} /></Field>
+          <Field label="Desconto-alvo (%)"><input type="number" value={pctDesconto} onChange={(e) => setPctDesconto(Number(e.target.value))} className={INPUT} /></Field>
+          <Field label="Valor de tabela (R$)"><input type="number" value={valorTabela || ''} onChange={(e) => setValorTabela(Number(e.target.value))} className={INPUT} /></Field>
+          <Field label="Êxito tabela (%)"><input type="number" value={pctExitoTabela} onChange={(e) => setPctExitoTabela(Number(e.target.value))} className={INPUT} /></Field>
+          <Field label="Entrada padrão (R$)"><input type="number" value={entradaPadrao || ''} onChange={(e) => setEntradaPadrao(Number(e.target.value))} className={INPUT} /></Field>
+          <Field label="Êxito padrão (%)"><input type="number" value={pctExitoPadrao} onChange={(e) => setPctExitoPadrao(Number(e.target.value))} className={INPUT} /></Field>
+          <Field label="Entrada p/ fechar hoje (R$)"><input type="number" value={entradaHoje || ''} onChange={(e) => setEntradaHoje(Number(e.target.value))} className={INPUT} /></Field>
+          <Field label="Parcelas (hoje)"><input type="number" value={parcelasHoje} onChange={(e) => setParcelasHoje(Number(e.target.value))} className={INPUT} /></Field>
+          <Field label="Êxito hoje (%)"><input type="number" value={pctExitoHoje} onChange={(e) => setPctExitoHoje(Number(e.target.value))} className={INPUT} /></Field>
           <Field label="Bancos"><input value={bancos} onChange={(e) => setBancos(e.target.value)} className={INPUT} /></Field>
+          <div className="col-span-2 sm:col-span-3 lg:col-span-2"><Field label="Casos reais (um por linha)"><textarea value={casos} onChange={(e) => setCasos(e.target.value)} rows={2} className={INPUT + ' h-auto py-1.5'} /></Field></div>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) extrairDePdf(f); }} />
-          <button onClick={() => fileRef.current?.click()} disabled={extraindo} className="inline-flex items-center gap-1.5 rounded-lg border border-[#E8590C]/40 bg-[#E8590C]/5 px-3 py-1.5 text-sm font-semibold text-[#E8590C] hover:bg-[#E8590C]/10 disabled:opacity-60">
-            {extraindo ? <><Loader2 className="h-4 w-4 animate-spin" /> Extraindo…</> : <><Upload className="h-4 w-4" /> Extrair de um PDF (contrato/extrato)</>}
-          </button>
-          <p className="text-xs text-zinc-400">Sobe um contrato/extrato/SCR e a IA preenche dívida, bancos e resumo. Tudo é <b>estimativa para negociação</b> — não promete resultado.</p>
+          <button onClick={() => fileRef.current?.click()} disabled={extraindo} className="inline-flex items-center gap-1.5 rounded-lg border border-[#B7791F]/40 bg-[#B7791F]/5 px-3 py-1.5 text-sm font-semibold text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-60">{extraindo ? <><Loader2 className="h-4 w-4 animate-spin" /> Extraindo…</> : <><Upload className="h-4 w-4" /> Extrair de um PDF (contrato/extrato)</>}</button>
+          <p className="text-xs text-zinc-400">Ajuste os números do caso. Tudo é <b>estimativa para negociação</b> — a apresentação deixa isso explícito e não promete resultado.</p>
         </div>
       </div>
 
-      {/* Slides — o que vai pra impressão */}
+      {/* Slides — impressão */}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto flex max-w-3xl flex-col gap-6">
-          {/* Capa */}
-          <Slide accent>
-            <div className="flex h-full flex-col justify-center">
-              <p className="text-sm font-semibold uppercase tracking-widest text-white/80">Frider Andrade Advogados</p>
-              <h1 className="mt-3 text-3xl font-bold leading-tight text-white">Reestruturação Estratégica de Passivo Bancário</h1>
-              <p className="mt-4 text-lg text-white/90">Proposta de trabalho para</p>
-              <p className="text-2xl font-bold text-white">{nome}</p>
-              {bancos && <p className="mt-3 text-sm text-white/80">Dívidas em: {bancos}</p>}
+
+          {/* 1 · CAPA */}
+          <Slide dark>
+            <div className="flex h-full flex-col justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#e0b872]">Frider Andrade · Advogados</p>
+              <div>
+                <p className="font-serif text-sm uppercase tracking-[0.2em] text-white/60">Proposta preparada para</p>
+                <h1 className="mt-1 font-serif text-4xl font-bold leading-tight text-white">{nome}</h1>
+                <div className="mt-5 h-px w-24 bg-[#B7791F]" />
+                <p className="mt-5 font-serif text-2xl leading-snug text-white/90">Reestruturação Estratégica<br />de Passivo Bancário</p>
+                {bancos && <p className="mt-3 text-sm text-white/70">Dívidas em: {bancos}</p>}
+              </div>
+              <p className="text-xs text-white/50">Auditoria · Provisionamento · Negociação com desconto</p>
             </div>
           </Slide>
 
-          {/* O problema */}
+          {/* 2 · O PROBLEMA (perda) */}
           <Slide>
-            <SlideTitle>A situação hoje</SlideTitle>
-            {resumo && <p className="mb-4 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-300">{resumo}</p>}
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-700 dark:bg-zinc-800/40">
-              <p className="text-sm text-zinc-500">Dívida bancária total aproximada</p>
-              <p className="mt-1 text-4xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(calc.D)}</p>
-              {bancos && <p className="mt-2 text-sm text-zinc-500">Distribuída entre: <b className="text-zinc-700 dark:text-zinc-200">{bancos}</b></p>}
+            <SlideKicker>A sua situação hoje</SlideKicker>
+            {resumo && <p className="mb-5 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-300">{resumo}</p>}
+            <div className="rounded-xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-6 dark:border-zinc-700 dark:from-zinc-800/60 dark:to-zinc-900">
+              <p className="text-xs uppercase tracking-wide text-zinc-500">Dívida bancária total (aprox.)</p>
+              <p className="mt-1 font-serif text-5xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.D)}</p>
+              {bancos && <p className="mt-3 text-sm text-zinc-500">Distribuída entre: <b className="text-zinc-700 dark:text-zinc-200">{bancos}</b></p>}
             </div>
-            <p className="mt-4 text-sm text-zinc-500">Juros altos, cobranças e o risco de a dívida crescer travam a vida financeira — de uma pessoa ou de uma empresa. Existe um caminho técnico para reverter isso.</p>
+            <div className="mt-5 flex items-start gap-3 rounded-lg border-l-4 border-[#c22e00] bg-[#c22e00]/5 p-4">
+              <Clock className="mt-0.5 h-5 w-5 shrink-0 text-[#c22e00]" />
+              <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">Enquanto nada é feito, os <b>juros seguem correndo</b> e o saldo cresce todos os meses — além do risco de execuções, protestos e negativação. Cada mês parado é dinheiro que sai do seu bolso.</p>
+            </div>
           </Slide>
 
-          {/* O método */}
+          {/* 3 · MÉTODO (autoridade) */}
           <Slide>
-            <SlideTitle>Como trabalhamos (o método REPB)</SlideTitle>
-            <ol className="space-y-3">
+            <SlideKicker>Como devolvemos o seu controle</SlideKicker>
+            <ol className="space-y-3.5">
               {[
-                ['Auditoria dos contratos', 'Revisamos juros, capitalização, tarifas e seguros de cada contrato bancário — o que estiver fora da lei vira argumento de negociação ou de revisão judicial.'],
-                ['Análise do provisionamento do banco', 'Todo banco é obrigado a “provisionar” (reservar) a perda das dívidas em atraso. Quanto mais provisionada está a sua dívida, mais desconto o banco tende a aceitar num acordo.'],
-                ['Negociação banco a banco', 'Com o dossiê técnico em mãos, buscamos acordo com desconto em cada banco — extrajudicialmente primeiro, no ritmo certo (fechamento de balanço, janelas de negociação).'],
-                ['Ação judicial quando necessário', 'Revisional, superendividamento (Lei 14.181/21), exibição de documentos ou defesa — para destravar contratos ou proteger o cliente.'],
-              ].map(([t, d], i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E8590C]/10 text-sm font-bold text-[#E8590C]">{i + 1}</span>
-                  <div><p className="font-semibold text-zinc-800 dark:text-zinc-100">{t}</p><p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{d}</p></div>
-                </li>
-              ))}
+                [Scale, 'Auditoria dos contratos', 'Revisamos juros, capitalização, tarifas e seguros de cada contrato — o que estiver fora da lei vira argumento de negociação ou de revisão judicial.'],
+                [Landmark, 'Análise do provisionamento do banco', 'Todo banco é obrigado a reservar (provisionar) a perda das dívidas em atraso. Quanto mais provisionada, mais desconto ele tende a aceitar. É o nosso trunfo técnico.'],
+                [TrendingDown, 'Negociação banco a banco', 'Com o dossiê técnico em mãos, buscamos acordo com desconto em cada banco — no ritmo certo (fechamento de balanço, janelas de negociação).'],
+                [ShieldCheck, 'Ação judicial quando necessário', 'Revisional, superendividamento (Lei 14.181/21), exibição de documentos ou defesa — para destravar contratos ou proteger o seu patrimônio.'],
+              ].map(([Ic, t, d], i) => {
+                const Icon = Ic as any;
+                return (
+                  <li key={i} className="flex gap-3.5">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#B7791F]/10 text-[#B7791F]"><Icon className="h-5 w-5" /></span>
+                    <div><p className="font-serif text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t as string}</p><p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{d as string}</p></div>
+                  </li>
+                );
+              })}
             </ol>
           </Slide>
 
-          {/* A projeção */}
+          {/* 4 · PROJEÇÃO */}
           <Slide>
-            <SlideTitle>O que buscamos para você</SlideTitle>
-            <p className="mb-4 text-sm text-zinc-500">Projeção de negociação (estimativa) considerando um desconto-alvo de <b>{pct(pctDesconto)}</b>:</p>
+            <SlideKicker>O que buscamos para você</SlideKicker>
+            <p className="mb-5 text-sm text-zinc-500">Projeção de negociação (estimativa), considerando um desconto-alvo de <b className="text-zinc-700 dark:text-zinc-200">{pct(pctDesconto)}</b>:</p>
             <div className="grid grid-cols-3 gap-3">
-              <Stat label="Dívida hoje" value={fmtBRL(calc.D)} tone="neutral" />
-              <Stat label="Acordo estimado" value={fmtBRL(calc.acordo)} tone="neutral" />
-              <Stat label="Economia buscada" value={fmtBRL(calc.economia)} tone="good" />
+              <Stat label="Dívida hoje" value={fmtBRL(c.D)} />
+              <Stat label="Acordo estimado" value={fmtBRL(c.acordo)} />
+              <Stat label="Economia buscada" value={fmtBRL(c.economia)} good />
             </div>
-            <p className="mt-4 text-xs text-zinc-400">O desconto real depende do provisionamento de cada banco e da negociação — por isso falamos em <b>objetivo</b>, não em garantia.</p>
+            <p className="mt-4 text-xs text-zinc-400">O desconto real depende do provisionamento de cada banco e da negociação — por isso falamos em <b>objetivo</b>, nunca em garantia.</p>
           </Slide>
 
-          {/* Honorários */}
+          {/* 5 · VALUE STACK (âncora) */}
           <Slide>
-            <SlideTitle>Nossos honorários</SlideTitle>
-            <p className="mb-4 text-sm text-zinc-500">Modelo alinhado ao seu resultado: uma entrada e um percentual só sobre a economia que conseguirmos.</p>
-            <div className="space-y-3">
-              <HonRow titulo={`Entrada — ${pct(pctEntrada)} sobre a dívida`} sub="Para dar início ao trabalho (auditoria, dossiê, malotes)." valor={fmtBRL(calc.entrada)} />
-              <HonRow titulo={`Êxito — ${pct(pctExito)} sobre a economia`} sub="Só incide sobre o quanto reduzirmos da sua dívida." valor={fmtBRL(calc.exito)} />
-              <div className="flex items-center justify-between rounded-xl border-2 border-[#E8590C]/30 bg-[#E8590C]/5 p-4">
-                <div><p className="font-bold text-zinc-800 dark:text-zinc-100">Total de honorários (estimado)</p><p className="text-xs text-zinc-500">Na projeção acima</p></div>
-                <p className="text-2xl font-bold text-[#E8590C]">{fmtBRL(calc.honorarios)}</p>
+            <SlideKicker>Tudo o que está incluído no seu trabalho</SlideKicker>
+            <p className="mb-4 text-sm text-zinc-500">Cada serviço tem um valor de mercado individual — veja o que você recebe:</p>
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {stack.map((s, i) => (
+                <div key={i} className="flex items-center justify-between gap-4 py-2">
+                  <span className="flex items-center gap-2 text-[13px] text-zinc-700 dark:text-zinc-300"><Check className="h-4 w-4 shrink-0 text-[#B7791F]" /> {s.n}</span>
+                  <span className="shrink-0 text-sm font-semibold text-zinc-500 line-through decoration-zinc-300">{fmtBRL(s.v)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-4 py-2">
+                <span className="flex items-center gap-2 text-[13px] text-zinc-700 dark:text-zinc-300"><Check className="h-4 w-4 shrink-0 text-[#B7791F]" /> Atendimento direto com o Dr. Matheus e a Dra. Kauani</span>
+                <span className="shrink-0 text-xs font-semibold uppercase text-[#B7791F]">incluso</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-50 p-4 dark:bg-emerald-900/15">
-                <div><p className="font-bold text-emerald-800 dark:text-emerald-300">Economia líquida estimada para você</p><p className="text-xs text-emerald-700/70 dark:text-emerald-400/70">Economia buscada − honorários</p></div>
-                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(calc.liquidoCliente)}</p>
+            </div>
+            <div className="mt-4 flex items-center justify-between rounded-xl bg-zinc-900 p-5 dark:bg-black">
+              <span className="font-serif text-lg text-white">Valor de tabela dos serviços</span>
+              <span className="font-serif text-3xl font-bold text-[#e0b872]">{fmtBRL(valorTabela)}</span>
+            </div>
+          </Slide>
+
+          {/* 6 · PROPOSTA ESPECIAL (ancoragem/queda) */}
+          <Slide>
+            <SlideKicker>A sua proposta</SlideKicker>
+            <div className="mb-4 flex items-center justify-between rounded-lg border border-zinc-200 px-5 py-3 dark:border-zinc-700">
+              <span className="text-sm text-zinc-500">Valor de tabela + {pct(pctExitoTabela)} de êxito</span>
+              <span className="text-xl font-semibold text-zinc-400 line-through">{fmtBRL(c.anchor)}</span>
+            </div>
+            <div className="rounded-2xl border-2 border-[#B7791F]/40 bg-[#B7791F]/5 p-6">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#B7791F]">Proposta especial para o seu caso</p>
+              <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3">
+                <div>
+                  <p className="text-xs text-zinc-500">Entrada (para dar início ao trabalho)</p>
+                  <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(entradaPadrao)}</p>
+                  <p className="text-[11px] font-semibold text-[#c22e00]">−{c.descTabela}% sobre o valor de tabela</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500">+ Êxito</p>
+                  <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{pct(pctExitoPadrao)}</p>
+                  <p className="text-[11px] text-zinc-500">só sobre a economia obtida</p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[#B7791F]/20 pt-3 text-sm">
+                {['Todos os serviços da tabela', 'Dossiê e parecer técnico', 'Negociação com todos os bancos', 'Acompanhamento até a quitação'].map((x) => (
+                  <span key={x} className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300"><Check className="h-3.5 w-3.5 shrink-0 text-[#B7791F]" /> {x}</span>
+                ))}
               </div>
             </div>
           </Slide>
 
-          {/* Próximos passos + disclaimer */}
+          {/* 7 · OFERTA PARA FECHAR HOJE (irrecusável + urgência) */}
+          <Slide dark>
+            <div className="flex h-full flex-col">
+              <span className="self-start rounded-full bg-[#c22e00] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-white">Oferta exclusiva · válida nesta reunião</span>
+              <h2 className="mt-4 font-serif text-3xl font-bold text-white">Condição para fechar hoje</h2>
+              <div className="mt-5 rounded-2xl border border-[#B7791F]/40 bg-white/5 p-6">
+                <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                  <div>
+                    <p className="text-xs text-white/60">Entrada hoje</p>
+                    <p className="font-serif text-4xl font-bold text-[#e0b872]">{fmtBRL(entradaHoje)}</p>
+                    {parcelasHoje > 1 && <p className="text-[11px] text-white/70">ou {parcelasHoje}× de {fmtBRL(c.parcela)}</p>}
+                  </div>
+                  <div>
+                    <p className="text-xs text-white/60">+ Êxito</p>
+                    <p className="font-serif text-4xl font-bold text-[#e0b872]">{pct(pctExitoHoje)}</p>
+                    <p className="text-[11px] text-white/70">só sobre a economia</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-white/5 p-4">
+                  <p className="text-xs text-white/60">Você economiza (vs. proposta padrão)</p>
+                  <p className="mt-0.5 font-serif text-2xl font-bold text-[#e0b872]">{fmtBRL(c.economizaVsPadrao)}</p>
+                </div>
+                <div className="rounded-xl bg-emerald-500/10 p-4">
+                  <p className="text-xs text-emerald-300/80">Você busca recuperar até</p>
+                  <p className="mt-0.5 font-serif text-2xl font-bold text-emerald-300">{fmtBRL(c.economia)}</p>
+                </div>
+              </div>
+              <p className="mt-auto pt-5 text-sm text-white/80">Você investe menos do que <b className="text-white">uma parcela mensal</b> das suas dívidas — e começamos amanhã. <span className="text-[#e0b872]">Válida somente para assinatura nesta reunião.</span></p>
+            </div>
+          </Slide>
+
+          {/* 8 · CASOS REAIS (prova social) */}
+          {casosList.length > 0 && (
+            <Slide>
+              <SlideKicker>Casos reais do escritório</SlideKicker>
+              <div className="space-y-3">
+                {casosList.map((cs, i) => (
+                  <div key={i} className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
+                    <Award className="mt-0.5 h-5 w-5 shrink-0 text-[#B7791F]" />
+                    <p className="text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-200">{cs}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-4 text-xs text-zinc-400">Resultados de casos reais já conduzidos pelo escritório. Cada caso é único e depende das suas particularidades — não constituem garantia de resultado.</p>
+            </Slide>
+          )}
+
+          {/* 9 · CTA + assinatura + disclaimer */}
           <Slide>
-            <SlideTitle>Próximos passos</SlideTitle>
-            <ol className="mb-5 space-y-2 text-[15px] text-zinc-700 dark:text-zinc-200">
+            <SlideKicker>O próximo passo é seu</SlideKicker>
+            <p className="mb-5 font-serif text-2xl leading-snug text-zinc-800 dark:text-zinc-100">O banco cobrou juros altos por anos.<br /><span className="text-[#B7791F]">É hora de reorganizar o seu passivo — em condições justas.</span></p>
+            <ol className="mb-6 space-y-2 text-[15px] text-zinc-700 dark:text-zinc-200">
               <li>1. Assinatura do contrato de honorários e da procuração.</li>
-              <li>2. Reunião de documentos: contratos, extratos e SCR/Registrato.</li>
-              <li>3. Início da auditoria + análise do provisionamento.</li>
-              <li>4. Negociação banco a banco, com você acompanhando cada etapa.</li>
+              <li>2. Início imediato da auditoria e do levantamento (SCR/contratos).</li>
+              <li>3. Negociação banco a banco, com você acompanhando cada etapa.</li>
             </ol>
-            <div className="flex items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/40">
+            <div className="rounded-xl border border-[#B7791F]/30 bg-[#B7791F]/5 p-5">
+              <p className="font-serif text-lg font-semibold text-zinc-900 dark:text-zinc-100">Frider Andrade — Advogados</p>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">Dr. Matheus Frider Andrade · OAB/PR 108.351 · Dra. Kauani Castro Macorim</p>
+              <p className="text-sm text-zinc-500">(44) 99157-4212 · Maringá/PR</p>
+            </div>
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/40">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
               <span>Os valores desta apresentação são <b>estimativas para fins de negociação</b> e podem variar conforme o provisionamento de cada banco e o andamento das tratativas. O escritório atua com dedicação e técnica, mas <b>não promete resultado</b> (Código de Ética da OAB, art. 41). Documento de uso interno na reunião de fechamento.</span>
             </div>
@@ -208,35 +352,26 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
   );
 }
 
-const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#E8590C] dark:border-zinc-700 dark:text-zinc-200';
+const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#B7791F] dark:border-zinc-700 dark:text-zinc-200';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-zinc-500">{label}</span>{children}</label>;
 }
-
-function Slide({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
+function Slide({ children, dark }: { children: React.ReactNode; dark?: boolean }) {
   return (
-    <section className={`print-slide flex min-h-[420px] flex-col rounded-2xl p-8 shadow-sm ${accent ? 'bg-gradient-to-br from-[#B7791F] to-[#E8590C]' : 'border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'}`} style={{ pageBreakAfter: 'always' }}>
+    <section className={`print-slide flex min-h-[440px] flex-col rounded-2xl p-9 shadow-sm ${dark ? 'bg-gradient-to-br from-[#1a1206] via-[#2a1d0a] to-[#101820] ring-1 ring-[#B7791F]/20' : 'border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'}`} style={{ pageBreakAfter: 'always' }}>
       {children}
     </section>
   );
 }
-function SlideTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-4 text-2xl font-bold text-zinc-900 dark:text-zinc-100"><span className="border-b-4 border-[#E8590C] pb-1">{children}</span></h2>;
+function SlideKicker({ children }: { children: React.ReactNode }) {
+  return <h2 className="mb-5 font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100"><span className="border-b-2 border-[#B7791F] pb-1">{children}</span></h2>;
 }
-function Stat({ label, value, tone }: { label: string; value: string; tone: 'neutral' | 'good' }) {
+function Stat({ label, value, good }: { label: string; value: string; good?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 text-center ${tone === 'good' ? 'border-emerald-500/30 bg-emerald-50 dark:bg-emerald-900/15' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/40'}`}>
+    <div className={`rounded-xl border p-4 text-center ${good ? 'border-emerald-500/30 bg-emerald-50 dark:bg-emerald-900/15' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/40'}`}>
       <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className={`mt-1 text-xl font-bold ${tone === 'good' ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}`}>{value}</p>
-    </div>
-  );
-}
-function HonRow({ titulo, sub, valor }: { titulo: string; sub: string; valor: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-      <div><p className="font-semibold text-zinc-800 dark:text-zinc-100">{titulo}</p><p className="text-xs text-zinc-500">{sub}</p></div>
-      <p className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{valor}</p>
+      <p className={`mt-1 font-serif text-xl font-bold ${good ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}`}>{value}</p>
     </div>
   );
 }
