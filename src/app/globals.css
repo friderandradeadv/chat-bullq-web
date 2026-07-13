@@ -399,12 +399,11 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 @media (min-width: 1024px) {
-  /* Respiro no topo de cada página = EXATAMENTE a altura da barra (2.75rem = h-11),
-     ZERO folga. O conteúdo encosta rente na barra de vidro (sem faixa branca).
-     Antes eram 4rem (1.25rem de folga) → depois 3rem (0.25rem) → agora rente.
-     Esta regra é a ÚNICA fonte do respiro do topo — páginas NÃO devem pôr pt-* no
-     root (senão volta a folga). */
+  /* Respiro no topo = altura da barra (2.75rem) + ~12px de ar (0.75rem) = 3.5rem.
+     Calibrado: 4rem (20px) era folga demais; 2.75rem (rente) ficou apertado; 3.5rem
+     é o meio-termo confortável. Esta regra é a ÚNICA fonte do respiro do topo —
+     páginas NÃO devem pôr pt-* no root (senão volta a folga). */
   .under-bar > * {
-    padding-top: 2.75rem;
+    padding-top: 3.5rem;
   }
 }
