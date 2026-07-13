@@ -218,6 +218,10 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'proximo_followup', label: 'Próximo follow-up (data)', type: 'date' },
     { key: 'obs', label: 'Histórico de follow-ups', type: 'textarea' },
   ],
+  repbc_perdido: [
+    { key: 'motivo', label: 'Motivo (por que o cliente não fechou)', type: 'select', options: ['Preço / honorários', 'Sem capacidade de pagamento', 'Foi em outro escritório', 'Desistiu / sumiu', 'Não era caso de REPB', 'Outro'] },
+    { key: 'obs', label: 'Observações', type: 'textarea' },
+  ],
 };
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';

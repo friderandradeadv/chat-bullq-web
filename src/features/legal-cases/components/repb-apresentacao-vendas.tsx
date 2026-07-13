@@ -87,10 +87,11 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
     const padrao = entradaPadrao + exitoPadrao;
     const oferta = entradaHoje + exitoHoje;
     const liquido = economia - oferta;
+    const liquidoPadrao = economia - padrao;
     const economizaVsPadrao = Math.max(0, padrao - oferta);
     const descTabela = valorTabela > 0 ? Math.round((1 - entradaPadrao / valorTabela) * 100) : 0;
     const parcela = parcelasHoje > 0 ? Math.round(entradaHoje / parcelasHoje) : entradaHoje;
-    return { D, acordo, economia, exitoTabela, exitoPadrao, exitoHoje, anchor, padrao, oferta, liquido, economizaVsPadrao, descTabela, parcela };
+    return { D, acordo, economia, exitoTabela, exitoPadrao, exitoHoje, anchor, padrao, oferta, liquido, liquidoPadrao, economizaVsPadrao, descTabela, parcela };
   }, [divida, pctDesconto, valorTabela, pctExitoTabela, entradaPadrao, pctExitoPadrao, entradaHoje, pctExitoHoje, parcelasHoje]);
 
   const stack = useMemo(() => {
@@ -263,12 +264,24 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
                   <p className="text-[11px] font-semibold text-[#c22e00]">−{c.descTabela}% sobre o valor de tabela</p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500">+ Êxito</p>
-                  <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{pct(pctExitoPadrao)}</p>
+                  <p className="text-xs text-zinc-500">+ Êxito ({pct(pctExitoPadrao)})</p>
+                  <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.exitoPadrao)}</p>
                   <p className="text-[11px] text-zinc-500">só sobre a economia obtida</p>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-2 border-t border-[#B7791F]/20 pt-3 text-sm">
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#B7791F]/20 pt-4">
+                <div className="rounded-xl bg-[#B7791F]/10 p-4">
+                  <p className="text-xs text-zinc-500">Total de honorários (estimado)</p>
+                  <p className="mt-0.5 font-serif text-2xl font-bold text-[#B7791F]">{fmtBRL(c.padrao)}</p>
+                  <p className="text-[11px] text-zinc-400">entrada + êxito, na projeção</p>
+                </div>
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 p-4 dark:bg-emerald-900/15">
+                  <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80">Economia líquida estimada para você</p>
+                  <p className="mt-0.5 font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(c.liquidoPadrao)}</p>
+                  <p className="text-[11px] text-emerald-700/60 dark:text-emerald-400/60">economia buscada − honorários</p>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                 {['Todos os serviços da tabela', 'Dossiê e parecer técnico', 'Negociação com todos os bancos', 'Acompanhamento até a quitação'].map((x) => (
                   <span key={x} className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300"><Check className="h-3.5 w-3.5 shrink-0 text-[#B7791F]" /> {x}</span>
                 ))}
