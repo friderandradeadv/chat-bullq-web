@@ -368,10 +368,11 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
 
-  // "Esperando você" = (a) conversas atribuídas a mim, não lidas +
-  // (b) conversas PENDING não lidas — quando o cliente reabre, o resolver zera o
-  // assignedToId, então ninguém é "dono" e elas não cairiam no filtro de (a),
-  // mas são justamente as que mais precisam de resposta.
+  // "Esperando você" = SOMENTE conversas atribuídas a MIM e não lidas.
+  // Regra do Matheus (12/07): o início de cada usuário mostra apenas o que ELE é
+  // responsável. NÃO puxamos mais PENDING órfãos (leads da Camila que travaram e
+  // ficaram sem dono vazavam pro início de todo mundo) nem pendência de outro
+  // advogado. Lead sem dono é problema da fila do robô, não do painel pessoal.
   const qMine = useQuery({
     queryKey: ['hub', 'pending-msgs', 'mine', user?.id],
     queryFn: () => inboxService.getConversations({ limit: '40', unread: 'true', archived: 'exclude', groups: 'exclude', assignedToId: user!.id }),
@@ -380,34 +381,22 @@ function PendingMessages({ now, onCelebrate }: { now: Date | null; onCelebrate: 
     retry: 1,
     refetchInterval: 60_000,
   });
-  const qPending = useQuery({
-    queryKey: ['hub', 'pending-msgs', 'pending', user?.id],
-    queryFn: () => inboxService.getConversations({ limit: '40', unread: 'true', archived: 'exclude', groups: 'exclude', status: 'PENDING' }),
-    enabled: !!user?.id,
-    staleTime: 30_000,
-    retry: 1,
-    refetchInterval: 60_000,
-  });
-  const isLoading = qMine.isLoading || qPending.isLoading;
+  const isLoading = qMine.isLoading;
 
   const pending = useMemo(() => {
     const myId = user?.id;
     const byId = new Map<string, Conversation>();
-    // (a) minhas atribuídas — entram todas.
-    // (b) PENDING — só as sem dono ou já minhas (nunca a pendência de outro advogado).
-    const add = (list: Conversation[], onlyMineOrUnclaimed: boolean) => {
-      for (const c of list) {
-        if (c.messages?.[0]?.direction !== 'INBOUND' || handled.has(c.id)) continue;
-        if (onlyMineOrUnclaimed && c.assignedToId && c.assignedToId !== myId) continue;
-        byId.set(c.id, c);
-      }
-    };
-    add(qMine.data?.conversations ?? [], false);
-    add(qPending.data?.conversations ?? [], true);
+    for (const c of qMine.data?.conversations ?? []) {
+      // só o que espera resposta (última msg do cliente) e ainda não tratei aqui
+      if (c.messages?.[0]?.direction !== 'INBOUND' || handled.has(c.id)) continue;
+      // trava de segurança: nunca mostrar conversa de outro dono
+      if (c.assignedToId && c.assignedToId !== myId) continue;
+      byId.set(c.id, c);
+    }
     return [...byId.values()].sort(
       (a, b) => (b.lastMessageAt || '').localeCompare(a.lastMessageAt || ''),
     );
-  }, [qMine.data, qPending.data, handled, user?.id]);
+  }, [qMine.data, handled, user?.id]);
 
   const shown = showAll ? pending.slice(0, 12) : pending.slice(0, 5);
 
