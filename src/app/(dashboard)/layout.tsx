@@ -137,8 +137,17 @@ export default function DashboardLayout({
           </>
         }
       >
-        <div className="relative isolate flex h-full flex-col">
-          <ToolFailureBanner />
+        <div className="isolate flex h-full flex-col">
+          {/* Banner de falha de skill: fica ACIMA da topbar/conteúdo e EMPURRA
+              tudo pra baixo (shrink-0). Antes ele ficava atrás da topbar absolute
+              (top-0) → aparecia "escondido" e ainda gerava barriga (empurrava o
+              conteúdo que já tinha respiro pra topbar). Agora a topbar é absolute
+              DENTRO do container interno, que começa abaixo do banner. */}
+          <div className="shrink-0">
+            <ToolFailureBanner />
+          </div>
+          {/* Container interno: novo contexto de posicionamento pra topbar glass. */}
+          <div className="relative flex min-h-0 flex-1 flex-col">
           {/* Busca global (estilo Astrea) — SÓ desktop. No mobile a navegação é
               a barra de abas inferior, então esta faixa não aparece (fim do
               empilhamento de 2 barras que dava cara de "web espremida"). */}
@@ -172,6 +181,7 @@ export default function DashboardLayout({
               (56px de padding sobravam no rodapé, "cortando" o kanban). O !important
               garante padding-bottom:0 no lg. */}
           <div className={`under-bar min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
+          </div>
         </div>
         <MobileTabBar />
         {/* Modo simples: barra de atalhos inferior também no desktop */}
