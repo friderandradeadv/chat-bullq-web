@@ -441,6 +441,11 @@ export const legalCasesService = {
     const { data } = await api.patch(`/legal-cases/${id}/fase-field`, { phase, key, value });
     return data.data ?? data;
   },
+  // Funil REPB: sobe um PDF (contrato/extrato) → IA extrai a dívida (total + bancos).
+  async extrairDividaRepb(id: string, pdfBase64: string): Promise<{ dividaTotal: number | null; bancos: { nome: string; valor: number | null }[]; resumo: string | null }> {
+    const { data } = await api.post(`/legal-cases/${id}/repb/extrair-divida`, { pdfBase64 });
+    return data.data ?? data;
+  },
   async protocolar(
     id: string,
     input: { cnj?: string; value?: number; dataProtocolo?: string; court?: string; jurisdiction?: string },

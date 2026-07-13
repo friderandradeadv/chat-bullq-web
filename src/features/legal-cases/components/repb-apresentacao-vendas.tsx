@@ -6,9 +6,17 @@
 // economia) e a economia projetada, e monta slides imprimíveis (PDF via imprimir).
 // Tudo é ESTIMATIVA para negociação — nunca promessa de resultado (OAB art. 41).
 
-import { useMemo, useState } from 'react';
-import { X, Printer, Sliders, ShieldCheck } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { X, Printer, Sliders, ShieldCheck, Upload, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard } from '../services/legal-cases.service';
+
+const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result));
+  r.onerror = reject;
+  r.readAsDataURL(file);
+});
 
 const fmtBRL = (v: number) => (Number.isFinite(v) ? v : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const pct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -33,6 +41,22 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
   const [bancos, setBancos] = useState(card.leadBancos ?? '');
   const [resumo, setResumo] = useState(card.leadResumo ?? '');
   const [salvando, setSalvando] = useState(false);
+  const [extraindo, setExtraindo] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const extrairDePdf = async (file: File) => {
+    setExtraindo(true);
+    try {
+      const b64 = await fileToBase64(file);
+      const r = await legalCasesService.extrairDividaRepb(card.id, b64);
+      if (r.dividaTotal != null) setDivida(r.dividaTotal);
+      if (r.bancos?.length) setBancos(r.bancos.map((b) => b.valor != null ? `${b.nome} (${fmtBRL(b.valor)})` : b.nome).join(', '));
+      if (r.resumo) setResumo(r.resumo);
+      toast.success('Dados extraídos do documento');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui extrair a dívida do PDF');
+    } finally { setExtraindo(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
 
   const calc = useMemo(() => {
     const D = Math.max(0, divida);
@@ -79,7 +103,13 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
           <Field label="Êxito (% da economia)"><input type="number" value={pctExito} onChange={(e) => setPctExito(Number(e.target.value))} className={INPUT} /></Field>
           <Field label="Bancos"><input value={bancos} onChange={(e) => setBancos(e.target.value)} className={INPUT} /></Field>
         </div>
-        <p className="mt-2 text-xs text-zinc-400">Ajuste os números do caso. Tudo aqui é <b>estimativa para negociação</b> — a apresentação deixa isso explícito e não promete resultado.</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) extrairDePdf(f); }} />
+          <button onClick={() => fileRef.current?.click()} disabled={extraindo} className="inline-flex items-center gap-1.5 rounded-lg border border-[#E8590C]/40 bg-[#E8590C]/5 px-3 py-1.5 text-sm font-semibold text-[#E8590C] hover:bg-[#E8590C]/10 disabled:opacity-60">
+            {extraindo ? <><Loader2 className="h-4 w-4 animate-spin" /> Extraindo…</> : <><Upload className="h-4 w-4" /> Extrair de um PDF (contrato/extrato)</>}
+          </button>
+          <p className="text-xs text-zinc-400">Sobe um contrato/extrato/SCR e a IA preenche dívida, bancos e resumo. Tudo é <b>estimativa para negociação</b> — não promete resultado.</p>
+        </div>
       </div>
 
       {/* Slides — o que vai pra impressão */}
