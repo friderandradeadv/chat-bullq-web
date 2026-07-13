@@ -77,7 +77,7 @@ export default function RepbPage() {
   const [focoBanco, setFocoBanco] = useState<string | null>(null); // bankId clicado → abre o drawer nele
   const [bankModal, setBankModal] = useState<{ caseId: string; bankId: string } | null>(null); // modal focado num banco
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
-  const [tab, setTab] = useState<'passivo' | 'funil'>('passivo');
+  const [tab, setTab] = useState<'passivo' | 'funil'>('funil');
 
   // ?case=<id> abre a ficha do card (link do chat); ?foco=<id> entra no kanban de bancos daquele cliente.
   useEffect(() => {
@@ -161,8 +161,8 @@ export default function RepbPage() {
       {/* Toggle Passivo | Funil de vendas — o Funil é a fase comercial pré-contrato. */}
       <div className="shrink-0 border-b border-[#dbeaf5] px-4 pt-2 dark:border-zinc-800 lg:px-6">
         <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
-          <button onClick={() => setTab('passivo')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-semibold ${tab === 'passivo' ? 'bg-[#B7791F] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Banknote className="h-4 w-4" /> Passivo</button>
           <button onClick={() => setTab('funil')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-semibold ${tab === 'funil' ? 'bg-[#E8590C] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Megaphone className="h-4 w-4" /> Funil de vendas</button>
+          <button onClick={() => setTab('passivo')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-semibold ${tab === 'passivo' ? 'bg-[#B7791F] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Banknote className="h-4 w-4" /> Passivo</button>
         </div>
       </div>
 
