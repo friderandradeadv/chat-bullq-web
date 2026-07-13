@@ -8,6 +8,7 @@ import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/legal-cases/components/kanban-card-bits';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
+import { isTerminalPhase, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
@@ -166,6 +167,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
         <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col, i) => {
             const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys) : col.cards;
+            const colTerminal = isTerminalPhase(col.key ? data?.phases?.find((p) => p.key === col.key) : null);
             return (
             <div key={col.key ?? col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
@@ -187,7 +189,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
               </div>
               <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {sortedCards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-                {sortedCards.map((c) => <AdminCard key={c.id} c={c} onOpen={setOpenCaseId} />)}
+                {sortedCards.map((c) => <AdminCard key={c.id} c={c} terminal={colTerminal} onOpen={setOpenCaseId} />)}
               </div>
             </div>
             );
@@ -201,13 +203,13 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   );
 }
 
-function AdminCard({ c, onOpen }: { c: KanbanCard; onOpen: (id: string) => void }) {
+function AdminCard({ c, terminal, onOpen }: { c: KanbanCard; terminal?: boolean; onOpen: (id: string) => void }) {
   const prod = produtoColor(c.produto);
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   return (
     <button onClick={() => onOpen(c.id)}
-      className="w-full cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-[#1E2226]">
+      className={`w-full cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-[#1E2226] ${terminal ? terminalCardClass : ''}`}>
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}

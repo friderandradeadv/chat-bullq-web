@@ -16,6 +16,7 @@ import { CasesListView } from '@/features/legal-cases/components/cases-list-view
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
+import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -240,6 +241,7 @@ export default function FaseJudicialKanbanPage() {
 
   const move = useCallback(async (card: KanbanCard, toPhase: string) => {
     if (card.phase === toPhase) return;
+    if (shouldCelebrate(qc.getQueryData<KanbanData>(KEY)?.phases.find((p) => p.key === toPhase))) fireConfetti();
     qc.setQueryData<KanbanData>(KEY, (old) =>
       old ? { ...old, cards: old.cards.map((x) => (x.id === card.id ? { ...x, phase: toPhase } : x)) } : old,
     );
@@ -514,6 +516,7 @@ const Card = memo(function Card({
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   const slaEstourado = c.slaDias > 0 && c.diasNaFase != null && c.diasNaFase > c.slaDias;
   const prod = produtoColor(c.produto);
+  const terminal = isTerminalPhase(phases.find((p) => p.key === c.phase));
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const style: React.CSSProperties = {
     borderLeftWidth: 4,
@@ -539,7 +542,7 @@ const Card = memo(function Card({
       }}
       className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
         isDragging && !overlay ? 'opacity-40' : ''
-      } ${overlay ? 'rotate-2 shadow-lg' : ''}`}
+      } ${overlay ? 'rotate-2 shadow-lg' : ''} ${terminal && !overlay ? terminalCardClass : ''}`}
     >
       {/* Etiquetas: produto (cor) + área (cinza) */}
       <div className="-ml-1 flex flex-wrap items-center gap-1">

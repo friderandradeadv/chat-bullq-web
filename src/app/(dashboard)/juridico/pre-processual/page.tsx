@@ -16,6 +16,7 @@ import { CasesListView } from '@/features/legal-cases/components/cases-list-view
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
+import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { boardOfPhase } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePreSeenStore } from '@/stores/pre-seen-store';
@@ -163,6 +164,7 @@ export default function PreProcessualPage() {
 
   const move = async (card: KanbanCard, to: string) => {
     if (card.phase === to) return;
+    if (shouldCelebrate(phases.find((p) => p.key === to))) fireConfetti();
     qc.setQueryData<KanbanData>(KEY, (old) => old ? { ...old, cards: old.cards.map((x) => x.id === card.id ? { ...x, phase: to } : x) } : old);
     try { await legalCasesService.movePhase(card.id, to); qc.invalidateQueries({ queryKey: KEY }); }
     catch { qc.invalidateQueries({ queryKey: KEY }); toast.error('Erro ao mover'); }
@@ -250,13 +252,13 @@ function Column({ phase, items, novoIds, onOpen, onProtocolar, onChanged, canRen
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {sorted.map((c) => <Card key={c.id} c={c} novo={novoIds.has(c.id)} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
+        {sorted.map((c) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, novo, onOpen, onProtocolar, onChanged }: { c: KanbanCard; novo?: boolean; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void }) {
+function Card({ c, terminal, novo, onOpen, onProtocolar, onChanged }: { c: KanbanCard; terminal?: boolean; novo?: boolean; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const down = useRef<{ x: number; y: number } | null>(null);
   const prod = produtoColor(c.produto);
@@ -267,7 +269,7 @@ function Card({ c, novo, onOpen, onProtocolar, onChanged }: { c: KanbanCard; nov
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id); }}
-      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''}`}>
       {/* Cliente novo (entrou depois da última visita ao board) — bolinha vermelha */}
       {novo && <span className="absolute -right-1.5 -top-1.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" title="Novo cliente" />}
       {/* Etiquetas: produto (cor) + área (cinza) */}

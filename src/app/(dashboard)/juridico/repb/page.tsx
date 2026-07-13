@@ -17,6 +17,7 @@ import { tagCor, BankFocusModal } from '@/features/legal-cases/components/bancos
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort, type SortKeys } from '@/features/legal-cases/lib/kanban-sort';
+import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { FunilRepbBoard } from '@/features/legal-cases/components/funil-repb-board';
@@ -243,7 +244,7 @@ function Column({ phase, items, onOpen, canRename, onRename, onDelete }: { phase
   );
 }
 
-function Card({ c, onOpen }: { c: KanbanCard; onOpen?: (id: string) => void }) {
+function Card({ c, terminal, onOpen }: { c: KanbanCard; terminal?: boolean; onOpen?: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
@@ -254,7 +255,7 @@ function Card({ c, onOpen }: { c: KanbanCard; onOpen?: (id: string) => void }) {
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onClick={() => onOpen?.(c.id)}
-      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''}`}>
       {/* Etiquetas: produto (cor) + área (cinza) */}
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{prodLabel}</span>
@@ -525,6 +526,7 @@ function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMo
       catch { qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', it.caseId] }); toast.error('Erro ao mover banco'); }
     } else {
       if (it.card.phase === to) return;
+      if (shouldCelebrate(phases.find((p) => p.key === to))) fireConfetti();
       try { await legalCasesService.movePhase(it.card.id, to); onMovedCase(); } catch { toast.error('Erro ao mover'); }
     }
   };
@@ -575,7 +577,7 @@ function UnifiedColumn({ phase, items, onOpenBank, onOpenCase, canRename, onRena
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {sorted.map((it) => it.kind === 'bank'
           ? <UnifiedBankCard key={it.id} it={it} onOpen={() => onOpenBank(it.caseId, it.party.id)} />
-          : <Card key={it.id} c={it.card} onOpen={() => onOpenCase(it.card.id)} />)}
+          : <Card key={it.id} c={it.card} terminal={isTerminalPhase(phase)} onOpen={() => onOpenCase(it.card.id)} />)}
       </div>
     </div>
   );

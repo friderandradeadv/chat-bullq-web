@@ -188,6 +188,7 @@ export interface KanbanPhase {
   order: number;
   slaDias: number;
   fluxo: boolean;
+  terminal?: boolean; // fim de processo/ciclo (CONCLUÍDO, ARQUIVADO, INVIÁVEL, PERDIDO…) → confete + card apagado
   lane: 'pre' | 'judicial';
   custom?: boolean;
   count: number;
