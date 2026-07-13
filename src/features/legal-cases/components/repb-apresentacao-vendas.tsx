@@ -226,7 +226,25 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
             <p className="mt-4 text-xs text-zinc-400">O desconto real depende do provisionamento de cada banco e da negociação — por isso falamos em <b>objetivo</b>, nunca em garantia.</p>
           </Slide>
 
-          {/* 5 · VALUE STACK (âncora) */}
+          {/* 5 · CASOS REAIS (prova social — cria o desejo ANTES de mostrar o preço) */}
+          {casosList.length > 0 && (
+            <Slide>
+              <SlideKicker>Casos reais do escritório</SlideKicker>
+              <p className="mb-4 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-300">Empresas e pessoas que estavam na mesma situação que você — e hoje respiram aliviadas:</p>
+              <div className="space-y-3">
+                {casosList.map((cs, i) => (
+                  <div key={i} className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
+                    <Award className="mt-0.5 h-5 w-5 shrink-0 text-[#B7791F]" />
+                    <p className="text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-200">{cs}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-4 text-sm font-medium text-zinc-700 dark:text-zinc-200">O mesmo trabalho técnico pode reorganizar o seu passivo. Veja o que está incluído — e por quanto.</p>
+              <p className="mt-2 text-xs text-zinc-400">Resultados de casos reais já conduzidos pelo escritório. Cada caso é único e depende das suas particularidades — não constituem garantia de resultado.</p>
+            </Slide>
+          )}
+
+          {/* 6 · VALUE STACK (âncora) */}
           <Slide>
             <SlideKicker>Tudo o que está incluído no seu trabalho</SlideKicker>
             <p className="mb-4 text-sm text-zinc-500">Cada serviço tem um valor de mercado individual — veja o que você recebe:</p>
@@ -248,7 +266,7 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
             </div>
           </Slide>
 
-          {/* 6 · PROPOSTA ESPECIAL (ancoragem/queda) */}
+          {/* 7 · PROPOSTA ESPECIAL (ancoragem/queda) */}
           <Slide>
             <SlideKicker>A sua proposta</SlideKicker>
             <div className="mb-4 flex items-center justify-between rounded-lg border border-zinc-200 px-5 py-3 dark:border-zinc-700">
@@ -289,7 +307,7 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
             </div>
           </Slide>
 
-          {/* 7 · OFERTA PARA FECHAR HOJE (irrecusável + urgência) */}
+          {/* 8 · OFERTA PARA FECHAR HOJE (irrecusável + urgência + valores definidos) */}
           <Slide dark>
             <div className="flex h-full flex-col">
               <span className="self-start rounded-full bg-[#c22e00] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-white">Oferta exclusiva · válida nesta reunião</span>
@@ -302,41 +320,27 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
                     {parcelasHoje > 1 && <p className="text-[11px] text-white/70">ou {parcelasHoje}× de {fmtBRL(c.parcela)}</p>}
                   </div>
                   <div>
-                    <p className="text-xs text-white/60">+ Êxito</p>
-                    <p className="font-serif text-4xl font-bold text-[#e0b872]">{pct(pctExitoHoje)}</p>
-                    <p className="text-[11px] text-white/70">só sobre a economia</p>
+                    <p className="text-xs text-white/60">+ Êxito ({pct(pctExitoHoje)})</p>
+                    <p className="font-serif text-4xl font-bold text-[#e0b872]">{fmtBRL(c.exitoHoje)}</p>
+                    <p className="text-[11px] text-white/70">só sobre a economia obtida</p>
                   </div>
                 </div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-white/5 p-4">
-                  <p className="text-xs text-white/60">Você economiza (vs. proposta padrão)</p>
-                  <p className="mt-0.5 font-serif text-2xl font-bold text-[#e0b872]">{fmtBRL(c.economizaVsPadrao)}</p>
-                </div>
-                <div className="rounded-xl bg-emerald-500/10 p-4">
-                  <p className="text-xs text-emerald-300/80">Você busca recuperar até</p>
-                  <p className="mt-0.5 font-serif text-2xl font-bold text-emerald-300">{fmtBRL(c.economia)}</p>
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#B7791F]/20 pt-4">
+                  <div className="rounded-xl bg-white/5 p-4">
+                    <p className="text-xs text-white/60">Total de honorários hoje (estimado)</p>
+                    <p className="mt-0.5 font-serif text-2xl font-bold text-[#e0b872]">{fmtBRL(c.oferta)}</p>
+                    {c.economizaVsPadrao > 0 && <p className="text-[11px] text-[#e0b872]/80">{fmtBRL(c.economizaVsPadrao)} a menos que a proposta padrão</p>}
+                  </div>
+                  <div className="rounded-xl bg-emerald-500/10 p-4">
+                    <p className="text-xs text-emerald-300/80">Economia líquida estimada para você</p>
+                    <p className="mt-0.5 font-serif text-2xl font-bold text-emerald-300">{fmtBRL(c.liquido)}</p>
+                    <p className="text-[11px] text-emerald-300/60">economia buscada − honorários</p>
+                  </div>
                 </div>
               </div>
               <p className="mt-auto pt-5 text-sm text-white/80">Você investe menos do que <b className="text-white">uma parcela mensal</b> das suas dívidas — e começamos amanhã. <span className="text-[#e0b872]">Válida somente para assinatura nesta reunião.</span></p>
             </div>
           </Slide>
-
-          {/* 8 · CASOS REAIS (prova social) */}
-          {casosList.length > 0 && (
-            <Slide>
-              <SlideKicker>Casos reais do escritório</SlideKicker>
-              <div className="space-y-3">
-                {casosList.map((cs, i) => (
-                  <div key={i} className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
-                    <Award className="mt-0.5 h-5 w-5 shrink-0 text-[#B7791F]" />
-                    <p className="text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-200">{cs}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-4 text-xs text-zinc-400">Resultados de casos reais já conduzidos pelo escritório. Cada caso é único e depende das suas particularidades — não constituem garantia de resultado.</p>
-            </Slide>
-          )}
 
           {/* 9 · CTA + assinatura + disclaimer */}
           <Slide>
