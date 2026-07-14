@@ -77,6 +77,11 @@ export function AvancoFaseModal({
   const [honTocado, setHonTocado] = useState(false);
   const [sucumbencia, setSucumbencia] = useState('Não');
   const [valorSucumbencia, setValorSucumbencia] = useState('');
+  // Sucumbência: valor fixo (R$) OU percentual sobre uma base (CPC 85 § 2º/§ 8º).
+  const [sucModo, setSucModo] = useState('Valor fixo'); // 'Valor fixo' | 'Percentual'
+  const [sucPct, setSucPct] = useState('');
+  const [sucBase, setSucBase] = useState('Condenação'); // Condenação | Valor corrigido da causa | Proveito econômico
+  const [sucBaseValor, setSucBaseValor] = useState('');
   const [valorCliente, setValorCliente] = useState('');
   const [cliTocado, setCliTocado] = useState(false);
   const [arrastando, setArrastando] = useState(false);
@@ -123,6 +128,16 @@ export function AvancoFaseModal({
     if (!cliTocado) { const cli = Math.round((alv - hon) * 100) / 100; setValorCliente(alv ? String(cli) : ''); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valorAlvara, honorarios, honTocado, cliTocado, pct, phase]);
+
+  // Sucumbência em % → calcula o valor a partir da base (percentual × base).
+  useEffect(() => {
+    if (phase !== 'prestacao_contas') return;
+    if (sucumbencia === 'Sim' && sucModo === 'Percentual') {
+      const v = Math.round(num(sucBaseValor) * (num(sucPct) / 100) * 100) / 100;
+      setValorSucumbencia(v ? String(v) : '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sucModo, sucPct, sucBaseValor, sucumbencia, phase]);
 
   // Sobe a petição de CS (PDF) → IA extrai o valor exequendo + nº dos autos.
   const subirPeticaoCs = async (files: FileList | null) => {
@@ -180,6 +195,14 @@ export function AvancoFaseModal({
           honorarios_pct: pct,
           sucumbencia,
           valor_sucumbencia: sucumbencia === 'Sim' ? num(valorSucumbencia) : 0,
+          ...(sucumbencia === 'Sim' ? {
+            sucumbencia_modo: sucModo,
+            ...(sucModo === 'Percentual' ? {
+              sucumbencia_pct: num(sucPct),
+              sucumbencia_base: sucBase,
+              sucumbencia_base_valor: num(sucBaseValor),
+            } : {}),
+          } : {}),
           valor_cliente: num(valorCliente),
         };
       } else if (phase === 'transito') {
@@ -275,8 +298,32 @@ export function AvancoFaseModal({
             <label className={lbl}>Honorários de sucumbência?</label>
             <Radio value={sucumbencia} onChange={setSucumbencia} options={['Sim', 'Não']} />
             {sucumbencia === 'Sim' && (
-              <><label className={lbl}>Valor da sucumbência</label>
-                <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorSucumbencia} onChange={(e) => setValorSucumbencia(e.target.value)} placeholder="0,00" className={inp} /></div></>
+              <>
+                <label className={lbl}>Como foi fixada?</label>
+                <Radio value={sucModo} onChange={setSucModo} options={['Valor fixo', 'Percentual']} />
+                {sucModo === 'Valor fixo' ? (
+                  <>
+                    <label className={lbl}>Valor da sucumbência</label>
+                    <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorSucumbencia} onChange={(e) => setValorSucumbencia(e.target.value)} placeholder="0,00" className={inp} /></div>
+                  </>
+                ) : (
+                  <>
+                    <label className={lbl}>Percentual e base</label>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min={0} max={100} step="0.1" value={sucPct} onChange={(e) => setSucPct(e.target.value)} placeholder="10" className="w-20 rounded-lg border border-[#DEE2E6] bg-white px-2 py-2 text-center text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                      <span className="text-sm text-zinc-500 dark:text-zinc-400">% sobre</span>
+                      <select value={sucBase} onChange={(e) => setSucBase(e.target.value)} className={`${inp} flex-1`}>
+                        <option>Condenação</option>
+                        <option>Valor corrigido da causa</option>
+                        <option>Proveito econômico</option>
+                      </select>
+                    </div>
+                    <label className={lbl}>Valor da base ({sucBase.toLowerCase()})</label>
+                    <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={sucBaseValor} onChange={(e) => setSucBaseValor(e.target.value)} placeholder="0,00" className={inp} /></div>
+                    <div className="mt-2 rounded-lg bg-[#228BE6]/5 px-3 py-2 text-sm text-[#228BE6] dark:bg-[#228BE6]/10">Sucumbência: <b>{brl(num(valorSucumbencia))}</b> <span className="text-zinc-400">({num(sucPct) || 0}% de {brl(num(sucBaseValor))})</span></div>
+                  </>
+                )}
+              </>
             )}
             <label className={lbl}>Valor do cliente <span className="font-normal normal-case text-zinc-400">— alvará − honorários</span></label>
             <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorCliente} onChange={(e) => { setCliTocado(true); setValorCliente(e.target.value); }} placeholder="0,00" className={inp} /></div>
