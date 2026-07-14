@@ -148,9 +148,17 @@ export function AvancoFaseModal({
     try {
       const r = await calculadoraCsService.extrairAlvara(arr);
       if (r.valorAlvara) { setValorAlvara(String(r.valorAlvara)); setHonTocado(false); setCliTocado(false); }
-      toast[r.valorAlvara ? 'success' : 'info'](r.valorAlvara
-        ? `Extraí o valor bruto do alvará (${brl(r.valorAlvara)})`
-        : (r.aviso || 'Não encontrei o valor no alvará — preencha à mão.'));
+      if (typeof r.honorariosPct === 'number') { setPct(r.honorariosPct); setHonTocado(false); setCliTocado(false); }
+      if (r.sucumbencia) setSucumbencia(r.sucumbencia);
+      if (r.valorSucumbencia) setValorSucumbencia(String(r.valorSucumbencia));
+      const achou = [
+        r.valorAlvara ? `alvará ${brl(r.valorAlvara)}` : null,
+        typeof r.honorariosPct === 'number' ? `honorários ${r.honorariosPct}%` : null,
+        r.sucumbencia === 'Sim' && r.valorSucumbencia ? `sucumbência ${brl(r.valorSucumbencia)}` : null,
+      ].filter(Boolean);
+      toast[achou.length ? 'success' : 'info'](achou.length
+        ? `Sugeri: ${achou.join(' · ')}`
+        : (r.aviso || 'Não encontrei os valores nos documentos — preencha à mão.'));
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui ler o alvará.');
     } finally { setExtraindo(false); if (alvaraRef.current) alvaraRef.current.value = ''; }
@@ -236,7 +244,7 @@ export function AvancoFaseModal({
           <>
             <input ref={alvaraRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => subirAlvara(e.target.files)} />
             <button onClick={() => alvaraRef.current?.click()} disabled={extraindo} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#7048e8]/50 bg-[#7048e8]/5 px-3 py-2.5 text-sm font-medium text-[#7048e8] hover:bg-[#7048e8]/10 disabled:opacity-60">
-              {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo o alvará com IA…</> : <><Paperclip className="h-4 w-4" /> Subir alvará (extrai o valor bruto com IA)</>}
+              {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo os documentos com IA…</> : <><Paperclip className="h-4 w-4" /> Subir alvará/documentos (IA sugere os valores)</>}
             </button>
             <label className={lbl}>Valor bruto do alvará</label>
             <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorAlvara} onChange={(e) => setValorAlvara(e.target.value)} placeholder="0,00" className={inp} /></div>

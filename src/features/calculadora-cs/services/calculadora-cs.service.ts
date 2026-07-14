@@ -129,10 +129,17 @@ export const calculadoraCsService = {
     return data.data ?? data;
   },
 
-  // Lê o alvará de levantamento (PDF) e extrai o valor bruto depositado (Prestação de Contas).
+  // Lê os documentos da Prestação de Contas (alvará + eventual sentença/contrato) e
+  // sugere os valores da fase: valor bruto, % de honorários e sucumbência.
   async extrairAlvara(
     files: File[],
-  ): Promise<{ valorAlvara: number | null; aviso?: string }> {
+  ): Promise<{
+    valorAlvara: number | null;
+    honorariosPct: number | null;
+    sucumbencia: 'Sim' | 'Não' | null;
+    valorSucumbencia: number | null;
+    aviso?: string;
+  }> {
     const fd = new FormData();
     files.forEach((f) => fd.append('files', f));
     const { data } = await api.post('/calculadora-cs/extrair-alvara', fd, {
