@@ -161,7 +161,9 @@ export function AvancoFaseModal({
         ? `Sugeri: ${achou.join(' · ')}`
         : (r.aviso || 'Não encontrei os valores nos documentos — preencha à mão.'));
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Não consegui ler o documento — tente o PDF do alvará, do comprovante de depósito ou da sentença.');
+      // O interceptor do axios (lib/api.ts) rejeita com um Error simples cuja `.message`
+      // já traz a mensagem do backend — não há `e.response` aqui.
+      toast.error(e?.message || e?.response?.data?.message || 'Não consegui ler o documento — tente o PDF do alvará, do comprovante de depósito ou da sentença.');
     } finally { setExtraindo(false); if (alvaraRef.current) alvaraRef.current.value = ''; }
   };
 
