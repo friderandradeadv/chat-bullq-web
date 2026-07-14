@@ -158,8 +158,16 @@ export function AvancoFaseModal({
 
   // Sobe o alvará de levantamento (PDF) → IA extrai o valor bruto e preenche o campo.
   const subirAlvara = async (files: FileList | null) => {
-    const arr = files ? Array.from(files) : [];
-    if (!arr.length) return;
+    const todos = files ? Array.from(files) : [];
+    if (!todos.length) return;
+    // Só PDF (o backend não lê .docx) e no máx. 8 (limite do multer).
+    const pdfs = todos.filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+    const naoPdf = todos.length - pdfs.length;
+    if (!pdfs.length) { toast.info('Envie PDFs — o .docx não é lido. Use o PDF do alvará, do comprovante ou da sentença.'); return; }
+    const MAX = 8;
+    const arr = pdfs.slice(0, MAX);
+    if (naoPdf > 0) toast.info(`${naoPdf} arquivo(s) não-PDF ignorado(s).`);
+    if (pdfs.length > MAX) toast.info(`Muitos arquivos — enviei os primeiros ${MAX}.`);
     setExtraindo(true);
     try {
       const r = await calculadoraCsService.extrairAlvara(arr);
