@@ -22,9 +22,15 @@ const inp =
   'w-full rounded-lg border border-[#DEE2E6] bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100';
 const lbl = 'mb-1 mt-3 block text-xs font-semibold uppercase tracking-wide text-[#6C757D]';
 
+// Aceita tanto o formato de máquina dos inputs `type="number"` ("25014.34", ponto
+// decimal) quanto o pt-BR vindo do hub/Pipefy ("25.014,34", ponto de milhar). ANTES
+// removia TODO ponto e inflava o alvará ×100 (25014.34 → 2501434) — bug dos valores.
 const num = (v: unknown): number => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
-  const s = String(v ?? '').replace(/[R$\s.]/g, '').replace(',', '.');
+  let s = String(v ?? '').replace(/[R$\s]/g, '');
+  if (!s) return 0;
+  // Só há vírgula quando é pt-BR: aí o ponto é milhar (remove) e a vírgula é decimal.
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;
 };
@@ -64,6 +70,7 @@ export function AvancoFaseModal({
   const [protocolado, setProtocolado] = useState('Sim');
   const [extraindo, setExtraindo] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const alvaraRef = useRef<HTMLInputElement | null>(null);
   // Prestação de contas
   const [valorAlvara, setValorAlvara] = useState('');
   const [honorarios, setHonorarios] = useState('');
@@ -133,6 +140,22 @@ export function AvancoFaseModal({
     } finally { setExtraindo(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
+  // Sobe o alvará de levantamento (PDF) → IA extrai o valor bruto e preenche o campo.
+  const subirAlvara = async (files: FileList | null) => {
+    const arr = files ? Array.from(files) : [];
+    if (!arr.length) return;
+    setExtraindo(true);
+    try {
+      const r = await calculadoraCsService.extrairAlvara(arr);
+      if (r.valorAlvara) { setValorAlvara(String(r.valorAlvara)); setHonTocado(false); setCliTocado(false); }
+      toast[r.valorAlvara ? 'success' : 'info'](r.valorAlvara
+        ? `Extraí o valor bruto do alvará (${brl(r.valorAlvara)})`
+        : (r.aviso || 'Não encontrei o valor no alvará — preencha à mão.'));
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui ler o alvará.');
+    } finally { setExtraindo(false); if (alvaraRef.current) alvaraRef.current.value = ''; }
+  };
+
   const confirmar = async () => {
     setBusy(true);
     try {
@@ -143,6 +166,7 @@ export function AvancoFaseModal({
         campos = {
           valor_alvara: num(valorAlvara),
           honorarios_contratuais: num(honorarios),
+          honorarios_pct: pct,
           sucumbencia,
           valor_sucumbencia: sucumbencia === 'Sim' ? num(valorSucumbencia) : 0,
           valor_cliente: num(valorCliente),
@@ -210,10 +234,20 @@ export function AvancoFaseModal({
           </>
         ) : phase === 'prestacao_contas' ? (
           <>
+            <input ref={alvaraRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => subirAlvara(e.target.files)} />
+            <button onClick={() => alvaraRef.current?.click()} disabled={extraindo} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#7048e8]/50 bg-[#7048e8]/5 px-3 py-2.5 text-sm font-medium text-[#7048e8] hover:bg-[#7048e8]/10 disabled:opacity-60">
+              {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo o alvará com IA…</> : <><Paperclip className="h-4 w-4" /> Subir alvará (extrai o valor bruto com IA)</>}
+            </button>
             <label className={lbl}>Valor bruto do alvará</label>
             <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorAlvara} onChange={(e) => setValorAlvara(e.target.value)} placeholder="0,00" className={inp} /></div>
-            <label className={lbl}>Honorários contratuais <span className="font-normal normal-case text-zinc-400">— {pct}% do alvará</span></label>
-            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={honorarios} onChange={(e) => { setHonTocado(true); setHonorarios(e.target.value); }} placeholder="0,00" className={inp} /></div>
+            <label className={lbl}>Honorários contratuais</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min={0} max={100} step="1" value={pct}
+                onChange={(e) => { const p = Math.max(0, Math.min(100, Number(e.target.value) || 0)); setPct(p); setHonTocado(false); setCliTocado(false); }}
+                className="w-16 rounded-lg border border-[#DEE2E6] bg-white px-2 py-2 text-center text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">% do alvará <span className="text-zinc-400 dark:text-zinc-500">— do contrato de honorários (hub)</span></span>
+            </div>
+            <div className="mt-1 flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={honorarios} onChange={(e) => { setHonTocado(true); setHonorarios(e.target.value); }} placeholder="0,00" className={inp} /></div>
             <label className={lbl}>Honorários de sucumbência?</label>
             <Radio value={sucumbencia} onChange={setSucumbencia} options={['Sim', 'Não']} />
             {sucumbencia === 'Sim' && (
