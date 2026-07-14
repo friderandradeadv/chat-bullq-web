@@ -161,7 +161,7 @@ export function AvancoFaseModal({
         ? `Sugeri: ${achou.join(' · ')}`
         : (r.aviso || 'Não encontrei os valores nos documentos — preencha à mão.'));
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Não consegui ler o alvará.');
+      toast.error(e?.response?.data?.message || 'Não consegui ler o documento — tente o PDF do alvará, do comprovante de depósito ou da sentença.');
     } finally { setExtraindo(false); if (alvaraRef.current) alvaraRef.current.value = ''; }
   };
 
