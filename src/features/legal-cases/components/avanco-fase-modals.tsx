@@ -79,6 +79,7 @@ export function AvancoFaseModal({
   const [valorSucumbencia, setValorSucumbencia] = useState('');
   const [valorCliente, setValorCliente] = useState('');
   const [cliTocado, setCliTocado] = useState(false);
+  const [arrastando, setArrastando] = useState(false);
   const [lancar, setLancar] = useState(!!podeLancarFinanceiro);
   // Trânsito
   const [transitou, setTransitou] = useState('Sim');
@@ -218,7 +219,11 @@ export function AvancoFaseModal({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-[70] max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div
+        className="relative z-[70] max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => e.preventDefault()}
+      >
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-[#202124] dark:text-zinc-100">{FASE_LABEL[phase]}</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
@@ -243,8 +248,17 @@ export function AvancoFaseModal({
         ) : phase === 'prestacao_contas' ? (
           <>
             <input ref={alvaraRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => subirAlvara(e.target.files)} />
-            <button onClick={() => alvaraRef.current?.click()} disabled={extraindo} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#7048e8]/50 bg-[#7048e8]/5 px-3 py-2.5 text-sm font-medium text-[#7048e8] hover:bg-[#7048e8]/10 disabled:opacity-60">
-              {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo os documentos com IA…</> : <><Paperclip className="h-4 w-4" /> Subir alvará/documentos (IA sugere os valores)</>}
+            <button
+              onClick={() => alvaraRef.current?.click()}
+              disabled={extraindo}
+              onDragOver={(e) => { e.preventDefault(); if (!extraindo) setArrastando(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setArrastando(false); }}
+              onDrop={(e) => { e.preventDefault(); setArrastando(false); if (!extraindo) subirAlvara(e.dataTransfer.files); }}
+              className={`mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm font-medium text-[#7048e8] transition-colors disabled:opacity-60 ${arrastando ? 'border-[#7048e8] bg-[#7048e8]/15 ring-2 ring-[#7048e8]/30' : 'border-[#7048e8]/50 bg-[#7048e8]/5 hover:bg-[#7048e8]/10'}`}
+            >
+              {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo os documentos com IA…</>
+                : arrastando ? <><Paperclip className="h-4 w-4" /> solte os PDFs aqui…</>
+                : <><Paperclip className="h-4 w-4" /> Subir ou arrastar alvará/documentos (IA sugere os valores)</>}
             </button>
             <label className={lbl}>Valor bruto do alvará</label>
             <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorAlvara} onChange={(e) => setValorAlvara(e.target.value)} placeholder="0,00" className={inp} /></div>
