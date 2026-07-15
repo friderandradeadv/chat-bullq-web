@@ -19,6 +19,7 @@ import {
 import Link from 'next/link';
 import {
   calculadoraCsService,
+  prepararPdfs,
   type CalcularCsInput,
   type HonorariosBase,
   type IndiceCorrecao,
@@ -181,13 +182,21 @@ export default function CumprimentoSentencaPage() {
     },
     onError: (err) => setIaAviso((err as Error)?.message ?? 'Erro ao ler os documentos.'),
   });
+  // Filtra só PDFs, corta em 8 (limite do multer) e avisa o que ignorou/cortou.
+  const importarDocs = (files: File[] | FileList | null) => {
+    const { arr, naoPdf, cortados } = prepararPdfs(files);
+    if (!arr.length) { setIaAviso('Envie a sentença/inicial em PDF — o .docx não é lido.'); return; }
+    const avisos = [
+      naoPdf ? `${naoPdf} arquivo(s) não-PDF ignorado(s)` : '',
+      cortados ? `enviei os primeiros ${arr.length}` : '',
+    ].filter(Boolean);
+    setIaAviso(avisos.length ? avisos.join(' · ') : null);
+    iaMut.mutate(arr);
+  };
   const onPick = (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const files = ev.target.files ? Array.from(ev.target.files) : [];
+    const files = ev.target.files;
     ev.target.value = '';
-    if (files.length) {
-      setIaAviso(null);
-      iaMut.mutate(files);
-    }
+    importarDocs(files);
   };
 
   // ── Cálculo ───────────────────────────────────────────────────────────────
@@ -352,7 +361,7 @@ export default function CumprimentoSentencaPage() {
                 preenche a condenação, índice, juros e honorários.
               </p>
               <input ref={fileRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={onPick} />
-              <DropZone accept="application/pdf,.pdf" disabled={iaMut.isPending} onFiles={(fs) => { setIaAviso(null); iaMut.mutate(fs); }} overlayLabel="Solte a sentença / inicial aqui">
+              <DropZone accept="application/pdf,.pdf" disabled={iaMut.isPending} onFiles={(fs) => importarDocs(fs)} overlayLabel="Solte a sentença / inicial aqui">
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}

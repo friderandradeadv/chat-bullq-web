@@ -1,5 +1,19 @@
 import { api } from '@/lib/api';
 
+/**
+ * Filtra só PDFs (o backend não lê .docx) e corta em `max` (o multer aceita no
+ * máx. 8). Devolve os arquivos prontos + quantos foram ignorados/cortados, para
+ * a UI avisar. Evita o erro "Unexpected field - files" ao arrastar a pasta toda.
+ */
+export function prepararPdfs(
+  files: File[] | FileList | null,
+  max = 8,
+): { arr: File[]; naoPdf: number; cortados: number } {
+  const todos = files ? Array.from(files) : [];
+  const pdfs = todos.filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+  return { arr: pdfs.slice(0, max), naoPdf: todos.length - pdfs.length, cortados: Math.max(0, pdfs.length - max) };
+}
+
 export type IndiceCorrecao = 'INPC' | 'IPCA-E' | 'IPCA' | 'IGP-M' | 'SELIC';
 export type HonorariosBase = 'debitos' | 'diferenca' | 'fixa';
 
