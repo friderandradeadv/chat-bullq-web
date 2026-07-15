@@ -97,13 +97,13 @@ export default function FaseJudicialKanbanPage() {
   const [phaseSel, setPhaseSel] = useState<string[]>([]);
   const [tagSel, setTagSel] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortKey>('prazo');
-  const [showFora, setShowFora] = useState(false);
+  const [showFora, setShowFora] = useState(true); // arquivados/abandonados VISÍVEIS por padrão (desmarque pra esconder)
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Quantos filtros estão ativos (badge do botão "Filtros"). Busca e ordenação não contam.
-  const activeFilters = [area, produto, resp].filter(Boolean).length + (phaseSel.length ? 1 : 0) + (tagSel.length ? 1 : 0) + (showFora ? 1 : 0);
-  const limparFiltros = () => { setArea(''); setProduto(''); setResp(''); setPhaseSel([]); setTagSel([]); setShowFora(false); };
+  const activeFilters = [area, produto, resp].filter(Boolean).length + (phaseSel.length ? 1 : 0) + (tagSel.length ? 1 : 0) + (!showFora ? 1 : 0);
+  const limparFiltros = () => { setArea(''); setProduto(''); setResp(''); setPhaseSel([]); setTagSel([]); setShowFora(true); };
   const dragScroll = useDragScroll();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
