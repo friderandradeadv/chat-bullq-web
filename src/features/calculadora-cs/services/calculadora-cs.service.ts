@@ -137,6 +137,10 @@ export const calculadoraCsService = {
     valorAlvara: number | null;
     honorariosPct: number | null;
     sucumbencia: 'Sim' | 'Não' | null;
+    sucumbenciaModo: 'Valor fixo' | 'Percentual' | null;
+    sucumbenciaPct: number | null;
+    sucumbenciaBase: string | null;
+    sucumbenciaBaseValor: number | null;
     valorSucumbencia: number | null;
     aviso?: string;
   }> {
@@ -146,6 +150,14 @@ export const calculadoraCsService = {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000,
     });
+    return data.data ?? data;
+  },
+
+  // Correção monetária de um valor (ex.: valor da causa) de uma data até hoje.
+  async corrigirValor(input: { valor: number; data: string; indice: string }): Promise<{
+    valorCorrigido: number; fator: number; indice: string; de: string; ate: string;
+  }> {
+    const { data } = await api.post('/calculadora-cs/corrigir-valor', input);
     return data.data ?? data;
   },
 };

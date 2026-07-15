@@ -82,6 +82,11 @@ export function AvancoFaseModal({
   const [sucPct, setSucPct] = useState('');
   const [sucBase, setSucBase] = useState('Condenação'); // Condenação | Valor corrigido da causa | Proveito econômico
   const [sucBaseValor, setSucBaseValor] = useState('');
+  // Correção do valor da causa → gera a base corrigida.
+  const [causaValor, setCausaValor] = useState('');
+  const [causaData, setCausaData] = useState('');
+  const [causaIndice, setCausaIndice] = useState('INPC');
+  const [corrigindo, setCorrigindo] = useState(false);
   const [valorCliente, setValorCliente] = useState('');
   const [cliTocado, setCliTocado] = useState(false);
   const [arrastando, setArrastando] = useState(false);
@@ -174,11 +179,20 @@ export function AvancoFaseModal({
       if (r.valorAlvara) { setValorAlvara(String(r.valorAlvara)); setHonTocado(false); setCliTocado(false); }
       if (typeof r.honorariosPct === 'number') { setPct(r.honorariosPct); setHonTocado(false); setCliTocado(false); }
       if (r.sucumbencia) setSucumbencia(r.sucumbencia);
-      if (r.valorSucumbencia) setValorSucumbencia(String(r.valorSucumbencia));
+      if (r.sucumbenciaModo) setSucModo(r.sucumbenciaModo);
+      if (r.sucumbenciaModo === 'Percentual') {
+        if (typeof r.sucumbenciaPct === 'number') setSucPct(String(r.sucumbenciaPct));
+        if (r.sucumbenciaBase) setSucBase(r.sucumbenciaBase);
+        if (typeof r.sucumbenciaBaseValor === 'number') setSucBaseValor(String(r.sucumbenciaBaseValor));
+      } else if (r.valorSucumbencia) {
+        setValorSucumbencia(String(r.valorSucumbencia));
+      }
       const achou = [
         r.valorAlvara ? `alvará ${brl(r.valorAlvara)}` : null,
         typeof r.honorariosPct === 'number' ? `honorários ${r.honorariosPct}%` : null,
-        r.sucumbencia === 'Sim' && r.valorSucumbencia ? `sucumbência ${brl(r.valorSucumbencia)}` : null,
+        r.sucumbencia === 'Sim' && r.sucumbenciaModo === 'Percentual' && typeof r.sucumbenciaPct === 'number'
+          ? `sucumbência ${r.sucumbenciaPct}%${typeof r.sucumbenciaBaseValor === 'number' ? ` de ${brl(r.sucumbenciaBaseValor)}` : ''}`
+          : (r.sucumbencia === 'Sim' && r.valorSucumbencia ? `sucumbência ${brl(r.valorSucumbencia)}` : null),
       ].filter(Boolean);
       toast[achou.length ? 'success' : 'info'](achou.length
         ? `Sugeri: ${achou.join(' · ')}`
@@ -188,6 +202,21 @@ export function AvancoFaseModal({
       // já traz a mensagem do backend — não há `e.response` aqui.
       toast.error(e?.message || e?.response?.data?.message || 'Não consegui ler o documento — tente o PDF do alvará, do comprovante de depósito ou da sentença.');
     } finally { setExtraindo(false); if (alvaraRef.current) alvaraRef.current.value = ''; }
+  };
+
+  // Corrige o valor da causa (nominal) da data informada até hoje e joga na base da sucumbência.
+  const corrigirDaCausa = async () => {
+    const v = num(causaValor);
+    if (!v || !causaData) { toast.info('Informe o valor da causa e a data de referência.'); return; }
+    setCorrigindo(true);
+    try {
+      const r = await calculadoraCsService.corrigirValor({ valor: v, data: causaData, indice: causaIndice });
+      setSucBaseValor(String(r.valorCorrigido));
+      if (sucBase !== 'Valor corrigido da causa') setSucBase('Valor corrigido da causa');
+      toast.success(`Corrigido para ${brl(r.valorCorrigido)} (${causaIndice}, fator ${r.fator})`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Não consegui corrigir o valor.');
+    } finally { setCorrigindo(false); }
   };
 
   const confirmar = async () => {
@@ -328,6 +357,18 @@ export function AvancoFaseModal({
                     </div>
                     <label className={lbl}>Valor da base ({sucBase.toLowerCase()})</label>
                     <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={sucBaseValor} onChange={(e) => setSucBaseValor(e.target.value)} placeholder="0,00" className={inp} /></div>
+                    <div className="mt-2 rounded-lg border border-dashed border-[#DEE2E6] p-2.5 dark:border-zinc-700">
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#6C757D]">Corrigir do valor da causa <span className="font-normal normal-case">(opcional)</span></p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-1"><span className="text-xs text-zinc-400">R$</span><input type="number" step="0.01" value={causaValor} onChange={(e) => setCausaValor(e.target.value)} placeholder="valor da causa" className="w-32 rounded-lg border border-[#DEE2E6] bg-white px-2 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" /></div>
+                        <input type="date" value={causaData} onChange={(e) => setCausaData(e.target.value)} className="rounded-lg border border-[#DEE2E6] bg-white px-2 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                        <select value={causaIndice} onChange={(e) => setCausaIndice(e.target.value)} className="rounded-lg border border-[#DEE2E6] bg-white px-2 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+                          <option>INPC</option><option>IPCA-E</option><option>IPCA</option><option>IGP-M</option><option>SELIC</option>
+                        </select>
+                        <button type="button" onClick={corrigirDaCausa} disabled={corrigindo} className="rounded-md bg-[#228BE6] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">{corrigindo ? 'Corrigindo…' : 'Corrigir'}</button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-zinc-400">Aplica correção monetária (índice escolhido) da data até hoje e preenche a base acima.</p>
+                    </div>
                     <div className="mt-2 rounded-lg bg-[#228BE6]/5 px-3 py-2 text-sm text-[#228BE6] dark:bg-[#228BE6]/10">Sucumbência: <b>{brl(num(valorSucumbencia))}</b> <span className="text-zinc-400">({num(sucPct) || 0}% de {brl(num(sucBaseValor))})</span></div>
                   </>
                 )}
