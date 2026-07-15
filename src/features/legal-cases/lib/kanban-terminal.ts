@@ -5,10 +5,14 @@
 
 import type { KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 
-/** Fase de desfecho: o backend marca `terminal` nas fases de fim; fases custom
- *  arquivadas (status ARCHIVED) também contam. */
-export function isTerminalPhase(phase?: { terminal?: boolean; status?: string } | null): boolean {
+/** Fase de desfecho que fica CINZA: fim de ciclo E fora do fluxo ativo. Fases
+ *  terminais que ainda seguem no fluxo (TRÂNSITO EM JULGADO, PRESTAÇÃO DE CONTAS
+ *  — `fluxo: true`) NÃO apagam, pois ainda há trabalho. Cinza só em arquivados,
+ *  ações vencidas/perdidas, inviável, perdido, concluído (todos `fluxo: false`).
+ *  Fases custom arquivadas (status ARCHIVED, sem fluxo) também contam. */
+export function isTerminalPhase(phase?: { terminal?: boolean; status?: string; fluxo?: boolean } | null): boolean {
   if (!phase) return false;
+  if (phase.fluxo === true) return false;
   return phase.terminal === true || phase.status === 'ARCHIVED';
 }
 
