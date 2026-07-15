@@ -132,15 +132,20 @@ export function AvancoFaseModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Prestação: honorários = alvará × pct e cliente = alvará − honorários (até você editar).
+  // Prestação (padrão do escritório): a sucumbência é do escritório (paga pelo banco,
+  // por lei) e NÃO entra na conta do cliente. A CONDENAÇÃO é o que sobra pro cliente
+  // (alvará − sucumbência); os honorários contratuais incidem SOBRE A CONDENAÇÃO; e o
+  // líquido do cliente = condenação − contratuais.
   useEffect(() => {
     if (phase !== 'prestacao_contas') return;
     const alv = num(valorAlvara);
-    const hon = honTocado ? num(honorarios) : Math.round(alv * (pct / 100) * 100) / 100;
+    const suc = sucumbencia === 'Sim' ? num(valorSucumbencia) : 0;
+    const condenacao = Math.max(0, Math.round((alv - suc) * 100) / 100);
+    const hon = honTocado ? num(honorarios) : Math.round(condenacao * (pct / 100) * 100) / 100;
     if (!honTocado) setHonorarios(fmtBRL(hon));
-    if (!cliTocado) { const cli = Math.round((alv - hon) * 100) / 100; setValorCliente(alv ? fmtBRL(cli) : ''); }
+    if (!cliTocado) { const cli = Math.round((condenacao - hon) * 100) / 100; setValorCliente(alv ? fmtBRL(cli) : ''); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valorAlvara, honorarios, honTocado, cliTocado, pct, phase]);
+  }, [valorAlvara, valorSucumbencia, sucumbencia, honorarios, honTocado, cliTocado, pct, phase]);
 
   // Sucumbência em % → calcula o valor a partir da base (percentual × base).
   useEffect(() => {
@@ -235,6 +240,7 @@ export function AvancoFaseModal({
       } else if (phase === 'prestacao_contas') {
         campos = {
           valor_alvara: num(valorAlvara),
+          condenacao: condenacaoCli, // alvará − sucumbência (o que é do cliente)
           honorarios_contratuais: num(honorarios),
           honorarios_pct: pct,
           sucumbencia,
@@ -283,7 +289,9 @@ export function AvancoFaseModal({
     } finally { setBusy(false); }
   };
 
-  const aReceber = num(honorarios) + (sucumbencia === 'Sim' ? num(valorSucumbencia) : 0);
+  const sucVal = sucumbencia === 'Sim' ? num(valorSucumbencia) : 0;
+  const aReceber = num(honorarios) + sucVal;
+  const condenacaoCli = Math.max(0, Math.round((num(valorAlvara) - sucVal) * 100) / 100);
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -336,7 +344,7 @@ export function AvancoFaseModal({
               <input type="number" min={0} max={100} step="1" value={pct}
                 onChange={(e) => { const p = Math.max(0, Math.min(100, Number(e.target.value) || 0)); setPct(p); setHonTocado(false); setCliTocado(false); }}
                 className="w-16 rounded-lg border border-[#DEE2E6] bg-white px-2 py-2 text-center text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">% do alvará <span className="text-zinc-400 dark:text-zinc-500">— do contrato de honorários (hub)</span></span>
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">% da condenação <span className="text-zinc-400 dark:text-zinc-500">— do contrato (hub); condenação = alvará − sucumbência</span></span>
             </div>
             <div className="mt-1"><MoneyBRLInput value={honorarios} onChange={(v) => { setHonTocado(true); setHonorarios(v); }} /></div>
             <label className={lbl}>Honorários de sucumbência?</label>
@@ -381,7 +389,8 @@ export function AvancoFaseModal({
                 )}
               </>
             )}
-            <label className={lbl}>Valor do cliente <span className="font-normal normal-case text-zinc-400">— alvará − honorários</span></label>
+            <div className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400">Condenação (do cliente) = alvará − sucumbência = <b className="text-zinc-700 dark:text-zinc-200">{brl(condenacaoCli)}</b></div>
+            <label className={lbl}>Valor líquido do cliente <span className="font-normal normal-case text-zinc-400">— condenação − honorários</span></label>
             <MoneyBRLInput value={valorCliente} onChange={(v) => { setCliTocado(true); setValorCliente(v); }} />
             <div className="mt-3 rounded-lg bg-[#02883C]/5 px-3 py-2 text-sm text-[#02883C] dark:bg-[#02883C]/10">Nosso a receber (honorários + sucumbência): <b>{brl(aReceber)}</b></div>
             {podeLancarFinanceiro && (
