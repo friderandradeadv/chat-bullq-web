@@ -35,6 +35,14 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// Máscara pt-BR ao digitar: acumula os dígitos como centavos (2501434 → "25.014,34").
+const maskBRL = (raw: string): string => {
+  const d = String(raw).replace(/\D/g, '');
+  if (!d) return '';
+  return (Number(d) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+// Número → string mascarada pt-BR (para preencher os campos vindos da IA/efeitos). Vazio se 0.
+const fmtBRL = (n: number): string => (n ? n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '');
 
 /**
  * Mini-form que MOVE o card para a fase e PREENCHE os campos dela (que o Financeiro
@@ -105,7 +113,7 @@ export function AvancoFaseModal({
         const c = s.campos ?? {};
         if (typeof s.honorariosPct === 'number') setPct(s.honorariosPct);
         if (phase === 'cumprimento') {
-          if (c.valor_calculo) setValorCalculo(String(num(c.valor_calculo) || ''));
+          if (c.valor_calculo) setValorCalculo(fmtBRL(num(c.valor_calculo)));
           if (c.numero_cs) setNumeroCs(String(c.numero_cs));
           if (c.protocolado) setProtocolado(String(c.protocolado));
         } else if (phase === 'transito') {
@@ -113,7 +121,7 @@ export function AvancoFaseModal({
           if (c.vencemos) setVencemos(String(c.vencemos));
         } else if (phase === 'acoes_vencidas') {
           if (c.resultado) setResultado(String(c.resultado));
-          if (c.valor_recebido) setValorRecebido(String(num(c.valor_recebido) || ''));
+          if (c.valor_recebido) setValorRecebido(fmtBRL(num(c.valor_recebido)));
         } else if (phase === 'acoes_perdidas') {
           if (c.recorremos) setRecorremos(String(c.recorremos));
         }
@@ -129,8 +137,8 @@ export function AvancoFaseModal({
     if (phase !== 'prestacao_contas') return;
     const alv = num(valorAlvara);
     const hon = honTocado ? num(honorarios) : Math.round(alv * (pct / 100) * 100) / 100;
-    if (!honTocado) setHonorarios(hon ? String(hon) : '');
-    if (!cliTocado) { const cli = Math.round((alv - hon) * 100) / 100; setValorCliente(alv ? String(cli) : ''); }
+    if (!honTocado) setHonorarios(fmtBRL(hon));
+    if (!cliTocado) { const cli = Math.round((alv - hon) * 100) / 100; setValorCliente(alv ? fmtBRL(cli) : ''); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valorAlvara, honorarios, honTocado, cliTocado, pct, phase]);
 
@@ -139,7 +147,7 @@ export function AvancoFaseModal({
     if (phase !== 'prestacao_contas') return;
     if (sucumbencia === 'Sim' && sucModo === 'Percentual') {
       const v = Math.round(num(sucBaseValor) * (num(sucPct) / 100) * 100) / 100;
-      setValorSucumbencia(v ? String(v) : '');
+      setValorSucumbencia(fmtBRL(v));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucModo, sucPct, sucBaseValor, sucumbencia, phase]);
@@ -154,7 +162,7 @@ export function AvancoFaseModal({
     setExtraindo(true);
     try {
       const r = await calculadoraCsService.extrairCumprimento(arr);
-      if (r.valorCalculo) setValorCalculo(String(r.valorCalculo));
+      if (r.valorCalculo) setValorCalculo(fmtBRL(r.valorCalculo));
       if (r.numeroCs) setNumeroCs(r.numeroCs);
       toast[r.valorCalculo ? 'success' : 'info'](r.valorCalculo
         ? `Extraí o valor exequendo (${brl(r.valorCalculo)}) da petição`
@@ -175,16 +183,16 @@ export function AvancoFaseModal({
     setExtraindo(true);
     try {
       const r = await calculadoraCsService.extrairAlvara(arr);
-      if (r.valorAlvara) { setValorAlvara(String(r.valorAlvara)); setHonTocado(false); setCliTocado(false); }
+      if (r.valorAlvara) { setValorAlvara(fmtBRL(r.valorAlvara)); setHonTocado(false); setCliTocado(false); }
       if (typeof r.honorariosPct === 'number') { setPct(r.honorariosPct); setHonTocado(false); setCliTocado(false); }
       if (r.sucumbencia) setSucumbencia(r.sucumbencia);
       if (r.sucumbenciaModo) setSucModo(r.sucumbenciaModo);
       if (r.sucumbenciaModo === 'Percentual') {
         if (typeof r.sucumbenciaPct === 'number') setSucPct(String(r.sucumbenciaPct));
         if (r.sucumbenciaBase) setSucBase(r.sucumbenciaBase);
-        if (typeof r.sucumbenciaBaseValor === 'number') setSucBaseValor(String(r.sucumbenciaBaseValor));
+        if (typeof r.sucumbenciaBaseValor === 'number') setSucBaseValor(fmtBRL(r.sucumbenciaBaseValor));
       } else if (r.valorSucumbencia) {
-        setValorSucumbencia(String(r.valorSucumbencia));
+        setValorSucumbencia(fmtBRL(r.valorSucumbencia));
       }
       const achou = [
         r.valorAlvara ? `alvará ${brl(r.valorAlvara)}` : null,
@@ -210,7 +218,7 @@ export function AvancoFaseModal({
     setCorrigindo(true);
     try {
       const r = await calculadoraCsService.corrigirValor({ valor: v, data: causaData, indice: causaIndice });
-      setSucBaseValor(String(r.valorCorrigido));
+      setSucBaseValor(fmtBRL(r.valorCorrigido));
       if (sucBase !== 'Valor corrigido da causa') setSucBase('Valor corrigido da causa');
       toast.success(`Corrigido para ${brl(r.valorCorrigido)} (${causaIndice}, fator ${r.fator})`);
     } catch (e: any) {
@@ -300,7 +308,7 @@ export function AvancoFaseModal({
               {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo a petição com IA…</> : <><Paperclip className="h-4 w-4" /> Subir petição de CS (extrai o valor com IA)</>}
             </button>
             <label className={lbl}>Valor do cálculo (execução) <span className="font-normal normal-case text-zinc-400">— do cálculo salvo / da petição</span></label>
-            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorCalculo} onChange={(e) => setValorCalculo(e.target.value)} placeholder="0,00" className={inp} /></div>
+            <MoneyBRLInput value={valorCalculo} onChange={setValorCalculo} />
             <label className={lbl}>Número dos autos de cumprimento</label>
             <input value={numeroCs} onChange={(e) => setNumeroCs(e.target.value)} placeholder="0000000-00.0000.0.00.0000" className={inp} />
             <label className={lbl}>Cumprimento protocolado?</label>
@@ -322,7 +330,7 @@ export function AvancoFaseModal({
                 : <><Paperclip className="h-4 w-4" /> Subir ou arrastar alvará/documentos (IA sugere os valores)</>}
             </button>
             <label className={lbl}>Valor bruto do alvará</label>
-            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorAlvara} onChange={(e) => setValorAlvara(e.target.value)} placeholder="0,00" className={inp} /></div>
+            <MoneyBRLInput value={valorAlvara} onChange={setValorAlvara} />
             <label className={lbl}>Honorários contratuais</label>
             <div className="flex items-center gap-2">
               <input type="number" min={0} max={100} step="1" value={pct}
@@ -330,7 +338,7 @@ export function AvancoFaseModal({
                 className="w-16 rounded-lg border border-[#DEE2E6] bg-white px-2 py-2 text-center text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
               <span className="text-sm text-zinc-500 dark:text-zinc-400">% do alvará <span className="text-zinc-400 dark:text-zinc-500">— do contrato de honorários (hub)</span></span>
             </div>
-            <div className="mt-1 flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={honorarios} onChange={(e) => { setHonTocado(true); setHonorarios(e.target.value); }} placeholder="0,00" className={inp} /></div>
+            <div className="mt-1"><MoneyBRLInput value={honorarios} onChange={(v) => { setHonTocado(true); setHonorarios(v); }} /></div>
             <label className={lbl}>Honorários de sucumbência?</label>
             <Radio value={sucumbencia} onChange={setSucumbencia} options={['Sim', 'Não']} />
             {sucumbencia === 'Sim' && (
@@ -340,7 +348,7 @@ export function AvancoFaseModal({
                 {sucModo === 'Valor fixo' ? (
                   <>
                     <label className={lbl}>Valor da sucumbência</label>
-                    <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorSucumbencia} onChange={(e) => setValorSucumbencia(e.target.value)} placeholder="0,00" className={inp} /></div>
+                    <MoneyBRLInput value={valorSucumbencia} onChange={setValorSucumbencia} />
                   </>
                 ) : (
                   <>
@@ -355,11 +363,11 @@ export function AvancoFaseModal({
                       </select>
                     </div>
                     <label className={lbl}>Valor da base ({sucBase.toLowerCase()})</label>
-                    <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={sucBaseValor} onChange={(e) => setSucBaseValor(e.target.value)} placeholder="0,00" className={inp} /></div>
+                    <MoneyBRLInput value={sucBaseValor} onChange={setSucBaseValor} />
                     <div className="mt-2 rounded-lg border border-dashed border-[#DEE2E6] p-2.5 dark:border-zinc-700">
                       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#6C757D]">Corrigir do valor da causa <span className="font-normal normal-case">(opcional)</span></p>
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex items-center gap-1"><span className="text-xs text-zinc-400">R$</span><input type="number" step="0.01" value={causaValor} onChange={(e) => setCausaValor(e.target.value)} placeholder="valor da causa" className="w-32 rounded-lg border border-[#DEE2E6] bg-white px-2 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" /></div>
+                        <div className="flex items-center gap-1"><span className="text-xs text-zinc-400">R$</span><input inputMode="numeric" value={causaValor} onChange={(e) => setCausaValor(maskBRL(e.target.value))} placeholder="valor da causa" className="w-32 rounded-lg border border-[#DEE2E6] bg-white px-2 py-1.5 text-right text-sm tabular-nums text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" /></div>
                         <input type="date" value={causaData} onChange={(e) => setCausaData(e.target.value)} className="rounded-lg border border-[#DEE2E6] bg-white px-2 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
                         <select value={causaIndice} onChange={(e) => setCausaIndice(e.target.value)} className="rounded-lg border border-[#DEE2E6] bg-white px-2 py-1.5 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
                           <option>INPC</option><option>IPCA-E</option><option>IPCA</option><option>IGP-M</option><option>SELIC</option>
@@ -374,7 +382,7 @@ export function AvancoFaseModal({
               </>
             )}
             <label className={lbl}>Valor do cliente <span className="font-normal normal-case text-zinc-400">— alvará − honorários</span></label>
-            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorCliente} onChange={(e) => { setCliTocado(true); setValorCliente(e.target.value); }} placeholder="0,00" className={inp} /></div>
+            <MoneyBRLInput value={valorCliente} onChange={(v) => { setCliTocado(true); setValorCliente(v); }} />
             <div className="mt-3 rounded-lg bg-[#02883C]/5 px-3 py-2 text-sm text-[#02883C] dark:bg-[#02883C]/10">Nosso a receber (honorários + sucumbência): <b>{brl(aReceber)}</b></div>
             {podeLancarFinanceiro && (
               <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
@@ -398,7 +406,7 @@ export function AvancoFaseModal({
             <label className={lbl}>Resultado</label>
             <Radio value={resultado} onChange={setResultado} options={['Procedente', 'Parcialmente procedente']} />
             <label className={lbl}>Valor recebido <span className="font-normal normal-case text-zinc-400">(estimado)</span></label>
-            <div className="flex items-center gap-2"><span className="text-sm text-zinc-400">R$</span><input type="number" step="0.01" value={valorRecebido} onChange={(e) => setValorRecebido(e.target.value)} placeholder="0,00" className={inp} /></div>
+            <MoneyBRLInput value={valorRecebido} onChange={setValorRecebido} />
             <label className={lbl}>Anotações</label>
             <textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className={`${inp} resize-none`} />
           </>
@@ -423,6 +431,16 @@ export function AvancoFaseModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Campo de dinheiro com máscara pt-BR ao digitar (ponto de milhar, vírgula decimal).
+function MoneyBRLInput({ value, onChange, placeholder = '0,00' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-zinc-400">R$</span>
+      <input inputMode="numeric" value={value} onChange={(e) => onChange(maskBRL(e.target.value))} placeholder={placeholder} className={`${inp} text-right tabular-nums`} />
     </div>
   );
 }
