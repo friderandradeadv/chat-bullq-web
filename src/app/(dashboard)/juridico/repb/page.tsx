@@ -521,6 +521,7 @@ function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMo
   const moveItem = async (it: UItem, to: string) => {
     if (it.kind === 'bank') {
       const sit = PHASE_TO_SIT[to]; if (!sit || ((it.party.metadata as any)?.situacao ?? 'Em análise') === sit) return;
+      if (shouldCelebrate(phases.find((p) => p.key === to))) fireConfetti();
       qc.setQueryData<any>(['legal-cases', 'detail', it.caseId], (old: any) => (old ? { ...old, parties: old.parties.map((x: any) => (x.id === it.party.id ? { ...x, metadata: { ...(x.metadata ?? {}), situacao: sit } } : x)) } : old));
       try { await legalCasesService.updateParty(it.party.id, { name: it.party.name || 'Banco', role: 'OPPONENT', document: it.party.document ?? undefined, metadata: { ...((it.party.metadata as any) ?? {}), situacao: sit } }); qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', it.caseId] }); }
       catch { qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', it.caseId] }); toast.error('Erro ao mover banco'); }
@@ -576,14 +577,14 @@ function UnifiedColumn({ phase, items, onOpenBank, onOpenCase, canRename, onRena
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {sorted.map((it) => it.kind === 'bank'
-          ? <UnifiedBankCard key={it.id} it={it} onOpen={() => onOpenBank(it.caseId, it.party.id)} />
+          ? <UnifiedBankCard key={it.id} it={it} terminal={isTerminalPhase(phase)} onOpen={() => onOpenBank(it.caseId, it.party.id)} />
           : <Card key={it.id} c={it.card} terminal={isTerminalPhase(phase)} onOpen={() => onOpenCase(it.card.id)} />)}
       </div>
     </div>
   );
 }
 
-function UnifiedBankCard({ it, onOpen }: { it: Extract<UItem, { kind: 'bank' }>; onOpen?: () => void }) {
+function UnifiedBankCard({ it, terminal, onOpen }: { it: Extract<UItem, { kind: 'bank' }>; terminal?: boolean; onOpen?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: it.id });
   const m: any = it.party.metadata ?? {};
   const tags: string[] = Array.isArray(m.tags) ? m.tags : [];
@@ -591,7 +592,7 @@ function UnifiedBankCard({ it, onOpen }: { it: Extract<UItem, { kind: 'bank' }>;
   const style: React.CSSProperties = { borderLeftWidth: 4, borderLeftColor: areaDot(it.area ?? 'Bancário'), ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}) };
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={onOpen}
-      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''}`}>
+      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''}`}>
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{prodLabel}</span>
         <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3 ${SIT_BADGE[m.situacao ?? 'Em análise'] ?? ''}`}>{m.situacao ?? 'Em análise'}</span>
