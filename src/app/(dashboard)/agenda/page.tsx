@@ -131,8 +131,17 @@ function avancoDoPrazo(a: Activity): Avanco {
   if (act === 'cumprimento' || /cumprimento de senten|inicie o cumprimento|iniciar o cumprimento/.test(txt)) {
     return { kind: 'fase', phase: 'cumprimento' };
   }
-  if (act === 'alvara' || /alvar[áa]|levantament/.test(txt)) {
+  // Prazo que já é de PRESTAR CONTAS → abre a Prestação de Contas.
+  if (/prestar contas|presta[çc][ãa]o de contas/.test(txt)) {
     return { kind: 'fase', phase: 'prestacao_contas' };
+  }
+  // "Requerer expedição de alvará" é só o PEDIDO — o dinheiro ainda não caiu e o
+  // valor muda quando o alvará é de fato expedido. Concluir MANTÉM o card em
+  // Cumprimento de Sentença. A Prestação de Contas só quando os valores entram em
+  // conta: aí abra o card e use o botão "Prestação de contas" (sobe o comprovante,
+  // calcula o rateio e move a fase).
+  if (act === 'alvara' || /alvar[áa]|levantament/.test(txt)) {
+    return null;
   }
   if (/certid[ãa]o de tr[âa]nsito|transit(?:ou|ada|ado) em julgado/.test(txt)) {
     return { kind: 'fase', phase: 'transito' };
