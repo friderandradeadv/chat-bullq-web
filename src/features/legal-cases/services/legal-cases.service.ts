@@ -133,6 +133,17 @@ export interface ContratoImpugnar {
   valor: number | null;
 }
 
+/** Processo relacionado por apensamento (principal ou apenso). */
+export interface ApensoRef {
+  id: string;
+  title: string;
+  cnjNumber: string | null;
+  status: CaseStatus;
+  area: string | null;
+  legalPhase: string | null;
+  legalTags: LegalTag[];
+}
+
 export interface CaseDetail extends Omit<CaseListItem, 'parties' | '_count'> {
   jurisdiction: string | null;
   legalPhase: string | null;
@@ -141,6 +152,11 @@ export interface CaseDetail extends Omit<CaseListItem, 'parties' | '_count'> {
   createdAt: string;
   metadata: Record<string, unknown>;
   card: { id: string; pipelineId: string; stageId: string; title: string } | null;
+  parentCaseId: string | null;
+  /** Processo principal, quando este é um apenso (ex.: agravo de instrumento). */
+  parent: ApensoRef | null;
+  /** Processos apensados a este. */
+  apensos: ApensoRef[];
   parties: PartyDetail[];
   movements: MovementItem[];
   deadlines: DeadlineRef[];
@@ -510,6 +526,10 @@ export const legalCasesService = {
   async update(id: string, input: Partial<CreateCaseInput>): Promise<CaseDetail> {
     const { data } = await api.patch(`/legal-cases/${id}`, input);
     return data.data ?? data;
+  },
+  /** Apensa `id` ao processo principal `parentCaseId`; null = desapensar. */
+  async apensar(id: string, parentCaseId: string | null): Promise<void> {
+    await api.patch(`/legal-cases/${id}/apensar`, { parentCaseId });
   },
   async remove(id: string): Promise<void> {
     await api.delete(`/legal-cases/${id}`);

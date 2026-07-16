@@ -34,6 +34,7 @@ import {
 import { toast } from 'sonner';
 import {
   legalCasesService,
+  type ApensoRef,
   type CaseDetail,
   type PartyRole,
 } from '@/features/legal-cases/services/legal-cases.service';
@@ -204,6 +205,17 @@ export default function ProcessoDetailPage() {
           <MetaRow label="Processo">
             {c.cnjNumber ? <CnjNumber value={c.cnjNumber} /> : '—'}
           </MetaRow>
+          {c.parent && (
+            <MetaRow label="Apensado a">
+              <Link
+                href={`/processos/${c.parent.id}`}
+                className="inline-flex items-center gap-1.5 font-medium text-[#202124] hover:text-[#228BE6] hover:underline dark:text-zinc-100"
+              >
+                <Paperclip className="h-3.5 w-3.5 text-zinc-400" />
+                {c.parent.cnjNumber || c.parent.title}
+              </Link>
+            </MetaRow>
+          )}
           <MetaRow label="Cliente">
             {clientParty ? (
               <Link
@@ -379,13 +391,12 @@ function OptionsMenu({
   onChange: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [confirm, setConfirm] = useState<null | 'encerrar' | 'desvincular'>(null);
+  const [confirm, setConfirm] = useState<null | 'encerrar' | 'desvincular' | 'desapensar'>(null);
+  // 'other-to-this' = escolher um processo pra apensar A ESTE;
+  // 'this-to-other' = escolher o principal ao qual ESTE será apensado.
+  const [apensar, setApensar] = useState<null | 'other-to-this' | 'this-to-other'>(null);
 
   const close = () => setOpen(false);
-  const fase2 = (label: string) => {
-    close();
-    toast(`${label} — disponível na Fase 2 (relação entre processos).`);
-  };
 
   const doEncerrar = async () => {
     try {
@@ -409,6 +420,17 @@ function OptionsMenu({
       setConfirm(null);
     }
   };
+  const doDesapensar = async () => {
+    try {
+      await legalCasesService.apensar(c.id, null);
+      toast.success('Processo desapensado');
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro');
+    } finally {
+      setConfirm(null);
+    }
+  };
 
   return (
     <div className="relative">
@@ -419,14 +441,36 @@ function OptionsMenu({
         <>
           <div className="fixed inset-0 z-10" onClick={close} />
           <div className="absolute right-0 top-11 z-20 w-64 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 text-left shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-            <MenuItem icon={Paperclip} onClick={() => fase2('Apensar outro processo a este')} muted>
+            <MenuItem
+              icon={Paperclip}
+              onClick={() => {
+                close();
+                setApensar('other-to-this');
+              }}
+            >
               Apensar outro processo a este
-              <Fase2Tag />
             </MenuItem>
-            <MenuItem icon={Paperclip} onClick={() => fase2('Apensar este processo a outro')} muted>
+            <MenuItem
+              icon={Paperclip}
+              onClick={() => {
+                close();
+                setApensar('this-to-other');
+              }}
+              disabled={!!c.parent}
+            >
               Apensar este processo a outro
-              <Fase2Tag />
             </MenuItem>
+            {c.parent && (
+              <MenuItem
+                icon={Link2Off}
+                onClick={() => {
+                  close();
+                  setConfirm('desapensar');
+                }}
+              >
+                Desapensar do principal
+              </MenuItem>
+            )}
             <MenuItem
               icon={Link2Off}
               onClick={() => {
@@ -491,15 +535,136 @@ function OptionsMenu({
           onClose={() => setConfirm(null)}
         />
       )}
+      {confirm === 'desapensar' && (
+        <ConfirmDialog
+          title="Desapensar do principal?"
+          message={`Este processo deixará de correr apensado a ${c.parent?.cnjNumber || c.parent?.title || 'outro processo'}. O histórico é preservado nos dois.`}
+          confirmLabel="Desapensar"
+          onConfirm={doDesapensar}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+      {apensar && (
+        <ApensarModal
+          c={c}
+          direction={apensar}
+          onClose={() => setApensar(null)}
+          onDone={() => {
+            setApensar(null);
+            onChange();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function Fase2Tag() {
+// ─── Apensar: busca e vincula processo (principal ⇄ apenso) ──────────
+
+function ApensarModal({
+  c,
+  direction,
+  onClose,
+  onDone,
+}: {
+  c: CaseDetail;
+  direction: 'other-to-this' | 'this-to-other';
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<{ id: string; title: string; cnjNumber: string | null } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const { data: results = [], isFetching } = useQuery({
+    queryKey: ['apensar-search', search],
+    queryFn: () => legalCasesService.list({ search }),
+    enabled: search.trim().length >= 2,
+  });
+  // Fora da lista: o próprio processo, os já apensados a ele e o principal atual.
+  const excluded = new Set<string>([c.id, ...(c.apensos ?? []).map((a) => a.id), ...(c.parent ? [c.parent.id] : [])]);
+  const options = results.filter((r) => !excluded.has(r.id)).slice(0, 12);
+
+  const save = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      if (direction === 'other-to-this') {
+        await legalCasesService.apensar(selected.id, c.id);
+      } else {
+        await legalCasesService.apensar(c.id, selected.id);
+      }
+      toast.success(
+        direction === 'other-to-this'
+          ? `${selected.cnjNumber || selected.title} apensado a este processo`
+          : `Processo apensado a ${selected.cnjNumber || selected.title}`,
+      );
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao apensar');
+      setSaving(false);
+    }
+  };
+
   return (
-    <span className="ml-auto rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
-      Fase 2
-    </span>
+    <Modal
+      title={direction === 'other-to-this' ? 'Apensar outro processo a este' : 'Apensar este processo a outro'}
+      onClose={onClose}
+    >
+      <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+        {direction === 'other-to-this'
+          ? 'Busque o processo (ex.: um agravo de instrumento) que passará a correr apensado a este.'
+          : 'Busque o processo PRINCIPAL ao qual este passará a correr apensado (ex.: a ação principal do agravo).'}
+      </p>
+      <input
+        autoFocus
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setSelected(null);
+        }}
+        placeholder="Buscar por título, nº CNJ ou código interno…"
+        className={inputCls}
+      />
+      <div className="mt-3 max-h-64 space-y-1 overflow-y-auto">
+        {search.trim().length < 2 ? (
+          <p className="px-1 py-2 text-xs text-zinc-400">Digite ao menos 2 caracteres para buscar.</p>
+        ) : isFetching ? (
+          <p className="px-1 py-2 text-xs text-zinc-400">Buscando…</p>
+        ) : options.length === 0 ? (
+          <p className="px-1 py-2 text-xs text-zinc-400">Nenhum processo encontrado.</p>
+        ) : (
+          options.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setSelected({ id: r.id, title: r.title, cnjNumber: r.cnjNumber })}
+              className={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
+                selected?.id === r.id
+                  ? 'border-[#228BE6] bg-blue-50 dark:bg-blue-500/10'
+                  : 'border-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                {r.title}
+              </span>
+              <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+                {r.cnjNumber && <span>{r.cnjNumber}</span>}
+                {r.area && <span>· {r.area}</span>}
+                {r.legalTags?.map((lt) => (
+                  <LegalTagChip key={lt.id} label={lt.tag.name} color={lt.tag.color} />
+                ))}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+      <ModalActions
+        saving={saving}
+        onClose={onClose}
+        onSave={save}
+        saveLabel={selected ? 'Apensar' : 'Selecione um processo'}
+      />
+    </Modal>
   );
 }
 
@@ -612,6 +777,8 @@ function ResumoTab({ c }: { c: CaseDetail }) {
           </dl>
         </Card>
 
+        {(c.parent || (c.apensos?.length ?? 0) > 0) && <ApensosCard c={c} />}
+
         <PartiesCard caseId={c.id} parties={c.parties} />
       </div>
 
@@ -693,6 +860,50 @@ function ResumoTab({ c }: { c: CaseDetail }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+// ─── Card: Apensos (relação entre processos) ─────────────────────────
+
+function ApensoRow({ p, principal }: { p: ApensoRef; principal?: boolean }) {
+  return (
+    <li>
+      <Link
+        href={`/processos/${p.id}`}
+        className="group block rounded-md border border-zinc-100 px-3 py-2 hover:border-[#228BE6]/40 hover:bg-blue-50/50 dark:border-zinc-800 dark:hover:bg-blue-500/5"
+      >
+        <span className="flex items-center gap-2">
+          <Paperclip className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 group-hover:text-[#228BE6] dark:text-zinc-100">
+            {p.title}
+          </span>
+          <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            {principal ? 'Principal' : 'Apenso'}
+          </span>
+        </span>
+        <span className="mt-1 flex flex-wrap items-center gap-1.5 pl-[22px] text-xs text-zinc-400">
+          {p.cnjNumber && <span>{p.cnjNumber}</span>}
+          {p.area && <span>· {p.area}</span>}
+          <span>· {STATUS_LABEL[p.status] ?? p.status}</span>
+          {p.legalTags.map((lt) => (
+            <LegalTagChip key={lt.id} label={lt.tag.name} color={lt.tag.color} />
+          ))}
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+function ApensosCard({ c }: { c: CaseDetail }) {
+  return (
+    <Card title="Processos relacionados (apensos)" icon={Paperclip}>
+      <ul className="space-y-2">
+        {c.parent && <ApensoRow p={c.parent} principal />}
+        {c.apensos.map((a) => (
+          <ApensoRow key={a.id} p={a} />
+        ))}
+      </ul>
+    </Card>
   );
 }
 
