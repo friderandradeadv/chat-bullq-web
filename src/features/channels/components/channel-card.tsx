@@ -17,6 +17,7 @@ import {
   Lock,
   Globe,
   Contact,
+  Camera,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Channel, LiveStatus } from '../services/channels.service';
@@ -25,6 +26,7 @@ import { useChannelSync } from '../hooks/use-channel-sync';
 import { ZappfyIcon, MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
 import { EditChannelDialog } from './edit-channel-dialog';
 import { BusinessProfileDialog } from './business-profile-dialog';
+import { ProfilePictureDialog } from './profile-picture-dialog';
 
 const channelTypeMap: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   WHATSAPP_ZAPPFY: { label: 'WhatsApp (Zappfy)', icon: ZappfyIcon, color: 'bg-zinc-50 dark:bg-zinc-800' },
@@ -43,6 +45,7 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false);
   const [live, setLive] = useState<LiveStatus | null>(null);
 
   useEffect(() => {
@@ -334,6 +337,15 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
                 <Pencil className="h-4 w-4" />
                 Editar credenciais
               </button>
+              {(channel.type === 'WHATSAPP_EVOLUTION' || channel.type === 'WHATSAPP_OFFICIAL') && (
+                <button
+                  onClick={() => { setShowPhoto(true); setShowMenu(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  <Camera className="h-4 w-4" />
+                  Alterar foto de perfil
+                </button>
+              )}
               {channel.config?.phoneNumberId && (
                 <button
                   onClick={() => { setShowProfile(true); setShowMenu(false); }}
@@ -378,6 +390,12 @@ export function ChannelCard({ channel, onUpdate }: ChannelCardProps) {
       <BusinessProfileDialog
         channel={showProfile ? channel : null}
         onClose={() => setShowProfile(false)}
+      />
+      <ProfilePictureDialog
+        channel={showPhoto ? channel : null}
+        currentPicUrl={live?.profilePicUrl}
+        onClose={() => setShowPhoto(false)}
+        onSaved={(s) => setLive(s)}
       />
     </div>
   );

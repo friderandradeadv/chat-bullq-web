@@ -170,4 +170,16 @@ export const channelsService = {
     );
     return data.data;
   },
+
+  // ─── Foto de perfil do WhatsApp da conexão (imagem já recortada) ──
+  async updateProfilePicture(id: string, file: Blob): Promise<LiveStatus> {
+    const form = new FormData();
+    form.append('file', file, 'profile.jpg');
+    const { data } = await api.post<{ data: LiveStatus }>(
+      `/channels/${id}/profile-picture`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data.data;
+  },
 };

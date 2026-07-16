@@ -138,13 +138,14 @@ export default function SettingsUsagePage() {
               <div className="flex h-40 items-end gap-1.5">
                 {data.daily.map((d) => (
                   <div key={d.date} className="group relative flex flex-1 flex-col items-center justify-end">
+                    {/* Valor SEMPRE visível (vertical, cabe em qualquer nº de dias) */}
+                    <span className="pointer-events-none mb-0.5 whitespace-nowrap text-[9px] font-medium leading-none tabular-nums text-zinc-500 [writing-mode:vertical-rl] rotate-180 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-100">
+                      {d.costBrl > 0 ? brl.format(d.costBrl) : ''}
+                    </span>
                     <div
                       className="w-full rounded-t bg-zinc-300 transition-colors group-hover:bg-zinc-900 dark:bg-zinc-700 dark:group-hover:bg-zinc-100"
                       style={{ height: `${Math.max(2, (d.costBrl / maxDaily) * 100)}%` }}
                     />
-                    <span className="pointer-events-none absolute -top-7 hidden whitespace-nowrap rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white group-hover:block dark:bg-zinc-100 dark:text-zinc-900">
-                      {brl.format(d.costBrl)}
-                    </span>
                     <span className="mt-1 text-[9px] text-zinc-400">{d.date.slice(8, 10)}</span>
                   </div>
                 ))}

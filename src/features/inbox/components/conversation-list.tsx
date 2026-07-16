@@ -397,17 +397,25 @@ export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }:
     queryKey: ['conversations', orgId, viewId ?? null, filterKey, debouncedSearch, selectedChannelId, scope, statusTab, archivedOnly, currentUserId, meusClientesOnly],
     queryFn: ({ pageParam = 1 }) => {
       const params: Record<string, string> = { limit: '30', page: String(pageParam) };
+      // Busca é GLOBAL: quando há texto digitado (e não está na aba Arquivados),
+      // ignora a partição da aba — filtro de status ativo + exclusão de
+      // arquivados — para achar o cliente em QUALQUER balde, inclusive o de
+      // Arquivados. Sem isso, procurar um cliente cuja conversa foi arquivada
+      // (isArchived/CLOSED) não retornava nada.
+      const searching = !archivedOnly && !!debouncedSearch;
       // Arquivados é seu próprio balde: mostra TODOS os arquivados, sem aplicar
       // o filtro de status da aba ativa (senão "Arquivados" com a aba OPEN
       // selecionada escondia os arquivados CLOSED — só apareciam uns poucos).
-      if (!archivedOnly && statusTab !== 'ALL' && statusTab !== 'GROUPS') params.status = statusTab;
+      if (!archivedOnly && !searching && statusTab !== 'ALL' && statusTab !== 'GROUPS') params.status = statusTab;
       if (unreadOnly) params.unread = 'true';
-      // archived: dentro de view, só passa quando user explicitamente
-      // ativou (override). Fora de view, passa sempre o estado atual.
+      // archived: dentro de view, só passa quando user explicitamente ativou
+      // (override) ou quando está buscando (inclui os arquivados). Fora de view,
+      // passa o estado atual; buscando, 'any' varre arquivados + ativos.
       if (viewId) {
         if (archivedOnly) params.archived = 'only';
+        else if (searching) params.archived = 'any';
       } else {
-        params.archived = archivedOnly ? 'only' : 'exclude';
+        params.archived = archivedOnly ? 'only' : searching ? 'any' : 'exclude';
       }
       // groups: a tab "Grupos" força only; fora dela, esconde grupos por padrão
       if (statusTab === 'GROUPS') {
@@ -1119,6 +1127,18 @@ export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }:
                             (linha horizontal uniforme, igual ao LíderHub). */}
                         <div className="mt-2 flex min-h-[18px] items-center gap-1 min-w-0">
                           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+                          {/* Arquivada — só aparece quando um resultado arquivado
+                              vaza para uma aba normal (busca global). Sinaliza ao
+                              usuário de onde veio o resultado. */}
+                          {!archivedOnly && (conv.isArchived || conv.status === 'CLOSED') && (
+                            <span
+                              title="Conversa arquivada"
+                              className="flex shrink-0 items-center gap-0.5 rounded bg-amber-50 px-1 py-px text-[9px] font-semibold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+                            >
+                              <Archive className="h-2 w-2 shrink-0" />
+                              Arquivada
+                            </span>
+                          )}
                           {/* Brazilian state from DDD */}
                           {(() => {
                             if (conv.isGroup) return null;

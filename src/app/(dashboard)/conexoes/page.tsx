@@ -15,8 +15,10 @@ import {
   Check,
   Pencil,
   X,
+  Camera,
 } from 'lucide-react';
 import { channelsService, type Channel } from '@/features/channels/services/channels.service';
+import { ProfilePictureDialog } from '@/features/channels/components/profile-picture-dialog';
 import { departmentsService } from '@/features/settings/services/departments.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { ZappfyIcon, MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
@@ -72,6 +74,7 @@ export default function ConexoesPage() {
   });
 
   const [editing, setEditing] = useState<Channel | null>(null);
+  const [photoFor, setPhotoFor] = useState<Channel | null>(null);
   const [search, setSearch] = useState('');
   const [colsOpen, setColsOpen] = useState(false);
   const [cols, setCols] = useState<Record<ColKey, boolean>>({
@@ -297,6 +300,17 @@ export default function ConexoesPage() {
                               >
                                 <Pencil className="h-3.5 w-3.5" /> Editar área/responsável
                               </button>
+                              {(ch.type === 'WHATSAPP_EVOLUTION' || ch.type === 'WHATSAPP_OFFICIAL') && (
+                                <button
+                                  onClick={() => {
+                                    setMenuFor(null);
+                                    setPhotoFor(ch);
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                >
+                                  <Camera className="h-3.5 w-3.5" /> Alterar foto de perfil
+                                </button>
+                              )}
                               <Link
                                 href="/settings/channels"
                                 className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -343,6 +357,12 @@ export default function ConexoesPage() {
           }}
         />
       )}
+
+      <ProfilePictureDialog
+        channel={photoFor}
+        onClose={() => setPhotoFor(null)}
+        onSaved={() => setPhotoFor(null)}
+      />
     </div>
   );
 }
