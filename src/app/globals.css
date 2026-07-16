@@ -390,6 +390,17 @@
   backdrop-filter: blur(24px) saturate(1.6);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
+/* MODO SIMPLES: a barra é SEMPRE escura (marca FA + controles claros), em
+   qualquer tema — regra do Matheus (16/07). No tema claro usa o tom Trello
+   #1D2125 SÓLIDO (translucidez sobre página branca lava a cor pra cinza médio;
+   já aconteceu e ele reclamou). No tema escuro, `.dark .topbar-glass` abaixo
+   vence por especificidade e devolve o vidro translúcido normal. */
+.topbar-glass--dark {
+  background: #1D2125 !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
 /* MODO ESCURO (app dark): vidro fosco iOS de verdade — translúcido (0.55) sobre o
    conteúdo escuro, blur + saturação revelam o corpo borrado por baixo ao rolar.
    Hairline claro embaixo pra separar sem peso. */
