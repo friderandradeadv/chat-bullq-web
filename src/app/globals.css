@@ -379,15 +379,16 @@
    rola POR BAIXO dela e o backdrop-filter revela o próprio conteúdo borrado — o
    mecanismo genuíno do Trello, sem foto. `under-bar > *` dá um respiro no topo de
    cada página (só desktop) pra o conteúdo começar abaixo da barra e rolar por
-   baixo. A barra fica escura (controles claros, classe literal `dark`) nos 2 modos.
-   !important pra vencer o `bg-[#1D2125]` utilitário. */
+   baixo. A barra SEGUE O TEMA do app: vidro claro no modo claro, vidro escuro no
+   modo escuro. !important pra vencer utilitários de bg. */
 .topbar-glass {
-  /* MODO CLARO (app light): tom EXATO do Trello/Atlassian = #1D2125 (DarkNeutral,
-     dark levemente azulado). SÓLIDO de propósito — sobre página branca a
-     translucidez lavava a cor pra um cinza médio/claro; solidez faz o tom azulado
-     aparecer de verdade. (Vidro glassy fica só no modo escuro, onde funciona.) */
-  background: #1D2125 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  /* MODO CLARO (app light): vidro fosco BRANCO — translúcido sobre a página
+     clara, blur + saturação revelam o conteúdo borrado por baixo ao rolar.
+     Hairline escuro embaixo pra separar sem peso. */
+  background: rgba(255, 255, 255, 0.65) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 /* MODO ESCURO (app dark): vidro fosco iOS de verdade — translúcido (0.55) sobre o
    conteúdo escuro, blur + saturação revelam o corpo borrado por baixo ao rolar.

@@ -154,14 +154,15 @@ export default function DashboardLayout({
           {/* Barra superior de VIDRO REAL (opção B): SOBREPOSTA e translúcida. O
               conteúdo da página rola POR BAIXO dela e o blur revela ele borrado — o
               mecanismo genuíno do Trello. `absolute` tira a barra do fluxo; o respiro
-              no topo de cada página vem do `.under-bar` (globals). A classe `dark`
-              mantém os controles (busca, toggle, sino, tema) e o logo SEMPRE claros
-              (barra escura clássica). */}
-          <div className="topbar-glass dark absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center px-4 lg:flex">
-            {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início). */}
+              no topo de cada página vem do `.under-bar` (globals). A barra segue o
+              tema do app: vidro claro no modo claro, vidro escuro no modo escuro. */}
+          <div className="topbar-glass absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center px-4 lg:flex">
+            {/* Modo simples: a MARCA minimalista (FA., clicável → Início), na
+                variante certa pro fundo da barra em cada tema. */}
             {simples && (
               <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
-                <img src="/favicon-dark.png" alt="Início" className="h-8 w-8 object-contain" />
+                <img src="/favicon-light.png" alt="Início" className="h-8 w-8 object-contain dark:hidden" />
+                <img src="/favicon-dark.png" alt="Início" className="hidden h-8 w-8 object-contain dark:block" />
               </Link>
             )}
             <GlobalSearch />
