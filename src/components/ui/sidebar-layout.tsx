@@ -103,7 +103,7 @@ export function SidebarLayout({
         }`}
       >
         <div
-          className={`dark flex h-full flex-col border-r border-zinc-200 bg-white w-64 transition-transform duration-200 ease-in-out dark:border-white/5 dark:bg-[#15181A] ${
+          className={`flex h-full flex-col border-r border-zinc-200 bg-white w-64 transition-transform duration-200 ease-in-out dark:border-white/5 dark:bg-[#15181A] ${
             collapsed ? "-translate-x-full" : "translate-x-0"
           }`}
         >
