@@ -462,6 +462,24 @@ function OptionsMenu({
             </MenuItem>
             {c.parent && (
               <MenuItem
+                icon={Paperclip}
+                onClick={async () => {
+                  close();
+                  try {
+                    // reapensar ao mesmo principal = backend só herda o que falta
+                    await legalCasesService.apensar(c.id, c.parent!.id);
+                    toast.success('Dados herdados do principal (título, etiquetas, partes…)');
+                    onChange();
+                  } catch (e: any) {
+                    toast.error(e?.response?.data?.message || e?.message || 'Erro');
+                  }
+                }}
+              >
+                Herdar dados do principal
+              </MenuItem>
+            )}
+            {c.parent && (
+              <MenuItem
                 icon={Link2Off}
                 onClick={() => {
                   close();
