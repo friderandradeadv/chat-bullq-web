@@ -351,7 +351,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Seus clientes (Visão geral) */}
         {subtab === 'resumo' && clientes.length > 0 && (
-          <Card title={<>Seus clientes <span className="font-normal text-zinc-400">· {clientes.length}</span></>} sub="quem mais te rendeu honorários.">
+          <Card title={<>{deArea ? 'Clientes da vertical' : 'Seus clientes'} <span className="font-normal text-zinc-400">· {clientes.length}</span></>} sub={deArea ? 'quem mais rendeu honorários na área.' : 'quem mais te rendeu honorários.'}>
             <div className="max-h-72 overflow-y-auto scrollbar-thin">
               {clientes.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm dark:border-zinc-800/70">
