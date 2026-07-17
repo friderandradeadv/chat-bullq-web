@@ -2429,12 +2429,12 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
                 return (
                 <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
                   {linhas.length > 0 ? (<>
-                    <div className="flex items-center gap-2 pb-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400"><span className="w-12 shrink-0">Mês</span><span className="flex flex-1 items-center justify-end gap-2"><span className="w-20 text-right">Faturou</span><span className="w-20 text-right">Gastou</span><span className="w-20 text-right">Result.</span></span></div>
+                    <div className="flex items-center gap-1 pb-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400"><span className="w-9 shrink-0">Mês</span><span className="flex flex-1 items-center justify-end gap-1"><span className="w-[58px] text-right">Faturou</span><span className="w-[58px] text-right">Gastou</span><span className="w-[58px] text-right">Result.</span></span></div>
                     <div className="max-h-56 space-y-0.5 overflow-y-auto scrollbar-thin">
                       {linhas.map((m) => { const gasto = Math.round(((m.diretas ?? 0) + (m.comum ?? 0)) * 100) / 100; return (
-                        <div key={m.mes} className={`flex items-center gap-2 text-[11px] ${mesV === m.mes ? 'rounded bg-violet-50 dark:bg-violet-900/20' : ''}`}>
-                          <span className="w-12 shrink-0 tabular-nums text-zinc-500">{mmYYYY(m.mes)}</span>
-                          <span className="flex flex-1 items-center justify-end gap-2 whitespace-nowrap tabular-nums"><span className="w-20 text-right text-emerald-600">{brlN(m.entradas)}</span><span className="w-20 text-right text-rose-500" title="direto + fatia do comum">−{brlN(gasto)}</span><span className={`w-20 text-right font-semibold ${m.resultado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brlN(m.resultado)}</span></span>
+                        <div key={m.mes} className={`flex items-center gap-1 text-[10px] ${mesV === m.mes ? 'rounded bg-violet-50 dark:bg-violet-900/20' : ''}`}>
+                          <span className="w-9 shrink-0 tabular-nums text-zinc-500">{mmYYYY(m.mes)}</span>
+                          <span className="flex flex-1 items-center justify-end gap-1 whitespace-nowrap tabular-nums"><span className="w-[58px] text-right text-emerald-600">{brlN(m.entradas)}</span><span className="w-[58px] text-right text-rose-500" title="direto + fatia do comum">−{brlN(gasto)}</span><span className={`w-[58px] text-right font-semibold ${m.resultado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brlN(m.resultado)}</span></span>
                         </div>
                       ); })}
                     </div>
