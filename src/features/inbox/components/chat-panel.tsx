@@ -814,7 +814,9 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         ...(pontual && !isMine ? { oneOff: true } : {}),
       });
       ensureUnarchivedOnSend();
-    } catch {
+      toast.success('Mensagem reenviada — ela entra como uma nova mensagem no fim da conversa.');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Erro ao reenviar a mensagem');
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
     } finally {
       setResendingId(null);
