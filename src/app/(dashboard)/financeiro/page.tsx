@@ -33,6 +33,10 @@ const brl2 = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleStr
 const MINUS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'du', 'a', 'o']);
 const titleCase = (s?: string | null) => (s ?? '').toLowerCase().replace(/\b[\p{L}']+/gu, (w, i) => (i > 0 && MINUS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)));
 const kbrl = (n: number) => { const a = Math.abs(n); const s = n < 0 ? '-' : ''; return a >= 1000 ? `${s}${(a / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : `${s}${a}`; };
+// valor compacto (sem "R$ ", com centavos) — p/ colunas estreitas que não podem quebrar linha
+const brlN = (n: number) => (n < 0 ? '-' : '') + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// mês "2026-07" → "07/2026" (evita quebrar em 2 linhas como "Julho de 2026")
+const mmYYYY = (k: string) => { const m = (k || '').match(/^(\d{4})-(\d{2})$/); return m ? `${m[2]}/${m[1]}` : k; };
 const pct = (n: number) => (n > 0 ? '+' : '') + n.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
 const mesCurto = (label: string) => label.replace('/20', '/');
 const catColor = (data: FinDashboard, cat: string) => /honor/i.test(cat) ? '#2F9E44' : (data.categorias?.find((c) => c.nome === cat)?.cor ?? '#868E96');
@@ -2397,10 +2401,14 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
 
       <Card title="Cada vertical se paga?" sub={mesV ? 'Faturou × gastou (direto + fatia do comum) no mês escolhido. Clique num card pra ver o mês a mês.' : 'Receita − Despesa da área = Resultado (período todo). Escolha um mês pra ver faturou × gastou do mês.'}
         action={mesesV.length > 0 && (
-          <select value={mesV} onChange={(e) => setMesV(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-            <option value="">Período todo</option>
-            {mesesV.map((k) => <option key={k} value={k}>{mesLabel(k)}</option>)}
-          </select>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => { const i = mesesV.indexOf(mesV); if (i < mesesV.length - 1) setMesV(mesesV[i + 1]); }} disabled={!mesV || mesesV.indexOf(mesV) >= mesesV.length - 1} className="rounded-lg border border-zinc-300 p-1.5 text-zinc-500 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800" title="mês anterior"><ChevronLeft className="h-4 w-4" /></button>
+            <select value={mesV} onChange={(e) => setMesV(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900">
+              <option value="">Período todo</option>
+              {mesesV.map((k) => <option key={k} value={k}>{mmYYYY(k)}</option>)}
+            </select>
+            <button onClick={() => { const i = mesesV.indexOf(mesV); if (mesV && i > 0) setMesV(mesesV[i - 1]); }} disabled={!mesV || mesesV.indexOf(mesV) <= 0} className="rounded-lg border border-zinc-300 p-1.5 text-zinc-500 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800" title="próximo mês"><ChevronRight className="h-4 w-4" /></button>
+          </div>
         )}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {verticais.map((v) => { const rc = recorte(v); return (
@@ -2414,19 +2422,19 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
                 <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">{mesV ? 'Gastou' : 'Despesa'}</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(rc.saidas)}</p>{(rc.comum ?? 0) > 0 && <p className="text-[9px] text-zinc-400">direto {brl(rc.diretas)} + comum {brl(rc.comum ?? 0)}</p>}</div>
                 <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Resultado</p><p className={`text-sm font-bold tabular-nums ${rc.resultado >= 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-rose-600'}`}>{brl(rc.resultado)}</p></div>
               </div>
-              <p className="mt-2 text-[11px] text-zinc-400">{mesV ? mesLabel(mesV) : `${v.nCasos} caso(s)`}{rc.margem != null ? ` · margem ${Math.round(rc.margem)}%` : ''} · <span className="text-[#228BE6]">{exp === v.area ? 'ocultar' : 'ver mês a mês'}</span></p>
+              <p className="mt-2 text-[11px] text-zinc-400">{mesV ? mmYYYY(mesV) : `${v.nCasos} caso(s)`}{rc.margem != null ? ` · margem ${Math.round(rc.margem)}%` : ''} · <span className="text-[#228BE6]">{exp === v.area ? 'ocultar' : 'ver mês a mês'}</span></p>
               {exp === v.area && (() => {
                 // Só meses com movimento real (evita listar meses só-comum eternamente e crescer sem fim).
                 const linhas = (v.porMes ?? []).filter((m) => (m.entradas ?? 0) !== 0 || (m.diretas ?? 0) !== 0 || (m.comum ?? 0) !== 0);
                 return (
                 <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
                   {linhas.length > 0 ? (<>
-                    <div className="flex items-center justify-between gap-2 pb-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400"><span>Mês</span><span className="flex shrink-0 items-center gap-2"><span className="w-16 text-right">Faturou</span><span className="w-16 text-right">Gastou</span><span className="w-16 text-right">Result.</span></span></div>
+                    <div className="flex items-center gap-2 pb-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400"><span className="w-12 shrink-0">Mês</span><span className="flex flex-1 items-center justify-end gap-2"><span className="w-20 text-right">Faturou</span><span className="w-20 text-right">Gastou</span><span className="w-20 text-right">Result.</span></span></div>
                     <div className="max-h-56 space-y-0.5 overflow-y-auto scrollbar-thin">
                       {linhas.map((m) => { const gasto = Math.round(((m.diretas ?? 0) + (m.comum ?? 0)) * 100) / 100; return (
-                        <div key={m.mes} className={`flex items-center justify-between gap-2 text-[11px] ${mesV === m.mes ? 'rounded bg-violet-50 px-1 dark:bg-violet-900/20' : ''}`}>
-                          <span className="truncate text-zinc-500">{m.label}</span>
-                          <span className="flex shrink-0 items-center gap-2 tabular-nums"><span className="w-16 text-right text-emerald-600">{brl(m.entradas)}</span><span className="w-16 text-right text-rose-500" title="direto + fatia do comum">−{brl(gasto)}</span><span className={`w-16 text-right font-semibold ${m.resultado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brl(m.resultado)}</span></span>
+                        <div key={m.mes} className={`flex items-center gap-2 text-[11px] ${mesV === m.mes ? 'rounded bg-violet-50 dark:bg-violet-900/20' : ''}`}>
+                          <span className="w-12 shrink-0 tabular-nums text-zinc-500">{mmYYYY(m.mes)}</span>
+                          <span className="flex flex-1 items-center justify-end gap-2 whitespace-nowrap tabular-nums"><span className="w-20 text-right text-emerald-600">{brlN(m.entradas)}</span><span className="w-20 text-right text-rose-500" title="direto + fatia do comum">−{brlN(gasto)}</span><span className={`w-20 text-right font-semibold ${m.resultado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brlN(m.resultado)}</span></span>
                         </div>
                       ); })}
                     </div>

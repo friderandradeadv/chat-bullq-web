@@ -261,15 +261,26 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         )}
 
         {/* Stats — VERTICAL: faturou × a receber da ÁREA (sem "o que VOCÊ leva") */}
-        {subtab === 'resumo' && deArea && (
+        {subtab === 'resumo' && deArea && (() => {
+          // "A receber" da área = honorários pendentes + parte do escritório nos cumprimentos
+          // de sentença (obrigação praticamente certa — já ganho, em execução) + prestação de contas.
+          const aReceberArea = r.aReceber + (cs.prestacao ?? 0) + csCumprimentoNosso;
+          const partes = [
+            `honorários ${brl(r.aReceber)}`,
+            csCumprimentoNosso > 0 ? `cumprimento ${brl(csCumprimentoNosso)}` : '',
+            (cs.prestacao ?? 0) > 0 ? `prestação ${brl(cs.prestacao)}` : '',
+          ].filter(Boolean);
+          return (
         <div className="mt-4">
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Honorários da vertical <span className="font-normal text-zinc-400">— entram no caixa e custeiam a estrutura da área</span></p>
           <div className="grid gap-3 sm:grid-cols-2">
             <MiniStat label="Faturou (recebido)" value={brl(r.recebido)} hint={melhorMes ? `melhor mês: ${mesLabel(melhorMes.mes).replace(' de ', '/')}` : `${data.area?.nCasos ?? r.nCasos} processo(s)`} accent="#2F9E44" />
-            <MiniStat label="A receber" value={brl(r.aReceber)} hint="honorários pendentes da área" accent="#F59F00" />
+            <MiniStat label="A receber" value={brl(aReceberArea)} hint={partes.join(' + ')} accent="#F59F00" />
           </div>
+          {csCumprimentoNosso > 0 && <p className="mt-1.5 text-[11px] text-zinc-400">O <strong>cumprimento de sentença</strong> entra pela <strong>parte do escritório</strong> ({brl(csCumprimentoNosso)} de {brl(cs.cumprimento)} bruto em execução) — obrigação já reconhecida, ainda não em caixa.</p>}
         </div>
-        )}
+          );
+        })()}
 
         {/* Stats — PESSOAL: o que custeia a vertical × o que VOCÊ leva */}
         {subtab === 'resumo' && !deArea && (
