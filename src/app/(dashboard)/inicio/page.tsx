@@ -49,6 +49,7 @@ import { tasksService } from '@/features/tasks/services/tasks.service';
 import { deadlinesService } from '@/features/deadlines/services/deadlines.service';
 import { calendarService } from '@/features/calendar/services/calendar.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { isTerminalPhase } from '@/features/legal-cases/lib/kanban-terminal';
 import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
 import { dashboardService, type HubNewsItem } from '@/features/dashboard/services/dashboard.service';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -762,21 +763,50 @@ function CasosParaAtencao() {
     queryFn: () => legalCasesService.kanban({ responsibleId: user!.id }),
     enabled: !!user?.id, staleTime: 300_000, retry: 1,
   });
+  // Board REPB completo (sem responsibleId): pra vertical de REPB ver os cards em
+  // andamento (documentos faltantes, investigativa…) já no Início. Auto-escopo:
+  // AGENT (associada) só recebe do backend os cards sob sua responsabilidade;
+  // quem não é da vertical não tem card → o cartão nem aparece.
+  const repbQ = useQuery({
+    queryKey: ['hub', 'kanban-repb-atencao', user?.id],
+    queryFn: () => legalCasesService.kanban({ lane: 'repb' }),
+    enabled: !!user?.id, staleTime: 300_000, retry: 1,
+  });
   const { pre, parados } = useMemo(() => {
     const d = q.data;
     if (!d) return { pre: [] as { id: string; nome: string; fase: string; dias: number }[], parados: [] as { id: string; nome: string; fase: string; dias: number }[] };
-    const preKeys = new Set(d.phases.filter((p) => p.lane === 'pre').map((p) => p.key));
+    // Fases terminais (CONCLUÍDO, INVIÁVEL, ARQUIVADO…) ficam de fora — o card é
+    // de acompanhamento, não de histórico. REPB (repb_*) sai daqui porque ganha
+    // cartão próprio abaixo.
+    const lanePre = new Set(d.phases.filter((p) => p.lane === 'pre').map((p) => p.key));
+    const preKeys = new Set(d.phases.filter((p) => p.lane === 'pre' && !isTerminalPhase(p) && !p.key.startsWith('repb_')).map((p) => p.key));
     const labelOf = (k: string) => (d.phases.find((p) => p.key === k)?.label ?? k).replace(/^\d+(\.\d+)?\.\s*/, '');
     const mk = (c: typeof d.cards[number]) => ({ id: c.id, nome: c.client || c.title, fase: labelOf(c.phase), dias: c.diasNaFase ?? 0 });
     const pre = d.cards.filter((c) => preKeys.has(c.phase)).sort((a, b) => (b.diasNaFase ?? 0) - (a.diasNaFase ?? 0)).slice(0, 6).map(mk);
-    const parados = d.cards.filter((c) => !preKeys.has(c.phase) && (c.diasNaFase ?? 0) >= 25).sort((a, b) => (b.diasNaFase ?? 0) - (a.diasNaFase ?? 0)).slice(0, 6).map(mk);
+    // "Parados" segue sendo só a trilha judicial (negação da lane pré INTEIRA —
+    // senão os pré concluídos/REPB recém-excluídos acima vazariam pra cá).
+    const parados = d.cards.filter((c) => !lanePre.has(c.phase) && (c.diasNaFase ?? 0) >= 25).sort((a, b) => (b.diasNaFase ?? 0) - (a.diasNaFase ?? 0)).slice(0, 6).map(mk);
     return { pre, parados };
   }, [q.data]);
-  if (!q.data || (pre.length === 0 && parados.length === 0)) return null;
+  const repb = useMemo(() => {
+    const d = repbQ.data;
+    if (!d) return [] as { id: string; nome: string; fase: string; dias: number }[];
+    const ativas = new Set(d.phases.filter((p) => p.key.startsWith('repb_') && !isTerminalPhase(p)).map((p) => p.key));
+    const labelOf = (k: string) => (d.phases.find((p) => p.key === k)?.label ?? k).replace(/^\d+(\.\d+)?\.\s*/, '');
+    return d.cards
+      .filter((c) => ativas.has(c.phase))
+      .sort((a, b) => (b.diasNaFase ?? 0) - (a.diasNaFase ?? 0))
+      .slice(0, 6)
+      .map((c) => ({ id: c.id, nome: c.client || c.title, fase: labelOf(c.phase), dias: c.diasNaFase ?? 0 }));
+  }, [repbQ.data]);
+  if (!q.data || (pre.length === 0 && parados.length === 0 && repb.length === 0)) return null;
   return (
-    <div className="welcome-pop mt-9 grid w-full gap-3 text-left sm:grid-cols-2" style={{ animationDelay: '0.23s' }}>
+    <div className={`welcome-pop mt-9 grid w-full gap-3 text-left sm:grid-cols-2 ${repb.length > 0 ? 'xl:grid-cols-3' : ''}`} style={{ animationDelay: '0.23s' }}>
       <AtencaoCard titulo="Pré-processual — acompanhar" cor="#e11970" href="/juridico/pre-processual" itens={pre} vazio="Nada pendente aqui 🎉" />
       <AtencaoCard titulo="Parados — acelerar" cor="#E03131" href="/juridico/kanban" itens={parados} vazio="Tudo em movimento 🚀" />
+      {repb.length > 0 && (
+        <AtencaoCard titulo="REPB — acompanhar" cor="#B7791F" href="/juridico/repb" itens={repb} vazio="Nada pendente aqui 🎉" />
+      )}
     </div>
   );
 }

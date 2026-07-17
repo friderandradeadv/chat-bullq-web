@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip, Eye, EyeOff, Pencil } from 'lucide-react';
+import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip, Eye, EyeOff, Pencil, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import { scheduledMessagesService } from '../services/scheduled-messages.service';
@@ -703,6 +703,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
 
   // Edição de mensagem enviada (janela ~15 min do WhatsApp).
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const startEditMessage = useCallback((msg: Message) => {
     setEditing({ id: msg.id, text: (msg.content as any)?.text ?? '' });
@@ -795,6 +796,28 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
       // Fallback: if send fails before the socket event arrives, force a refresh.
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
       throw err;
+    }
+  };
+
+  // Reenviar uma mensagem que FALHOU: dispara um envio NOVO com o mesmo
+  // conteúdo (texto ou mídia por URL) — a original fica no histórico como
+  // registro da falha. Se a causa persistir (ex.: janela de 24h), a nova
+  // também falha e o motivo aparece no tooltip dela.
+  const handleResend = async (msg: Message) => {
+    if (resendingId) return;
+    setResendingId(msg.id);
+    try {
+      await inboxService.sendMessage({
+        conversationId: conversation.id,
+        type: msg.type,
+        content: msg.content ?? {},
+        ...(pontual && !isMine ? { oneOff: true } : {}),
+      });
+      ensureUnarchivedOnSend();
+    } catch {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -1544,6 +1567,21 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                             )}
                           </div>
                           </div>
+                        </div>
+                      )}
+                      {/* Falhou? Oferece reenviar (envio novo com o mesmo conteúdo). */}
+                      {isOutbound && msg.status === 'FAILED' && !isRevoked && (
+                        <div className="mt-1 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleResend(msg)}
+                            disabled={resendingId === msg.id}
+                            title={statusTooltip(msg.status, msg.failedReason)}
+                            className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600 transition hover:bg-red-100 disabled:opacity-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                          >
+                            <RotateCw className={`h-3 w-3 ${resendingId === msg.id ? 'animate-spin' : ''}`} />
+                            {resendingId === msg.id ? 'Reenviando…' : 'Reenviar'}
+                          </button>
                         </div>
                       )}
                       {reactions.length > 0 && (
