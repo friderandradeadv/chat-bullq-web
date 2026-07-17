@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, MessageSquare, Scale, CircleDollarSign, Menu } from 'lucide-react';
+import { Sparkles, MessageSquare, CalendarCheck, CircleDollarSign, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
@@ -82,10 +82,10 @@ export function MobileTabBar() {
         className={linkCls(isActive(['/agenda', '/juridico', '/processos', '/caixa-djen', '/clientes']))}
       >
         <span className="relative">
-          <Scale className="h-5 w-5" />
+          <CalendarCheck className="h-5 w-5" />
           <Badge count={pendingTasks + preUnseen} />
         </span>
-        <span>Jurídico</span>
+        <span>Agenda</span>
       </Link>
 
       {isAdmin && (
