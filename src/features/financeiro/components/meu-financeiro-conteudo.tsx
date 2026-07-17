@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   ArrowUpCircle, ArrowDownCircle, Sparkles, Search, HeartHandshake, Flame, Calendar, Gavel, ExternalLink, UserCircle2,
-  TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt, Wallet,
+  TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt, Wallet, Layers,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
 import { contactsService } from '@/features/contacts/services/contacts.service';
@@ -20,7 +20,8 @@ import { ComboBox } from '@/features/financeiro/components/combo-box';
 /** Contexto de criação de lançamento (quando o advogado pode lançar na vertical dele). */
 export type CriarCtx = { userId: string; area: string; nome?: string };
 
-const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(Math.round(n)).toLocaleString('pt-BR');
+// SEMPRE com centavos — pedido do Matheus 17/07: todo valor em R$ exibe os centavos.
+const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const brl2 = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kbrl = (n: number) => { const a = Math.abs(n); const s = n < 0 ? '-' : ''; return a >= 1000 ? `${s}${(a / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : `${s}${a}`; };
 
@@ -89,7 +90,7 @@ const FRASES_ADV = [
 const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido', label: 'Recebidos' }, { key: 'a_receber', label: 'A receber' }] as const;
 
 export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; criar?: CriarCtx }) {
-  const [subtab, setSubtab] = useState<'resumo' | 'holerite' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>('holerite');
+  const [subtab, setSubtab] = useState<'resumo' | 'holerite' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>(data.area ? 'resumo' : 'holerite');
   const [holMesSel, setHolMesSel] = useState('');
   const [novo, setNovo] = useState(false);
   const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nCasos: 0, nLancamentos: 0 };
@@ -139,18 +140,28 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
   return (
     <>
-        {/* Cabeçalho personalizado */}
-        <div className="flex items-center gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-[#228BE6] text-base font-bold text-white">{iniciais}</span>
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{saud}, {primeiro}! 👋</h1>
-            <p className="text-sm text-zinc-500">{deArea ? <>Financeiro da vertical <strong>{areaNome}</strong> — <strong>{data.area?.nCasos ?? r.nCasos} processo(s)</strong> na área.</> : <>Seu financeiro — <strong>{r.nCasos ?? casos.length} processo(s)</strong> seus · <strong>{r.nClientes} cliente(s)</strong> que já te renderam honorários.</>}</p>
+        {/* Cabeçalho — área (vertical) OU pessoa */}
+        {deArea ? (
+          <div className="flex items-center gap-3">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#15AABF] to-[#7048E8] text-white"><Layers className="h-6 w-6" /></span>
+            <div>
+              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Vertical {areaNome}</h1>
+              <p className="text-sm text-zinc-500">Financeiro da área — todos os casos e advogados · <strong>{data.area?.nCasos ?? r.nCasos} processo(s)</strong>.</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-[#228BE6] text-base font-bold text-white">{iniciais}</span>
+            <div>
+              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{saud}, {primeiro}! 👋</h1>
+              <p className="text-sm text-zinc-500">Seu financeiro — <strong>{r.nCasos ?? casos.length} processo(s)</strong> seus · <strong>{r.nClientes} cliente(s)</strong> que já te renderam honorários.</p>
+            </div>
+          </div>
+        )}
 
-        {/* Subabas da visão escopada — organiza como o dashboard, mas na vertical */}
+        {/* Subabas — a vertical não tem "Holerite" (isso é pessoal) */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
-          {([['holerite', 'Holerite', Wallet], ['resumo', 'Meu financeiro', Scale], ['lancamentos', 'Lançamentos', Receipt]] as const).map(([k, label, Icon]) => (
+          {(deArea ? [['resumo', 'Resumo da vertical', Scale], ['lancamentos', 'Lançamentos', Receipt]] as const : [['holerite', 'Holerite', Wallet], ['resumo', 'Meu financeiro', Scale], ['lancamentos', 'Lançamentos', Receipt]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setSubtab(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${subtab === k ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}><Icon className="h-4 w-4" /> {label}</button>
           ))}
           {criar && <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"><Plus className="h-4 w-4" /> Novo lançamento</button>}
@@ -234,8 +245,8 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           </div>
         )}
 
-        {/* Banner motivacional (Visão geral) */}
-        {subtab === 'resumo' && (
+        {/* Banner motivacional — só na visão PESSOAL (uma vertical não recebe elogio pessoal) */}
+        {subtab === 'resumo' && !deArea && (
         <div className="mt-4 overflow-hidden rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 dark:border-zinc-800 dark:from-amber-900/15 dark:via-zinc-900 dark:to-emerald-900/15">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-400/20 text-amber-600"><Flame className="h-5 w-5" /></span>
@@ -249,8 +260,19 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         </div>
         )}
 
-        {/* Stats (Visão geral) — 2 grupos claros: o que custeia a vertical × o que VOCÊ leva */}
-        {subtab === 'resumo' && (
+        {/* Stats — VERTICAL: faturou × a receber da ÁREA (sem "o que VOCÊ leva") */}
+        {subtab === 'resumo' && deArea && (
+        <div className="mt-4">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Honorários da vertical <span className="font-normal text-zinc-400">— entram no caixa e custeiam a estrutura da área</span></p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MiniStat label="Faturou (recebido)" value={brl(r.recebido)} hint={melhorMes ? `melhor mês: ${mesLabel(melhorMes.mes).replace(' de ', '/')}` : `${data.area?.nCasos ?? r.nCasos} processo(s)`} accent="#2F9E44" />
+            <MiniStat label="A receber" value={brl(r.aReceber)} hint="honorários pendentes da área" accent="#F59F00" />
+          </div>
+        </div>
+        )}
+
+        {/* Stats — PESSOAL: o que custeia a vertical × o que VOCÊ leva */}
+        {subtab === 'resumo' && !deArea && (
         <div className="mt-4">
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Você trouxe pra vertical <span className="font-normal text-zinc-400">— custeia a estrutura, não é o que você leva</span></p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -262,8 +284,8 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         </div>
         )}
 
-        {/* Como funciona a remuneração da associada — honorários custeiam a vertical; ela recebe o rateio no êxito */}
-        {subtab === 'resumo' && (
+        {/* Como funciona a remuneração da associada — só na visão PESSOAL */}
+        {subtab === 'resumo' && !deArea && (
         <div className="mt-4 flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-900/40 dark:bg-violet-900/10">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-100 text-[#7048E8] dark:bg-violet-900/30"><Scale className="h-4 w-4" /></span>
           <div className="min-w-0 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
@@ -275,7 +297,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* Gráfico: recebido mês a mês (Visão geral) */}
         {subtab === 'resumo' && serie.length > 1 && (
-          <Card title="Seu recebido mês a mês" sub="a evolução dos honorários que você trouxe.">
+          <Card title={deArea ? 'Recebido da vertical mês a mês' : 'Seu recebido mês a mês'} sub={deArea ? 'a evolução dos honorários da área.' : 'a evolução dos honorários que você trouxe.'}>
             <ResponsiveContainer width="100%" height={200}>
               <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" className="dark:opacity-20" />
@@ -400,8 +422,8 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* ── CUSTO DA SUA VERTICAL — entradas × saídas, overhead rateado por casos ── */}
         {subtab === 'resumo' && data.resultadoVertical && (
-          <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-[#15AABF]" /> Custo da sua vertical{data.minhaArea ? ` · ${data.minhaArea}` : ''}</span>}
-            sub={`quanto a sua área rende e custa hoje — a estrutura compartilhada do escritório entra rateada por nº de casos (${data.resultadoVertical.nCasos} da sua vertical).`}>
+          <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-[#15AABF]" /> {deArea ? 'Custo da vertical' : 'Custo da sua vertical'}{data.minhaArea ? ` · ${data.minhaArea}` : ''}</span>}
+            sub={`quanto ${deArea ? 'a área' : 'a sua área'} rende e custa hoje — a estrutura compartilhada do escritório entra rateada por nº de casos (${data.resultadoVertical.nCasos} ${deArea ? 'da vertical' : 'da sua vertical'}).`}>
             <div className="grid gap-3 sm:grid-cols-4">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Entradas</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl(data.resultadoVertical.entradas)}</p><p className="text-[11px] text-zinc-400">honorários recebidos</p></div>
               <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3 dark:border-rose-900/40 dark:bg-rose-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Saídas</p><p className="mt-0.5 text-xl font-bold tabular-nums text-rose-600">{brl(data.resultadoVertical.saidas)}</p><p className="text-[11px] text-zinc-400">diretas {brl(data.resultadoVertical.diretas)} + estrutura {brl(data.resultadoVertical.overhead)}</p></div>
@@ -509,7 +531,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           if (entradasMes === 0 && saidasMes === 0) return null;
           return (
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Entradas{mesSel ? ' do mês' : ''} (seus casos)</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl2(entradasMes)}</p><p className="text-[10px] text-zinc-400">honorários que você trouxe</p></div>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Entradas{mesSel ? ' do mês' : ''}{deArea ? '' : ' (seus casos)'}</p><p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{brl2(entradasMes)}</p><p className="text-[10px] text-zinc-400">{deArea ? 'honorários da vertical' : 'honorários que você trouxe'}</p></div>
               <div className="rounded-2xl border border-rose-200 bg-rose-50/40 p-3.5 dark:border-rose-900/40 dark:bg-rose-900/10"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Saídas{mesSel ? ' do mês' : ''}{svCur ? ` · ${svCur.area}` : ''}</p><p className="mt-0.5 text-xl font-bold tabular-nums text-rose-600">{brl2(saidasMes)}</p><p className="text-[10px] text-zinc-400">custos da vertical</p></div>
               <div className={`rounded-2xl border p-3.5 ${res >= 0 ? 'border-violet-300 bg-violet-50/60 dark:border-violet-900/50 dark:bg-violet-900/15' : 'border-amber-200 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-900/10'}`}><p className="text-[11px] uppercase tracking-wide text-zinc-400">Resultado{mesSel ? ' do mês' : ''}</p><p className={`mt-0.5 text-xl font-bold tabular-nums ${res >= 0 ? 'text-[#7048E8]' : 'text-amber-600'}`}>{brl2(res)}</p><p className="text-[10px] text-zinc-400">entradas − saídas</p></div>
             </div>

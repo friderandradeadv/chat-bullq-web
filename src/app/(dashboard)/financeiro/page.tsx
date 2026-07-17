@@ -26,7 +26,8 @@ import {
   aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
 
-const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(Math.round(n)).toLocaleString('pt-BR');
+// SEMPRE com centavos — pedido do Matheus 17/07: todo valor em R$ exibe os centavos.
+const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const brl2 = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Nomes vêm em CAPS do Pipefy/Astrea — exibe em Title Case (preserva siglas/conectivos).
 const MINUS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'du', 'a', 'o']);
@@ -1647,9 +1648,9 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
     // somatórios EXATOS, direto das transações de honorários (inclui estornos a quem nunca pagou)
     const honor = dataF.transacoes.filter((t) => /honor/i.test(t.categoria));
     const entradas = honor.filter((t) => t.valor >= 0);
-    const recebido = Math.round(entradas.reduce((s, t) => s + t.valor, 0));
-    const repassado = Math.round(honor.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0));
-    const exito = Math.round(entradas.filter((t) => t.subtipo === 'exito').reduce((s, t) => s + t.valor, 0));
+    const recebido = entradas.reduce((s, t) => s + t.valor, 0);
+    const repassado = honor.filter((t) => t.valor < 0).reduce((s, t) => s - t.valor, 0);
+    const exito = entradas.filter((t) => t.subtipo === 'exito').reduce((s, t) => s + t.valor, 0);
     const inicial = recebido - exito; // tudo que não é êxito = inicial (contrato/entrada)
     const porStatus = (st: StatusFin) => clientes.filter((c) => c.status === st).length;
     return { recebido, repassado, inicial, exito, liquido: recebido - repassado, nClientes: clientes.length, emDia: porStatus('em-dia'), atencao: porStatus('atencao') };
@@ -2338,8 +2339,23 @@ const corArea = (a: string) => CORES_AREA[a] ?? '#15AABF';
 function VerticaisTab({ data }: { data: FinDashboard }) {
   const [sel, setSel] = useState('');
   const [exp, setExp] = useState(''); // vertical com o livro-razão mensal aberto
+  const [mesV, setMesV] = useState(''); // '' = período todo; senão recorta cada vertical no mês
   const pnl = data.verticalPnL;
   const verticais = pnl?.verticais ?? [];
+  // meses disponíveis (o backend agora dá a mesma lista de meses em toda vertical)
+  const mesesV = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of verticais) for (const m of v.porMes ?? []) s.add(m.mes);
+    return [...s].filter((k) => /^\d{4}-\d{2}$/.test(k)).sort((a, b) => b.localeCompare(a));
+  }, [verticais]);
+  // recorta uma vertical no mês escolhido (ou o período todo se mesV === '')
+  const recorte = (v: (typeof verticais)[number]) => {
+    if (!mesV) return { entradas: v.entradas, diretas: v.diretas, comum: v.comum ?? 0, saidas: v.saidas, resultado: v.resultado, margem: v.margem };
+    const pm = (v.porMes ?? []).find((m) => m.mes === mesV);
+    const entradas = pm?.entradas ?? 0, diretas = pm?.diretas ?? 0, comum = pm?.comum ?? 0;
+    const saidas = Math.round((diretas + comum) * 100) / 100;
+    return { entradas, diretas, comum, saidas, resultado: pm?.resultado ?? Math.round((entradas - saidas) * 100) / 100, margem: entradas > 0 ? Math.round(((entradas - saidas) / entradas) * 1000) / 10 : null };
+  };
   const cons = pnl?.consolidado;
   const comum = pnl?.comum;
   const pessoas = pnl?.pessoas;
@@ -2379,37 +2395,49 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Resultado do escritório" value={brl(cons?.resultado ?? 0)} hint="faturou − direto − comum − pessoas" accent={(cons?.resultado ?? 0) >= 0 ? '#2F9E44' : '#E03131'} />
       </div>
 
-      <Card title="Cada vertical se paga?" sub="Receita − Despesa da área = Resultado. Clique num card pra ver o mês a mês.">
+      <Card title="Cada vertical se paga?" sub={mesV ? 'Faturou × gastou (direto + fatia do comum) no mês escolhido. Clique num card pra ver o mês a mês.' : 'Receita − Despesa da área = Resultado (período todo). Escolha um mês pra ver faturou × gastou do mês.'}
+        action={mesesV.length > 0 && (
+          <select value={mesV} onChange={(e) => setMesV(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+            <option value="">Período todo</option>
+            {mesesV.map((k) => <option key={k} value={k}>{mesLabel(k)}</option>)}
+          </select>
+        )}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {verticais.map((v) => (
+          {verticais.map((v) => { const rc = recorte(v); return (
             <div key={v.area} className="cursor-pointer rounded-xl border p-4 transition hover:shadow-sm" style={{ borderColor: `${corArea(v.area)}55` }} onClick={() => setExp(exp === v.area ? '' : v.area)}>
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 text-sm font-bold text-zinc-800 dark:text-zinc-100"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${v.resultado >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>{v.resultado >= 0 ? '✅ se paga' : '⚠️ subsidiada'}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${rc.entradas <= 0 && rc.saidas <= 0 ? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' : rc.resultado >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>{rc.entradas <= 0 && rc.saidas <= 0 ? 'sem movimento' : rc.resultado >= 0 ? '✅ se paga' : '⚠️ subsidiada'}</span>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Receita</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(v.entradas)}</p></div>
-                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesa</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(v.saidas)}</p>{(v.comum ?? 0) > 0 && <p className="text-[9px] text-zinc-400">direto {brl(v.diretas)} + comum {brl(v.comum ?? 0)}</p>}</div>
-                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Resultado</p><p className={`text-sm font-bold tabular-nums ${v.resultado >= 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-rose-600'}`}>{brl(v.resultado)}</p></div>
+                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">{mesV ? 'Faturou' : 'Receita'}</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(rc.entradas)}</p></div>
+                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">{mesV ? 'Gastou' : 'Despesa'}</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(rc.saidas)}</p>{(rc.comum ?? 0) > 0 && <p className="text-[9px] text-zinc-400">direto {brl(rc.diretas)} + comum {brl(rc.comum ?? 0)}</p>}</div>
+                <div><p className="text-[10px] uppercase tracking-wide text-zinc-400">Resultado</p><p className={`text-sm font-bold tabular-nums ${rc.resultado >= 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-rose-600'}`}>{brl(rc.resultado)}</p></div>
               </div>
-              <p className="mt-2 text-[11px] text-zinc-400">{v.nCasos} caso(s){v.margem != null ? ` · margem ${Math.round(v.margem)}%` : ''} · <span className="text-[#228BE6]">{exp === v.area ? 'ocultar' : 'ver mês a mês'}</span></p>
-              {exp === v.area && (
+              <p className="mt-2 text-[11px] text-zinc-400">{mesV ? mesLabel(mesV) : `${v.nCasos} caso(s)`}{rc.margem != null ? ` · margem ${Math.round(rc.margem)}%` : ''} · <span className="text-[#228BE6]">{exp === v.area ? 'ocultar' : 'ver mês a mês'}</span></p>
+              {exp === v.area && (() => {
+                // Só meses com movimento real (evita listar meses só-comum eternamente e crescer sem fim).
+                const linhas = (v.porMes ?? []).filter((m) => (m.entradas ?? 0) !== 0 || (m.diretas ?? 0) !== 0 || (m.comum ?? 0) !== 0);
+                return (
                 <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
-                  {(v.porMes?.length ?? 0) > 0 ? (
-                    <div className="space-y-0.5">
-                      {v.porMes!.map((m) => (
-                        <div key={m.mes} className="flex items-center justify-between gap-2 text-[11px]">
+                  {linhas.length > 0 ? (<>
+                    <div className="flex items-center justify-between gap-2 pb-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400"><span>Mês</span><span className="flex shrink-0 items-center gap-2"><span className="w-16 text-right">Faturou</span><span className="w-16 text-right">Gastou</span><span className="w-16 text-right">Result.</span></span></div>
+                    <div className="max-h-56 space-y-0.5 overflow-y-auto scrollbar-thin">
+                      {linhas.map((m) => { const gasto = Math.round(((m.diretas ?? 0) + (m.comum ?? 0)) * 100) / 100; return (
+                        <div key={m.mes} className={`flex items-center justify-between gap-2 text-[11px] ${mesV === m.mes ? 'rounded bg-violet-50 px-1 dark:bg-violet-900/20' : ''}`}>
                           <span className="truncate text-zinc-500">{m.label}</span>
-                          <span className="flex shrink-0 items-center gap-2 tabular-nums"><span className="text-emerald-600">{brl(m.entradas)}</span><span className="text-rose-500">−{brl(m.diretas)}</span><span className={`font-semibold ${m.resultado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brl(m.resultado)}</span></span>
+                          <span className="flex shrink-0 items-center gap-2 tabular-nums"><span className="w-16 text-right text-emerald-600">{brl(m.entradas)}</span><span className="w-16 text-right text-rose-500" title="direto + fatia do comum">−{brl(gasto)}</span><span className={`w-16 text-right font-semibold ${m.resultado >= 0 ? 'text-zinc-700 dark:text-zinc-200' : 'text-rose-600'}`}>{brl(m.resultado)}</span></span>
                         </div>
-                      ))}
+                      ); })}
                     </div>
-                  ) : <p className="text-[11px] text-zinc-400">Sem lançamentos com data ainda. Lance honorários e marque a vertical nas despesas.</p>}
+                    {linhas.length > 6 && <p className="mt-1 text-[10px] text-zinc-400">{linhas.length} meses · role pra ver todos</p>}
+                  </>) : <p className="text-[11px] text-zinc-400">Sem lançamentos com data ainda. Lance honorários e marque a vertical nas despesas.</p>}
                   <button onClick={(e) => { e.stopPropagation(); setSel(v.area); }} className="mt-1.5 text-[11px] font-medium text-[#228BE6] hover:underline">detalhe completo da vertical →</button>
                 </div>
-              )}
+                );
+              })()}
             </div>
-          ))}
+          ); })}
           {verticais.length === 0 && <p className="col-span-full py-8 text-center text-sm text-zinc-400">Sem verticais ainda. Lance honorários (casam pelo cliente) e marque a vertical nas despesas.</p>}
         </div>
       </Card>
