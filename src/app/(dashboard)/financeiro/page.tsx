@@ -1625,6 +1625,7 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
   const ficha = useFichaCliente();
   const [filtro, setFiltro] = useState<'todos' | StatusFin>('todos');
   const [busca, setBusca] = useState('');
+  const [ordemCli, setOrdemCli] = useState<'valor' | 'recente' | 'antigo'>('valor');
   const [aberto, setAberto] = useState<string | null>(null);
   const [respF, setRespF] = useState('');
   const [mesDe, setMesDe] = useState('');
@@ -1662,8 +1663,15 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
 
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return clientes.filter((c) => (filtro === 'todos' || c.status === filtro) && (!q || c.nome.toLowerCase().includes(q)));
-  }, [clientes, filtro, busca]);
+    const filtrada = clientes.filter((c) => (filtro === 'todos' || c.status === filtro) && (!q || c.nome.toLowerCase().includes(q)));
+    // aggregarClientes já devolve ordenado por 'valor' (recebido desc); só reordena se pedirem outra ordem.
+    if (ordemCli === 'valor') return filtrada;
+    const dataIso = (br: string | null) => toISOInput(br || '') || '0000-00-00';
+    return [...filtrada].sort((a, b) => {
+      const cmp = dataIso(ordemCli === 'recente' ? b.ultimo : a.primeiro).localeCompare(dataIso(ordemCli === 'recente' ? a.ultimo : b.primeiro));
+      return cmp;
+    });
+  }, [clientes, filtro, busca, ordemCli]);
 
   // TODOS os recebimentos individuais (não agrupados por cliente), mais recente primeiro —
   // pra nenhum pagamento "sumir" no meio da carteira ordenada por valor total.
@@ -1717,7 +1725,14 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
 
       <Card title="Carteira de honorários por cliente" sub="vinculado aos lançamentos. Status é comportamental (frequência de pagamento). O saldo devedor exato dos parcelados está na aba Cobranças."
         action={
-          <div className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente…" className="w-44 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
+          <div className="flex items-center gap-2">
+            <select value={ordemCli} onChange={(e) => setOrdemCli(e.target.value as typeof ordemCli)} className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" title="Ordem da lista">
+              <option value="valor">Maior valor</option>
+              <option value="recente">Chegada: mais recente</option>
+              <option value="antigo">Chegada: mais antigo</option>
+            </select>
+            <div className="relative"><Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" /><input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente…" className="w-44 rounded-md border border-zinc-300 bg-white py-1.5 pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></div>
+          </div>
         }>
         {/* Filtros: responsável + período */}
         <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-zinc-100 pb-3 dark:border-zinc-800">
