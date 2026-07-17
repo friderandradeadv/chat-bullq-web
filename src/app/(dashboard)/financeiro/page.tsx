@@ -1665,6 +1665,17 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
     return clientes.filter((c) => (filtro === 'todos' || c.status === filtro) && (!q || c.nome.toLowerCase().includes(q)));
   }, [clientes, filtro, busca]);
 
+  // TODOS os recebimentos individuais (não agrupados por cliente), mais recente primeiro —
+  // pra nenhum pagamento "sumir" no meio da carteira ordenada por valor total.
+  const recebimentos = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return dataF.transacoes
+      .filter((t) => /honor/i.test(t.categoria) && t.valor >= 0 && (!t.status || t.status === 'recebido'))
+      .filter((t) => !q || (t.party || t.pagador || '').toLowerCase().includes(q))
+      .sort((a, b) => toISOInput(b.data).localeCompare(toISOInput(a.data)));
+  }, [dataF.transacoes, busca]);
+  const [showTodos, setShowTodos] = useState(false);
+
   return (
     <>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -1674,6 +1685,35 @@ function HonorariosTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Líquido p/ o escritório" value={brl(tot.liquido)} hint="recebido − repassado" accent="#228BE6" />
         <MiniStat label="Em dia / Atenção" value={`${tot.emDia} / ${tot.atencao}`} hint="recorrentes que pararam" accent="#F59F00" />
       </div>
+
+      <Card title={<>Todos os recebimentos <span className="font-normal text-zinc-400">· {recebimentos.length}</span></>}
+        sub="cada pagamento de honorário individual, mais recente primeiro — nenhum some no meio da carteira por cliente."
+        action={<button onClick={() => setShowTodos((v) => !v)} className="text-xs font-medium text-[#228BE6] hover:underline">{showTodos ? 'ocultar' : 'ver todos'}</button>}>
+        {showTodos ? (
+          <div className="max-h-96 overflow-y-auto scrollbar-thin">
+            {recebimentos.map((t, i) => (
+              <div key={t.id ?? i} className="flex items-center gap-2 border-t border-zinc-100 px-1 py-1.5 text-sm first:border-t-0 dark:border-zinc-800/70">
+                <span className="w-16 shrink-0 tabular-nums text-xs text-zinc-400">{(t.data || '').slice(0, 5)}</span>
+                <ClienteLink nome={t.party || t.pagador || ''} ficha={ficha} className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300" />
+                {t.subtipo === 'exito' && <span className="hidden shrink-0 rounded bg-violet-100 px-1.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-900/30 sm:inline">êxito</span>}
+                <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-emerald-600">{brl2(t.valor)}</span>
+              </div>
+            ))}
+            {recebimentos.length === 0 && <p className="py-6 text-center text-sm text-zinc-400">Nenhum recebimento no filtro atual.</p>}
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {recebimentos.slice(0, 5).map((t, i) => (
+              <div key={t.id ?? i} className="flex items-center gap-2 px-1 py-1 text-sm">
+                <span className="w-16 shrink-0 tabular-nums text-xs text-zinc-400">{(t.data || '').slice(0, 5)}</span>
+                <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{titleCase(t.party || t.pagador || '')}</span>
+                {t.subtipo === 'exito' && <span className="hidden shrink-0 rounded bg-violet-100 px-1.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-900/30 sm:inline">êxito</span>}
+                <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-emerald-600">{brl2(t.valor)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card title="Carteira de honorários por cliente" sub="vinculado aos lançamentos. Status é comportamental (frequência de pagamento). O saldo devedor exato dos parcelados está na aba Cobranças."
         action={

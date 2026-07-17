@@ -91,6 +91,7 @@ const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido',
 
 export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; criar?: CriarCtx }) {
   const [subtab, setSubtab] = useState<'resumo' | 'holerite' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>(data.area ? 'resumo' : 'holerite');
+  const [showCs, setShowCs] = useState(false); // detalhe "quem está em cumprimento de sentença" (visão de área)
   const [holMesSel, setHolMesSel] = useState('');
   const [novo, setNovo] = useState(false);
   const r = data.resumo ?? { recebido: 0, aReceber: 0, minhaParte: 0, nClientes: 0, nCasos: 0, nLancamentos: 0 };
@@ -277,7 +278,29 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
             <MiniStat label="Faturou (recebido)" value={brl(r.recebido)} hint={melhorMes ? `melhor mês: ${mesLabel(melhorMes.mes).replace(' de ', '/')}` : `${data.area?.nCasos ?? r.nCasos} processo(s)`} accent="#2F9E44" />
             <MiniStat label="A receber" value={brl(aReceberArea)} hint={partes.join(' + ')} accent="#F59F00" />
           </div>
-          {csCumprimentoNosso > 0 && <p className="mt-1.5 text-[11px] text-zinc-400">O <strong>cumprimento de sentença</strong> entra pela <strong>parte do escritório</strong> ({brl(csCumprimentoNosso)} de {brl(cs.cumprimento)} bruto em execução) — obrigação já reconhecida, ainda não em caixa.</p>}
+          {csCumprimentoNosso > 0 && (
+            <div className="mt-1.5">
+              <p className="text-[11px] text-zinc-400">O <strong>cumprimento de sentença</strong> entra pela <strong>parte do escritório</strong> ({brl(csCumprimentoNosso)} de {brl(cs.cumprimento)} bruto em execução) — obrigação já reconhecida, ainda não em caixa. <button onClick={() => setShowCs((v) => !v)} className="font-medium text-[#228BE6] hover:underline">{showCs ? 'ocultar' : `ver quem está em cumprimento (${(cs.itens ?? []).filter((i) => i.tipo === 'cumprimento').length})`}</button></p>
+              {showCs && (() => {
+                const itens = (cs.itens ?? []).filter((i) => (i.nosso ?? 0) > 0 || (i.valor ?? 0) > 0).slice().sort((a, b) => (b.nosso ?? b.valor ?? 0) - (a.nosso ?? a.valor ?? 0));
+                return (
+                <div className="mt-2 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+                  <div className="flex items-center gap-2 bg-zinc-50/70 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-400 dark:bg-zinc-800/30"><span className="flex-1">Cliente · {itens.length} em execução</span><span className="w-24 text-right">Bruto</span><span className="w-24 text-right">Nossa parte</span></div>
+                  <div className="max-h-64 overflow-y-auto scrollbar-thin">
+                    {itens.map((i, k) => (
+                      <div key={i.caseId ?? k} className="flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-[12px] dark:border-zinc-800/70">
+                        <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300" title={i.cliente}>{i.cliente}{i.tipo === 'prestacao' ? <span className="ml-1 rounded bg-sky-100 px-1 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">prestação</span> : ''}</span>
+                        <span className="w-24 shrink-0 text-right tabular-nums text-zinc-400">{brl(i.valor ?? 0)}</span>
+                        <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-amber-600">{brl(i.nosso ?? 0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 border-t-2 border-zinc-200 bg-zinc-50/40 px-3 py-1.5 text-[12px] font-bold dark:border-zinc-700 dark:bg-zinc-800/20"><span className="flex-1 text-zinc-700 dark:text-zinc-200">Total em cumprimento</span><span className="w-24 text-right tabular-nums text-zinc-500">{brl(cs.cumprimento)}</span><span className="w-24 text-right tabular-nums text-amber-600">{brl(csCumprimentoNosso)}</span></div>
+                </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
           );
         })()}
