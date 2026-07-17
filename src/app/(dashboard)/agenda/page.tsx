@@ -124,8 +124,17 @@ type Avanco =
 
 function avancoDoPrazo(a: Activity): Avanco {
   if (a.source !== 'prazo' || !a.caseId) return null;
-  if (isRecursoPrazo(a)) return { kind: 'recurso' };
   const act = (a.djenAction ?? '').toLowerCase();
+  // Tarefa de ANALISAR a decisão (sentença/acórdão) conclui SECO — sem mini-form
+  // de recurso nem avanço de kanban. O fluxo é: no card da análise cria-se o
+  // PRAZO DE RECURSO (bloco "Criar prazo de recurso"); é ao cumprir ESSE prazo
+  // que o mini-form abre e o card vai pro kanban (14. RECURSO). Sem este guard,
+  // o texto da análise ("avaliar embargos/agravo interno/REsp…") enganava o
+  // fallback por texto do isRecursoPrazo e concluir a análise reabria o registro
+  // de recurso — redundante com o prazo já criado.
+  if (act === 'sentenca' || act === 'acordao') return null;
+  if (/^analisar\s+(a\s+)?(senten[çc]a|ac[óo]rd[ãa]o|decis[ãa]o)/i.test(a.title.trim())) return null;
+  if (isRecursoPrazo(a)) return { kind: 'recurso' };
   const txt = `${a.title} ${a.description ?? ''}`.toLowerCase();
   // Fases pós-sentença com preenchimento (cumprimento/prestação/trânsito).
   if (act === 'cumprimento' || /cumprimento de senten|inicie o cumprimento|iniciar o cumprimento/.test(txt)) {
