@@ -2643,6 +2643,29 @@ const toBRdate = (c: string): string => {
   if (br) return `${br[1]}/${br[2]}/${br[3].length === 2 ? '20' + br[3] : br[3]}`;
   return '';
 };
+// Fallback pra TEXTO CORRIDO (comum em PDF de extrato de CONTA bancária extraído sem
+// tabela real: "20/07/2026 PIX RECEBIDO - JOÃO SILVA 1.250,00", 1 transação por linha).
+// A lógica por coluna/separador falha aqui porque a vírgula DECIMAL do valor (1.250,00)
+// é confundida com separador de coluna quando o parser cai no default `,`. Em vez de
+// depender de colunas, acha a DATA em qualquer posição da linha e o PRIMEIRO valor em
+// formato BR (R$ opcional, milhar com ponto, 2 casas decimais) logo depois dela —
+// o que sobrar entre os dois é a descrição. Pega o PRIMEIRO valor (não o último) porque
+// layouts com coluna de SALDO no fim ("... 1.250,00 5.430,12") têm o valor da transação
+// antes do saldo corrente.
+function parseLinhaLivre(linha: string): { data: string; valor: number; descricao: string } | null {
+  const mData = linha.match(/(\d{2})[\/-](\d{2})[\/-](\d{2,4})/);
+  if (!mData || mData.index == null) return null;
+  const dataBR = toBRdate(mData[0]);
+  if (!dataBR) return null;
+  const depoisData = linha.slice(mData.index + mData[0].length);
+  const mValor = depoisData.match(/-?\(?\s*R?\$?\s*\d{1,3}(?:\.\d{3})*,\d{2}\)?/);
+  if (!mValor || mValor.index == null) return null;
+  let valor = brNum(mValor[0]);
+  if (!Number.isFinite(valor) || valor === 0) return null;
+  if (/\(/.test(mValor[0])) valor = -Math.abs(valor); // "(1.234,56)" = negativo contábil
+  const descricao = depoisData.slice(0, mValor.index).replace(/^[\s\-–|:]+/, '').replace(/[\s\-–|:]+$/, '').trim();
+  return { data: dataBR, valor, descricao: descricao.slice(0, 140) };
+}
 // Parser de extrato CSV/TSV/; — entende cabeçalho (date/title/amount, Data/Histórico/Valor)
 // e a convenção da FATURA DE CARTÃO Nubank (amount positivo = compra = DESPESA).
 function parseExtrato(text: string): { data: string; valor: number; descricao: string }[] {
@@ -2677,6 +2700,12 @@ function parseExtrato(text: string): { data: string; valor: number; descricao: s
         if (c && !/^\d+$/.test(c)) rest.push(c);
       }
       desc = rest.join(' ');
+    }
+    // Coluna/separador não achou nada útil (típico de PDF de extrato de conta em texto
+    // corrido) — tenta direto na linha crua, sem depender de separador.
+    if (!dataBR || !Number.isFinite(valor) || valor === 0) {
+      const livre = parseLinhaLivre(linhas[r]);
+      if (livre) { dataBR = livre.data; valor = livre.valor; desc = livre.descricao; }
     }
     if (dataBR && Number.isFinite(valor) && valor !== 0) out.push({ data: dataBR, valor, descricao: desc.slice(0, 140) });
   }
