@@ -1542,6 +1542,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA); '__ratear' = rateio abaixo
   const [rateios, setRateios] = useState<Record<number, { area: string; valor: string; label?: string }[]>>({}); // fatia de cada vertical quando areas[i] === '__ratear'
+  const [contribs, setContribs] = useState<Record<number, { userId?: string; nome: string; valor: string }[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
+  const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
 
   const conferir = async (linhas: { data: string; valor: number; descricao: string }[], contaArg?: string) => {
     if (!linhas.length) { toast.error('Não consegui ler lançamentos desse arquivo. Tente OFX/CSV ou cole o texto.'); return; }
@@ -1584,7 +1587,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       if (!conf) throw new Error('confira primeiro');
       const linhas = conf.linhas.map((l, i) => ({ l, i })).filter(({ i }) => sel.has(i)).map(({ l, i }) => {
         const rv = (areas[i] === '__ratear' ? (rateios[i] ?? []) : []).filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
-        return { data: l.data, valor: l.valor, descricao: l.descricao, area: rv.length ? undefined : (areas[i] || '').trim() || undefined, rateioVerticais: rv.length ? rv : undefined };
+        const cb = (contribs[i] ?? []).filter((x) => x.nome && parseValor(x.valor) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: parseValor(x.valor) }));
+        return { data: l.data, valor: l.valor, descricao: l.descricao, area: rv.length ? undefined : (areas[i] || '').trim() || undefined, rateioVerticais: rv.length ? rv : undefined, contribuintes: cb.length ? cb : undefined };
       });
       return financeiroService.importarExtratoLinhas(conta || null, linhas);
     },
@@ -1628,9 +1632,11 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
               <span className="text-zinc-500">{conf.novos - (conf.revisar ?? conf.linhas.filter((l) => l.revisar).length)} novo(s) · <span className="text-amber-600">{conf.duplicados} já existe(m)</span>{(conf.revisar ?? conf.linhas.filter((l) => l.revisar).length) > 0 && <> · <span className="font-semibold text-amber-700 dark:text-amber-300">{conf.revisar ?? conf.linhas.filter((l) => l.revisar).length} pra revisar ⚠️</span></>}</span>
               <span className="text-xs text-zinc-400">{sel.size} selecionado(s)</span>
             </div>
-            <div className="max-h-72 overflow-x-auto overflow-y-auto rounded-lg border border-zinc-200/70 scrollbar-thin dark:border-zinc-800">
+            {/* Sem scroll aninhado (era um scroll dentro do scroll do modal, confuso de mexer):
+                só o modal inteiro rola — 1 scrollbar só. */}
+            <div className="overflow-x-auto rounded-lg border border-zinc-200/70 scrollbar-thin dark:border-zinc-800">
               <table className="w-full min-w-[26rem] text-sm">
-                <thead className="sticky top-0 bg-white dark:bg-zinc-900"><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium"></th><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 font-medium">Status</th></tr></thead>
+                <thead className="sticky top-0 z-10 bg-white dark:bg-zinc-900"><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium"></th><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 font-medium">Status</th></tr></thead>
                 <tbody>
                   {conf.linhas.map((l, i) => (
                     <Fragment key={i}>
@@ -1698,6 +1704,33 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 <span className={`text-[11px] ${soma - total > 0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>rateado {brl2(soma)} de {brl2(total)}{soma - total > 0.01 ? ' · excede!' : (total - soma > 0.01 ? ` · falta ${brl2(total - soma)}` : ' ✓')}</span>
                               </div>
                             </div>
+                            {/* Contribuição PESSOAL — quem ajudou a pagar do próprio bolso. Vem
+                                DEPOIS do rateio por vertical (mesma ordem do editor manual);
+                                independente das fatias acima — aparece no holerite da pessoa. */}
+                            {(() => {
+                              const cRows = contribs[i] ?? [];
+                              const cSoma = cRows.reduce((s, x) => s + parseValor(x.valor), 0);
+                              const setCRows = (fn: (rows: { userId?: string; nome: string; valor: string }[]) => { userId?: string; nome: string; valor: string }[]) => setContribs((c) => ({ ...c, [i]: fn(c[i] ?? []) }));
+                              return (
+                              <div className="mt-2 space-y-1.5 rounded-lg border border-amber-200/70 p-2.5 dark:border-amber-900/40">
+                                <p className="text-[11px] text-zinc-400">Quem ajudou a pagar <strong>do próprio bolso</strong> (informativo — aparece no <strong>holerite</strong> da pessoa, não abate a despesa).</p>
+                                {cRows.map((x, j) => (
+                                  <div key={j} className="flex flex-wrap items-center gap-1.5">
+                                    <select className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={x.userId ?? ''} onChange={(e) => { const u = advogados.find((a) => a.id === e.target.value); setCRows((rr) => rr.map((y, k) => k === j ? { ...y, userId: e.target.value || undefined, nome: u?.name ?? y.nome } : y)); }}>
+                                      <option value="">— escolher pessoa —</option>
+                                      {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                    <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setCRows((rr) => rr.map((y, k) => k === j ? { ...y, valor: v } : y))} /></div>
+                                    <button onClick={() => setCRows((rr) => rr.filter((_, k) => k !== j))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                                  </div>
+                                ))}
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <button onClick={() => setCRows((rr) => [...rr, { nome: '', valor: '' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar pessoa</button>
+                                  {cRows.length > 0 && <span className="text-[11px] text-zinc-400">contribuiu {brl2(cSoma)} de {brl2(total)}</span>}
+                                </div>
+                              </div>
+                              );
+                            })()}
                           </td>
                         </tr>
                       );
