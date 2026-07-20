@@ -1583,8 +1583,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</td>
                       <td className="px-2 py-1.5">{l.valor < 0 ? (
                         <ComboBox className="w-40" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
-                          actions={[{ value: '', label: '— sem vertical —' }, { value: 'Escritório', label: 'Escritório (comum · rateia auto)' }]}
-                          labelOf={(v) => v === '' ? '— sem vertical —' : v === 'Escritório' ? 'Escritório (comum)' : v}
+                          actions={[{ value: 'Escritório', label: 'Escritório (comum) · rateia auto' }]}
+                          labelOf={(v) => v === '' ? 'Escritório (comum · padrão)' : v === 'Escritório' ? 'Escritório (comum)' : v}
                           placeholder="vertical…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
                       ) : (
                         <ComboBox className="w-44" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
