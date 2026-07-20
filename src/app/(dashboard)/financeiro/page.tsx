@@ -357,6 +357,25 @@ const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padSt
 const toBR = (iso: string) => { const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };
 const toISOInput = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
 const parseValor = (s: string) => Number(String(s).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0;
+// Percentual OU fração — aceita "50" (%), "50%", "1/2", "1/3" no mesmo campo. Usado na
+// contribuição pessoal (Kauani contribui "1/2 do REPB" é mais natural que calcular 216,67 de cabeça).
+const parsePct = (s: string): number => {
+  const t = String(s).trim();
+  const fr = t.match(/^(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)$/);
+  if (fr) { const num = Number(fr[1].replace(',', '.')); const den = Number(fr[2].replace(',', '.')); return den > 0 ? (num / den) * 100 : 0; }
+  return parseValor(t.replace('%', ''));
+};
+// Contribuição de uma pessoa numa despesa: valor fixo, % do total, ou % de UMA vertical do
+// rateio (ex.: "Kauani banca 50% da fatia do REPB"). O valor final gravado é sempre em R$
+// (o modo/%/vertical só existem pra facilitar a conta na hora de digitar).
+type ContribModo = 'valor' | 'pctTotal' | 'pctVertical';
+interface ContribRow { userId?: string; nome: string; modo: ContribModo; valor: string; pct: string; area?: string }
+const contribValorCalc = (row: ContribRow, totalDespesa: number, rateioRows: { area: string; valor: string }[]): number => {
+  if (row.modo === 'valor') return parseValor(row.valor);
+  if (row.modo === 'pctTotal') return Math.round(totalDespesa * (parsePct(row.pct) / 100) * 100) / 100;
+  if (row.modo === 'pctVertical') { const rv = rateioRows.find((r) => r.area === row.area); const base = rv ? parseValor(rv.valor) : 0; return Math.round(base * (parsePct(row.pct) / 100) * 100) / 100; }
+  return 0;
+};
 // Moeda: máscara enquanto digita (só dígitos → centavos → "1.234,56") + número → texto.
 const maskBRL = (raw: string) => { const d = String(raw).replace(/\D/g, ''); if (!d) return ''; return (Number(d) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
 const fmtMoney = (n: number) => (Math.abs(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -389,7 +408,7 @@ interface Editor {
   rateio: RateioForm; responsavelId: string; conta: string;
   area: string; // vertical/centro de custos do lançamento (direto). Rateio, quando houver, sobrepõe.
   rateioVerticais: { area: string; valor: string; label?: string }[]; // rateio de despesa entre verticais (label = linha do custo, ex.: Agência 1/3)
-  contribuintes: { userId?: string; nome: string; valor: string }[]; // contribuição PESSOAL (quem ajudou a pagar do próprio bolso) — independente do rateio por vertical, só informativo
+  contribuintes: ContribRow[]; // contribuição PESSOAL (quem ajudou a pagar do próprio bolso) — independente do rateio por vertical, só informativo
   contactId?: string; caseId?: string; procLabel?: string;
 }
 const RATEIO_VAZIO: RateioForm = { bruto: '', cliente: '', sucumbencia: '', honorarios: '' };
@@ -784,7 +803,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
   const [importing, setImporting] = useState(false);
   const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })), contribuintes: (t.contribuintes ?? []).map((x) => ({ userId: x.userId ?? undefined, nome: x.nome, valor: fmtMoney(x.valor) })) });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })), contribuintes: (t.contribuintes ?? []).map((x) => ({ userId: x.userId ?? undefined, nome: x.nome, modo: 'valor' as const, valor: fmtMoney(x.valor), pct: '' })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
@@ -831,7 +850,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     const liq = ehLiquidado(editor.status);
     const split = buildSplit(editor);
     const rvArr = editor.tipo === 'despesa' ? editor.rateioVerticais.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) })) : [];
-    const contribArr = editor.tipo === 'despesa' ? editor.contribuintes.filter((x) => x.nome && parseValor(x.valor) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: parseValor(x.valor) })) : [];
+    const contribArr = editor.tipo === 'despesa' ? editor.contribuintes.filter((x) => x.nome && contribValorCalc(x, v, editor.rateioVerticais) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: contribValorCalc(x, v, editor.rateioVerticais) })) : [];
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
@@ -1263,23 +1282,42 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                   reembolso nem abate o líquido. */}
               {editor.tipo === 'despesa' && (() => {
                 const total = parseValor(editor.valor);
-                const somaContrib = editor.contribuintes.reduce((s, x) => s + parseValor(x.valor), 0);
+                const verticaisComFatia = editor.rateioVerticais.filter((r) => r.area);
+                const calc = (x: ContribRow) => contribValorCalc(x, total, editor.rateioVerticais);
+                const somaContrib = editor.contribuintes.reduce((s, x) => s + calc(x), 0);
+                const setRow = (i: number, patch: Partial<ContribRow>) => setEditor({ ...editor, contribuintes: editor.contribuintes.map((y, j) => j === i ? { ...y, ...patch } : y) });
                 return (
                 <Field label="Quem ajudou a pagar (contribuição pessoal)">
                   <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
-                    <p className="text-[11px] text-zinc-400">Marque quem cobriu parte deste gasto <strong>do próprio bolso</strong> (ex.: Kauani pagou R$400 dos R$1.300 da agência). Só aparece como "você contribuiu" no <strong>holerite</strong> da pessoa — não é reembolso nem abate a despesa.</p>
+                    <p className="text-[11px] text-zinc-400">Marque quem cobriu parte deste gasto <strong>do próprio bolso</strong> — em <strong>valor fixo</strong>, <strong>%</strong> ou <strong>fração</strong> (ex.: Kauani banca "1/2" da fatia do REPB). Só aparece como "você contribuiu" no <strong>holerite</strong> da pessoa — não é reembolso nem abate a despesa.</p>
                     {editor.contribuintes.map((x, i) => (
-                      <div key={i} className="flex flex-wrap items-center gap-1.5">
-                        <select className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={x.userId ?? ''} onChange={(e) => { const u = advogados.find((a) => a.id === e.target.value); setEditor({ ...editor, contribuintes: editor.contribuintes.map((y, j) => j === i ? { ...y, userId: e.target.value || undefined, nome: u?.name ?? y.nome } : y) }); }}>
-                          <option value="">— escolher pessoa —</option>
-                          {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                        <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setEditor({ ...editor, contribuintes: editor.contribuintes.map((y, j) => j === i ? { ...y, valor: v } : y) })} /></div>
-                        <button onClick={() => setEditor({ ...editor, contribuintes: editor.contribuintes.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                      <div key={i} className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <select className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={x.userId ?? ''} onChange={(e) => { const u = advogados.find((a) => a.id === e.target.value); setRow(i, { userId: e.target.value || undefined, nome: u?.name ?? x.nome }); }}>
+                            <option value="">— escolher pessoa —</option>
+                            {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                          </select>
+                          <select className="shrink-0 rounded-md border border-zinc-300 bg-white px-1.5 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900" value={x.modo} onChange={(e) => setRow(i, { modo: e.target.value as ContribModo })}>
+                            <option value="valor">R$ fixo</option>
+                            <option value="pctTotal">% do total</option>
+                            <option value="pctVertical" disabled={!verticaisComFatia.length}>% de uma vertical</option>
+                          </select>
+                          {x.modo === 'valor' && <div className="w-24"><MoneyInput value={x.valor} onChange={(v) => setRow(i, { valor: v })} /></div>}
+                          {x.modo === 'pctTotal' && <div className="flex w-24 items-center gap-1"><input value={x.pct} onChange={(e) => setRow(i, { pct: e.target.value })} placeholder="50 ou 1/2" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>}
+                          {x.modo === 'pctVertical' && (<>
+                            <select className="w-28 shrink-0 rounded-md border border-zinc-300 bg-white px-1.5 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900" value={x.area ?? ''} onChange={(e) => setRow(i, { area: e.target.value })}>
+                              <option value="">— vertical —</option>
+                              {verticaisComFatia.map((r, k) => <option key={k} value={r.area}>{r.area}</option>)}
+                            </select>
+                            <div className="flex w-20 items-center gap-1"><input value={x.pct} onChange={(e) => setRow(i, { pct: e.target.value })} placeholder="50 ou 1/2" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
+                          </>)}
+                          <button onClick={() => setEditor({ ...editor, contribuintes: editor.contribuintes.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                        </div>
+                        {x.modo !== 'valor' && <p className="pl-1 text-[10px] text-zinc-400">= {brl2(calc(x))}{x.modo === 'pctVertical' && !x.area ? ' · escolha a vertical' : ''}</p>}
                       </div>
                     ))}
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <button onClick={() => setEditor({ ...editor, contribuintes: [...editor.contribuintes, { nome: '', valor: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar pessoa</button>
+                      <button onClick={() => setEditor({ ...editor, contribuintes: [...editor.contribuintes, { nome: '', modo: 'valor', valor: '', pct: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar pessoa</button>
                       {editor.contribuintes.length > 0 && <span className={`text-[11px] ${somaContrib - total > 0.01 ? 'text-amber-600' : 'text-zinc-400'}`}>contribuiu {brl2(somaContrib)}{total > 0 ? ` de ${brl2(total)}` : ''}{somaContrib - total > 0.01 ? ' · passou do total' : ''}</span>}
                     </div>
                   </div>
@@ -1566,7 +1604,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA); '__ratear' = rateio abaixo
   const [rateios, setRateios] = useState<Record<number, { area: string; valor: string; label?: string }[]>>({}); // fatia de cada vertical quando areas[i] === '__ratear'
-  const [contribs, setContribs] = useState<Record<number, { userId?: string; nome: string; valor: string }[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
+  const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
 
@@ -1610,8 +1648,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     mutationFn: () => {
       if (!conf) throw new Error('confira primeiro');
       const linhas = conf.linhas.map((l, i) => ({ l, i })).filter(({ i }) => sel.has(i)).map(({ l, i }) => {
-        const rv = (areas[i] === '__ratear' ? (rateios[i] ?? []) : []).filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
-        const cb = (contribs[i] ?? []).filter((x) => x.nome && parseValor(x.valor) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: parseValor(x.valor) }));
+        const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
+        const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
+        const cb = (contribs[i] ?? []).filter((x) => x.nome && contribValorCalc(x, Math.abs(l.valor), rawRateio) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: contribValorCalc(x, Math.abs(l.valor), rawRateio) }));
         return { data: l.data, valor: l.valor, descricao: l.descricao, area: rv.length ? undefined : (areas[i] || '').trim() || undefined, rateioVerticais: rv.length ? rv : undefined, contribuintes: cb.length ? cb : undefined };
       });
       return financeiroService.importarExtratoLinhas(conta || null, linhas);
@@ -1733,23 +1772,41 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 independente das fatias acima — aparece no holerite da pessoa. */}
                             {(() => {
                               const cRows = contribs[i] ?? [];
-                              const cSoma = cRows.reduce((s, x) => s + parseValor(x.valor), 0);
-                              const setCRows = (fn: (rows: { userId?: string; nome: string; valor: string }[]) => { userId?: string; nome: string; valor: string }[]) => setContribs((c) => ({ ...c, [i]: fn(c[i] ?? []) }));
+                              const verticaisComFatia = rows.filter((r) => r.area);
+                              const calc = (x: ContribRow) => contribValorCalc(x, total, rows);
+                              const cSoma = cRows.reduce((s, x) => s + calc(x), 0);
+                              const setCRow = (j: number, patch: Partial<ContribRow>) => setContribs((c) => ({ ...c, [i]: (c[i] ?? []).map((y, k) => k === j ? { ...y, ...patch } : y) }));
                               return (
                               <div className="mt-2 space-y-1.5 rounded-lg border border-amber-200/70 p-2.5 dark:border-amber-900/40">
-                                <p className="text-[11px] text-zinc-400">Quem ajudou a pagar <strong>do próprio bolso</strong> (informativo — aparece no <strong>holerite</strong> da pessoa, não abate a despesa).</p>
+                                <p className="text-[11px] text-zinc-400">Quem ajudou a pagar <strong>do próprio bolso</strong> — em <strong>valor fixo</strong>, <strong>%</strong> ou <strong>fração</strong> (ex.: "1/2" da fatia do REPB). Informativo — aparece no <strong>holerite</strong> da pessoa, não abate a despesa.</p>
                                 {cRows.map((x, j) => (
-                                  <div key={j} className="flex flex-wrap items-center gap-1.5">
-                                    <select className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={x.userId ?? ''} onChange={(e) => { const u = advogados.find((a) => a.id === e.target.value); setCRows((rr) => rr.map((y, k) => k === j ? { ...y, userId: e.target.value || undefined, nome: u?.name ?? y.nome } : y)); }}>
-                                      <option value="">— escolher pessoa —</option>
-                                      {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                    </select>
-                                    <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setCRows((rr) => rr.map((y, k) => k === j ? { ...y, valor: v } : y))} /></div>
-                                    <button onClick={() => setCRows((rr) => rr.filter((_, k) => k !== j))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                                  <div key={j} className="space-y-1">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <select className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={x.userId ?? ''} onChange={(e) => { const u = advogados.find((a) => a.id === e.target.value); setCRow(j, { userId: e.target.value || undefined, nome: u?.name ?? x.nome }); }}>
+                                        <option value="">— escolher pessoa —</option>
+                                        {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                      </select>
+                                      <select className="shrink-0 rounded-md border border-zinc-300 bg-white px-1.5 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900" value={x.modo} onChange={(e) => setCRow(j, { modo: e.target.value as ContribModo })}>
+                                        <option value="valor">R$ fixo</option>
+                                        <option value="pctTotal">% do total</option>
+                                        <option value="pctVertical" disabled={!verticaisComFatia.length}>% de uma vertical</option>
+                                      </select>
+                                      {x.modo === 'valor' && <div className="w-24"><MoneyInput value={x.valor} onChange={(v) => setCRow(j, { valor: v })} /></div>}
+                                      {x.modo === 'pctTotal' && <div className="flex w-24 items-center gap-1"><input value={x.pct} onChange={(e) => setCRow(j, { pct: e.target.value })} placeholder="50 ou 1/2" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>}
+                                      {x.modo === 'pctVertical' && (<>
+                                        <select className="w-28 shrink-0 rounded-md border border-zinc-300 bg-white px-1.5 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900" value={x.area ?? ''} onChange={(e) => setCRow(j, { area: e.target.value })}>
+                                          <option value="">— vertical —</option>
+                                          {verticaisComFatia.map((r, k) => <option key={k} value={r.area}>{r.area}</option>)}
+                                        </select>
+                                        <div className="flex w-20 items-center gap-1"><input value={x.pct} onChange={(e) => setCRow(j, { pct: e.target.value })} placeholder="50 ou 1/2" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
+                                      </>)}
+                                      <button onClick={() => setContribs((c) => ({ ...c, [i]: (c[i] ?? []).filter((_, k) => k !== j) }))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                                    </div>
+                                    {x.modo !== 'valor' && <p className="pl-1 text-[10px] text-zinc-400">= {brl2(calc(x))}{x.modo === 'pctVertical' && !x.area ? ' · escolha a vertical' : ''}</p>}
                                   </div>
                                 ))}
                                 <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <button onClick={() => setCRows((rr) => [...rr, { nome: '', valor: '' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar pessoa</button>
+                                  <button onClick={() => setContribs((c) => ({ ...c, [i]: [...(c[i] ?? []), { nome: '', modo: 'valor', valor: '', pct: '' }] }))} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar pessoa</button>
                                   {cRows.length > 0 && <span className="text-[11px] text-zinc-400">contribuiu {brl2(cSoma)} de {brl2(total)}</span>}
                                 </div>
                               </div>
