@@ -638,7 +638,7 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [serieDel, setSerieDel] = useState<FinTransacao | null>(null);
 
-  const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
+  const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Agência de tráfego', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
   const contas = data.contas ?? [];
   const contaNome = (id?: string | null) => contas.find((c) => c.id === id)?.nome ?? null;
   // Cartões de crédito: os gastos do cartão NÃO entram no caixa (livro-razão) — vivem na visão de cartão.
@@ -1172,17 +1172,31 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
               </div>
 
               {/* Centro de custos UNIFICADO: uma vertical · Escritório (comum, rateia auto) · Ratear entre várias.
-                  Um controle só — some a confusão de ter "vertical" e "ratear" separados. */}
+                  Modo escolhido em PILLS bem visíveis (não escondido dentro do combobox) — é o
+                  ponto que mais gerava confusão: "Ratear" ficava perdido no rodapé de uma lista
+                  de 7 verticais e passava despercebido. */}
               {(() => {
-                const modo = editor.rateioVerticais.length > 0 ? '__ratear' : editor.area;
+                const modo = editor.rateioVerticais.length > 0 ? '__ratear' : (editor.area === 'Escritório' ? 'Escritório' : 'uma');
                 const opcoes = [...new Set([...verticaisLanc, ...VERTICAIS_PADRAO])];
+                const irPara = (m: 'uma' | 'Escritório' | '__ratear') => {
+                  if (m === '__ratear') {
+                    const primeira = editor.area && editor.area !== 'Escritório' ? editor.area : '';
+                    setEditor({ ...editor, area: '', rateioVerticais: editor.rateioVerticais.length ? editor.rateioVerticais : [{ area: primeira, valor: '', label: '' }, { area: '', valor: '', label: '' }] });
+                  } else if (m === 'Escritório') {
+                    setEditor({ ...editor, area: 'Escritório', rateioVerticais: [] });
+                  } else {
+                    setEditor({ ...editor, area: editor.area === 'Escritório' ? '' : editor.area, rateioVerticais: [] });
+                  }
+                };
                 return (
                 <Field label="Centro de custos (vertical)">
-                  <ComboBox value={modo} options={opcoes} allowFree placeholder="digite a vertical…"
-                    labelOf={(v) => v === '__ratear' ? 'Ratear entre várias verticais' : v === 'Escritório' ? 'Escritório (comum · rateia auto entre todas)' : v === '' ? '— escolher —' : v}
-                    actions={[{ value: 'Escritório', label: 'Escritório (comum · rateia auto entre todas)' }, { value: '__ratear', label: 'Ratear entre várias verticais…' }]}
-                    onChange={(v) => { if (v === '__ratear') setEditor({ ...editor, area: '', rateioVerticais: editor.rateioVerticais.length ? editor.rateioVerticais : [{ area: '', valor: '', label: '' }, { area: '', valor: '', label: '' }] }); else setEditor({ ...editor, area: v, rateioVerticais: [] }); }} />
-                  <p className="mt-1 text-[11px] text-zinc-400"><strong>Uma vertical</strong> = custo direto dela · <strong>Escritório (comum)</strong> = rateia automático e igual entre todas as verticais · <strong>Ratear</strong> = você define a fatia de cada uma (ex.: agência ÷ 3). Honorário casa a vertical sozinho pelo cliente do processo.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Chip active={modo === 'uma'} onClick={() => irPara('uma')}>Uma vertical</Chip>
+                    <Chip active={modo === 'Escritório'} onClick={() => irPara('Escritório')}>Escritório (comum)</Chip>
+                    <Chip active={modo === '__ratear'} onClick={() => irPara('__ratear')}>Ratear entre várias verticais</Chip>
+                  </div>
+                  {modo === 'uma' && <div className="mt-2"><ComboBox value={editor.area} options={opcoes} allowFree placeholder="digite a vertical…" onChange={(v) => setEditor({ ...editor, area: v })} /></div>}
+                  <p className="mt-1.5 text-[11px] text-zinc-400"><strong>Uma vertical</strong> = custo direto dela · <strong>Escritório (comum)</strong> = rateia automático e igual entre todas as verticais · <strong>Ratear</strong> = você define a fatia de cada uma (ex.: agência ÷ 3). Honorário casa a vertical sozinho pelo cliente do processo.</p>
                 </Field>
                 );
               })()}
@@ -1603,7 +1617,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
           </label>
           {nome && <span className="text-xs text-zinc-400">{nome}</span>}
         </div>
-        <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, <strong>sugere a vertical</strong> de cada despesa (você ajusta na coluna) e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (valor+data) e contra reenvio do mesmo arquivo. Linhas <span className="font-semibold text-amber-700 dark:text-amber-300">⚠️ Revisar</span> têm mesmo valor+data de um lançamento existente mas <strong>nome diferente</strong> (ex.: sucumbência paga pelo tribunal no caso de um cliente) — vêm <strong>desmarcadas</strong>; marque só se for mesmo um lançamento novo. Comum do escritório → "Escritório" (rateia auto).</p>
+        <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, <strong>sugere a vertical</strong> de cada despesa (você ajusta na coluna) e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (valor+data) e contra reenvio do mesmo arquivo. Linhas <span className="font-semibold text-amber-700 dark:text-amber-300">⚠️ Revisar</span> têm mesmo valor+data de um lançamento existente mas <strong>nome diferente</strong> (ex.: sucumbência paga pelo tribunal no caso de um cliente) — vêm <strong>desmarcadas</strong>; marque só se for mesmo um lançamento novo. Comum do escritório → "Escritório" (rateia auto). Precisa dividir uma despesa entre <strong>várias verticais</strong> (ex.: agência ÷ 3)? Clique no ícone <Layers className="inline h-3 w-3 align-text-bottom" /> ao lado da vertical.</p>
         {contas.find((c) => c.id === conta)?.cartao
           ? <p className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] text-violet-700 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-300">💳 <strong>Fatura de cartão:</strong> as compras entram como <strong>"a pagar"</strong> (fora do caixa) e a linha de <strong>pagamento de fatura é ignorada</strong>. Só entram no caixa quando você clicar em <strong>Pagar fatura</strong>.</p>
           : <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Importando pra uma <strong>conta bancária</strong> (vira caixa). Se este for o <strong>extrato do cartão</strong>, troque a conta acima pra <strong>"Nubank cartão"</strong>.</p>}
@@ -1626,10 +1640,25 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{l.descricao || '—'}{l.revisar && l.motivo && <span className="mt-0.5 block text-[10px] font-medium leading-tight text-amber-700 dark:text-amber-300">⚠️ {l.motivo}</span>}</td>
                       <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</td>
                       <td className="px-2 py-1.5">{l.valor < 0 ? (
-                        <ComboBox className="w-40" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
-                          actions={[{ value: 'Escritório', label: 'Escritório (comum) · rateia auto' }, { value: '__ratear', label: 'Ratear entre verticais…' }]}
-                          labelOf={(v) => v === '' ? 'Escritório (comum · padrão)' : v === 'Escritório' ? 'Escritório (comum)' : v === '__ratear' ? 'Ratear entre verticais…' : v}
-                          placeholder="vertical…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__ratear' && !rateios[i]) setRateios((r) => ({ ...r, [i]: [{ area: '', valor: '' }, { area: '', valor: '' }] })); }} />
+                        areas[i] === '__ratear' ? (
+                          <button type="button" onClick={() => setAreas((a) => ({ ...a, [i]: '' }))} title="Desfazer rateio — voltar a escolher uma vertical" className="inline-flex items-center gap-1 rounded-md border border-[#7048E8]/40 bg-[#7048E8]/10 px-2 py-1.5 text-xs font-medium text-[#7048E8] hover:bg-[#7048E8]/20">
+                            <Layers className="h-3.5 w-3.5" /> Rateando <X className="h-3 w-3" />
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <ComboBox className="w-28" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
+                              actions={[{ value: 'Escritório', label: 'Escritório (comum) · rateia auto' }]}
+                              labelOf={(v) => v === '' ? 'Escritório (comum · padrão)' : v === 'Escritório' ? 'Escritório (comum)' : v}
+                              placeholder="vertical…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
+                            <button type="button" title="Ratear entre várias verticais" onClick={() => {
+                              const primeira = areas[i] && areas[i] !== 'Escritório' ? areas[i] : '';
+                              setAreas((a) => ({ ...a, [i]: '__ratear' }));
+                              if (!rateios[i]) setRateios((r) => ({ ...r, [i]: [{ area: primeira, valor: '' }, { area: '', valor: '' }] }));
+                            }} className="shrink-0 rounded-md border border-zinc-300 p-1.5 text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">
+                              <Layers className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )
                       ) : (
                         <ComboBox className="w-44" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
                           actions={[{ value: '', label: 'Honorário (casa pelo cliente)' }, { value: '__transfer', label: 'Transferência / cobertura (não é honorário)' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
