@@ -224,6 +224,26 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     <span className={`text-xl font-bold tabular-nums ${liquido >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(liquido)}</span>
                   </div>
                   <p className="mt-2 text-[11px] text-zinc-400">Fiel ao livro-razão: <strong>o que caiu pra você</strong> (repasses/retiradas) menos <strong>o que você ajudou a pagar</strong> (sua fatia das despesas). Sua remuneração vem do <strong>rateio no êxito</strong> — só aparece quando o lançamento é feito.</p>
+
+                  {/* Contribuição PESSOAL (informativa) — quanto ela cobriu do próprio bolso em
+                      despesas da vertical. NÃO entra no líquido acima (não é reembolso). */}
+                  {(h.contribuicoes?.length ?? 0) > 0 && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
+                      <p className="mb-1.5 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                        <span>Você contribuiu do próprio bolso</span>
+                        <span className="text-sm tabular-nums">{brl2(h.contribuicaoTot ?? 0)}</span>
+                      </p>
+                      <div className="space-y-0.5">
+                        {h.contribuicoes!.map((c, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span className="flex min-w-0 items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><span className="w-9 shrink-0 text-[11px] tabular-nums text-zinc-400">{(c.data || '').slice(0, 5)}</span><span className="truncate">{c.desc}</span></span>
+                            <span className="shrink-0 font-medium tabular-nums text-amber-700 dark:text-amber-400">{brl2(c.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-1.5 text-[10px] text-amber-700/80 dark:text-amber-400/70">Informativo — não é reembolso e <strong>não entra no líquido</strong> acima. Só mostra o quanto você bancou de estrutura este mês.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

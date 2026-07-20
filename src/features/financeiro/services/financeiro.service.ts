@@ -50,6 +50,7 @@ export interface FinTransacao {
   faturaDe?: string | null; // id do cartão de origem (débito que migrou pra conta ao pagar a fatura)
   area?: string | null; // vertical direta do lançamento (centro de custos)
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null; // rateio de despesa entre verticais
+  contribuintes?: { userId?: string | null; nome: string; valor: number }[] | null; // contribuição pessoal (quem ajudou a pagar) — informativo, independente do rateio por vertical
   verticais?: string[]; // verticais que o lançamento toca (centro de custos) — vazio = comum/escritório
   vertical?: string | null; // vertical resolvida do lançamento (visão Meu Espaço — p/ filtro das entradas)
   mine?: boolean; // no espelho do livro-razão: true = lançamento seu (casos/custeio); false = movimentação da vertical/transferência que aparece por paridade
@@ -125,6 +126,10 @@ export interface HoleriteMes {
   saidaTot: number;
   retiradas: { desc: string; valor: number; data: string }[];
   retiradaTot: number;
+  // Contribuição PESSOAL (informativa) — quanto ela cobriu do próprio bolso em despesas
+  // este mês. NÃO entra no líquido (não é reembolso, não abate nada) — só exibição.
+  contribuicoes?: { desc: string; valor: number; data: string }[];
+  contribuicaoTot?: number;
   liquido: number;
 }
 
@@ -193,6 +198,7 @@ export interface AddTransacaoInput {
   rateio?: RateioExito | null;
   responsavelId?: string; responsavel?: string; conta?: string; area?: string;
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null;
+  contribuintes?: { userId?: string; nome: string; valor: number }[] | null;
   caseId?: string; contactId?: string;
 }
 export interface UpdateTransacaoInput {
@@ -202,6 +208,7 @@ export interface UpdateTransacaoInput {
   rateio?: RateioExito | null;
   responsavelId?: string; responsavel?: string; conta?: string; area?: string;
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null;
+  contribuintes?: { userId?: string; nome: string; valor: number }[] | null;
   escopo?: 'uma' | 'proximas';
 }
 

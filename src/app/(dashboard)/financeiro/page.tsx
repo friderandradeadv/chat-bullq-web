@@ -389,6 +389,7 @@ interface Editor {
   rateio: RateioForm; responsavelId: string; conta: string;
   area: string; // vertical/centro de custos do lançamento (direto). Rateio, quando houver, sobrepõe.
   rateioVerticais: { area: string; valor: string; label?: string }[]; // rateio de despesa entre verticais (label = linha do custo, ex.: Agência 1/3)
+  contribuintes: { userId?: string; nome: string; valor: string }[]; // contribuição PESSOAL (quem ajudou a pagar do próprio bolso) — independente do rateio por vertical, só informativo
   contactId?: string; caseId?: string; procLabel?: string;
 }
 const RATEIO_VAZIO: RateioForm = { bruto: '', cliente: '', sucumbencia: '', honorarios: '' };
@@ -782,8 +783,8 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const toggleRv = (id: string) => setRvOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const [importing, setImporting] = useState(false);
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contactId: '', caseId: '', procLabel: '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })) });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? t.party ?? '', recebedor: t.recebedor ?? '', valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })), contribuintes: (t.contribuintes ?? []).map((x) => ({ userId: x.userId ?? undefined, nome: x.nome, valor: fmtMoney(x.valor) })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
@@ -806,12 +807,13 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     const liq = ehLiquidado(editor.status);
     const split = buildSplit(editor);
     const rvArr = editor.tipo === 'despesa' ? editor.rateioVerticais.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) })) : [];
+    const contribArr = editor.tipo === 'despesa' ? editor.contribuintes.filter((x) => x.nome && parseValor(x.valor) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: parseValor(x.valor) })) : [];
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, rateioVerticais: rvArr.length ? rvArr : undefined, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined, area: editor.area || undefined, contactId: editor.contactId || undefined, caseId: editor.caseId || undefined });
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, rateioVerticais: rvArr.length ? rvArr : undefined, contribuintes: contribArr.length ? contribArr : undefined, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined, area: editor.area || undefined, contactId: editor.contactId || undefined, caseId: editor.caseId || undefined });
     } else {
-      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, ...(rvArr.length ? { rateioVerticais: rvArr } : {}), responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '', area: editor.area || '' } });
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, ...(rvArr.length ? { rateioVerticais: rvArr } : {}), contribuintes: contribArr, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '', area: editor.area || '' } });
     }
   };
   const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
@@ -1211,6 +1213,36 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                         {editor.rateioVerticais.length > 0 && total > 0 && <button onClick={dividirIgual} className="text-xs font-medium text-[#7048E8] hover:underline">dividir igual</button>}
                       </div>
                       {editor.rateioVerticais.length > 0 && <span className={`text-[11px] ${somaRV - total > 0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>rateado {brl2(somaRV)}{total > 0 ? ` de ${brl2(total)}` : ''}{somaRV - total > 0.01 ? ' · excede!' : (total - somaRV > 0.01 ? ` · ${brl2(total - somaRV)} no geral` : '')}</span>}
+                    </div>
+                  </div>
+                </Field>
+                );
+              })()}
+
+              {/* Contribuição PESSOAL — quem, do próprio bolso, ajudou a pagar esta despesa.
+                  Dimensão INDEPENDENTE do rateio por vertical acima (não precisa bater célula a
+                  célula) — puramente informativo: aparece no holerite da pessoa, mas não vira
+                  reembolso nem abate o líquido. */}
+              {editor.tipo === 'despesa' && (() => {
+                const total = parseValor(editor.valor);
+                const somaContrib = editor.contribuintes.reduce((s, x) => s + parseValor(x.valor), 0);
+                return (
+                <Field label="Quem ajudou a pagar (contribuição pessoal)">
+                  <div className="space-y-2 rounded-lg border border-zinc-200/70 p-2.5 dark:border-zinc-800">
+                    <p className="text-[11px] text-zinc-400">Marque quem cobriu parte deste gasto <strong>do próprio bolso</strong> (ex.: Kauani pagou R$400 dos R$1.300 da agência). Só aparece como "você contribuiu" no <strong>holerite</strong> da pessoa — não é reembolso nem abate a despesa.</p>
+                    {editor.contribuintes.map((x, i) => (
+                      <div key={i} className="flex flex-wrap items-center gap-1.5">
+                        <select className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={x.userId ?? ''} onChange={(e) => { const u = advogados.find((a) => a.id === e.target.value); setEditor({ ...editor, contribuintes: editor.contribuintes.map((y, j) => j === i ? { ...y, userId: e.target.value || undefined, nome: u?.name ?? y.nome } : y) }); }}>
+                          <option value="">— escolher pessoa —</option>
+                          {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                        <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setEditor({ ...editor, contribuintes: editor.contribuintes.map((y, j) => j === i ? { ...y, valor: v } : y) })} /></div>
+                        <button onClick={() => setEditor({ ...editor, contribuintes: editor.contribuintes.filter((_, j) => j !== i) })} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button onClick={() => setEditor({ ...editor, contribuintes: [...editor.contribuintes, { nome: '', valor: '' }] })} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar pessoa</button>
+                      {editor.contribuintes.length > 0 && <span className={`text-[11px] ${somaContrib - total > 0.01 ? 'text-amber-600' : 'text-zinc-400'}`}>contribuiu {brl2(somaContrib)}{total > 0 ? ` de ${brl2(total)}` : ''}{somaContrib - total > 0.01 ? ' · passou do total' : ''}</span>}
                     </div>
                   </div>
                 </Field>
