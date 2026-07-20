@@ -798,12 +798,36 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const rateioNosso = (r: RateioForm) => parseValor(r.honorarios) + parseValor(r.sucumbencia);
   const buildRateio = (ed: Editor) => (ehExito(ed) && parseValor(ed.rateio.bruto) > 0) ? { bruto: parseValor(ed.rateio.bruto), cliente: parseValor(ed.rateio.cliente), sucumbencia: parseValor(ed.rateio.sucumbencia), honorarios: parseValor(ed.rateio.honorarios) } : null;
 
+  // Checa duplicata ANTES de criar um lançamento NOVO — mesma essência do dedup da importação
+  // de extrato (mesmo sinal + valor ±1 centavo + data ±3 dias), só que aqui é um AVISO com
+  // confirmação (não um bloqueio silencioso): mostra o candidato e o usuário decide, porque um
+  // lançamento manual nunca conferia nada antes de salvar (diferente da importação, que já confere).
+  const diasEntre = (isoA: string, isoB: string) => Math.round(Math.abs(new Date(isoA).getTime() - new Date(isoB).getTime()) / 86400000);
+  const possiveisDuplicatas = (tipo: 'receita' | 'despesa', valor: number, dataISO: string): FinTransacao[] => {
+    const sinal = tipo === 'despesa' ? -1 : 1;
+    return data.transacoes.filter((t) => {
+      if (Math.sign(t.valor) !== sinal) return false;
+      if (Math.abs(Math.abs(t.valor) - valor) > 0.01) return false;
+      const tIso = toISOInput(t.data);
+      return !!tIso && diasEntre(tIso, dataISO) <= 3;
+    }).slice(0, 3);
+  };
+
   const salvar = () => {
     if (!editor) return;
     const rateio = buildRateio(editor);
     // com rateio de êxito, o que entra no caixa é a parte do escritório (honorário + sucumbência)
     const v = rateio ? rateioNosso(editor.rateio) : parseValor(editor.valor);
     if (!(v > 0)) { toast.error(rateio ? 'Preencha honorário e/ou sucumbência do escritório' : 'Informe um valor maior que zero'); return; }
+    // Só para lançamento NOVO e ÚNICO (não série repetida — recorrência é intencional e geraria
+    // aviso falso todo mês).
+    if (editor.id == null && editor.repetir === 'nao') {
+      const dup = possiveisDuplicatas(editor.tipo, v, editor.dataISO);
+      if (dup.length) {
+        const lista = dup.map((c) => `• ${(c.data || '').slice(0, 5)} — ${titleCase(c.pagador || c.recebedor || c.party || '') || c.categoria} — ${brl2(Math.abs(c.valor))}`).join('\n');
+        if (!confirm(`Já existe ${dup.length > 1 ? 'lançamento(s) parecido(s)' : 'um lançamento parecido'} (mesmo valor, data próxima):\n\n${lista}\n\nPode ser o mesmo já lançado (ex.: veio de um extrato importado). Lançar mesmo assim?`)) return;
+      }
+    }
     const liq = ehLiquidado(editor.status);
     const split = buildSplit(editor);
     const rvArr = editor.tipo === 'despesa' ? editor.rateioVerticais.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) })) : [];
