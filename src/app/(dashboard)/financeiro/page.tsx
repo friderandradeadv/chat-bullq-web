@@ -1494,7 +1494,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [parsing, setParsing] = useState(false);
   const [conf, setConf] = useState<import('@/features/financeiro/services/financeiro.service').ExtratoConferencia | null>(null);
   const [sel, setSel] = useState<Set<number>>(new Set());
-  const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA)
+  const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA); '__ratear' = rateio abaixo
+  const [rateios, setRateios] = useState<Record<number, { area: string; valor: string; label?: string }[]>>({}); // fatia de cada vertical quando areas[i] === '__ratear'
 
   const conferir = async (linhas: { data: string; valor: number; descricao: string }[], contaArg?: string) => {
     if (!linhas.length) { toast.error('Não consegui ler lançamentos desse arquivo. Tente OFX/CSV ou cole o texto.'); return; }
@@ -1533,10 +1534,20 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   };
 
   const importM = useMutation({
-    mutationFn: () => { if (!conf) throw new Error('confira primeiro'); const linhas = conf.linhas.map((l, i) => ({ l, i })).filter(({ i }) => sel.has(i)).map(({ l, i }) => ({ data: l.data, valor: l.valor, descricao: l.descricao, area: (areas[i] || '').trim() || undefined })); return financeiroService.importarExtratoLinhas(conta || null, linhas); },
+    mutationFn: () => {
+      if (!conf) throw new Error('confira primeiro');
+      const linhas = conf.linhas.map((l, i) => ({ l, i })).filter(({ i }) => sel.has(i)).map(({ l, i }) => {
+        const rv = (areas[i] === '__ratear' ? (rateios[i] ?? []) : []).filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
+        return { data: l.data, valor: l.valor, descricao: l.descricao, area: rv.length ? undefined : (areas[i] || '').trim() || undefined, rateioVerticais: rv.length ? rv : undefined };
+      });
+      return financeiroService.importarExtratoLinhas(conta || null, linhas);
+    },
     onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s)${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`); onClose(); },
     onError: (e: any) => toast.error(e?.message || 'Erro ao importar'),
   });
+  // Bloqueia importar se alguma linha selecionada estiver "ratear" sem nenhuma fatia válida
+  // (área + valor) — evita cair de volta em "sem vertical" silenciosamente.
+  const rateioIncompleto = [...sel].some((i) => areas[i] === '__ratear' && !(rateios[i] ?? []).some((x) => x.area && parseValor(x.valor) > 0));
 
   const toggle = (i: number) => setSel((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
@@ -1576,16 +1587,17 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                 <thead className="sticky top-0 bg-white dark:bg-zinc-900"><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium"></th><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Descrição</th><th className="px-2 py-1.5 text-right font-medium">Valor</th><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 font-medium">Status</th></tr></thead>
                 <tbody>
                   {conf.linhas.map((l, i) => (
-                    <tr key={i} className={`border-t border-zinc-100 dark:border-zinc-800 ${l.duplicado ? 'opacity-60' : l.revisar ? 'bg-amber-50/70 dark:bg-amber-900/10' : ''}`}>
+                    <Fragment key={i}>
+                    <tr className={`border-t border-zinc-100 dark:border-zinc-800 ${l.duplicado ? 'opacity-60' : l.revisar ? 'bg-amber-50/70 dark:bg-amber-900/10' : ''}`}>
                       <td className="px-2 py-1.5"><input type="checkbox" checked={sel.has(i)} onChange={() => toggle(i)} className="accent-[#02883C]" /></td>
                       <td className="px-2 py-1.5 tabular-nums text-zinc-500">{l.data}</td>
                       <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{l.descricao || '—'}{l.revisar && l.motivo && <span className="mt-0.5 block text-[10px] font-medium leading-tight text-amber-700 dark:text-amber-300">⚠️ {l.motivo}</span>}</td>
                       <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</td>
                       <td className="px-2 py-1.5">{l.valor < 0 ? (
                         <ComboBox className="w-40" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
-                          actions={[{ value: 'Escritório', label: 'Escritório (comum) · rateia auto' }]}
-                          labelOf={(v) => v === '' ? 'Escritório (comum · padrão)' : v === 'Escritório' ? 'Escritório (comum)' : v}
-                          placeholder="vertical…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
+                          actions={[{ value: 'Escritório', label: 'Escritório (comum) · rateia auto' }, { value: '__ratear', label: 'Ratear entre verticais…' }]}
+                          labelOf={(v) => v === '' ? 'Escritório (comum · padrão)' : v === 'Escritório' ? 'Escritório (comum)' : v === '__ratear' ? 'Ratear entre verticais…' : v}
+                          placeholder="vertical…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__ratear' && !rateios[i]) setRateios((r) => ({ ...r, [i]: [{ area: '', valor: '' }, { area: '', valor: '' }] })); }} />
                       ) : (
                         <ComboBox className="w-44" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
                           actions={[{ value: '', label: 'Honorário (casa pelo cliente)' }, { value: '__transfer', label: 'Transferência / cobertura (não é honorário)' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
@@ -1598,13 +1610,46 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                         ? <span className="cursor-help rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" title={l.motivo || ''}>⚠️ Revisar</span>
                         : <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Novo</span>}</td>
                     </tr>
+                    {areas[i] === '__ratear' && (() => {
+                      const rows = rateios[i] ?? [];
+                      const total = Math.abs(l.valor);
+                      const soma = rows.reduce((s, x) => s + parseValor(x.valor), 0);
+                      const setRows = (fn: (rows: { area: string; valor: string; label?: string }[]) => { area: string; valor: string; label?: string }[]) => setRateios((r) => ({ ...r, [i]: fn(r[i] ?? []) }));
+                      const dividirIgual = () => { const n = rows.filter((x) => x.area).length || rows.length; if (!n || total <= 0) return; const cada = Math.floor((total / n) * 100) / 100; setRows((rr) => rr.map((x, j, arr) => ({ ...x, valor: fmtMoney(j === arr.length - 1 ? total - cada * (n - 1) : cada) }))); };
+                      return (
+                        <tr className="border-t border-zinc-100 bg-violet-50/40 dark:border-zinc-800 dark:bg-violet-900/10">
+                          <td></td>
+                          <td colSpan={5} className="px-2 py-2">
+                            <div className="space-y-1.5 rounded-lg border border-violet-200/70 p-2.5 dark:border-violet-900/40">
+                              <p className="text-[11px] text-zinc-400">A despesa continua <strong>uma só</strong> no livro-razão; cada vertical puxa sua fatia (rateio de {brl2(l.valor)}).</p>
+                              {rows.map((x, j) => (
+                                <div key={j} className="flex flex-wrap items-center gap-1.5">
+                                  <ComboBox className="min-w-0 flex-1" value={x.area} options={VERTICAIS_PADRAO} allowFree placeholder="vertical…" onChange={(val) => setRows((rr) => rr.map((y, k) => k === j ? { ...y, area: val } : y))} />
+                                  <div className="w-28"><MoneyInput value={x.valor} onChange={(v) => setRows((rr) => rr.map((y, k) => k === j ? { ...y, valor: v } : y))} /></div>
+                                  <button onClick={() => setRows((rr) => rr.filter((_, k) => k !== j))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                                </div>
+                              ))}
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => setRows((rr) => [...rr, { area: '', valor: '' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar vertical</button>
+                                  {rows.length > 0 && total > 0 && <button onClick={dividirIgual} className="text-xs font-medium text-[#7048E8] hover:underline">dividir igual</button>}
+                                </div>
+                                <span className={`text-[11px] ${soma - total > 0.01 ? 'text-rose-600' : 'text-zinc-400'}`}>rateado {brl2(soma)} de {brl2(total)}{soma - total > 0.01 ? ' · excede!' : (total - soma > 0.01 ? ` · falta ${brl2(total - soma)}` : ' ✓')}</span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex items-center justify-end gap-2">
+              {rateioIncompleto && <span className="text-xs text-amber-600">⚠️ dê uma fatia (vertical + valor) pra cada rateio antes de importar</span>}
               <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
-              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
+              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0 || rateioIncompleto} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
             </div>
           </div>
         )}

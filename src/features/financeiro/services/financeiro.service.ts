@@ -416,7 +416,7 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false });
     return data.data ?? data;
   },
-  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null }[]): Promise<{ importados: number; duplicados: number; total: number }> {
+  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[] }[]): Promise<{ importados: number; duplicados: number; total: number }> {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true });
     return data.data ?? data;
   },
