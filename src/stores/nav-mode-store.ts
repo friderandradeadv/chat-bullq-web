@@ -55,13 +55,15 @@ export const DEFAULT_SIMPLE_BAR: string[] = [
 export const barItemById = (id: string) => SIMPLE_BAR_CATALOG.find((i) => i.id === id);
 
 const BAR_KEY = 'nav-bar-items';
+const sanitizeBar = (arr: unknown): string[] => {
+  const valid = Array.isArray(arr) ? arr.filter((id) => typeof id === 'string' && barItemById(id)) : [];
+  return valid.length ? (valid as string[]) : DEFAULT_SIMPLE_BAR;
+};
 const readBar = (): string[] => {
   try {
     const raw = localStorage.getItem(BAR_KEY);
     if (!raw) return DEFAULT_SIMPLE_BAR;
-    const arr = JSON.parse(raw);
-    const valid = Array.isArray(arr) ? arr.filter((id) => typeof id === 'string' && barItemById(id)) : [];
-    return valid.length ? valid : DEFAULT_SIMPLE_BAR;
+    return sanitizeBar(JSON.parse(raw));
   } catch {
     return DEFAULT_SIMPLE_BAR;
   }
@@ -80,7 +82,7 @@ export const useNavMode = create<NavModeState>((set) => ({
   modo: 'completo',
   barItems: DEFAULT_SIMPLE_BAR,
   hydrated: false,
-  hydrate: () =>
+  hydrate: () => {
     set(() => {
       let modo: NavMode = 'completo';
       try {
@@ -89,7 +91,22 @@ export const useNavMode = create<NavModeState>((set) => ({
         /* localStorage indisponível */
       }
       return { modo, barItems: readBar(), hydrated: true };
-    }),
+    });
+    // Fonte da VERDADE dos atalhos da barra = preferências do usuário no
+    // BACKEND (users/me/preferences → chave `nav.barItems`), pra escolha valer
+    // em qualquer navegador/aparelho. localStorage vira só cache do 1º paint.
+    // Import dinâmico: evita puxar o axios no bundle de quem nunca hidrata.
+    void import('@/features/inbox/services/preferences.service')
+      .then(({ preferencesService }) => preferencesService.get())
+      .then((prefs) => {
+        const remote = (prefs as { nav?: { barItems?: unknown } }).nav?.barItems;
+        if (!Array.isArray(remote) || remote.length === 0) return; // nunca salvou → mantém local
+        const ids = sanitizeBar(remote);
+        try { localStorage.setItem(BAR_KEY, JSON.stringify(ids)); } catch { /* ignora */ }
+        set({ barItems: ids });
+      })
+      .catch(() => { /* sem rede/sessão → fica no cache local */ });
+  },
   setModo: (m) => {
     try {
       localStorage.setItem('nav-mode', m);
@@ -105,5 +122,10 @@ export const useNavMode = create<NavModeState>((set) => ({
       /* ignora */
     }
     set({ barItems: ids });
+    // Persiste GLOBAL (por usuário, todos os aparelhos). Fire-and-forget: se
+    // falhar, o cache local segura este navegador e o próximo save re-tenta.
+    void import('@/features/inbox/services/preferences.service')
+      .then(({ preferencesService }) => preferencesService.patch({ nav: { barItems: ids } }))
+      .catch(() => { /* offline → fica só local por ora */ });
   },
 }));

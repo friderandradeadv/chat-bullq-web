@@ -1080,7 +1080,10 @@ export default function InicioPage() {
         </div>
       )}
 
-      <div className="relative z-10 w-full max-w-5xl text-center">
+      {/* mt-6: respiro extra entre a barra superior (busca) e a saudação — o
+          padding global do .under-bar (3.5rem) sozinho deixava o "Boa tarde"
+          colado na barra (pedido do Matheus, 21/07). */}
+      <div className="relative z-10 mt-6 w-full max-w-5xl text-center lg:mt-8">
         {/* Saudação */}
         <h1 className="welcome-pop text-3xl font-bold tracking-tight text-[#202124] dark:text-zinc-50 sm:text-4xl" style={{ animationDelay: '0.05s' }}>
           {saud},{' '}
