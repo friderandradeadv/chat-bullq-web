@@ -24,6 +24,7 @@ import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { CommentsSection } from '@/features/activities/components/comments-section';
+import { AnexosSection } from '@/features/activities/components/anexos-section';
 import { MoverFaseManual } from '@/features/legal-cases/components/mover-fase-manual';
 import { DisponibilidadeModal } from '@/features/calendar/components/disponibilidade-modal';
 import { preferencesService } from '@/features/inbox/services/preferences.service';
@@ -1523,6 +1524,12 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
 
         {/* Geração de peças por IA saiu do BullQ (réplica/especificação/recurso usam
             o Cowork). No kanban pré-judicial fica só a geração de iniciais de RMC/RCC. */}
+
+        {/* Anexos — deixa o documento junto do prazo/tarefa pra usar depois. */}
+        <div className="mt-5 border-t border-[#DEE2E6] pt-4 dark:border-zinc-800">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Anexos</p>
+          <AnexosSection entityType={entityType} entityId={activity.rawId} />
+        </div>
 
         {/* Comentários — multi-linha, @menção (com notificação), editar e foto do autor. */}
         <div className="mt-5 border-t border-[#DEE2E6] pt-4 dark:border-zinc-800">

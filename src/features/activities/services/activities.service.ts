@@ -38,7 +38,43 @@ export interface TagIndexEntry {
   tag: { id: string; name: string; color: string };
 }
 
+export interface ActivityAnexo {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  key: string;
+  /** caminho relativo à base da API (ex.: /uploads/activities/...) */
+  url: string;
+  uploadedById: string | null;
+  uploadedAt: string;
+}
+
+/** URL absoluta do anexo (a base da API já termina em /api/v1). */
+export function anexoHref(a: ActivityAnexo): string {
+  const base = (api.defaults.baseURL || '').replace(/\/$/, '');
+  return `${base}${a.url}`;
+}
+
 export const activitiesService = {
+  async listAnexos(entityType: string, entityId: string): Promise<ActivityAnexo[]> {
+    const { data } = await api.get(`/activities/${entityType}/${entityId}/anexos`);
+    return data.data ?? data;
+  },
+  async uploadAnexos(entityType: string, entityId: string, files: File[]): Promise<ActivityAnexo[]> {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    const { data } = await api.post(`/activities/${entityType}/${entityId}/anexos`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
+    return data.data ?? data;
+  },
+  async removeAnexo(entityType: string, entityId: string, anexoId: string): Promise<ActivityAnexo[]> {
+    const { data } = await api.delete(`/activities/${entityType}/${entityId}/anexos/${anexoId}`);
+    return data.data ?? data;
+  },
+
   async listComments(entityType: string, entityId: string): Promise<ActivityComment[]> {
     const { data } = await api.get(`/activities/${entityType}/${entityId}/comments`);
     return data.data ?? data;
