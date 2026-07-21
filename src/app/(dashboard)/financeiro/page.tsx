@@ -31,7 +31,10 @@ const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleStri
 const brl2 = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Nomes vêm em CAPS do Pipefy/Astrea — exibe em Title Case (preserva siglas/conectivos).
 const MINUS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'du', 'a', 'o']);
-const titleCase = (s?: string | null) => (s ?? '').toLowerCase().replace(/\b[\p{L}']+/gu, (w, i) => (i > 0 && MINUS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)));
+// Siglas que devem ficar em CAIXA ALTA mesmo depois do title-case (ex.: "IOF de Compra
+// Internacional", não "Iof de..."). Independe de como a sigla chegou (IOF/iof/Iof).
+const SIGLAS = new Set(['iof', 'cnpj', 'cpf', 'oab', 'gps', 'pix', 'ted', 'doc', 'iptu', 'icms', 'pis', 'cofins', 'inss', 'cs', 'rmc', 'rcc', 'repb', 'asaas']);
+const titleCase = (s?: string | null) => (s ?? '').toLowerCase().replace(/\b[\p{L}']+/gu, (w, i) => SIGLAS.has(w) ? w.toUpperCase() : (i > 0 && MINUS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)));
 const kbrl = (n: number) => { const a = Math.abs(n); const s = n < 0 ? '-' : ''; return a >= 1000 ? `${s}${(a / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}k` : `${s}${a}`; };
 // valor compacto (sem "R$ ", com centavos) — p/ colunas estreitas que não podem quebrar linha
 const brlN = (n: number) => (n < 0 ? '-' : '') + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
