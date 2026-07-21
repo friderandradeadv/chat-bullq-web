@@ -1445,7 +1445,9 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   // Despesa lançada à mão (ex.: repasse) NÃO entra na fatura — fica no livro-razão.
   // Gastos da fatura: TUDO que é despesa no cartão (a_pagar ou já pago) + os que migraram
   // pra conta ao pagar (faturaDe = este cartão). Assim nenhuma fatura "some" do histórico.
-  const gastos = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && (t.conta === cartao?.id || t.faturaDe === cartao?.id)), [data.transacoes, cartao?.id]);
+  // ESTORNO (crédito — "Estorno de compra") vem do extrato com valor POSITIVO — inclui aqui
+  // também, senão ele simplesmente sumia da fatura em vez de abater o total.
+  const gastos = useMemo(() => data.transacoes.filter((t) => (t.conta === cartao?.id && (t.valor < 0 || (t.valor > 0 && t.fonteImport === 'extrato'))) || t.faturaDe === cartao?.id), [data.transacoes, cartao?.id]);
 
   // A qual fatura (mês/ciclo) um gasto pertence: se o dia > fechamento, cai na fatura do mês seguinte.
   const faturaInfo = (dataBR: string) => {
@@ -1472,7 +1474,9 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
     return [...map.values()].sort((a, b) => b.info.key.localeCompare(a.info.key));
   }, [gastos, fechamento, vencDia]);
 
-  const abertoTotal = faturas.reduce((s, f) => s + f.abertos.reduce((x, t) => x + Math.abs(t.valor), 0), 0);
+  // Soma com SINAL (não Math.abs): despesa (negativo) soma ao total devido, estorno
+  // (positivo) abate — Math.abs contaria o estorno como MAIS um gasto em vez de um crédito.
+  const abertoTotal = faturas.reduce((s, f) => s + f.abertos.reduce((x, t) => x - t.valor, 0), 0);
 
   // Seletor de mês (fatura) — igual ao livro-razão. '' = todas as faturas.
   const [mesFat, setMesFat] = useState<string>(() => faturaInfo(hojeBR()).key);
@@ -1493,21 +1497,24 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   });
 
   const abrirPagar = (f: (typeof faturas)[number]) => {
-    const total = f.abertos.reduce((s, t) => s + Math.abs(t.valor), 0);
+    const total = f.abertos.reduce((s, t) => s - t.valor, 0); // sinal: estorno abate
     setContaPg(contasPagam[0]?.id ?? '');
     setDataPg(f.info.venc ? toISOInput(f.info.venc) : toISOInput(hojeBR()));
     setPgFatura({ key: f.info.key, label: f.info.label, venc: f.info.venc, txIds: f.abertos.map((t) => t.id!).filter(Boolean), total });
   };
 
-  const linha = (t: FinTransacao) => (
+  const linha = (t: FinTransacao) => {
+    const ehCredito = t.valor > 0; // estorno/crédito na fatura — abate em vez de somar
+    return (
     <div key={t.id} className="flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 text-sm dark:border-zinc-800/70">
       <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{(t.data || '').slice(0, 5)}</span>
-      <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />
-      <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{titleCase(t.pagador || t.recebedor || t.party || '') || t.categoria}</span>
+      {ehCredito ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
+      <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{titleCase(t.pagador || t.recebedor || t.party || '') || t.categoria}{ehCredito && <span className="ml-1.5 rounded bg-emerald-100 px-1 text-[9px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">estorno</span>}</span>
       <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="truncate">{t.categoria}</span></span>
-      <span className="w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums text-rose-600">{brl2(t.valor)}</span>
+      <span className={`w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums ${ehCredito ? 'text-emerald-600' : 'text-rose-600'}`}>{ehCredito ? '-' : ''}{brl2(t.valor)}</span>
     </div>
-  );
+    );
+  };
 
   if (!cartao) return null;
   const semCiclo = !(fechamento > 0);
@@ -1539,8 +1546,8 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
 
       <div className="mt-3 space-y-3">
         {faturasVis.map((f) => {
-          const totalAberto = f.abertos.reduce((s, t) => s + Math.abs(t.valor), 0);
-          const totalPago = f.pagos.reduce((s, t) => s + Math.abs(t.valor), 0);
+          const totalAberto = f.abertos.reduce((s, t) => s - t.valor, 0); // sinal: estorno abate
+          const totalPago = f.pagos.reduce((s, t) => s - t.valor, 0);
           const paga = f.abertos.length === 0 && f.pagos.length > 0;
           return (
             <div key={f.info.key} className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
