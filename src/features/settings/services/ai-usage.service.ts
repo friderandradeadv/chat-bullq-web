@@ -69,6 +69,9 @@ export interface AiCreditHealth {
   usdBrlRate: number;
   exhausted: boolean;
   exhaustedAt: string | null;
+  /** true = último request ao Gemini bateu em quota/rate-limit (429 RESOURCE_EXHAUSTED) */
+  geminiExhausted: boolean;
+  geminiExhaustedAt: string | null;
 }
 
 export const aiUsageService = {

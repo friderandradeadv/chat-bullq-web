@@ -74,6 +74,9 @@ export default function SettingsUsagePage() {
       {/* Saldo da IA (Anthropic) — alerta de "perto do fim" / "acabou" */}
       <CreditCard />
 
+      {/* Quota do Gemini — alerta de "429 RESOURCE_EXHAUSTED" */}
+      <GeminiQuotaCard />
+
       {/* Seletor de período */}
       <div className="mb-5 inline-flex rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900">
         {PERIODS.map((p) => (
@@ -354,6 +357,51 @@ function CreditCard() {
                 Quanto você carregou agora no console da Anthropic.
               </span>
             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Quota do Gemini — sem "saldo declarado" (o Google não vende crédito
+ * pré-pago do mesmo jeito que a Anthropic), só o erro real de 429
+ * RESOURCE_EXHAUSTED reportado pelo GeminiLlmBackend. Fica escondido quando
+ * está tudo ok pra não poluir a tela com mais uma caixa verde de "saldo
+ * folgado" (aqui não existe "folgado", só "não bateu erro ainda").
+ */
+function GeminiQuotaCard() {
+  const activeOrgId = useAuthStore((s) => s.activeOrgId);
+
+  const { data: h, isLoading } = useQuery({
+    queryKey: ['ai-usage', 'credit-health', activeOrgId],
+    queryFn: () => aiUsageService.creditHealth(),
+    refetchInterval: 60_000,
+  });
+
+  if (isLoading || !h || !h.geminiExhausted) return null;
+
+  return (
+    <div className="mb-5 rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 shrink-0 text-red-600 dark:text-red-400">
+          <AlertTriangle className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            Quota do Gemini esgotou
+          </h3>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            A API do Google recusou a última chamada por limite de quota (429). Enquanto
+            durar, os agentes que rodam em modelo Gemini param de responder e os leads
+            travam. Verifique o limite/faturamento no Google AI Studio ou aguarde a janela
+            de quota resetar.
+          </p>
+          {h.geminiExhaustedAt && (
+            <p className="mt-1.5 text-[11px] text-zinc-400">
+              Desde {new Date(h.geminiExhaustedAt).toLocaleString('pt-BR')}
+            </p>
           )}
         </div>
       </div>
