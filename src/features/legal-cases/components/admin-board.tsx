@@ -12,6 +12,7 @@ import { isTerminalPhase, terminalCardClass } from '@/features/legal-cases/lib/k
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
+import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -108,10 +109,9 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   const preKeys = useMemo(() => new Set((data?.phases ?? []).filter((p) => p.lane === 'pre').map((p) => p.key)), [data]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return (data?.cards ?? []).filter((c) => {
       if (!filter(c, preKeys)) return false;
-      if (q && !`${c.title} ${c.client ?? ''} ${c.opponent ?? ''}`.toLowerCase().includes(q)) return false;
+      if (!matchesKanbanSearch(c, search, [c.title, c.client, c.opponent])) return false;
       return true;
     });
   }, [data, search, filter, preKeys]);
@@ -149,7 +149,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· {subtitle}</span>
           <div className="relative ml-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, banco…"
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, banco, CPF…"
               className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
         </div>

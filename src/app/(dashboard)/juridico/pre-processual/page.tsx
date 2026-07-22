@@ -21,6 +21,7 @@ import { boardOfPhase } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePreSeenStore } from '@/stores/pre-seen-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
+import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
 const KEY = ['legal-cases', 'kanban', 'pre'];
 const INPUT = 'h-[38px] w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
@@ -101,11 +102,10 @@ export default function PreProcessualPage() {
 
   const preKeys = new Set(phases.map((p) => p.key));
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return cards.filter((c) => {
       if (!preKeys.has(c.phase)) return false;
       if (resp && c.responsible?.id !== resp) return false;
-      if (q && !`${c.title} ${c.client ?? ''}`.toLowerCase().includes(q)) return false;
+      if (!matchesKanbanSearch(c, search, [c.title, c.client])) return false;
       return true;
     });
   }, [cards, search, resp, phases]);
@@ -199,7 +199,7 @@ export default function PreProcessualPage() {
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· do fechamento do contrato até o protocolo — ao protocolar, o processo migra para a Fase Judicial</span>
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, CPF…"
               className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
           <select value={resp} onChange={(e) => setResp(e.target.value)} className="h-9 max-w-[200px] rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">

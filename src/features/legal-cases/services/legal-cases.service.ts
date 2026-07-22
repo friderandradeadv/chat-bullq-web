@@ -223,6 +223,7 @@ export interface KanbanCard {
   id: string;
   title: string;
   cnj: string | null;
+  clientDocument: string | null; // CPF/CNPJ do cliente, só dígitos (busca do Kanban)
   produto: string | null; // 1ª etiqueta (RMC/BPC-LOAS…)
   areaJuridica: string | null; // 2ª etiqueta (Bancário/Previdenciário…)
   vencemos: string | null; // 'Sim' | 'Não' | 'Parcial' | resultado da sentença → badge

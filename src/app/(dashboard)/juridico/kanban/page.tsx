@@ -21,6 +21,7 @@ import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
+import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
 // queryKey por lane: cada board escopa a busca no servidor à sua trilha; keys
 // distintas evitam que o cache de um board sirva os cards de outro.
@@ -149,16 +150,12 @@ export default function FaseJudicialKanbanPage() {
   }, [cards]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return cards.filter((c) => {
       if (area && c.areaJuridica !== area) return false;
       if (produto && c.produto !== produto) return false;
       if (resp && c.responsible?.id !== resp) return false;
       if (tagSel.length && !(c.tags ?? []).some((t) => tagSel.includes(t.id))) return false;
-      if (q) {
-        const hay = `${c.title} ${c.cnj ?? ''} ${c.client ?? ''} ${c.opponent ?? ''}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
+      if (!matchesKanbanSearch(c, search, [c.title, c.cnj, c.client, c.opponent])) return false;
       return true;
     });
   }, [cards, search, area, produto, resp, tagSel]);
@@ -315,7 +312,7 @@ export default function FaseJudicialKanbanPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar cliente, réu, CNJ…"
+              placeholder="Buscar cliente, réu, CNJ, CPF…"
               className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
             />
           </div>

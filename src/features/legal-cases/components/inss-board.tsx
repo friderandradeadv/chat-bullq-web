@@ -13,6 +13,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
+import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
 // inss_admin está na trilha 'pre' — escopa a busca por lane (mesma key/cache do
 // board Pré-processual, que puxa os mesmos cards).
@@ -82,10 +83,9 @@ export function InssBoard() {
   const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'pre' }), refetchInterval: 60_000 });
 
   const inss = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return (data?.cards ?? []).filter((c) => {
       if (c.phase !== 'inss_admin') return false;
-      if (q && !`${c.title} ${c.client ?? ''} ${c.opponent ?? ''}`.toLowerCase().includes(q)) return false;
+      if (!matchesKanbanSearch(c, search, [c.title, c.client, c.opponent])) return false;
       return true;
     });
   }, [data, search]);
@@ -154,7 +154,7 @@ export function InssBoard() {
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· arraste os cards entre as situações — no indeferimento, você entra com a ação judicial em um clique</span>
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, CPF…"
               className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
           <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">

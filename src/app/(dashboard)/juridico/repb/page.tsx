@@ -21,6 +21,7 @@ import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } fro
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { FunilRepbBoard } from '@/features/legal-cases/components/funil-repb-board';
+import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
 const KEY = ['legal-cases', 'kanban', 'repb'];
 const ACCENT = '#B7791F'; // gold/âmbar — trilha REPB (reestruturação de passivo bancário)
@@ -108,11 +109,10 @@ export default function RepbPage() {
 
   const repbKeys = new Set(phases.map((p) => p.key));
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return cards.filter((c) => {
       if (!repbKeys.has(c.phase)) return false;
       if (resp && c.responsible?.id !== resp) return false;
-      if (q && !`${c.title} ${c.client ?? ''}`.toLowerCase().includes(q)) return false;
+      if (!matchesKanbanSearch(c, search, [c.title, c.client])) return false;
       return true;
     });
   }, [cards, search, resp, phases]);
@@ -177,7 +177,7 @@ export default function RepbPage() {
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· auditoria da dívida + provisionamento (Res. CMN 4.966/21) até o acordo — o card sobe automático ao assinar o contrato REPB</span>
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…"
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, CPF…"
               className="h-9 w-full rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none sm:w-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
           <select value={resp} onChange={(e) => setResp(e.target.value)} className="h-9 max-w-[200px] rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
