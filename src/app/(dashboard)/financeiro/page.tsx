@@ -2805,7 +2805,7 @@ function RemunVerticalEditor({ data }: { data: FinDashboard }) {
               <div className="space-y-1.5">
                 {rows(a.id).map((r, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <ComboBox className="min-w-0 flex-1" value={r.area} options={verticais} allowFree placeholder="vertical…" onChange={(val) => setRow(a.id, i, { area: val })} />
+                    <ComboBox className="min-w-0 flex-1" value={r.area} options={verticais} placeholder="vertical…" onChange={(val) => setRow(a.id, i, { area: val })} />
                     <div className="flex items-center gap-1"><input value={String(r.pct)} onChange={(e) => setRow(a.id, i, { pct: Math.max(0, Math.min(100, parseFloat(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.')) || 0)) })} inputMode="decimal" className="w-14 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-sm text-zinc-400">%</span></div>
                     <button onClick={() => rmRow(a.id, i)} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                   </div>
