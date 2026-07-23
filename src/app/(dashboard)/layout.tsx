@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTheme } from 'next-themes';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { SidebarLayout } from '@/components/ui/sidebar-layout';
@@ -58,6 +59,10 @@ export default function DashboardLayout({
   const { modo, hydrated, hydrate, setModo } = useNavMode();
   useEffect(() => { hydrate(); }, [hydrate]);
   const simples = hydrated && modo === 'simples';
+  const { resolvedTheme } = useTheme();
+  const [themeMounted, setThemeMounted] = useState(false);
+  useEffect(() => { setThemeMounted(true); }, []);
+  const isDarkTheme = themeMounted && resolvedTheme === 'dark';
 
   // ── Trava por módulo: redireciona quem não tem acesso à área da rota atual.
   // OWNER/ADMIN têm restrictedModules vazio (vêm assim da API) → nunca barra.
@@ -155,16 +160,14 @@ export default function DashboardLayout({
               conteúdo da página rola POR BAIXO dela e o blur revela ele borrado — o
               mecanismo genuíno do Trello. `absolute` tira a barra do fluxo; o respiro
               no topo de cada página vem do `.under-bar` (globals).
-              REGRA (Matheus, 16/07): no modo COMPLETO a barra segue o tema (vidro
-              claro no claro, escuro no escuro); no modo SIMPLES ela fica SEMPRE
-              escura (marca FA + controles claros — classes `topbar-glass--dark
-              dark`), independente do tema. */}
-          <div className={`topbar-glass ${simples ? 'topbar-glass--dark dark' : ''} absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center px-4 lg:flex`}>
-            {/* Modo simples: a MARCA minimalista (FA. clara, clicável → Início) —
-                barra escura sempre, então só a variante clara do logo. */}
+              23/07 (2): a barra SEMPRE segue o tema real, nos dois modos (Completo
+              e Simples) — a variante "sempre escura" do Simples foi removida. */}
+          <div className="topbar-glass absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center px-4 lg:flex">
+            {/* Modo simples: a MARCA minimalista (FA., clicável → Início) — o
+                ícone acompanha o tema, igual ao favicon da aba. */}
             {simples && (
               <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
-                <img src="/favicon-dark.png" alt="Início" className="h-8 w-8 object-contain" />
+                <img src={isDarkTheme ? '/favicon-dark.png' : '/favicon-light.png'} alt="Início" className="h-8 w-8 object-contain" />
               </Link>
             )}
             <GlobalSearch />

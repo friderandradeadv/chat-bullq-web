@@ -390,20 +390,12 @@
   backdrop-filter: blur(24px) saturate(1.6);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
-/* MODO SIMPLES: a barra é SEMPRE escura (marca FA + controles claros), em
-   qualquer tema — regra do Matheus (16/07). No tema claro usa GRAFITE
-   TRANSLÚCIDO + blur (23/07 — antes era #1D2125 sólido sem blur; achou pesado
-   demais). ⚠️ Opacidade alta de propósito: translucidez BAIXA sobre página
-   branca lava a cor pra cinza médio (já reclamou disso uma vez) — 0.85 mantém
-   o grafite reconhecível e só dá o ar glassy pela borda/blur, não pela
-   transparência. No tema escuro, `.dark .topbar-glass` abaixo vence por
-   especificidade e devolve o vidro translúcido normal (0.55). */
-.topbar-glass--dark {
-  background: rgba(29, 33, 37, 0.85) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(1.3);
-  backdrop-filter: blur(20px) saturate(1.3);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
+/* 23/07 (2): a barra do MODO SIMPLES deixou de ser "sempre escura" (regra de
+   16/07, testada sólida e depois grafite translúcido — pesada demais nas duas
+   versões). Agora o Simples usa o MESMO `.topbar-glass` do Completo, seguindo
+   o tema real (branco no claro, escuro no escuro) — `.topbar-glass--dark` foi
+   removida. Ver `(dashboard)/layout.tsx`: o logo e os controles também
+   passaram a acompanhar o tema em vez de forçar a variante clara fixa. */
 /* MODO ESCURO (app dark): vidro fosco iOS de verdade — translúcido (0.55) sobre o
    conteúdo escuro, blur + saturação revelam o corpo borrado por baixo ao rolar.
    Hairline claro embaixo pra separar sem peso. */
