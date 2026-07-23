@@ -126,7 +126,7 @@ export default function FollowUpsPage() {
           <MessageCircleHeart className="h-6 w-6" />
         </span>
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Follow-ups</h1>
+          <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Follow-ups</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             A IA reengaja sozinha quem parou de responder — mensagens naturais, na hora certa, sem ser robótico.
           </p>

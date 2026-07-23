@@ -596,7 +596,7 @@ export default function AgendaPage() {
           vem da folga global (.under-bar > *). */}
       <div className="mb-3">
       <div className="flex items-center justify-between">
-        <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100"><CalendarDays className="h-5 w-5" style={{ color: '#228BE6' }} /> Agenda</h1>
+        <h1 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><CalendarDays className="h-4 w-4" style={{ color: '#228BE6' }} /> Agenda</h1>
         <div className="flex items-center gap-2">
           <button onClick={() => { refetchAll(); toast.success('Agenda atualizada'); }} className="flex h-9 w-9 items-center justify-center rounded-md border border-[#E9ECEF] bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900" title="Atualizar"><RefreshCw className={`h-4 w-4 ${(evQ.isFetching || dlQ.isFetching || tkQ.isFetching || tagsQ.isFetching) ? 'animate-spin' : ''}`} /></button>
           <div className="relative">

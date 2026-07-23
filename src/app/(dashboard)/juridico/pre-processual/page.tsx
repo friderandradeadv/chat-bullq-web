@@ -192,8 +192,8 @@ export default function PreProcessualPage() {
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-2 lg:px-6">
         {/* Título + dica + busca + ações na MESMA linha (quebra se faltar espaço) */}
         <div className="flex flex-wrap items-center gap-2">
-          <Workflow className="h-5 w-5 shrink-0 text-[#e11970]" />
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Pré-Processual</h1>
+          <Workflow className="h-4 w-4 shrink-0 text-[#e11970]" />
+          <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Pré-Processual</h1>
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{filtered.length}</span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· do fechamento do contrato até o protocolo — ao protocolar, o processo migra para a Fase Judicial</span>

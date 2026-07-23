@@ -170,8 +170,8 @@ export default function RepbPage() {
       {tab === 'funil' ? <FunilRepbBoard embedded /> : (<>
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-4 lg:px-6">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-          <Banknote className="h-5 w-5 shrink-0" style={{ color: ACCENT }} />
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">REPB — Reestruturação de Passivo</h1>
+          <Banknote className="h-4 w-4 shrink-0" style={{ color: ACCENT }} />
+          <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">REPB — Reestruturação de Passivo</h1>
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{filtered.length}</span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· auditoria da dívida + provisionamento (Res. CMN 4.966/21) até o acordo — o card sobe automático ao assinar o contrato REPB</span>

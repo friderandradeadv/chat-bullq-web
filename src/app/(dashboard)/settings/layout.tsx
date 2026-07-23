@@ -88,7 +88,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl p-6">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Configurações</h1>
+        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Configurações</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Gerencie sua organização e integrações
         </p>

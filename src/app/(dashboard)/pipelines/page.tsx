@@ -62,7 +62,7 @@ export default function PipelinesIndexPage() {
     <div className="flex h-full flex-col p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+          <h1 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
             <KanbanSquare className="h-5 w-5 text-primary" />
             Pipelines
           </h1>

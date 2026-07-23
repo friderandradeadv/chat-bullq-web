@@ -160,7 +160,7 @@ export default function SettingsStatusesPage() {
     <div>
       {/* Header — estilo LíderHub */}
       <div>
-        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
           Status
         </h2>
         <p className="mt-1 text-sm text-zinc-500">

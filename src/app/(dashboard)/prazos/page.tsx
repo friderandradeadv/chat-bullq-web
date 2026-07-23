@@ -76,7 +76,7 @@ export default function PrazosPage() {
     <div className="flex h-full flex-col bg-white dark:bg-zinc-950 p-4 lg:p-6 text-zinc-800 dark:text-zinc-200">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+          <h1 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
             <Clock className="h-5 w-5 text-primary" />
             Prazos
           </h1>

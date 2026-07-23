@@ -7,7 +7,7 @@ export default function VozesPage() {
     <div className="mx-auto w-full max-w-4xl p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Vozes</h1>
+          <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Vozes</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Configure as vozes usadas pela IA para enviar áudios aos clientes.
           </p>

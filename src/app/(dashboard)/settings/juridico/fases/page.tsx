@@ -123,7 +123,7 @@ export default function FasesSettingsPage() {
       </Link>
       <div className="flex items-center gap-2">
         <Columns3 className="h-5 w-5 text-[#228BE6]" />
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Fases dos Kanbans</h1>
+        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Fases dos Kanbans</h1>
       </div>
       <p className="mt-1 text-sm text-zinc-500">Renomeie, reordene, esconda ou crie fases próprias em cada kanban. Só sócios podem salvar. As alterações valem para todo o escritório.</p>
 

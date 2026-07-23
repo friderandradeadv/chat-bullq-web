@@ -141,7 +141,7 @@ export default function FinanceiroPage() {
     return (
       <div className="h-full overflow-y-auto overflow-x-hidden bg-[#f5f6f8] dark:bg-zinc-950">
         <div className="mx-auto max-w-3xl p-6">
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100"><CircleDollarSign className="h-5 w-5 text-emerald-600" /> Financeiro</h1>
+          <h1 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><CircleDollarSign className="h-4 w-4 text-emerald-600" /> Financeiro</h1>
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-6 text-sm dark:border-amber-900/40 dark:bg-amber-900/10">
             Ainda não importamos seus dados financeiros do Astrea. Assim que o snapshot for carregado, o painel completo aparece aqui.
           </div>
@@ -157,7 +157,7 @@ export default function FinanceiroPage() {
       <div className="mx-auto w-full max-w-6xl p-6">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            <h1 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600"><CircleDollarSign className="h-5 w-5" /></span>
               Financeiro
               {verVert ? <span className="text-lg font-semibold text-[#15AABF]"> · {verVert}</span> : verAdv && advNome ? <span className="text-lg font-semibold text-[#7048E8]"> · {advNome.split(' ')[0]}</span> : null}

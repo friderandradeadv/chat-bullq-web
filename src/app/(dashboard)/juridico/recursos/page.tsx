@@ -75,7 +75,7 @@ export default function RecursosPage() {
     <div className="h-full overflow-y-auto bg-white p-4 text-zinc-800 lg:p-6 dark:bg-zinc-950 dark:text-zinc-200">
       <div className="flex items-center gap-2">
         <Gavel className="h-5 w-5 text-[#228BE6]" />
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Recursos</h1>
+        <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Recursos</h1>
         <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">{filtered.length}</span>
       </div>
       <p className="mt-0.5 text-sm text-zinc-500">Recursos importados do Pipefy, vinculados aos processos.</p>
