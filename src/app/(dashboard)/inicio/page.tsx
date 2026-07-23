@@ -6,11 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   MessageSquare,
-  CalendarCheck,
-  Folder,
   Newspaper,
-  Users,
-  BarChart3,
   ArrowRight,
   CalendarClock,
   AlarmClock,
@@ -252,15 +248,6 @@ const DICAS: string[] = [
   'Acordo melhor que a melhor sentença provável é vitória. Pragmatismo também é estratégia.',
   'Separe 15 min no fim da semana pra ler um informativo do STJ. Repertório se constrói pingando.',
   'Nomeie bem os arquivos do cliente hoje: você economiza horas de garimpo no futuro.',
-];
-
-const QUICK = [
-  { href: '/inbox', icon: MessageSquare, label: 'Conversas', desc: 'Atender clientes', color: '#228BE6' },
-  { href: '/agenda', icon: CalendarCheck, label: 'Agenda', desc: 'Prazos & audiências', color: '#02883C' },
-  { href: '/processos', icon: Folder, label: 'Processos', desc: 'Carteira jurídica', color: '#7048E8' },
-  { href: '/caixa-djen', icon: Newspaper, label: 'Publicações', desc: 'Intimações do dia', color: '#F76707' },
-  { href: '/clientes', icon: Users, label: 'Clientes', desc: 'Quem você defende', color: '#E64980' },
-  { href: '/juridico/jurimetria', icon: BarChart3, label: 'Jurimetria', desc: 'Seus números', color: '#15AABF' },
 ];
 
 const CONFETTI_COLORS = ['#228BE6', '#15AABF', '#7048E8', '#F76707', '#F59F00', '#2F9E44', '#E64980', '#FA5252'];
@@ -1151,23 +1138,6 @@ export default function InicioPage() {
 
         {/* Casos que pedem atenção — largura total */}
         {mounted && <CasosParaAtencao />}
-
-        {/* Atalhos */}
-        <div className="welcome-pop mt-9" style={{ animationDelay: '0.26s' }}>
-          <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400">Por onde vamos começar?</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {QUICK.map((q) => (
-              <Link key={q.href} href={q.href} className="group flex items-center gap-3 rounded-xl border border-zinc-200/70 bg-white/70 p-3.5 text-left backdrop-blur transition hover:-translate-y-0.5 hover:border-[#228BE6]/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:border-[#228BE6]/40">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${q.color}1A`, color: q.color }}><q.icon className="h-5 w-5" /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-zinc-800 dark:text-zinc-100">{q.label}</span>
-                  <span className="block text-xs text-zinc-400">{q.desc}</span>
-                </span>
-                <ArrowRight className="h-4 w-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-[#228BE6]" />
-              </Link>
-            ))}
-          </div>
-        </div>
 
         {/* Frase + Dica do dia */}
         {mounted && (
