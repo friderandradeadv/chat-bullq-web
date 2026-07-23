@@ -161,14 +161,12 @@ export default function DashboardLayout({
               mecanismo genuíno do Trello. `absolute` tira a barra do fluxo; o respiro
               no topo de cada página vem do `.under-bar` (globals).
               23/07 (2): a barra SEMPRE segue o tema real, nos dois modos (Completo
-              e Simples) — a variante "sempre escura" do Simples foi removida.
-              23/07 (3): `top-2` (8px) em vez de `top-0` — respiro entre o topo do
-              navegador e a barra, pedido depois de enxugar o resto. */}
-          <div className="topbar-glass absolute inset-x-0 top-2 z-40 hidden h-11 items-center justify-center px-4 lg:flex">
+              e Simples) — a variante "sempre escura" do Simples foi removida. */}
+          <div className="topbar-glass absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center px-4 lg:flex">
             {/* Modo simples: a MARCA minimalista (FA., clicável → Início) — o
                 ícone acompanha o tema, igual ao favicon da aba. */}
             {simples && (
-              <Link href="/inicio" title="Início" className="absolute left-4 top-[calc(50%-3px)] -translate-y-1/2">
+              <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
                 <img src={isDarkTheme ? '/favicon-dark.png' : '/favicon-light.png'} alt="Início" className="h-8 w-8 object-contain" />
               </Link>
             )}
@@ -187,11 +185,8 @@ export default function DashboardLayout({
           {/* pb-tabbar dá espaço pra barra de abas do mobile; no desktop tem que
               ZERAR — mas o utilitário custom .pb-tabbar vencia o lg:pb-0 na cascata
               (56px de padding sobravam no rodapé, "cortando" o kanban). O !important
-              garante padding-bottom:0 no lg.
-              23/07: respiro do topo (`.under-bar` em globals) ficou mais justo só
-              no chat (`under-bar--tight`, pedido do Matheus) — as outras páginas
-              mantêm o respiro padrão (3.5rem). */}
-          <div className={`under-bar ${pathname.startsWith('/inbox') ? 'under-bar--tight' : ''} min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
+              garante padding-bottom:0 no lg. */}
+          <div className={`under-bar min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
           </div>
         </div>
         <MobileTabBar />
