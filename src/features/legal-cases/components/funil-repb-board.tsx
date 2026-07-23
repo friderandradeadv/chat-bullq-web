@@ -151,10 +151,10 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className={rootClass}>
-      <div className="shrink-0 border-b border-[#f0dcc9] dark:border-zinc-800 px-4 py-2 lg:px-6">
-        <div className="flex flex-wrap items-center gap-2">
-          {!embedded && <Megaphone className="h-5 w-5 shrink-0" style={{ color: ACCENT }} />}
-          {!embedded && <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Funil REPB</h1>}
+      <div className="shrink-0 border-b border-[#f0dcc9] dark:border-zinc-800 px-4 py-4 lg:px-6">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
+          {!embedded && <Megaphone className="h-4 w-4 shrink-0" style={{ color: ACCENT }} />}
+          {!embedded && <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Funil REPB</h1>}
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{filtered.length}</span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· leads das campanhas REPB — o robô tria, marca a reunião com a Kauani e o lead sobe pra Reunião Agendada; fechou vira cliente</span>
