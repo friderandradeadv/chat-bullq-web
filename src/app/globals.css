@@ -407,11 +407,13 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 @media (min-width: 1024px) {
-  /* Respiro no topo = altura da barra (2.75rem) + ~12px de ar (0.75rem) = 3.5rem.
-     Calibrado: 4rem (20px) era folga demais; 2.75rem (rente) ficou apertado; 3.5rem
-     é o meio-termo confortável. Esta regra é a ÚNICA fonte do respiro do topo —
-     páginas NÃO devem pôr pt-* no root (senão volta a folga). */
+  /* Respiro no topo = altura da barra (2.75rem) + ar. 23/07: pediu pra enxugar
+     o vão acima da InboxToolbar (que não mudava por mais que a toolbar
+     encolhesse, já que esse padding-top é a fonte real do respiro) — baixado
+     de 3.5rem (12px de ar) pra 2.875rem (~2px de ar), testado ao vivo. Esta
+     regra é a ÚNICA fonte do respiro do topo — páginas NÃO devem pôr pt-* no
+     root (senão volta a folga). */
   .under-bar > * {
-    padding-top: 3.5rem;
+    padding-top: 2.875rem;
   }
 }
