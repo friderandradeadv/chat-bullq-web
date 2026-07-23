@@ -185,8 +185,12 @@ export default function DashboardLayout({
           {/* pb-tabbar dá espaço pra barra de abas do mobile; no desktop tem que
               ZERAR — mas o utilitário custom .pb-tabbar vencia o lg:pb-0 na cascata
               (56px de padding sobravam no rodapé, "cortando" o kanban). O !important
-              garante padding-bottom:0 no lg. */}
-          <div className={`under-bar min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
+              garante padding-bottom:0 no lg.
+              23/07 (4): SÓ o chat (`under-bar--tight`, escopado por pathname) usa
+              respiro mais justo — as outras páginas NÃO mudam (ficam no 3.5rem
+              padrão do `.under-bar` em globals). Não reduzir o valor base pra
+              todo mundo de novo (já testamos e sufocava o kanban). */}
+          <div className={`under-bar ${pathname.startsWith('/inbox') ? 'under-bar--tight' : ''} min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
           </div>
         </div>
         <MobileTabBar />
