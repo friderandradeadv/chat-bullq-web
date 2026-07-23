@@ -89,12 +89,12 @@ export function RegisterForm() {
     <div className="mx-auto w-full max-w-sm space-y-8">
       <div className="space-y-2 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-          <MessageSquare className="h-6 w-6 text-primary-foreground" />
+          <MessageSquare className="h-6 w-6 text-white" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Criar Conta</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Criar Conta</h1>
         {inviteInfo ? (
           <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Você foi convidado para entrar em:
             </p>
             <div className="inline-flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary">
@@ -103,7 +103,7 @@ export function RegisterForm() {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Crie sua conta para começar a atender
           </p>
         )}
@@ -111,26 +111,26 @@ export function RegisterForm() {
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="name" className="text-sm font-medium">
+          <label htmlFor="name" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             Nome
           </label>
           <input
             id="name"
             type="text"
             autoComplete="name"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
             placeholder="Seu nome"
             {...form.register('name')}
           />
           {form.formState.errors.name && (
-            <p className="text-xs text-destructive">
+            <p className="text-xs text-red-600 dark:text-red-400">
               {form.formState.errors.name.message}
             </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-medium">
+          <label htmlFor="email" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             Email
           </label>
           <input
@@ -138,52 +138,52 @@ export function RegisterForm() {
             type="email"
             autoComplete="email"
             readOnly={!!inviteInfo}
-            className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              inviteInfo ? 'cursor-not-allowed bg-muted' : ''
+            className={`flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
+              inviteInfo ? 'cursor-not-allowed bg-zinc-100 dark:bg-zinc-800' : ''
             }`}
             placeholder="seu@email.com"
             {...form.register('email')}
           />
           {form.formState.errors.email && (
-            <p className="text-xs text-destructive">
+            <p className="text-xs text-red-600 dark:text-red-400">
               {form.formState.errors.email.message}
             </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="password" className="text-sm font-medium">
+          <label htmlFor="password" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             Senha
           </label>
           <input
             id="password"
             type="password"
             autoComplete="new-password"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
             placeholder="Mínimo 6 caracteres"
             {...form.register('password')}
           />
           {form.formState.errors.password && (
-            <p className="text-xs text-destructive">
+            <p className="text-xs text-red-600 dark:text-red-400">
               {form.formState.errors.password.message}
             </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="confirmPassword" className="text-sm font-medium">
+          <label htmlFor="confirmPassword" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             Confirmar senha
           </label>
           <input
             id="confirmPassword"
             type="password"
             autoComplete="new-password"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
             placeholder="Repita a senha"
             {...form.register('confirmPassword')}
           />
           {form.formState.errors.confirmPassword && (
-            <p className="text-xs text-destructive">
+            <p className="text-xs text-red-600 dark:text-red-400">
               {form.formState.errors.confirmPassword.message}
             </p>
           )}
@@ -192,14 +192,14 @@ export function RegisterForm() {
         <button
           type="submit"
           disabled={isLoading}
-          className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
         >
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {inviteInfo ? 'Criar conta e entrar' : 'Criar conta'}
         </button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
         Já tem conta?{' '}
         <Link href="/login" className="font-medium text-primary hover:underline">
           Fazer login
