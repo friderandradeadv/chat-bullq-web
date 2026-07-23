@@ -168,7 +168,7 @@ export default function DashboardLayout({
             {/* Modo simples: a MARCA minimalista (FA., clicável → Início) — o
                 ícone acompanha o tema, igual ao favicon da aba. */}
             {simples && (
-              <Link href="/inicio" title="Início" className="absolute left-4 top-1/2 -translate-y-1/2">
+              <Link href="/inicio" title="Início" className="absolute left-4 top-[calc(50%-4px)] -translate-y-1/2">
                 <img src={isDarkTheme ? '/favicon-dark.png' : '/favicon-light.png'} alt="Início" className="h-10 w-10 object-contain" />
               </Link>
             )}

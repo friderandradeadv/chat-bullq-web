@@ -407,12 +407,13 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 @media (min-width: 1024px) {
-  /* Respiro no topo = altura da barra (2.75rem) + ~12px de ar (0.75rem) = 3.5rem.
-     Calibrado: 4rem (20px) era folga demais; 2.75rem (rente) ficou apertado; 3.5rem
-     é o meio-termo confortável PRA MAIORIA DAS PÁGINAS. Esta regra é a fonte do
-     respiro do topo — páginas NÃO devem pôr pt-* no root (senão volta a folga). */
+  /* Respiro no topo pra MAIORIA DAS PÁGINAS (Agenda, Processos, Clientes etc).
+     23/07 (2): subido de 3.5rem pra 4.25rem — o Matheus achou o 3.5rem ainda
+     apertado depois de comparar com o chat (que ficou mais justo de propósito,
+     ver under-bar--tight abaixo). Esta regra é a fonte do respiro do topo —
+     páginas NÃO devem pôr pt-* no root (senão volta a folga). */
   .under-bar > * {
-    padding-top: 3.5rem;
+    padding-top: 4.25rem;
   }
   /* 23/07: SÓ no chat (`under-bar--tight`, via pathname em layout.tsx) o respiro
      fica mais justo (~2px de ar) — pedido específico do Matheus pra essa página;
