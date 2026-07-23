@@ -74,7 +74,7 @@ export default function ContabilidadePage() {
       <div className="mx-auto w-full max-w-5xl p-6">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+            <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/10 text-indigo-600">
                 <Calculator className="h-5 w-5" />
               </span>

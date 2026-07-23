@@ -281,7 +281,7 @@ export default function ProcessosPage() {
     <div className="h-full overflow-y-auto bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pb-1 lg:px-8">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100"><Scale className="h-6 w-6" style={{ color: ASTREA_BLUE }} /> Processos e casos</h1>
+        <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100"><Scale className="h-5 w-5" style={{ color: ASTREA_BLUE }} /> Processos e casos</h1>
         <div className="flex items-center gap-2">
           <IconBtn title="Imprimir">
             <Printer className="h-4 w-4" />

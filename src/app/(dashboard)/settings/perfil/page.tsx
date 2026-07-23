@@ -109,7 +109,7 @@ export default function PerfilPage() {
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="mx-auto w-full max-w-2xl">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Meu perfil</h1>
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Meu perfil</h1>
         <p className="mt-1 text-sm text-zinc-500">Foto, nome, e-mail, telefone e senha da sua conta.</p>
 
         {/* Foto + dados */}

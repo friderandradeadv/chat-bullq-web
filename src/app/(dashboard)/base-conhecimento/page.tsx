@@ -80,7 +80,7 @@ export default function BaseConhecimentoPage() {
       <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col p-4 lg:p-6">
         <div className="flex shrink-0 flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Base de Conhecimento</h1>
+            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Base de Conhecimento</h1>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
               Centralize documentos e FAQs e vincule aos agentes — a IA responde com base neles.
             </p>
