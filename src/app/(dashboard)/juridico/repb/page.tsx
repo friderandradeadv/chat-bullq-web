@@ -168,7 +168,7 @@ export default function RepbPage() {
       </div>
 
       {tab === 'funil' ? <FunilRepbBoard embedded /> : (<>
-      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-2 lg:px-6">
+      <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-4 lg:px-6">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
           <Banknote className="h-5 w-5 shrink-0" style={{ color: ACCENT }} />
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">REPB — Reestruturação de Passivo</h1>
