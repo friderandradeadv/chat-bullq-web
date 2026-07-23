@@ -161,8 +161,10 @@ export default function DashboardLayout({
               mecanismo genuíno do Trello. `absolute` tira a barra do fluxo; o respiro
               no topo de cada página vem do `.under-bar` (globals).
               23/07 (2): a barra SEMPRE segue o tema real, nos dois modos (Completo
-              e Simples) — a variante "sempre escura" do Simples foi removida. */}
-          <div className="topbar-glass absolute inset-x-0 top-0 z-40 hidden h-11 items-center justify-center px-4 lg:flex">
+              e Simples) — a variante "sempre escura" do Simples foi removida.
+              23/07 (3): `top-2` (8px) em vez de `top-0` — respiro entre o topo do
+              navegador e a barra, pedido depois de enxugar o resto. */}
+          <div className="topbar-glass absolute inset-x-0 top-2 z-40 hidden h-11 items-center justify-center px-4 lg:flex">
             {/* Modo simples: a MARCA minimalista (FA., clicável → Início) — o
                 ícone acompanha o tema, igual ao favicon da aba. */}
             {simples && (
