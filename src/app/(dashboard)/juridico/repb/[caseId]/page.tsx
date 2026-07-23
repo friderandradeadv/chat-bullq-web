@@ -43,7 +43,7 @@ export default function RepbFichaPage() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: ACCENT }}><Banknote className="h-5 w-5" /></span>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-xl font-bold text-zinc-900 dark:text-zinc-100">{nome}</h1>
+              <h1 className="truncate text-xl font-semibold text-zinc-900 dark:text-zinc-100">{nome}</h1>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-[#48626f] dark:text-zinc-400">
                 <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: ACCENT }}>REPB</span>
                 <span className="rounded-full bg-[#edeff3] px-2 py-0.5 text-[10px] font-semibold text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{FASE_LABEL[c.legalPhase ?? ''] ?? c.legalPhase}</span>

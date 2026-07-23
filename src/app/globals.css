@@ -407,17 +407,13 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 @media (min-width: 1024px) {
-  /* Respiro no topo pra MAIORIA DAS PÁGINAS (Agenda, Processos, Clientes etc).
-     23/07 (2): subido de 3.5rem pra 4.25rem — o Matheus achou o 3.5rem ainda
-     apertado depois de comparar com o chat (que ficou mais justo de propósito,
-     ver under-bar--tight abaixo). Esta regra é a fonte do respiro do topo —
-     páginas NÃO devem pôr pt-* no root (senão volta a folga). */
-  .under-bar > * {
-    padding-top: 4.25rem;
-  }
-  /* 23/07: SÓ no chat (`under-bar--tight`, via pathname em layout.tsx) o respiro
-     fica mais justo (~2px de ar) — pedido específico do Matheus pra essa página;
-     as outras (Agenda, Processos, Clientes, etc.) mantêm o 3.5rem acima. */
+  /* Respiro no topo — 23/07 (3): UNIFICADO pra todas as páginas em 2.875rem
+     (tinha uma distinção chat×resto que oscilou o dia todo — 3.5rem "apertado",
+     4.25rem "sufocava" o kanban e criava vão vazio ("vazando") entre a barra
+     glass e o conteúdo — 2.875rem é o valor que já tinha funcionado bem no
+     chat, agora padrão em tudo. `.under-bar--tight` virou alias do mesmo
+     valor só pra não quebrar a classe já usada em layout.tsx. */
+  .under-bar > *,
   .under-bar--tight > * {
     padding-top: 2.875rem;
   }
