@@ -16,12 +16,12 @@ import { calendarService } from '@/features/calendar/services/calendar.service';
 const BLUE = '#228BE6';
 const MS_DAY = 86_400_000;
 
-const CASE_STATUS = {
-  ACTIVE: { label: 'Ativos', color: '#16a34a' },
-  SUSPENDED: { label: 'Suspensos', color: '#d97706' },
-  ARCHIVED: { label: 'Arquivados', color: '#71717a' },
-  CLOSED: { label: 'Encerrados', color: '#2563eb' },
-} as const;
+// Status agrupado igual à aba Processos: baixado = encerrado + arquivado.
+const STATUS_GROUPS = [
+  { label: 'Ativos', color: '#16a34a', keys: ['ACTIVE'] },
+  { label: 'Suspensos', color: '#d97706', keys: ['SUSPENDED'] },
+  { label: 'Baixados', color: '#2563eb', keys: ['CLOSED', 'ARCHIVED'] },
+] as const;
 
 const KIND_LABEL: Record<string, string> = {
   audiencia: 'Audiência', reuniao: 'Reunião', pericia: 'Perícia', tarefa: 'Tarefa', outro: 'Outro',
@@ -79,8 +79,8 @@ export default function JuridicoDashboardPage() {
 
     const pubsToTriage = pubs.filter((p) => p.status === 'CLASSIFIED' || p.status === 'NEW').length;
 
-    const statusData = (Object.keys(CASE_STATUS) as (keyof typeof CASE_STATUS)[])
-      .map((k) => ({ name: CASE_STATUS[k].label, value: byStatus[k] ?? 0, color: CASE_STATUS[k].color }))
+    const statusData = STATUS_GROUPS
+      .map((g) => ({ name: g.label, value: g.keys.reduce((s, k) => s + (byStatus[k] ?? 0), 0), color: g.color }))
       .filter((d) => d.value > 0);
 
     const areaData = Object.entries(byArea)
