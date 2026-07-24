@@ -47,6 +47,10 @@ const STATUS_LABEL: Record<CaseStatus, string> = {
   SUSPENDED: 'Suspenso',
   CLOSED: 'Encerrado',
 };
+// "Baixado" = processo encerrado/arquivado (baixa no geral). Unifica CLOSED+ARCHIVED
+// no rótulo da lista e no filtro, pra a busca mostrar baixado em vez de ativo.
+const isBaixado = (s: CaseStatus) => s === 'CLOSED' || s === 'ARCHIVED';
+const rowStatusLabel = (s: CaseStatus) => (isBaixado(s) ? 'Baixado' : STATUS_LABEL[s]);
 
 // Etiquetas no estilo Astrea: chip de fundo SÓLIDO na cor da categoria.
 // Cores conhecidas (capturadas do Astrea); demais caem num fallback determinístico.
@@ -180,7 +184,7 @@ export default function ProcessosPage() {
   const qc = useQueryClient();
   const { canDeleteCases } = usePermissions();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<CaseStatus | ''>('');
+  const [view, setView] = useState<'ativos' | 'baixados' | 'todos'>('ativos');
   const [grauFilter, setGrauFilter] = useState<'' | '1' | '2'>('');
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -191,16 +195,18 @@ export default function ProcessosPage() {
   const { data: cases = [], isLoading } = useQuery({
     // hasCnj:true → a aba "Processos e casos" mostra só processos ajuizados (com CNJ).
     // Leads/pré-judiciais (contrato assinado, intake) ficam só no kanban pré-processual.
-    queryKey: ['legal-cases', { search, status: statusFilter, judicial: true }],
+    queryKey: ['legal-cases', { search, judicial: true }],
     queryFn: () =>
       legalCasesService.list({
         search: search || undefined,
-        status: statusFilter || undefined,
         hasCnj: true,
       }),
   });
-  // Filtros client-side (etiqueta + grau) sobre o resultado já carregado.
+  // Filtros client-side (status/etiqueta/grau) sobre o resultado já carregado.
+  // Ao buscar, varre TODOS os status (o processo aparece mesmo baixado, com o
+  // rótulo "Baixado"); sem busca, respeita a aba Ativos/Baixados/Todos.
   const filtered = cases
+    .filter((c) => (search || view === 'todos' ? true : view === 'baixados' ? isBaixado(c.status) : !isBaixado(c.status)))
     .filter((c) => (tagFilter ? c.legalTags.some((lt) => lt.tagId === tagFilter) : true))
     .filter((c) => (grauFilter ? grauOf(c) === grauFilter : true));
 
@@ -209,7 +215,7 @@ export default function ProcessosPage() {
   const curPage = Math.min(page, pageCount);
   const paginated = pageSize > 0 ? filtered.slice((curPage - 1) * pageSize, curPage * pageSize) : filtered;
   // Reseta a página quando os filtros mudam o tamanho da lista.
-  useEffect(() => { setPage(1); }, [search, statusFilter, grauFilter, tagFilter, pageSize]);
+  useEffect(() => { setPage(1); }, [search, view, grauFilter, tagFilter, pageSize]);
 
   const toggle = (id: string) =>
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -326,16 +332,14 @@ export default function ProcessosPage() {
           <option value="2">2º grau</option>
         </select>
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as CaseStatus | '')}
+          value={view}
+          onChange={(e) => setView(e.target.value as 'ativos' | 'baixados' | 'todos')}
           className="h-10 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium uppercase tracking-wide text-zinc-600 outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+          title="Ativos = em andamento · Baixados = encerrados/arquivados"
         >
-          <option value="">Ativos</option>
-          {(Object.keys(STATUS_LABEL) as CaseStatus[]).map((s) => (
-            <option key={s} value={s}>
-              {STATUS_LABEL[s]}
-            </option>
-          ))}
+          <option value="ativos">Ativos</option>
+          <option value="baixados">Baixados</option>
+          <option value="todos">Todos</option>
         </select>
       </div>
 
@@ -478,7 +482,7 @@ function CaseRow({ c, members, selected, onToggle, onChange }: { c: CaseListItem
               {c.title}
             </Link>
             <p className="mt-0.5 text-xs text-zinc-400">
-              Processo {STATUS_LABEL[c.status].toLowerCase()}
+              Processo {rowStatusLabel(c.status).toLowerCase()}
               {c.cnjNumber ? (
                 <>
                   {' · '}

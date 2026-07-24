@@ -67,6 +67,8 @@ const STATUS_LABEL: Record<string, string> = {
   SUSPENDED: 'Suspenso',
   CLOSED: 'Encerrado',
 };
+// Badge de status: encerrado/arquivado = "Baixado" (mesma linguagem da aba Processos).
+const statusBadgeLabel = (s: string) => (s === 'CLOSED' || s === 'ARCHIVED' ? 'Baixado' : STATUS_LABEL[s] ?? s);
 // Datas só-data (distribuição, prazos, andamentos) são gravadas em UTC meia-noite
 // → formatar em UTC pra não exibir o dia anterior em fusos negativos (BRT). Datas
 // legais precisam bater com o que está no banco. Eventos (com hora real) usam local.
@@ -231,7 +233,7 @@ export default function ProcessoDetailPage() {
           <MetaRow label="Status">
             <span className="inline-flex items-center gap-2">
               <span className="text-[#202124] dark:text-zinc-100">
-                {STATUS_LABEL[c.status]}
+                {statusBadgeLabel(c.status)}
                 {getInstancia(c) ? ` · ${getInstancia(c)}` : ''}
               </span>
               <DjenBadge monitorado={monitorado} />
