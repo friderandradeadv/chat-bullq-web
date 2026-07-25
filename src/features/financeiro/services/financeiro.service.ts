@@ -18,6 +18,7 @@ export interface FinCliente { cliente: string; recebido: number; parcelas: numbe
 export type TxStatus = 'a_receber' | 'recebido' | 'a_pagar' | 'pago';
 export type AcessoNivel = 'full' | 'cases' | 'none';
 export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean; cartao?: boolean; fechamento?: number; vencimento?: number }
+export interface ReconConta { saldoReal: number | null; saldoCalculado: number; diferenca: number | null; nLancamentos: number }
 export type CadastroTipo = 'escritorio' | 'fornecedor' | 'socio' | 'cliente' | 'outro';
 export interface FinCadastro { id: string; nome: string; tipo: CadastroTipo; doc?: string | null }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
@@ -90,7 +91,9 @@ export interface FinDashboard {
   categoriasConhecidas?: string[];
   contas?: Conta[];
   cadastros?: FinCadastro[]; // pagadores/recebedores cadastrados (escritório + fornecedores/sócios)
-  saldosReais?: Record<string, number>; // saldo real por conta (ASAAS via API)
+  saldosReais?: Record<string, number>; // saldo real por conta (ASAAS via API, ou âncora do extrato)
+  // Reconciliação por conta: saldo real (banco) × saldo calculado pelo livro-razão.
+  reconciliacao?: Record<string, { saldoReal: number | null; saldoCalculado: number; diferenca: number | null; nLancamentos: number }>;
   acessoMembros?: Record<string, AcessoNivel>;
   // controle de acesso por membro
   nivel?: AcessoNivel;
@@ -423,8 +426,13 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false });
     return data.data ?? data;
   },
-  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[] }[]): Promise<{ importados: number; duplicados: number; total: number }> {
-    const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true });
+  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[] }[], saldoFinal?: number | null): Promise<{ importados: number; duplicados: number; total: number; reconciliacao?: ReconConta | null }> {
+    const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true, ...(saldoFinal != null && Number.isFinite(saldoFinal) ? { saldoFinal } : {}) });
+    return data.data ?? data;
+  },
+  // Fixa (ou limpa, com saldo=null) o saldo REAL de uma conta e devolve a diferença vs. o razão.
+  async setSaldoRealConta(id: string, saldo: number | null): Promise<{ ok: boolean; contaId: string } & ReconConta> {
+    const { data } = await api.patch(`/financeiro/contas/${id}/saldo-real`, { saldo });
     return data.data ?? data;
   },
   // ── Cobranças (vendas a prazo) do ASAAS ──

@@ -1610,6 +1610,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [conta, setConta] = useState(contaFixa ?? contas[0]?.id ?? '');
   const [nome, setNome] = useState('');
   const [parsing, setParsing] = useState(false);
+  const [saldoFinal, setSaldoFinal] = useState(''); // saldo final do extrato → âncora do saldo real (OFX preenche sozinho)
+  const [recon, setRecon] = useState<import('@/features/financeiro/services/financeiro.service').ReconConta | null>(null);
   const [conf, setConf] = useState<import('@/features/financeiro/services/financeiro.service').ExtratoConferencia | null>(null);
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA); '__ratear' = rateio abaixo
@@ -1637,6 +1639,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       let texto = '';
       if (isPdf) { const b64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] ?? ''); r.onerror = rej; r.readAsDataURL(f); }); texto = (await financeiroService.lerExtratoPdf(b64)).texto; }
       else texto = await f.text();
+      const sf = ofxSaldoFinal(texto); // OFX traz o saldo do dia → preenche a âncora
+      if (sf != null) setSaldoFinal(brl2(sf).replace(/[^\d.,-]/g, '').trim());
       let linhas = lerExtrato(texto);
       if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
       // Detecta se é FATURA DE CARTÃO só com sinais ESTRUTURAIS de cartão (compras parceladas,
@@ -1663,9 +1667,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         const cb = (contribs[i] ?? []).filter((x) => x.nome && contribValorCalc(x, Math.abs(l.valor), rawRateio) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: contribValorCalc(x, Math.abs(l.valor), rawRateio) }));
         return { data: l.data, valor: l.valor, descricao: l.descricao, area: rv.length ? undefined : (areas[i] || '').trim() || undefined, rateioVerticais: rv.length ? rv : undefined, contribuintes: cb.length ? cb : undefined };
       });
-      return financeiroService.importarExtratoLinhas(conta || null, linhas);
+      const sf = saldoFinal.trim() && !contas.find((c) => c.id === conta)?.cartao ? parseValor(saldoFinal) : null;
+      return financeiroService.importarExtratoLinhas(conta || null, linhas, sf);
     },
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s)${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`); onClose(); },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s)${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`); if (r.reconciliacao && r.reconciliacao.saldoReal != null) setRecon(r.reconciliacao); else onClose(); },
     onError: (e: any) => toast.error(e?.message || 'Erro ao importar'),
   });
   // Bloqueia importar se alguma linha selecionada estiver "ratear" sem nenhuma fatia válida
@@ -1698,6 +1703,29 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         {contas.find((c) => c.id === conta)?.cartao
           ? <p className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] text-violet-700 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-300">💳 <strong>Fatura de cartão:</strong> as compras entram como <strong>"a pagar"</strong> (fora do caixa) e a linha de <strong>pagamento de fatura é ignorada</strong>. Só entram no caixa quando você clicar em <strong>Pagar fatura</strong>.</p>
           : <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Importando pra uma <strong>conta bancária</strong> (vira caixa). Se este for o <strong>extrato do cartão</strong>, troque a conta acima pra <strong>"Nubank cartão"</strong>.</p>}
+
+        {conta && !contas.find((c) => c.id === conta)?.cartao && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-900/15">
+            <label className="text-[12px] font-medium text-emerald-800 dark:text-emerald-300">Saldo final do extrato</label>
+            <input value={saldoFinal} onChange={(e) => setSaldoFinal(e.target.value)} inputMode="decimal" placeholder="R$ 0,00" className="w-32 rounded-md border border-emerald-300 bg-white px-2 py-1 text-right text-sm tabular-nums dark:border-emerald-800 dark:bg-zinc-900" />
+            <span className="text-[11px] text-emerald-700/80 dark:text-emerald-300/70">o "saldo do dia" do banco. Vira o <strong>saldo real</strong> da conta e o hub aponta se o razão bate. OFX já preenche sozinho.</span>
+          </div>
+        )}
+
+        {recon && (
+          <div className={`mt-3 rounded-xl border p-3 text-sm ${Math.abs(recon.diferenca ?? 0) <= 0.01 ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-900/20' : 'border-amber-300 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/20'}`}>
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-zinc-800 dark:text-zinc-100">{Math.abs(recon.diferenca ?? 0) <= 0.01 ? '✓ Bate com o extrato' : '⚠️ Diferença com o livro-razão'}</span>
+              <button onClick={onClose} className="rounded-md bg-zinc-800 px-3 py-1 text-xs font-semibold text-white hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900">Fechar</button>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+              <div><p className="text-zinc-400">Saldo do banco</p><p className="font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(recon.saldoReal ?? 0)}</p></div>
+              <div><p className="text-zinc-400">Pelo razão</p><p className="font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(recon.saldoCalculado)}</p></div>
+              <div><p className="text-zinc-400">Diferença</p><p className={`font-bold tabular-nums ${Math.abs(recon.diferenca ?? 0) <= 0.01 ? 'text-emerald-600' : 'text-amber-600'}`}>{brl2(recon.diferenca ?? 0)}</p></div>
+            </div>
+            {Math.abs(recon.diferenca ?? 0) > 0.01 && <p className="mt-2 text-[12px] text-amber-700 dark:text-amber-300">O saldo do banco não fecha com a soma dos lançamentos dessa conta ({recon.nLancamentos} lançamento(s)). Provavelmente <strong>falta lançar</strong> algo (ou o <strong>saldo inicial</strong> da conta está errado). Suba o extrato do período todo ou ajuste o saldo inicial.</p>}
+          </div>
+        )}
 
         {conf && (
           <div className="mt-4">
@@ -2850,6 +2878,14 @@ function lerExtrato(text: string): ExtratoLinha[] {
   if (/<STMTTRN>|<OFX>/i.test(text)) return parseOfx(text);
   return parseExtrato(text);
 }
+// Saldo FINAL do extrato OFX (<LEDGERBAL><BALAMT>...). É o saldo do dia que o banco fecha —
+// vira a âncora do saldo real da conta. Só o OFX carrega isso; CSV/PDF → o usuário digita.
+function ofxSaldoFinal(text: string): number | null {
+  const m = text.match(/<LEDGERBAL>[\s\S]*?<BALAMT>\s*([^<\r\n]+)/i) ?? text.match(/<AVAILBAL>[\s\S]*?<BALAMT>\s*([^<\r\n]+)/i);
+  if (!m) return null;
+  const v = Number(String(m[1]).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(v) ? v : null;
+}
 // Divide UMA linha de CSV respeitando aspas (RFC4180: "" = aspas escapada;
 // vírgulas dentro de aspas não separam). Sem isso, "IOF de ""X""","18,22" quebra.
 function splitCsvLine(line: string, sep: string): string[] {
@@ -2998,6 +3034,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const [iaLoading, setIaLoading] = useState(false);
   const [upLoading, setUpLoading] = useState(false);
   const [upNome, setUpNome] = useState('');
+  const [concSaldoFinal, setConcSaldoFinal] = useState(''); // saldo final do extrato → âncora do saldo real
   const [retro, setRetro] = useState<{ done: number; total: number; pulados: number } | null>(null);
   const [retroMsg, setRetroMsg] = useState<string>('');
   const onArquivo = async (f: File) => {
@@ -3012,6 +3049,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
         texto = await f.text();
       }
       setConc((c) => (c ? { ...c, texto } : c));
+      const sf = ofxSaldoFinal(texto); if (sf != null) setConcSaldoFinal(brl2(sf).replace(/[^\d.,-]/g, '').trim());
       // OFX/CSV tabular: regex local (rápido). Senão (PDF do Nubank, texto livre): IA parseia.
       let linhas = lerExtrato(texto);
       if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
@@ -3020,7 +3058,8 @@ function ContasTab({ data }: { data: FinDashboard }) {
       else toast.success(`${linhas.length} lançamento(s) lido(s) do extrato`);
     } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setUpLoading(false); }
   };
-  const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string; cartao?: boolean; fechamento?: string; vencimento?: string } | null>(null);
+  const [form, setForm] = useState<{ id?: string; nome: string; banco: string; saldoInicial: string; cartao?: boolean; fechamento?: string; vencimento?: string; saldoReal?: string } | null>(null);
+  const saldoRealM = useMutation({ mutationFn: ({ id, saldo }: { id: string; saldo: number | null }) => financeiroService.setSaldoRealConta(id, saldo), onSuccess: () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }) });
   const inval = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
   const addM = useMutation({ mutationFn: (i: { nome: string; banco: string; saldoInicial: number; cartao?: boolean; fechamento?: number; vencimento?: number }) => financeiroService.addConta(i), onSuccess: () => { inval(); toast.success('Conta adicionada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
   const updM = useMutation({ mutationFn: ({ id, i }: { id: string; i: any }) => financeiroService.updateConta(id, i), onSuccess: () => { inval(); toast.success('Conta atualizada'); setForm(null); }, onError: (e: any) => toast.error(e?.message || 'Erro') });
@@ -3176,6 +3215,11 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
     const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial), cartao: !!form.cartao, fechamento: form.cartao && form.fechamento ? Number(form.fechamento) : undefined, vencimento: form.cartao && form.vencimento ? Number(form.vencimento) : undefined };
+    // saldo real (só conta bancária): campo vazio limpa a âncora, valor fixa o saldo do banco.
+    if (form.id && !form.cartao && form.saldoReal !== undefined) {
+      const sr = form.saldoReal.trim() ? parseValor(form.saldoReal) : null;
+      saldoRealM.mutate({ id: form.id, saldo: sr });
+    }
     if (form.id) updM.mutate({ id: form.id, i }); else addM.mutate(i);
   };
 
@@ -3227,9 +3271,13 @@ function ContasTab({ data }: { data: FinDashboard }) {
         const tipo: 'receita' | 'despesa' = ehCartao ? 'despesa' : ((s?.tipo as 'receita' | 'despesa') ?? (l.valor >= 0 ? 'receita' : 'despesa'));
         await financeiroService.addTransacao({ data: l.data, tipo, categoria: s?.categoria ?? (ehCartao ? 'Cartão' : (l.valor >= 0 ? 'Honorários' : 'Outros')), valor: Math.abs(l.valor), pagador: s?.party || l.descricao.slice(0, 60), conta: conc.conta, status: ehCartao ? 'a_pagar' : (tipo === 'receita' ? 'recebido' : 'pago') });
       }
+      // Âncora do saldo real: fixa o saldo final do extrato na conta (bate com o banco).
+      if (conc.conta && !ehCartao && concSaldoFinal.trim()) {
+        try { await financeiroService.setSaldoRealConta(conc.conta, parseValor(concSaldoFinal)); } catch { /* não bloqueia o import */ }
+      }
       qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
       toast.success(`${escolhidos.length} lançamento(s) criado(s) e conciliado(s)`);
-      setConc(null); setConcResult(null); setConcSel(new Set());
+      setConc(null); setConcResult(null); setConcSel(new Set()); setConcSaldoFinal('');
     } catch (e: any) { toast.error(e?.message || 'Erro ao criar lançamentos'); } finally { setIaLoading(false); }
   };
 
@@ -3336,6 +3384,11 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <Field label="…ou cole o extrato (CSV: data; valor; descrição)">
                 <textarea value={conc.texto} onChange={(e) => { setConc({ ...conc, texto: e.target.value }); setConcResult(null); setConcLinhas([]); }} rows={4} placeholder={'10/06/2026;47,00;Pix recebido Júlia Macedo\n12/06/2026;-2850,00;Aluguel Top Office'} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900" />
               </Field>
+              {!contas.find((c) => c.id === conc.conta)?.cartao && (
+                <Field label="Saldo final do extrato (opcional — vira o saldo real da conta)">
+                  <input value={concSaldoFinal} onChange={(e) => setConcSaldoFinal(e.target.value)} inputMode="decimal" placeholder="R$ 0,00 (OFX preenche sozinho)" className="w-full rounded-md border border-emerald-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-emerald-800 dark:bg-zinc-900" />
+                </Field>
+              )}
               {contas.find((c) => c.id === conc.conta)?.cartao && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Esta conta é um <strong>cartão</strong>. Aqui deve entrar só o <strong>extrato do cartão</strong> (os gastos viram fatura). O extrato da <strong>conta bancária</strong> deve ir numa conta normal.</p>
               )}
@@ -3385,14 +3438,26 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100"><span className="h-3 w-3 rounded-full" style={{ background: c.cor ?? '#868E96' }} />{c.nome}</span>
                 <span className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-                  <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ','), cartao: !!c.cartao, fechamento: c.fechamento ? String(c.fechamento) : '', vencimento: c.vencimento ? String(c.vencimento) : '' })} className="rounded p-1 text-zinc-300 hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ','), cartao: !!c.cartao, fechamento: c.fechamento ? String(c.fechamento) : '', vencimento: c.vencimento ? String(c.vencimento) : '', saldoReal: data.saldosReais?.[c.id] != null ? String(data.saldosReais[c.id]).replace('.', ',') : '' })} className="rounded p-1 text-zinc-300 hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                   <button onClick={() => { if (confirm(`Remover a conta "${c.nome}"?`)) delM.mutate(c.id); }} className="rounded p-1 text-zinc-300 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                 </span>
               </div>
               <p className={`mt-2 text-2xl font-bold tabular-nums ${s.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(s.saldo)}</p>
-              <p className="text-[11px] text-zinc-400">{s.real ? 'saldo real (API) · ' : ''}{c.cartao ? 'cartão · ' : ''}{s.n} lançamento(s) nesta conta</p>
+              <p className="text-[11px] text-zinc-400">{s.real ? 'saldo real · ' : ''}{c.cartao ? 'cartão · ' : ''}{s.n} lançamento(s) nesta conta</p>
+              {(() => {
+                const rc = data.reconciliacao?.[c.id];
+                if (!rc || rc.saldoReal == null) return null;
+                const ok = Math.abs(rc.diferenca ?? 0) <= 0.01;
+                return (
+                  <div className={`mt-2 rounded-lg border px-2 py-1.5 text-[11px] ${ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300'}`}>
+                    {ok
+                      ? <>✓ <strong>Bate com o livro-razão</strong> — o extrato fecha com os lançamentos.</>
+                      : <>⚠️ <strong>Difere {brl2(Math.abs(rc.diferenca ?? 0))}</strong> do razão (banco {brl2(rc.saldoReal ?? 0)} · razão {brl2(rc.saldoCalculado)}). {(rc.diferenca ?? 0) > 0 ? 'Falta lançar entradas' : 'Sobrou lançamento ou falta despesa'} — suba o extrato do período ou confira o saldo inicial.</>}
+                  </div>
+                );
+              })()}
               {s.saldo < 0 && !s.real && !c.cartao && (c.saldoInicial ?? 0) === 0 && (
-                <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ','), cartao: !!c.cartao, fechamento: c.fechamento ? String(c.fechamento) : '', vencimento: c.vencimento ? String(c.vencimento) : '' })} className="mt-2 block w-full rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-left text-[11px] text-amber-700 hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Saldo negativo? Falta o <strong>saldo inicial</strong> da conta. Clique e informe o saldo de abertura (o extrato traz "saldo anterior").</button>
+                <button onClick={() => setForm({ id: c.id, nome: c.nome, banco: c.banco, saldoInicial: String(c.saldoInicial ?? 0).replace('.', ','), cartao: !!c.cartao, fechamento: c.fechamento ? String(c.fechamento) : '', vencimento: c.vencimento ? String(c.vencimento) : '', saldoReal: data.saldosReais?.[c.id] != null ? String(data.saldosReais[c.id]).replace('.', ',') : '' })} className="mt-2 block w-full rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-left text-[11px] text-amber-700 hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">⚠️ Saldo negativo? Falta o <strong>saldo inicial</strong> da conta. Clique e informe o saldo de abertura (o extrato traz "saldo anterior").</button>
               )}
               {(s.aReceber > 0 || s.aPagar > 0) && (
                 <div className="mt-2 flex gap-3 text-[11px]">
@@ -3419,6 +3484,12 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <Field label="Banco"><select value={form.banco} onChange={(e) => setForm({ ...form, banco: e.target.value, nome: form.nome || (BANCOS.find((b) => b.id === e.target.value)?.nome ?? '') })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">{BANCOS.map((b) => <option key={b.id} value={b.id}>{b.nome}</option>)}</select></Field>
               <Field label="Nome / apelido"><input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="ex.: Nubank PJ" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
               <Field label="Saldo inicial (opcional)"><input value={form.saldoInicial} onChange={(e) => setForm({ ...form, saldoInicial: e.target.value })} inputMode="decimal" placeholder="R$ 0,00" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+              {form.id && !form.cartao && (
+                <Field label="Saldo real (bate com o banco — opcional)">
+                  <input value={form.saldoReal ?? ''} onChange={(e) => setForm({ ...form, saldoReal: e.target.value })} inputMode="decimal" placeholder="deixe vazio p/ calcular pelo razão" className="w-full rounded-md border border-emerald-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums dark:border-emerald-800 dark:bg-zinc-900" />
+                  <p className="mt-1 text-[11px] text-zinc-400">Fixe o saldo que aparece no app do banco. O card mostra esse número e o hub aponta se o livro-razão bate. Vazio = volta a somar os lançamentos.</p>
+                </Field>
+              )}
               <label className="flex items-start gap-2 rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
                 <input type="checkbox" checked={!!form.cartao} onChange={(e) => setForm({ ...form, cartao: e.target.checked })} className="mt-0.5 h-4 w-4 accent-[#820AD1]" />
                 <span className="text-sm text-zinc-600 dark:text-zinc-300">É <strong>cartão de crédito</strong><span className="mt-0.5 block text-[11px] text-zinc-400">Os <strong>gastos</strong> (despesas) ficam na fatura, fora do caixa, até você pagar. As entradas continuam no livro-razão. Dica: se o banco tem conta E cartão (ex.: Nubank), crie <strong>duas contas separadas</strong> — uma conta e uma cartão.</span></span>
