@@ -98,7 +98,8 @@ export function aggregarClientes(data: FinDashboard | undefined | null): Cliente
 // ── Retiradas / Pró-labore por advogado ───────────────────────────────────────
 export interface RetiradaUser { userId: string; nome: string; aReceber: number; retirado: number; saldo: number }
 export interface RetiradasResumo { porUser: RetiradaUser[]; escritorio: number; totalHonorarios: number; totalRetirado: number; totalAdvogados: number }
-const ehRetirada = (cat: string) => /pr[óo]\s*-?\s*labore|retirada/i.test(cat || '');
+// "repass" cobre "Honorários repassados" (o repasse do rateio) — igual ao holerite do backend.
+const ehRetirada = (cat: string) => /pr[óo]\s*-?\s*labore|retirada|repass/i.test(cat || '');
 
 /**
  * Rateio de honorários por advogado: a parte de cada sócio/associado (do split dos

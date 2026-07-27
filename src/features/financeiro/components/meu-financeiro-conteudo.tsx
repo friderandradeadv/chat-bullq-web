@@ -233,8 +233,14 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
               {/* TICKET / recibo — UMA peça só: papel creme do topo à base, tinta "stone",
                   tipografia mono como voz do bilhete (dados = mono, nome/prosa = sans),
                   cor apenas nos valores. Aberturas/serrilha usam a cor do fundo da página. */}
-              <div className="relative mx-auto max-w-[480px] font-mono">
-                <div className="overflow-hidden rounded-t-xl bg-[#FBF6E9] shadow-lg ring-1 ring-stone-300/60 dark:bg-[#211E17] dark:ring-stone-700/50">
+              <div className="relative mx-auto max-w-[480px] font-mono drop-shadow-[0_10px_18px_rgba(0,0,0,0.15)]">
+                <div className="relative overflow-hidden rounded-t-xl bg-[#FBF6E9] dark:bg-[#211E17]" style={{
+                  // Recorta DE VERDADE as aberturas laterais do papel (côncavo, sem linha
+                  // reta). y ≈ costura entre o canhoto e o corpo (conteúdo é de 1 linha).
+                  WebkitMaskImage: 'radial-gradient(circle 11px at 0 187px, transparent 10.5px, #000 11px), radial-gradient(circle 11px at 100% 187px, transparent 10.5px, #000 11px)',
+                  maskImage: 'radial-gradient(circle 11px at 0 187px, transparent 10.5px, #000 11px), radial-gradient(circle 11px at 100% 187px, transparent 10.5px, #000 11px)',
+                  WebkitMaskComposite: 'source-in', maskComposite: 'intersect',
+                }}>
                   {/* Canhoto (stub) — mesmo papel, separado só pelo picote */}
                   <div className="relative overflow-hidden px-7 pt-6 pb-7 text-stone-800 dark:text-stone-100">
                     <div className="relative">
@@ -246,12 +252,10 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     {data.meuNome && <p className="relative mt-3 flex items-center gap-1.5 font-sans text-sm font-medium text-stone-600 dark:text-stone-300"><UserCircle2 className="h-4 w-4 shrink-0 opacity-60" /> <span className="truncate">{data.meuNome}</span></p>}
                   </div>
 
-                  {/* Picote — aberturas laterais como RECORTE real (furo com sombra de
-                      profundidade, sem contorno e sem linha), igual a um ticket físico. */}
-                  <div className="relative h-0">
-                    <span aria-hidden className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] shadow-[inset_0_2px_4px_-1px_rgba(0,0,0,0.30),inset_0_-1px_1px_rgba(255,255,255,0.5)] dark:bg-zinc-950 dark:shadow-[inset_0_2px_4px_-1px_rgba(0,0,0,0.7)]" />
-                    <span aria-hidden className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] shadow-[inset_0_2px_4px_-1px_rgba(0,0,0,0.30),inset_0_-1px_1px_rgba(255,255,255,0.5)] dark:bg-zinc-950 dark:shadow-[inset_0_2px_4px_-1px_rgba(0,0,0,0.7)]" />
-                  </div>
+                  {/* Picote — linha tracejada na costura (y = 187px, igual à máscara dos
+                      furos). Recuada (inset-x-5) pra QUEBRAR antes das aberturas, que são
+                      recortadas de verdade no card pela máscara acima. */}
+                  <div aria-hidden className="pointer-events-none absolute inset-x-5 top-[187px] border-t-2 border-dashed border-stone-300 dark:border-stone-600" />
 
                   {/* Corpo do recibo */}
                   <div className="px-7 pt-6 pb-5">
