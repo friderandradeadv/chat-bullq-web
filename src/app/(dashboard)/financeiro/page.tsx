@@ -76,7 +76,6 @@ const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }
   { key: 'verticais', label: 'Verticais', icon: Layers, grupo: 'Análise' },
   { key: 'projecoes', label: 'Projeções e crescimento', icon: Rocket, grupo: 'Análise' },
 ];
-const GRUPOS = ['Caixa', 'Análise'];
 
 // Produto cru do card (RMC, RCC, "CS - RMC", Contribuições, 7780-Indenização…)
 // → Área jurídica (Bancário/Previdenciário/Trabalhista/Consumidor/Cível).
@@ -237,41 +236,20 @@ export default function FinanceiroPage() {
 }
 
 function TabsMenu({ view, setView, lancCount }: { view: View; setView: (v: View) => void; lancCount?: number }) {
-  const [open, setOpen] = useState(false);
-  const active = TABS.find((t) => t.key === view) ?? TABS[0];
+  // Barra de abas HORIZONTAL fixa (não é dropdown): ícone + label, a ativa
+  // sublinhada. Rola na horizontal se não couber (mobile). Sem sticky.
   return (
-    <div className="relative z-30 mt-5">
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#DEE2E6] bg-white px-3.5 py-2.5 text-left shadow-sm transition hover:border-[#228BE6]/40 dark:border-zinc-800 dark:bg-zinc-900 sm:w-auto sm:min-w-[300px]">
-        <span className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#228BE6]/10 text-[#228BE6]"><active.icon className="h-4 w-4" /></span>
-          <span className="truncate">{active.label}</span>
-          {view === 'lancamentos' && lancCount != null && <span className="rounded-full bg-[#228BE6]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#228BE6]">{lancCount}</span>}
-        </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          {/* Mobile: ocupa a coluna toda (não estoura/corta com o overflow-x-hidden
-              do root). Desktop: painel largo fixo. */}
-          <div className="absolute left-0 z-40 mt-1.5 w-full sm:w-[min(92vw,440px)] rounded-2xl border border-[#DEE2E6] bg-white p-2 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-            {GRUPOS.map((g) => (
-              <div key={g} className="mb-1 last:mb-0">
-                <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{g}</p>
-                <div className="grid grid-cols-1 gap-0.5">
-                  {TABS.filter((t) => t.grupo === g).map((t) => (
-                    <button key={t.key} onClick={() => { setView(t.key); setOpen(false); }} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition ${view === t.key ? 'bg-[#228BE6]/10 font-semibold text-[#228BE6]' : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'}`}>
-                      <t.icon className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{t.label}</span>
-                      {t.key === 'lancamentos' && lancCount != null && <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-400 dark:bg-zinc-800">{lancCount}</span>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+    <div className="mt-5 flex gap-1 overflow-x-auto border-b border-zinc-200/70 pb-px scrollbar-thin dark:border-zinc-800">
+      {TABS.map((t) => {
+        const ativo = view === t.key;
+        return (
+          <button key={t.key} onClick={() => setView(t.key)} className={`inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition ${ativo ? 'border-[#228BE6] text-[#228BE6]' : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>
+            <t.icon className="h-4 w-4 shrink-0" />
+            <span className="whitespace-nowrap">{t.label.replace(' e crescimento', '')}</span>
+            {t.key === 'lancamentos' && lancCount != null && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${ativo ? 'bg-[#228BE6]/10 text-[#228BE6]' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800'}`}>{lancCount}</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }
