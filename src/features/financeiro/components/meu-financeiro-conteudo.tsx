@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   ArrowUpCircle, ArrowDownCircle, Sparkles, Search, HeartHandshake, Flame, Calendar, Gavel, ExternalLink, UserCircle2,
-  TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt, Wallet, Layers,
+  TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt, Wallet, Layers, Download,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
 import { contactsService } from '@/features/contacts/services/contacts.service';
@@ -173,6 +173,21 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           const mes = hol.some((x) => x.mes === holMesSel) ? holMesSel : hol[0].mes;
           const h = hol.find((x) => x.mes === mes) ?? hol[0];
           const liquido = h.liquido ?? (h.entradaTot - (h.saidaTot ?? 0));
+          // Baixar PDF — monta o ticket em HTML autocontido e abre a janela de impressão
+          // (o usuário escolhe "Salvar como PDF"). Sem dependências novas. Inclui o aviso
+          // jurídico completo (documento estético, sem vínculo empregatício).
+          const baixarPdf = () => {
+            const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as Record<string, string>)[c] ?? c));
+            const linha = (dt: string, ds: string, vl: string, cor: string) => `<div class="row"><span class="dt">${esc((dt || '').slice(0, 5))}</span><span class="ds">${esc(ds)}</span><span class="fill"></span><span class="vl" style="color:${cor}">${esc(vl)}</span></div>`;
+            const recebidos = (h.retiradas?.length ?? 0) ? h.retiradas.map((rt) => linha(rt.data || '', rt.desc, brl2(rt.valor), '#047857')).join('') : '<p class="empty">Nada foi pago a você neste mês.</p>';
+            const saidasHtml = (h.saidas?.length ?? 0) ? `<div class="sec">Saídas que você ajudou a pagar</div>${h.saidas.map((sd) => linha(sd.data || '', sd.label, '-' + brl2(sd.valor), '#b91c1c')).join('')}` : '';
+            const contribHtml = (h.contribuicoes?.length ?? 0) ? `<div class="box"><div class="boxh"><span>Você contribuiu do próprio bolso</span><span style="color:#b45309">${esc(brl2(h.contribuicaoTot ?? 0))}</span></div>${h.contribuicoes!.map((c) => linha(c.data || '', c.desc, brl2(c.valor), '#b45309')).join('')}<div class="note">Não entra no líquido — só o que você bancou de estrutura.</div></div>` : '';
+            const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Holerite ${esc(mesLabel(h.mes))}${data.meuNome ? ' — ' + esc(data.meuNome) : ''}</title><style>*{margin:0;padding:0;box-sizing:border-box}@page{size:A4;margin:22mm}body{font-family:'Courier New',ui-monospace,monospace;color:#292524;-webkit-print-color-adjust:exact;print-color-adjust:exact}.ticket{max-width:430px;margin:0 auto;background:#FBF6E9;border:1px solid #e7e5e4;border-radius:14px;overflow:hidden}.head{padding:20px 24px}.office{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.rule{height:1px;background:#d6d3d1;margin:14px 0}.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.2em;color:#78716c}.mes{font-size:24px;font-weight:700;text-transform:uppercase;line-height:1.15}.nome{margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#57534e}.perf{border-top:2px dashed #d6d3d1;margin:0 16px}.body{padding:18px 24px}.sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#78716c;margin:16px 0 8px}.sec.first{margin-top:0}.row{display:flex;align-items:baseline;gap:10px;font-size:13px;margin:6px 0}.row .dt{width:34px;color:#a8a29e;font-size:11px}.row .ds{font-family:Arial,Helvetica,sans-serif;color:#57534e;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row .fill{flex:1;border-bottom:1px dotted #d6d3d1;transform:translateY(-3px)}.row .vl{font-weight:700;white-space:nowrap}.empty{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#a8a29e}.liq{display:flex;justify-content:space-between;align-items:center;border-top:2px dashed #d6d3d1;border-bottom:2px dashed #d6d3d1;background:rgba(41,37,36,.05);padding:12px 24px;margin:16px -24px}.liq .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#78716c}.liq .v{font-size:22px;font-weight:700;color:${liquido >= 0 ? '#047857' : '#b91c1c'}}.hint{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#a8a29e;margin-top:8px}.box{border:1px dashed #d6d3d1;border-radius:8px;padding:12px;margin-top:16px}.boxh{display:flex;justify-content:space-between;gap:8px;font-size:10px;font-weight:700;text-transform:uppercase;color:#78716c;margin-bottom:8px}.note{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#a8a29e;margin-top:8px}.foot{padding:8px 24px 18px}.code{text-align:center;font-size:10px;letter-spacing:.3em;color:#a8a29e;text-transform:uppercase}.disc{max-width:430px;margin:16px auto 0;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;line-height:1.55;color:#78716c;text-align:justify}</style></head><body><div class="ticket"><div class="head"><div class="office">Frider Andrade Advogados</div><div class="rule"></div><div class="lbl">Holerite · competência</div><div class="mes">${esc(mesLabel(h.mes))}</div>${data.meuNome ? `<div class="nome">${esc(data.meuNome)}</div>` : ''}</div><div class="perf"></div><div class="body"><div class="sec first">Recebido no mês</div>${recebidos}${saidasHtml}<div class="liq"><span class="k">Líquido do mês</span><span class="v">${esc(brl2(liquido))}</span></div><div class="hint">Repasses e retiradas, menos a sua parte das despesas.</div>${contribHtml}</div><div class="foot"><div class="code">${esc(iniciais)} · ${esc(h.mes.replace('-', ''))} · ${liquido >= 0 ? 'CR' : 'DB'}</div></div></div><div class="disc"><strong>Aviso:</strong> documento meramente estético, gerado pelo Hub para controle interno dos lançamentos. Não é holerite/contracheque, não tem valor fiscal e <strong>não configura vínculo empregatício</strong>. A relação com sócios e associados é regida pelo contrato social e/ou de associação, conforme a legislação vigente e as normas da OAB.</div><script>window.onload=function(){setTimeout(function(){window.print();},250);};</script></body></html>`;
+            const w = window.open('', '_blank');
+            if (!w) { toast.error('Permita pop-ups para gerar o PDF.'); return; }
+            w.document.write(html);
+            w.document.close();
+          };
           return (
             <div className="mt-4">
               <div className="mb-3 flex items-center gap-2">
@@ -180,6 +195,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                 <select value={h.mes} onChange={(e) => setHolMesSel(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
                   {hol.map((x) => <option key={x.mes} value={x.mes}>{mesLabel(x.mes)}</option>)}
                 </select>
+                <button onClick={baixarPdf} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"><Download className="h-4 w-4" /> Baixar PDF</button>
               </div>
               {/* TICKET / recibo — UMA peça só: papel creme do topo à base, tinta "stone",
                   tipografia mono como voz do bilhete (dados = mono, nome/prosa = sans),
@@ -270,7 +286,8 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     <div className="mx-4 mb-2 border-t border-dashed border-stone-300 dark:border-stone-700" />
                     <div className="h-10 w-full text-stone-800 dark:text-stone-200" style={{ background: 'repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 4px, currentColor 4px 5px, transparent 5px 8px, currentColor 8px 11px, transparent 11px 12px, currentColor 12px 13px, transparent 13px 16px)' }} />
                     <p className="mt-2 text-center text-[10px] uppercase tracking-[0.3em] text-stone-400">{iniciais} · {h.mes.replace('-', '')} · {liquido >= 0 ? 'CR' : 'DB'}</p>
-                    <p className="mt-1.5 text-center font-sans text-[9px] uppercase tracking-wide text-stone-400 dark:text-stone-600">Documento gerado pelo Hub · sem valor fiscal</p>
+                    <p className="mt-1.5 text-center font-sans text-[9px] uppercase tracking-wide text-stone-400 dark:text-stone-600">Documento estético · controle interno · sem valor fiscal</p>
+                    <p className="mt-1 text-center font-sans text-[9px] leading-snug text-stone-400 dark:text-stone-600">Não configura vínculo empregatício.</p>
                   </div>
                 </div>
 
