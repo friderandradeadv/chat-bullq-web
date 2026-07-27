@@ -248,8 +248,8 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
                   {/* Picote — aberturas laterais + linha pontilhada (a "rasgadura" do bilhete) */}
                   <div className="relative">
-                    <span className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] ring-1 ring-stone-300/70 dark:bg-zinc-950 dark:ring-stone-700/60" />
-                    <span className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] ring-1 ring-stone-300/70 dark:bg-zinc-950 dark:ring-stone-700/60" />
+                    <span className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] shadow-[inset_0_0_4px_1px_rgba(120,113,108,0.32)] dark:bg-zinc-950 dark:shadow-[inset_0_0_4px_1px_rgba(0,0,0,0.55)]" />
+                    <span className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] shadow-[inset_0_0_4px_1px_rgba(120,113,108,0.32)] dark:bg-zinc-950 dark:shadow-[inset_0_0_4px_1px_rgba(0,0,0,0.55)]" />
                     <div className="mx-4 border-t-2 border-dashed border-stone-300 dark:border-stone-600" />
                   </div>
 
