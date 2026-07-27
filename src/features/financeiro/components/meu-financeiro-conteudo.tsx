@@ -151,12 +151,9 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-[#228BE6] text-base font-bold text-white">{iniciais}</span>
-            <div>
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{saud}, {primeiro}! 👋</h1>
-              <p className="text-sm text-zinc-500">Seu financeiro — <strong>{r.nCasos ?? casos.length} processo(s)</strong> seus · <strong>{r.nClientes} cliente(s)</strong> que já te renderam honorários.</p>
-            </div>
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{saud}, {primeiro}! 👋</h1>
+            <p className="text-sm text-zinc-500">Seu financeiro — <strong>{r.nCasos ?? casos.length} processo(s)</strong> seus · <strong>{r.nClientes} cliente(s)</strong> que já te renderam honorários.</p>
           </div>
         )}
 
