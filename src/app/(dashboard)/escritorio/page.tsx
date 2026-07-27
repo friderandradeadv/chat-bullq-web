@@ -205,7 +205,7 @@ export default function EscritorioPage() {
         </div>
 
         {/* Abas — só a ativa é renderizada */}
-        <div className="sticky top-0 z-10 -mx-4 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa] px-4 py-2 lg:-mx-6 lg:px-6 dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="-mx-4 mb-3 mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 bg-[#fafafa] px-4 py-2 lg:-mx-6 lg:px-6 dark:border-zinc-800 dark:bg-zinc-950">
           {([['perfil', 'Meu Perfil', UserCircle], ['financeiro', 'Financeiro', CircleDollarSign], ['estrutura', 'Estrutura', Building2], ['manuais', 'Manuais', BookOpen], ['onboarding', 'Onboarding', ListChecks]] as const).map(([key, label, Icon]) => (
             <button key={key} onClick={() => setTab(key)} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${tab === key ? 'bg-[#7048E8] text-white shadow-sm' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}>
               <Icon className="h-4 w-4" /> {label}
