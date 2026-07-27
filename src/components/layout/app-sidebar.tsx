@@ -47,6 +47,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useUnreadConversations } from '@/features/notifications/use-unread-conversations';
 import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks-count';
 import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
+import { useRepassesPendentesCount } from '@/features/notifications/use-repasses-pendentes';
 import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
@@ -227,6 +228,7 @@ export function AppSidebar() {
   const preUnseen = usePreUnseenCount();
   const disconnectedChannels = useDisconnectedChannels();
   const { alert: creditAlert } = useAiCreditHealth();
+  const repassesPend = useRepassesPendentesCount();
 
   return (
     <Sidebar>
@@ -340,7 +342,7 @@ export function AppSidebar() {
           {isAdmin && (
             <div className="mt-3">
               <NavSection label="Administrativo" defaultOpen={false}>
-                <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" badge={payslipUnread} />
+                <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" badge={payslipUnread + repassesPend} badgeTone={repassesPend > 0 ? 'danger' : 'default'} />
                 <NavItem href="/rh" icon={Users} label="RH & Seleção" />
                 <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
               </NavSection>

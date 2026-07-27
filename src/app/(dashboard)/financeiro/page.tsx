@@ -730,6 +730,16 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const { data: repasses } = useQuery({ queryKey: ['financeiro', 'repasses-pendentes'], queryFn: () => financeiroService.repassesPendentes(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   const [repAberto, setRepAberto] = useState(false);
   const repassarM = useMutation({ mutationFn: ({ txId, userId }: { txId: string; userId?: string }) => financeiroService.repassar(txId, userId), onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(`Repasse feito: ${r.repassados} advogado(s) · ${brl2(r.total)} — já cai no holerite`); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao repassar') });
+  const repassarTodosM = useMutation({
+    mutationFn: async () => {
+      const txIds = [...new Set((repasses?.itens ?? []).map((i) => i.txId))];
+      let repassados = 0, total = 0;
+      for (const txId of txIds) { const r = await financeiroService.repassar(txId); repassados += r.repassados; total += r.total; }
+      return { repassados, total };
+    },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(`Repasse feito: ${r.repassados} advogado(s) · ${brl2(r.total)} — já cai no holerite`); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao repassar'),
+  });
 
   const temPeriodo = !!(deISO || ateISO); // período por calendário vence o filtro de mês
   const txs = useMemo(() => {
@@ -875,6 +885,11 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
           </button>
           {repAberto && (
             <div className="mt-2 space-y-1">
+              {repasses.count > 1 && (
+                <div className="mb-1 flex justify-end">
+                  <button disabled={repassarTodosM.isPending || repassarM.isPending} onClick={() => { if (confirm(`Repassar todos os ${repasses.count} pendentes (${brl2(repasses.total)})? Gera a saída de cada advogado.`)) repassarTodosM.mutate(); }} className="inline-flex items-center gap-1.5 rounded-lg border border-[#02883C] px-2.5 py-1 text-xs font-semibold text-[#02883C] transition hover:bg-[#02883C]/10 disabled:opacity-50">Repassar todos · {brl2(repasses.total)}</button>
+                </div>
+              )}
               {repasses.itens.map((it, i) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg bg-white/70 px-2.5 py-1.5 text-sm dark:bg-zinc-900/40">
                   <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-200"><strong>{it.nome}</strong> <span className="text-zinc-400">· {it.origem}{it.mes ? ` · ${mesLabel(it.mes)}` : ''}</span></span>
