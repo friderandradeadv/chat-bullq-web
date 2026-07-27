@@ -125,11 +125,16 @@ export function aggregarRetiradas(data: FinDashboard | undefined | null, users: 
       }
       if (t.valor - assigned > 0.01) escritorio += t.valor - assigned;
     }
-    // retiradas/pró-labore pagas → por recebedor (advogado)
+    // retiradas/pró-labore pagas → por recebedor (advogado). Casamento robusto:
+    // 1) responsavelId (repasse automático já grava); 2) nome exato; 3) recebedor
+    // COMEÇA com o nome do advogado (ex.: "Matheus Frider Andrade Quebra de Caixa
+    // PRÓLABORE" casa com "Matheus Frider Andrade") — senão a retirada some do "já retirou".
     if (t.valor < 0 && ehRetirada(t.categoria) && (!t.status || t.status === 'pago')) {
-      const nome = (t.recebedor || t.party || '').trim();
-      const u = users.find((x) => normNome(x.name) === normNome(nome));
-      const k = u ? u.id : normNome(nome);
+      const nome = normNome((t.recebedor || t.party || '').trim());
+      const u = (t.responsavelId && users.find((x) => x.id === t.responsavelId))
+        || users.find((x) => normNome(x.name) === nome)
+        || users.find((x) => nome && normNome(x.name) && nome.startsWith(normNome(x.name)));
+      const k = u ? u.id : nome;
       retirado.set(k, (retirado.get(k) ?? 0) - t.valor);
       totalRetirado += -t.valor;
     }
