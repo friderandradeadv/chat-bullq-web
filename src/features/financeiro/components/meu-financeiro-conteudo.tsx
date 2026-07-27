@@ -74,21 +74,21 @@ function MiniStat({ label, value, hint, accent }: { label: string; value: string
   );
 }
 
-/** Toggle de mês do holerite: setas ‹ › + clique no mês abre mini-calendário
- *  (grade de 12 meses + navegação de ano), no padrão do Financeiro. Só habilita
- *  meses que têm folha (`meses`). */
-function MesTicketPicker({ meses, value, onChange }: { meses: string[]; value: string; onChange: (m: string) => void }) {
+/** Toggle de mês do holerite: setas ‹ › navegam mês a mês (qualquer mês, até
+ *  `maxMes`); clicar abre mini-calendário (grade de 12 meses + ano). Meses com
+ *  folha (`comDados`) ganham um ponto; futuro (> maxMes) fica desabilitado. */
+function addMesYM(ym: string, n: number) { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+function MesTicketPicker({ value, onChange, comDados, maxMes }: { value: string; onChange: (m: string) => void; comDados: Set<string>; maxMes: string }) {
   const [open, setOpen] = useState(false);
   const [verAno, setVerAno] = useState(() => Number(value.split('-')[0]) || new Date().getFullYear());
-  const asc = useMemo(() => [...meses].sort((a, b) => a.localeCompare(b)), [meses]);
-  const has = useMemo(() => new Set(meses), [meses]);
-  const idx = asc.indexOf(value);
+  const next = addMesYM(value, 1);
+  const podeNext = next <= maxMes;
   const MN = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   return (
     <div className="relative flex items-center justify-center gap-1">
-      <button onClick={() => asc[idx - 1] && onChange(asc[idx - 1])} disabled={idx <= 0} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800" aria-label="Mês anterior"><ChevronLeft className="h-5 w-5" /></button>
+      <button onClick={() => onChange(addMesYM(value, -1))} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Mês anterior"><ChevronLeft className="h-5 w-5" /></button>
       <button onClick={() => { setVerAno(Number(value.split('-')[0]) || verAno); setOpen((o) => !o); }} className="inline-flex min-w-[150px] items-center justify-center rounded-lg px-3 py-1.5 text-lg font-bold text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800">{mesLabel(value)}</button>
-      <button onClick={() => asc[idx + 1] && onChange(asc[idx + 1])} disabled={idx < 0 || idx >= asc.length - 1} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800" aria-label="Próximo mês"><ChevronRight className="h-5 w-5" /></button>
+      <button onClick={() => podeNext && onChange(next)} disabled={!podeNext} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800" aria-label="Próximo mês"><ChevronRight className="h-5 w-5" /></button>
       {open && (<>
         <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
         <div className="absolute left-1/2 top-full z-30 mt-2 w-64 -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
@@ -100,8 +100,8 @@ function MesTicketPicker({ meses, value, onChange }: { meses: string[]; value: s
           <div className="grid grid-cols-3 gap-1.5">
             {MN.map((mn, i) => {
               const key = `${verAno}-${String(i + 1).padStart(2, '0')}`;
-              const ok = has.has(key); const sel = key === value;
-              return <button key={i} disabled={!ok} onClick={() => { onChange(key); setOpen(false); }} className={`rounded-lg px-2 py-2 text-sm transition ${sel ? 'bg-[#7048E8] font-semibold text-white' : ok ? 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800' : 'cursor-default text-zinc-300 dark:text-zinc-600'}`}>{mn}</button>;
+              const futuro = key > maxMes; const sel = key === value; const tem = comDados.has(key);
+              return <button key={i} disabled={futuro} onClick={() => { onChange(key); setOpen(false); }} className={`relative rounded-lg px-2 py-2 text-sm transition ${sel ? 'bg-[#7048E8] font-semibold text-white' : futuro ? 'cursor-default text-zinc-300 dark:text-zinc-600' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800'}`}>{mn}{tem && !sel && <span className="absolute left-1/2 top-1 h-1 w-1 -translate-x-1/2 rounded-full bg-emerald-500" />}</button>;
             })}
           </div>
         </div>
@@ -205,11 +205,14 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         {/* HOLERITE — folha do mês (entradas = sua parte dos honorários recebidos; retiradas; líquido) */}
         {subtab === 'holerite' && (() => {
           const holRaw = data.holerite ?? [];
-          // Ticket SEMPRE visível: sem folha no mês, mostra um ticket ZERADO da competência
-          // atual (antes só aparecia um texto quando não havia lançamento).
-          const hol = holRaw.length ? holRaw : [{ mes: mesAtual, entradas: [], entradaTot: 0, saidas: [], saidaTot: 0, retiradas: [], retiradaTot: 0, contribuicoes: [], contribuicaoTot: 0, liquido: 0 }];
-          const mes = hol.some((x) => x.mes === holMesSel) ? holMesSel : hol[0].mes;
-          const h = hol.find((x) => x.mes === mes) ?? hol[0];
+          const comDados = new Set(holRaw.map((x) => x.mes));
+          // até onde o toggle/calendário deixa navegar (não passa do mês corrente).
+          const maxMes = [mesAtual, ...holRaw.map((x) => x.mes)].sort().slice(-1)[0] ?? mesAtual;
+          // mês selecionado: pode ser QUALQUER mês (mesmo sem folha) — default = mais
+          // recente com folha, ou o mês corrente.
+          const mes = holMesSel && /^\d{4}-\d{2}$/.test(holMesSel) ? holMesSel : (holRaw[0]?.mes ?? mesAtual);
+          // Ticket SEMPRE visível: mês sem folha → ticket ZERADO daquele mês.
+          const h = holRaw.find((x) => x.mes === mes) ?? { mes, entradas: [], entradaTot: 0, saidas: [], saidaTot: 0, retiradas: [], retiradaTot: 0, contribuicoes: [], contribuicaoTot: 0, liquido: 0 };
           const liquido = h.liquido ?? (h.entradaTot - (h.saidaTot ?? 0));
           // Baixar PDF — monta o ticket em HTML autocontido e abre a janela de impressão
           // (o usuário escolhe "Salvar como PDF"). Sem dependências novas. Inclui o aviso
@@ -229,7 +232,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           return (
             <div className="mt-4">
               <div className="relative mb-3 flex items-center justify-center">
-                <MesTicketPicker meses={hol.map((x) => x.mes)} value={mes} onChange={setHolMesSel} />
+                <MesTicketPicker value={mes} onChange={setHolMesSel} comDados={comDados} maxMes={maxMes} />
                 <button onClick={baixarPdf} className="absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800" title="Baixar PDF"><Download className="h-4 w-4" /><span className="hidden sm:inline">Baixar PDF</span></button>
               </div>
               {/* TICKET / recibo — UMA peça só: papel creme do topo à base, tinta "stone",
@@ -340,12 +343,12 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                 }} />
               </div>
 
-              {/* HISTÓRICO — todos os meses com folha e o líquido; clique seleciona (igual ao Financeiro) */}
-              {hol.length >= 1 && (
+              {/* HISTÓRICO — meses que TÊM folha e o líquido; clique seleciona (igual ao Financeiro) */}
+              {holRaw.length >= 1 && (
                 <div className="mx-auto mt-5 max-w-[480px] rounded-2xl border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                   <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-500"><TrendingUp className="h-3.5 w-3.5" /> Histórico</p>
                   <div className="max-h-64 space-y-0.5 overflow-y-auto scrollbar-thin">
-                    {[...hol].sort((a, b) => b.mes.localeCompare(a.mes)).map((x) => {
+                    {[...holRaw].sort((a, b) => b.mes.localeCompare(a.mes)).map((x) => {
                       const l = x.liquido ?? (x.entradaTot - (x.saidaTot ?? 0));
                       const sel = x.mes === mes;
                       return (
@@ -358,7 +361,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   </div>
                   <div className="mt-2 flex items-center justify-between border-t border-zinc-100 pt-2 dark:border-zinc-800">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Acumulado</span>
-                    <span className="font-mono text-sm font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(hol.reduce((s, x) => s + (x.liquido ?? (x.entradaTot - (x.saidaTot ?? 0))), 0))}</span>
+                    <span className="font-mono text-sm font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(holRaw.reduce((s, x) => s + (x.liquido ?? (x.entradaTot - (x.saidaTot ?? 0))), 0))}</span>
                   </div>
                 </div>
               )}
