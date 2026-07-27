@@ -748,6 +748,10 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
   const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
   const updM = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpdateTransacaoInput }) => financeiroService.updateTransacao(id, input), onSuccess: () => { invalidate(); toast.success('Lançamento atualizado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar') });
   const delM = useMutation({ mutationFn: ({ id, escopo }: { id: string; escopo: 'uma' | 'proximas' }) => financeiroService.removeTransacao(id, escopo), onSuccess: (r) => { invalidate(); toast.success(`${r.removidos} lançamento(s) removido(s)`); setSerieDel(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
+  // Repasses pendentes (rateio de honorários ainda não pago ao advogado) — selo + botão
+  const { data: repasses } = useQuery({ queryKey: ['financeiro', 'repasses-pendentes'], queryFn: () => financeiroService.repassesPendentes(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
+  const [repAberto, setRepAberto] = useState(false);
+  const repassarM = useMutation({ mutationFn: ({ txId, userId }: { txId: string; userId?: string }) => financeiroService.repassar(txId, userId), onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(`Repasse feito: ${r.repassados} advogado(s) · ${brl2(r.total)} — já cai no holerite`); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao repassar') });
 
   const temPeriodo = !!(deISO || ateISO); // período por calendário vence o filtro de mês
   const txs = useMemo(() => {
@@ -881,6 +885,30 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         <button onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-[#02883C] hover:text-[#02883C] dark:border-zinc-700 dark:text-zinc-300"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar extrato</button>
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>
       </div>}>
+
+      {/* Repasses pendentes — rateio de honorários ainda não pago ao advogado (selo + ação) */}
+      {repasses && repasses.count > 0 && (
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-900/10">
+          <button onClick={() => setRepAberto((v) => !v)} className="flex w-full items-center gap-2 text-left">
+            <span className="relative flex h-2.5 w-2.5 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" /></span>
+            <span className="text-sm font-semibold text-rose-700 dark:text-rose-300">Repasses pendentes · {repasses.count}</span>
+            <span className="text-sm font-bold tabular-nums text-rose-700 dark:text-rose-300">{brl2(repasses.total)}</span>
+            <span className="ml-auto text-xs font-medium text-rose-600 dark:text-rose-400">{repAberto ? 'ocultar' : 'ver e repassar'}</span>
+          </button>
+          {repAberto && (
+            <div className="mt-2 space-y-1">
+              {repasses.itens.map((it, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-lg bg-white/70 px-2.5 py-1.5 text-sm dark:bg-zinc-900/40">
+                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-200"><strong>{it.nome}</strong> <span className="text-zinc-400">· {it.origem}{it.mes ? ` · ${mesLabel(it.mes)}` : ''}</span></span>
+                  <span className="shrink-0 font-semibold tabular-nums text-emerald-600">{brl2(it.valor)}</span>
+                  <button disabled={repassarM.isPending} onClick={() => repassarM.mutate({ txId: it.txId, userId: it.userId })} className="shrink-0 rounded-lg bg-[#02883C] px-2.5 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
+                </div>
+              ))}
+              <p className="pt-1 text-[11px] text-rose-600/80 dark:text-rose-400/70">Repassar gera a saída do caixa pro advogado e faz cair no holerite dele — a fatia sai desta lista (não conta em dobro).</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Alternador: caixa (livro-razão) × cartão de crédito */}
       {cardIds.size > 0 && (

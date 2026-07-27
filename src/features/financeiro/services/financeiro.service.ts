@@ -215,6 +215,13 @@ export interface UpdateTransacaoInput {
   escopo?: 'uma' | 'proximas';
 }
 
+export interface RepassePendenteItem { txId: string; userId: string; nome: string; valor: number; mes: string; data: string; origem: string; area: string | null }
+export interface RepassesPendentes {
+  count: number; total: number;
+  itens: RepassePendenteItem[];
+  porPessoa: { userId: string; nome: string; total: number; count: number }[];
+}
+
 export const financeiroService = {
   async dashboard(): Promise<FinDashboard> {
     const { data } = await api.get('/financeiro/dashboard');
@@ -245,6 +252,14 @@ export const financeiroService = {
   },
   async removeTransacao(id: string, escopo: 'uma' | 'proximas' = 'uma'): Promise<{ removidos: number }> {
     const { data } = await api.delete(`/financeiro/transacoes/${id}`, { params: { escopo } });
+    return data.data ?? data;
+  },
+  async repassesPendentes(userId?: string): Promise<RepassesPendentes> {
+    const { data } = await api.get('/financeiro/repasses-pendentes', { params: userId ? { userId } : undefined });
+    return data.data ?? data;
+  },
+  async repassar(txId: string, userId?: string): Promise<{ repassados: number; total: number }> {
+    const { data } = await api.post(`/financeiro/transacoes/${txId}/repassar`, userId ? { userId } : {});
     return data.data ?? data;
   },
   async listContas(): Promise<Conta[]> {
