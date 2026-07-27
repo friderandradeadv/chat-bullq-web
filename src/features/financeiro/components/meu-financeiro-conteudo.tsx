@@ -89,7 +89,7 @@ const FRASES_ADV = [
 ];
 const STATUS_FILTROS_ADV = [{ key: 'todos', label: 'Todos' }, { key: 'recebido', label: 'Recebidos' }, { key: 'a_receber', label: 'A receber' }] as const;
 
-export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; criar?: CriarCtx }) {
+export function MeuFinanceiroConteudo({ data, criar, avatarUrl }: { data: FinDashboard; criar?: CriarCtx; avatarUrl?: string | null }) {
   const [subtab, setSubtab] = useState<'resumo' | 'holerite' | 'lancamentos' | 'receber' | 'projecoes' | 'motivacao'>(data.area ? 'resumo' : 'holerite');
   const [showCs, setShowCs] = useState(false); // detalhe "quem está em cumprimento de sentença" (visão de área)
   const [holMesSel, setHolMesSel] = useState('');
@@ -152,7 +152,11 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-[#228BE6] text-base font-bold text-white">{iniciais}</span>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={data.meuNome || ''} className="h-12 w-12 shrink-0 rounded-2xl object-cover ring-1 ring-black/5 dark:ring-white/10" />
+            ) : (
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-[#228BE6] text-base font-bold text-white">{iniciais}</span>
+            )}
             <div>
               <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{saud}, {primeiro}! 👋</h1>
               <p className="text-sm text-zinc-500">Seu financeiro — <strong>{r.nCasos ?? casos.length} processo(s)</strong> seus · <strong>{r.nClientes} cliente(s)</strong> que já te renderam honorários.</p>
@@ -188,7 +192,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   tipografia mono como voz do bilhete (dados = mono, nome/prosa = sans),
                   cor apenas nos valores. Aberturas/serrilha usam a cor do fundo da página. */}
               <div className="relative mx-auto max-w-[480px] font-mono">
-                <div className="overflow-hidden rounded-t-xl bg-[#FBF6E9] shadow-lg ring-1 ring-stone-300/60 dark:bg-[#211E17] dark:ring-stone-700/50">
+                <div className="rounded-t-xl bg-[#FBF6E9] shadow-lg ring-1 ring-stone-300/60 dark:bg-[#211E17] dark:ring-stone-700/50">
                   {/* Canhoto (stub) — mesmo papel, separado só pelo picote */}
                   <div className="relative overflow-hidden px-7 pt-6 pb-7 text-stone-800 dark:text-stone-100">
                     <div className="relative">
@@ -202,8 +206,8 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
                   {/* Picote — aberturas laterais + linha pontilhada (a "rasgadura" do bilhete) */}
                   <div className="relative">
-                    <span className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#f5f6f8] dark:bg-zinc-950" />
-                    <span className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#f5f6f8] dark:bg-zinc-950" />
+                    <span className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] dark:bg-zinc-950" />
+                    <span className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] dark:bg-zinc-950" />
                     <div className="mx-4 border-t-2 border-dashed border-stone-300 dark:border-stone-600" />
                   </div>
 
