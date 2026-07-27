@@ -273,6 +273,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     <div className="mx-4 mb-2 border-t border-dashed border-stone-300 dark:border-stone-700" />
                     <div className="h-10 w-full text-stone-800 dark:text-stone-200" style={{ background: 'repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 4px, currentColor 4px 5px, transparent 5px 8px, currentColor 8px 11px, transparent 11px 12px, currentColor 12px 13px, transparent 13px 16px)' }} />
                     <p className="mt-2 text-center text-[10px] uppercase tracking-[0.3em] text-stone-400">{iniciais} · {h.mes.replace('-', '')} · {liquido >= 0 ? 'CR' : 'DB'}</p>
+                    <p className="mt-1.5 text-center font-sans text-[9px] uppercase tracking-wide text-stone-400 dark:text-stone-600">Documento gerado pelo Hub · sem valor fiscal</p>
                   </div>
                 </div>
 
