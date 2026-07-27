@@ -246,11 +246,11 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                     {data.meuNome && <p className="relative mt-3 flex items-center gap-1.5 font-sans text-sm font-medium text-stone-600 dark:text-stone-300"><UserCircle2 className="h-4 w-4 shrink-0 opacity-60" /> <span className="truncate">{data.meuNome}</span></p>}
                   </div>
 
-                  {/* Picote — aberturas laterais + linha pontilhada (a "rasgadura" do bilhete) */}
-                  <div className="relative">
-                    <span className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] shadow-[inset_0_0_4px_1px_rgba(120,113,108,0.32)] dark:bg-zinc-950 dark:shadow-[inset_0_0_4px_1px_rgba(0,0,0,0.55)]" />
-                    <span className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] shadow-[inset_0_0_4px_1px_rgba(120,113,108,0.32)] dark:bg-zinc-950 dark:shadow-[inset_0_0_4px_1px_rgba(0,0,0,0.55)]" />
-                    <div className="mx-4 border-t-2 border-dashed border-stone-300 dark:border-stone-600" />
+                  {/* Picote — aberturas laterais como RECORTE real (furo com sombra de
+                      profundidade, sem contorno e sem linha), igual a um ticket físico. */}
+                  <div className="relative h-0">
+                    <span aria-hidden className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] shadow-[inset_0_2px_4px_-1px_rgba(0,0,0,0.30),inset_0_-1px_1px_rgba(255,255,255,0.5)] dark:bg-zinc-950 dark:shadow-[inset_0_2px_4px_-1px_rgba(0,0,0,0.7)]" />
+                    <span aria-hidden className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#fafafa] shadow-[inset_0_2px_4px_-1px_rgba(0,0,0,0.30),inset_0_-1px_1px_rgba(255,255,255,0.5)] dark:bg-zinc-950 dark:shadow-[inset_0_2px_4px_-1px_rgba(0,0,0,0.7)]" />
                   </div>
 
                   {/* Corpo do recibo */}
