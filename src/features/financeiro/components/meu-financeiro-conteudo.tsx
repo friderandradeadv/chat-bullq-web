@@ -184,67 +184,106 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   {hol.map((x) => <option key={x.mes} value={x.mes}>{mesLabel(x.mes)}</option>)}
                 </select>
               </div>
-              <div className="mx-auto max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="flex items-center justify-between gap-2 bg-gradient-to-br from-emerald-500 to-[#228BE6] px-5 py-4 text-white">
-                  <div><p className="text-[11px] uppercase tracking-wider opacity-80">Folha do mês</p><p className="text-lg font-bold">{mesLabel(h.mes)}</p></div>
-                  <div className="text-right"><p className="text-[11px] uppercase tracking-wider opacity-80">{data.meuNome || ''}</p><p className="inline-flex items-center gap-1 text-sm font-semibold"><Wallet className="h-4 w-4" /> holerite</p></div>
-                </div>
-                <div className="px-5 py-4">
-                  {/* Recebido de fato no mês (repasses + retiradas) = o dinheiro real */}
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600"><ArrowUpCircle className="h-3.5 w-3.5" /> Recebido no mês (repasses e retiradas)</p>
-                  {(h.retiradas?.length ?? 0) === 0 ? <p className="pb-1 text-xs text-zinc-400">Nada foi pago a você neste mês ainda.</p> : (
-                    <div className="space-y-0.5">
-                      {h.retiradas.map((rt, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <span className="flex min-w-0 items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><span className="w-9 shrink-0 text-[11px] tabular-nums text-zinc-400">{(rt.data || '').slice(0, 5)}</span><span className="truncate">{rt.desc}</span></span>
-                          <span className="shrink-0 font-medium tabular-nums text-emerald-600">{brl2(rt.valor)}</span>
-                        </div>
-                      ))}
+              {/* TICKET / recibo — UMA peça só: papel creme do topo à base, tinta "stone",
+                  tipografia mono como voz do bilhete (dados = mono, nome/prosa = sans),
+                  cor apenas nos valores. Aberturas/serrilha usam a cor do fundo da página. */}
+              <div className="relative mx-auto max-w-[480px] font-mono">
+                <div className="overflow-hidden rounded-t-xl bg-[#FBF6E9] shadow-lg ring-1 ring-stone-300/60 dark:bg-[#211E17] dark:ring-stone-700/50">
+                  {/* Canhoto (stub) — mesmo papel, separado só pelo picote */}
+                  <div className="relative overflow-hidden px-7 pt-6 pb-7 text-stone-800 dark:text-stone-100">
+                    <div className="relative">
+                      <span className="block truncate text-[13px] font-bold uppercase tracking-[0.08em] text-stone-800 dark:text-stone-100">Frider Andrade Advogados</span>
                     </div>
-                  )}
-
-                  {/* Saídas do mês (o que ela ajudou a pagar — fatia dela nas despesas) */}
-                  {(h.saidas?.length ?? 0) > 0 && (
-                    <div className="mt-4">
-                      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-rose-600"><ArrowDownCircle className="h-3.5 w-3.5" /> Saídas que você ajudou a pagar</p>
-                      <div className="space-y-0.5">
-                        {h.saidas.map((sd, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm">
-                            <span className="flex min-w-0 items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><span className="w-9 shrink-0 text-[11px] tabular-nums text-zinc-400">{(sd.data || '').slice(0, 5)}</span><span className="truncate">{sd.label}</span></span>
-                            <span className="shrink-0 font-medium tabular-nums text-rose-600">-{brl2(sd.valor)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Líquido = o que recebeu de fato − o que ajudou a pagar */}
-                  <div className="mt-4 flex items-center justify-between border-t-2 border-dashed border-zinc-200 pt-3 dark:border-zinc-700">
-                    <span className="text-sm font-bold uppercase tracking-wide text-zinc-500">Líquido do mês</span>
-                    <span className={`text-xl font-bold tabular-nums ${liquido >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(liquido)}</span>
+                    <div className="mt-4 h-px bg-stone-300/70 dark:bg-stone-600/50" />
+                    <p className="relative mt-5 truncate text-[10px] uppercase tracking-[0.2em] text-stone-500 dark:text-stone-400">Holerite · competência</p>
+                    <p className="relative mt-1.5 truncate text-[26px] font-bold uppercase leading-tight tracking-tight text-stone-800 dark:text-stone-50">{mesLabel(h.mes)}</p>
+                    {data.meuNome && <p className="relative mt-3 flex items-center gap-1.5 font-sans text-sm font-medium text-stone-600 dark:text-stone-300"><UserCircle2 className="h-4 w-4 shrink-0 opacity-60" /> <span className="truncate">{data.meuNome}</span></p>}
                   </div>
-                  <p className="mt-2 text-[11px] text-zinc-400">Fiel ao livro-razão: <strong>o que caiu pra você</strong> (repasses/retiradas) menos <strong>o que você ajudou a pagar</strong> (sua fatia das despesas). Sua remuneração vem do <strong>rateio no êxito</strong> — só aparece quando o lançamento é feito.</p>
 
-                  {/* Contribuição PESSOAL (informativa) — quanto ela cobriu do próprio bolso em
-                      despesas da vertical. NÃO entra no líquido acima (não é reembolso). */}
-                  {(h.contribuicoes?.length ?? 0) > 0 && (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
-                      <p className="mb-1.5 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                        <span>Você contribuiu do próprio bolso</span>
-                        <span className="text-sm tabular-nums">{brl2(h.contribuicaoTot ?? 0)}</span>
-                      </p>
-                      <div className="space-y-0.5">
-                        {h.contribuicoes!.map((c, i) => (
-                          <div key={i} className="flex items-center justify-between text-sm">
-                            <span className="flex min-w-0 items-center gap-1.5 text-zinc-600 dark:text-zinc-300"><span className="w-9 shrink-0 text-[11px] tabular-nums text-zinc-400">{(c.data || '').slice(0, 5)}</span><span className="truncate">{c.desc}</span></span>
-                            <span className="shrink-0 font-medium tabular-nums text-amber-700 dark:text-amber-400">{brl2(c.valor)}</span>
+                  {/* Picote — aberturas laterais + linha pontilhada (a "rasgadura" do bilhete) */}
+                  <div className="relative">
+                    <span className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#f5f6f8] dark:bg-zinc-950" />
+                    <span className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#f5f6f8] dark:bg-zinc-950" />
+                    <div className="mx-4 border-t-2 border-dashed border-stone-300 dark:border-stone-600" />
+                  </div>
+
+                  {/* Corpo do recibo */}
+                  <div className="px-7 pt-6 pb-5">
+                    {/* Recebido de fato no mês (repasses + retiradas) = o dinheiro real */}
+                    <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-stone-500 dark:text-stone-400"><ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-600" /> Recebido no mês</p>
+                    {(h.retiradas?.length ?? 0) === 0 ? <p className="pb-1 font-sans text-xs text-stone-400">Nada foi pago a você neste mês ainda.</p> : (
+                      <div className="space-y-2">
+                        {h.retiradas.map((rt, i) => (
+                          <div key={i} className="flex items-baseline gap-2.5 text-sm">
+                            <span className="w-9 shrink-0 text-[11px] tabular-nums text-stone-400">{(rt.data || '').slice(0, 5)}</span>
+                            <span className="min-w-0 flex-1 truncate font-sans text-stone-600 dark:text-stone-300">{rt.desc}</span>
+                            <span className="shrink-0 whitespace-nowrap font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{brl2(rt.valor)}</span>
                           </div>
                         ))}
                       </div>
-                      <p className="mt-1.5 text-[10px] text-amber-700/80 dark:text-amber-400/70">Informativo — não é reembolso e <strong>não entra no líquido</strong> acima. Só mostra o quanto você bancou de estrutura este mês.</p>
+                    )}
+
+                    {/* Saídas do mês (o que ela ajudou a pagar — fatia dela nas despesas) */}
+                    {(h.saidas?.length ?? 0) > 0 && (
+                      <div className="mt-5">
+                        <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-stone-500 dark:text-stone-400"><ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-600" /> Saídas que você ajudou a pagar</p>
+                        <div className="space-y-2">
+                          {h.saidas.map((sd, i) => (
+                            <div key={i} className="flex items-baseline gap-2.5 text-sm">
+                              <span className="w-9 shrink-0 text-[11px] tabular-nums text-stone-400">{(sd.data || '').slice(0, 5)}</span>
+                              <span className="min-w-0 flex-1 truncate font-sans text-stone-600 dark:text-stone-300">{sd.label}</span>
+                              <span className="shrink-0 whitespace-nowrap font-semibold tabular-nums text-rose-700 dark:text-rose-400">-{brl2(sd.valor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Líquido = o que recebeu de fato − o que ajudou a pagar (total do bilhete) */}
+                    <div className="-mx-7 mt-5 flex items-center justify-between border-y-2 border-dashed border-stone-300 bg-stone-900/5 px-7 py-4 dark:border-stone-600 dark:bg-stone-100/5">
+                      <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500 dark:text-stone-300"><Receipt className="h-4 w-4 shrink-0 opacity-60" /> <span className="truncate">Líquido do mês</span></span>
+                      <span className={`shrink-0 whitespace-nowrap pl-3 text-[22px] font-bold leading-none tabular-nums ${liquido >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>{brl2(liquido)}</span>
                     </div>
-                  )}
+                    <p className="mt-2.5 font-sans text-[11px] leading-relaxed text-stone-400 dark:text-stone-500">Repasses e retiradas, menos a sua parte das despesas.</p>
+
+                    {/* Contribuição PESSOAL (informativa) — quanto ela cobriu do próprio bolso em
+                        despesas da vertical. NÃO entra no líquido acima (não é reembolso). */}
+                    {(h.contribuicoes?.length ?? 0) > 0 && (
+                      <div className="mt-5 rounded-lg border border-dashed border-stone-300 p-3.5 dark:border-stone-600">
+                        <p className="mb-2 flex items-center justify-between gap-2 text-[9px] font-bold uppercase text-stone-500 dark:text-stone-400">
+                          <span className="min-w-0 truncate">Você contribuiu do próprio bolso</span>
+                          <span className="shrink-0 whitespace-nowrap tabular-nums text-amber-700 dark:text-amber-500">{brl2(h.contribuicaoTot ?? 0)}</span>
+                        </p>
+                        <div className="space-y-2">
+                          {h.contribuicoes!.map((c, i) => (
+                            <div key={i} className="flex items-baseline gap-2.5 text-sm">
+                              <span className="w-9 shrink-0 text-[11px] tabular-nums text-stone-400">{(c.data || '').slice(0, 5)}</span>
+                              <span className="min-w-0 flex-1 truncate font-sans text-stone-600 dark:text-stone-300">{c.desc}</span>
+                              <span className="shrink-0 whitespace-nowrap font-semibold tabular-nums text-amber-700 dark:text-amber-500">{brl2(c.valor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 font-sans text-[10px] text-stone-400 dark:text-stone-500">Não entra no líquido — só o que você bancou de estrutura.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Rodapé — código de barras (aparência de bilhete) */}
+                  <div className="px-7 pb-5 pt-3">
+                    <div className="mx-4 mb-2 border-t border-dashed border-stone-300 dark:border-stone-700" />
+                    <div className="h-10 w-full text-stone-800 dark:text-stone-200" style={{ background: 'repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 4px, currentColor 4px 5px, transparent 5px 8px, currentColor 8px 11px, transparent 11px 12px, currentColor 12px 13px, transparent 13px 16px)' }} />
+                    <p className="mt-2 text-center text-[10px] uppercase tracking-[0.3em] text-stone-400">{iniciais} · {h.mes.replace('-', '')} · {liquido >= 0 ? 'CR' : 'DB'}</p>
+                  </div>
                 </div>
+
+                {/* Borda serrilhada inferior — recorta semicírculos da base do ticket */}
+                <div aria-hidden className="h-3 bg-[#FBF6E9] dark:bg-[#211E17]" style={{
+                  WebkitMaskImage: 'radial-gradient(circle 6px at 8px 0, transparent 6px, black 6.5px)',
+                  maskImage: 'radial-gradient(circle 6px at 8px 0, transparent 6px, black 6.5px)',
+                  WebkitMaskSize: '16px 12px', maskSize: '16px 12px',
+                  WebkitMaskRepeat: 'repeat-x', maskRepeat: 'repeat-x',
+                  WebkitMaskPosition: 'top', maskPosition: 'top',
+                }} />
               </div>
             </div>
           );
