@@ -334,8 +334,8 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                 }} />
               </div>
 
-              {/* HISTÓRICO — meses anteriores com o líquido; clique seleciona (igual ao Financeiro) */}
-              {hol.length > 1 && (
+              {/* HISTÓRICO — todos os meses com folha e o líquido; clique seleciona (igual ao Financeiro) */}
+              {hol.length >= 1 && (
                 <div className="mx-auto mt-5 max-w-[480px] rounded-2xl border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                   <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-500"><TrendingUp className="h-3.5 w-3.5" /> Histórico</p>
                   <div className="max-h-64 space-y-0.5 overflow-y-auto scrollbar-thin">
