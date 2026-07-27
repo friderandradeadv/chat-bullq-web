@@ -942,8 +942,30 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         <div className="rounded-lg bg-emerald-50 py-1.5 dark:bg-emerald-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Recebido</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(resumo.recebido)}</p></div>
         <div className="rounded-lg bg-amber-50 py-1.5 dark:bg-amber-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">A receber</p><p className="text-sm font-bold tabular-nums text-amber-600">{brl(resumo.aReceber)}</p></div>
         <div className="rounded-lg bg-rose-50 py-1.5 dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesas</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(resumo.despesas)}</p>{resumo.aPagar > 0 && <p className="text-[10px] text-amber-600">+{brl(resumo.aPagar)} a pagar</p>}</div>
-        <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo realizado</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
+        <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo realizado{mesSel ? ' do mês' : ''}</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
       </div>
+
+      {/* Saldo ACUMULADO da conta (não o fluxo do mês) — só quando filtra por uma conta bancária.
+          Reusa `reconciliacao` do backend: saldo real (âncora) OU calculado pelo razão. Mesmo número do card na aba Contas. */}
+      {contaFiltro && data.reconciliacao?.[contaFiltro] && (() => {
+        const rc = data.reconciliacao[contaFiltro];
+        const nomeC = contas.find((c) => c.id === contaFiltro)?.nome ?? 'conta';
+        const saldo = rc.saldoReal != null ? rc.saldoReal : rc.saldoCalculado;
+        const anchored = rc.saldoReal != null;
+        const ok = anchored && Math.abs(rc.diferenca ?? 0) <= 0.01;
+        return (
+          <div className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2 text-sm ${anchored && !ok ? 'border-amber-300 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/15' : 'border-violet-200 bg-violet-50 dark:border-violet-900/40 dark:bg-violet-900/15'}`}>
+            <span className="font-semibold text-zinc-700 dark:text-zinc-200">Saldo da conta {nomeC} <span className="text-[11px] font-normal text-zinc-400">(acumulado, agora)</span></span>
+            <span className={`text-base font-bold tabular-nums ${saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldo)}</span>
+            {anchored
+              ? (ok
+                ? <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">✓ bate com o razão</span>
+                : <span className="text-[12px] text-amber-700 dark:text-amber-300">⚠️ difere {brl2(Math.abs(rc.diferenca ?? 0))} — banco {brl2(rc.saldoReal ?? 0)} · razão {brl2(rc.saldoCalculado)}</span>)
+              : <span className="text-[11px] text-zinc-400">calculado pelo razão · fixe o saldo real na aba <strong>Contas</strong> pra o hub conferir</span>}
+            <span className="w-full text-[11px] text-zinc-400">O <strong>Saldo realizado{mesSel ? ' do mês' : ''}</strong> acima é o fluxo {mesSel ? `de ${mesLabel(mesSel)}` : 'do período'}; este é o saldo acumulado da conta (todos os meses).</span>
+          </div>
+        );
+      })()}
 
       <p className="mt-2 text-xs text-zinc-400">{txs.length} lançamento(s){temPeriodo ? ` no período${deISO ? ` de ${toBR(deISO)}` : ''}${ateISO ? ` até ${toBR(ateISO)}` : ''}` : mesSel ? ` em ${mesLabel(mesSel)}` : ` · ${grupos.length} ${grupos.length === 1 ? 'mês' : 'meses'}`}</p>
 
