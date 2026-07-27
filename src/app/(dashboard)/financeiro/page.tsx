@@ -177,7 +177,14 @@ export default function FinanceiroPage() {
                 </select>
               </div>
             )}
-            {!sel && data.geradoEm && <p className="text-xs text-zinc-400">atualizado em {new Date(data.geradoEm).toLocaleDateString('pt-BR')}</p>}
+            {!sel && (() => {
+              // "atualizado em" = data da ÚLTIMA movimentação lançada (não a data do import antigo, que ficava congelada).
+              const hoje = toISOInput(hojeBR());
+              let mx = '';
+              for (const t of (data.transacoes ?? [])) { const iso = toISOInput(t.data); if (iso && iso <= hoje && iso > mx) mx = iso; }
+              const quando = mx ? `${mx.slice(8, 10)}/${mx.slice(5, 7)}/${mx.slice(0, 4)}` : (data.geradoEm ? new Date(data.geradoEm).toLocaleDateString('pt-BR') : '');
+              return quando ? <p className="text-xs text-zinc-400">atualizado em {quando}</p> : null;
+            })()}
           </div>
         </div>
 
