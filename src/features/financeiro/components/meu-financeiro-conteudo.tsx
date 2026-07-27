@@ -204,8 +204,10 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
 
         {/* HOLERITE — folha do mês (entradas = sua parte dos honorários recebidos; retiradas; líquido) */}
         {subtab === 'holerite' && (() => {
-          const hol = data.holerite ?? [];
-          if (hol.length === 0) return <p className="mt-6 text-center text-sm text-zinc-400">Ainda não há holerite. Quando você receber honorários com <strong>rateio</strong> (sua parte) ou tiver <strong>retiradas</strong>, sua folha do mês aparece aqui.</p>;
+          const holRaw = data.holerite ?? [];
+          // Ticket SEMPRE visível: sem folha no mês, mostra um ticket ZERADO da competência
+          // atual (antes só aparecia um texto quando não havia lançamento).
+          const hol = holRaw.length ? holRaw : [{ mes: mesAtual, entradas: [], entradaTot: 0, saidas: [], saidaTot: 0, retiradas: [], retiradaTot: 0, contribuicoes: [], contribuicaoTot: 0, liquido: 0 }];
           const mes = hol.some((x) => x.mes === holMesSel) ? holMesSel : hol[0].mes;
           const h = hol.find((x) => x.mes === mes) ?? hol[0];
           const liquido = h.liquido ?? (h.entradaTot - (h.saidaTot ?? 0));
