@@ -4252,7 +4252,7 @@ function FinanceiroLimitado({ data }: { data: FinDashboard }) {
         {/* Visão pessoal escopada à vertical do advogado — lançamentos (pode criar),
             CS, projeção e motivação. O caixa e a carteira do escritório inteiro
             ficam restritos aos administradores. */}
-        <MeuFinanceiroConteudo data={data} avatarUrl={user?.avatarUrl ?? null} criar={criar} />
+        <MeuFinanceiroConteudo data={data} criar={criar} />
       </div>
     </div>
   );
