@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   ArrowUpCircle, ArrowDownCircle, Sparkles, Search, HeartHandshake, Flame, Calendar, Gavel, ExternalLink, UserCircle2,
-  TrendingUp, Target, ChevronRight, Scale, Plus, X, Loader2, Receipt, Wallet, Layers, Download,
+  TrendingUp, Target, ChevronRight, ChevronLeft, Scale, Plus, X, Loader2, Receipt, Wallet, Layers, Download,
 } from 'lucide-react';
 import { financeiroService, type FinDashboard, type TxStatus } from '@/features/financeiro/services/financeiro.service';
 import { contactsService } from '@/features/contacts/services/contacts.service';
@@ -70,6 +70,42 @@ function MiniStat({ label, value, hint, accent }: { label: string; value: string
       <p className="text-[11px] font-medium text-zinc-500">{label}</p>
       <p className="mt-1 text-xl font-bold tabular-nums" style={{ color: accent }}>{value}</p>
       {hint && <p className="mt-0.5 text-[11px] text-zinc-400">{hint}</p>}
+    </div>
+  );
+}
+
+/** Toggle de mês do holerite: setas ‹ › + clique no mês abre mini-calendário
+ *  (grade de 12 meses + navegação de ano), no padrão do Financeiro. Só habilita
+ *  meses que têm folha (`meses`). */
+function MesTicketPicker({ meses, value, onChange }: { meses: string[]; value: string; onChange: (m: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [verAno, setVerAno] = useState(() => Number(value.split('-')[0]) || new Date().getFullYear());
+  const asc = useMemo(() => [...meses].sort((a, b) => a.localeCompare(b)), [meses]);
+  const has = useMemo(() => new Set(meses), [meses]);
+  const idx = asc.indexOf(value);
+  const MN = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  return (
+    <div className="relative flex items-center justify-center gap-1">
+      <button onClick={() => asc[idx - 1] && onChange(asc[idx - 1])} disabled={idx <= 0} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800" aria-label="Mês anterior"><ChevronLeft className="h-5 w-5" /></button>
+      <button onClick={() => { setVerAno(Number(value.split('-')[0]) || verAno); setOpen((o) => !o); }} className="inline-flex min-w-[150px] items-center justify-center rounded-lg px-3 py-1.5 text-lg font-bold text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800">{mesLabel(value)}</button>
+      <button onClick={() => asc[idx + 1] && onChange(asc[idx + 1])} disabled={idx < 0 || idx >= asc.length - 1} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-zinc-800" aria-label="Próximo mês"><ChevronRight className="h-5 w-5" /></button>
+      {open && (<>
+        <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+        <div className="absolute left-1/2 top-full z-30 mt-2 w-64 -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="mb-2 flex items-center justify-between">
+            <button onClick={() => setVerAno((v) => v - 1)} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Ano anterior"><ChevronLeft className="h-4 w-4" /></button>
+            <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{verAno}</span>
+            <button onClick={() => setVerAno((v) => v + 1)} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Próximo ano"><ChevronRight className="h-4 w-4" /></button>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {MN.map((mn, i) => {
+              const key = `${verAno}-${String(i + 1).padStart(2, '0')}`;
+              const ok = has.has(key); const sel = key === value;
+              return <button key={i} disabled={!ok} onClick={() => { onChange(key); setOpen(false); }} className={`rounded-lg px-2 py-2 text-sm transition ${sel ? 'bg-[#7048E8] font-semibold text-white' : ok ? 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800' : 'cursor-default text-zinc-300 dark:text-zinc-600'}`}>{mn}</button>;
+            })}
+          </div>
+        </div>
+      </>)}
     </div>
   );
 }
@@ -190,12 +226,9 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           };
           return (
             <div className="mt-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-zinc-400" />
-                <select value={h.mes} onChange={(e) => setHolMesSel(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-                  {hol.map((x) => <option key={x.mes} value={x.mes}>{mesLabel(x.mes)}</option>)}
-                </select>
-                <button onClick={baixarPdf} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"><Download className="h-4 w-4" /> Baixar PDF</button>
+              <div className="relative mb-3 flex items-center justify-center">
+                <MesTicketPicker meses={hol.map((x) => x.mes)} value={mes} onChange={setHolMesSel} />
+                <button onClick={baixarPdf} className="absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800" title="Baixar PDF"><Download className="h-4 w-4" /><span className="hidden sm:inline">Baixar PDF</span></button>
               </div>
               {/* TICKET / recibo — UMA peça só: papel creme do topo à base, tinta "stone",
                   tipografia mono como voz do bilhete (dados = mono, nome/prosa = sans),
@@ -300,6 +333,29 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
                   WebkitMaskPosition: 'top', maskPosition: 'top',
                 }} />
               </div>
+
+              {/* HISTÓRICO — meses anteriores com o líquido; clique seleciona (igual ao Financeiro) */}
+              {hol.length > 1 && (
+                <div className="mx-auto mt-5 max-w-[480px] rounded-2xl border border-[#DEE2E6] bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-500"><TrendingUp className="h-3.5 w-3.5" /> Histórico</p>
+                  <div className="max-h-64 space-y-0.5 overflow-y-auto scrollbar-thin">
+                    {[...hol].sort((a, b) => b.mes.localeCompare(a.mes)).map((x) => {
+                      const l = x.liquido ?? (x.entradaTot - (x.saidaTot ?? 0));
+                      const sel = x.mes === mes;
+                      return (
+                        <button key={x.mes} onClick={() => setHolMesSel(x.mes)} className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm transition ${sel ? 'bg-[#7048E8]/10' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'}`}>
+                          <span className={`truncate ${sel ? 'font-semibold text-[#7048E8]' : 'text-zinc-600 dark:text-zinc-300'}`}>{mesLabel(x.mes)}</span>
+                          <span className={`shrink-0 font-mono tabular-nums ${l >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{brl2(l)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Acumulado</span>
+                    <span className="font-mono text-sm font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(hol.reduce((s, x) => s + (x.liquido ?? (x.entradaTot - (x.saidaTot ?? 0))), 0))}</span>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
