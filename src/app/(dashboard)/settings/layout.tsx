@@ -82,8 +82,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
   // Conexões WhatsApp caídas agora → bolinha vermelha no item "Canais".
   const disconnectedChannels = useDisconnectedChannels();
-  // Saldo da IA perto do fim / zerado → bolinha no item "Uso da IA".
-  const { alert: creditAlert, status: creditStatus } = useAiCreditHealth();
+  // Quota do Gemini esgotou (429) → bolinha vermelha no item "Uso da IA".
+  const { alert: creditAlert } = useAiCreditHealth();
   // Associados (AGENT) só veem "Conta" (o próprio perfil); o resto é do escritório.
   const visibleGroups = groups.filter((g) => isAdmin || !g.adminOnly);
 
@@ -130,14 +130,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                           )}
                           {showCredit && (
                             <span
-                              className={`h-2 w-2 shrink-0 rounded-full ${
-                                creditStatus === 'empty' ? 'bg-red-500' : 'bg-amber-500'
-                              }`}
-                              title={
-                                creditStatus === 'empty'
-                                  ? 'Saldo da IA acabou'
-                                  : 'Saldo da IA perto do fim'
-                              }
+                              className="h-2 w-2 shrink-0 rounded-full bg-red-500"
+                              title="Quota do Gemini esgotou"
                             />
                           )}
                         </Link>

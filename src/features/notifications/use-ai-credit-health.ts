@@ -8,18 +8,14 @@ import {
 } from '@/features/settings/services/ai-usage.service';
 
 /**
- * Saúde do saldo da IA (Anthropic + quota do Gemini). Alimenta a bolinha da
- * aba "Uso da IA" e o badge da Config — MESMA lógica do alerta de conexão
- * caída. Poll de 60s.
+ * Saúde da IA — hoje os agentes rodam no Google (Gemini), que não tem crédito
+ * pré-pago: o único sinal de saúde é a quota (erro 429 RESOURCE_EXHAUSTED).
+ * Alimenta a bolinha da aba "Uso da IA" e o badge da Config — MESMA lógica do
+ * alerta de conexão caída. Poll de 60s.
  *
- * - `alert` = true quando o Anthropic está AMARELO (perto do fim, <20%) ou
- *   VERMELHO (zerou/erro real da API), OU quando o Gemini bateu em quota
- *   (`geminiExhausted`). É o que acende a bolinha.
- * - `status='unset'` (nenhuma recarga registrada) NÃO alerta sozinho — só
- *   depois que o usuário registra o saldo é que o amarelo passa a valer; o
- *   vermelho por erro real ('empty') acende mesmo sem recarga registrada.
- * - Gemini não tem "saldo declarado" (Google não vende crédito pré-pago do
- *   mesmo jeito) — só o erro real de quota, que já acende sozinho.
+ * - `alert` = true quando o Gemini bateu em quota (`geminiExhausted`). É o que
+ *   acende a bolinha (vermelha).
+ * - `status` fica só como compat com o tipo antigo — não dirige mais o alerta.
  */
 export function useAiCreditHealth() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
@@ -35,7 +31,7 @@ export function useAiCreditHealth() {
 
   const health: AiCreditHealth | undefined = query.data;
   const status = health?.status ?? 'ok';
-  const alert = status === 'low' || status === 'empty' || !!health?.geminiExhausted;
+  const alert = !!health?.geminiExhausted;
 
   return { health, status, alert, isLoading: query.isLoading };
 }

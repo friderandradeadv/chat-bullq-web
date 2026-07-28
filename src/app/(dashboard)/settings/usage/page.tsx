@@ -1,8 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 import {
   Coins,
   Cpu,
@@ -10,16 +9,13 @@ import {
   Loader2,
   Sparkles,
   MessageSquare,
-  Wallet,
   AlertTriangle,
   CheckCircle2,
-  Plus,
 } from 'lucide-react';
 import {
   aiUsageService,
   USAGE_SOURCE_LABELS,
   type UsageRange,
-  type AiCreditHealth,
 } from '@/features/settings/services/ai-usage.service';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -71,11 +67,8 @@ export default function SettingsUsagePage() {
         </div>
       </div>
 
-      {/* Saldo da IA (Anthropic) — alerta de "perto do fim" / "acabou" */}
-      <CreditCard />
-
-      {/* Quota do Gemini — alerta de "429 RESOURCE_EXHAUSTED" */}
-      <GeminiQuotaCard />
+      {/* Status do Gemini (Google) — provedor atual dos agentes */}
+      <GeminiStatusCard />
 
       {/* Seletor de período */}
       <div className="mb-5 inline-flex rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900">
@@ -183,8 +176,8 @@ export default function SettingsUsagePage() {
           </Card>
 
           <p className="text-xs text-zinc-400 dark:text-zinc-500">
-            Custo estimado a partir da tabela de preços da Anthropic (USD) convertido por câmbio fixo
-            configurável. Valores para acompanhamento — não são fatura.
+            Custo estimado a partir da tabela de preços do Google (Gemini), em USD, convertido por
+            câmbio fixo configurável. Valores para acompanhamento — não são fatura.
           </p>
         </div>
       )}
@@ -192,69 +185,20 @@ export default function SettingsUsagePage() {
   );
 }
 
-const CREDIT_TONE: Record<
-  AiCreditHealth['status'],
-  { box: string; icon: string; Icon: React.ComponentType<{ className?: string }> }
-> = {
-  ok: {
-    box: 'border-emerald-300 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30',
-    icon: 'text-emerald-600 dark:text-emerald-400',
-    Icon: CheckCircle2,
-  },
-  low: {
-    box: 'border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30',
-    icon: 'text-amber-600 dark:text-amber-400',
-    Icon: AlertTriangle,
-  },
-  empty: {
-    box: 'border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30',
-    icon: 'text-red-600 dark:text-red-400',
-    Icon: AlertTriangle,
-  },
-  unset: {
-    box: 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900',
-    icon: 'text-zinc-400',
-    Icon: Wallet,
-  },
-};
-
-function creditMessage(h: AiCreditHealth): string {
-  if (h.status === 'empty')
-    return h.exhausted
-      ? 'O crédito da IA ACABOU — a API da Anthropic recusou a última chamada. Enquanto não recarregar, os agentes (Camila etc.) param de responder e os leads travam. Recarregue no console da Anthropic e registre aqui.'
-      : 'O saldo estimado zerou. Recarregue no console da Anthropic e registre a recarga aqui.';
-  if (h.status === 'low')
-    return 'Saldo perto do fim (menos de 20%). Recarregue logo pra não parar os agentes.';
-  if (h.status === 'unset')
-    return 'Registre quanto você carregou pra acompanharmos o saldo restante e avisarmos antes de acabar. O aviso de "acabou" (erro da API) funciona mesmo sem isso.';
-  return 'Saldo folgado. Vou avisar aqui quando chegar perto do fim.';
-}
-
-function CreditCard() {
-  const qc = useQueryClient();
+/**
+ * Status do Gemini (Google) — provedor atual dos agentes. O Google não vende
+ * crédito pré-pago do mesmo jeito que a Anthropic, então aqui NÃO existe
+ * "saldo/recarga": mostramos só se a API está respondendo (verde) ou se bateu
+ * em quota/limite 429 RESOURCE_EXHAUSTED (vermelho), caso em que os agentes
+ * param e os leads travam até a quota resetar ou o limite ser ajustado.
+ */
+function GeminiStatusCard() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const organizations = useAuthStore((s) => s.organizations);
-  const role = organizations.find((o) => o.id === activeOrgId)?.role;
-  const isAdmin = role === 'OWNER' || role === 'ADMIN';
-
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState('');
 
   const { data: h, isLoading } = useQuery({
     queryKey: ['ai-usage', 'credit-health', activeOrgId],
     queryFn: () => aiUsageService.creditHealth(),
     refetchInterval: 60_000,
-  });
-
-  const reload = useMutation({
-    mutationFn: (loadedUsd: number) => aiUsageService.registerReload(loadedUsd),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ai-usage'] });
-      setOpen(false);
-      setAmount('');
-      toast.success('Recarga registrada 💳 Saldo zerado e alerta apagado.');
-    },
-    onError: () => toast.error('Não consegui registrar a recarga.'),
   });
 
   if (isLoading || !h) {
@@ -265,140 +209,40 @@ function CreditCard() {
     );
   }
 
-  const tone = CREDIT_TONE[h.status];
-  const pct = h.remainingPct != null ? Math.round(h.remainingPct * 100) : null;
-  const submit = () => {
-    const v = Number(amount.replace(',', '.'));
-    if (!Number.isFinite(v) || v < 1) {
-      toast.error('Informe o valor da recarga em dólar (ex: 50).');
-      return;
-    }
-    reload.mutate(v);
-  };
+  const exhausted = h.geminiExhausted;
 
   return (
-    <div className={`mb-5 rounded-xl border p-4 ${tone.box}`}>
+    <div
+      className={`mb-5 rounded-xl border p-4 ${
+        exhausted
+          ? 'border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30'
+          : 'border-emerald-300 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30'
+      }`}
+    >
       <div className="flex items-start gap-3">
-        <span className={`mt-0.5 shrink-0 ${tone.icon}`}>
-          <tone.Icon className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Saldo da IA (Anthropic)
-            </h3>
-            {isAdmin && (
-              <button
-                onClick={() => setOpen((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-              >
-                <Plus className="h-3.5 w-3.5" /> Registrei uma recarga
-              </button>
-            )}
-          </div>
-
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{creditMessage(h)}</p>
-
-          {h.remainingUsd != null && h.loadedUsd != null && (
-            <div className="mt-3">
-              <div className="flex items-baseline justify-between text-xs text-zinc-500">
-                <span>
-                  Restante estimado:{' '}
-                  <strong className="text-zinc-900 dark:text-zinc-100">
-                    {usd.format(h.remainingUsd)}
-                  </strong>{' '}
-                  ({brl.format(h.remainingUsd * h.usdBrlRate)})
-                  {pct != null && ` • ${pct}%`}
-                </span>
-                <span className="text-zinc-400">de {usd.format(h.loadedUsd)}</span>
-              </div>
-              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-                <div
-                  className={`h-full rounded-full ${
-                    h.status === 'empty'
-                      ? 'bg-red-500'
-                      : h.status === 'low'
-                        ? 'bg-amber-500'
-                        : 'bg-emerald-500'
-                  }`}
-                  style={{ width: `${Math.max(2, pct ?? 0)}%` }}
-                />
-              </div>
-              <p className="mt-1.5 text-[11px] text-zinc-400">
-                Gasto desde a recarga: {usd.format(h.spentUsd)}
-                {h.loadedAt &&
-                  ` • recarregado em ${new Date(h.loadedAt).toLocaleDateString('pt-BR')}`}
-              </p>
-            </div>
+        <span
+          className={`mt-0.5 shrink-0 ${
+            exhausted
+              ? 'text-red-600 dark:text-red-400'
+              : 'text-emerald-600 dark:text-emerald-400'
+          }`}
+        >
+          {exhausted ? (
+            <AlertTriangle className="h-5 w-5" />
+          ) : (
+            <CheckCircle2 className="h-5 w-5" />
           )}
-
-          {open && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-lg border border-zinc-300 bg-white px-2 dark:border-zinc-700 dark:bg-zinc-900">
-                <span className="text-sm text-zinc-400">US$</span>
-                <input
-                  autoFocus
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && submit()}
-                  inputMode="decimal"
-                  placeholder="50"
-                  className="w-20 bg-transparent px-1.5 py-1.5 text-sm text-zinc-900 outline-none dark:text-zinc-100"
-                />
-              </div>
-              <button
-                onClick={submit}
-                disabled={reload.isPending}
-                className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
-              >
-                {reload.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Confirmar'}
-              </button>
-              <span className="text-[11px] text-zinc-400">
-                Quanto você carregou agora no console da Anthropic.
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Quota do Gemini — sem "saldo declarado" (o Google não vende crédito
- * pré-pago do mesmo jeito que a Anthropic), só o erro real de 429
- * RESOURCE_EXHAUSTED reportado pelo GeminiLlmBackend. Fica escondido quando
- * está tudo ok pra não poluir a tela com mais uma caixa verde de "saldo
- * folgado" (aqui não existe "folgado", só "não bateu erro ainda").
- */
-function GeminiQuotaCard() {
-  const activeOrgId = useAuthStore((s) => s.activeOrgId);
-
-  const { data: h, isLoading } = useQuery({
-    queryKey: ['ai-usage', 'credit-health', activeOrgId],
-    queryFn: () => aiUsageService.creditHealth(),
-    refetchInterval: 60_000,
-  });
-
-  if (isLoading || !h || !h.geminiExhausted) return null;
-
-  return (
-    <div className="mb-5 rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 shrink-0 text-red-600 dark:text-red-400">
-          <AlertTriangle className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Quota do Gemini esgotou
+            {exhausted ? 'Quota do Gemini esgotou' : 'Gemini (Google) operando'}
           </h3>
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-            A API do Google recusou a última chamada por limite de quota (429). Enquanto
-            durar, os agentes que rodam em modelo Gemini param de responder e os leads
-            travam. Verifique o limite/faturamento no Google AI Studio ou aguarde a janela
-            de quota resetar.
+            {exhausted
+              ? 'A API do Google recusou a última chamada por limite de quota (429). Enquanto durar, os agentes (Camila etc.) param de responder e os leads travam. Verifique o limite/faturamento no Google AI Studio ou aguarde a janela de quota resetar.'
+              : 'A API do Google está respondendo normalmente. Aviso aqui se bater limite de quota (429). O Gemini é cobrado por uso — não tem saldo pré-pago pra registrar.'}
           </p>
-          {h.geminiExhaustedAt && (
+          {exhausted && h.geminiExhaustedAt && (
             <p className="mt-1.5 text-[11px] text-zinc-400">
               Desde {new Date(h.geminiExhaustedAt).toLocaleString('pt-BR')}
             </p>
