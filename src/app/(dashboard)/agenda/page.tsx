@@ -22,6 +22,7 @@ import { deadlinesService, type Deadline } from '@/features/deadlines/services/d
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { recursosService, type Recurso } from '@/features/recursos/services/recursos.service';
 import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { CommentsSection } from '@/features/activities/components/comments-section';
 import { AnexosSection } from '@/features/activities/components/anexos-section';
@@ -991,6 +992,9 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [prazoBusy, setPrazoBusy] = useState(false);
   const [naoRecorrerOpen, setNaoRecorrerOpen] = useState(false); // "não vamos recorrer" (decisão)
   const [motivoNR, setMotivoNR] = useState('');
+  const [remessaOpen, setRemessaOpen] = useState(false); // "recurso provido → remessa à origem" (acórdão)
+  const [remessaFase, setRemessaFase] = useState('aguardando_sentenca'); // fase de retorno na origem
+  const [remessaObs, setRemessaObs] = useState('');
   const [recursoForm, setRecursoForm] = useState(false); // mini-form "registrar recurso"
   const [avancoForm, setAvancoForm] = useState<Avanco>(null); // modal de avanço de fase (kanban vivo)
   const [faseForm, setFaseForm] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | null>(null);
@@ -1175,6 +1179,50 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
       onClose();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || 'Erro ao mover para trânsito');
+    } finally { setPrazoBusy(false); }
+  };
+
+  // "Recurso provido — remessa dos autos à origem": o acórdão DEU provimento e
+  // ANULOU a decisão, mandando os autos voltarem à origem para novo julgamento.
+  // NÃO é trânsito. Aqui (a) marca o recurso como PROVIDO na aba Recursos (êxito),
+  // e (b) move o card de volta à fase de origem escolhida (re-julgamento), e
+  // conclui o prazo/tarefa da análise do acórdão.
+  const REMESSA_FASES: { key: string; label: string }[] = [
+    { key: 'aguardando_sentenca', label: '12. Aguardando sentença (re-julgamento)' },
+    { key: 'aud_instrucao', label: '11. Audiência de instrução' },
+    { key: 'pericia', label: '10. Perícia' },
+    { key: 'provas', label: '09. Especificação de provas' },
+    { key: 'contestacao', label: '08. Réplica/Contestação' },
+  ];
+  const confirmarRemessaOrigem = async () => {
+    if (!activity.caseId) { toast.error('Sem processo vinculado'); return; }
+    setPrazoBusy(true);
+    try {
+      // (a) Registra o resultado na aba Recursos = PROVIDO. Atualiza o recurso
+      // aberto (AGUARDANDO) do processo; se não houver, cria um já provido.
+      const ementa = ementaAcordao ?? activity.dispositivo ?? undefined;
+      const abertos = await recursosService.list({ caseId: activity.caseId }).catch(() => [] as Recurso[]);
+      const alvo = abertos.find((r) => r.julgamento === 'AGUARDANDO') ?? abertos[0];
+      if (alvo) {
+        await recursosService.update(alvo.id, { julgamento: 'PROVIDO', ...(ementa ? { ementa } : {}) });
+      } else {
+        await recursosService.create({ caseId: activity.caseId, julgamento: 'PROVIDO', parteRecorrente: 'CLIENTE', ...(ementa ? { ementa } : {}) });
+      }
+      // (b) Move o card de volta à fase de origem (anulação → novo julgamento).
+      const faseLabel = REMESSA_FASES.find((f) => f.key === remessaFase)?.label ?? remessaFase;
+      await legalCasesService.avancarFaseComCampos({
+        caseId: activity.caseId,
+        targetPhase: remessaFase,
+        campos: { obs: `Recurso PROVIDO — acórdão anulou a decisão e remeteu os autos à origem${remessaObs.trim() ? `: ${remessaObs.trim()}` : ''}` },
+      });
+      // conclui o prazo/tarefa da análise do acórdão.
+      if (activity.source === 'prazo') await deadlinesService.complete(activity.rawId, activity.fatal).catch(() => {});
+      else if (activity.source === 'tarefa') await tasksService.update(activity.rawId, { status: 'DONE' }).catch(() => {});
+      toast.success(`Recurso provido — autos à origem. Recurso marcado como provido e card movido para "${faseLabel}".`);
+      onRefetch();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao registrar remessa à origem');
     } finally { setPrazoBusy(false); }
   };
 
@@ -1500,16 +1548,51 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
               )}
             </div>
 
-            {/* Não vamos recorrer → 15. Trânsito em Julgado + motivo (linkado no kanban). */}
+            {/* Recurso PROVIDO → remessa dos autos à origem (acórdão anulou a decisão
+                e mandou re-julgar). Não é trânsito: marca o recurso como provido na
+                aba Recursos e move o card de volta à fase de origem escolhida. */}
+            {isAcordao && (
+              <div className="mt-3 border-t border-[#DEE2E6] pt-3 dark:border-zinc-700">
+                {!remessaOpen ? (
+                  <button onClick={() => setRemessaOpen(true)} className="text-left text-sm font-medium text-[#495057] hover:text-[#7048E8] dark:text-zinc-300 dark:hover:text-[#b197fc]">
+                    Recurso <span className="font-semibold">provido</span> — anulou e remeteu os autos à origem
+                  </button>
+                ) : (
+                  <div>
+                    <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Recurso provido — remessa à origem</p>
+                    <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      O acórdão deu provimento e anulou a decisão: o processo volta para ser julgado corretamente. Marca o recurso como <span className="font-semibold text-[#7048E8] dark:text-[#b197fc]">provido</span> (aba Recursos) e devolve o card à fase de origem.
+                    </p>
+                    <label className="mb-1 block text-xs font-medium text-[#6C757D]">Volta para a fase</label>
+                    <select value={remessaFase} onChange={(e) => setRemessaFase(e.target.value)} className={inputCls}>
+                      {REMESSA_FASES.map((f) => (<option key={f.key} value={f.key}>{f.label}</option>))}
+                    </select>
+                    <textarea value={remessaObs} onChange={(e) => setRemessaObs(e.target.value)} rows={2} placeholder="Obs. (opcional) — ex.: anulação por cerceamento de defesa; refazer instrução" className={`${inputCls} mt-2 resize-none`} />
+                    <div className="mt-2 flex items-center gap-2">
+                      <button disabled={prazoBusy} onClick={confirmarRemessaOrigem} className="inline-flex items-center gap-1.5 rounded-md bg-[#7048E8] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+                        <Check className="h-4 w-4" /> {prazoBusy ? 'Registrando…' : 'Confirmar (provido → origem)'}
+                      </button>
+                      <button disabled={prazoBusy} onClick={() => { setRemessaOpen(false); setRemessaObs(''); }} className="text-sm font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300">Cancelar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Não vamos recorrer → 15. Trânsito em Julgado + motivo (linkado no kanban).
+                Vale tanto quando PERDEMOS mas não recorreremos quanto quando a decisão
+                foi FAVORÁVEL (nada a recorrer) — o desfecho vencemos/perdemos é gravado
+                depois, no trânsito. */}
             <div className="mt-3 border-t border-[#DEE2E6] pt-3 dark:border-zinc-700">
               {!naoRecorrerOpen ? (
-                <button onClick={() => setNaoRecorrerOpen(true)} className="text-sm font-medium text-[#495057] hover:text-[#02883C] dark:text-zinc-300">
-                  Não vamos recorrer →&nbsp;<span className="font-semibold">trânsito em julgado</span>
+                <button onClick={() => setNaoRecorrerOpen(true)} className="text-left text-sm font-medium text-[#495057] hover:text-[#02883C] dark:text-zinc-300">
+                  Não vamos recorrer (decisão favorável ou inviável) →&nbsp;<span className="font-semibold">trânsito em julgado</span>
                 </button>
               ) : (
                 <div>
                   <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Não vamos recorrer — motivo</p>
-                  <textarea autoFocus value={motivoNR} onChange={(e) => setMotivoNR(e.target.value)} rows={2} placeholder="Ex.: a parte usou o cartão para compras, difícil reverter em 2º grau" className={`${inputCls} resize-none`} />
+                  <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Pode ser porque a <span className="font-semibold text-[#02883C]">decisão foi favorável</span> (nada a recorrer) ou porque recorrer é inviável.</p>
+                  <textarea autoFocus value={motivoNR} onChange={(e) => setMotivoNR(e.target.value)} rows={2} placeholder="Ex.: decisão favorável, nada a recorrer — ou: a parte usou o cartão para compras, difícil reverter em 2º grau" className={`${inputCls} resize-none`} />
                   <div className="mt-2 flex items-center gap-2">
                     <button disabled={prazoBusy} onClick={confirmarNaoRecorrer} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
                       <Check className="h-4 w-4" /> {prazoBusy ? 'Movendo…' : 'Confirmar (mover p/ trânsito)'}
