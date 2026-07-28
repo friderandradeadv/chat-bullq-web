@@ -23,6 +23,7 @@ import {
   CalendarCheck,
   LayoutList,
   Columns3,
+  LayoutGrid,
   Gavel,
   Scale,
   Workflow,
@@ -309,6 +310,7 @@ export function AppSidebar() {
                   <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
                   <NavItem href="/juridico/planejamento" icon={TrendingUp} label="Planejamento Previdenciário" />
                   <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
+                  <NavItem href="/juridico/quadros" icon={LayoutGrid} label="Quadros personalizados" />
                 </NavSection>
               </div>
 

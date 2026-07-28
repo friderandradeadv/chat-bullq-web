@@ -207,7 +207,17 @@ export interface KanbanPhase {
   terminal?: boolean; // fim de processo/ciclo (CONCLUÍDO, ARQUIVADO, INVIÁVEL, PERDIDO…) → confete + card apagado
   lane: 'pre' | 'judicial';
   custom?: boolean;
+  board?: string;         // quadro (base ou custom) a que a fase pertence
+  color?: string | null;  // cor do cabeçalho da coluna (fases custom)
   count: number;
+}
+
+/** Quadro CUSTOM criado pelo escritório (vertical nova sem deploy). */
+export interface KanbanBoard {
+  key: string;
+  name: string;
+  color?: string;
+  order: number;
 }
 
 // Personalização de fases (org.settings.kanbanPhases).
@@ -360,7 +370,7 @@ export const legalCasesService = {
     return data.data ?? data;
   },
   async kanban(
-    query: { responsibleId?: string; area?: string; search?: string; lane?: 'pre' | 'judicial' | 'banco' | 'plan' | 'repb' | 'repbc' } = {},
+    query: { responsibleId?: string; area?: string; search?: string; lane?: string } = {},
   ): Promise<KanbanData> {
     const { data } = await api.get(`/legal-cases/kanban${qs(query)}`);
     const kb: KanbanData = data.data ?? data;
@@ -507,13 +517,35 @@ export const legalCasesService = {
       custom: cfg.config.custom ?? [],
     });
   },
-  // Criar/excluir fase inline no kanban (só sócios — gate no backend).
-  async addPhase(board: 'pre' | 'banco' | 'plan' | 'repb' | 'repbc' | 'judicial', label: string): Promise<PhaseConfigResponse> {
+  // Criar/excluir fase inline no kanban (só sócios — gate no backend). `board`
+  // pode ser um quadro base OU a chave de um quadro custom (board_*).
+  async addPhase(board: string, label: string): Promise<PhaseConfigResponse> {
     const { data } = await api.post('/legal-cases/phases', { board, label });
     return data.data ?? data;
   },
   async deletePhase(key: string): Promise<PhaseConfigResponse & { mode?: 'deleted' | 'hidden' }> {
     const { data } = await api.delete(`/legal-cases/phases/${key}`);
+    return data.data ?? data;
+  },
+  // ─── Quadros CUSTOM (verticais criadas pelo sócio, sem deploy) ───
+  async getBoards(): Promise<KanbanBoard[]> {
+    const { data } = await api.get('/legal-cases/boards');
+    return data.data ?? data;
+  },
+  async createBoard(name: string, color?: string): Promise<KanbanBoard> {
+    const { data } = await api.post('/legal-cases/boards', { name, color });
+    return data.data ?? data;
+  },
+  async updateBoard(key: string, patch: { name?: string; color?: string }): Promise<KanbanBoard> {
+    const { data } = await api.patch(`/legal-cases/boards/${key}`, patch);
+    return data.data ?? data;
+  },
+  async deleteBoard(key: string): Promise<{ removed: string }> {
+    const { data } = await api.delete(`/legal-cases/boards/${key}`);
+    return data.data ?? data;
+  },
+  async reorderBoards(keys: string[]): Promise<KanbanBoard[]> {
+    const { data } = await api.post('/legal-cases/boards/reorder', { keys });
     return data.data ?? data;
   },
   async get(id: string): Promise<CaseDetail> {

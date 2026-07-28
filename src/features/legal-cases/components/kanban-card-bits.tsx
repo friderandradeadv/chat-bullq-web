@@ -164,7 +164,9 @@ export function PhaseHeader({
 }
 
 /** Quadros com fases gerenciáveis inline (add/excluir). */
-export type KanbanBoardId = 'pre' | 'banco' | 'plan' | 'repb' | 'repbc' | 'judicial';
+// Quadros base + qualquer quadro CUSTOM (chave board_*). `(string & {})` preserva
+// o autocomplete dos base sem travar a atribuição de uma chave custom.
+export type KanbanBoardId = 'pre' | 'banco' | 'plan' | 'repb' | 'repbc' | 'judicial' | (string & {});
 
 /**
  * Coluna-fantasma "＋ Nova fase" no fim do board (estilo Pipefy). Só sócios veem

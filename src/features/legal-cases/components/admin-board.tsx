@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock } from 'lucide-react';
+import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
@@ -10,7 +10,7 @@ import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/lega
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { isTerminalPhase, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { useDragScroll } from '@/lib/use-drag-scroll';
-import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
+import { phasesOfBoard, type Board } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
@@ -51,10 +51,14 @@ export interface AdminBoardProps {
   columns?: { key: string; label: string }[];
   /** colunas derivadas das fases do endpoint (respeita rename/ordem/esconder/custom das Configurações). */
   columnsFromPhases?: (p: KanbanPhase) => boolean;
-  /** trilha do board — escopa a busca no servidor (performance). */
-  lane?: 'pre' | 'judicial' | 'banco';
+  /** trilha do board — escopa a busca no servidor (performance). Aceita a chave de um quadro CUSTOM (board_*). */
+  lane?: 'pre' | 'judicial' | 'banco' | (string & {});
   /** habilita gerência de fases inline (renomear/excluir/criar) neste quadro — só sócios. */
   manageBoard?: KanbanBoardId;
+  /** quadro cujas fases aparecem no seletor de mover da ficha do card (default 'banco'). */
+  drawerBoard?: Board;
+  /** botão "Novo caso" no cabeçalho (abre o dialog na página); ausente = sem botão. */
+  onNewCard?: () => void;
 }
 
 /**
@@ -62,7 +66,7 @@ export interface AdminBoardProps {
  * os cards do kanban jurídico, filtra pela trilha e agrupa por PRODUTO em colunas.
  * Cards clicáveis abrem a ficha (sem drag — a trilha não é uma fase movível).
  */
-export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases, lane, manageBoard }: AdminBoardProps) {
+export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases, lane, manageBoard, drawerBoard, onNewCard }: AdminBoardProps) {
   // queryKey por lane (mesma convenção dos demais boards) — evita colisão de cache.
   const KEY = ['legal-cases', 'kanban', lane ?? 'all'];
   const qc = useQueryClient();
@@ -152,6 +156,11 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, banco, CPF…"
               className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
+          {onNewCard && (
+            <button onClick={onNewCard} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-white" style={{ background: accent }}>
+              <Plus className="h-4 w-4" /> Novo caso
+            </button>
+          )}
         </div>
       </div>
 
@@ -198,7 +207,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
         </div>
       )}
 
-      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phasesOfBoard(data?.phases ?? [], 'banco')} onClose={() => setOpenCaseId(null)} />}
+      {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phasesOfBoard(data?.phases ?? [], drawerBoard ?? 'banco')} onClose={() => setOpenCaseId(null)} />}
     </div>
   );
 }

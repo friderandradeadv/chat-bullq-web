@@ -20,6 +20,7 @@ import {
   Coins,
   UserCircle,
   Scale,
+  MessageSquareText,
 } from 'lucide-react';
 
 // Menu lateral agrupado POR SETOR — Conta / Geral (organização) / Comercial
@@ -51,6 +52,7 @@ const groups = [
       { href: '/settings/ai', label: 'IA', icon: Sparkles },
       { href: '/settings/usage', label: 'Uso da IA', icon: Coins },
       { href: '/settings/quick-replies', label: 'Mensagens rápidas', icon: Zap },
+      { href: '/settings/system-texts', label: 'Textos do sistema', icon: MessageSquareText },
       { href: '/settings/statuses', label: 'Status', icon: CircleDot },
       { href: '/settings/tags', label: 'Etiquetas', icon: Tags },
       { href: '/settings/departments', label: 'Departamento', icon: Network },
