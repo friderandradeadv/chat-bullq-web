@@ -80,6 +80,12 @@ interface Activity {
   // pré-preenche o mini-form de "registrar recurso" ao concluir o prazo.
   djenAction: string | null;
   recursoSugestao: { especie: string | null; parteRecorrente: string | null; motivo: string | null } | null;
+  // Réplica: outras ações do mesmo cliente (mesmo banco em destaque) — pra
+  // impugnar o contrato certo (o banco junta os documentos de todos na defesa).
+  processosRelacionados: Array<{
+    caseId: string; cnj: string | null; title: string; area: string | null;
+    legalPhase: string | null; status: string; banco: string | null; mesmoBanco: boolean;
+  }> | null;
 }
 
 // Espécies de recurso (para o dropdown do mini-form). Texto livre no backend.
@@ -448,6 +454,7 @@ export default function AgendaPage() {
         prazoFatal: dj?.prazoFatal ?? null, recorte: dj?.recorte ?? null, tipoPublicacao: dj?.tipoPublicacao ?? null,
         faseMovida: dj?.faseMovida ?? null, dispositivo: dj?.dispositivo ?? null,
         djenAction: (dj as any)?.action ?? null, recursoSugestao: (dj as any)?.recurso ?? null,
+        processosRelacionados: (dj as any)?.processosRelacionados ?? null,
       });
     }
     for (const d of dlQ.data ?? []) {
@@ -468,6 +475,7 @@ export default function AgendaPage() {
         prazoFatal: d.dueDate, recorte: ddj?.recorte ?? null, tipoPublicacao: ddj?.tipoPublicacao ?? null,
         faseMovida: ddj?.faseMovida ?? null, dispositivo: ddj?.dispositivo ?? null,
         djenAction: (ddj as any)?.action ?? null, recursoSugestao: (ddj as any)?.recurso ?? null,
+        processosRelacionados: (ddj as any)?.processosRelacionados ?? null,
       });
     }
     for (const e of evQ.data ?? []) {
@@ -485,7 +493,7 @@ export default function AgendaPage() {
         createdName: null, priorityLabel: null, completedAt: (e.metadata?.completedAt as string) ?? null, description: e.location,
         prazoFatal: null, recorte: null, tipoPublicacao: null,
         faseMovida: null, dispositivo: null,
-        djenAction: null, recursoSugestao: null,
+        djenAction: null, recursoSugestao: null, processosRelacionados: null,
       });
     }
     return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
@@ -1488,6 +1496,46 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
               </dd>
             </div>
           )}
+          {(activity.source === 'tarefa' || activity.source === 'prazo') && activity.processosRelacionados && activity.processosRelacionados.length > 0 && (() => {
+            const rel = activity.processosRelacionados!;
+            const mesmoBanco = rel.filter((p) => p.mesmoBanco);
+            const outros = rel.filter((p) => !p.mesmoBanco);
+            return (
+              <div className="flex flex-col gap-1">
+                <dt className="font-medium text-[#6C757D]">Outras ações do mesmo cliente:</dt>
+                <dd className="m-0 flex flex-col gap-2">
+                  {mesmoBanco.length > 0 && (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-2 dark:border-amber-500/40 dark:bg-amber-500/10">
+                      <p className="m-0 mb-1 flex items-center gap-1 text-[12px] font-semibold text-amber-700 dark:text-amber-400">
+                        ⚠️ {mesmoBanco.length === 1 ? 'Ação contra o MESMO banco' : `${mesmoBanco.length} ações contra o MESMO banco`}
+                      </p>
+                      <p className="m-0 mb-2 text-[11px] font-normal leading-snug text-amber-700/90 dark:text-amber-300/80">
+                        Na defesa o banco costuma juntar documentos de todos os contratos — confira a qual contrato/benefício cada documento se refere antes de impugnar.
+                      </p>
+                      <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                        {mesmoBanco.map((p) => (
+                          <li key={p.caseId} className="text-[12px] font-normal leading-snug text-zinc-700 dark:text-zinc-200">
+                            <a href={`/processos/${p.caseId}`} className="font-medium text-amber-800 underline decoration-dotted underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200">{p.title}</a>
+                            <span className="text-zinc-500 dark:text-zinc-400">{' · '}{p.cnj ?? 's/ CNJ'}{p.area ? ` · ${p.area}` : ''}{p.legalPhase ? ` · ${p.legalPhase}` : ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {outros.length > 0 && (
+                    <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                      {outros.map((p) => (
+                        <li key={p.caseId} className="text-[12px] font-normal leading-snug text-zinc-500 dark:text-zinc-400">
+                          <a href={`/processos/${p.caseId}`} className="underline decoration-dotted underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-200">{p.title}</a>
+                          <span>{' · '}{p.cnj ?? 's/ CNJ'}{p.banco ? ` · ${p.banco}` : ''}{p.area ? ` · ${p.area}` : ''}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </dd>
+              </div>
+            );
+          })()}
           {activity.caseId && (
             <div className="flex flex-col gap-1">
               <dt className="font-medium text-[#6C757D]">Fase do processo:</dt>
