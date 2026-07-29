@@ -180,4 +180,16 @@ export const calculadoraRescisaoService = {
     });
     return data.data ?? data;
   },
+
+  // Texto colado (conversa/relato) → pré-preenche o formulário.
+  async extrairTexto(texto: string): Promise<{ extracao: Record<string, unknown>; metodo?: string }> {
+    const { data } = await api.post('/calculadora-rescisao/extrair-texto', { texto }, { timeout: 300000 });
+    return data.data ?? data;
+  },
+
+  // Puxa a conversa do cliente de um processo (quando aberta de um card).
+  async extrairDoCaso(caseId: string): Promise<{ extracao: Record<string, unknown>; metodo?: string }> {
+    const { data } = await api.post('/calculadora-rescisao/extrair-do-caso', { caseId }, { timeout: 300000 });
+    return data.data ?? data;
+  },
 };

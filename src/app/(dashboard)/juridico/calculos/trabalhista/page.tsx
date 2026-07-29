@@ -9,8 +9,12 @@ import {
   FileDown,
   FileText,
   Loader2,
+  MessageSquare,
+  Plus,
   Save,
   Scale,
+  Sparkles,
+  Trash2,
   TriangleAlert,
   Upload,
 } from 'lucide-react';
@@ -44,6 +48,45 @@ function parseValor(raw: string): number {
 }
 
 const MODALIDADES = Object.keys(MODALIDADE_LABEL) as Modalidade[];
+const MOD_OK: string[] = MODALIDADES;
+
+// Mapeia o JSON genérico da IA (conversa/print/texto/caso) para o formulário.
+function aplicarPrefill(ex: any, p: Form): Form {
+  return {
+    ...p,
+    reclamante: ex.reclamante ?? p.reclamante,
+    reclamado: ex.reclamado ?? p.reclamado,
+    cnaeReu: ex.cnae ?? p.cnaeReu,
+    admissao: ex.admissao ?? p.admissao,
+    desligamento: ex.desligamento ?? p.desligamento,
+    maiorRemuneracao: ex.remuneracao != null ? String(ex.remuneracao) : p.maiorRemuneracao,
+    cargaHoraria: ex.cargaHoraria != null ? String(Math.round(ex.cargaHoraria)) : p.cargaHoraria,
+    modalidade: MOD_OK.includes(ex.modalidadeSugerida) ? (ex.modalidadeSugerida as Modalidade) : p.modalidade,
+    feriasVencidasAvos: ex.feriasVencidas != null ? String(ex.feriasVencidas) : p.feriasVencidasAvos,
+    liquidoTrctZero: ex.liquidoTrctZero === true ? true : p.liquidoTrctZero,
+  };
+}
+function prefillToast(ex: any): string {
+  const verbas = Array.isArray(ex.verbasMencionadas) && ex.verbasMencionadas.length ? ` Verbas citadas: ${ex.verbasMencionadas.join(', ')}.` : '';
+  return `Preenchi o que deu.${verbas}${ex.observacoes ? ' ' + ex.observacoes : ''} Confira antes de calcular.`;
+}
+
+// Catálogo de verbas adicionais (o motor já calcula; aqui só a UI).
+type VerbaLinhaUI = { chave: string; base: string; divisor: string; multiplicador: string; quantidade: string; valorDireto: string; dobra: boolean; obs: string };
+const VERBAS_CATALOGO: { chave: string; label: string; tipo: 'param' | 'direto'; hintQtd?: string }[] = [
+  { chave: 'horas_extras_50', label: 'Horas extras 50%', tipo: 'param', hintQtd: 'nº de horas' },
+  { chave: 'horas_extras_100', label: 'Horas extras 100%', tipo: 'param', hintQtd: 'nº de horas' },
+  { chave: 'adicional_noturno', label: 'Adicional noturno', tipo: 'param', hintQtd: 'horas noturnas' },
+  { chave: 'domingos_dobro', label: 'Domingos em dobro', tipo: 'param', hintQtd: 'nº de domingos' },
+  { chave: 'insalubridade', label: 'Insalubridade', tipo: 'param', hintQtd: 'nº de meses' },
+  { chave: 'periculosidade', label: 'Periculosidade', tipo: 'param', hintQtd: 'nº de meses' },
+  { chave: 'restituicao_descontos', label: 'Restituição de descontos', tipo: 'direto' },
+  { chave: 'estabilidade', label: 'Estabilidade (indenização subst.)', tipo: 'direto' },
+  { chave: 'dano_moral', label: 'Dano moral', tipo: 'direto' },
+  { chave: 'dano_material', label: 'Dano material', tipo: 'direto' },
+  { chave: 'custom', label: 'Outra (personalizada)', tipo: 'param' },
+];
+const verbaLinhaVazia = (chave = 'horas_extras_50'): VerbaLinhaUI => ({ chave, base: '', divisor: '', multiplicador: '', quantidade: '', valorDireto: '', dobra: false, obs: '' });
 
 type Form = {
   reclamante: string;
@@ -96,7 +139,9 @@ export default function RescisaoTrabalhistaPage() {
   const [res, setRes] = useState<ResultadoRescisao | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [tipoUpload, setTipoUpload] = useState<'documento' | 'trct' | 'holerite' | 'fgts'>('documento');
+  const [tipoUpload, setTipoUpload] = useState<'documento' | 'texto' | 'trct' | 'holerite' | 'fgts'>('documento');
+  const [textoColado, setTextoColado] = useState('');
+  const [verbasUI, setVerbasUI] = useState<VerbaLinhaUI[]>([]);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => ({ ...p, [k]: v }));
 
   useEffect(() => {
@@ -106,6 +151,21 @@ export default function RescisaoTrabalhistaPage() {
 
   const montarPayload = (): CalcularRescisaoInput => {
     const feriasAvos = parseValor(f.feriasVencidasAvos);
+    const verbasExtras = verbasUI
+      .map((v) => {
+        const cat = VERBAS_CATALOGO.find((c) => c.chave === v.chave);
+        const num = (s: string) => (s.trim() ? parseValor(s) : undefined);
+        if (cat?.tipo === 'direto') {
+          const vd = num(v.valorDireto);
+          if (!vd) return null;
+          return { chave: v.chave, valorDireto: vd, obs: v.obs || undefined };
+        }
+        const base = { chave: v.chave, base: num(v.base), divisor: num(v.divisor), multiplicador: num(v.multiplicador), quantidade: num(v.quantidade), dobra: v.dobra || undefined, obs: v.obs || undefined };
+        // precisa de ao menos quantidade ou base pra valer
+        if (base.quantidade == null && base.base == null) return null;
+        return base;
+      })
+      .filter(Boolean) as CalcularRescisaoInput['verbasExtras'];
     return {
       identificacao: { reclamante: f.reclamante, reclamado: f.reclamado },
       admissao: f.admissao,
@@ -128,6 +188,7 @@ export default function RescisaoTrabalhistaPage() {
         f.satAliquota && f.satFonte
           ? { aliquota_sat: parseValor(f.satAliquota), fonte_sat: f.satFonte, cnae_reu: f.cnaeReu || undefined }
           : undefined,
+      verbasExtras: verbasExtras?.length ? verbasExtras : undefined,
       municipio: f.municipio || undefined,
       uf: f.uf || undefined,
     };
@@ -152,22 +213,8 @@ export default function RescisaoTrabalhistaPage() {
     onSuccess: ({ tipo, r }) => {
       const ex = (r as any).extracao ?? {};
       if (tipo === 'documento') {
-        const modOk = ['sem_justa_causa', 'pedido_demissao', 'justa_causa', 'acordo_484a', 'fim_contrato', 'rescisao_indireta'];
-        setF((p) => ({
-          ...p,
-          reclamante: ex.reclamante ?? p.reclamante,
-          reclamado: ex.reclamado ?? p.reclamado,
-          cnaeReu: ex.cnae ?? p.cnaeReu,
-          admissao: ex.admissao ?? p.admissao,
-          desligamento: ex.desligamento ?? p.desligamento,
-          maiorRemuneracao: ex.remuneracao != null ? String(ex.remuneracao) : p.maiorRemuneracao,
-          cargaHoraria: ex.cargaHoraria != null ? String(Math.round(ex.cargaHoraria)) : p.cargaHoraria,
-          modalidade: modOk.includes(ex.modalidadeSugerida) ? ex.modalidadeSugerida : p.modalidade,
-          feriasVencidasAvos: ex.feriasVencidas != null ? String(ex.feriasVencidas) : p.feriasVencidasAvos,
-          liquidoTrctZero: ex.liquidoTrctZero === true ? true : p.liquidoTrctZero,
-        }));
-        const verbas = Array.isArray(ex.verbasMencionadas) && ex.verbasMencionadas.length ? ` Verbas citadas: ${ex.verbasMencionadas.join(', ')}.` : '';
-        toast.success(`Li o documento e preenchi o que deu.${verbas}${ex.observacoes ? ' ' + ex.observacoes : ''} Confira antes de calcular.`);
+        setF((p) => aplicarPrefill(ex, p));
+        toast.success(prefillToast(ex));
         return;
       }
       if (tipo === 'trct') {
@@ -195,6 +242,24 @@ export default function RescisaoTrabalhistaPage() {
       }
     },
     onError: (e) => toast.error((e as Error)?.message ?? 'Não consegui ler o documento.'),
+  });
+
+  const uploadTexto = useMutation({
+    mutationFn: () => calculadoraRescisaoService.extrairTexto(textoColado),
+    onSuccess: ({ extracao }) => {
+      setF((p) => aplicarPrefill(extracao as any, p));
+      toast.success(prefillToast(extracao as any));
+    },
+    onError: (e) => toast.error((e as Error)?.message ?? 'Não consegui ler o texto.'),
+  });
+
+  const puxarCaso = useMutation({
+    mutationFn: () => calculadoraRescisaoService.extrairDoCaso(caseId!),
+    onSuccess: ({ extracao }) => {
+      setF((p) => aplicarPrefill(extracao as any, p));
+      toast.success(`Conversa do cliente lida. ${prefillToast(extracao as any)}`);
+    },
+    onError: (e) => toast.error((e as Error)?.message ?? 'Não consegui puxar a conversa do cliente.'),
   });
 
   const podeCalcular = f.admissao && f.desligamento && parseValor(f.maiorRemuneracao) > 0;
@@ -251,8 +316,18 @@ export default function RescisaoTrabalhistaPage() {
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                 <Upload className="h-4 w-4 text-violet-500" /> Importar documento (IA)
               </div>
+              {caseId && (
+                <button
+                  onClick={() => puxarCaso.mutate()}
+                  disabled={puxarCaso.isPending}
+                  className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-violet-50 py-2 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 dark:bg-violet-500/10 dark:text-violet-300"
+                >
+                  {puxarCaso.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5" />}
+                  {puxarCaso.isPending ? 'Lendo a conversa do cliente…' : 'Puxar a conversa do cliente (deste processo)'}
+                </button>
+              )}
               <div className="mb-2 flex flex-wrap gap-1">
-                {(['documento', 'trct', 'holerite', 'fgts'] as const).map((t) => (
+                {(['documento', 'texto', 'trct', 'holerite', 'fgts'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTipoUpload(t)}
@@ -262,11 +337,31 @@ export default function RescisaoTrabalhistaPage() {
                         : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
                     }`}
                   >
-                    {t === 'documento' ? 'Conversa / Print' : t === 'trct' ? 'TRCT' : t === 'holerite' ? 'Holerite' : 'Extrato FGTS'}
+                    {t === 'documento' ? 'Arquivo / Print' : t === 'texto' ? 'Colar texto' : t === 'trct' ? 'TRCT' : t === 'holerite' ? 'Holerite' : 'Extrato FGTS'}
                   </button>
                 ))}
               </div>
-              <input
+              {tipoUpload === 'texto' ? (
+                <div>
+                  <textarea
+                    value={textoColado}
+                    onChange={(e) => setTextoColado(e.target.value)}
+                    rows={5}
+                    placeholder="Cole aqui a conversa do cliente, o relato, um e-mail… A IA lê e preenche o que der."
+                    className={`${inputCls} resize-y`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => uploadTexto.mutate()}
+                    disabled={uploadTexto.isPending || textoColado.trim().length < 20}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 py-2.5 text-sm text-zinc-500 hover:border-violet-400 hover:text-violet-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400"
+                  >
+                    {uploadTexto.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {uploadTexto.isPending ? 'Lendo…' : 'Analisar texto colado'}
+                  </button>
+                </div>
+              ) : (
+              <><input
                 ref={fileRef}
                 type="file"
                 accept="image/*,application/pdf,.pdf,.txt"
@@ -299,6 +394,8 @@ export default function RescisaoTrabalhistaPage() {
                   ? 'Aceita qualquer coisa — PDF, foto de documento, print de tela ou a conversa do cliente. A IA lê e preenche o que der.'
                   : 'Aceita PDF, foto ou print. A IA propõe; você valida. Nada é gravado sem sua confirmação.'}
               </p>
+              </>
+              )}
             </div>
 
             {/* Dados do contrato */}
@@ -396,6 +493,59 @@ export default function RescisaoTrabalhistaPage() {
               <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
                 O SAT/RAT não é presumido: sem alíquota + fonte, a seção de encargos é bloqueada (regra §6).
               </p>
+            </div>
+
+            {/* Verbas adicionais */}
+            <div className={cardCls}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Verbas adicionais</div>
+                <button
+                  onClick={() => setVerbasUI((p) => [...p, verbaLinhaVazia()])}
+                  className="flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Adicionar
+                </button>
+              </div>
+              {verbasUI.length === 0 ? (
+                <p className="text-[11px] leading-relaxed text-zinc-400">
+                  Horas extras, adicional noturno, domingos, insalubridade, periculosidade, danos, estabilidade… entram no cálculo e na planilha.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {verbasUI.map((v, i) => {
+                    const cat = VERBAS_CATALOGO.find((c) => c.chave === v.chave);
+                    const upd = (patch: Partial<VerbaLinhaUI>) => setVerbasUI((p) => p.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                    return (
+                      <div key={i} className="rounded-lg border border-zinc-200 p-2 dark:border-zinc-800">
+                        <div className="mb-2 flex items-center gap-2">
+                          <select className={`${inputCls} py-1.5 text-xs`} value={v.chave} onChange={(e) => upd({ chave: e.target.value })}>
+                            {VERBAS_CATALOGO.map((c) => (
+                              <option key={c.chave} value={c.chave}>{c.label}</option>
+                            ))}
+                          </select>
+                          <button onClick={() => setVerbasUI((p) => p.filter((_, j) => j !== i))} className="shrink-0 rounded-md p-1.5 text-zinc-400 hover:text-red-500">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {cat?.tipo === 'direto' ? (
+                          <input className={`${inputCls} py-1.5 text-xs`} placeholder="Valor (R$)" value={v.valorDireto} onChange={(e) => upd({ valorDireto: e.target.value })} />
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            <input className={`${inputCls} py-1.5 text-xs`} placeholder={cat?.hintQtd ?? 'Quantidade'} value={v.quantidade} onChange={(e) => upd({ quantidade: e.target.value })} />
+                            <input className={`${inputCls} py-1.5 text-xs`} placeholder="Base (opcional)" value={v.base} onChange={(e) => upd({ base: e.target.value })} />
+                            {v.chave === 'custom' && (
+                              <>
+                                <input className={`${inputCls} py-1.5 text-xs`} placeholder="Divisor" value={v.divisor} onChange={(e) => upd({ divisor: e.target.value })} />
+                                <input className={`${inputCls} py-1.5 text-xs`} placeholder="Multiplicador" value={v.multiplicador} onChange={(e) => upd({ multiplicador: e.target.value })} />
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <button
