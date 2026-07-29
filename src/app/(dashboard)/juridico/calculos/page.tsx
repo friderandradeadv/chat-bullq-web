@@ -42,12 +42,12 @@ const CALCULADORAS: Calc[] = [
     disponivel: true,
   },
   {
-    href: '#',
+    href: '/juridico/calculos/trabalhista',
     titulo: 'Rescisão Trabalhista',
     descricao:
-      'Verbas rescisórias por motivo: aviso prévio, 13º, férias + 1/3, FGTS + multa, saldo de salário.',
+      'Motor único, 3 saídas: calculadora de verbas por modalidade (com comparativo da conversão), planilha analítica em PDF (anexo de inicial, padrão pericial) e confronto de TRCT. Importa TRCT/holerite/extrato FGTS por IA.',
     icon: Briefcase,
-    disponivel: false,
+    disponivel: true,
   },
   {
     href: '/juridico/calculos/provisionamento',

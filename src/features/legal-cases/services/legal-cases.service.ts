@@ -1,5 +1,19 @@
 import { api } from '@/lib/api';
 
+export interface ViabilidadeAnalise {
+  veredito: 'viavel' | 'inviavel' | 'depende';
+  confianca: 'alta' | 'media' | 'baixa';
+  area: string | null;
+  teseAplicavel: string | null;
+  fundamento: string | null;
+  riscos: string | null;
+  prescricao: string | null;
+  documentosNecessarios: string[];
+  proximoPasso: string | null;
+  valorEstimado: number | null;
+  geradoEm: string;
+}
+
 export type CaseStatus = 'ACTIVE' | 'ARCHIVED' | 'SUSPENDED' | 'CLOSED';
 export type PartyRole =
   | 'CLIENT'
@@ -579,6 +593,11 @@ export const legalCasesService = {
   },
   async resumoAtendimento(id: string): Promise<{ resumo: string; geradoEm: string }> {
     const { data } = await api.post(`/legal-cases/${id}/resumo-atendimento`);
+    return data.data ?? data;
+  },
+
+  async analisarViabilidade(id: string): Promise<ViabilidadeAnalise> {
+    const { data } = await api.post(`/legal-cases/${id}/viabilidade`);
     return data.data ?? data;
   },
   async addParty(caseId: string, input: PartyInput): Promise<PartyDetail> {

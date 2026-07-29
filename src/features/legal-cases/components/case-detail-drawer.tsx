@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef, type PartyDetail, type CaseDetail,
+  legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef, type PartyDetail, type CaseDetail, type ViabilidadeAnalise,
 } from '@/features/legal-cases/services/legal-cases.service';
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
@@ -226,6 +226,12 @@ export function CaseDetailDrawer({
                   caseId={c.id}
                   resumo={(c.metadata as any)?.atendimentoResumo?.texto ?? null}
                   geradoEm={(c.metadata as any)?.atendimentoResumo?.geradoEm ?? null}
+                  onDone={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
+                />
+
+                <AnaliseViabilidade
+                  caseId={c.id}
+                  analise={(c.metadata as any)?.viabilidade ?? null}
                   onDone={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
                 />
 
@@ -1083,6 +1089,82 @@ function ResumoAtendimento({ caseId, resumo, geradoEm, onDone }: { caseId: strin
         </article>
       ) : (
         <p className="mt-1.5 text-xs italic text-zinc-400">Sem resumo. Clique em “Gerar resumo” — a IA lê a conversa do cliente no WhatsApp e destaca bancos, benefício, valores e pendências.</p>
+      )}
+    </div>
+  );
+}
+
+// ANALISTA DE VIABILIDADE (brinde): triagem trabalhista da ação do lead a partir
+// da conversa (WhatsApp/Camila) — veredito viável/inviável/depende, tese, fundamento,
+// riscos, prescrição e próximo passo. Enriquecido pelo Curso de Prática em Acidente
+// de Trabalho. Diagnóstico, nunca promessa de resultado (OAB, art. 41).
+function AnaliseViabilidade({ caseId, analise, onDone }: { caseId: string; analise: ViabilidadeAnalise | null; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [r, setR] = useState<ViabilidadeAnalise | null>(analise);
+  const analisar = async () => {
+    setBusy(true);
+    try {
+      const out = await legalCasesService.analisarViabilidade(caseId);
+      setR(out);
+      toast.success('Viabilidade analisada');
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao analisar viabilidade');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const cor =
+    r?.veredito === 'viavel'
+      ? { chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400', card: 'border-emerald-300 bg-emerald-50/60 dark:border-emerald-700/50 dark:bg-emerald-950/20', label: 'VIÁVEL' }
+      : r?.veredito === 'inviavel'
+        ? { chip: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400', card: 'border-red-300 bg-red-50/60 dark:border-red-700/50 dark:bg-red-950/20', label: 'INVIÁVEL' }
+        : { chip: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400', card: 'border-amber-300 bg-amber-50/60 dark:border-amber-700/50 dark:bg-amber-950/20', label: 'DEPENDE' };
+  const bloco = (titulo: string, valor: string | null) =>
+    valor ? (
+      <div className="mt-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">{titulo}</p>
+        <p className="text-xs leading-relaxed text-[#101820] dark:text-zinc-200">{valor}</p>
+      </div>
+    ) : null;
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Análise de viabilidade (IA)</p>
+        <button onClick={analisar} disabled={busy} className="inline-flex items-center gap-1 text-xs font-medium text-[#7048e8] hover:underline disabled:opacity-50">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />}
+          {busy ? 'Lendo a conversa…' : r ? 'Reanalisar' : 'Analisar viabilidade'}
+        </button>
+      </div>
+      {!r ? (
+        <p className="mt-1.5 text-xs italic text-zinc-400">Clique em “Analisar” — a IA lê a conversa do lead e faz a triagem trabalhista: tese aplicável, fundamento, riscos, prescrição e próximo passo (diagnóstico, sem promessa de resultado).</p>
+      ) : (
+        <article className={`mt-1.5 rounded border p-3 ${cor.card}`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${cor.chip}`}>{cor.label}</span>
+            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">confiança: {r.confianca}</span>
+            {r.area && <span className="text-[10px] text-zinc-500 dark:text-zinc-400">· {r.area}</span>}
+            {r.valorEstimado != null && (
+              <span className="text-[10px] text-zinc-500 dark:text-zinc-400">· estimativa {r.valorEstimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span>
+            )}
+          </div>
+          {bloco('Tese aplicável', r.teseAplicavel)}
+          {bloco('Fundamento', r.fundamento)}
+          {bloco('Riscos', r.riscos)}
+          {bloco('Prescrição', r.prescricao)}
+          {r.documentosNecessarios?.length > 0 && (
+            <div className="mt-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Documentos a pedir</p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {r.documentosNecessarios.map((d, i) => (
+                  <span key={i} className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{d}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {bloco('Próximo passo', r.proximoPasso)}
+          {r.geradoEm && <p className="mt-2 text-[10px] text-zinc-400">Gerado em {new Date(r.geradoEm).toLocaleString('pt-BR')}</p>}
+        </article>
       )}
     </div>
   );
