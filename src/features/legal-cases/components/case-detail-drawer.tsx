@@ -1109,7 +1109,7 @@ function AnaliseViabilidade({ caseId, analise, onDone }: { caseId: string; anali
       toast.success('Viabilidade analisada');
       onDone();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Erro ao analisar viabilidade');
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao analisar viabilidade');
     } finally {
       setBusy(false);
     }
