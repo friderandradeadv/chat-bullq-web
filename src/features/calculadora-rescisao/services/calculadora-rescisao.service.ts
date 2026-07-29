@@ -169,4 +169,15 @@ export const calculadoraRescisaoService = {
     });
     return data.data ?? data;
   },
+
+  // Genérico: qualquer documento (conversa, print, foto, PDF) → pré-preenche o formulário.
+  async extrairDocumento(files: File[]): Promise<{ extracao: Record<string, unknown>; metodo?: string }> {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    const { data } = await api.post('/calculadora-rescisao/extrair-documento', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    });
+    return data.data ?? data;
+  },
 };

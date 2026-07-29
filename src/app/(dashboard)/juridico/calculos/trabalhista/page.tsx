@@ -96,7 +96,7 @@ export default function RescisaoTrabalhistaPage() {
   const [res, setRes] = useState<ResultadoRescisao | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [tipoUpload, setTipoUpload] = useState<'trct' | 'holerite' | 'fgts'>('trct');
+  const [tipoUpload, setTipoUpload] = useState<'documento' | 'trct' | 'holerite' | 'fgts'>('documento');
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => ({ ...p, [k]: v }));
 
   useEffect(() => {
@@ -146,10 +146,30 @@ export default function RescisaoTrabalhistaPage() {
     mutationFn: async (files: File[]) => {
       if (tipoUpload === 'trct') return { tipo: 'trct' as const, r: await calculadoraRescisaoService.extrairTrct(files) };
       if (tipoUpload === 'holerite') return { tipo: 'holerite' as const, r: await calculadoraRescisaoService.extrairHolerite(files) };
-      return { tipo: 'fgts' as const, r: await calculadoraRescisaoService.extrairFgts(files) };
+      if (tipoUpload === 'fgts') return { tipo: 'fgts' as const, r: await calculadoraRescisaoService.extrairFgts(files) };
+      return { tipo: 'documento' as const, r: await calculadoraRescisaoService.extrairDocumento(files) };
     },
     onSuccess: ({ tipo, r }) => {
       const ex = (r as any).extracao ?? {};
+      if (tipo === 'documento') {
+        const modOk = ['sem_justa_causa', 'pedido_demissao', 'justa_causa', 'acordo_484a', 'fim_contrato', 'rescisao_indireta'];
+        setF((p) => ({
+          ...p,
+          reclamante: ex.reclamante ?? p.reclamante,
+          reclamado: ex.reclamado ?? p.reclamado,
+          cnaeReu: ex.cnae ?? p.cnaeReu,
+          admissao: ex.admissao ?? p.admissao,
+          desligamento: ex.desligamento ?? p.desligamento,
+          maiorRemuneracao: ex.remuneracao != null ? String(ex.remuneracao) : p.maiorRemuneracao,
+          cargaHoraria: ex.cargaHoraria != null ? String(Math.round(ex.cargaHoraria)) : p.cargaHoraria,
+          modalidade: modOk.includes(ex.modalidadeSugerida) ? ex.modalidadeSugerida : p.modalidade,
+          feriasVencidasAvos: ex.feriasVencidas != null ? String(ex.feriasVencidas) : p.feriasVencidasAvos,
+          liquidoTrctZero: ex.liquidoTrctZero === true ? true : p.liquidoTrctZero,
+        }));
+        const verbas = Array.isArray(ex.verbasMencionadas) && ex.verbasMencionadas.length ? ` Verbas citadas: ${ex.verbasMencionadas.join(', ')}.` : '';
+        toast.success(`Li o documento e preenchi o que deu.${verbas}${ex.observacoes ? ' ' + ex.observacoes : ''} Confira antes de calcular.`);
+        return;
+      }
       if (tipo === 'trct') {
         setF((p) => ({
           ...p,
@@ -231,8 +251,8 @@ export default function RescisaoTrabalhistaPage() {
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                 <Upload className="h-4 w-4 text-violet-500" /> Importar documento (IA)
               </div>
-              <div className="mb-2 flex gap-1">
-                {(['trct', 'holerite', 'fgts'] as const).map((t) => (
+              <div className="mb-2 flex flex-wrap gap-1">
+                {(['documento', 'trct', 'holerite', 'fgts'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTipoUpload(t)}
@@ -242,23 +262,23 @@ export default function RescisaoTrabalhistaPage() {
                         : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
                     }`}
                   >
-                    {t === 'trct' ? 'TRCT' : t === 'holerite' ? 'Holerite' : 'Extrato FGTS'}
+                    {t === 'documento' ? 'Conversa / Print' : t === 'trct' ? 'TRCT' : t === 'holerite' ? 'Holerite' : 'Extrato FGTS'}
                   </button>
                 ))}
               </div>
               <input
                 ref={fileRef}
                 type="file"
-                accept="application/pdf,.pdf"
+                accept="image/*,application/pdf,.pdf,.txt"
                 multiple
                 className="hidden"
                 onChange={(e) => e.target.files && upload.mutate(Array.from(e.target.files))}
               />
               <DropZone
-                accept="application/pdf,.pdf"
+                accept="image/*,application/pdf,.pdf,.txt"
                 disabled={upload.isPending}
                 onFiles={(fs) => upload.mutate(fs)}
-                overlayLabel="Solte o PDF aqui"
+                overlayLabel="Solte aqui — PDF, foto, print ou conversa"
               >
                 <button
                   type="button"
@@ -267,11 +287,17 @@ export default function RescisaoTrabalhistaPage() {
                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 py-3 text-sm text-zinc-500 hover:border-violet-400 hover:text-violet-600 dark:border-zinc-700 dark:text-zinc-400"
                 >
                   {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  {upload.isPending ? 'Lendo…' : `Enviar ${tipoUpload === 'trct' ? 'TRCT' : tipoUpload === 'holerite' ? 'holerite' : 'extrato de FGTS'} (PDF)`}
+                  {upload.isPending
+                    ? 'Lendo…'
+                    : tipoUpload === 'documento'
+                      ? 'Enviar conversa, print, foto ou PDF'
+                      : `Enviar ${tipoUpload === 'trct' ? 'TRCT' : tipoUpload === 'holerite' ? 'holerite' : 'extrato de FGTS'} (PDF, foto ou print)`}
                 </button>
               </DropZone>
               <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-                A IA propõe; você valida. Nada é gravado sem sua confirmação.
+                {tipoUpload === 'documento'
+                  ? 'Aceita qualquer coisa — PDF, foto de documento, print de tela ou a conversa do cliente. A IA lê e preenche o que der.'
+                  : 'Aceita PDF, foto ou print. A IA propõe; você valida. Nada é gravado sem sua confirmação.'}
               </p>
             </div>
 
