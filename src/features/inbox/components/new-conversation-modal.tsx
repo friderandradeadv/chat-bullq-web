@@ -50,7 +50,7 @@ export function NewConversationModal({
       toast.error('Selecione um canal');
       return;
     }
-    if (!targetPhone || targetPhone.replace(/\D/g, '').length < 10) {
+    if (!targetPhone || targetPhone.replace(/\D/g, '').length < 8) {
       toast.error('Número inválido');
       return;
     }
@@ -177,12 +177,14 @@ export function NewConversationModal({
                 onChange={(e) => setPhone(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && start(phone, 'new')}
                 autoFocus
-                placeholder="Ex: (11) 91234-5678"
+                placeholder="Ex: (11) 91234-5678 ou +1 415 555 1234"
                 className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
               />
               <p className="mt-1 text-[11px] text-zinc-400">
-                O Brasil (+55) é adicionado automaticamente. Mensagens a quem nunca te chamou podem
-                esbarrar na janela de 24h do WhatsApp.
+                Número do Brasil: só o DDD + número (o +55 é adicionado automaticamente).
+                Cliente de outro país: comece com <span className="font-medium">+</span> e o código do país
+                (ex.: <span className="font-mono">+1</span> EUA, <span className="font-mono">+351</span> Portugal).
+                Mensagens a quem nunca te chamou podem esbarrar na janela de 24h do WhatsApp.
               </p>
             </div>
             <button

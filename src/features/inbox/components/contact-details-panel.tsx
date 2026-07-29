@@ -894,12 +894,21 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
     { tagId: 'cmqbqd3f5000b2cbff83zxs93', label: 'REPB' },
     { tagId: 'tag_outros', label: 'Parceiros / Outros' },
   ];
-  // "Clientes" NÃO entra aqui: é definido pelo STATUS do contato (pill de
-  // status), não por tag. Este botão é só pra rotear ÁREA/Outros de leads.
+  // "Clientes" é uma workspace especial: definida pelo STATUS do contato
+  // (lhst_cliente), NÃO por tag. Também é escolhível aqui no switcher (além do
+  // pill de status), porque a equipe pensa em "Clientes" como uma área — mover
+  // pra cá = marcar o contato como Cliente, o que já o tira das views de lead
+  // (todas as áreas têm excludeContactStatusIds: [lhst_cliente]).
   const wsColor = (tagId: string) =>
     allAvailableTags.find((t) => t.id === tagId)?.color ?? '#a1a1aa';
   const currentWorkspace =
     WORKSPACES.find((w) => allTags.some((t) => t.tag.id === w.tagId)) ?? null;
+  const CLIENTE_STATUS_ID = 'lhst_cliente';
+  const clienteStatus =
+    contactStatuses.find((s) => s.id === CLIENTE_STATUS_ID) ??
+    contactStatuses.find((s) => (s.name ?? '').toLowerCase() === 'cliente') ??
+    null;
+  const isCliente = !!clienteStatus && contact.status?.id === clienteStatus.id;
 
   // Move a conversa entre workspaces = TROCA a tag de área: remove todas as
   // outras tags de workspace (da conversa E do contato) e aplica a do destino.
@@ -1140,6 +1149,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                 className={cn(
                   'inline-flex h-5 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium leading-none outline-none transition-opacity hover:opacity-80 disabled:opacity-50',
                   !currentWorkspace &&
+                    !isCliente &&
                     'border-zinc-200 bg-zinc-50 italic text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500',
                 )}
                 style={
@@ -1149,11 +1159,21 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                         color: chipTextColor(wsColor(currentWorkspace.tagId)),
                         borderColor: wsColor(currentWorkspace.tagId),
                       }
-                    : undefined
+                    : isCliente && clienteStatus
+                      ? {
+                          backgroundColor: clienteStatus.color,
+                          color: chipTextColor(clienteStatus.color),
+                          borderColor: clienteStatus.color,
+                        }
+                      : undefined
                 }
               >
                 {movingWorkspace && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-                {currentWorkspace ? currentWorkspace.label : 'Recepção (sem área)'}
+                {currentWorkspace
+                  ? currentWorkspace.label
+                  : isCliente
+                    ? 'Clientes'
+                    : 'Recepção (sem área)'}
                 <ChevronDown className="h-2.5 w-2.5 opacity-50" />
               </PopoverButton>
               <PopoverPanel
@@ -1192,6 +1212,29 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
                         </button>
                       );
                     })}
+                    {clienteStatus && (
+                      <>
+                        <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                        <button
+                          onClick={() =>
+                            handleSetContactStatus(clienteStatus.id, close)
+                          }
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors',
+                            isCliente
+                              ? 'bg-primary/[0.06] font-medium text-primary dark:bg-primary/10'
+                              : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60',
+                          )}
+                        >
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: clienteStatus.color }}
+                          />
+                          <span className="flex-1 truncate">Clientes</span>
+                          {isCliente && <Check className="h-3.5 w-3.5 text-primary" />}
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </PopoverPanel>
