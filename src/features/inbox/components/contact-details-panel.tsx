@@ -769,6 +769,15 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
     setSavingContactStatus(true);
     try {
       await contactStatusesService.setContactStatus(contact.id, statusId);
+      // Reflete na hora: escreve o novo status no cache do detalhe. cancelQueries
+      // antes evita que um poll de 5s já em voo (com dado antigo) sobrescreva.
+      const newStatus = statusId
+        ? (contactStatuses.find((s) => s.id === statusId) ?? null)
+        : null;
+      await queryClient.cancelQueries({ queryKey: ['conversation', conversation.id] });
+      queryClient.setQueryData(['conversation', conversation.id], (old: any) =>
+        old ? { ...old, contact: { ...old.contact, status: newStatus } } : old,
+      );
       queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       queryClient.invalidateQueries({ queryKey: ['contact-statuses', orgId] });
@@ -852,6 +861,25 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
       if (!onConversation && !onContact) {
         await tagsService.addToContact(contact.id, tagId);
       }
+      // Reflete na hora no cache do detalhe. cancelQueries evita que um poll de
+      // 5s já em voo (com dado antigo) desfaça a alteração antes do refetch.
+      const removing = onConversation || onContact;
+      const tagObj = allAvailableTags.find((t) => t.id === tagId);
+      await queryClient.cancelQueries({ queryKey: ['conversation', conversation.id] });
+      queryClient.setQueryData(['conversation', conversation.id], (old: any) => {
+        if (!old) return old;
+        const drop = (arr: any[]) => (arr ?? []).filter((t) => t.tag.id !== tagId);
+        return {
+          ...old,
+          contact: {
+            ...old.contact,
+            tags: removing
+              ? drop(old.contact?.tags)
+              : [...(old.contact?.tags ?? []), ...(tagObj ? [{ tag: tagObj }] : [])],
+          },
+          tags: removing ? drop(old.tags) : (old.tags ?? []),
+        };
+      });
       queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       close?.();
@@ -929,6 +957,21 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
       if (targetTagId && !allTags.some((t) => t.tag.id === targetTagId)) {
         await tagsService.addToConversation(conversation.id, targetTagId);
       }
+      // Reflete na hora: tira as tags de workspace e aplica a do destino no
+      // cache do detalhe. cancelQueries evita sobrescrita por poll em voo.
+      const wsIds = new Set(WORKSPACES.map((w) => w.tagId));
+      const targetTag = targetTagId ? allAvailableTags.find((t) => t.id === targetTagId) : null;
+      await queryClient.cancelQueries({ queryKey: ['conversation', conversation.id] });
+      queryClient.setQueryData(['conversation', conversation.id], (old: any) => {
+        if (!old) return old;
+        const stripWs = (arr: any[]) =>
+          (arr ?? []).filter((t) => !wsIds.has(t.tag.id) || t.tag.id === targetTagId);
+        const convTags = stripWs(old.tags);
+        if (targetTag && !convTags.some((t: any) => t.tag.id === targetTagId)) {
+          convTags.push({ tag: targetTag });
+        }
+        return { ...old, contact: { ...old.contact, tags: stripWs(old.contact?.tags) }, tags: convTags };
+      });
       queryClient.invalidateQueries({ queryKey: ['conversation', conversation.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       close?.();
