@@ -21,7 +21,9 @@ import {
   MediaDocument,
   MediaSticker,
   MediaLocation,
+  MediaContact,
 } from './media-bubbles';
+import type { PickedContact } from './contact-picker-modal';
 import { useSocket } from '../hooks/use-socket';
 import { useAuthStore } from '@/stores/auth-store';
 import { PendingActionsList } from '../pending-actions/pending-actions-list';
@@ -843,6 +845,25 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     }
   };
 
+  // Cartão(ões) de contato (vCard). Cada contato vira uma mensagem CONTACT —
+  // o adapter do canal (Uazapi / Evolution / Cloud API) monta o formato nativo.
+  const handleSendContact = async (contacts: PickedContact[]) => {
+    try {
+      for (const c of contacts) {
+        await inboxService.sendMessage({
+          conversationId: conversation.id,
+          type: 'CONTACT',
+          content: { contact: { name: c.name, phone: c.phone } },
+          ...(pontual && !isMine ? { oneOff: true } : {}),
+        });
+      }
+      ensureUnarchivedOnSend();
+    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+      throw err;
+    }
+  };
+
   // Mídia por URL (anexo de mensagem rápida) — o provider baixa da URL,
   // mesmo caminho do envio do vídeo tutorial do ZapSign no backend.
   const handleSendRemoteAttachment = async (
@@ -1539,6 +1560,8 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                             <MediaSticker message={msg} isOutbound={isOutbound} />
                           ) : msg.type === 'LOCATION' ? (
                             <MediaLocation message={msg} isOutbound={isOutbound} />
+                          ) : msg.type === 'CONTACT' ? (
+                            <MediaContact message={msg} isOutbound={isOutbound} />
                           ) : msg.type === 'TEMPLATE' ? (
                             <TemplateMessage content={msg.content} isOutbound={isOutbound} />
                           ) : (
@@ -1651,6 +1674,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
             onSendAudio={handleSendAudio}
             onSendInternal={handleSendInternal}
             onSendMedia={handleSendMedia}
+            onSendContact={handleSendContact}
             onGenerateSummary={() => setSummaryOpen(true)}
             onSchedule={async (scheduleText, scheduledAtISO) => {
               try {

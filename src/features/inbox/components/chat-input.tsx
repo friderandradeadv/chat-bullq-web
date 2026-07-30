@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon, Maximize2, Minimize2 } from 'lucide-react';
+import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon, Maximize2, Minimize2, UserRound } from 'lucide-react';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '../hooks/use-audio-recorder';
 import { EmojiPicker } from './emoji-picker';
+import { ContactPickerModal, type PickedContact } from './contact-picker-modal';
 import type {
   QuickReply,
   QuickReplyAttachment,
@@ -33,6 +34,8 @@ interface ChatInputProps {
   onSendInternal?: (text: string) => Promise<void>;
   /** Envia uma mídia (imagem/vídeo/documento) — caption opcional. */
   onSendMedia?: (file: File, caption?: string) => Promise<void>;
+  /** Envia um ou mais cartões de contato (vCard). */
+  onSendContact?: (contacts: PickedContact[]) => Promise<void>;
   /** Abre o modal de gerar resumo da conversa. */
   onGenerateSummary?: () => void;
   /** Agenda o texto atual para envio futuro (ISO 8601). */
@@ -60,10 +63,11 @@ interface PendingFile {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { onSend, onSendAudio, onSendInternal, onSendMedia, onGenerateSummary, onSchedule, sendingFrom, signatureName, quickReplies, contactName, onSendRemoteAttachment, disabled },
+  { onSend, onSendAudio, onSendInternal, onSendMedia, onSendContact, onGenerateSummary, onSchedule, sendingFrom, signatureName, quickReplies, contactName, onSendRemoteAttachment, disabled },
   ref,
 ) {
   const [text, setText] = useState('');
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [internalMode, setInternalMode] = useState(false);
   const [signatureOn, setSignatureOn] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -473,6 +477,12 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   return (
     <div className={`border-t px-5 py-3 transition-colors ${internalMode ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-900/10' : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950'}`}>
+      {contactPickerOpen && onSendContact && (
+        <ContactPickerModal
+          onClose={() => setContactPickerOpen(false)}
+          onSend={onSendContact}
+        />
+      )}
       {/* Top row — Nota interna toggle + Gerar resumo */}
       <div className="mb-2 flex items-center gap-3">
         {onSendInternal && (
@@ -760,6 +770,16 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                   >
                     <FileUp className="h-4 w-4 text-zinc-500" />
                     Selecionar arquivo
+                  </button>
+                )}
+                {onSendContact && (
+                  <button
+                    type="button"
+                    onClick={() => { close(); setContactPickerOpen(true); }}
+                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <UserRound className="h-4 w-4 text-zinc-500" />
+                    Enviar contato
                   </button>
                 )}
                 {onGenerateSummary && (

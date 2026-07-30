@@ -14,6 +14,8 @@ import {
   FileAudio,
   File as FileIcon,
   MapPin,
+  UserRound,
+  MessageCircle,
   X,
 } from 'lucide-react';
 import { useResolvedMedia } from '../hooks/use-resolved-media';
@@ -400,6 +402,48 @@ export function MediaLocation({ message, isOutbound }: MediaProps) {
         </p>
       </div>
     </a>
+  );
+}
+
+export function MediaContact({ message, isOutbound }: MediaProps) {
+  const c = (message.content?.contact ??
+    (Array.isArray(message.content?.contacts) ? message.content?.contacts[0] : undefined)) as
+    | { name?: string; phone?: string; waId?: string }
+    | undefined;
+  const name = c?.name || 'Contato';
+  const phone = c?.phone || '';
+  const digits = (c?.waId || phone).replace(/\D/g, '');
+  return (
+    <div
+      className={`flex min-w-[200px] max-w-[280px] flex-col gap-2 rounded-lg border px-3 py-2.5 ${
+        isOutbound
+          ? 'border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10'
+          : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/60'
+      }`}
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300">
+          <UserRound className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{name}</p>
+          {phone && (
+            <p className="truncate text-[11px] tabular-nums opacity-70">{phone}</p>
+          )}
+        </div>
+      </div>
+      {digits && (
+        <a
+          href={`https://wa.me/${digits}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-black/10 py-1 text-xs font-medium transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          Conversar
+        </a>
+      )}
+    </div>
   );
 }
 
