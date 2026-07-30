@@ -779,12 +779,49 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     inboxService.unarchive(conversation.id).catch(() => undefined);
   };
 
+  // Insere a mensagem recém-enviada (retorno do POST) direto no cache, na hora.
+  // Antes o envio dependia 100% do eco `message:new` do socket pra aparecer —
+  // quando esse evento não chegava (socket instável), a bolha "sumia" até o
+  // refetch/F5. Aqui garantimos que a própria mensagem enviada aparece na hora,
+  // independente do socket. O handler de `message:new` deduplica por id/externalId,
+  // então o eco só atualiza a bolha (status), não duplica.
+  const insertSentMessage = useCallback(
+    (created: Message | undefined | null) => {
+      if (!created?.id) return;
+      const cache = queryClient.getQueryData<{ messages: Message[] }>([
+        'messages',
+        conversation.id,
+      ]);
+      if (!cache) {
+        queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+        return;
+      }
+      queryClient.setQueryData<{ messages: Message[] } | undefined>(
+        ['messages', conversation.id],
+        (prev) => {
+          if (!prev) return prev;
+          const existing = prev.messages || [];
+          const match = existing.findIndex(
+            (m) =>
+              m.id === created.id ||
+              (created.externalId && m.externalId && m.externalId === created.externalId),
+          );
+          if (match !== -1) {
+            const merged = [...existing];
+            merged[match] = { ...existing[match], ...created };
+            return { ...prev, messages: merged };
+          }
+          return { ...prev, messages: [...existing, created] };
+        },
+      );
+    },
+    [queryClient, conversation.id],
+  );
+
   const handleSend = async (text: string) => {
-    // The server broadcasts message:new with the QUEUED row immediately, so we
-    // don't need to invalidate — the socket handler above will insert the row.
     const replyToMessageId = replyingTo?.id;
     try {
-      await inboxService.sendMessage({
+      const created = await inboxService.sendMessage({
         conversationId: conversation.id,
         type: 'TEXT',
         content: { text },
@@ -792,6 +829,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         // Intervenção pontual: manda sem assumir a conversa nem pausar a IA.
         ...(pontual && !isMine ? { oneOff: true } : {}),
       });
+      insertSentMessage(created);
       ensureUnarchivedOnSend();
       setReplyingTo(null);
     } catch (err) {
@@ -809,12 +847,13 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     if (resendingId) return;
     setResendingId(msg.id);
     try {
-      await inboxService.sendMessage({
+      const created = await inboxService.sendMessage({
         conversationId: conversation.id,
         type: msg.type,
         content: msg.content ?? {},
         ...(pontual && !isMine ? { oneOff: true } : {}),
       });
+      insertSentMessage(created);
       ensureUnarchivedOnSend();
       toast.success('Mensagem reenviada — ela entra como uma nova mensagem no fim da conversa.');
     } catch (err: any) {
@@ -827,7 +866,8 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
 
   const handleSendAudio = async (blob: Blob) => {
     try {
-      await inboxService.sendAudioMessage(conversation.id, blob);
+      const created = await inboxService.sendAudioMessage(conversation.id, blob);
+      insertSentMessage(created);
       ensureUnarchivedOnSend();
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
@@ -837,7 +877,8 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
 
   const handleSendMedia = async (file: File, caption?: string) => {
     try {
-      await inboxService.sendMediaMessage(conversation.id, file, caption);
+      const created = await inboxService.sendMediaMessage(conversation.id, file, caption);
+      insertSentMessage(created);
       ensureUnarchivedOnSend();
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
@@ -850,12 +891,13 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
   const handleSendContact = async (contacts: PickedContact[]) => {
     try {
       for (const c of contacts) {
-        await inboxService.sendMessage({
+        const created = await inboxService.sendMessage({
           conversationId: conversation.id,
           type: 'CONTACT',
           content: { contact: { name: c.name, phone: c.phone } },
           ...(pontual && !isMine ? { oneOff: true } : {}),
         });
+        insertSentMessage(created);
       }
       ensureUnarchivedOnSend();
     } catch (err) {
@@ -871,7 +913,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
     caption?: string,
   ) => {
     try {
-      await inboxService.sendMessage({
+      const created = await inboxService.sendMessage({
         conversationId: conversation.id,
         type: att.type,
         content: {
@@ -881,6 +923,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         },
         ...(pontual && !isMine ? { oneOff: true } : {}),
       });
+      insertSentMessage(created);
       ensureUnarchivedOnSend();
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
