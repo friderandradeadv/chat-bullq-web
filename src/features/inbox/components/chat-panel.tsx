@@ -1543,7 +1543,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                                     msg.status === 'FAILED'
                                       ? 'text-red-500'
                                       : msg.status === 'READ'
-                                        ? 'text-primary'
+                                        ? 'text-sky-600 dark:text-sky-300'
                                         : ''
                                   }`}
                                 />
