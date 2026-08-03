@@ -996,33 +996,6 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
       <p className="mt-2 text-xs text-zinc-400">{txs.length} lançamento(s){temPeriodo ? ` no período${deISO ? ` de ${toBR(deISO)}` : ''}${ateISO ? ` até ${toBR(ateISO)}` : ''}` : mesSel ? ` em ${mesLabel(mesSel)}` : ` · ${grupos.length} ${grupos.length === 1 ? 'mês' : 'meses'}`}</p>
 
-      {(() => {
-        // Marcador informativo: fatura(s) do cartão paga(s) no mês selecionado. NÃO soma no caixa
-        // (as compras já entram itemizadas e categorizadas abaixo) — só pra você achar o pagamento.
-        const pagas = new Map<string, { cardId: string; data: string; total: number; n: number }>();
-        for (const t of data.transacoes) {
-          if (!t.faturaDe || !t.dataPagamento) continue;
-          if (mesSel && mesKey({ mes: '', data: t.dataPagamento }) !== mesSel) continue;
-          const k = `${t.faturaDe}|${t.dataPagamento}`;
-          const g = pagas.get(k) ?? { cardId: t.faturaDe, data: t.dataPagamento, total: 0, n: 0 };
-          g.total += -t.valor; g.n += 1; pagas.set(k, g);
-        }
-        const arr = [...pagas.values()].filter((g) => g.total > 0.005).sort((a, b) => toISOInput(b.data).localeCompare(toISOInput(a.data)));
-        if (!arr.length) return null;
-        return (
-          <div className="mt-2 space-y-1.5">
-            {arr.map((g) => (
-              <div key={`${g.cardId}|${g.data}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs dark:border-violet-900/40 dark:bg-violet-900/15">
-                <CreditCard className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-                <span className="text-violet-800 dark:text-violet-300"><strong>Fatura {contas.find((c) => c.id === g.cardId)?.nome ?? 'cartão'} paga em {(g.data || '').slice(0, 5)}</strong> · {g.n} compra(s) itemizada(s) abaixo</span>
-                <span className="ml-auto font-semibold tabular-nums text-violet-800 dark:text-violet-300">{brl2(g.total)}</span>
-                <span className="rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-900/40 dark:text-violet-300">não soma no caixa</span>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
       <div className="mt-2 space-y-2">
         {grupos.map((g) => {
           const aberto = !!mesSel || !collapsed.has(g.key);
@@ -1131,16 +1104,40 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 // Separa de fato o que já caiu no caixa do que ainda é a receber / a pagar.
                 const liq = g.items.filter((t) => ehLiquidado(txStatus(t)));
                 const pend = g.items.filter((t) => !ehLiquidado(txStatus(t)));
-                const secao = (titulo: string, cor: string, itens: FinTransacao[]) => itens.length === 0 ? null : (
+                // Débitos de fatura PAGA (faturaDe setado) colapsam numa linha só "Fatura {cartão}"
+                // — a saída do cartão aparece como UM lançamento. As compras seguem contadas 1× (KPIs,
+                // saldo e P&L não mudam) e ficam itemizadas na aba Cartão (ou expandindo aqui).
+                const secao = (titulo: string, cor: string, itens: FinTransacao[]) => { if (itens.length === 0) return null;
+                  const fatMap = new Map<string, FinTransacao[]>(); const soltos: FinTransacao[] = [];
+                  for (const t of itens) { if (t.faturaDe) { const k = `${t.faturaDe}|${t.dataPagamento || t.data}`; if (!fatMap.has(k)) fatMap.set(k, []); fatMap.get(k)!.push(t); } else soltos.push(t); }
+                  const fatRows = [...fatMap.entries()].map(([k, arr]) => {
+                    const cardId = arr[0].faturaDe!; const dt = arr[0].dataPagamento || arr[0].data;
+                    const total = arr.reduce((s, t) => s - t.valor, 0); const nome = contas.find((c) => c.id === cardId)?.nome ?? 'cartão';
+                    const key = `fat:${k}`; const open = rvOpen.has(key);
+                    return (
+                      <div key={key} className="border-t border-zinc-100 dark:border-zinc-800/70">
+                        <button onClick={() => toggleRv(key)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40">
+                          <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{(dt || '').slice(0, 5)}</span>
+                          <CreditCard className="h-3.5 w-3.5 shrink-0 text-[#820AD1]" />
+                          <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300"><strong>Fatura {nome}</strong> <span className="text-zinc-400">· {arr.length} compra(s) — na aba Cartão</span></span>
+                          {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-400" />}
+                          <span className="w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums text-rose-600">{brl2(total)}</span>
+                        </button>
+                        {open && <div className="bg-zinc-50/40 dark:bg-zinc-800/20">{arr.map(linha)}</div>}
+                      </div>
+                    );
+                  });
+                  return (
                   <div>
                     <div className="flex items-center gap-1.5 border-t border-zinc-100 bg-zinc-50/50 px-3 py-1 dark:border-zinc-800/70 dark:bg-zinc-800/20">
                       <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: cor }}>{titulo}</span>
                       <span className="text-[10px] text-zinc-400">({itens.length})</span>
                       <span className="ml-auto text-[10px] font-semibold tabular-nums text-zinc-400">{brl(itens.reduce((s, t) => s + Math.abs(t.valor), 0))}</span>
                     </div>
-                    {itens.map(linha)}
+                    {soltos.map(linha)}
+                    {fatRows}
                   </div>
-                );
+                  ); };
                 return <div>{secao('Recebido / pago (caixa)', '#02883C', liq)}{secao('A receber / a pagar', '#F08C00', pend)}</div>;
               })()}
             </div>
