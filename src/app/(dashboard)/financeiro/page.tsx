@@ -1502,12 +1502,17 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   // também, senão ele simplesmente sumia da fatura em vez de abater o total.
   const gastos = useMemo(() => data.transacoes.filter((t) => (t.conta === cartao?.id && (t.valor < 0 || (t.valor > 0 && t.fonteImport === 'extrato'))) || t.faturaDe === cartao?.id), [data.transacoes, cartao?.id]);
 
-  // A qual fatura (mês/ciclo) um gasto pertence: se o dia > fechamento, cai na fatura do mês seguinte.
+  // A qual fatura (mês/ciclo) um gasto pertence: o gasto no DIA do fechamento (>=) já cai na
+  // fatura do mês seguinte — é o dia que ABRE o novo ciclo. Ex.: cartão fecha 26; a fatura que
+  // fecha 26/07 (período 26/06→25/07, como no extrato do Nubank) inclui a compra de 26/06.
+  // Usar `>` (só depois do dia 26) jogava o gasto do próprio dia 26 na fatura anterior por
+  // engano — a fatura de julho ficava R$X a menos e nenhum reimport corrigia (o gasto já
+  // existe no livro, só estava no ciclo errado).
   const faturaInfo = (dataBR: string) => {
     const m = (dataBR || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
     if (!m) return { key: '0000-00', label: 'Sem data', fecha: '', venc: '' };
     const dia = +m[1]; let mes = +m[2]; let ano = +m[3];
-    if (fechamento > 0 && dia > fechamento) { mes += 1; if (mes > 12) { mes = 1; ano += 1; } }
+    if (fechamento > 0 && dia >= fechamento) { mes += 1; if (mes > 12) { mes = 1; ano += 1; } }
     const key = `${ano}-${String(mes).padStart(2, '0')}`;
     const fecha = fechamento > 0 ? `${String(fechamento).padStart(2, '0')}/${String(mes).padStart(2, '0')}/${ano}` : '';
     let vm = mes + 1, va = ano; if (vm > 12) { vm = 1; va += 1; }
@@ -2923,9 +2928,77 @@ function parseOfx(text: string): ExtratoLinha[] {
   }
   return out;
 }
-// Detecta o formato e lê (OFX ou CSV/TSV).
+// Meses PT-BR abreviados (formato da FATURA do Nubank: "26 JUN", "03 AGO").
+const MES_ABBR_PT: Record<string, number> = { JAN: 1, FEV: 2, MAR: 3, ABR: 4, MAI: 5, JUN: 6, JUL: 7, AGO: 8, SET: 9, OUT: 10, NOV: 11, DEZ: 12 };
+// Parser da FATURA (PDF) do cartão Nubank — texto extraído pelo pdf-parse. O layout NÃO é
+// tabular (date,title,amount): cada transação começa com "DD MMM" (sem ano), o valor vem no
+// fim da linha OU, em compra internacional, algumas linhas abaixo numa linha só com "R$ x,xx"
+// (as linhas "BRL … = USD …"/"Conversão: … = R$ 5,32" são câmbio, não o valor). Estorno vem
+// com sinal "−" (U+2212). Convenção interna (igual à do CSV Nubank em parseExtrato): compra =
+// DESPESA (valor negativo); estorno/crédito = valor POSITIVO. O ano vem do vencimento/período.
+function parseNubankFatura(text: string): ExtratoLinha[] {
+  const up = text.toUpperCase();
+  const dateLine = /^\s*(\d{1,2})\s+(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\b/;
+  const lines = text.split(/\r?\n/);
+  const hits = lines.filter((l) => dateLine.test(l.trim())).length;
+  if (hits < 2 || !/TRANSA[ÇC][ÕO]ES/i.test(up)) return []; // não parece fatura Nubank
+  // Ano de referência (vencimento/fatura) + mês de fechamento (fim do período vigente).
+  const mVenc = text.match(/(?:vencimento:?|FATURA)\s*\d{1,2}\s+([A-Z]{3})\s+(\d{4})/i);
+  const dueMonth = mVenc ? MES_ABBR_PT[mVenc[1].toUpperCase()] ?? null : null;
+  const dueYear = mVenc ? Number(mVenc[2]) : new Date().getFullYear();
+  const mPer = up.match(/(?:TRANSA[ÇC][ÕO]ES DE|PER[ÍI]ODO VIGENTE:?)\s*\d{1,2}\s+[A-Z]{3}\s+A\s+\d{1,2}\s+([A-Z]{3})/);
+  const closeMonth = mPer ? MES_ABBR_PT[mPer[1]] ?? null : dueMonth;
+  const closeYear = dueMonth == null || closeMonth == null ? dueYear : dueMonth >= closeMonth ? dueYear : dueYear - 1;
+  const yearFor = (m: number) => (closeMonth == null ? (dueMonth != null && m > dueMonth ? dueYear - 1 : dueYear) : m > closeMonth ? closeYear - 1 : closeYear);
+  const CUR = /([−-])?\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})/g;
+  const CUR_ONLY = /^\s*([−-])?\s*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+  // Terminadores de bloco: rodapé/cabeçalho de página, subtotais ("Pagamentos -R$ …"), etc.
+  const stop = /^\s*(\d+\s+de\s+\d+|--\s*\d+\s+of\s+\d+\s*--|FRIDER|FATURA\s|TRANSA[ÇC][ÕO]ES DE|RESUMO|PR[ÓO]XIMAS|LIMITES|VALOR M[ÁA]XIMO|PAGAMENTOS?\b)/i;
+  // Pagamento da fatura ANTERIOR ("Pagamento em 02 JUL", "Pagamento recebido") não é gasto.
+  const ehPagFatura = (d: string) => /^pagamento\s+em\b/i.test(d) || /pagamento\s*(de\s*)?(fatura|recebid)/i.test(d);
+  const out: ExtratoLinha[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].trim().match(dateLine);
+    if (!m) continue;
+    const dia = String(m[1]).padStart(2, '0');
+    const mes = MES_ABBR_PT[m[2].toUpperCase()];
+    // Valor: prefere o ÚLTIMO "R$" da PRÓPRIA linha da data; se não houver (compra
+    // internacional), procura a 1ª linha "só valor" nas continuações (ignora câmbio).
+    let last: RegExpExecArray | null = null, mm: RegExpExecArray | null;
+    CUR.lastIndex = 0;
+    while ((mm = CUR.exec(lines[i]))) last = mm;
+    if (!last) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const lt = lines[j].trim();
+        if (dateLine.test(lt) || stop.test(lt)) break;
+        const c = lt.match(CUR_ONLY);
+        if (c) { last = c as unknown as RegExpExecArray; break; }
+      }
+    }
+    if (!last) continue;
+    const credito = last[1] === '−' || last[1] === '-';
+    const abs = brNum(last[2]);
+    if (!Number.isFinite(abs) || abs === 0) continue;
+    const valor = credito ? abs : -abs; // compra = despesa (−); estorno = crédito (+)
+    const data = `${dia}/${String(mes).padStart(2, '0')}/${yearFor(mes)}`;
+    let desc = lines[i].trim().replace(dateLine, '').replace(/^\s*[•·]{2,}\s*\d{3,4}\s*/, '').replace(/([−-])?\s*R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}\s*$/, '').trim();
+    if (!desc) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const c = lines[j].trim();
+        if (dateLine.test(c) || stop.test(c)) break;
+        if (c && !CUR_ONLY.test(c) && !/^(BRL|USD|Convers)/i.test(c)) { desc = c; break; }
+      }
+    }
+    if (ehPagFatura(desc)) continue;
+    out.push({ data, valor, descricao: desc.slice(0, 140) });
+  }
+  return out;
+}
+// Detecta o formato e lê (OFX, fatura Nubank em PDF, ou CSV/TSV).
 function lerExtrato(text: string): ExtratoLinha[] {
   if (/<STMTTRN>|<OFX>/i.test(text)) return parseOfx(text);
+  const nubank = parseNubankFatura(text);
+  if (nubank.length) return nubank;
   return parseExtrato(text);
 }
 // Saldo FINAL do extrato OFX (<LEDGERBAL><BALAMT>...). É o saldo do dia que o banco fecha —
