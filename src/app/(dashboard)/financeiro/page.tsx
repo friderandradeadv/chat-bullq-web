@@ -23,8 +23,9 @@ import { ComboBox } from '@/features/financeiro/components/combo-box';
 import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { useAuthStore } from '@/stores/auth-store';
 import {
-  aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
+  aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
+import { MesTicketPicker } from '@/features/financeiro/components/mes-ticket-picker';
 
 // SEMPRE com centavos — pedido do Matheus 17/07: todo valor em R$ exibe os centavos.
 const brl = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -622,7 +623,7 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
 function LancamentosTab({ data }: { data: FinDashboard }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
-  const mesHoje = useMemo(() => { const p = hojeBR().split('/'); return `${p[2]}-${p[1]}`; }, []);
+  const mesHoje = useMemo(() => mesAtualCompetencia(), []); // competência fecha dia 3 (hoje 03/08 → julho)
   // Abre já filtrado pelo mês corrente (é o que a equipe olha no dia a dia). "" = Todos os meses.
   const [mesSel, setMesSel] = useState<string>(mesHoje);
   // Garante o mês corrente na lista do seletor mesmo sem lançamentos ainda (senão o value fica órfão).
@@ -1537,7 +1538,9 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   const abertoTotal = faturas.reduce((s, f) => s + f.abertos.reduce((x, t) => x - t.valor, 0), 0);
 
   // Seletor de mês (fatura) — igual ao livro-razão. '' = todas as faturas.
-  const [mesFat, setMesFat] = useState<string>(() => faturaInfo(hojeBR()).key);
+  // Abre na fatura do mês-competência atual (fecha dia 3): hoje 03/08 → julho, a fatura que
+  // está sendo paga — não em agosto (que ainda está vazia). Sempre um mês concreto.
+  const [mesFat, setMesFat] = useState<string>(() => mesAtualCompetencia());
   const [impFatura, setImpFatura] = useState(false);
   const mesesFat = useMemo(() => [...new Set([mesFat, ...faturas.map((f) => f.info.key)])].filter((k) => /^\d{4}-\d{2}$/.test(k)).sort((a, b) => b.localeCompare(a)), [faturas, mesFat]);
   const faturasVis = mesFat ? faturas.filter((f) => f.info.key === mesFat) : faturas;
@@ -1587,11 +1590,11 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200"><CreditCard className="h-4 w-4" style={{ color: cartao.cor ?? '#820AD1' }} /> {cartao.nome}</span>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <CalendarioFiltro
-            mesSel={mesFat} deISO="" ateISO=""
-            onMes={(ym) => setMesFat(ym)}
-            onPeriodo={() => setMesFat('')}
-            onLimpar={() => setMesFat('')}
+          <MesTicketPicker
+            value={mesFat}
+            onChange={setMesFat}
+            comDados={new Set(faturas.map((f) => f.info.key))}
+            maxMes={[mesAtualCompetencia(), ...faturas.map((f) => f.info.key)].sort().slice(-1)[0] ?? mesAtualCompetencia()}
           />
           <span className="text-xs text-zinc-400">{fechamento > 0 ? `fecha dia ${fechamento}` : 'sem dia de fechamento'}{vencDia > 0 ? ` · vence dia ${vencDia}` : ''} · em aberto <strong className="text-rose-600">{brl2(abertoTotal)}</strong></span>
           <button onClick={() => setImpFatura(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar fatura</button>

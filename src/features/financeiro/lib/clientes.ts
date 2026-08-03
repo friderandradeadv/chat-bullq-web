@@ -8,11 +8,28 @@ const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 export const isoOf = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
 export const normNome = (s: string) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-/** Mês (YYYY-MM) de um lançamento: usa `mes`; se faltar/for inválido, deriva da data DD/MM/YYYY. */
+// Competência do escritório FECHA no dia 3 (vencimento da fatura): lançamento até o dia 3
+// conta como o mês ANTERIOR. ESPELHA `mesFromBR` do backend (financeiro.service.ts) — se
+// mudar um, mude o outro. Ex.: 03/08 → 2026-07 (julho); 04/08 → 2026-08.
+export const DIA_FECHA_COMPETENCIA = 3;
+export const competenciaBR = (br: string) => {
+  const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return '';
+  let dia = +m[1], mes = +m[2], ano = +m[3];
+  if (dia <= DIA_FECHA_COMPETENCIA) { mes -= 1; if (mes < 1) { mes = 12; ano -= 1; } }
+  return `${ano}-${String(mes).padStart(2, '0')}`;
+};
+/** Mês-competência de HOJE (respeita o fechamento no dia 3). */
+export const mesAtualCompetencia = () => {
+  const d = new Date();
+  return competenciaBR(`${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`);
+};
+/** Mês (YYYY-MM) de um lançamento: deriva da data pela competência (dia 3); só cai no
+ *  `mes` gravado se a data faltar/for inválida. */
 export const mesKey = (t: Pick<FinTransacao, 'mes' | 'data'>) => {
-  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '')) return t.mes as string;
-  const m = (t.data || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  return m ? `${m[3]}-${m[2]}` : '0000-00';
+  const k = competenciaBR(t.data || '');
+  if (k) return k;
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '') ? (t.mes as string) : '0000-00';
 };
 export const mesLabel = (mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_PT[+m[2] - 1]} de ${m[1]}` : 'Sem data'; };
 export const mesCurtoKey = (mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_ABREV[+m[2] - 1]}/${m[1].slice(2)}` : mes; };
