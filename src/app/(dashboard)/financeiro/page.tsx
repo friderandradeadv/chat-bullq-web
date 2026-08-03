@@ -922,7 +922,6 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
             value={mesSel || mesHoje}
             onChange={(m) => { setMesSel(m); setDeISO(''); setAteISO(''); }}
             comDados={new Set(mesesDisp)}
-            maxMes={[mesHoje, ...mesesDisp].sort().slice(-1)[0] ?? mesHoje}
           />
           <button
             onClick={() => { setMesSel(''); setDeISO(''); setAteISO(''); }}
@@ -1600,7 +1599,6 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
             value={mesFat}
             onChange={setMesFat}
             comDados={new Set(faturas.map((f) => f.info.key))}
-            maxMes={[mesAtualCompetencia(), ...faturas.map((f) => f.info.key)].sort().slice(-1)[0] ?? mesAtualCompetencia()}
           />
           <span className="text-xs text-zinc-400">{fechamento > 0 ? `fecha dia ${fechamento}` : 'sem dia de fechamento'}{vencDia > 0 ? ` · vence dia ${vencDia}` : ''} · em aberto <strong className="text-rose-600">{brl2(abertoTotal)}</strong></span>
           <button onClick={() => setImpFatura(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar fatura</button>

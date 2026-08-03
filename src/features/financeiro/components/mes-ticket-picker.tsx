@@ -12,11 +12,12 @@ export function addMesYM(ym: string, n: number) {
 
 /** Seletor de mês estilo holerite: ‹ Mês de Ano › + grade de 12 meses/ano ao clicar
  *  no título. Meses com dados (`comDados`) ganham um ponto; futuro (> maxMes) desabilita. */
-export function MesTicketPicker({ value, onChange, comDados, maxMes }: { value: string; onChange: (m: string) => void; comDados: Set<string>; maxMes: string }) {
+export function MesTicketPicker({ value, onChange, comDados, maxMes }: { value: string; onChange: (m: string) => void; comDados: Set<string>; maxMes?: string }) {
   const [open, setOpen] = useState(false);
   const [verAno, setVerAno] = useState(() => Number(value.split('-')[0]) || new Date().getFullYear());
   const next = addMesYM(value, 1);
-  const podeNext = next <= maxMes;
+  // Sem maxMes = navegação livre (qualquer mês futuro). Com maxMes, trava o que passa dele.
+  const podeNext = !maxMes || next <= maxMes;
   const MN = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   return (
     <div className="relative flex items-center justify-center gap-1">
@@ -34,7 +35,7 @@ export function MesTicketPicker({ value, onChange, comDados, maxMes }: { value: 
           <div className="grid grid-cols-3 gap-1.5">
             {MN.map((mn, i) => {
               const key = `${verAno}-${String(i + 1).padStart(2, '0')}`;
-              const futuro = key > maxMes; const sel = key === value; const tem = comDados.has(key);
+              const futuro = maxMes ? key > maxMes : false; const sel = key === value; const tem = comDados.has(key);
               return <button key={i} disabled={futuro} onClick={() => { onChange(key); setOpen(false); }} className={`relative rounded-lg px-2 py-2 text-sm transition ${sel ? 'bg-[#7048E8] font-semibold text-white' : futuro ? 'cursor-default text-zinc-300 dark:text-zinc-600' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800'}`}>{mn}{tem && !sel && <span className="absolute left-1/2 top-1 h-1 w-1 -translate-x-1/2 rounded-full bg-emerald-500" />}</button>;
             })}
           </div>

@@ -174,8 +174,6 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         {subtab === 'holerite' && (() => {
           const holRaw = data.holerite ?? [];
           const comDados = new Set(holRaw.map((x) => x.mes));
-          // até onde o toggle/calendário deixa navegar (não passa do mês corrente).
-          const maxMes = [mesAtual, ...holRaw.map((x) => x.mes)].sort().slice(-1)[0] ?? mesAtual;
           // mês selecionado: pode ser QUALQUER mês (mesmo sem folha) — default = mais
           // recente com folha, ou o mês corrente.
           const mes = holMesSel && /^\d{4}-\d{2}$/.test(holMesSel) ? holMesSel : (holRaw[0]?.mes ?? mesAtual);
@@ -200,7 +198,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
           return (
             <div className="mt-4">
               <div className="relative mb-3 flex items-center justify-center">
-                <MesTicketPicker value={mes} onChange={setHolMesSel} comDados={comDados} maxMes={maxMes} />
+                <MesTicketPicker value={mes} onChange={setHolMesSel} comDados={comDados} />
                 <button onClick={baixarPdf} className="absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800" title="Baixar PDF"><Download className="h-4 w-4" /><span className="hidden sm:inline">Baixar PDF</span></button>
               </div>
               {/* TICKET / recibo — UMA peça só: papel creme do topo à base, tinta "stone",
