@@ -102,6 +102,10 @@ export function AssignmentPopover({
   }, [agents, ctxTagIds, search]);
 
   const currentRobot = useMemo(() => {
+    // Responsável é humano OU robô, nunca os dois. Se há responsável HUMANO,
+    // ele SEMPRE vence — mesmo que a conversa ainda carregue um robô responsável
+    // antigo (assignedAgentId) por drift de dados de um handoff antigo.
+    if (conversation.assignedToId) return null;
     // Robô responsável FIXO (assignedAgentId) tem prioridade. Se não há robô
     // nem humano atribuído, mostra o robô que está ATENDENDO agora
     // (activeAgentId) — assim o "Atendimento" reflete quem está trabalhando na
@@ -109,7 +113,7 @@ export function AssignmentPopover({
     if (conversation.assignedAgentId) {
       return agents.find((a) => a.id === conversation.assignedAgentId) ?? null;
     }
-    if (!conversation.assignedToId && conversation.activeAgentId) {
+    if (conversation.activeAgentId) {
       return agents.find((a) => a.id === conversation.activeAgentId) ?? null;
     }
     return null;
@@ -185,20 +189,23 @@ export function AssignmentPopover({
 
   // Fallback: o popover de membros nem sempre encontra o assignee na lista
   // (ex.: membro desativado), mas a conversa já traz assignedTo embutido.
-  // Quando o responsável é um ROBÔ, ele tem prioridade na exibição.
-  const assigneeName =
-    currentRobot?.name ??
-    conversation.assignedAgent?.name ??
-    currentAssignee?.user.name ??
-    conversation.assignedTo?.name ??
-    null;
-  const assigneeAvatar =
-    currentRobot?.avatarUrl ??
-    conversation.assignedAgent?.avatarUrl ??
+  const humanName =
+    currentAssignee?.user.name ?? conversation.assignedTo?.name ?? null;
+  const humanAvatar =
     currentAssignee?.user.avatarUrl ??
     conversation.assignedTo?.avatarUrl ??
     null;
-  const assigneeIsRobot = !!(currentRobot ?? conversation.assignedAgent);
+  const robotName = currentRobot?.name ?? conversation.assignedAgent?.name ?? null;
+  const robotAvatar =
+    currentRobot?.avatarUrl ?? conversation.assignedAgent?.avatarUrl ?? null;
+
+  // Responsável é humano OU robô, nunca os dois. O HUMANO sempre vence — o robô
+  // só aparece como responsável quando não há ninguém atribuído. Isso conserta o
+  // caso em que a conversa carrega um robô responsável antigo (assignedAgentId)
+  // por drift, escondendo o humano de fato responsável (ex.: transferência p/ Maju).
+  const assigneeIsRobot = !humanName && !!robotName;
+  const assigneeName = humanName ?? robotName;
+  const assigneeAvatar = assigneeIsRobot ? robotAvatar : humanAvatar;
 
   return (
     <Popover className="relative">
