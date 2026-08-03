@@ -996,6 +996,33 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
 
       <p className="mt-2 text-xs text-zinc-400">{txs.length} lançamento(s){temPeriodo ? ` no período${deISO ? ` de ${toBR(deISO)}` : ''}${ateISO ? ` até ${toBR(ateISO)}` : ''}` : mesSel ? ` em ${mesLabel(mesSel)}` : ` · ${grupos.length} ${grupos.length === 1 ? 'mês' : 'meses'}`}</p>
 
+      {(() => {
+        // Marcador informativo: fatura(s) do cartão paga(s) no mês selecionado. NÃO soma no caixa
+        // (as compras já entram itemizadas e categorizadas abaixo) — só pra você achar o pagamento.
+        const pagas = new Map<string, { cardId: string; data: string; total: number; n: number }>();
+        for (const t of data.transacoes) {
+          if (!t.faturaDe || !t.dataPagamento) continue;
+          if (mesSel && mesKey({ mes: '', data: t.dataPagamento }) !== mesSel) continue;
+          const k = `${t.faturaDe}|${t.dataPagamento}`;
+          const g = pagas.get(k) ?? { cardId: t.faturaDe, data: t.dataPagamento, total: 0, n: 0 };
+          g.total += -t.valor; g.n += 1; pagas.set(k, g);
+        }
+        const arr = [...pagas.values()].filter((g) => g.total > 0.005).sort((a, b) => toISOInput(b.data).localeCompare(toISOInput(a.data)));
+        if (!arr.length) return null;
+        return (
+          <div className="mt-2 space-y-1.5">
+            {arr.map((g) => (
+              <div key={`${g.cardId}|${g.data}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs dark:border-violet-900/40 dark:bg-violet-900/15">
+                <CreditCard className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                <span className="text-violet-800 dark:text-violet-300"><strong>Fatura {contas.find((c) => c.id === g.cardId)?.nome ?? 'cartão'} paga em {(g.data || '').slice(0, 5)}</strong> · {g.n} compra(s) itemizada(s) abaixo</span>
+                <span className="ml-auto font-semibold tabular-nums text-violet-800 dark:text-violet-300">{brl2(g.total)}</span>
+                <span className="rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-900/40 dark:text-violet-300">não soma no caixa</span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       <div className="mt-2 space-y-2">
         {grupos.map((g) => {
           const aberto = !!mesSel || !collapsed.has(g.key);
