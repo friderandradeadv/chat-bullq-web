@@ -8,6 +8,7 @@ import { useUnreadConversations } from '@/features/notifications/use-unread-conv
 import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks-count';
 import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
 import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count';
+import { useRepbNewLeadsCount } from '@/features/notifications/use-repb-new-leads-count';
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
 import { useRepassesPendentesCount } from '@/features/notifications/use-repasses-pendentes';
@@ -33,6 +34,7 @@ export function SimpleTabBar() {
   const pendingTasks = usePendingTasksCount();
   const payslipUnread = usePayslipUnreadCount();
   const preUnseen = usePreUnseenCount();
+  const repbNew = useRepbNewLeadsCount();
   const disconnected = useDisconnectedChannels();
   const { alert: creditAlert } = useAiCreditHealth();
   const repassesPend = useRepassesPendentesCount();
@@ -72,6 +74,7 @@ export function SimpleTabBar() {
           it.id === 'conversas' ? unread :
           it.id === 'agenda' ? pendingTasks :
           it.id === 'pre-processual' ? preUnseen :
+          it.id === 'repb' ? repbNew :
           it.id === 'config' ? disconnected + (creditAlert ? 1 : 0) :
           it.id === 'financeiro' ? payslipUnread + repassesPend :
           it.id === 'espaco' ? payslipUnread : 0;

@@ -25,6 +25,7 @@ import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/k
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { useAuthStore } from '@/stores/auth-store';
+import { useRepbSeenStore } from '@/stores/repb-seen-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
@@ -49,6 +50,12 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
     const cid = new URLSearchParams(window.location.search).get('case');
     if (cid) setOpenCaseId(cid);
   }, []);
+
+  // Abrir o funil = "vi os novos leads": avança o marcador e zera o badge da barra.
+  const markRepbSeen = useRepbSeenStore((s) => s.markSeen);
+  useEffect(() => {
+    markRepbSeen();
+  }, [markRepbSeen]);
 
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
