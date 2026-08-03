@@ -917,12 +917,18 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
       <>
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
-        <CalendarioFiltro
-          mesSel={mesSel} deISO={deISO} ateISO={ateISO}
-          onMes={(ym) => { setMesSel(ym); setDeISO(''); setAteISO(''); }}
-          onPeriodo={(de, ate) => { setDeISO(de); setAteISO(ate); setMesSel(''); }}
-          onLimpar={() => { setMesSel(''); setDeISO(''); setAteISO(''); }}
-        />
+        <div className="flex items-center gap-1.5">
+          <MesTicketPicker
+            value={mesSel || mesHoje}
+            onChange={(m) => { setMesSel(m); setDeISO(''); setAteISO(''); }}
+            comDados={new Set(mesesDisp)}
+            maxMes={[mesHoje, ...mesesDisp].sort().slice(-1)[0] ?? mesHoje}
+          />
+          <button
+            onClick={() => { setMesSel(''); setDeISO(''); setAteISO(''); }}
+            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${!mesSel && !temPeriodo ? 'bg-[#7048E8] text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+          >Todos</button>
+        </div>
         <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
           {ABAS.map((a) => <button key={a.key} onClick={() => setAba(a.key)} className={`rounded-md px-3 py-1 text-xs font-semibold transition ${aba === a.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{a.label}</button>)}
         </div>
