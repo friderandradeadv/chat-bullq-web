@@ -223,7 +223,10 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
               <Stat label="Acordo estimado" value={fmtBRL(c.acordo)} />
               <Stat label="Economia buscada" value={fmtBRL(c.economia)} good />
             </div>
-            <p className="mt-4 text-xs text-zinc-400">O desconto real depende do provisionamento de cada banco e da negociação — por isso falamos em <b>objetivo</b>, nunca em garantia.</p>
+            <div className="mt-4 rounded-lg border border-[#B7791F]/30 bg-[#B7791F]/5 p-3.5 text-[12px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+              É sobre essa <b>economia</b> — o quanto conseguirmos <b>abater da sua dívida</b> — que incide o nosso <b>êxito</b>: um <b>percentual</b> (você vê o valor na proposta), nunca sobre o total da dívida. Quanto maior a economia, melhor para você — e o êxito acompanha esse resultado. Justamente por isso o valor do êxito <b>varia com a negociação</b>.
+            </div>
+            <p className="mt-3 text-xs text-zinc-400">O desconto real depende do provisionamento de cada banco e da negociação — por isso falamos em <b>objetivo</b>, nunca em garantia.</p>
           </Slide>
 
           {/* 5 · CASOS REAIS (prova social — cria o desejo ANTES de mostrar o preço) */}
@@ -287,6 +290,7 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
                   <p className="text-[11px] text-zinc-500">só sobre a economia obtida</p>
                 </div>
               </div>
+              <ExitoExplica economia={c.economia} pctExito={pctExitoPadrao} exito={c.exitoPadrao} />
               <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#B7791F]/20 pt-4">
                 <div className="rounded-xl bg-[#B7791F]/10 p-4">
                   <p className="text-xs text-zinc-500">Total de honorários (estimado)</p>
@@ -325,6 +329,7 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
                     <p className="text-[11px] text-white/70">só sobre a economia obtida</p>
                   </div>
                 </div>
+                <ExitoExplica economia={c.economia} pctExito={pctExitoHoje} exito={c.exitoHoje} dark />
                 <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#B7791F]/20 pt-4">
                   <div className="rounded-xl bg-white/5 p-4">
                     <p className="text-xs text-white/60">Total de honorários hoje (estimado)</p>
@@ -389,6 +394,25 @@ function Stat({ label, value, good }: { label: string; value: string; good?: boo
     <div className={`rounded-xl border p-4 text-center ${good ? 'border-emerald-500/30 bg-emerald-50 dark:bg-emerald-900/15' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/40'}`}>
       <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
       <p className={`mt-1 font-serif text-xl font-bold ${good ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}`}>{value}</p>
+    </div>
+  );
+}
+
+// Explica que o êxito é um PERCENTUAL sobre a economia (não um valor fixo). Mostra
+// a conta com os números reais do caso e avisa que varia conforme a negociação.
+// Serve tanto no slide claro (proposta) quanto no escuro (fechar hoje).
+function ExitoExplica({ economia, pctExito, exito, dark }: { economia: number; pctExito: number; exito: number; dark?: boolean }) {
+  return (
+    <div className={`mt-3 rounded-lg border p-3.5 text-[12px] leading-relaxed ${dark ? 'border-[#B7791F]/30 bg-white/5 text-white/75' : 'border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300'}`}>
+      <p>
+        O êxito é <b>{pct(pctExito)} sobre a economia</b> — ou seja, sobre o quanto conseguirmos <b>abater da sua dívida</b>, nunca sobre o valor total dela.
+      </p>
+      <p className={`mt-1.5 font-semibold ${dark ? 'text-[#e0b872]' : 'text-[#B7791F]'}`}>
+        Ex.: economia de {fmtBRL(economia)} × {pct(pctExito)} = {fmtBRL(exito)} de êxito
+      </p>
+      <p className={`mt-1.5 ${dark ? 'text-white/55' : 'text-zinc-400'}`}>
+        Esse número é uma <b>estimativa</b> pela projeção atual e <b>varia com a negociação</b>: se conseguirmos um desconto maior, a sua economia sobe e o êxito acompanha; se for menor, cai junto. O fixo é sempre o <b>percentual</b>, não o valor — porque ele incide sobre o que você <b>efetivamente economizar</b>.
+      </p>
     </div>
   );
 }
