@@ -8,7 +8,7 @@
 // (OAB art. 41); os disclaimers ficam explícitos.
 
 import { useMemo, useRef, useState } from 'react';
-import { X, Printer, Sliders, ShieldCheck, Upload, Loader2, Check, Landmark, Clock, Scale, TrendingDown, Award } from 'lucide-react';
+import { X, Printer, Sliders, ShieldCheck, Upload, Loader2, Check, Landmark, Clock, Scale, TrendingDown, Award, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard } from '../services/legal-cases.service';
 
@@ -74,7 +74,9 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
   const [casos, setCasos] = useState(CASOS_DEFAULT);
   const [salvando, setSalvando] = useState(false);
   const [extraindo, setExtraindo] = useState(false);
+  const [baixandoPdf, setBaixandoPdf] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const slideRef = useRef<HTMLDivElement>(null);
 
   const c = useMemo(() => {
     const D = Math.max(0, divida);
@@ -124,6 +126,49 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
     } finally { setExtraindo(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
+  // Baixa o SLIDE como PDF direto (sem o diálogo de impressão do navegador).
+  // html2canvas-pro suporta as cores oklch do Tailwind v4; jsPDF monta o A4 e
+  // fatia em páginas se o slide for mais alto que uma folha.
+  const baixarPdf = async () => {
+    const el = slideRef.current;
+    if (!el) return;
+    setBaixandoPdf(true);
+    try {
+      await salvar();
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas-pro'),
+        import('jspdf'),
+      ]);
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      });
+      const img = canvas.toDataURL('image/jpeg', 0.92);
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pw) / canvas.width;
+      let position = 0;
+      let heightLeft = imgH;
+      pdf.addImage(img, 'JPEG', 0, position, pw, imgH);
+      heightLeft -= ph;
+      while (heightLeft > 0) {
+        position -= ph;
+        pdf.addPage();
+        pdf.addImage(img, 'JPEG', 0, position, pw, imgH);
+        heightLeft -= ph;
+      }
+      const safe = (nome || 'cliente').replace(/[^\p{L}\p{N} .-]/gu, '').trim() || 'cliente';
+      pdf.save(`Proposta REPB - ${safe}.pdf`);
+    } catch (e) {
+      toast.error('Não consegui gerar o PDF. Use "Imprimir" e salve como PDF.');
+    } finally {
+      setBaixandoPdf(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-zinc-100 dark:bg-zinc-950">
       {/* Barra de topo — some na impressão */}
@@ -131,7 +176,8 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
         <Sliders className="h-4 w-4 text-[#B7791F]" />
         <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Apresentação de vendas — {nome}</span>
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => { salvar(); window.print(); }} className="inline-flex items-center gap-1 rounded-lg bg-[#B7791F] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"><Printer className="h-4 w-4" /> Imprimir / PDF</button>
+          <button onClick={baixarPdf} disabled={baixandoPdf} className="inline-flex items-center gap-1 rounded-lg bg-[#B7791F] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{baixandoPdf ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando PDF…</> : <><Download className="h-4 w-4" /> Baixar PDF</>}</button>
+          <button onClick={() => { salvar(); window.print(); }} title="Imprimir (salvar como PDF pelo navegador)" className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"><Printer className="h-4 w-4" /> Imprimir</button>
           <button onClick={salvar} disabled={salvando} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{salvando ? 'Salvando…' : 'Salvar dados'}</button>
           <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
         </div>
@@ -161,7 +207,7 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
 
       {/* Slides — impressão */}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
-        <div className="mx-auto flex max-w-3xl flex-col gap-6">
+        <div ref={slideRef} className="mx-auto flex max-w-3xl flex-col gap-6 bg-white p-1 dark:bg-zinc-950">
 
           {/* 1 · CAPA */}
           <Slide dark>
