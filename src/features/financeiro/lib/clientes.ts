@@ -8,18 +8,14 @@ const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 export const isoOf = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
 export const normNome = (s: string) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-// Competência do escritório FECHA no dia 3 (vencimento da fatura): lançamento até o dia 3
-// conta como o mês ANTERIOR. ESPELHA `mesFromBR` do backend (financeiro.service.ts) — se
-// mudar um, mude o outro. Ex.: 03/08 → 2026-07 (julho); 04/08 → 2026-08.
-export const DIA_FECHA_COMPETENCIA = 3;
+// Competência do lançamento = MÊS REAL da data (calendário). ESPELHA `mesFromBR` do backend.
+// A lógica "fecha dia 3" é só do CARTÃO (ciclo da fatura, ver faturaInfo) — não vale pros
+// gastos/recebimentos gerais do livro-razão.
 export const competenciaBR = (br: string) => {
   const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!m) return '';
-  let dia = +m[1], mes = +m[2], ano = +m[3];
-  if (dia <= DIA_FECHA_COMPETENCIA) { mes -= 1; if (mes < 1) { mes = 12; ano -= 1; } }
-  return `${ano}-${String(mes).padStart(2, '0')}`;
+  return m ? `${m[3]}-${m[2]}` : '';
 };
-/** Mês-competência de HOJE (respeita o fechamento no dia 3). */
+/** Mês-competência de HOJE (mês real do calendário). */
 export const mesAtualCompetencia = () => {
   const d = new Date();
   return competenciaBR(`${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`);
