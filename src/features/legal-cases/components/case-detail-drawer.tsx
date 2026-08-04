@@ -1084,7 +1084,28 @@ function ResumoAtendimento({ caseId, resumo, geradoEm, onDone }: { caseId: strin
       </div>
       {resumo ? (
         <article className="mt-1.5 rounded border border-[#cfe0ed] bg-[#f8fbff] p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-          <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-[#101820] dark:text-zinc-200">{resumo}</p>
+          <div className="space-y-2.5 text-xs leading-relaxed text-[#101820] dark:text-zinc-200">
+            {resumo.split('\n').map((raw, i) => {
+              const line = raw.replace(/^\s*[•\-*]\s*/, '').trim();
+              if (!line) return null;
+              const m = line.match(/^([^:]{2,70}):\s*(.*)$/);
+              return (
+                <div key={i} className="flex gap-2 break-words">
+                  <span className="mt-[1px] select-none text-[#7048e8]">•</span>
+                  <p className="min-w-0">
+                    {m ? (
+                      <>
+                        <strong className="font-semibold text-[#101820] dark:text-zinc-100">{m[1]}:</strong>
+                        {m[2] ? ` ${m[2]}` : ''}
+                      </>
+                    ) : (
+                      line
+                    )}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
           {geradoEm && <p className="mt-2 text-[10px] text-zinc-400">Gerado em {new Date(geradoEm).toLocaleString('pt-BR')}</p>}
         </article>
       ) : (
