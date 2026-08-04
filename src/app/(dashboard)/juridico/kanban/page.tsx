@@ -561,6 +561,18 @@ const Card = memo(function Card({
             </span>
           ) : null;
         })()}
+        {/* Selo "revisar fase": o tribunal já registrou um ato terminal/adiantado
+            (sentença/acórdão/trânsito, via DataJud/Astrea) à frente da fase — o
+            kanban só anda com DJEN, então isto pede conferência. Some ao mover. */}
+        {c.revisarFase && (
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3"
+            style={{ background: '#fde68a', color: '#7c2d12' }}
+            title={`Tribunal registrou ${c.revisarFase.evento ?? 'andamento'} à frente da fase — conferir e mover o card`}
+          >
+            🔎 revisar fase
+          </span>
+        )}
         {/* Etiquetas jurídicas (EntityTag, incl. migradas do Astrea) NÃO vão na face
             do card — enchiam demais e misturavam com produto/área (fix 406b46f, que
             regrediu). Ficam só produto + área aqui; a edição/visão das etiquetas é na

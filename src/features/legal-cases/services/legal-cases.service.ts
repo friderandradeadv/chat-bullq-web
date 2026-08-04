@@ -251,6 +251,9 @@ export interface KanbanCard {
   produto: string | null; // 1ª etiqueta (RMC/BPC-LOAS…)
   areaJuridica: string | null; // 2ª etiqueta (Bancário/Previdenciário…)
   vencemos: string | null; // 'Sim' | 'Não' | 'Parcial' | resultado da sentença → badge
+  // Selo "revisar fase": tribunal registrou ato terminal/adiantado à frente da
+  // fase (via DataJud/Astrea). Badge de alerta — conferir e mover o card.
+  revisarFase: { evento: string | null; desde: string | null } | null;
   inssResultado: string | null; // 'deferido' | 'recurso' | 'indeferido' — abas do board do INSS
   tags: { id: string; name: string; color: string }[];
   court: string | null;
