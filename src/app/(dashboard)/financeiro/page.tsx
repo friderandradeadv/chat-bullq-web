@@ -122,6 +122,26 @@ export default function FinanceiroPage() {
   const verAdv = sel.startsWith('v:') ? '' : sel;
   const advNome = advs.find((a) => a.id === verAdv)?.name;
 
+  // Mês selecionado — COMPARTILHADO entre os KPIs do topo e o livro-razão (Lançamentos).
+  const [mesSel, setMesSel] = useState<string>(() => mesAtualCompetencia());
+  // KPIs recalculados para o mês selecionado (a partir da série `meses`): posição em caixa no
+  // fim do mês, resultado/receita/despesa do mês e janela de 12 meses até ele.
+  const kpiMes = useMemo(() => {
+    const kk = data?.kpis;
+    const meses = [...(data?.meses ?? [])].filter((m) => /^\d{4}-\d{2}$/.test(m.key)).sort((a, b) => a.key.localeCompare(b.key));
+    const sm = mesSel && /^\d{4}-\d{2}$/.test(mesSel) ? mesSel : (meses.at(-1)?.key ?? mesSel);
+    const m = meses.find((x) => x.key === sm) ?? null;
+    const ant = [...meses].reverse().find((x) => x.key <= sm); // último mês ≤ sel (carrega o saldo p/ mês vazio)
+    const caixa = m ? m.acumulado : (ant ? ant.acumulado : (kk?.caixaContas ?? kk?.saldoAtual ?? 0));
+    const janela = meses.filter((x) => x.key <= sm).slice(-12);
+    return {
+      sel: sm, label: mesLabel(sm),
+      resultado: m?.resultado ?? 0, receita: m?.receita ?? 0, despesa: m?.despesaTotal ?? 0, caixa,
+      receita12: janela.reduce((s, x) => s + (x.receita ?? 0), 0),
+      despesa12: janela.reduce((s, x) => s + (x.despesaTotal ?? 0), 0),
+    };
+  }, [mesSel, data]);
+
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
 
   if (data?.semAcesso) {
@@ -196,12 +216,12 @@ export default function FinanceiroPage() {
         <>
         {/* KPIs — pulso financeiro sempre visível */}
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {(() => { const caixa = k.caixaContas ?? k.saldoAtual; const divida = k.aporteAcumulado ?? 0; const pos = caixa - divida; const temDivida = divida > 0; const valor = temDivida ? pos : caixa; return (
-          <Kpi icon={Scale} accent={valor < 0 ? '#E03131' : '#2F9E44'} label={`${temDivida ? 'Posição real' : 'Caixa real'} · ${k.mesAtualLabel}`} value={brl(valor)} hint={temDivida ? `${brl(caixa)} em caixa − ${brl(divida)} devido aos sócios` : `nas contas · operacional ${brl(k.saldoOperacional ?? k.saldoAtual)}`} onClick={() => setShowSaldo(true)} />
+          {(() => { const caixa = kpiMes.caixa; const divida = k.aporteAcumulado ?? 0; const pos = caixa - divida; const temDivida = divida > 0; const valor = temDivida ? pos : caixa; return (
+          <Kpi icon={Scale} accent={valor < 0 ? '#E03131' : '#2F9E44'} label={`${temDivida ? 'Posição real' : 'Caixa real'} · ${kpiMes.label}`} value={brl(valor)} hint={temDivida ? `${brl(caixa)} em caixa − ${brl(divida)} devido aos sócios` : `${brl(caixa)} em caixa no fim do mês`} onClick={() => setShowSaldo(true)} />
           ); })()}
-          <Kpi icon={k.resultadoMes >= 0 ? TrendingUp : TrendingDown} accent={k.resultadoMes >= 0 ? '#2F9E44' : '#E03131'} label="Resultado do mês" value={brl(k.resultadoMes)} hint={`receita ${brl(k.receitaMes)} · despesa ${brl(k.despesaMes)}`} />
-          <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(k.receita12m)} hint={`média ${brl(k.receitaMedia)}/mês`} />
-          <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
+          <Kpi icon={kpiMes.resultado >= 0 ? TrendingUp : TrendingDown} accent={kpiMes.resultado >= 0 ? '#2F9E44' : '#E03131'} label={`Resultado · ${kpiMes.label}`} value={brl(kpiMes.resultado)} hint={`receita ${brl(kpiMes.receita)} · despesa ${brl(kpiMes.despesa)}`} />
+          <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(kpiMes.receita12)} hint={`até ${kpiMes.label} · média ${brl(kpiMes.receita12 / 12)}/mês`} />
+          <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(kpiMes.despesa12)} hint={`até ${kpiMes.label} · fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
         {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} onClose={() => setShowSaldo(false)} />}
@@ -209,7 +229,7 @@ export default function FinanceiroPage() {
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
 
-        {view === 'lancamentos' && <LancamentosTab data={data} />}
+        {view === 'lancamentos' && <LancamentosTab data={data} mesSel={mesSel} setMesSel={setMesSel} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
         {/* "A receber" reúne Cobranças (parcelas/ASAAS) + CS (recebíveis dos processos), separados por subaba. */}
         {view === 'cobrancas' && <AReceberTab data={data} />}
@@ -620,12 +640,12 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
   );
 }
 
-function LancamentosTab({ data }: { data: FinDashboard }) {
+function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSel: string; setMesSel: (m: string) => void }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
-  const mesHoje = useMemo(() => mesAtualCompetencia(), []); // competência fecha dia 3 (hoje 03/08 → julho)
+  const mesHoje = useMemo(() => mesAtualCompetencia(), []); // mês real corrente
   // Abre já filtrado pelo mês corrente (é o que a equipe olha no dia a dia). "" = Todos os meses.
-  const [mesSel, setMesSel] = useState<string>(mesHoje);
+  // mesSel vem do pai (compartilhado com os KPIs do topo).
   // Garante o mês corrente na lista do seletor mesmo sem lançamentos ainda (senão o value fica órfão).
   const mesesOpcoes = useMemo(() => (mesesDisp.includes(mesHoje) ? mesesDisp : [mesHoje, ...mesesDisp]), [mesesDisp, mesHoje]);
   const [mostrarFuturas, setMostrarFuturas] = useState(false); // parcelas a receber/pagar de meses futuros só sob demanda
