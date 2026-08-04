@@ -127,8 +127,9 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
   };
 
   // Baixa o SLIDE como PDF direto (sem o diálogo de impressão do navegador).
-  // html2canvas-pro suporta as cores oklch do Tailwind v4; jsPDF monta o A4 e
-  // fatia em páginas se o slide for mais alto que uma folha.
+  // Gera UMA página única do tamanho EXATO do slide — sem quebra de página, então
+  // NUNCA corta um card no meio. html2canvas-pro suporta as cores oklch do
+  // Tailwind v4 (o html2canvas comum quebra).
   const baixarPdf = async () => {
     const el = slideRef.current;
     if (!el) return;
@@ -139,45 +140,16 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
         import('html2canvas-pro'),
         import('jspdf'),
       ]);
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-      const pw = pdf.internal.pageSize.getWidth();
-      const ph = pdf.internal.pageSize.getHeight();
-      const margin = 8;
-      const gap = 4;
-      const availW = pw - margin * 2;
-      const availH = ph - margin * 2;
-      // Captura CADA seção do slide (cada filho direto) e empacota nas páginas,
-      // quebrando SÓ entre blocos — nunca no meio de um card/texto. Se uma seção
-      // for mais alta que a página, reduz pra caber inteira.
-      const sections = Array.from(el.children).filter(
-        (n): n is HTMLElement => n instanceof HTMLElement && n.offsetHeight > 4,
-      );
-      const targets = sections.length ? sections : [el];
-      let y = margin;
-      let first = true;
-      for (const sec of targets) {
-        const canvas = await html2canvas(sec, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          logging: false,
-        });
-        const img = canvas.toDataURL('image/jpeg', 0.92);
-        let w = availW;
-        let h = (canvas.height * w) / canvas.width;
-        if (h > availH) {
-          h = availH;
-          w = (canvas.width * h) / canvas.height;
-        }
-        if (!first && y + h > ph - margin) {
-          pdf.addPage();
-          y = margin;
-        }
-        const x = margin + (availW - w) / 2;
-        pdf.addImage(img, 'JPEG', x, y, w, h);
-        y += h + gap;
-        first = false;
-      }
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      });
+      const wmm = 210;
+      const hmm = Math.max(297, (canvas.height * wmm) / canvas.width);
+      const pdf = new jsPDF({ unit: 'mm', format: [wmm, hmm], orientation: 'portrait' });
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, wmm, hmm);
       const safe = (nome || 'cliente').replace(/[^\p{L}\p{N} .-]/gu, '').trim() || 'cliente';
       pdf.save(`Proposta REPB - ${safe}.pdf`);
     } catch (e) {
