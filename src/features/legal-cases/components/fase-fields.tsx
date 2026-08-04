@@ -254,8 +254,41 @@ export function FaseFields({ caseId, phase, data }: { caseId: string; phase: str
   );
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+// ISO (ou qualquer data parseável) -> valor do <input datetime-local> (local, sem Z).
+// Sem isso, um valor salvo como ISO ("...T13:00:00.000Z") NÃO aparece no input
+// (ele só aceita "YYYY-MM-DDTHH:MM" local) — o campo ficava vazio mesmo com a
+// reunião já marcada.
+const toInputDateTime = (v: any): string => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return typeof v === 'string' ? v : '';
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+// valor do <input datetime-local> (local) -> ISO pra salvar (igual ao "Agendar reunião").
+const fromInputDateTime = (v: string): string => {
+  if (!v) return '';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? v : d.toISOString();
+};
+const toInputDate = (v: any): string => {
+  if (!v) return '';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return typeof v === 'string' ? v : '';
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
 function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave: (v: any) => void }) {
-  const [local, setLocal] = useState(field.type === 'currency' ? currencyToInput(value) : (value ?? ''));
+  const [local, setLocal] = useState(
+    field.type === 'currency'
+      ? currencyToInput(value)
+      : field.type === 'datetime'
+        ? toInputDateTime(value)
+        : field.type === 'date'
+          ? toInputDate(value)
+          : (value ?? ''),
+  );
   const [expanded, setExpanded] = useState(false);
   const debRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { setLocal(field.type === 'currency' ? currencyToInput(value) : (value ?? '')); }, [value, field.type]);
@@ -342,8 +375,8 @@ function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave
       inputMode={isCurrency ? 'decimal' : undefined}
       value={local}
       placeholder={isCurrency ? 'R$ 0,00' : undefined}
-      onChange={(e) => { const v = isCurrency ? maskCurrencyBR(e.target.value) : e.target.value; setLocal(v); if (inputType !== 'text') onSave(v); }}
-      onBlur={() => onSave(local)}
+      onChange={(e) => { const v = isCurrency ? maskCurrencyBR(e.target.value) : e.target.value; setLocal(v); if (inputType !== 'text') onSave(field.type === 'datetime' ? fromInputDateTime(v) : v); }}
+      onBlur={() => onSave(field.type === 'datetime' ? fromInputDateTime(local) : local)}
       className={INPUT}
     />
   );
