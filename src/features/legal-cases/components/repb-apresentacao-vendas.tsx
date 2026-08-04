@@ -139,26 +139,44 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
         import('html2canvas-pro'),
         import('jspdf'),
       ]);
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-      });
-      const img = canvas.toDataURL('image/jpeg', 0.92);
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
       const pw = pdf.internal.pageSize.getWidth();
       const ph = pdf.internal.pageSize.getHeight();
-      const imgH = (canvas.height * pw) / canvas.width;
-      let position = 0;
-      let heightLeft = imgH;
-      pdf.addImage(img, 'JPEG', 0, position, pw, imgH);
-      heightLeft -= ph;
-      while (heightLeft > 0) {
-        position -= ph;
-        pdf.addPage();
-        pdf.addImage(img, 'JPEG', 0, position, pw, imgH);
-        heightLeft -= ph;
+      const margin = 8;
+      const gap = 4;
+      const availW = pw - margin * 2;
+      const availH = ph - margin * 2;
+      // Captura CADA seção do slide (cada filho direto) e empacota nas páginas,
+      // quebrando SÓ entre blocos — nunca no meio de um card/texto. Se uma seção
+      // for mais alta que a página, reduz pra caber inteira.
+      const sections = Array.from(el.children).filter(
+        (n): n is HTMLElement => n instanceof HTMLElement && n.offsetHeight > 4,
+      );
+      const targets = sections.length ? sections : [el];
+      let y = margin;
+      let first = true;
+      for (const sec of targets) {
+        const canvas = await html2canvas(sec, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+        });
+        const img = canvas.toDataURL('image/jpeg', 0.92);
+        let w = availW;
+        let h = (canvas.height * w) / canvas.width;
+        if (h > availH) {
+          h = availH;
+          w = (canvas.width * h) / canvas.height;
+        }
+        if (!first && y + h > ph - margin) {
+          pdf.addPage();
+          y = margin;
+        }
+        const x = margin + (availW - w) / 2;
+        pdf.addImage(img, 'JPEG', x, y, w, h);
+        y += h + gap;
+        first = false;
       }
       const safe = (nome || 'cliente').replace(/[^\p{L}\p{N} .-]/gu, '').trim() || 'cliente';
       pdf.save(`Proposta REPB - ${safe}.pdf`);
