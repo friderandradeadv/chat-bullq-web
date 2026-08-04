@@ -196,7 +196,7 @@ export interface AddCobrancaInput { cliente: string; descricao?: string; valorTo
 export interface AddTransacaoInput {
   data: string; tipo: 'receita' | 'despesa'; categoria: string; subtipo?: 'inicial' | 'exito'; valor: number;
   party?: string; pagador?: string; recebedor?: string;
-  vencimento?: string; dataPagamento?: string;
+  vencimento?: string; dataPagamento?: string; competencia?: string;
   status?: TxStatus; parcelas?: number; intervalo?: 'mensal' | 'anual'; split?: SplitItem[];
   rateio?: RateioExito | null;
   responsavelId?: string; responsavel?: string; conta?: string; area?: string;
@@ -205,7 +205,7 @@ export interface AddTransacaoInput {
   caseId?: string; contactId?: string;
 }
 export interface UpdateTransacaoInput {
-  data?: string; vencimento?: string; dataPagamento?: string;
+  data?: string; vencimento?: string; dataPagamento?: string; competencia?: string;
   tipo?: 'receita' | 'despesa'; categoria?: string; subtipo?: 'inicial' | 'exito'; valor?: number;
   pagador?: string; recebedor?: string; status?: TxStatus; split?: SplitItem[];
   rateio?: RateioExito | null;

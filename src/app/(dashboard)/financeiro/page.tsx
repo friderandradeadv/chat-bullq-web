@@ -391,7 +391,7 @@ interface SplitRow { tipo: 'socio' | 'associado'; userId: string; valor: string;
 interface RateioForm { bruto: string; cliente: string; sucumbencia: string; honorarios: string }
 interface Editor {
   id: string | null; serieId: string | null; tipo: 'receita' | 'despesa';
-  dataISO: string; vencISO: string; pagtoISO: string;
+  dataISO: string; vencISO: string; pagtoISO: string; competencia: string; // YYYY-MM mês de referência (padrão = mês da data)
   categoria: string; subtipo: 'inicial' | 'exito'; pagador: string; recebedor: string; valor: string;
   status: TxStatus; parcelas: string; repetir: 'nao' | 'mensal' | 'anual'; escopo: 'uma' | 'proximas'; split: SplitRow[];
   rateio: RateioForm; responsavelId: string; conta: string;
@@ -799,14 +799,31 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     return { recebido, aReceber, despesas, aPagar, saldo: recebido - despesas };
   }, [txs]);
 
+  // Saldo GERAL (acumulado/running): abre com o que sobrou até o fim do mês anterior e fecha
+  // com + o movimento do mês. Global (ignora filtros de responsável/vertical) — é o caixa do
+  // escritório; bate com o "em caixa" do topo. Cartão não é caixa (saldo do cartão fora).
+  const saldoGeral = useMemo(() => {
+    if (!mesSel) return null;
+    const saldoIni = (data.contas ?? []).reduce((s, c) => s + (Number((c as { saldoInicial?: number }).saldoInicial) || 0), 0);
+    let antes = 0, mov = 0;
+    for (const t of data.transacoes) {
+      if (!ehLiquidado(txStatus(t))) continue;
+      if (t.conta && cardIds.has(t.conta)) continue;
+      const k = mesKey(t);
+      if (k < mesSel) antes += t.valor; else if (k === mesSel) mov += t.valor;
+    }
+    const abre = saldoIni + antes;
+    return { abre, mov, fecha: abre + mov };
+  }, [mesSel, data.transacoes, data.contas, cardIds]);
+
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   // Lançamentos com o rateio (verticais/honorários) expandido no livro-razão.
   const [rvOpen, setRvOpen] = useState<Set<string>>(new Set());
   const toggleRv = (id: string) => setRvOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const [importing, setImporting] = useState(false);
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' });
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? (t.valor < 0 ? escritorioNome : (t.party ?? '')), recebedor: t.recebedor ?? (t.valor < 0 ? (t.party ?? '') : ''), valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })), contribuintes: (t.contribuintes ?? []).map((x) => ({ userId: x.userId ?? undefined, nome: x.nome, modo: 'valor' as const, valor: fmtMoney(x.valor), pct: '' })) });
+  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), competencia: toISOInput(hojeBR()).slice(0, 7), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), competencia: /^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '') ? (t.mes as string) : toISOInput(t.data).slice(0, 7), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? (t.valor < 0 ? escritorioNome : (t.party ?? '')), recebedor: t.recebedor ?? (t.valor < 0 ? (t.party ?? '') : ''), valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })), contribuintes: (t.contribuintes ?? []).map((x) => ({ userId: x.userId ?? undefined, nome: x.nome, modo: 'valor' as const, valor: fmtMoney(x.valor), pct: '' })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
@@ -857,9 +874,9 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
     const responsavel = advogados.find((a) => a.id === editor.responsavelId)?.name ?? '';
     if (editor.id == null) {
       const reps = editor.repetir === 'nao' ? 1 : Math.max(1, parseInt(editor.parcelas, 10) || 1);
-      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, rateioVerticais: rvArr.length ? rvArr : undefined, contribuintes: contribArr.length ? contribArr : undefined, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined, area: editor.area || undefined, contactId: editor.contactId || undefined, caseId: editor.caseId || undefined });
+      addM.mutate({ data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || undefined, recebedor: editor.recebedor || undefined, vencimento: editor.vencISO ? toBR(editor.vencISO) : undefined, dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : undefined, competencia: /^\d{4}-\d{2}$/.test(editor.competencia) ? editor.competencia : undefined, status: editor.status, parcelas: reps, intervalo: editor.repetir === 'anual' ? 'anual' : 'mensal', split, rateio, rateioVerticais: rvArr.length ? rvArr : undefined, contribuintes: contribArr.length ? contribArr : undefined, responsavelId: editor.responsavelId || undefined, responsavel: responsavel || undefined, conta: editor.conta || undefined, area: editor.area || undefined, contactId: editor.contactId || undefined, caseId: editor.caseId || undefined });
     } else {
-      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', status: editor.status, escopo: editor.escopo, split, rateio, ...(rvArr.length ? { rateioVerticais: rvArr } : {}), contribuintes: contribArr, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '', area: editor.area || '' } });
+      updM.mutate({ id: editor.id, input: { data: toBR(editor.dataISO), tipo: editor.tipo, categoria: editor.categoria, subtipo: /honor/i.test(editor.categoria) ? editor.subtipo : undefined, valor: v, pagador: editor.pagador || '', recebedor: editor.recebedor || '', vencimento: editor.vencISO ? toBR(editor.vencISO) : '', dataPagamento: liq ? toBR(editor.pagtoISO || editor.dataISO) : '', competencia: /^\d{4}-\d{2}$/.test(editor.competencia) ? editor.competencia : '', status: editor.status, escopo: editor.escopo, split, rateio, ...(rvArr.length ? { rateioVerticais: rvArr } : {}), contribuintes: contribArr, responsavelId: editor.responsavelId || '', responsavel, conta: editor.conta || '', area: editor.area || '' } });
     }
   };
   const quickReceber = (t: FinTransacao) => updM.mutate({ id: t.id!, input: { status: t.valor >= 0 ? 'recebido' : 'pago', dataPagamento: hojeBR(), escopo: 'uma' } });
@@ -971,6 +988,17 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
         <div className="rounded-lg bg-rose-50 py-1.5 dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesas</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(resumo.despesas)}</p>{resumo.aPagar > 0 && <p className="text-[10px] text-amber-600">+{brl(resumo.aPagar)} a pagar</p>}</div>
         <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo realizado{mesSel ? ' do mês' : ''}</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
       </div>
+
+      {saldoGeral && (
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg border border-[#7048E8]/20 bg-[#7048E8]/[0.04] px-3 py-2 text-xs dark:border-[#7048E8]/25 dark:bg-[#7048E8]/[0.08]">
+          <span className="font-semibold text-zinc-600 dark:text-zinc-300">Saldo geral</span>
+          <span className="text-zinc-500">abre {mesLabel(mesSel)} com <strong className={`tabular-nums ${saldoGeral.abre >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoGeral.abre)}</strong></span>
+          <span className="text-zinc-300 dark:text-zinc-600">›</span>
+          <span className="text-zinc-500">movimento <strong className={`tabular-nums ${saldoGeral.mov >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{saldoGeral.mov >= 0 ? '+' : '−'}{brl(Math.abs(saldoGeral.mov))}</strong></span>
+          <span className="text-zinc-300 dark:text-zinc-600">›</span>
+          <span className="text-zinc-500">fecha com <strong className={`tabular-nums ${saldoGeral.fecha >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoGeral.fecha)}</strong></span>
+        </div>
+      )}
 
       {/* Saldo ACUMULADO da conta (não o fluxo do mês) — só quando filtra por uma conta bancária.
           Reusa `reconciliacao` do backend: saldo real (âncora) OU calculado pelo razão. Mesmo número do card na aba Contas. */}
@@ -1235,13 +1263,17 @@ function LancamentosTab({ data }: { data: FinDashboard }) {
                 </div>
               </Field>
 
-              {/* Datas: sempre a competência (mês de referência) + UMA data conforme a situação —
-                  se já caiu (recebido/pago) mostra quando entrou/saiu; se está a receber/pagar, o vencimento. */}
+              {/* Data do lançamento + UMA data conforme a situação (recebido/pago em, ou vence em).
+                  A COMPETÊNCIA (mês que conta) fica separada abaixo — padrão = mês da data. */}
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Competência (mês de referência)"><input type="date" value={editor.dataISO} onChange={(e) => setEditor({ ...editor, dataISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <Field label="Data do lançamento"><input type="date" value={editor.dataISO} onChange={(e) => setEditor({ ...editor, dataISO: e.target.value, competencia: (e.target.value || '').slice(0, 7) || editor.competencia })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
                 {ehLiquidado(editor.status)
                   ? <Field label={editor.tipo === 'receita' ? 'Recebido em' : 'Pago em'}><input type="date" value={editor.pagtoISO} onChange={(e) => setEditor({ ...editor, pagtoISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
                   : <Field label="Vence em"><input type="date" value={editor.vencISO} onChange={(e) => setEditor({ ...editor, vencISO: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>}
+              </div>
+              <div className="mt-3">
+                <Field label="Competência (mês que conta)"><input type="month" value={editor.competencia} onChange={(e) => setEditor({ ...editor, competencia: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></Field>
+                <p className="mt-1 text-[11px] text-zinc-400">Padrão = mês da data. Mude só quando o lançamento é <strong>de outro mês</strong> — ex.: pró-labore pago 03/08 mas competência <strong>julho</strong>.</p>
               </div>
 
               {editor.tipo === 'receita' ? (

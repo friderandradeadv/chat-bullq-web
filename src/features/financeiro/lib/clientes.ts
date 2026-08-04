@@ -20,12 +20,11 @@ export const mesAtualCompetencia = () => {
   const d = new Date();
   return competenciaBR(`${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`);
 };
-/** Mês (YYYY-MM) de um lançamento: deriva da data pela competência (dia 3); só cai no
- *  `mes` gravado se a data faltar/for inválida. */
+/** Mês-competência (YYYY-MM) de um lançamento: usa o `mes` gravado (pode ser setado à mão,
+ *  ex.: pró-labore pago 03/08 mas competência julho); só deriva da data se `mes` faltar. */
 export const mesKey = (t: Pick<FinTransacao, 'mes' | 'data'>) => {
-  const k = competenciaBR(t.data || '');
-  if (k) return k;
-  return /^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '') ? (t.mes as string) : '0000-00';
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '')) return t.mes as string;
+  return competenciaBR(t.data || '') || '0000-00';
 };
 export const mesLabel = (mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_PT[+m[2] - 1]} de ${m[1]}` : 'Sem data'; };
 export const mesCurtoKey = (mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_ABREV[+m[2] - 1]}/${m[1].slice(2)}` : mes; };
