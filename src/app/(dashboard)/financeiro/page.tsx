@@ -124,22 +124,26 @@ export default function FinanceiroPage() {
 
   // Mês selecionado — COMPARTILHADO entre os KPIs do topo e o livro-razão (Lançamentos).
   const [mesSel, setMesSel] = useState<string>(() => mesAtualCompetencia());
-  // KPIs recalculados para o mês selecionado (a partir da série `meses`): posição em caixa no
-  // fim do mês, resultado/receita/despesa do mês e janela de 12 meses até ele.
+  // KPIs do mês selecionado, calculados das TRANSAÇÕES REAIS liquidadas (igual o livro-razão —
+  // NÃO da série `meses`, que mistura projeção do Astrea). Resultado/receita/despesa = fluxo do
+  // mês; caixa = posição no fim do mês = caixa atual − fluxos liquidados DEPOIS do mês (âncora no
+  // caixa real). Aporte fica fora (é dívida, não caixa/faturamento).
   const kpiMes = useMemo(() => {
     const kk = data?.kpis;
-    const meses = [...(data?.meses ?? [])].filter((m) => /^\d{4}-\d{2}$/.test(m.key)).sort((a, b) => a.key.localeCompare(b.key));
-    const sm = mesSel && /^\d{4}-\d{2}$/.test(mesSel) ? mesSel : (meses.at(-1)?.key ?? mesSel);
-    const m = meses.find((x) => x.key === sm) ?? null;
-    const ant = [...meses].reverse().find((x) => x.key <= sm); // último mês ≤ sel (carrega o saldo p/ mês vazio)
-    const caixa = m ? m.acumulado : (ant ? ant.acumulado : (kk?.caixaContas ?? kk?.saldoAtual ?? 0));
-    const janela = meses.filter((x) => x.key <= sm).slice(-12);
-    return {
-      sel: sm, label: mesLabel(sm),
-      resultado: m?.resultado ?? 0, receita: m?.receita ?? 0, despesa: m?.despesaTotal ?? 0, caixa,
-      receita12: janela.reduce((s, x) => s + (x.receita ?? 0), 0),
-      despesa12: janela.reduce((s, x) => s + (x.despesaTotal ?? 0), 0),
-    };
+    const txs = data?.transacoes ?? [];
+    const mesesKeys = [...(data?.meses ?? [])].map((m) => m.key).filter((x) => /^\d{4}-\d{2}$/.test(x)).sort();
+    const sm = mesSel && /^\d{4}-\d{2}$/.test(mesSel) ? mesSel : (mesesKeys.at(-1) ?? mesSel);
+    const liq = (t: FinTransacao) => { const s = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago'); return s === 'recebido' || s === 'pago'; };
+    const ehAporte = (t: FinTransacao) => t.valor >= 0 && /aporte/i.test(t.categoria || '');
+    let receita = 0, despesa = 0, fluxoDepois = 0;
+    for (const t of txs) {
+      if (!liq(t) || ehAporte(t)) continue;
+      const mk = mesKey(t);
+      if (mk === sm) { if (t.valor >= 0) receita += t.valor; else despesa += -t.valor; }
+      else if (mk > sm) fluxoDepois += t.valor;
+    }
+    const caixa = (kk?.caixaContas ?? kk?.saldoAtual ?? 0) - fluxoDepois;
+    return { sel: sm, label: mesLabel(sm), resultado: receita - despesa, receita, despesa, caixa };
   }, [mesSel, data]);
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
@@ -220,8 +224,8 @@ export default function FinanceiroPage() {
           <Kpi icon={Scale} accent={valor < 0 ? '#E03131' : '#2F9E44'} label={`${temDivida ? 'Posição real' : 'Caixa real'} · ${kpiMes.label}`} value={brl(valor)} hint={temDivida ? `${brl(caixa)} em caixa − ${brl(divida)} devido aos sócios` : `${brl(caixa)} em caixa no fim do mês`} onClick={() => setShowSaldo(true)} />
           ); })()}
           <Kpi icon={kpiMes.resultado >= 0 ? TrendingUp : TrendingDown} accent={kpiMes.resultado >= 0 ? '#2F9E44' : '#E03131'} label={`Resultado · ${kpiMes.label}`} value={brl(kpiMes.resultado)} hint={`receita ${brl(kpiMes.receita)} · despesa ${brl(kpiMes.despesa)}`} />
-          <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(kpiMes.receita12)} hint={`até ${kpiMes.label} · média ${brl(kpiMes.receita12 / 12)}/mês`} />
-          <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(kpiMes.despesa12)} hint={`até ${kpiMes.label} · fixo ${brl(k.custoFixoMensal)}/mês`} />
+          <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(k.receita12m)} hint={`média ${brl(k.receitaMedia)}/mês`} />
+          <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
         {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} onClose={() => setShowSaldo(false)} />}
