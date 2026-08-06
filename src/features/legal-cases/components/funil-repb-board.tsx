@@ -244,7 +244,7 @@ function Card({ c, isNovos, terminal, onOpen, onFechou, onApresentar, onAgendar,
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onClick={() => { markCardClicked(c.id); onOpen?.(c.id); }}
       className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''}`}>
-      {isNew && <span title="Novo lead — clique para ver" className="absolute -right-1.5 -top-1.5 z-10 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" />}
+      {isNew && <span title="Novo lead — clique para ver" className="absolute right-2 top-2 z-10 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" />}
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: ACCENT, color: '#fff' }}>REPB</span>
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
