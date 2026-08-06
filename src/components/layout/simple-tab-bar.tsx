@@ -14,6 +14,16 @@ import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health
 import { useRepassesPendentesCount } from '@/features/notifications/use-repasses-pendentes';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
 import { useNavMode, barItemById, DEFAULT_SIMPLE_BAR } from '@/stores/nav-mode-store';
+import { useDockSafeArea } from '@/components/layout/use-dock-safe-area';
+import {
+  Dropdown,
+  DropdownButton,
+  DropdownMenu,
+  DropdownItem,
+  DropdownLabel,
+  DropdownDivider,
+} from '@/components/ui/dropdown';
+import { UserCircle, Settings, LogOut } from 'lucide-react';
 
 // Barra de atalhos do MODO SIMPLES (desktop) — mesma pegada da barra de baixo do
 // mobile, mas com os atalhos que o usuário escolhe (editável nas Configurações).
@@ -40,7 +50,9 @@ export function SimpleTabBar() {
   const repassesPend = useRepassesPendentesCount();
   const nav = useMobileNav();
   const { barItems, hydrated } = useNavMode();
-  const { user, organizations, activeOrgId } = useAuthStore();
+  const { user, organizations, activeOrgId, logout } = useAuthStore();
+  // Mede o quanto o Dock do macOS cobre o rodapé e publica em `--dock-safe`.
+  useDockSafeArea();
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
   const iniciais = (user?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -64,6 +76,9 @@ export function SimpleTabBar() {
   return (
     <nav
       aria-label="Atalhos"
+      // paddingBottom = altura coberta pelo Dock: o fundo desce até bottom-0
+      // (atrás do Dock), mas a fileira de atalhos sobe pra ficar sempre visível.
+      style={{ paddingBottom: 'var(--dock-safe, 0px)' }}
       className="fixed inset-x-0 bottom-0 z-30 hidden items-stretch border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-white/10 dark:bg-[#15181A]/95 lg:flex"
     >
       {items.map((it) => {
@@ -85,6 +100,41 @@ export function SimpleTabBar() {
             <button key={it.id} type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>
               {iconEl}<span>{it.label}</span>
             </button>
+          );
+        }
+        // "Você": em vez de navegar, abre um menu (perfil, configurações, sair)
+        // — como o avatar nas redes sociais. Menu abre PRA CIMA (top end) pra
+        // não sair da tela nem cair atrás do Dock.
+        if (it.id === 'espaco') {
+          return (
+            <Dropdown key={it.id}>
+              <DropdownButton className={linkCls(isActive('/escritorio'))}>
+                {iconEl}<span>{it.label}</span>
+              </DropdownButton>
+              <DropdownMenu anchor="top end" className="mb-1 min-w-56">
+                <div className="flex items-center gap-2 px-2.5 py-2">
+                  {avatarEl(false)}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-zinc-900 dark:text-white">{user?.name}</span>
+                    <span className="block truncate text-xs text-zinc-500">{user?.email}</span>
+                  </span>
+                </div>
+                <DropdownDivider />
+                <DropdownItem href="/escritorio">
+                  <UserCircle />
+                  <DropdownLabel>Meu Espaço</DropdownLabel>
+                </DropdownItem>
+                <DropdownItem href="/settings">
+                  <Settings />
+                  <DropdownLabel>Configurações</DropdownLabel>
+                </DropdownItem>
+                <DropdownDivider />
+                <DropdownItem onClick={logout}>
+                  <LogOut />
+                  <DropdownLabel>Sair</DropdownLabel>
+                </DropdownItem>
+              </DropdownMenu>
+            </Dropdown>
           );
         }
         return (

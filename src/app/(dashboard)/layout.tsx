@@ -190,7 +190,7 @@ export default function DashboardLayout({
               respiro mais justo — as outras páginas NÃO mudam (ficam no 3.5rem
               padrão do `.under-bar` em globals). Não reduzir o valor base pra
               todo mundo de novo (já testamos e sufocava o kanban). */}
-          <div className={`under-bar ${pathname.startsWith('/inbox') ? 'under-bar--tight' : ''} min-h-0 flex-1 pb-tabbar ${simples ? 'lg:pb-16' : 'lg:!pb-0'}`}>{children}</div>
+          <div className={`under-bar ${pathname.startsWith('/inbox') ? 'under-bar--tight' : ''} min-h-0 flex-1 pb-tabbar ${simples ? 'lg:![padding-bottom:calc(4rem_+_var(--dock-safe,0px))]' : 'lg:!pb-0'}`}>{children}</div>
           </div>
         </div>
         <MobileTabBar />
