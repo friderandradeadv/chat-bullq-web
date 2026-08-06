@@ -1,66 +1,67 @@
 'use client';
 
 import { create } from 'zustand';
+import { preferencesService } from '@/features/inbox/services/preferences.service';
 
-// ── "Visto" do funil REPB ────────────────────────────────────────────────────────
-// Dois estados independentes, por navegador:
-//  • lastSeenAt: última vez que o usuário ABRIU o funil. Alimenta o BADGE da aba
-//    (bolinha vermelha na barra) — conta os leads que entraram DEPOIS disso. Ao
-//    abrir o funil, markSeen() põe "agora" → o badge zera. No 1º acesso é null
-//    (conta TODOS, pra os leads que já estavam lá aparecerem no badge).
-//  • clickedIds: cards que o usuário JÁ CLICOU (abriu). Alimenta a bolinha AO
-//    LADO DE CADA CARD (igual à agenda) — a bolinha some quando você clica no card.
-// Persistem em localStorage; hidrata no cliente (no 1º paint tudo é "não visto").
+// ── "Visto" do funil REPB — POR USUÁRIO, salvo no SERVIDOR ────────────────────────
+// Antes era localStorage (por NAVEGADOR): se Matheus e Kauani usam o mesmo browser
+// (troca de conta), o "visto" vazava entre eles. Agora fica em
+// users/me/preferences.repbFunil (por usuário/org), então cada um tem o seu:
+//   • seenAt: última vez que o usuário abriu o funil → BADGE da aba (conta leads
+//     que entraram depois; zera ao abrir). null = nunca abriu (conta todos).
+//   • seenCardIds: cards que o usuário já CLICOU → bolinha por card (some ao clicar).
+// Se um usuário não abriu, o dele continua aparecendo — não é afetado pelo outro.
 
-const KEY_SEEN = 'repb-funil-last-seen';
-const KEY_CLICKED = 'repb-cards-clicked';
+interface RepbFunilPrefs {
+  seenAt?: string | null;
+  seenCardIds?: string[];
+}
+
+let started = false; // evita hidratar (fetch) mais de uma vez
 
 interface RepbSeenState {
   lastSeenAt: string | null;
   clickedIds: string[];
   hydrated: boolean;
   hydrate: () => void;
-  markSeen: () => void; // abriu o funil → zera o badge da aba
-  markCardClicked: (id: string) => void; // clicou no card → tira a bolinha dele
+  markSeen: () => void;
+  markCardClicked: (id: string) => void;
 }
 
-export const useRepbSeenStore = create<RepbSeenState>((set) => ({
+export const useRepbSeenStore = create<RepbSeenState>((set, get) => ({
   lastSeenAt: null,
   clickedIds: [],
   hydrated: false,
-  hydrate: () =>
-    set((s) => {
-      if (s.hydrated) return s;
-      let lastSeenAt: string | null = null;
-      let clickedIds: string[] = [];
-      try {
-        // null se nunca abriu → o badge conta TODOS (não zera retroativo).
-        lastSeenAt = localStorage.getItem(KEY_SEEN);
-        const raw = localStorage.getItem(KEY_CLICKED);
-        if (raw) clickedIds = JSON.parse(raw);
-      } catch {
-        /* localStorage indisponível */
-      }
-      return { lastSeenAt, clickedIds, hydrated: true };
-    }),
+  hydrate: () => {
+    if (started) return;
+    started = true;
+    void preferencesService
+      .get()
+      .then((prefs) => {
+        const r = ((prefs as Record<string, unknown>)?.repbFunil ?? {}) as RepbFunilPrefs;
+        set({
+          lastSeenAt: typeof r.seenAt === 'string' ? r.seenAt : null,
+          clickedIds: Array.isArray(r.seenCardIds) ? r.seenCardIds : [],
+          hydrated: true,
+        });
+      })
+      .catch(() => set({ hydrated: true }));
+  },
   markSeen: () => {
     const now = new Date().toISOString();
-    try {
-      localStorage.setItem(KEY_SEEN, now);
-    } catch {
-      /* ignora */
-    }
-    set({ lastSeenAt: now, hydrated: true });
+    set({ lastSeenAt: now });
+    // PATCH é shallow-merge no topo → mando o objeto repbFunil INTEIRO.
+    void preferencesService
+      .patch({ repbFunil: { seenAt: now, seenCardIds: get().clickedIds } })
+      .catch(() => undefined);
   },
-  markCardClicked: (id: string) =>
-    set((s) => {
-      if (!id || s.clickedIds.includes(id)) return s;
-      const clickedIds = [...s.clickedIds, id].slice(-800);
-      try {
-        localStorage.setItem(KEY_CLICKED, JSON.stringify(clickedIds));
-      } catch {
-        /* ignora */
-      }
-      return { clickedIds };
-    }),
+  markCardClicked: (id: string) => {
+    const s = get();
+    if (!id || s.clickedIds.includes(id)) return;
+    const clickedIds = [...s.clickedIds, id].slice(-800);
+    set({ clickedIds });
+    void preferencesService
+      .patch({ repbFunil: { seenAt: s.lastSeenAt, seenCardIds: clickedIds } })
+      .catch(() => undefined);
+  },
 }));
