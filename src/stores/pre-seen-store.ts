@@ -1,15 +1,18 @@
 'use client';
 
 import { create } from 'zustand';
+import { preferencesService } from '@/features/inbox/services/preferences.service';
 
-// ── "Visto" do board Pré-Processual ─────────────────────────────────────────────
-// Guarda, por navegador, o último instante (ISO) em que o usuário abriu o quadro
-// Pré-Processual. Um card é "novo" se entrou na fase depois disso; o badge da barra
-// inferior conta esses novos. Ao abrir o board, `markSeen()` avança o marcador para
-// agora → some a bolinha dos cards e zera o badge. Persiste em localStorage; hidrata
-// no cliente para não dar mismatch de SSR (no 1º paint, lastSeenAt = null).
+// ── "Visto" do board Pré-Processual — POR USUÁRIO, salvo no SERVIDOR ──────────────
+// Antes era localStorage (por NAVEGADOR): quem usa o mesmo browser p/ contas
+// diferentes compartilhava o "visto". Agora fica em
+// users/me/preferences.preProcessual.seenAt (por usuário/org) — cada um tem o seu.
+// Guarda o último instante em que o usuário abriu o quadro; um card é "novo" se
+// entrou na fase depois disso. Ao abrir o board, markSeen() avança pra agora →
+// o badge zera. No 1º acesso o baseline é AGORA (cards antigos não contam
+// retroativo) e já é salvo no servidor.
 
-const KEY = 'pre-processual-last-seen';
+let started = false; // evita hidratar (fetch) mais de uma vez
 
 interface PreSeenState {
   lastSeenAt: string | null;
@@ -21,31 +24,33 @@ interface PreSeenState {
 export const usePreSeenStore = create<PreSeenState>((set) => ({
   lastSeenAt: null,
   hydrated: false,
-  hydrate: () =>
-    set((s) => {
-      if (s.hydrated) return s;
-      let lastSeenAt: string | null = null;
-      try {
-        lastSeenAt = localStorage.getItem(KEY);
-        // Primeiro acesso deste navegador: baseline = agora. Assim os cards que já
-        // existiam NÃO viram "novos" retroativamente (nem enchem o badge) — só o que
-        // entrar daqui pra frente conta.
-        if (!lastSeenAt) {
-          lastSeenAt = new Date().toISOString();
-          localStorage.setItem(KEY, lastSeenAt);
+  hydrate: () => {
+    if (started) return;
+    started = true;
+    void preferencesService
+      .get()
+      .then((prefs) => {
+        const r = ((prefs as Record<string, unknown>)?.preProcessual ?? {}) as {
+          seenAt?: string | null;
+        };
+        if (typeof r.seenAt === 'string') {
+          set({ lastSeenAt: r.seenAt, hydrated: true });
+        } else {
+          // 1º acesso: baseline = agora (não conta retroativo) e SALVA no servidor.
+          const now = new Date().toISOString();
+          set({ lastSeenAt: now, hydrated: true });
+          void preferencesService
+            .patch({ preProcessual: { seenAt: now } })
+            .catch(() => undefined);
         }
-      } catch {
-        /* localStorage indisponível */
-      }
-      return { lastSeenAt, hydrated: true };
-    }),
+      })
+      .catch(() => set({ hydrated: true }));
+  },
   markSeen: () => {
     const now = new Date().toISOString();
-    try {
-      localStorage.setItem(KEY, now);
-    } catch {
-      /* ignora */
-    }
     set({ lastSeenAt: now, hydrated: true });
+    void preferencesService
+      .patch({ preProcessual: { seenAt: now } })
+      .catch(() => undefined);
   },
 }));
