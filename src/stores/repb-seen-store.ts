@@ -3,50 +3,64 @@
 import { create } from 'zustand';
 
 // ── "Visto" do funil REPB ────────────────────────────────────────────────────────
-// Guarda, por navegador, o último instante (ISO) em que o usuário abriu o funil REPB
-// (/juridico/repb). Um lead é "novo" se entrou na 1ª coluna (repbc_novos_leads)
-// depois disso; o badge da barra inferior conta esses novos leads DO RESPONSÁVEL
-// (ex.: a Kauani). Ao abrir o funil, `markSeen()` avança o marcador para agora → some
-// a bolinha e zera o badge. Persiste em localStorage; hidrata no cliente para não dar
-// mismatch de SSR (no 1º paint, lastSeenAt = null). Espelha usePreSeenStore.
+// Dois estados independentes, por navegador:
+//  • lastSeenAt: última vez que o usuário ABRIU o funil. Alimenta o BADGE da aba
+//    (bolinha vermelha na barra) — conta os leads que entraram DEPOIS disso. Ao
+//    abrir o funil, markSeen() põe "agora" → o badge zera. No 1º acesso é null
+//    (conta TODOS, pra os leads que já estavam lá aparecerem no badge).
+//  • clickedIds: cards que o usuário JÁ CLICOU (abriu). Alimenta a bolinha AO
+//    LADO DE CADA CARD (igual à agenda) — a bolinha some quando você clica no card.
+// Persistem em localStorage; hidrata no cliente (no 1º paint tudo é "não visto").
 
-const KEY = 'repb-funil-last-seen';
+const KEY_SEEN = 'repb-funil-last-seen';
+const KEY_CLICKED = 'repb-cards-clicked';
 
 interface RepbSeenState {
   lastSeenAt: string | null;
+  clickedIds: string[];
   hydrated: boolean;
   hydrate: () => void;
-  markSeen: () => void;
+  markSeen: () => void; // abriu o funil → zera o badge da aba
+  markCardClicked: (id: string) => void; // clicou no card → tira a bolinha dele
 }
 
 export const useRepbSeenStore = create<RepbSeenState>((set) => ({
   lastSeenAt: null,
+  clickedIds: [],
   hydrated: false,
   hydrate: () =>
     set((s) => {
       if (s.hydrated) return s;
       let lastSeenAt: string | null = null;
+      let clickedIds: string[] = [];
       try {
-        lastSeenAt = localStorage.getItem(KEY);
-        // Primeiro acesso deste navegador: baseline = agora. Assim os leads que já
-        // existiam NÃO viram "novos" retroativamente (nem enchem o badge) — só o que
-        // entrar daqui pra frente conta.
-        if (!lastSeenAt) {
-          lastSeenAt = new Date().toISOString();
-          localStorage.setItem(KEY, lastSeenAt);
-        }
+        // null se nunca abriu → o badge conta TODOS (não zera retroativo).
+        lastSeenAt = localStorage.getItem(KEY_SEEN);
+        const raw = localStorage.getItem(KEY_CLICKED);
+        if (raw) clickedIds = JSON.parse(raw);
       } catch {
         /* localStorage indisponível */
       }
-      return { lastSeenAt, hydrated: true };
+      return { lastSeenAt, clickedIds, hydrated: true };
     }),
   markSeen: () => {
     const now = new Date().toISOString();
     try {
-      localStorage.setItem(KEY, now);
+      localStorage.setItem(KEY_SEEN, now);
     } catch {
       /* ignora */
     }
     set({ lastSeenAt: now, hydrated: true });
   },
+  markCardClicked: (id: string) =>
+    set((s) => {
+      if (!id || s.clickedIds.includes(id)) return s;
+      const clickedIds = [...s.clickedIds, id].slice(-800);
+      try {
+        localStorage.setItem(KEY_CLICKED, JSON.stringify(clickedIds));
+      } catch {
+        /* ignora */
+      }
+      return { clickedIds };
+    }),
 }));
