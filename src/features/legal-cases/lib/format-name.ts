@@ -55,15 +55,18 @@ export function cleanAreaLabel(raw: string | null | undefined): string {
 }
 
 /**
- * Nome do processo no padrão do escritório: "Autor × Réu" (ambos Title Case).
- * Sem réu, devolve só o autor. Sem autor, cai no título já gravado (Title Case).
+ * Nome do processo no padrão do escritório: "AUTOR × RÉU" em CAIXA ALTA.
+ * (O nome do CLIENTE, na coluna Cliente/Pasta, é que fica em Title Case — use
+ * properName lá; aqui o TÍTULO do processo é tudo em maiúsculas.)
  */
 export function processoNome(clienteNome: string | null | undefined, reuNome: string | null | undefined, fallbackTitle?: string | null): string {
-  const autor = properName(clienteNome);
-  const reu = properName(reuNome);
-  if (autor && reu) return `${autor} × ${reu}`;
-  if (autor) return autor;
-  return properName(fallbackTitle) || (fallbackTitle ?? '').trim();
+  const autor = (clienteNome ?? '').trim();
+  const reu = (reuNome ?? '').trim();
+  let nome: string;
+  if (autor && reu) nome = `${autor} × ${reu}`;
+  else if (autor) nome = autor;
+  else nome = (fallbackTitle ?? '').trim();
+  return nome.toUpperCase();
 }
 
 /**
