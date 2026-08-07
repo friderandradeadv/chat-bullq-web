@@ -36,6 +36,7 @@ import {
 import { activitiesService } from '@/features/activities/services/activities.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { usePermissions } from '@/hooks/use-permissions';
+import { properName, cleanAreaLabel, formatJuizo, processoNome } from '@/features/legal-cases/lib/format-name';
 
 // ─── Estilo "cara do Astrea" (tema claro, azul Astrea) ───────────────
 // Componentes próprios; replica o look (não os ativos da Aurum).
@@ -450,7 +451,11 @@ export default function ProcessosPage() {
 
 function CaseRow({ c, members, selected, onToggle, onChange }: { c: CaseListItem; members: Member[]; selected: boolean; onToggle: () => void; onChange: () => void }) {
   const { canDeleteCases } = usePermissions();
-  const client = c.parties[0];
+  const client = c.parties.find((p) => p.role === 'CLIENT') ?? c.parties[0];
+  const opponent = c.parties.find((p) => p.role === 'OPPONENT');
+  // Nome do processo no padrão do escritório: "Autor × Réu" (Title Case), com
+  // fallback no título gravado. Corrige o CAPS e o "só o nome do cliente" do intake.
+  const nomeProcesso = processoNome(client?.name, opponent?.name, c.title);
   // Barrinha verde = monitorado via DJEN (tem nº CNJ → o monitor por OAB captura as publicações).
   const monitorado = !!c.cnjNumber;
   const removeTag = async (etId: string) => {
@@ -479,7 +484,7 @@ function CaseRow({ c, members, selected, onToggle, onChange }: { c: CaseListItem
               href={`/processos/${c.id}`}
               className="text-sm font-medium text-zinc-800 dark:text-zinc-100 hover:text-[#228BE6] hover:underline"
             >
-              {c.title}
+              {nomeProcesso}
             </Link>
             <p className="mt-0.5 text-xs text-zinc-400">
               Processo {rowStatusLabel(c.status).toLowerCase()}
@@ -501,15 +506,15 @@ function CaseRow({ c, members, selected, onToggle, onChange }: { c: CaseListItem
       <td className="px-3 py-4 align-top text-sm">
         {client ? (
           <Link href={`/clientes/${client.id}`} className="text-zinc-600 hover:text-[#228BE6] hover:underline dark:text-zinc-300">
-            {client.name}
+            {properName(client.name)}
           </Link>
         ) : (
           <span className="text-zinc-600">—</span>
         )}
       </td>
       <td className="px-3 py-4 align-top">
-        <p className="text-sm text-zinc-700 dark:text-zinc-300">{c.area ?? '—'}</p>
-        {c.court && <p className="text-xs text-zinc-400">{c.court}</p>}
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">{cleanAreaLabel(c.area) || '—'}</p>
+        {c.court && <p className="text-xs text-zinc-400">{formatJuizo(c.court)}</p>}
       </td>
       <td className="px-3 py-4 align-top">
         <RespCell caseId={c.id} current={c.responsible} members={members} onChange={onChange} />
@@ -808,7 +813,12 @@ function CreateCaseDialog({
 }) {
   const [form, setForm] = useState<CreateCaseInput>({ title: '' });
   const [clientName, setClientName] = useState('');
+  const [opponentName, setOpponentName] = useState('');
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const { data: allTags = [] } = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+
+  const toggleTag = (id: string) => setTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
 
   const submit = async () => {
     if (!form.title.trim()) {
@@ -817,12 +827,18 @@ function CreateCaseDialog({
     }
     setSaving(true);
     try {
-      await legalCasesService.create({
+      const parties = [
+        ...(clientName.trim() ? [{ name: clientName.trim(), role: 'CLIENT' as const }] : []),
+        ...(opponentName.trim() ? [{ name: opponentName.trim(), role: 'OPPONENT' as const }] : []),
+      ];
+      const created = await legalCasesService.create({
         ...form,
-        parties: clientName.trim()
-          ? [{ name: clientName.trim(), role: 'CLIENT' }]
-          : undefined,
+        parties: parties.length ? parties : undefined,
       });
+      // Anexa as etiquetas escolhidas ao processo recém-criado (best-effort).
+      if (tagIds.length && created?.id) {
+        await Promise.allSettled(tagIds.map((tid) => activitiesService.attachTag('case', created.id, tid)));
+      }
       toast.success('Processo criado');
       onCreated();
     } catch (err: any) {
@@ -886,13 +902,47 @@ function CreateCaseDialog({
               />
             </Field>
           </div>
-          <Field label="Cliente (parte)">
-            <input
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              className={inputCls}
-              placeholder="Nome do cliente"
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Cliente (autor)">
+              <input
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                className={inputCls}
+                placeholder="Nome do cliente"
+              />
+            </Field>
+            <Field label="Parte adversa (réu)">
+              <input
+                value={opponentName}
+                onChange={(e) => setOpponentName(e.target.value)}
+                className={inputCls}
+                placeholder="Ex.: Banco BMG S/A"
+              />
+            </Field>
+          </div>
+          <Field label="Etiquetas">
+            {allTags.length === 0 ? (
+              <p className="text-xs text-zinc-400">Nenhuma etiqueta cadastrada.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {allTags.map((t) => {
+                  const on = tagIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => toggleTag(t.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${on ? 'border-transparent text-white' : 'border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'}`}
+                      style={on ? { backgroundColor: t.color } : undefined}
+                    >
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: on ? 'rgba(255,255,255,.85)' : t.color }} />
+                      {t.name}
+                      {on && <Check className="h-3 w-3" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </Field>
         </div>
         <div className="mt-6 flex items-center justify-end gap-3">

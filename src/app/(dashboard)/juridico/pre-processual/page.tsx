@@ -6,7 +6,7 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus } from 'lucide-react';
+import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -25,6 +25,25 @@ import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
 const KEY = ['legal-cases', 'kanban', 'pre'];
 const INPUT = 'h-[38px] w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
+
+// Máscara de moeda BRL estilo "centavos": digita "2846077" → "28.460,77".
+// Retorna só a parte formatada (sem "R$" — o prefixo é visual no input).
+function maskBRL(v: string): string {
+  const digits = v.replace(/\D/g, '');
+  if (!digits) return '';
+  return (Number(digits) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Número (ex.: 28460.77) → string mascarada "28.460,77" para preencher o campo.
+function numberToBRL(n: number): string {
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Campo mascarado "28.460,77" → número 28460.77 (undefined se vazio/ inválido).
+function brlToNumber(v: string): number | undefined {
+  const cleaned = v.replace(/\./g, '').replace(',', '.').trim();
+  if (!cleaned) return undefined;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 function cleanProduto(s: string | null): string | null {
   if (!s) return s;
@@ -317,13 +336,41 @@ function ProtocolarDialog({ caseId, onClose, onDone }: { caseId: string; onClose
   const [valor, setValor] = useState('');
   const [data, setData] = useState('');
   const [saving, setSaving] = useState(false);
+  const [extraindo, setExtraindo] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Upload da petição inicial → IA lê e pré-preenche CNJ + valor + data.
+  const onPickInicial = async (file: File | null) => {
+    if (!file) return;
+    setExtraindo(true);
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+        r.readAsDataURL(file);
+      });
+      const d = await legalCasesService.extrairProtocoloInicial(caseId, b64);
+      let preencheu = false;
+      if (d.cnj) { setCnj(d.cnj); preencheu = true; }
+      if (d.value != null) { setValor(numberToBRL(d.value)); preencheu = true; }
+      if (d.dataProtocolo) { setData(d.dataProtocolo); preencheu = true; }
+      if (preencheu) toast.success('Dados extraídos da inicial — confira antes de protocolar');
+      else toast.warning('Não encontrei CNJ, valor da causa nem data no documento');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não foi possível ler a inicial');
+    } finally {
+      setExtraindo(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
 
   const submit = async () => {
     setSaving(true);
     try {
       const res = await legalCasesService.protocolar(caseId, {
         cnj: cnj.trim() || undefined,
-        value: valor ? Number(valor.replace(/\./g, '').replace(',', '.')) : undefined,
+        value: brlToNumber(valor),
         dataProtocolo: data || undefined,
       });
       toast.success('Protocolado — movido para Admissão da inicial');
@@ -343,9 +390,26 @@ function ProtocolarDialog({ caseId, onClose, onDone }: { caseId: string; onClose
         <button onClick={onClose} className="absolute right-3 top-3 rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
         <h3 className="text-base font-bold text-[#101820] dark:text-zinc-100">Protocolar processo</h3>
         <p className="mt-0.5 text-xs text-zinc-500">Preencha os dados do protocolo. O processo migra para a Fase Judicial (Admissão da inicial).</p>
+
+        {/* Preencher com a inicial (IA lê o PDF e completa os campos) */}
+        <input ref={fileRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => onPickInicial(e.target.files?.[0] ?? null)} />
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={extraindo || saving}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#4a90e2]/60 bg-[#4a90e2]/5 px-3 py-2.5 text-sm font-medium text-[#005efc] hover:bg-[#4a90e2]/10 disabled:opacity-50 dark:border-[#4a90e2]/50 dark:text-[#7fb4f5] dark:bg-[#4a90e2]/10"
+        >
+          {extraindo ? <><Loader2 className="h-4 w-4 animate-spin" /> Lendo a inicial…</> : <><Sparkles className="h-4 w-4" /> Preencher com a inicial (IA)</>}
+        </button>
+        <p className="mt-1 text-center text-[11px] text-zinc-400">Envie o PDF da petição inicial — a IA extrai CNJ, valor da causa e data. Confira antes de protocolar.</p>
+
         <div className="mt-4 space-y-3">
           <Field label="Número do processo (CNJ)"><input value={cnj} onChange={(e) => setCnj(e.target.value)} placeholder="0000000-00.0000.0.00.0000" className={INPUT} /></Field>
-          <Field label="Valor da causa (R$)"><input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="10.000,00" className={INPUT} /></Field>
+          <Field label="Valor da causa (R$)">
+            <div className="relative">
+              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-zinc-400">R$</span>
+              <input value={valor} onChange={(e) => setValor(maskBRL(e.target.value))} inputMode="numeric" placeholder="10.000,00" className={`${INPUT} pl-9`} />
+            </div>
+          </Field>
           <Field label="Data do protocolo"><input type="date" value={data} onChange={(e) => setData(e.target.value)} className={INPUT} /></Field>
         </div>
         <div className="mt-5 flex justify-end gap-2">

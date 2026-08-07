@@ -85,7 +85,7 @@ export interface CaseListItem {
   status: CaseStatus;
   value: string | null;
   responsible: UserRef | null;
-  parties: { id: string; name: string; contactId: string | null }[];
+  parties: { id: string; name: string; contactId: string | null; role?: PartyRole }[];
   _count: { movements: number; deadlines: number };
   updatedAt: string;
   metadata?: { astrea?: { tags?: string[]; instanciaAtual?: string; raw?: Record<string, string> } } | null;
@@ -496,6 +496,12 @@ export const legalCasesService = {
     input: { cnj?: string; value?: number; dataProtocolo?: string; court?: string; jurisdiction?: string },
   ): Promise<{ ok: boolean; phase: string; aviso?: { enviado: boolean; motivo?: string } }> {
     const { data } = await api.patch(`/legal-cases/${id}/protocolar`, input);
+    return data.data ?? data;
+  },
+  // Upload da petição inicial (PDF base64) → IA extrai CNJ + valor da causa + data
+  // para pré-preencher o modal Protocolar. Não grava nada; o advogado revisa.
+  async extrairProtocoloInicial(id: string, pdfBase64: string): Promise<{ cnj: string | null; value: number | null; dataProtocolo: string | null }> {
+    const { data } = await api.post(`/legal-cases/${id}/protocolar/extrair`, { pdfBase64 });
     return data.data ?? data;
   },
   // Renomeia uma fase do kanban (só OWNER — o backend valida o papel).
