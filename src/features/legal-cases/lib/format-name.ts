@@ -80,7 +80,8 @@ export function formatJuizo(raw: string | null | undefined): string {
   if (!t) return '';
   // UF ao final em várias grafias (" - PR", ", PR", " / PR", " PR") → "/PR".
   t = t.replace(/\s*[-,/]?\s*\b([A-Z]{2})\b\s*$/, (m, uf) => `/${uf}`);
-  // Remove "Comarca de"/"Foro de" duplicados quando já há "de <cidade>".
-  t = t.replace(/\b(Comarca|Foro)\s+de\s+/gi, (m, _p, off) => (/\bde\s+\S/i.test(t.slice(0, off)) ? '' : m));
+  // Formato curto do escritório: "da Comarca de X" → "de X"; colapsa "de X de X".
+  t = t.replace(/\s+da\s+Comarca\s+de\s+/gi, ' de ');
+  t = t.replace(/\bde\s+([^/]+?)\s+de\s+\1\b/gi, 'de $1');
   return t.replace(/\s+\//, '/').replace(/\s{2,}/g, ' ').trim();
 }
