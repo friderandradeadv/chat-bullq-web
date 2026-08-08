@@ -4,12 +4,13 @@
 
 import type { KanbanCard } from '../services/legal-cases.service';
 
-export type CardSort = 'manual' | 'due' | 'created' | 'updated' | 'alpha';
+export type CardSort = 'manual' | 'due' | 'created' | 'created_desc' | 'updated' | 'alpha';
 
 export const SORT_OPTIONS: { id: CardSort; label: string }[] = [
   { id: 'manual', label: 'Padrão (manual)' },
   { id: 'due', label: 'Vencimento (mais próximo)' },
   { id: 'created', label: 'Criação (mais antigo)' },
+  { id: 'created_desc', label: 'Criação (mais recente)' },
   { id: 'updated', label: 'Última atualização' },
   { id: 'alpha', label: 'Alfabética (A–Z)' },
 ];
@@ -44,6 +45,8 @@ export function applyCardSort<T>(items: T[], sort: CardSort, keys: (it: T) => So
         return ka.title.localeCompare(kb.title, 'pt-BR', { sensitivity: 'base' });
       case 'created':
         return ka.created - kb.created; // mais antigo primeiro (o que está parado há mais tempo sobe)
+      case 'created_desc':
+        return kb.created - ka.created; // mais recente primeiro (o que entrou por último sobe)
       case 'updated':
         return kb.updated - ka.updated; // mexido há pouco primeiro
       case 'due': {
@@ -65,7 +68,7 @@ const PREFIX = 'bullq:phase-sort:';
 export function loadPhaseSort(phaseKey: string): CardSort {
   if (typeof window === 'undefined') return 'manual';
   const v = window.localStorage.getItem(PREFIX + phaseKey);
-  return v === 'due' || v === 'created' || v === 'updated' || v === 'alpha' ? v : 'manual';
+  return v === 'due' || v === 'created' || v === 'created_desc' || v === 'updated' || v === 'alpha' ? v : 'manual';
 }
 
 export function savePhaseSort(phaseKey: string, sort: CardSort): void {
