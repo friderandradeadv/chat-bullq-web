@@ -59,6 +59,21 @@ export interface ChannelInfo {
   profileName?: string | null;
 }
 
+/** Template HSM aprovado na Meta, no formato enxuto do seletor do chat. */
+export interface WaTemplate {
+  name: string;
+  language: string;
+  category: string;
+  status: string;
+  headerText?: string;
+  /** Corpo com os placeholders {{1}}, {{2}}, … ainda por preencher. */
+  bodyText: string;
+  footerText?: string;
+  /** Quantos parâmetros posicionais distintos o corpo espera. */
+  paramCount: number;
+  buttons?: string[];
+}
+
 export interface AgentInfo {
   id: string;
   name: string;
@@ -214,6 +229,24 @@ export const inboxService = {
     oneOff?: boolean;
   }): Promise<Message> {
     const { data } = await api.post('/messages', payload);
+    return data.data;
+  },
+
+  /** Templates HSM aprovados do canal (WhatsApp Cloud API). Vazio se o canal não for Cloud API. */
+  async listTemplates(channelId: string): Promise<WaTemplate[]> {
+    const { data } = await api.get(`/channels/${channelId}/templates`);
+    return data.data ?? [];
+  },
+
+  /** Envia um template HSM aprovado (reabre a janela de 24h). */
+  async sendTemplate(payload: {
+    conversationId: string;
+    name: string;
+    language: string;
+    parameters: string[];
+    previewText: string;
+  }): Promise<Message> {
+    const { data } = await api.post('/messages/template', payload);
     return data.data;
   },
 

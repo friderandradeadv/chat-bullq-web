@@ -100,7 +100,7 @@ function EngagementWindowBanner({
         <strong>templates aprovados</strong> agora. Mensagem de texto livre
         vai falhar com erro <code className="font-mono text-[11px]">Re-engagement message</code>.
         Peça pro cliente mandar qualquer mensagem pra reabrir a janela, ou
-        envie um template HSM via Meta Business.
+        use o menu <strong>＋ → Enviar template</strong> no compositor.
       </div>
     </div>
   );
@@ -900,6 +900,27 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
         insertSentMessage(created);
       }
       ensureUnarchivedOnSend();
+    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
+      throw err;
+    }
+  };
+
+  // Template HSM aprovado — reabre a janela de 24h no Cloud API.
+  const handleSendTemplate = async (payload: {
+    name: string;
+    language: string;
+    parameters: string[];
+    previewText: string;
+  }) => {
+    try {
+      const created = await inboxService.sendTemplate({
+        conversationId: conversation.id,
+        ...payload,
+      });
+      insertSentMessage(created);
+      ensureUnarchivedOnSend();
+      toast.success('Template enviado');
     } catch (err) {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
       throw err;
@@ -1744,6 +1765,16 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
             quickReplies={quickReplies}
             contactName={conversation.contact?.name ?? null}
             onSendRemoteAttachment={handleSendRemoteAttachment}
+            channelId={
+              conversation.channel.type.startsWith('WHATSAPP')
+                ? conversation.channelId
+                : null
+            }
+            onSendTemplate={
+              conversation.channel.type.startsWith('WHATSAPP')
+                ? handleSendTemplate
+                : undefined
+            }
             disabled={conversation.status === 'CLOSED'}
           />
         </>
