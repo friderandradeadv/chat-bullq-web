@@ -2606,7 +2606,7 @@ function CumprimentoTab() {
                   {/parcial/i.test(x.resultado || '') ? 'Parcial' : /procedente/i.test(x.resultado || '') ? 'Procedente' : (x.resultado || (x.situacao ? '1º grau favorável' : '—'))}
                   {x.situacao ? <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">{x.situacao}</span> : null}
                 </td>
-                <td className="px-2 py-1.5 text-right text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.exito != null ? `êxito ${x.exito}%` : '—')}</td>
+                <td className="px-2 py-1.5 text-right text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.baseLabel ?? (x.exito != null ? `êxito ${x.exito}%` : '—'))}</td>
                 <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-amber-600">{x.estimado != null ? brl2(x.estimado) : '—'}</td>
               </tr>
             ))}
@@ -2630,7 +2630,7 @@ function CumprimentoTab() {
                   {/parcial/i.test(x.resultado || '') ? 'Parcial' : /procedente/i.test(x.resultado || '') ? 'Procedente' : (x.resultado || 'Ganha')}
                   <span className="ml-1 rounded bg-emerald-100 px-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">vencida</span>
                 </td>
-                <td className="px-2 py-1.5 text-right text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.exito != null ? `êxito ${x.exito}%` : '—')}</td>
+                <td className="px-2 py-1.5 text-right text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.baseLabel ?? (x.exito != null ? `êxito ${x.exito}%` : '—'))}</td>
                 <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-emerald-600">{x.estimado != null ? brl2(x.estimado) : '—'}</td>
               </tr>
             ))}
