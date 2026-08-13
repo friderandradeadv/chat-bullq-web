@@ -152,6 +152,16 @@ export default function ProcessoDetailPage() {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{c.title}</h1>
+            {/* Veio do DJEN sem partes identificáveis (nota administrativa / Projudi) → cadastro pendente. */}
+            {(c.metadata as { djen?: { revisarCadastro?: boolean } } | null)?.djen?.revisarCadastro && (
+              <button
+                onClick={() => setEditing(true)}
+                title="Este processo entrou pelo DJEN sem partes identificáveis — clique para cadastrar cliente/réu, comarca etc."
+                className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
+              >
+                ⚠️ Cadastro pendente — clique para completar
+              </button>
+            )}
             {/* Etiquetas com ✕ */}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {c.legalTags.map((lt) => (
