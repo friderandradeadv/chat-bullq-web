@@ -2600,7 +2600,10 @@ function CumprimentoTab() {
             {favoraveis.map((x) => (
               <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
                 <td className="px-2 py-1.5"><VerProcesso id={x.caseId}>{titleCase(x.cliente || x.title)}</VerProcesso></td>
-                <td className="px-2 py-1.5 text-right text-xs text-zinc-500">{/parcial/i.test(x.resultado || '') ? 'Parcial' : /procedente/i.test(x.resultado || '') ? 'Procedente' : (x.resultado || '—')}</td>
+                <td className="px-2 py-1.5 text-right text-xs text-zinc-500">
+                  {/parcial/i.test(x.resultado || '') ? 'Parcial' : /procedente/i.test(x.resultado || '') ? 'Procedente' : (x.resultado || (x.emRecurso ? '1º grau favorável' : '—'))}
+                  {x.emRecurso ? <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">em recurso</span> : null}
+                </td>
                 <td className="px-2 py-1.5 text-right text-[11px] text-zinc-400">{x.manualEstimado ? '✨ IA' : (x.exito != null ? `êxito ${x.exito}%` : '—')}</td>
                 <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-amber-600">{x.estimado != null ? brl2(x.estimado) : '—'}</td>
               </tr>

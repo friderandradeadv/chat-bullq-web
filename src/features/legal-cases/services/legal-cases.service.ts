@@ -353,7 +353,7 @@ export interface JurimetriaData {
 export interface CsBase { caseId: string; title: string; cliente: string | null; cnj: string | null; area: string | null; responsavel: string | null; valorCausa: number | null; legalPhaseAt: string | null }
 export interface CsCumprimento extends CsBase { fase: 'cumprimento'; protocolado: boolean; valorCalculo: number; numeroCs: string | null }
 export interface CsPrestacao extends CsBase { fase: 'prestacao_contas'; valorAlvara: number; honorariosNossos: number; sucumbencia: number; valorCliente: number; aReceberNosso: number }
-export interface CsFavoravel extends CsBase { fase: 'sentenca_favoravel' | 'transito'; resultado: string | null; exito: number | null; estimado: number | null; manualEstimado?: boolean }
+export interface CsFavoravel extends CsBase { fase: 'sentenca_favoravel' | 'recurso' | 'aguardando_arquivamento' | 'transito'; emRecurso?: boolean; faseLabel?: string | null; resultado: string | null; exito: number | null; estimado: number | null; manualEstimado?: boolean }
 export interface CsRepb extends CsBase { fase: 'repb_concluido' | 'repb_acordo'; concluido: boolean; dividaOriginal: number; valorAcordo: number; desconto: number; honorariosNossos: number; aReceberNosso: number }
 export interface CumprimentoFinanceiro {
   prestacao: CsPrestacao[];
