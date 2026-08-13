@@ -34,6 +34,8 @@ import {
   type UserRef,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { activitiesService } from '@/features/activities/services/activities.service';
+import { ClientCombobox } from '@/features/legal-cases/components/client-combobox';
+import { OpponentCombobox } from '@/features/legal-cases/components/opponent-combobox';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { usePermissions } from '@/hooks/use-permissions';
 import { properName, cleanAreaLabel, formatJuizo, processoNome } from '@/features/legal-cases/lib/format-name';
@@ -835,7 +837,11 @@ function CreateCaseDialog({
 }) {
   const [form, setForm] = useState<CreateCaseInput>({ title: initial?.title ?? '', cnjNumber: initial?.cnjNumber });
   const [clientName, setClientName] = useState('');
+  const [clientDoc, setClientDoc] = useState<string>('');
+  const [clientContactId, setClientContactId] = useState<string>('');
   const [opponentName, setOpponentName] = useState('');
+  const [opponentDoc, setOpponentDoc] = useState<string>('');
+  const [opponentContactId, setOpponentContactId] = useState<string>('');
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { data: allTags = [] } = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
@@ -883,8 +889,12 @@ function CreateCaseDialog({
     setSaving(true);
     try {
       const parties = [
-        ...(clientName.trim() ? [{ name: clientName.trim(), role: 'CLIENT' as const }] : []),
-        ...(opponentName.trim() ? [{ name: opponentName.trim(), role: 'OPPONENT' as const }] : []),
+        ...(clientName.trim()
+          ? [{ name: clientName.trim(), role: 'CLIENT' as const, contactId: clientContactId || undefined, document: clientDoc || undefined }]
+          : []),
+        ...(opponentName.trim()
+          ? [{ name: opponentName.trim(), role: 'OPPONENT' as const, contactId: opponentContactId || undefined, document: opponentDoc || undefined }]
+          : []),
       ];
       const created = await legalCasesService.create({
         ...form,
@@ -969,20 +979,32 @@ function CreateCaseDialog({
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Cliente (autor)">
-              <input
+              <ClientCombobox
                 value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                className={inputCls}
-                placeholder="Nome do cliente"
+                onSelect={(s) => {
+                  setClientName(s.name);
+                  setClientDoc(s.document ?? '');
+                  setClientContactId(s.contactId ?? '');
+                }}
               />
+              {clientContactId && (
+                <span className="mt-1 block text-[10px] font-medium text-emerald-600 dark:text-emerald-400">✓ vinculado ao cliente cadastrado</span>
+              )}
             </Field>
             <Field label="Parte adversa (réu)">
-              <input
+              <OpponentCombobox
                 value={opponentName}
-                onChange={(e) => setOpponentName(e.target.value)}
-                className={inputCls}
+                onSelect={(s) => {
+                  setOpponentName(s.name);
+                  setOpponentDoc(s.document ?? '');
+                  setOpponentContactId(s.contactId ?? '');
+                }}
                 placeholder="Ex.: Banco BMG S/A"
+                inputClassName={`${inputCls} pl-8`}
               />
+              {opponentContactId && (
+                <span className="mt-1 block text-[10px] font-medium text-emerald-600 dark:text-emerald-400">✓ vinculado ao réu cadastrado</span>
+              )}
             </Field>
           </div>
           <Field label="Etiquetas">
