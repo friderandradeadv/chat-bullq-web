@@ -1045,11 +1045,21 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   };
   const toggleCo = (uid: string) => saveCoResponsibles(coIds.includes(uid) ? coIds.filter((x) => x !== uid) : [...coIds, uid]);
 
-  // Puxa a ficha do processo p/ montar "Cliente x Parte | 1º Grau - Área" (igual Astrea).
+  // Puxa a ficha do processo p/ montar "Cliente x Parte | 1º Grau - Comarca - Área".
   const caseQ = useQuery({ queryKey: ['legal-case', 'agenda', activity.caseId], queryFn: () => legalCasesService.get(activity.caseId!), enabled: !!activity.caseId });
   const inst = (caseQ.data?.metadata as { astrea?: { raw?: Record<string, string> } } | undefined)?.astrea?.raw?.['Instância Atual'];
   const grade = inst ? `${String(inst).replace(/\D/g, '')}º Grau` : null;
-  const procSuffix = [grade, caseQ.data?.area].filter(Boolean).join(' - ');
+  // Réu vem das PARTES (fonte da verdade): muitos cards do Pipefy têm título só com
+  // o cliente ("NILSON ROBERTO DE SOUZA") e o réu (ex.: BANCO BMG) fica nas partes.
+  // Compõe "Cliente x Réu" quando ambos existem; senão cai no título do processo.
+  const clientParty = caseQ.data?.parties?.find((p) => p.role === 'CLIENT')?.name;
+  const opponentParty = caseQ.data?.parties?.find((p) => p.role === 'OPPONENT')?.name;
+  const procLabel = (clientParty && opponentParty) ? `${clientParty} x ${opponentParty}` : (activity.caseTitle || caseQ.data?.title || '');
+  // Detalhes: grau + juízo/comarca (court já vem no padrão "Nª Vara … Comarca de …/UF"
+  // pelo DataJud; nos importados do Pipefy é só o tribunal, ex. "TJMS") + área.
+  const procSuffix = [grade, caseQ.data?.court, caseQ.data?.area].filter(Boolean).join(' - ');
+  // Etiquetas jurídicas do PROCESSO (EntityTag: Bancário / RMC-RCC / Frider Andrade …).
+  const caseTags = (caseQ.data?.legalTags ?? []).map((lt) => lt.tag);
   const clientConv = caseQ.data?.parties?.find((p) => p.role === 'CLIENT' && p.contact?.conversations?.length)?.contact?.conversations?.[0];
 
   // 2º grau (acórdão) vs 1º grau (sentença): pela instância do processo OU por
@@ -1066,7 +1076,15 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     || grade === '2º Grau'
     || (grade !== '1º Grau' && ACORDAO_MARKER.test(decisaoTxt))
   );
-  const isDecisaoAnalise = isDecisaoBase && (isDecisaoTitulo || isAcordao);
+  // Desistência/renúncia HOMOLOGADA = extinção a pedido da própria parte autora →
+  // NÃO há recurso a interpor. Suprime o painel "Criar prazo de recurso" (era o
+  // caminho do prazo de "Apelação" FANTASMA lançado num processo já extinto). Guarda
+  // legada: cards novos já vêm com título "Ciência — desistência homologada" (sem
+  // recurso); isto protege as tarefas antigas ainda rotuladas "Analisar sentença".
+  const isDesistenciaHomologada =
+    /homolog\w+[^.]{0,45}(?:desist|ren[úu]nci)/i.test(decisaoTxt) ||
+    /(?:julgo\s+extint\w*|exting[o]\s+o\s+(?:processo|feito))[^.]{0,80}(?:desist|ren[úu]nci)/i.test(decisaoTxt);
+  const isDecisaoAnalise = isDecisaoBase && (isDecisaoTitulo || isAcordao) && !isDesistenciaHomologada;
   const ementaAcordao = isAcordao ? extractEmentaClient(activity.recorte ?? activity.dispositivo) : null;
 
   // ── Comentários + etiquetas + editar (backend novo) ──
@@ -1396,7 +1414,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
                 </div></>)}
             </dd>
           </div>
-          {activity.caseTitle && <Row label="Processo"><button onClick={() => onOpenCase(activity.caseId!)} className="text-left font-light text-[#228BE6] hover:underline">{activity.caseTitle}{procSuffix ? `  |  ${procSuffix}` : ''}</button></Row>}
+          {activity.caseTitle && <Row label="Processo"><button onClick={() => onOpenCase(activity.caseId!)} className="text-left font-light text-[#228BE6] hover:underline">{procLabel}{procSuffix ? `  |  ${procSuffix}` : ''}</button></Row>}
+          {caseTags.length > 0 && <Row label="Etiquetas"><span className="flex flex-wrap gap-1.5">{caseTags.map((t) => <span key={t.id} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: t.color || '#868E96' }}>{t.name}</span>)}</span></Row>}
           {activity.cnj && <Row label="Número do processo"><CnjNumber value={activity.cnj} /></Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo' || activity.responsibleName) && (
             <Row label="Responsável">
@@ -1565,6 +1584,12 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         {/* Criar prazo de recurso — quando a atividade é a análise de uma decisão.
             Acórdão (2º grau): REsp/RE, Embargos de Declaração, Agravo Interno.
             Sentença (1º grau): Apelação, Embargos de Declaração. */}
+        {isDesistenciaHomologada && (
+          <div className="mt-5 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+            <p className="font-semibold">Desistência homologada — processo extinto</p>
+            <p className="mt-1">O desfecho é o que a parte autora requereu: <strong>não há recurso a interpor</strong>. Apenas dar ciência e acompanhar o trânsito/arquivamento. Não lance prazo de apelação/embargos.</p>
+          </div>
+        )}
         {isDecisaoAnalise && (
           <div className="mt-5 rounded-lg border border-[#DEE2E6] bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
             <p className="mb-1 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Criar prazo de recurso {isAcordao && <span className="ml-1 rounded bg-[#7048E8]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#7048E8] dark:text-[#b197fc]">acórdão · 2º grau</span>}</p>
