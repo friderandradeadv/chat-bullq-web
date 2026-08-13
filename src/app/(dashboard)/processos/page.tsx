@@ -188,6 +188,8 @@ export default function ProcessosPage() {
   const [view, setView] = useState<'ativos' | 'baixados' | 'todos'>('ativos');
   const [grauFilter, setGrauFilter] = useState<'' | '1' | '2'>('');
   const [creating, setCreating] = useState(false);
+  // Pré-preenchimento do cadastro (ex.: veio da notificação "processo fora do hub").
+  const [createInitial, setCreateInitial] = useState<{ cnjNumber?: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [pageSize, setPageSize] = useState<number>(50); // 0 = todos
@@ -217,6 +219,20 @@ export default function ProcessosPage() {
   const paginated = pageSize > 0 ? filtered.slice((curPage - 1) * pageSize, curPage * pageSize) : filtered;
   // Reseta a página quando os filtros mudam o tamanho da lista.
   useEffect(() => { setPage(1); }, [search, view, grauFilter, tagFilter, pageSize]);
+
+  // Notificação "🕳️ processo FORA do hub" abre aqui com ?cadastrarCnj=<cnj>:
+  // abre o cadastro já com o nº CNJ preenchido (e a opção de apensar ao principal)
+  // e limpa a URL pra não reabrir num refresh/navegação.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cnj = params.get('cadastrarCnj');
+    if (!cnj) return;
+    setCreateInitial({ cnjNumber: cnj });
+    setCreating(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('cadastrarCnj');
+    window.history.replaceState({}, '', url.pathname + url.search);
+  }, []);
 
   const toggle = (id: string) =>
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -300,7 +316,7 @@ export default function ProcessosPage() {
             <RefreshCw className="h-4 w-4" />
           </IconBtn>
           <button
-            onClick={() => setCreating(true)}
+            onClick={() => { setCreateInitial(null); setCreating(true); }}
             title="Novo processo"
             className="flex h-9 w-9 items-center justify-center rounded-md text-white shadow-sm"
             style={{ backgroundColor: ASTREA_BLUE }}
@@ -438,10 +454,12 @@ export default function ProcessosPage() {
 
       {creating && (
         <CreateCaseDialog
-          onClose={() => setCreating(false)}
+          initial={createInitial ?? undefined}
+          onClose={() => { setCreating(false); setCreateInitial(null); }}
           onCreated={() => {
             qc.invalidateQueries({ queryKey: ['legal-cases'] });
             setCreating(false);
+            setCreateInitial(null);
           }}
         />
       )}
@@ -805,18 +823,30 @@ function IconBtn({
 }
 
 function CreateCaseDialog({
+  initial,
   onClose,
   onCreated,
 }: {
+  /** Pré-preenchimento (ex.: veio da notificação "processo fora do hub" com o nº CNJ). */
+  initial?: { cnjNumber?: string; title?: string };
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [form, setForm] = useState<CreateCaseInput>({ title: '' });
+  const [form, setForm] = useState<CreateCaseInput>({ title: initial?.title ?? '', cnjNumber: initial?.cnjNumber });
   const [clientName, setClientName] = useState('');
   const [opponentName, setOpponentName] = useState('');
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { data: allTags = [] } = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+
+  // Apensar ao principal já na criação (mesma busca do modal de apensamento da ficha).
+  const [apensarSearch, setApensarSearch] = useState('');
+  const [principal, setPrincipal] = useState<{ id: string; title: string; cnjNumber: string | null } | null>(null);
+  const { data: apensarResults = [], isFetching: apensarBusy } = useQuery({
+    queryKey: ['create-apensar-search', apensarSearch],
+    queryFn: () => legalCasesService.list({ search: apensarSearch }),
+    enabled: apensarSearch.trim().length >= 2 && !principal,
+  });
 
   const toggleTag = (id: string) => setTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
 
@@ -839,7 +869,17 @@ function CreateCaseDialog({
       if (tagIds.length && created?.id) {
         await Promise.allSettled(tagIds.map((tid) => activitiesService.attachTag('case', created.id, tid)));
       }
-      toast.success('Processo criado');
+      // Apensa ao principal escolhido — o backend herda partes/área/responsável/etiquetas.
+      if (principal && created?.id) {
+        try {
+          await legalCasesService.apensar(created.id, principal.id);
+          toast.success(`Processo criado e apensado a ${principal.cnjNumber || principal.title}`);
+        } catch (e: any) {
+          toast.error(`Processo criado, mas falhou ao apensar: ${e?.response?.data?.message || e?.message || 'erro'}`);
+        }
+      } else {
+        toast.success('Processo criado');
+      }
       onCreated();
     } catch (err: any) {
       toast.error(err?.message || 'Erro ao criar processo');
@@ -942,6 +982,48 @@ function CreateCaseDialog({
                   );
                 })}
               </div>
+            )}
+          </Field>
+          <Field label="Apensar ao processo principal (opcional)">
+            {principal ? (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-[#228BE6] bg-blue-50 px-3 py-2 dark:bg-blue-500/10">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{principal.title}</span>
+                  {principal.cnjNumber && <span className="text-xs text-zinc-400">{principal.cnjNumber}</span>}
+                </span>
+                <button type="button" onClick={() => { setPrincipal(null); setApensarSearch(''); }} className="shrink-0 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200">Trocar</button>
+              </div>
+            ) : (
+              <>
+                <input
+                  value={apensarSearch}
+                  onChange={(e) => setApensarSearch(e.target.value)}
+                  className={inputCls}
+                  placeholder="Buscar o principal por título, nº CNJ ou código…"
+                />
+                {apensarSearch.trim().length >= 2 && (
+                  <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto">
+                    {apensarBusy ? (
+                      <p className="px-1 py-1.5 text-xs text-zinc-400">Buscando…</p>
+                    ) : apensarResults.length === 0 ? (
+                      <p className="px-1 py-1.5 text-xs text-zinc-400">Nenhum processo encontrado.</p>
+                    ) : (
+                      apensarResults.slice(0, 8).map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setPrincipal({ id: r.id, title: r.title, cnjNumber: r.cnjNumber })}
+                          className="w-full rounded-md border border-transparent px-3 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        >
+                          <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{r.title}</span>
+                          <span className="text-xs text-zinc-400">{r.cnjNumber || 'sem nº CNJ'}{r.area ? ` · ${r.area}` : ''}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+                <p className="mt-1 text-[11px] text-zinc-400">Ao apensar, o cliente, a parte adversa, a área e as etiquetas são herdados do principal.</p>
+              </>
             )}
           </Field>
         </div>

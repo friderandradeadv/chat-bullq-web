@@ -60,5 +60,10 @@ export function notificationHref(n: AppNotification): string {
   if (d.url) return d.url as string;
   if (d.conversationId) return `/inbox?conversationId=${d.conversationId}`;
   if (d.caseId) return `/processos/${d.caseId}`;
+  // Sentinela Projudi de processo FORA do hub: ainda não existe card (por isso
+  // não há caseId). Em vez de cair no início, leva à aba Processos com o cadastro
+  // já aberto e o nº CNJ preenchido — de lá dá pra criar e apensar ao principal.
+  if (d.kind === 'projudi_sentinela' && d.cnj)
+    return `/processos?cadastrarCnj=${encodeURIComponent(String(d.cnj))}`;
   return '/inicio';
 }
