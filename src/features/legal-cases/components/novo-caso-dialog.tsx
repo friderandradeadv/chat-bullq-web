@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { legalCasesService, type PartyInput } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { OpponentCombobox } from '@/features/legal-cases/components/opponent-combobox';
+import { ClientCombobox } from '@/features/legal-cases/components/client-combobox';
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 const PRODUTOS = ['RMC', 'RCC', 'RMC + RCC', 'BPC-LOAS', 'Aposentadoria', 'Auxílio-doença', 'Revisional', 'Consumidor', 'Trabalhista'];
@@ -14,6 +15,8 @@ const PRODUTOS = ['RMC', 'RCC', 'RMC + RCC', 'BPC-LOAS', 'Aposentadoria', 'Auxí
 /** Dialog de criação de processo/card. targetPhase = fase inicial; phases = opções de fase. */
 export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }: { targetPhase?: string; phases?: { key: string; label: string }[]; onClose: () => void; onCreated: () => void }) {
   const [cliente, setCliente] = useState('');
+  const [clienteDoc, setClienteDoc] = useState('');
+  const [clienteContactId, setClienteContactId] = useState('');
   const [produto, setProduto] = useState('');
   const [adversa, setAdversa] = useState('');
   const [adversaDoc, setAdversaDoc] = useState<string>('');
@@ -27,7 +30,12 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
     if (!cliente.trim()) { toast.error('Informe o nome do cliente'); return; }
     setBusy(true);
     try {
-      const parties: PartyInput[] = [{ role: 'CLIENT', name: cliente.trim() }];
+      const parties: PartyInput[] = [{
+        role: 'CLIENT',
+        name: cliente.trim(),
+        contactId: clienteContactId || undefined,
+        document: clienteDoc || undefined,
+      }];
       if (adversa.trim())
         parties.push({
           role: 'OPPONENT',
@@ -60,7 +68,18 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
 
         <div className="mt-4 space-y-3">
           <Field label="Cliente *">
-            <input value={cliente} onChange={(e) => setCliente(e.target.value)} placeholder="Nome do cliente" className={INPUT} autoFocus />
+            <ClientCombobox
+              value={cliente}
+              onSelect={(s) => {
+                setCliente(s.name);
+                setClienteDoc(s.document ?? '');
+                setClienteContactId(s.contactId ?? '');
+              }}
+              inputClassName={`${INPUT} pl-8`}
+            />
+            {clienteContactId && (
+              <span className="mt-1 block text-[10px] font-medium text-emerald-600 dark:text-emerald-400">✓ vinculado ao cliente cadastrado</span>
+            )}
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Produto">

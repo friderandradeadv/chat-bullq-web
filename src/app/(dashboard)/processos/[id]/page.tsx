@@ -39,6 +39,8 @@ import {
   type PartyRole,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { activitiesService } from '@/features/activities/services/activities.service';
+import { ClientCombobox } from '@/features/legal-cases/components/client-combobox';
+import { OpponentCombobox } from '@/features/legal-cases/components/opponent-combobox';
 import {
   deadlinesService,
   type Deadline,
@@ -1657,17 +1659,27 @@ function PartiesCard({
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  const [doc, setDoc] = useState('');
+  const [contactId, setContactId] = useState('');
   const [role, setRole] = useState<PartyRole>('OPPONENT');
   const qc = useQueryClient();
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['legal-case', caseId] });
 
+  // Troca de papel zera o vínculo (um contactId de cliente não vale como réu).
+  const changeRole = (r: PartyRole) => { setRole(r); setDoc(''); setContactId(''); };
+
   const add = async () => {
     if (!name.trim()) return;
     try {
-      await legalCasesService.addParty(caseId, { name: name.trim(), role });
+      await legalCasesService.addParty(caseId, {
+        name: name.trim(),
+        role,
+        contactId: contactId || undefined,
+        document: doc || undefined,
+      });
       toast.success('Parte adicionada');
-      setName('');
+      setName(''); setDoc(''); setContactId('');
       setAdding(false);
       refresh();
     } catch (err: any) {
@@ -1700,8 +1712,28 @@ function PartiesCard({
     >
       {adding && (
         <div className="mb-3 space-y-2 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/40">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da parte" className={inputCls} />
-          <select value={role} onChange={(e) => setRole(e.target.value as PartyRole)} className={inputCls}>
+          {/* Cliente/Réu buscam os já cadastrados e vinculam por contactId/CPF; os
+              demais papéis (terceiro, advogado, testemunha) seguem texto livre. */}
+          {role === 'CLIENT' ? (
+            <ClientCombobox
+              value={name}
+              onSelect={(s) => { setName(s.name); setDoc(s.document ?? ''); setContactId(s.contactId ?? ''); }}
+              placeholder="Nome do cliente"
+              inputClassName={`${inputCls} pl-8`}
+            />
+          ) : role === 'OPPONENT' ? (
+            <OpponentCombobox
+              value={name}
+              onSelect={(s) => { setName(s.name); setDoc(s.document ?? ''); setContactId(s.contactId ?? ''); }}
+              inputClassName={`${inputCls} pl-8`}
+            />
+          ) : (
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da parte" className={inputCls} />
+          )}
+          {contactId && (
+            <span className="block text-[10px] font-medium text-emerald-600 dark:text-emerald-400">✓ vinculado ao cadastro</span>
+          )}
+          <select value={role} onChange={(e) => changeRole(e.target.value as PartyRole)} className={inputCls}>
             {(Object.keys(ROLE_LABEL) as PartyRole[]).map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABEL[r]}
