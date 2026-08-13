@@ -1524,6 +1524,10 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             const rel = activity.processosRelacionados!;
             const mesmoBanco = rel.filter((p) => p.mesmoBanco);
             const outros = rel.filter((p) => !p.mesmoBanco);
+            // Mesma regra de sigla do card: título curado ("CLIENTE x SIGLA") em CAPS;
+            // quando o título já traz o réu (tem " x "), NÃO repete o nome-monstro do banco.
+            const relLabel = (t: string) => t.split(/\s+x\s+/i).map((s) => s.trim().toUpperCase()).join(' x ');
+            const titleTemReu = (t: string) => /\sx\s/i.test(t);
             return (
               <div className="flex flex-col gap-1">
                 <dt className="font-medium text-[#6C757D]">Outras ações do mesmo cliente:</dt>
@@ -1539,7 +1543,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
                       <ul className="m-0 flex list-none flex-col gap-1 p-0">
                         {mesmoBanco.map((p) => (
                           <li key={p.caseId} className="text-[12px] font-normal leading-snug text-zinc-700 dark:text-zinc-200">
-                            <a href={`/processos/${p.caseId}`} className="font-medium text-amber-800 underline decoration-dotted underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200">{p.title}</a>
+                            <a href={`/processos/${p.caseId}`} className="font-medium text-amber-800 underline decoration-dotted underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200">{relLabel(p.title)}</a>
                             <span className="text-zinc-500 dark:text-zinc-400">{' · '}{p.cnj ?? 's/ CNJ'}{p.area ? ` · ${p.area}` : ''}{p.legalPhase ? ` · ${p.legalPhase}` : ''}</span>
                           </li>
                         ))}
@@ -1550,8 +1554,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
                     <ul className="m-0 flex list-none flex-col gap-1 p-0">
                       {outros.map((p) => (
                         <li key={p.caseId} className="text-[12px] font-normal leading-snug text-zinc-500 dark:text-zinc-400">
-                          <a href={`/processos/${p.caseId}`} className="underline decoration-dotted underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-200">{p.title}</a>
-                          <span>{' · '}{p.cnj ?? 's/ CNJ'}{p.banco ? ` · ${p.banco}` : ''}{p.area ? ` · ${p.area}` : ''}</span>
+                          <a href={`/processos/${p.caseId}`} className="underline decoration-dotted underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-200">{relLabel(p.title)}</a>
+                          <span>{' · '}{p.cnj ?? 's/ CNJ'}{p.banco && !titleTemReu(p.title) ? ` · ${p.banco}` : ''}{p.area ? ` · ${p.area}` : ''}</span>
                         </li>
                       ))}
                     </ul>
