@@ -7,6 +7,16 @@ export interface ParcelaInput {
   data: string; // YYYY-MM-DD
   valor: number;
   saque?: number;
+  /** id do documento nos autos + página (extrato do órgão pagador) — trava C1 */
+  fonte?: string;
+}
+
+/** Ocorrência da validação antiexcesso (C1–C11). */
+export interface Ocorrencia {
+  codigo: string;
+  severidade: 'erro' | 'aviso';
+  mensagem: string;
+  campo?: string;
 }
 
 export type CenarioId = 'apenasConversao' | 'conversaoDobro' | 'restituicaoTotal';
@@ -34,6 +44,8 @@ export interface CalcularRmcInput {
   modulacaoStj?: boolean; // dobro só >= 30/03/2021 (EAREsp 676.608)
   indiceCorrecao: IndiceCorrecao;
   dataBase: string; // YYYY-MM-DD
+  /** data da contratação impugnada — marco da trava antiexcesso C2 */
+  dataContratacao?: string; // YYYY-MM-DD
   proRataDie?: boolean;
   jurosMora?: number;
   danosMorais?: number;
@@ -110,6 +122,8 @@ export interface ResultadoRmc {
   };
   cenarios: Cenario[];
   cs: ResultadoCs | null;
+  /** ocorrências da validação antiexcesso (não-bloqueante no preview) */
+  ocorrencias?: Ocorrencia[];
   linhas: LinhaEvolucao[];
   resumo: ResumoCenario;
 }

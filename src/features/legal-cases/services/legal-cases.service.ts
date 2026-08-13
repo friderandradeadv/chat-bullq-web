@@ -713,6 +713,10 @@ export const legalCasesService = {
       metodoLabel?: string;
       linhas?: any[];
       definirValorCausa?: boolean;
+      /** marco do contrato (trava antiexcesso C2) */
+      dataContratacao?: string;
+      /** competências comprovadas (com fonte) — revalidadas antiexcesso na gravação */
+      descontos?: { data: string; valor: number; fonte?: string }[];
     },
   ): Promise<{ ok: boolean; calculo: any }> {
     const { data } = await api.post(`/legal-cases/${id}/calculo`, payload);

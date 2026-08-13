@@ -97,15 +97,35 @@ export function gerarPdfCsExecucao(
           : 'sobre a condenação (restituição)'
     }`;
 
+  // Premissa antiexcesso: confronta o marco do contrato com a PRIMEIRA
+  // competência debitada. Competência anterior ao contrato é defeito de origem
+  // (o caso Magnus) — aqui fica impresso na mesma página, não escondido no anexo.
+  const primeiraComp = (c?.linhas ?? [])
+    .map((l) => String(l.data ?? '').slice(0, 7))
+    .filter((m) => /^\d{4}-\d{2}$/.test(m))
+    .sort()[0];
+  const ymContratoCs = String(meta.dataContratacao ?? '').slice(0, 7);
+  const compAnterior = !!(primeiraComp && ymContratoCs && primeiraComp < ymContratoCs);
+  const primeiraCompLinha = primeiraComp
+    ? kv(
+        '1ª competência debitada',
+        primeiraComp.split('-').reverse().join('/') +
+          (compAnterior ? ' — ANTERIOR AO CONTRATO' : ''),
+        compAnterior ? 'alerta' : '',
+      )
+    : '';
+
   const dados =
     kv('Nome do cálculo', esc(nome)) +
     kv('Tipo de contrato', meta.tipo) +
     (meta.banco ? kv('Banco', esc(meta.banco)) : '') +
     (meta.numeroContrato ? kv('Nº do contrato', esc(meta.numeroContrato)) : '') +
     (meta.valorEmprestimo != null ? kv('Valor do empréstimo', brl(meta.valorEmprestimo)) : '') +
-    (meta.dataContratacao ? kv('Data da contratação', dm(meta.dataContratacao)) : '') +
+    (meta.dataContratacao ? kv('Data da contratação (marco)', dm(meta.dataContratacao)) : '') +
+    primeiraCompLinha +
     (meta.taxaConversao != null ? kv('Taxa de conversão', `${taxa} a.m.`) : '') +
     (meta.indiceCorrecao ? kv('Índice de correção', meta.indiceCorrecao) : '') +
+    (meta.dataBase ? kv('Data-base única da apuração', dm(meta.dataBase)) : '') +
     kv('Principal atualizado até', dm(cs.termoFinal));
 
   const resultado =
@@ -134,6 +154,7 @@ export function gerarPdfCsExecucao(
   .kv:nth-child(even){background:#faf9fe}
   .kv span:first-child{color:#6b7280}
   .kv span:last-child{font-weight:700;text-align:right}
+  .kv.alerta span:last-child{color:#b91c1c}
   .res .kv.total{background:#ede9fe;border-top:1px solid #ddd6fe}
   .res .kv.total span{color:#4c1d95;font-size:12px}
   table{width:100%;border-collapse:collapse;font-size:7.6px;margin-top:4px}

@@ -43,6 +43,10 @@ import {
   type ResultadoRmc,
 } from '@/features/calculadora-rmc/services/calculadora-rmc.service';
 import {
+  validar as validarAntiexcesso,
+  type Ocorrencia as OcorrenciaAntiexcesso,
+} from '@/features/calculadora-rmc/antiexcesso/validacao-antiexcesso';
+import {
   calculadoraCsService,
   type ResultadoCs as ResultadoCsAvulso,
 } from '@/features/calculadora-cs/services/calculadora-cs.service';
@@ -84,16 +88,21 @@ function parseParcelas(texto: string): { parcelas: ParcelaInput[]; erros: string
   const parcelas: ParcelaInput[] = [];
   const erros: string[] = [];
   texto.split('\n').forEach((linha, i) => {
-    const t = linha.trim();
-    if (!t) return;
+    const bruto = linha.trim();
+    if (!bruto) return;
+    // FONTE (trava C1): tudo depois de '#' na linha é o id do documento + página.
+    // Ex.: "2022-08-01  183,17  #HISCON id. 12345, p. 4". Sem '#', fonte fica vazia.
+    const hashIdx = bruto.indexOf('#');
+    const fonte = hashIdx >= 0 ? bruto.slice(hashIdx + 1).trim() : undefined;
+    const t = (hashIdx >= 0 ? bruto.slice(0, hashIdx) : bruto).trim();
     const partes = t.split(/[;,\t]|\s{2,}|\s(?=R\$)|\s(?=\d)/).map((p) => p.trim()).filter(Boolean);
     const data = parseData(partes[0] ?? '');
     const valor = parseValor(partes[1] ?? partes[0] ?? '');
     if (!data || isNaN(valor)) {
-      erros.push(`Linha ${i + 1}: "${t}"`);
+      erros.push(`Linha ${i + 1}: "${bruto}"`);
       return;
     }
-    parcelas.push({ data, valor });
+    parcelas.push({ data, valor, fonte });
   });
   return { parcelas, erros };
 }
@@ -304,6 +313,36 @@ export default function CalculadoraRmcPage() {
   }, [ultimaParcela, form.dataBase]);
   const mesBr = (iso: string) => iso.slice(0, 7).split('-').reverse().join('/');
 
+  // ── Validação antiexcesso (client-side, imediata) ─────────────────────────
+  // MESMO módulo do servidor (fonte única, sincronizada). Dá o feedback na hora
+  // para ninguém digitar dez linhas e só depois descobrir. C10 (índice) roda só
+  // no servidor (depende da série do BACEN). O erro aqui bloqueia "salvar no
+  // processo" — mas o servidor é a autoridade final e revalida na gravação.
+  const ocorrenciasLocais = useMemo<OcorrenciaAntiexcesso[]>(() => {
+    const todas = [...parcelas, ...parcelasExtras];
+    if (!todas.length) return [];
+    return validarAntiexcesso({
+      contrato: form.dataContratacao || '',
+      citacao: form.dataBase || '',
+      sentenca: form.dataBase || '',
+      eventoDanoso: form.dataBase || '',
+      dataBase: form.dataBase || '',
+      descontos: todas.map((p) => ({
+        competencia: (p.data || '').slice(0, 7),
+        valor: p.valor,
+        fonte: p.fonte,
+      })),
+    });
+  }, [parcelas, parcelasExtras, form.dataContratacao, form.dataBase]);
+  const antiexcessoErros = useMemo(
+    () => ocorrenciasLocais.filter((o) => o.severidade === 'erro'),
+    [ocorrenciasLocais],
+  );
+  const antiexcessoAvisos = useMemo(
+    () => ocorrenciasLocais.filter((o) => o.severidade === 'aviso'),
+    [ocorrenciasLocais],
+  );
+
   const gerarParcelas = () => {
     const di = parseData(ger.dataInicial) ?? ger.dataInicial;
     const v = parseValor(ger.valor);
@@ -329,6 +368,7 @@ export default function CalculadoraRmcPage() {
         modulacaoStj: form.modulacaoStj,
         indiceCorrecao: form.indiceCorrecao,
         dataBase: form.dataBase,
+        dataContratacao: form.dataContratacao || undefined,
         proRataDie: form.proRataDie,
         nomeCalculo: form.nomeCalculo || undefined,
         parcelas: [...parcelas, ...parcelasExtras],
@@ -1397,7 +1437,7 @@ export default function CalculadoraRmcPage() {
               </div>
               <textarea
                 className={`${inputCls} h-40 font-mono text-xs`}
-                placeholder={'01/12/2022\t60,60\n01/01/2023\t60,60\n...'}
+                placeholder={'01/12/2022\t60,60\t#HISCON id. 12345, p. 4\n01/01/2023\t60,60\t#HISCON id. 12345, p. 4\n...'}
                 value={parcelasTexto}
                 onChange={(e) => setParcelasTexto(e.target.value)}
               />
@@ -1412,6 +1452,49 @@ export default function CalculadoraRmcPage() {
                   </span>
                 )}
               </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+                Após o valor, use <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">#</code>{' '}
+                para a <b>fonte</b> da competência (id do documento nos autos + página) — é o que amarra
+                cada desconto à prova do extrato do órgão pagador.
+              </p>
+
+              {/* Painel antiexcesso — feedback imediato (mesmas regras do servidor) */}
+              {ocorrenciasLocais.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {antiexcessoErros.length > 0 && (
+                    <div className="rounded-lg border border-red-300 bg-red-50 p-3 dark:border-red-500/40 dark:bg-red-500/10">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-red-700 dark:text-red-300">
+                        <ShieldAlert className="h-4 w-4" />
+                        {antiexcessoErros.length} impedimento(s) — corrija antes de salvar no processo
+                      </p>
+                      <ul className="space-y-1 text-[11px] leading-relaxed text-red-700 dark:text-red-300">
+                        {antiexcessoErros.map((o, i) => (
+                          <li key={i} className="flex gap-1.5">
+                            <span className="font-mono font-semibold">{o.codigo}</span>
+                            <span>{o.mensagem}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {antiexcessoAvisos.length > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        <TriangleAlert className="h-4 w-4" />
+                        {antiexcessoAvisos.length} aviso(s) — não bloqueiam, mas confira
+                      </p>
+                      <ul className="space-y-1 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+                        {antiexcessoAvisos.map((o, i) => (
+                          <li key={i} className="flex gap-1.5">
+                            <span className="font-mono font-semibold">{o.codigo}</span>
+                            <span>{o.mensagem}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Tutela / descontos continuados — só no cumprimento de sentença */}
@@ -1796,6 +1879,14 @@ export default function CalculadoraRmcPage() {
                               metodoLabel: METODO_LABEL[cenarioView.id],
                               // Linhas da evolução do saldo devedor → memorial DETALHADO nos anexos.
                               linhas: cenarioView.linhas,
+                              // Marco do contrato + competências (com fonte): o servidor revalida
+                              // antiexcesso na gravação e persiste p/ a auditoria retroativa.
+                              dataContratacao: form.dataContratacao || undefined,
+                              descontos: [...parcelas, ...parcelasExtras].map((p) => ({
+                                data: p.data,
+                                valor: p.valor,
+                                fonte: p.fonte,
+                              })),
                               config: {
                                 ...(res?.config ?? {}),
                                 banco: form.banco,
@@ -1820,12 +1911,18 @@ export default function CalculadoraRmcPage() {
                             setSalvando(false);
                           }
                         }}
-                        disabled={salvando || salvouOk}
+                        disabled={salvando || salvouOk || antiexcessoErros.length > 0}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#005efc] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
                       >
                         {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                         {salvando ? 'Salvando…' : salvouOk ? 'Salvo no processo ✓' : 'Salvar no processo (valor da causa)'}
                       </button>
+                      {antiexcessoErros.length > 0 && (
+                        <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs text-red-600 dark:text-red-400">
+                          <ShieldAlert className="h-3.5 w-3.5" />
+                          Validação antiexcesso: corrija os {antiexcessoErros.length} impedimento(s) acima antes de salvar.
+                        </p>
+                      )}
                       {salvouOk && (
                         <p className="mt-2 text-center text-xs text-emerald-600 dark:text-emerald-400">
                           ✓ Salvo. Volte para a aba do processo — o cálculo já aparece lá e o botão “Gerar petição inicial” está liberado. Pode fechar esta aba.
