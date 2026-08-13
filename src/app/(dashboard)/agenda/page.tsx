@@ -1054,10 +1054,15 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // Compõe "Cliente x Réu" quando ambos existem; senão cai no título do processo.
   const clientParty = caseQ.data?.parties?.find((p) => p.role === 'CLIENT')?.name;
   const opponentParty = caseQ.data?.parties?.find((p) => p.role === 'OPPONENT')?.name;
-  // Partes em CAPS (pedido do Matheus); mantém o " x " minúsculo entre elas.
-  const procLabel = (clientParty && opponentParty)
-    ? `${clientParty.toUpperCase()} x ${opponentParty.toUpperCase()}`
-    : (activity.caseTitle || caseQ.data?.title || '').toUpperCase();
+  // Rótulo do processo no card: partes em CAPS, " x " minúsculo. Título CURADO
+  // ("CLIENTE x SIGLA") tem PRIORIDADE — quando o réu tem sigla, o título já a traz
+  // (ex.: "… x ASTEBA"), evitando o nome-monstro da parte ("ASSOCIACAO DOS SERVIDORES
+  // TECNICO-ADMINISTRATIVO … - CNPJ …"). Sem " x " no título (cards do Pipefy = só
+  // cliente), compõe de CLIENT x OPPONENT das partes.
+  const rawLabel = (activity.caseTitle && /\sx\s/i.test(activity.caseTitle))
+    ? activity.caseTitle
+    : (clientParty && opponentParty) ? `${clientParty} x ${opponentParty}` : (activity.caseTitle || caseQ.data?.title || '');
+  const procLabel = rawLabel.split(/\s+x\s+/i).map((p) => p.trim().toUpperCase()).join(' x ');
   // No card de prazo/tarefa: SÓ partes (CAPS) + assunto/área. Etiquetas, vara e demais
   // detalhes ficam na ABA DO PROCESSO (ficha expandida), NÃO no card da agenda.
   const procSuffix = caseQ.data?.area ?? '';
