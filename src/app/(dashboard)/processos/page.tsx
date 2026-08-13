@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -189,7 +189,7 @@ export default function ProcessosPage() {
   const [grauFilter, setGrauFilter] = useState<'' | '1' | '2'>('');
   const [creating, setCreating] = useState(false);
   // Pré-preenchimento do cadastro (ex.: veio da notificação "processo fora do hub").
-  const [createInitial, setCreateInitial] = useState<{ cnjNumber?: string } | null>(null);
+  const [createInitial, setCreateInitial] = useState<{ cnjNumber?: string; parte?: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [pageSize, setPageSize] = useState<number>(50); // 0 = todos
@@ -227,10 +227,11 @@ export default function ProcessosPage() {
     const params = new URLSearchParams(window.location.search);
     const cnj = params.get('cadastrarCnj');
     if (!cnj) return;
-    setCreateInitial({ cnjNumber: cnj });
+    setCreateInitial({ cnjNumber: cnj, parte: params.get('parte') || undefined });
     setCreating(true);
     const url = new URL(window.location.href);
     url.searchParams.delete('cadastrarCnj');
+    url.searchParams.delete('parte');
     window.history.replaceState({}, '', url.pathname + url.search);
   }, []);
 
@@ -827,8 +828,8 @@ function CreateCaseDialog({
   onClose,
   onCreated,
 }: {
-  /** Pré-preenchimento (ex.: veio da notificação "processo fora do hub" com o nº CNJ). */
-  initial?: { cnjNumber?: string; title?: string };
+  /** Pré-preenchimento (ex.: veio da notificação "processo fora do hub" com o nº CNJ + parte). */
+  initial?: { cnjNumber?: string; title?: string; parte?: string };
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -840,13 +841,37 @@ function CreateCaseDialog({
   const { data: allTags = [] } = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
 
   // Apensar ao principal já na criação (mesma busca do modal de apensamento da ficha).
-  const [apensarSearch, setApensarSearch] = useState('');
+  // Quando vem da notificação, já busca pela parte (ex.: "Alceu de Oliveira Martins").
+  const [apensarSearch, setApensarSearch] = useState(initial?.parte ?? '');
   const [principal, setPrincipal] = useState<{ id: string; title: string; cnjNumber: string | null } | null>(null);
+  const autoTried = useRef(false);
   const { data: apensarResults = [], isFetching: apensarBusy } = useQuery({
     queryKey: ['create-apensar-search', apensarSearch],
     queryFn: () => legalCasesService.list({ search: apensarSearch }),
     enabled: apensarSearch.trim().length >= 2 && !principal,
   });
+
+  // Seleciona o principal e, se o título ainda estiver vazio, herda o dele (o
+  // apensamento no submit completa cliente/réu/área/etiquetas a partir do principal).
+  const escolherPrincipal = (p: { id: string; title: string; cnjNumber: string | null }) => {
+    setPrincipal(p);
+    setForm((f) => (f.title.trim() ? f : { ...f, title: p.title }));
+  };
+
+  // Auto-seleção: veio da notificação com a parte e a busca achou exatamente 1
+  // processo → assume que é o principal (o usuário pode "Trocar" se não for).
+  useEffect(() => {
+    if (autoTried.current || principal || !initial?.parte) return;
+    if (apensarBusy) return;
+    if (apensarResults.length === 1) {
+      autoTried.current = true;
+      const r = apensarResults[0];
+      escolherPrincipal({ id: r.id, title: r.title, cnjNumber: r.cnjNumber });
+    } else if (apensarResults.length > 1) {
+      autoTried.current = true; // vários candidatos: deixa a lista aberta pro clique
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apensarResults, apensarBusy, principal, initial?.parte]);
 
   const toggleTag = (id: string) => setTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
 
@@ -1012,7 +1037,7 @@ function CreateCaseDialog({
                         <button
                           key={r.id}
                           type="button"
-                          onClick={() => setPrincipal({ id: r.id, title: r.title, cnjNumber: r.cnjNumber })}
+                          onClick={() => escolherPrincipal({ id: r.id, title: r.title, cnjNumber: r.cnjNumber })}
                           className="w-full rounded-md border border-transparent px-3 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
                         >
                           <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{r.title}</span>
