@@ -1054,10 +1054,12 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // Compõe "Cliente x Réu" quando ambos existem; senão cai no título do processo.
   const clientParty = caseQ.data?.parties?.find((p) => p.role === 'CLIENT')?.name;
   const opponentParty = caseQ.data?.parties?.find((p) => p.role === 'OPPONENT')?.name;
-  const procLabel = (clientParty && opponentParty) ? `${clientParty} x ${opponentParty}` : (activity.caseTitle || caseQ.data?.title || '');
-  // Detalhes: grau + juízo/comarca (court já vem no padrão "Nª Vara … Comarca de …/UF"
-  // pelo DataJud; nos importados do Pipefy é só o tribunal, ex. "TJMS") + área.
-  const procSuffix = [grade, caseQ.data?.court, caseQ.data?.area].filter(Boolean).join(' - ');
+  // Partes em CAPS (pedido do Matheus); mantém o " x " minúsculo entre elas.
+  const procLabel = (clientParty && opponentParty)
+    ? `${clientParty.toUpperCase()} x ${opponentParty.toUpperCase()}`
+    : (activity.caseTitle || caseQ.data?.title || '').toUpperCase();
+  // No card de prazo/tarefa: SÓ o assunto/área — sem Vara nem grau (pedido do Matheus).
+  const procSuffix = caseQ.data?.area ?? '';
   // Etiquetas jurídicas do PROCESSO (EntityTag: Bancário / RMC-RCC / Frider Andrade …).
   const caseTags = (caseQ.data?.legalTags ?? []).map((lt) => lt.tag);
   const clientConv = caseQ.data?.parties?.find((p) => p.role === 'CLIENT' && p.contact?.conversations?.length)?.contact?.conversations?.[0];
@@ -1414,7 +1416,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
                 </div></>)}
             </dd>
           </div>
-          {activity.caseTitle && <Row label="Processo"><button onClick={() => onOpenCase(activity.caseId!)} className="text-left font-light text-[#228BE6] hover:underline">{procLabel}{procSuffix ? `  |  ${procSuffix}` : ''}</button></Row>}
+          {activity.caseTitle && <Row label="Processo"><button onClick={() => onOpenCase(activity.caseId!)} className="text-left font-light text-[#228BE6] hover:underline">{procLabel}{procSuffix ? ` - ${procSuffix}` : ''}</button></Row>}
           {caseTags.length > 0 && <Row label="Etiquetas"><span className="flex flex-wrap gap-1.5">{caseTags.map((t) => <span key={t.id} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: t.color || '#868E96' }}>{t.name}</span>)}</span></Row>}
           {activity.cnj && <Row label="Número do processo"><CnjNumber value={activity.cnj} /></Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo' || activity.responsibleName) && (

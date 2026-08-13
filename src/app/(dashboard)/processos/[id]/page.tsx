@@ -1598,7 +1598,14 @@ function EditCaseDialog({
             <input value={form.jurisdiction} onChange={set('jurisdiction')} className={inputCls} />
           </Field>
           <Field label="Valor da causa">
-            <input type="number" step="0.01" value={form.value} onChange={set('value')} className={inputCls} />
+            {/* Máscara R$ (centavos): exibe "R$ 19.410,38"; grava numérico ("19410.38"). */}
+            <input
+              inputMode="numeric"
+              value={form.value ? Number(form.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : ''}
+              onChange={(e) => { const d = e.target.value.replace(/\D/g, ''); setForm({ ...form, value: d ? String(parseInt(d, 10) / 100) : '' }); }}
+              placeholder="R$ 0,00"
+              className={inputCls}
+            />
           </Field>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
