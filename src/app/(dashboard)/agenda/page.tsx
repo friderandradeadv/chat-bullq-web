@@ -58,6 +58,21 @@ const initials = (name: string | null) => { if (!name) return 'Eu'; const p = na
 // Capitaliza só a 1ª letra (mantém "de/da" minúsculos). A classe CSS `capitalize`
 // deixava "junho de 2026" → "Junho De 2026"; aqui vira "Junho de 2026".
 const capFirst = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+// Encurta o nome do RÉU institucional p/ a SIGLA nos cards de prazo/tarefa (não muda
+// o cadastro — é só exibição). Conservador: só corta em padrões claros e NUNCA mexe
+// em banco simples ("BANCO BMG S/A" fica igual). Ver varredura 13/08 (256 cases).
+function shortenReu(raw: string): string {
+  let s = (raw || '').trim();
+  s = s.replace(/\s*[-–]\s*CNPJ[:\s].*$/i, '').replace(/\s*\([^)]*\)\s*$/, '').trim(); // tira "- CNPJ …" e "(…)"
+  // "SIGLA – EXPANSÃO institucional/financeira" → SIGLA (ex.: "ANDDAP – ASSOCIAÇÃO…",
+  // "AGI FINANCEIRA S.A - SOCIEDADE DE CRÉDITO…", "SINDIAPI UGT – SINDICATO…").
+  let m = s.match(/^(.{2,24}?)\s*[-–]\s*(?:ASSOCIA|SINDICAT|SIND\b|INSTITUT|SOCIEDADE|FUNDA|COOPERATIV|FEDERA|ASS\.)/i);
+  if (m) return m[1].trim();
+  // "NOME COMPLETO - SIGLA" (sigla curta ao final, ex.: "INSTITUTO … - INSS").
+  m = s.match(/[-–]\s*([A-ZÀ-Ú]{2,8})\s*$/);
+  if (m) return m[1];
+  return s;
+}
 const SEEN_NEW_KEY = 'agenda:seenNew';
 
 interface Activity {
@@ -1062,7 +1077,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const rawLabel = (activity.caseTitle && /\sx\s/i.test(activity.caseTitle))
     ? activity.caseTitle
     : (clientParty && opponentParty) ? `${clientParty} x ${opponentParty}` : (activity.caseTitle || caseQ.data?.title || '');
-  const procLabel = rawLabel.split(/\s+x\s+/i).map((p) => p.trim().toUpperCase()).join(' x ');
+  const procLabel = rawLabel.split(/\s+x\s+/i).map((p, i) => (i === 0 ? p.trim() : shortenReu(p.trim())).toUpperCase()).join(' x ');
   // No card de prazo/tarefa: SÓ partes (CAPS) + assunto/área. Etiquetas, vara e demais
   // detalhes ficam na ABA DO PROCESSO (ficha expandida), NÃO no card da agenda.
   const procSuffix = caseQ.data?.area ?? '';
@@ -1526,7 +1541,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             const outros = rel.filter((p) => !p.mesmoBanco);
             // Mesma regra de sigla do card: título curado ("CLIENTE x SIGLA") em CAPS;
             // quando o título já traz o réu (tem " x "), NÃO repete o nome-monstro do banco.
-            const relLabel = (t: string) => t.split(/\s+x\s+/i).map((s) => s.trim().toUpperCase()).join(' x ');
+            const relLabel = (t: string) => t.split(/\s+x\s+/i).map((s, i) => (i === 0 ? s.trim() : shortenReu(s.trim())).toUpperCase()).join(' x ');
             const titleTemReu = (t: string) => /\sx\s/i.test(t);
             return (
               <div className="flex flex-col gap-1">
