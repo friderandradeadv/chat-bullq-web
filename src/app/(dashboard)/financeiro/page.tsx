@@ -1764,6 +1764,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
   const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
+  const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
 
@@ -2091,9 +2092,14 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                         <tr className="border-t border-zinc-100 bg-violet-50/40 dark:border-zinc-800 dark:bg-violet-900/10">
                           <td></td>
                           <td colSpan={5} className="px-2 py-2">
-                            <div className="space-y-2 rounded-lg border border-violet-200/70 p-2.5 dark:border-violet-900/40">
+                            <div
+                              onDragOver={(e) => { e.preventDefault(); if (dragIdx !== i) setDragIdx(i); }}
+                              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragIdx(null); }}
+                              onDrop={(e) => { e.preventDefault(); setDragIdx(null); lerDocsAlvara(i, e.dataTransfer.files); }}
+                              className={`space-y-2 rounded-lg border p-2.5 transition-colors ${dragIdx === i ? 'border-[#228BE6] border-dashed bg-[#228BE6]/10 ring-2 ring-[#228BE6]/30' : 'border-violet-200/70 dark:border-violet-900/40'}`}
+                            >
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-[11px] text-zinc-400">Alvará <strong>bruto {brl2(bruto)}</strong> → parte do <strong>cliente</strong> (repasse a pagar) e o <strong>nosso</strong> (sucumbência + honorário). Suba o <strong>contrato</strong> e a <strong>petição de CS/alvará</strong> que a IA separa sozinha.</p>
+                                <p className="text-[11px] text-zinc-400">{dragIdx === i ? <span className="font-semibold text-[#228BE6]">Solte o contrato / petição de CS aqui</span> : <>Alvará <strong>bruto {brl2(bruto)}</strong> → parte do <strong>cliente</strong> (repasse a pagar) e o <strong>nosso</strong> (sucumbência + honorário). <strong>Arraste</strong> ou suba o <strong>contrato</strong> e a <strong>petição de CS/alvará</strong> que a IA separa sozinha.</>}</p>
                                 <label className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#228BE6]/40 bg-[#228BE6]/10 px-2 py-1 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/20 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
                                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownCircle className="h-3.5 w-3.5" />} {busy ? 'Lendo…' : '📎 Ler documentos (IA)'}
                                   <input type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={(e) => { lerDocsAlvara(i, e.target.files); e.currentTarget.value = ''; }} />
