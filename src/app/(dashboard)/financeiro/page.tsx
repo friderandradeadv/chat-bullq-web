@@ -21,6 +21,7 @@ import { membersService } from '@/features/settings/services/members.service';
 import { MeuFinanceiroConteudo, BuscaCliente, BuscaProcesso } from '@/features/financeiro/components/meu-financeiro-conteudo';
 import { ComboBox } from '@/features/financeiro/components/combo-box';
 import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
+import { calculadoraCsService } from '@/features/calculadora-cs/services/calculadora-cs.service';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
@@ -1759,8 +1760,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA); '__ratear' = rateio abaixo
   const [rateios, setRateios] = useState<Record<number, { area: string; valor: string; label?: string }[]>>({}); // fatia de cada vertical quando areas[i] === '__ratear'
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
-  // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + prestação de contas (bruto → cliente/sucumbência/honorário).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cliente: string; sucumbencia: string; honorarios: string }>>({});
+  // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
+  // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
 
@@ -1770,10 +1773,11 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       const r = await financeiroService.conferirExtrato((contaArg ?? conta) || null, linhas);
       setConf(r);
       setAreas(Object.fromEntries(r.linhas.map((l, i) => [i, l.verticalSugerida || '']))); // pré-preenche com a sugestão
-      setSel(new Set(r.linhas.map((l, i) => (!l.duplicado && !l.revisar ? i : -1)).filter((i) => i >= 0))); // novos marcados; suspeitas ficam DESMARCADAS pra revisão
+      setSel(new Set(r.linhas.map((l, i) => ((!l.duplicado && !l.revisar) || l.baixaPendente ? i : -1)).filter((i) => i >= 0))); // novos + baixas de pendência marcados; suspeitas DESMARCADAS
       const rev = r.revisar ?? r.linhas.filter((l) => l.revisar).length;
-      if (r.novos === 0 && !rev) toast('Tudo nesse extrato já está lançado — nada novo.', { icon: '✅' });
-      else toast.success(`${r.novos} novo(s) · ${r.duplicados} já existe(m)${rev ? ` · ${rev} pra revisar` : ''}`);
+      const baixas = r.baixarPendentes ?? r.linhas.filter((l) => l.baixaPendente).length;
+      if (r.novos === 0 && !rev && !baixas) toast('Tudo nesse extrato já está lançado — nada novo.', { icon: '✅' });
+      else toast.success(`${r.novos} novo(s) · ${r.duplicados} já existe(m)${baixas ? ` · ${baixas} baixa(s) de pendência` : ''}${rev ? ` · ${rev} pra revisar` : ''}`);
     } catch (e: any) { toast.error(e?.message || 'Erro ao conferir'); }
   };
   const onArquivo = async (f: File) => {
@@ -1802,14 +1806,57 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setParsing(false); }
   };
 
+  // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
+  const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
+    if (!caseId) return;
+    try {
+      const r = await financeiroService.rateioSugerido(caseId, vertical);
+      setAlvara((s) => ({ ...s, [idx]: { ...(s[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' }), vertical: s[idx]?.vertical || r.vertical || '', split: r.split.map((x) => ({ userId: x.userId, nome: x.nome, pct: String(x.pct) })) } }));
+    } catch { /* sem rateio salvo → escritório fica com tudo */ }
+  };
+  // ALVARÁ: lê contrato de honorários + petição de CS/alvará (IA) e pré-preenche a prestação de contas.
+  const lerDocsAlvara = async (idx: number, files: FileList | null) => {
+    const arr = files ? Array.from(files) : [];
+    if (!arr.length || !conf) return;
+    setAlvaraBusy((b) => ({ ...b, [idx]: true }));
+    try {
+      const r = await calculadoraCsService.extrairAlvara(arr);
+      const bruto = Math.abs(conf.linhas[idx].valor);
+      const val = r.valorAlvara && r.valorAlvara > 0 ? r.valorAlvara : bruto;
+      const hon = r.honorariosPct ? (val * r.honorariosPct) / 100 : null;
+      const suc = r.valorSucumbencia && r.valorSucumbencia > 0 ? r.valorSucumbencia
+        : (r.sucumbencia === 'Sim' && r.sucumbenciaPct && r.sucumbenciaBaseValor ? (r.sucumbenciaBaseValor * r.sucumbenciaPct) / 100 : null);
+      setAlvara((s) => {
+        const cur = s[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' };
+        const honN = hon != null ? hon : parseValor(cur.honorarios || '');
+        const sucN = suc != null ? suc : parseValor(cur.sucumbencia || '');
+        const cli = Math.max(0, Math.round((bruto - honN - sucN) * 100) / 100);
+        return { ...s, [idx]: { ...cur, honorarios: hon != null ? fmtMoney(hon) : cur.honorarios, sucumbencia: suc != null ? fmtMoney(suc) : cur.sucumbencia, cliente: fmtMoney(cli) } };
+      });
+      toast.success(`Documentos lidos${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${suc ? ` · sucumbência ${brl2(suc)}` : ''}. Confira antes de importar.`);
+      if (r.aviso) toast(r.aviso, { icon: '⚠️' });
+    } catch (e: any) { toast.error(e?.message || 'Não consegui ler os documentos'); }
+    finally { setAlvaraBusy((b) => ({ ...b, [idx]: false })); }
+  };
+
   const importM = useMutation({
     mutationFn: () => {
       if (!conf) throw new Error('confira primeiro');
       const linhas = conf.linhas.map((l, i) => ({ l, i })).filter(({ i }) => sel.has(i)).map(({ l, i }) => {
-        // ALVARÁ/ÊXITO: entrada bruta com prestação de contas (bruto → cliente/sucumbência/honorário).
+        // BAIXA DE PENDÊNCIA: a linha confirma o pagamento de um a_pagar/a_receber existente
+        // (ex.: o Pix do repasse ao cliente) — manda liquidar, não cria lançamento novo.
+        if (l.baixaPendente && l.liquidaId) return { data: l.data, valor: l.valor, descricao: l.descricao, liquidarTxId: l.liquidaId };
+        // ALVARÁ/ÊXITO: entrada bruta com prestação de contas (bruto → cliente/sucumbência/honorário)
+        // + vertical + rateio entre advogados (fatias em % sobre o "nosso"; Escritório fica com a sobra).
         if (areas[i] === '__alvara') {
           const a = alvara[i];
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, exito: { bruto: Math.abs(l.valor), cliente: parseValor(a?.cliente || ''), sucumbencia: parseValor(a?.sucumbencia || ''), honorarios: parseValor(a?.honorarios || '') } };
+          const suc = parseValor(a?.sucumbencia || ''), hon = parseValor(a?.honorarios || '');
+          const nosso = suc + hon;
+          const splitAdv = (a?.split ?? []).map((s) => ({ s, pct: parseFloat(String(s.pct || '').replace(',', '.')) })).filter(({ pct }) => pct > 0)
+            .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
+          const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
+          const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto: Math.abs(l.valor), cliente: parseValor(a?.cliente || ''), sucumbencia: suc, honorarios: hon }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -1819,7 +1866,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       const sf = saldoFinal.trim() && !contas.find((c) => c.id === conta)?.cartao ? parseValor(saldoFinal) : null;
       return financeiroService.importarExtratoLinhas(conta || null, linhas, sf);
     },
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s)${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`); if (r.reconciliacao && r.reconciliacao.saldoReal != null) setRecon(r.reconciliacao); else onClose(); },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s)${r.baixados ? ` · ${r.baixados} baixa(s) de pendência` : ''}${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`); if (r.reconciliacao && r.reconciliacao.saldoReal != null) setRecon(r.reconciliacao); else onClose(); },
     onError: (e: any) => toast.error(e?.message || 'Erro ao importar'),
   });
   // Bloqueia importar se alguma linha selecionada estiver "ratear" sem nenhuma fatia válida
@@ -1830,7 +1877,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const a = alvara[i]; if (!a || !conf) return true;
     const bruto = Math.abs(conf.linhas[i].valor);
     const soma = parseValor(a.cliente || '') + parseValor(a.sucumbencia || '') + parseValor(a.honorarios || '');
-    return Math.abs(soma - bruto) > 0.01 || !(a.clienteNome || '').trim();
+    const somaPct = (a.split ?? []).reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
+    return Math.abs(soma - bruto) > 0.01 || !(a.clienteNome || '').trim() || somaPct > 100.01;
   })());
 
   const toggle = (i: number) => setSel((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
@@ -1897,12 +1945,14 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                 <tbody>
                   {conf.linhas.map((l, i) => (
                     <Fragment key={i}>
-                    <tr className={`border-t border-zinc-100 dark:border-zinc-800 ${l.duplicado ? 'opacity-60' : l.revisar ? 'bg-amber-50/70 dark:bg-amber-900/10' : ''}`}>
+                    <tr className={`border-t border-zinc-100 dark:border-zinc-800 ${l.baixaPendente ? 'bg-sky-50/70 dark:bg-sky-900/10' : l.duplicado ? 'opacity-60' : l.revisar ? 'bg-amber-50/70 dark:bg-amber-900/10' : ''}`}>
                       <td className="px-2 py-1.5"><input type="checkbox" checked={sel.has(i)} onChange={() => toggle(i)} className="accent-[#02883C]" /></td>
                       <td className="px-2 py-1.5 tabular-nums text-zinc-500">{l.data}</td>
-                      <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{l.descricao || '—'}{l.revisar && l.motivo && <span className="mt-0.5 block text-[10px] font-medium leading-tight text-amber-700 dark:text-amber-300">⚠️ {l.motivo}</span>}</td>
+                      <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{l.descricao || '—'}{l.revisar && l.motivo && <span className="mt-0.5 block text-[10px] font-medium leading-tight text-amber-700 dark:text-amber-300">⚠️ {l.motivo}</span>}{l.baixaPendente && <span className="mt-0.5 block text-[10px] font-medium leading-tight text-sky-700 dark:text-sky-300">↻ baixa uma pendência (o extrato confirma o pagamento)</span>}</td>
                       <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${l.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(l.valor)}</td>
-                      <td className="px-2 py-1.5">{l.valor < 0 ? (
+                      <td className="px-2 py-1.5">{l.baixaPendente ? (
+                        <span className="text-[11px] text-sky-700 dark:text-sky-300">baixa pendência</span>
+                      ) : l.valor < 0 ? (
                         areas[i] === '__ratear' ? (
                           <button type="button" onClick={() => setAreas((a) => ({ ...a, [i]: '' }))} title="Desfazer rateio — voltar a escolher uma vertical" className="inline-flex items-center gap-1 rounded-md border border-[#7048E8]/40 bg-[#7048E8]/10 px-2 py-1.5 text-xs font-medium text-[#7048E8] hover:bg-[#7048E8]/20">
                             <Layers className="h-3.5 w-3.5" /> Rateando <X className="h-3 w-3" />
@@ -1928,7 +1978,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                           labelOf={(v) => v === '' ? 'casa pelo cliente' : v === '__alvara' ? '⚖️ alvará / êxito' : v === '__transfer' ? 'transferência (não honorário)' : v === 'Escritório' ? 'Escritório (comum)' : v}
                           placeholder="honorário…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__alvara') setAlvara((s) => s[i] ? s : ({ ...s, [i]: { cliente: '', sucumbencia: '', honorarios: fmtMoney(Math.abs(conf.linhas[i].valor)) } })); }} />
                       )}</td>
-                      <td className="px-2 py-1.5">{l.duplicado
+                      <td className="px-2 py-1.5">{l.baixaPendente
+                        ? <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200" title={l.motivo || ''}>↻ Baixa</span>
+                        : l.duplicado
                         ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={l.motivo || ''}>Já existe</span>
                         : l.revisar
                         ? <span className="cursor-help rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" title={l.motivo || ''}>⚠️ Revisar</span>
@@ -2013,24 +2065,37 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                     {areas[i] === '__alvara' && (() => {
                       const a = alvara[i] ?? { cliente: '', sucumbencia: '', honorarios: '' };
                       const bruto = Math.abs(l.valor);
-                      const set = (patch: Partial<{ contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cliente: string; sucumbencia: string; honorarios: string }>) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), ...patch } }));
+                      const set = (patch: Partial<NonNullable<typeof alvara[number]>>) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), ...patch } }));
                       const cli = parseValor(a.cliente), suc = parseValor(a.sucumbencia), hon = parseValor(a.honorarios);
+                      const nosso = suc + hon;
                       const soma = cli + suc + hon;
                       const fecha = Math.abs(soma - bruto) <= 0.01;
+                      const rows = a.split ?? [];
+                      const setRows = (fn: (r: { userId?: string; nome: string; pct: string }[]) => { userId?: string; nome: string; pct: string }[]) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), split: fn(s[i]?.split ?? []) } }));
+                      const somaPct = rows.reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
+                      const escrPct = Math.max(0, 100 - somaPct);
+                      const busy = !!alvaraBusy[i];
                       return (
                         <tr className="border-t border-zinc-100 bg-violet-50/40 dark:border-zinc-800 dark:bg-violet-900/10">
                           <td></td>
                           <td colSpan={5} className="px-2 py-2">
                             <div className="space-y-2 rounded-lg border border-violet-200/70 p-2.5 dark:border-violet-900/40">
-                              <p className="text-[11px] text-zinc-400">Alvará <strong>bruto {brl2(bruto)}</strong> → separe a parte do <strong>cliente</strong> (vira repasse a pagar) do que é <strong>nosso</strong> (sucumbência + honorário contratual). O honorário casa no processo; a parte do cliente entra e sai como <strong>"Repasse ao cliente"</strong>.</p>
-                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-[11px] text-zinc-400">Alvará <strong>bruto {brl2(bruto)}</strong> → parte do <strong>cliente</strong> (repasse a pagar) e o <strong>nosso</strong> (sucumbência + honorário). Suba o <strong>contrato</strong> e a <strong>petição de CS/alvará</strong> que a IA separa sozinha.</p>
+                                <label className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#228BE6]/40 bg-[#228BE6]/10 px-2 py-1 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/20 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+                                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownCircle className="h-3.5 w-3.5" />} {busy ? 'Lendo…' : '📎 Ler documentos (IA)'}
+                                  <input type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={(e) => { lerDocsAlvara(i, e.target.files); e.currentTarget.value = ''; }} />
+                                </label>
+                              </div>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                                 <Field label="Cliente"><BuscaCliente value={a.clienteNome ?? ''} onPick={(c) => set({ clienteNome: c?.nome ?? '', contactId: c?.id })} onText={(t) => set({ clienteNome: t, contactId: undefined })} /></Field>
-                                <Field label="Processo (opcional)">{a.caseId ? (
+                                <Field label="Processo">{a.caseId ? (
                                   <div className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800/60">
                                     <span className="truncate text-zinc-700 dark:text-zinc-200">{a.procLabel}</span>
                                     <button type="button" onClick={() => set({ caseId: undefined, procLabel: undefined })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                                   </div>
-                                ) : <BuscaProcesso onPick={(c) => set({ caseId: c.id, procLabel: c.label })} />}</Field>
+                                ) : <BuscaProcesso onPick={(c) => { set({ caseId: c.id, procLabel: c.label }); puxarRateioAlvara(i, c.id, a.vertical); }} />}</Field>
+                                <Field label="Vertical"><ComboBox className="w-full" value={a.vertical ?? ''} options={VERTICAIS_PADRAO} placeholder="vertical…" onChange={(v) => { set({ vertical: v }); if (a.caseId) puxarRateioAlvara(i, a.caseId, v); }} /></Field>
                               </div>
                               <div className="grid grid-cols-3 gap-1.5">
                                 <Field label="Parte do cliente"><MoneyInput value={a.cliente} onChange={(v) => set({ cliente: v })} /></Field>
@@ -2038,8 +2103,24 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 <Field label="Honorário contratual"><MoneyInput value={a.honorarios} onChange={(v) => set({ honorarios: v })} /></Field>
                               </div>
                               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                                <span className="text-zinc-400">nosso <strong className="text-emerald-600">{brl2(suc + hon)}</strong> · cliente <strong>{brl2(cli)}</strong></span>
+                                <span className="text-zinc-400">nosso <strong className="text-emerald-600">{brl2(nosso)}</strong> · cliente <strong>{brl2(cli)}</strong></span>
                                 <span className={fecha ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{fecha ? 'fecha com o bruto ✓' : `soma ${brl2(soma)} ≠ bruto ${brl2(bruto)}`}</span>
+                              </div>
+                              {/* Rateio entre advogados — % sobre o NOSSO; Escritório fica com a sobra. */}
+                              <div className="space-y-1.5 rounded-lg border border-emerald-200/60 p-2 dark:border-emerald-900/40">
+                                <p className="text-[11px] text-zinc-400">Rateio entre advogados sobre o <strong>nosso</strong> ({brl2(nosso)}) — puxado da divisão salva do responsável; ajuste se precisar.</p>
+                                {rows.map((r, j) => { const pct = parseFloat(String(r.pct || '').replace(',', '.')) || 0; return (
+                                  <div key={j} className="flex flex-wrap items-center gap-1.5">
+                                    <input value={r.nome} onChange={(e) => setRows((rr) => rr.map((y, k) => k === j ? { ...y, nome: e.target.value, userId: undefined } : y))} placeholder="advogado" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                                    <div className="flex w-20 items-center gap-1"><input value={r.pct} onChange={(e) => setRows((rr) => rr.map((y, k) => k === j ? { ...y, pct: e.target.value } : y))} placeholder="0" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
+                                    <span className="w-20 text-right text-[11px] tabular-nums text-zinc-500">{brl2(nosso * (pct / 100))}</span>
+                                    <button onClick={() => setRows((rr) => rr.filter((_, k) => k !== j))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                                  </div>
+                                ); })}
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <button onClick={() => setRows((rr) => [...rr, { nome: '', pct: '' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar advogado</button>
+                                  <span className={`text-[11px] ${somaPct > 100.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório fica com <strong>{escrPct.toFixed(0)}%</strong> ({brl2(nosso * (escrPct / 100))}){somaPct > 100.01 ? ' · passou de 100%!' : ''}</span>
+                                </div>
                               </div>
                             </div>
                           </td>

@@ -437,11 +437,15 @@ export const financeiroService = {
     return data.data ?? data;
   },
   // ── Importar extrato (PDF/CSV/OFX) como lançamentos, com dedup ──
+  async rateioSugerido(caseId: string, vertical?: string): Promise<{ vertical: string; responsavelId: string | null; split: Array<{ tipo: 'socio'; userId: string; nome: string; pct: number }> }> {
+    const { data } = await api.get('/financeiro/rateio-sugerido', { params: { caseId, ...(vertical ? { vertical } : {}) } });
+    return data.data ?? data;
+  },
   async conferirExtrato(conta: string | null, linhas: { data: string; valor: number; descricao: string }[]): Promise<ExtratoConferencia> {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false });
     return data.data ?? data;
   },
-  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[]; caseId?: string | null; contactId?: string | null; clienteNome?: string | null; exito?: { bruto: number; cliente: number; sucumbencia: number; honorarios: number } | null }[], saldoFinal?: number | null): Promise<{ importados: number; duplicados: number; total: number; reconciliacao?: ReconConta | null }> {
+  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[]; caseId?: string | null; contactId?: string | null; clienteNome?: string | null; exito?: { bruto: number; cliente: number; sucumbencia: number; honorarios: number } | null; liquidarTxId?: string | null }[], saldoFinal?: number | null): Promise<{ importados: number; duplicados: number; baixados?: number; total: number; reconciliacao?: ReconConta | null }> {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true, ...(saldoFinal != null && Number.isFinite(saldoFinal) ? { saldoFinal } : {}) });
     return data.data ?? data;
   },
@@ -469,8 +473,8 @@ export interface ClienteResumo {
   cobrancas: { id: string; descricao?: string; valorTotal: number; saldoDevedor: number; pagas: number; nParcelas: number; statusCalc: string; proximaParcela: { num: number; vencimento: string; valor: number } | null; fonte?: string | null }[];
 }
 
-export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; revisar?: boolean; motivo: string | null; verticalSugerida?: string }
-export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; revisar?: number; linhas: ExtratoLinhaConf[] }
+export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; revisar?: boolean; baixaPendente?: boolean; liquidaId?: string | null; motivo: string | null; verticalSugerida?: string }
+export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; baixarPendentes?: number; revisar?: number; linhas: ExtratoLinhaConf[] }
 
 export interface AsaasPreview {
   configurado: boolean;
