@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -866,6 +866,8 @@ function NovoLancamentoModal({ criar, onClose }: { criar: CriarCtx; onClose: () 
 /** Busca de cliente (cadastro) — autocomplete. onPick=selecionou contato; onText=digitou livre. */
 export function BuscaCliente({ value, onPick, onText }: { value: string; onPick: (c: { id: string; nome: string } | null) => void; onText: (t: string) => void }) {
   const [q, setQ] = useState(value);
+  // Sincroniza quando o `value` muda POR FORA (ex.: a IA do alvará preenche o cliente lido da CS).
+  useEffect(() => { setQ(value); }, [value]);
   const [open, setOpen] = useState(false);
   const ql = q.trim().toLowerCase();
   // Contatos do Comercial + clientes do Jurídico (parties dos processos, ex.: Lubrimarques).
