@@ -473,7 +473,7 @@ export interface ClienteResumo {
   cobrancas: { id: string; descricao?: string; valorTotal: number; saldoDevedor: number; pagas: number; nParcelas: number; statusCalc: string; proximaParcela: { num: number; vencimento: string; valor: number } | null; fonte?: string | null }[];
 }
 
-export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; revisar?: boolean; baixaPendente?: boolean; liquidaId?: string | null; motivo: string | null; verticalSugerida?: string }
+export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; revisar?: boolean; baixaPendente?: boolean; liquidaId?: string | null; motivo: string | null; verticalSugerida?: string; verticalDetectada?: string | null }
 export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; baixarPendentes?: number; revisar?: number; linhas: ExtratoLinhaConf[] }
 
 export interface AsaasPreview {
