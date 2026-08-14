@@ -1812,15 +1812,21 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // ou em %: contratual % incide sobre o BRUTO; sucumbência % sobre a BASE própria (condenação/
   // proveito). A parte do cliente é sempre a sobra (bruto − nosso) — assim fecha sozinho.
   const parsePct = (s?: string) => { const n = parseFloat(String(s || '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+  // Modelo da PRESTAÇÃO DE CONTAS (padrão do escritório):
+  //   bruto (alvará) = sucumbência + condenação
+  //   • sucumbência = % sobre o VALOR ATUALIZADO DA CAUSA (art. 85 CPC), paga pelo banco ao
+  //     escritório — NÃO sai do cliente. (base própria, não é o bruto.)
+  //   • condenação = bruto − sucumbência (o que é do cliente)
+  //   • honorário contratual = % sobre a CONDENAÇÃO (não sobre o bruto)
+  //   • cliente (líquido) = condenação − contratual = bruto − sucumbência − contratual
   const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string } | undefined, bruto: number) => {
-    const hon = a?.honMode === 'pct' ? Math.round(bruto * (parsePct(a?.honPct) / 100) * 100) / 100 : parseValor(a?.honorarios || '');
-    // Sucumbência em %: incide sobre a BASE (condenação). Sem base informada, usa o BRUTO do
-    // alvará (o valor REAL depositado) — a condenação costuma ≈ o que caiu; o usuário ajusta se diferir.
-    const sucBaseVal = parseValor(a?.sucBase || '') > 0 ? parseValor(a?.sucBase || '') : bruto;
-    const suc = a?.sucMode === 'pct' ? Math.round(sucBaseVal * (parsePct(a?.sucPct) / 100) * 100) / 100 : parseValor(a?.sucumbencia || '');
-    const nosso = Math.round((hon + suc) * 100) / 100;
-    const cli = Math.round(Math.max(0, bruto - nosso) * 100) / 100;
-    return { hon, suc, nosso, cli, valido: nosso <= bruto + 0.01 };
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const suc = a?.sucMode === 'pct' ? r2(parseValor(a?.sucBase || '') * (parsePct(a?.sucPct) / 100)) : parseValor(a?.sucumbencia || '');
+    const condenacao = r2(bruto - suc);
+    const hon = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
+    const nosso = r2(suc + hon);
+    const cli = r2(condenacao - hon);
+    return { suc, condenacao, hon, nosso, cli, valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 };
   };
   // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
   const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
@@ -1870,7 +1876,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       // Com o processo casado, puxa a vertical + o rateio entre advogados salvo.
       if (hit) puxarRateioAlvara(idx, hit.id);
       const temSuc = r.sucumbencia === 'Sim' && ((r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) || (r.valorSucumbencia && r.valorSucumbencia > 0));
-      toast.success(`Documentos lidos${hit ? ` · processo ${hit.cnjNumber || 'casado'}` : (r.cnj ? ` · CNJ ${r.cnj} não achei cadastrado` : '')}${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${temSuc ? (r.sucumbenciaModo === 'Percentual' ? ` · sucumbência ${r.sucumbenciaPct}%` : ` · sucumbência ${brl2(r.valorSucumbencia || 0)}`) : ''}. Confira${r.sucumbenciaModo === 'Percentual' && !r.sucumbenciaBaseValor ? ' (sucumbência % está sobre o bruto — ajuste a base se a condenação for outra)' : ''} antes de importar.`);
+      toast.success(`Documentos lidos${hit ? ` · processo ${hit.cnjNumber || 'casado'}` : (r.cnj ? ` · CNJ ${r.cnj} não achei cadastrado` : '')}${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${temSuc ? (r.sucumbenciaModo === 'Percentual' ? ` · sucumbência ${r.sucumbenciaPct}%` : ` · sucumbência ${brl2(r.valorSucumbencia || 0)}`) : ''}. Confira${r.sucumbenciaModo === 'Percentual' && !r.sucumbenciaBaseValor ? ' e informe o VALOR DA CAUSA (base da sucumbência)' : ''} antes de importar.`);
       if (r.aviso) toast(r.aviso, { icon: '⚠️' });
     } catch (e: any) { toast.error(e?.message || 'Não consegui ler os documentos'); }
     finally { setAlvaraBusy((b) => ({ ...b, [idx]: false })); }
@@ -1914,7 +1920,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const a = alvara[i]; if (!a || !conf) return true;
     const c = alvaraCalc(a, Math.abs(conf.linhas[i].valor));
     const somaPct = (a.split ?? []).reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
-    return !c.valido || !(a.clienteNome || '').trim() || somaPct > 100.01;
+    const sucSemBase = a.sucMode === 'pct' && parsePct(a.sucPct) > 0 && parseValor(a.sucBase || '') <= 0;
+    return !c.valido || !(a.clienteNome || '').trim() || somaPct > 100.01 || sucSemBase;
   })());
 
   const toggle = (i: number) => setSel((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
@@ -2148,7 +2155,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                       : <MoneyInput value={a.honorarios} onChange={(v) => set({ honorarios: v })} />}
                                     <button type="button" title="Alternar R$ / %" onClick={() => set({ honMode: a.honMode === 'pct' ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{a.honMode === 'pct' ? '%' : 'R$'}</button>
                                   </div>
-                                  {a.honMode === 'pct' && <p className="mt-0.5 text-[10px] text-zinc-400">= {brl2(calc.hon)} · sobre o bruto</p>}
+                                  {a.honMode === 'pct' && <p className="mt-0.5 text-[10px] text-zinc-400">= {brl2(calc.hon)} · sobre a condenação {brl2(calc.condenacao)}</p>}
                                 </Field>
                                 <Field label="Sucumbência">
                                   <div className="flex items-center gap-1">
@@ -2157,13 +2164,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                       : <MoneyInput value={a.sucumbencia} onChange={(v) => set({ sucumbencia: v })} />}
                                     <button type="button" title="Alternar R$ / %" onClick={() => set({ sucMode: a.sucMode === 'pct' ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{a.sucMode === 'pct' ? '%' : 'R$'}</button>
                                   </div>
-                                  {a.sucMode === 'pct' && <div className="mt-1 space-y-0.5"><MoneyInput value={a.sucBase ?? ''} onChange={(v) => set({ sucBase: v })} placeholder={`base — padrão: bruto ${brl2(bruto)}`} /><p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · {parseValor(a.sucBase || '') > 0 ? 'base' : 'bruto'} × %</p></div>}
+                                  {a.sucMode === 'pct' && <div className="mt-1 space-y-0.5"><MoneyInput value={a.sucBase ?? ''} onChange={(v) => set({ sucBase: v })} placeholder="valor atualizado da causa" /><p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · {parseValor(a.sucBase || '') > 0 ? 'sobre o valor da causa' : '⚠️ informe o valor da causa'}</p></div>}
                                 </Field>
                                 <Field label="Parte do cliente (repasse)"><div className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-right text-sm tabular-nums text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">{brl2(calc.cli)}</div></Field>
                               </div>
                               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                                <span className="text-zinc-400">honorário <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.hon)}</strong> + sucumbência <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.suc)}</strong> = nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong> · cliente <strong>{brl2(calc.cli)}</strong></span>
-                                <span className={calc.valido ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{calc.valido ? 'fecha com o bruto ✓' : `nosso ${brl2(calc.nosso)} passou do bruto ${brl2(bruto)}`}</span>
+                                <span className="text-zinc-400">bruto {brl2(bruto)} − sucumbência {brl2(calc.suc)} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong></span>
+                                <span className={calc.valido ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{calc.valido ? 'fecha com o bruto ✓' : 'sucumbência/contratual maior que o disponível — confira'}</span>
                               </div>
                               {/* Rateio entre advogados — % sobre o NOSSO; Escritório fica com a sobra. */}
                               <div className="space-y-1.5 rounded-lg border border-emerald-200/60 p-2 dark:border-emerald-900/40">
