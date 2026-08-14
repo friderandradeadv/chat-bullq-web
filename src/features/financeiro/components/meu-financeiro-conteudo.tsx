@@ -121,7 +121,7 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
   const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
 
   const [fraseIdx, setFraseIdx] = useState(0);
-  const mesAtual = useMemo(() => mesAtualCompetencia(), []); // competência fecha dia 3 (hoje 03/08 → julho)
+  const mesAtual = useMemo(() => mesAtualCompetencia(), []); // mês REAL do calendário (competência = mês da data; "fecha dia 3" é só do cartão)
   const [mesSel, setMesSel] = useState(mesAtual); // abre no mês corrente (igual livro-razão); usuário muda no seletor
   const [stf, setStf] = useState<'todos' | 'recebido' | 'a_receber'>('todos');
   const [busca, setBusca] = useState('');
@@ -174,9 +174,10 @@ export function MeuFinanceiroConteudo({ data, criar }: { data: FinDashboard; cri
         {subtab === 'holerite' && (() => {
           const holRaw = data.holerite ?? [];
           const comDados = new Set(holRaw.map((x) => x.mes));
-          // mês selecionado: pode ser QUALQUER mês (mesmo sem folha) — default = mais
-          // recente com folha, ou o mês corrente.
-          const mes = holMesSel && /^\d{4}-\d{2}$/.test(holMesSel) ? holMesSel : (holRaw[0]?.mes ?? mesAtual);
+          // mês selecionado: pode ser QUALQUER mês (mesmo sem folha) — default = mês
+          // CORRENTE (o ticket fica zerado se a folha do mês ainda não fechou); o usuário
+          // navega pros meses anteriores no seletor.
+          const mes = holMesSel && /^\d{4}-\d{2}$/.test(holMesSel) ? holMesSel : mesAtual;
           // Ticket SEMPRE visível: mês sem folha → ticket ZERADO daquele mês.
           const h = holRaw.find((x) => x.mes === mes) ?? { mes, entradas: [], entradaTot: 0, saidas: [], saidaTot: 0, retiradas: [], retiradaTot: 0, contribuicoes: [], contribuicaoTot: 0, liquido: 0 };
           const liquido = h.liquido ?? (h.entradaTot - (h.saidaTot ?? 0));
