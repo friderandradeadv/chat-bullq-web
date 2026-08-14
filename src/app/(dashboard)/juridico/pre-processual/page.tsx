@@ -337,11 +337,14 @@ function ProtocolarDialog({ caseId, onClose, onDone }: { caseId: string; onClose
   const [data, setData] = useState('');
   const [saving, setSaving] = useState(false);
   const [extraindo, setExtraindo] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Upload da petição inicial → IA lê e pré-preenche CNJ + valor + data.
   const onPickInicial = async (file: File | null) => {
     if (!file) return;
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (!isPdf) { toast.error('Envie o PDF da petição inicial'); return; }
     setExtraindo(true);
     try {
       const b64 = await new Promise<string>((resolve, reject) => {
@@ -396,11 +399,14 @@ function ProtocolarDialog({ caseId, onClose, onDone }: { caseId: string; onClose
         <button
           onClick={() => fileRef.current?.click()}
           disabled={extraindo || saving}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#4a90e2]/60 bg-[#4a90e2]/5 px-3 py-2.5 text-sm font-medium text-[#005efc] hover:bg-[#4a90e2]/10 disabled:opacity-50 dark:border-[#4a90e2]/50 dark:text-[#7fb4f5] dark:bg-[#4a90e2]/10"
+          onDragOver={(e) => { e.preventDefault(); if (!extraindo && !saving) setDragActive(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
+          onDrop={(e) => { e.preventDefault(); setDragActive(false); if (extraindo || saving) return; onPickInicial(e.dataTransfer.files?.[0] ?? null); }}
+          className={`mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm font-medium text-[#005efc] disabled:opacity-50 dark:text-[#7fb4f5] ${dragActive ? 'border-[#005efc] bg-[#4a90e2]/20 ring-2 ring-[#4a90e2]/40 dark:bg-[#4a90e2]/20' : 'border-[#4a90e2]/60 bg-[#4a90e2]/5 hover:bg-[#4a90e2]/10 dark:border-[#4a90e2]/50 dark:bg-[#4a90e2]/10'}`}
         >
-          {extraindo ? <><Loader2 className="h-4 w-4 animate-spin" /> Lendo a inicial…</> : <><Sparkles className="h-4 w-4" /> Preencher com a inicial (IA)</>}
+          {extraindo ? <><Loader2 className="h-4 w-4 animate-spin" /> Lendo a inicial…</> : dragActive ? <><Sparkles className="h-4 w-4" /> Solte o PDF aqui</> : <><Sparkles className="h-4 w-4" /> Preencher com a inicial (IA)</>}
         </button>
-        <p className="mt-1 text-center text-[11px] text-zinc-400">Envie o PDF da petição inicial — a IA extrai CNJ, valor da causa e data. Confira antes de protocolar.</p>
+        <p className="mt-1 text-center text-[11px] text-zinc-400">Arraste o PDF da petição inicial aqui ou clique — a IA extrai CNJ, valor da causa e data. Confira antes de protocolar.</p>
 
         <div className="mt-4 space-y-3">
           <Field label="Número do processo (CNJ)"><input value={cnj} onChange={(e) => setCnj(e.target.value)} placeholder="0000000-00.0000.0.00.0000" className={INPUT} /></Field>
