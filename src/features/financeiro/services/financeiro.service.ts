@@ -441,7 +441,7 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false });
     return data.data ?? data;
   },
-  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[] }[], saldoFinal?: number | null): Promise<{ importados: number; duplicados: number; total: number; reconciliacao?: ReconConta | null }> {
+  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[]; caseId?: string | null; contactId?: string | null; clienteNome?: string | null; exito?: { bruto: number; cliente: number; sucumbencia: number; honorarios: number } | null }[], saldoFinal?: number | null): Promise<{ importados: number; duplicados: number; total: number; reconciliacao?: ReconConta | null }> {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true, ...(saldoFinal != null && Number.isFinite(saldoFinal) ? { saldoFinal } : {}) });
     return data.data ?? data;
   },

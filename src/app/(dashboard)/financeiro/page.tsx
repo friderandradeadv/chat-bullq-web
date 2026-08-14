@@ -1759,6 +1759,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA); '__ratear' = rateio abaixo
   const [rateios, setRateios] = useState<Record<number, { area: string; valor: string; label?: string }[]>>({}); // fatia de cada vertical quando areas[i] === '__ratear'
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
+  // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + prestação de contas (bruto → cliente/sucumbência/honorário).
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cliente: string; sucumbencia: string; honorarios: string }>>({});
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
 
@@ -1804,6 +1806,11 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     mutationFn: () => {
       if (!conf) throw new Error('confira primeiro');
       const linhas = conf.linhas.map((l, i) => ({ l, i })).filter(({ i }) => sel.has(i)).map(({ l, i }) => {
+        // ALVARÁ/ÊXITO: entrada bruta com prestação de contas (bruto → cliente/sucumbência/honorário).
+        if (areas[i] === '__alvara') {
+          const a = alvara[i];
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, exito: { bruto: Math.abs(l.valor), cliente: parseValor(a?.cliente || ''), sucumbencia: parseValor(a?.sucumbencia || ''), honorarios: parseValor(a?.honorarios || '') } };
+        }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
         const cb = (contribs[i] ?? []).filter((x) => x.nome && contribValorCalc(x, Math.abs(l.valor), rawRateio) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: contribValorCalc(x, Math.abs(l.valor), rawRateio) }));
@@ -1818,6 +1825,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // Bloqueia importar se alguma linha selecionada estiver "ratear" sem nenhuma fatia válida
   // (área + valor) — evita cair de volta em "sem vertical" silenciosamente.
   const rateioIncompleto = [...sel].some((i) => areas[i] === '__ratear' && !(rateios[i] ?? []).some((x) => x.area && parseValor(x.valor) > 0));
+  // Alvará: só importa quando a soma (cliente + sucumbência + honorário) fecha com o bruto E há cliente.
+  const alvaraIncompleto = [...sel].some((i) => areas[i] === '__alvara' && (() => {
+    const a = alvara[i]; if (!a || !conf) return true;
+    const bruto = Math.abs(conf.linhas[i].valor);
+    const soma = parseValor(a.cliente || '') + parseValor(a.sucumbencia || '') + parseValor(a.honorarios || '');
+    return Math.abs(soma - bruto) > 0.01 || !(a.clienteNome || '').trim();
+  })());
 
   const toggle = (i: number) => setSel((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
@@ -1910,9 +1924,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                         )
                       ) : (
                         <ComboBox className="w-44" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
-                          actions={[{ value: '', label: 'Honorário (casa pelo cliente)' }, { value: '__transfer', label: 'Transferência / cobertura (não é honorário)' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
-                          labelOf={(v) => v === '' ? 'casa pelo cliente' : v === '__transfer' ? 'transferência (não honorário)' : v === 'Escritório' ? 'Escritório (comum)' : v}
-                          placeholder="honorário…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
+                          actions={[{ value: '', label: 'Honorário (casa pelo cliente)' }, { value: '__alvara', label: 'Alvará / êxito (prestação de contas)' }, { value: '__transfer', label: 'Transferência / cobertura (não é honorário)' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
+                          labelOf={(v) => v === '' ? 'casa pelo cliente' : v === '__alvara' ? '⚖️ alvará / êxito' : v === '__transfer' ? 'transferência (não honorário)' : v === 'Escritório' ? 'Escritório (comum)' : v}
+                          placeholder="honorário…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__alvara') setAlvara((s) => s[i] ? s : ({ ...s, [i]: { cliente: '', sucumbencia: '', honorarios: fmtMoney(Math.abs(conf.linhas[i].valor)) } })); }} />
                       )}</td>
                       <td className="px-2 py-1.5">{l.duplicado
                         ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={l.motivo || ''}>Já existe</span>
@@ -1996,6 +2010,42 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                         </tr>
                       );
                     })()}
+                    {areas[i] === '__alvara' && (() => {
+                      const a = alvara[i] ?? { cliente: '', sucumbencia: '', honorarios: '' };
+                      const bruto = Math.abs(l.valor);
+                      const set = (patch: Partial<{ contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cliente: string; sucumbencia: string; honorarios: string }>) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), ...patch } }));
+                      const cli = parseValor(a.cliente), suc = parseValor(a.sucumbencia), hon = parseValor(a.honorarios);
+                      const soma = cli + suc + hon;
+                      const fecha = Math.abs(soma - bruto) <= 0.01;
+                      return (
+                        <tr className="border-t border-zinc-100 bg-violet-50/40 dark:border-zinc-800 dark:bg-violet-900/10">
+                          <td></td>
+                          <td colSpan={5} className="px-2 py-2">
+                            <div className="space-y-2 rounded-lg border border-violet-200/70 p-2.5 dark:border-violet-900/40">
+                              <p className="text-[11px] text-zinc-400">Alvará <strong>bruto {brl2(bruto)}</strong> → separe a parte do <strong>cliente</strong> (vira repasse a pagar) do que é <strong>nosso</strong> (sucumbência + honorário contratual). O honorário casa no processo; a parte do cliente entra e sai como <strong>"Repasse ao cliente"</strong>.</p>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                                <Field label="Cliente"><BuscaCliente value={a.clienteNome ?? ''} onPick={(c) => set({ clienteNome: c?.nome ?? '', contactId: c?.id })} onText={(t) => set({ clienteNome: t, contactId: undefined })} /></Field>
+                                <Field label="Processo (opcional)">{a.caseId ? (
+                                  <div className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800/60">
+                                    <span className="truncate text-zinc-700 dark:text-zinc-200">{a.procLabel}</span>
+                                    <button type="button" onClick={() => set({ caseId: undefined, procLabel: undefined })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                                  </div>
+                                ) : <BuscaProcesso onPick={(c) => set({ caseId: c.id, procLabel: c.label })} />}</Field>
+                              </div>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                <Field label="Parte do cliente"><MoneyInput value={a.cliente} onChange={(v) => set({ cliente: v })} /></Field>
+                                <Field label="Sucumbência"><MoneyInput value={a.sucumbencia} onChange={(v) => set({ sucumbencia: v })} /></Field>
+                                <Field label="Honorário contratual"><MoneyInput value={a.honorarios} onChange={(v) => set({ honorarios: v })} /></Field>
+                              </div>
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                                <span className="text-zinc-400">nosso <strong className="text-emerald-600">{brl2(suc + hon)}</strong> · cliente <strong>{brl2(cli)}</strong></span>
+                                <span className={fecha ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{fecha ? 'fecha com o bruto ✓' : `soma ${brl2(soma)} ≠ bruto ${brl2(bruto)}`}</span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
                     </Fragment>
                   ))}
                 </tbody>
@@ -2003,8 +2053,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             </div>
             <div className="mt-4 flex items-center justify-end gap-2">
               {rateioIncompleto && <span className="text-xs text-amber-600">⚠️ dê uma fatia (vertical + valor) pra cada rateio antes de importar</span>}
+              {!rateioIncompleto && alvaraIncompleto && <span className="text-xs text-amber-600">⚠️ no alvará, escolha o cliente e faça cliente + sucumbência + honorário fecharem com o bruto</span>}
               <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
-              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0 || rateioIncompleto} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
+              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0 || rateioIncompleto || alvaraIncompleto} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
             </div>
           </div>
         )}
