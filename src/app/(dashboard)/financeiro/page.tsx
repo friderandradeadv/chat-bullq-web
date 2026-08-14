@@ -1789,7 +1789,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       let texto = '';
       if (isPdf) { const b64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] ?? ''); r.onerror = rej; r.readAsDataURL(f); }); texto = (await financeiroService.lerExtratoPdf(b64)).texto; }
       else texto = await f.text();
-      const sf = ofxSaldoFinal(texto); // OFX traz o saldo do dia → preenche a âncora
+      const sf = ofxSaldoFinal(texto) ?? (isPdf ? pdfSaldoFinal(texto) : null); // OFX e PDF trazem o saldo do dia → preenche a âncora
       if (sf != null) setSaldoFinal(brl2(sf).replace(/[^\d.,-]/g, '').trim());
       let linhas = lerExtrato(texto);
       if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
@@ -3314,6 +3314,17 @@ function splitCsvLine(line: string, sep: string): string[] {
   return out;
 }
 const brNum = (s: string): number => { const t = String(s).replace(/[^\d,.-]/g, ''); if (!t || !/\d/.test(t)) return NaN; return /,\d{1,2}$/.test(t) ? Number(t.replace(/\./g, '').replace(',', '.')) : Number(t.replace(/,/g, '')); };
+// Saldo final de um EXTRATO EM PDF (o OFX usa ofxSaldoFinal). Ex.: Nubank traz
+// "Saldo final do período" seguido do valor (mesma linha ou na próxima, "R$ 16.289,45")
+// — esse já inclui o rendimento, então é o saldo real do banco. Fallback: último
+// "Saldo do dia X" (varre todas as datas e pega a última).
+function pdfSaldoFinal(text: string): number | null {
+  const m = text.match(/saldo\s+final\s+do\s+per[íi]odo[\s:R$]*([\d.]{1,15},\d{2})/i);
+  if (m) { const v = brNum(m[1]); if (Number.isFinite(v)) return v; }
+  const dias = [...text.matchAll(/saldo\s+do\s+dia[\s:R$]*([\d.]{1,15},\d{2})/gi)];
+  if (dias.length) { const v = brNum(dias[dias.length - 1][1]); if (Number.isFinite(v)) return v; }
+  return null;
+}
 const toBRdate = (c: string): string => {
   const br = c.match(/(\d{2})[\/-](\d{2})[\/-](\d{2,4})/); const iso = c.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
