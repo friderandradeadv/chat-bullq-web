@@ -1834,9 +1834,23 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     setAlvaraBusy((b) => ({ ...b, [idx]: true }));
     try {
       const r = await calculadoraCsService.extrairAlvara(arr);
+      // Acha o PROCESSO pelo CNJ que a IA leu na peça de CS (Autos nº).
+      let hit: import('@/features/legal-cases/services/legal-cases.service').CaseListItem | undefined;
+      if (r.cnj) {
+        try {
+          const so = (r.cnj || '').replace(/\D/g, '');
+          const cases = await legalCasesService.list({ search: r.cnj });
+          hit = cases.find((c) => (c.cnjNumber || '').replace(/\D/g, '') === so) || cases[0];
+        } catch { /* segue sem processo */ }
+      }
+      const cliParty = hit?.parties?.find((p) => p.role === 'CLIENT') ?? hit?.parties?.[0];
       setAlvara((s) => {
         const cur = s[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' };
         const patch: typeof cur = { ...cur };
+        // Cliente + processo lidos da peça de CS (número dos autos → casa o processo cadastrado).
+        if (r.cliente || cliParty?.name) patch.clienteNome = cliParty?.name || r.cliente || cur.clienteNome;
+        if (cliParty?.contactId) patch.contactId = cliParty.contactId;
+        if (hit) { patch.caseId = hit.id; patch.procLabel = `${hit.title}${hit.cnjNumber ? ` · ${hit.cnjNumber}` : ''}`; }
         // Honorário contratual em % → incide sobre o BRUTO do alvará.
         if (r.honorariosPct) { patch.honMode = 'pct'; patch.honPct = String(r.honorariosPct); }
         // Sucumbência: % sobre a BASE própria (condenação/proveito) OU valor fixo arbitrado.
@@ -1850,8 +1864,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         }
         return { ...s, [idx]: patch };
       });
+      // Com o processo casado, puxa a vertical + o rateio entre advogados salvo.
+      if (hit) puxarRateioAlvara(idx, hit.id);
       const temSuc = r.sucumbencia === 'Sim' && ((r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) || (r.valorSucumbencia && r.valorSucumbencia > 0));
-      toast.success(`Documentos lidos${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${temSuc ? (r.sucumbenciaModo === 'Percentual' ? ` · sucumbência ${r.sucumbenciaPct}%` : ` · sucumbência ${brl2(r.valorSucumbencia || 0)}`) : ''}. Confira${r.sucumbenciaModo === 'Percentual' && !r.sucumbenciaBaseValor ? ' e preencha a base da sucumbência' : ''} antes de importar.`);
+      toast.success(`Documentos lidos${hit ? ` · processo ${hit.cnjNumber || 'casado'}` : (r.cnj ? ` · CNJ ${r.cnj} não achei cadastrado` : '')}${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${temSuc ? (r.sucumbenciaModo === 'Percentual' ? ` · sucumbência ${r.sucumbenciaPct}%` : ` · sucumbência ${brl2(r.valorSucumbencia || 0)}`) : ''}. Confira${r.sucumbenciaModo === 'Percentual' && !r.sucumbenciaBaseValor ? ' e preencha a base da sucumbência' : ''} antes de importar.`);
       if (r.aviso) toast(r.aviso, { icon: '⚠️' });
     } catch (e: any) { toast.error(e?.message || 'Não consegui ler os documentos'); }
     finally { setAlvaraBusy((b) => ({ ...b, [idx]: false })); }

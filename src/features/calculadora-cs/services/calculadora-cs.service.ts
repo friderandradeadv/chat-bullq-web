@@ -156,6 +156,8 @@ export const calculadoraCsService = {
     sucumbenciaBase: string | null;
     sucumbenciaBaseValor: number | null;
     valorSucumbencia: number | null;
+    cliente: string | null;
+    cnj: string | null;
     aviso?: string;
   }> {
     const fd = new FormData();
