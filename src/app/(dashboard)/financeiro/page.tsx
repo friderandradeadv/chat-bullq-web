@@ -1753,6 +1753,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [conta, setConta] = useState(contaFixa ?? contas[0]?.id ?? '');
   const [nome, setNome] = useState('');
   const [parsing, setParsing] = useState(false);
+  const [dragMain, setDragMain] = useState(false); // arrastando o extrato sobre o seletor de arquivo
   const [saldoFinal, setSaldoFinal] = useState(''); // saldo final do extrato → âncora do saldo real (OFX preenche sozinho)
   const [recon, setRecon] = useState<import('@/features/financeiro/services/financeiro.service').ReconConta | null>(null);
   const [conf, setConf] = useState<import('@/features/financeiro/services/financeiro.service').ExtratoConferencia | null>(null);
@@ -1907,7 +1908,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
         </div>
 
-        <div className="flex flex-wrap items-end gap-3">
+        <div
+          onDragOver={(e) => { e.preventDefault(); if (!dragMain) setDragMain(true); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragMain(false); }}
+          onDrop={(e) => { e.preventDefault(); setDragMain(false); const f = e.dataTransfer.files?.[0]; if (f) onArquivo(f); }}
+          className={`flex flex-wrap items-end gap-3 rounded-lg p-2 transition-colors ${dragMain ? 'border-2 border-dashed border-[#02883C] bg-[#02883C]/10' : 'border-2 border-dashed border-transparent'}`}
+        >
           <div><label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-400">Conta</label>
             {contaFixa
               ? <div className="flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-sm font-semibold text-violet-700 dark:border-violet-900/40 dark:bg-violet-900/20 dark:text-violet-300"><CreditCard className="h-3.5 w-3.5" /> {contas.find((c) => c.id === contaFixa)?.nome ?? 'Cartão'}</div>
@@ -1917,7 +1923,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             {parsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownCircle className="h-4 w-4" />} Escolher arquivo (PDF/CSV/OFX)
             <input type="file" accept=".pdf,.csv,.ofx,.txt,.tsv,text/csv,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onArquivo(f); e.currentTarget.value = ''; }} />
           </label>
-          {nome && <span className="text-xs text-zinc-400">{nome}</span>}
+          {dragMain ? <span className="text-xs font-semibold text-[#02883C]">solte o extrato aqui (PDF/CSV/OFX)</span> : nome && <span className="text-xs text-zinc-400">{nome}</span>}
         </div>
         <p className="mt-2 text-[11px] text-zinc-400">Lê o arquivo, <strong>sugere a vertical</strong> de cada despesa (você ajusta na coluna) e <strong>não duplica</strong>: confere cada linha contra o que já está no caixa (valor+data) e contra reenvio do mesmo arquivo. Linhas <span className="font-semibold text-amber-700 dark:text-amber-300">⚠️ Revisar</span> têm mesmo valor+data de um lançamento existente mas <strong>nome diferente</strong> (ex.: sucumbência paga pelo tribunal no caso de um cliente) — vêm <strong>desmarcadas</strong>; marque só se for mesmo um lançamento novo. Comum do escritório → "Escritório" (rateia auto). Precisa dividir uma despesa entre <strong>várias verticais</strong> (ex.: agência ÷ 3)? Clique no ícone <Layers className="inline h-3 w-3 align-text-bottom" /> ao lado da vertical.</p>
         {contas.find((c) => c.id === conta)?.cartao
