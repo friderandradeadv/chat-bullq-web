@@ -1762,7 +1762,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
@@ -1806,6 +1806,17 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     } catch (e: any) { toast.error(e?.message || 'Erro ao ler o arquivo'); } finally { setParsing(false); }
   };
 
+  // ALVARÁ: cálculo do rateio (bruto → nosso/cliente). Honorário e sucumbência podem ser em R$
+  // ou em %: contratual % incide sobre o BRUTO; sucumbência % sobre a BASE própria (condenação/
+  // proveito). A parte do cliente é sempre a sobra (bruto − nosso) — assim fecha sozinho.
+  const parsePct = (s?: string) => { const n = parseFloat(String(s || '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string } | undefined, bruto: number) => {
+    const hon = a?.honMode === 'pct' ? Math.round(bruto * (parsePct(a?.honPct) / 100) * 100) / 100 : parseValor(a?.honorarios || '');
+    const suc = a?.sucMode === 'pct' ? Math.round(parseValor(a?.sucBase || '') * (parsePct(a?.sucPct) / 100) * 100) / 100 : parseValor(a?.sucumbencia || '');
+    const nosso = Math.round((hon + suc) * 100) / 100;
+    const cli = Math.round(Math.max(0, bruto - nosso) * 100) / 100;
+    return { hon, suc, nosso, cli, valido: nosso <= bruto + 0.01 };
+  };
   // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
   const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
     if (!caseId) return;
@@ -1821,19 +1832,24 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     setAlvaraBusy((b) => ({ ...b, [idx]: true }));
     try {
       const r = await calculadoraCsService.extrairAlvara(arr);
-      const bruto = Math.abs(conf.linhas[idx].valor);
-      const val = r.valorAlvara && r.valorAlvara > 0 ? r.valorAlvara : bruto;
-      const hon = r.honorariosPct ? (val * r.honorariosPct) / 100 : null;
-      const suc = r.valorSucumbencia && r.valorSucumbencia > 0 ? r.valorSucumbencia
-        : (r.sucumbencia === 'Sim' && r.sucumbenciaPct && r.sucumbenciaBaseValor ? (r.sucumbenciaBaseValor * r.sucumbenciaPct) / 100 : null);
       setAlvara((s) => {
         const cur = s[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' };
-        const honN = hon != null ? hon : parseValor(cur.honorarios || '');
-        const sucN = suc != null ? suc : parseValor(cur.sucumbencia || '');
-        const cli = Math.max(0, Math.round((bruto - honN - sucN) * 100) / 100);
-        return { ...s, [idx]: { ...cur, honorarios: hon != null ? fmtMoney(hon) : cur.honorarios, sucumbencia: suc != null ? fmtMoney(suc) : cur.sucumbencia, cliente: fmtMoney(cli) } };
+        const patch: typeof cur = { ...cur };
+        // Honorário contratual em % → incide sobre o BRUTO do alvará.
+        if (r.honorariosPct) { patch.honMode = 'pct'; patch.honPct = String(r.honorariosPct); }
+        // Sucumbência: % sobre a BASE própria (condenação/proveito) OU valor fixo arbitrado.
+        if (r.sucumbencia === 'Sim') {
+          if (r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) {
+            patch.sucMode = 'pct'; patch.sucPct = String(r.sucumbenciaPct);
+            if (r.sucumbenciaBaseValor && r.sucumbenciaBaseValor > 0) patch.sucBase = fmtMoney(r.sucumbenciaBaseValor);
+          } else if (r.valorSucumbencia && r.valorSucumbencia > 0) {
+            patch.sucMode = 'valor'; patch.sucumbencia = fmtMoney(r.valorSucumbencia);
+          }
+        }
+        return { ...s, [idx]: patch };
       });
-      toast.success(`Documentos lidos${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${suc ? ` · sucumbência ${brl2(suc)}` : ''}. Confira antes de importar.`);
+      const temSuc = r.sucumbencia === 'Sim' && ((r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) || (r.valorSucumbencia && r.valorSucumbencia > 0));
+      toast.success(`Documentos lidos${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${temSuc ? (r.sucumbenciaModo === 'Percentual' ? ` · sucumbência ${r.sucumbenciaPct}%` : ` · sucumbência ${brl2(r.valorSucumbencia || 0)}`) : ''}. Confira${r.sucumbenciaModo === 'Percentual' && !r.sucumbenciaBaseValor ? ' e preencha a base da sucumbência' : ''} antes de importar.`);
       if (r.aviso) toast(r.aviso, { icon: '⚠️' });
     } catch (e: any) { toast.error(e?.message || 'Não consegui ler os documentos'); }
     finally { setAlvaraBusy((b) => ({ ...b, [idx]: false })); }
@@ -1850,13 +1866,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         // + vertical + rateio entre advogados (fatias em % sobre o "nosso"; Escritório fica com a sobra).
         if (areas[i] === '__alvara') {
           const a = alvara[i];
-          const suc = parseValor(a?.sucumbencia || ''), hon = parseValor(a?.honorarios || '');
-          const nosso = suc + hon;
+          const bruto = Math.abs(l.valor);
+          const { hon, suc, nosso, cli } = alvaraCalc(a, bruto);
           const splitAdv = (a?.split ?? []).map((s) => ({ s, pct: parseFloat(String(s.pct || '').replace(',', '.')) })).filter(({ pct }) => pct > 0)
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto: Math.abs(l.valor), cliente: parseValor(a?.cliente || ''), sucumbencia: suc, honorarios: hon }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -1875,10 +1891,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // Alvará: só importa quando a soma (cliente + sucumbência + honorário) fecha com o bruto E há cliente.
   const alvaraIncompleto = [...sel].some((i) => areas[i] === '__alvara' && (() => {
     const a = alvara[i]; if (!a || !conf) return true;
-    const bruto = Math.abs(conf.linhas[i].valor);
-    const soma = parseValor(a.cliente || '') + parseValor(a.sucumbencia || '') + parseValor(a.honorarios || '');
+    const c = alvaraCalc(a, Math.abs(conf.linhas[i].valor));
     const somaPct = (a.split ?? []).reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
-    return Math.abs(soma - bruto) > 0.01 || !(a.clienteNome || '').trim() || somaPct > 100.01;
+    return !c.valido || !(a.clienteNome || '').trim() || somaPct > 100.01;
   })());
 
   const toggle = (i: number) => setSel((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
@@ -2066,10 +2081,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       const a = alvara[i] ?? { cliente: '', sucumbencia: '', honorarios: '' };
                       const bruto = Math.abs(l.valor);
                       const set = (patch: Partial<NonNullable<typeof alvara[number]>>) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), ...patch } }));
-                      const cli = parseValor(a.cliente), suc = parseValor(a.sucumbencia), hon = parseValor(a.honorarios);
-                      const nosso = suc + hon;
-                      const soma = cli + suc + hon;
-                      const fecha = Math.abs(soma - bruto) <= 0.01;
+                      const calc = alvaraCalc(a, bruto);
                       const rows = a.split ?? [];
                       const setRows = (fn: (r: { userId?: string; nome: string; pct: string }[]) => { userId?: string; nome: string; pct: string }[]) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), split: fn(s[i]?.split ?? []) } }));
                       const somaPct = rows.reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
@@ -2097,29 +2109,45 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 ) : <BuscaProcesso onPick={(c) => { set({ caseId: c.id, procLabel: c.label }); puxarRateioAlvara(i, c.id, a.vertical); }} />}</Field>
                                 <Field label="Vertical"><ComboBox className="w-full" value={a.vertical ?? ''} options={VERTICAIS_PADRAO} placeholder="vertical…" onChange={(v) => { set({ vertical: v }); if (a.caseId) puxarRateioAlvara(i, a.caseId, v); }} /></Field>
                               </div>
-                              <div className="grid grid-cols-3 gap-1.5">
-                                <Field label="Parte do cliente"><MoneyInput value={a.cliente} onChange={(v) => set({ cliente: v })} /></Field>
-                                <Field label="Sucumbência"><MoneyInput value={a.sucumbencia} onChange={(v) => set({ sucumbencia: v })} /></Field>
-                                <Field label="Honorário contratual"><MoneyInput value={a.honorarios} onChange={(v) => set({ honorarios: v })} /></Field>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                <Field label="Honorário contratual">
+                                  <div className="flex items-center gap-1">
+                                    {a.honMode === 'pct'
+                                      ? <div className="flex w-full items-center gap-1"><input value={a.honPct ?? ''} onChange={(e) => set({ honPct: e.target.value })} inputMode="decimal" placeholder="0" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
+                                      : <MoneyInput value={a.honorarios} onChange={(v) => set({ honorarios: v })} />}
+                                    <button type="button" title="Alternar R$ / %" onClick={() => set({ honMode: a.honMode === 'pct' ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{a.honMode === 'pct' ? '%' : 'R$'}</button>
+                                  </div>
+                                  {a.honMode === 'pct' && <p className="mt-0.5 text-[10px] text-zinc-400">= {brl2(calc.hon)} · sobre o bruto</p>}
+                                </Field>
+                                <Field label="Sucumbência">
+                                  <div className="flex items-center gap-1">
+                                    {a.sucMode === 'pct'
+                                      ? <div className="flex w-full items-center gap-1"><input value={a.sucPct ?? ''} onChange={(e) => set({ sucPct: e.target.value })} inputMode="decimal" placeholder="0" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
+                                      : <MoneyInput value={a.sucumbencia} onChange={(v) => set({ sucumbencia: v })} />}
+                                    <button type="button" title="Alternar R$ / %" onClick={() => set({ sucMode: a.sucMode === 'pct' ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{a.sucMode === 'pct' ? '%' : 'R$'}</button>
+                                  </div>
+                                  {a.sucMode === 'pct' && <div className="mt-1 space-y-0.5"><MoneyInput value={a.sucBase ?? ''} onChange={(v) => set({ sucBase: v })} placeholder="base (condenação)" /><p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · base × %</p></div>}
+                                </Field>
+                                <Field label="Parte do cliente (repasse)"><div className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-right text-sm tabular-nums text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">{brl2(calc.cli)}</div></Field>
                               </div>
                               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                                <span className="text-zinc-400">nosso <strong className="text-emerald-600">{brl2(nosso)}</strong> · cliente <strong>{brl2(cli)}</strong></span>
-                                <span className={fecha ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{fecha ? 'fecha com o bruto ✓' : `soma ${brl2(soma)} ≠ bruto ${brl2(bruto)}`}</span>
+                                <span className="text-zinc-400">nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong> · cliente <strong>{brl2(calc.cli)}</strong></span>
+                                <span className={calc.valido ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{calc.valido ? 'fecha com o bruto ✓' : `nosso ${brl2(calc.nosso)} passou do bruto ${brl2(bruto)}`}</span>
                               </div>
                               {/* Rateio entre advogados — % sobre o NOSSO; Escritório fica com a sobra. */}
                               <div className="space-y-1.5 rounded-lg border border-emerald-200/60 p-2 dark:border-emerald-900/40">
-                                <p className="text-[11px] text-zinc-400">Rateio entre advogados sobre o <strong>nosso</strong> ({brl2(nosso)}) — puxado da divisão salva do responsável; ajuste se precisar.</p>
+                                <p className="text-[11px] text-zinc-400">Rateio entre advogados sobre o <strong>nosso</strong> ({brl2(calc.nosso)}) — puxado da divisão salva do responsável; ajuste se precisar.</p>
                                 {rows.map((r, j) => { const pct = parseFloat(String(r.pct || '').replace(',', '.')) || 0; return (
                                   <div key={j} className="flex flex-wrap items-center gap-1.5">
                                     <input value={r.nome} onChange={(e) => setRows((rr) => rr.map((y, k) => k === j ? { ...y, nome: e.target.value, userId: undefined } : y))} placeholder="advogado" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
                                     <div className="flex w-20 items-center gap-1"><input value={r.pct} onChange={(e) => setRows((rr) => rr.map((y, k) => k === j ? { ...y, pct: e.target.value } : y))} placeholder="0" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
-                                    <span className="w-20 text-right text-[11px] tabular-nums text-zinc-500">{brl2(nosso * (pct / 100))}</span>
+                                    <span className="w-20 text-right text-[11px] tabular-nums text-zinc-500">{brl2(calc.nosso * (pct / 100))}</span>
                                     <button onClick={() => setRows((rr) => rr.filter((_, k) => k !== j))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                                   </div>
                                 ); })}
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <button onClick={() => setRows((rr) => [...rr, { nome: '', pct: '' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar advogado</button>
-                                  <span className={`text-[11px] ${somaPct > 100.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório fica com <strong>{escrPct.toFixed(0)}%</strong> ({brl2(nosso * (escrPct / 100))}){somaPct > 100.01 ? ' · passou de 100%!' : ''}</span>
+                                  <span className={`text-[11px] ${somaPct > 100.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório fica com <strong>{escrPct.toFixed(0)}%</strong> ({brl2(calc.nosso * (escrPct / 100))}){somaPct > 100.01 ? ' · passou de 100%!' : ''}</span>
                                 </div>
                               </div>
                             </div>
