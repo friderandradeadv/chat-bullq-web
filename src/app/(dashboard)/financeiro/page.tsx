@@ -220,11 +220,12 @@ export default function FinanceiroPage() {
         ) : (
         <>
         {/* KPIs — pulso financeiro sempre visível */}
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {(() => { const caixa = kpiMes.caixa; const divida = k.aporteAcumulado ?? 0; const pos = caixa - divida; const temDivida = divida > 0; const valor = temDivida ? pos : caixa; return (
           <Kpi icon={Scale} accent={valor < 0 ? '#E03131' : '#2F9E44'} label={`${temDivida ? 'Posição real' : 'Caixa real'} · ${kpiMes.label}`} value={brl(valor)} hint={temDivida ? `${brl(caixa)} em caixa − ${brl(divida)} devido aos sócios` : `${brl(caixa)} em caixa no fim do mês`} onClick={() => setShowSaldo(true)} />
           ); })()}
           <Kpi icon={kpiMes.resultado >= 0 ? TrendingUp : TrendingDown} accent={kpiMes.resultado >= 0 ? '#2F9E44' : '#E03131'} label={`Resultado · ${kpiMes.label}`} value={brl(kpiMes.resultado)} hint={`receita ${brl(kpiMes.receita)} · despesa ${brl(kpiMes.despesa)}`} />
+          <Kpi icon={Landmark} accent={(k.caixaContas ?? 0) < 0 ? '#E03131' : '#12B886'} label="Total em conta" value={brl(k.caixaContas ?? 0)} hint="Nubank + ASAAS (dinheiro nas contas)" onClick={() => setShowSaldo(true)} />
           <Kpi icon={ArrowUpCircle} accent="#2F9E44" label="Receita (12 meses)" value={brl(k.receita12m)} hint={`média ${brl(k.receitaMedia)}/mês`} />
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
