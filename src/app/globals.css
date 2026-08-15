@@ -359,6 +359,25 @@
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+/* "Caixa registradora" — comemora ao importar extrato/alvará. Respeita reduced-motion abaixo. */
+@keyframes caixaPop {
+  0% { transform: scale(0.3) translateY(10px); opacity: 0; }
+  25% { transform: scale(1.18) translateY(-6px); opacity: 1; }
+  45% { transform: scale(0.96); }
+  60% { transform: scale(1.04); }
+  75% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1) translateY(-14px); opacity: 0; }
+}
+@keyframes caixaCoins {
+  0% { transform: translateY(-8px) scale(0.6); opacity: 0; }
+  30% { transform: translateY(0) scale(1.15); opacity: 1; }
+  55% { transform: translateY(-4px) scale(1); }
+  70% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(18px) scale(0.9); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="caixaPop"], [style*="caixaCoins"] { animation-duration: 0.01ms !important; }
+}
 @keyframes welcome-pop {
   0% { opacity: 0; transform: translateY(14px) scale(0.98); }
   100% { opacity: 1; transform: translateY(0) scale(1); }

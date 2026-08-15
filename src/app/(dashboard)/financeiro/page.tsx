@@ -1770,6 +1770,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [dragMain, setDragMain] = useState(false); // arrastando o extrato sobre o seletor de arquivo
   const [saldoFinal, setSaldoFinal] = useState(''); // saldo final do extrato → âncora do saldo real (OFX preenche sozinho)
   const [recon, setRecon] = useState<import('@/features/financeiro/services/financeiro.service').ReconConta | null>(null);
+  const [celebra, setCelebra] = useState(false); // animação de "caixa registradora" ao importar
   const [conf, setConf] = useState<import('@/features/financeiro/services/financeiro.service').ExtratoConferencia | null>(null);
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA); '__ratear' = rateio abaixo
@@ -1940,7 +1941,16 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       const sf = saldoFinal.trim() && !contas.find((c) => c.id === conta)?.cartao ? parseValor(saldoFinal) : null;
       return financeiroService.importarExtratoLinhas(conta || null, linhas, sf);
     },
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); toast.success(`${r.importados} lançamento(s) importado(s)${r.baixados ? ` · ${r.baixados} baixa(s) de pendência` : ''}${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`); if (r.reconciliacao && r.reconciliacao.saldoReal != null) setRecon(r.reconciliacao); else onClose(); },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
+      toast.success(`${r.importados} lançamento(s) importado(s)${r.baixados ? ` · ${r.baixados} baixa(s) de pendência` : ''}${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`);
+      // Reconciliação: se o razão não bate com o banco, avisa (sem prender o quadro aberto).
+      const rec = r.reconciliacao;
+      if (rec && rec.saldoReal != null && rec.diferenca != null && Math.abs(rec.diferenca) > 0.01) toast(`⚠️ Razão × banco: diferença de ${brl2(rec.diferenca)} — confira na aba Contas`, { icon: '⚠️', duration: 7000 });
+      // Comemora (caixa registradora) e fecha. Se nada entrou nem baixou, só fecha.
+      if ((r.importados || 0) > 0 || (r.baixados || 0) > 0) { setCelebra(true); setTimeout(() => { setCelebra(false); onClose(); }, 1400); }
+      else onClose();
+    },
     onError: (e: any) => toast.error(e?.message || 'Erro ao importar'),
   });
   // Bloqueia importar se alguma linha selecionada estiver "ratear" sem nenhuma fatia válida
@@ -1959,6 +1969,15 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      {celebra && (
+        <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
+          <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
+            <div className="text-[80px] leading-none drop-shadow-lg">🧾</div>
+            <div className="mt-1 text-3xl" style={{ animation: 'caixaCoins 1.4s ease-out forwards' }}>💰💰💰</div>
+            <div className="mt-2 rounded-full bg-[#02883C] px-5 py-1.5 text-sm font-extrabold tracking-wide text-white shadow-xl">Lançado! ka-ching 🤑</div>
+          </div>
+        </div>
+      )}
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl scrollbar-thin dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><ArrowDownCircle className="h-4 w-4 text-[#02883C]" /> {contaFixa ? 'Importar fatura do cartão' : 'Importar extrato'}</h3>
