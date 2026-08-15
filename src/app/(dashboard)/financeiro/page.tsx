@@ -1833,9 +1833,23 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   //   • condenação = bruto − sucumbência (o que é do cliente)
   //   • honorário contratual = % sobre a CONDENAÇÃO (não sobre o bruto)
   //   • cliente (líquido) = condenação − contratual = bruto − sucumbência − contratual
-  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string } | undefined, bruto: number) => {
+  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string } | undefined, bruto: number) => {
     const r2 = (n: number) => Math.round(n * 100) / 100;
-    const suc = a?.sucMode === 'pct' ? r2(parseValor(a?.sucBase || '') * (parsePct(a?.sucPct) / 100)) : parseValor(a?.sucumbencia || '');
+    let suc: number;
+    if (a?.sucMode === 'pct') {
+      const pct = parsePct(a?.sucPct);
+      if ((a?.sucBaseTipo || 'Condenação') === 'Condenação') {
+        // Sucumbência EMBUTIDA no alvará: bruto = condenação + sucumbência e sucumbência = pct% da
+        // condenação → condenação = bruto/(1+pct/100); sucumbência = bruto − condenação. (não precisa digitar base)
+        const cond = pct > 0 ? r2(bruto / (1 + pct / 100)) : bruto;
+        suc = r2(bruto - cond);
+      } else {
+        // Base explícita (valor da causa / proveito econômico): sucumbência = base × pct.
+        suc = r2(parseValor(a?.sucBase || '') * (pct / 100));
+      }
+    } else {
+      suc = parseValor(a?.sucumbencia || ''); // valor fixo arbitrado
+    }
     const condenacao = r2(bruto - suc);
     const hon = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
     const nosso = r2(suc + hon);
@@ -1909,12 +1923,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         if (areas[i] === '__alvara') {
           const a = alvara[i];
           const bruto = Math.abs(l.valor);
-          const { hon, suc, nosso, cli } = alvaraCalc(a, bruto);
+          const { hon, suc, nosso, cli, condenacao } = alvaraCalc(a, bruto);
           const splitAdv = (a?.split ?? []).map((s) => ({ s, pct: parseFloat(String(s.pct || '').replace(',', '.')) })).filter(({ pct }) => pct > 0)
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? parseValor(a?.sucBase || '') || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -1935,7 +1949,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const a = alvara[i]; if (!a || !conf) return true;
     const c = alvaraCalc(a, Math.abs(conf.linhas[i].valor));
     const somaPct = (a.split ?? []).reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
-    const sucSemBase = a.sucMode === 'pct' && parsePct(a.sucPct) > 0 && parseValor(a.sucBase || '') <= 0;
+    const sucSemBase = a.sucMode === 'pct' && parsePct(a.sucPct) > 0 && (a.sucBaseTipo || 'Condenação') !== 'Condenação' && parseValor(a.sucBase || '') <= 0;
     return !c.valido || !(a.clienteNome || '').trim() || somaPct > 100.01 || sucSemBase;
   })());
 
@@ -2179,12 +2193,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                       : <MoneyInput value={a.sucumbencia} onChange={(v) => set({ sucumbencia: v })} />}
                                     <button type="button" title="Alternar R$ / %" onClick={() => set({ sucMode: a.sucMode === 'pct' ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{a.sucMode === 'pct' ? '%' : 'R$'}</button>
                                   </div>
-                                  {a.sucMode === 'pct' && (() => { const tipo = (a.sucBaseTipo || 'Condenação'); const tl = tipo.toLowerCase(); return <div className="mt-1 space-y-1">
+                                  {a.sucMode === 'pct' && (() => { const tipo = (a.sucBaseTipo || 'Condenação'); const tl = tipo.toLowerCase(); const embutida = tipo === 'Condenação'; return <div className="mt-1 space-y-1">
                                     <select value={tipo} onChange={(e) => set({ sucBaseTipo: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-1.5 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900" title="Base da sucumbência (conforme a sentença)">
                                       <option>Condenação</option><option>Valor da causa</option><option>Proveito econômico</option>
                                     </select>
-                                    <MoneyInput value={a.sucBase ?? ''} onChange={(v) => set({ sucBase: v })} placeholder={`valor (${tl})`} />
-                                    <p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · {parseValor(a.sucBase || '') > 0 ? `${a.sucPct || ''}% sobre ${tl}` : `⚠️ informe o valor (${tl})`}</p>
+                                    {!embutida && <MoneyInput value={a.sucBase ?? ''} onChange={(v) => set({ sucBase: v })} placeholder={`valor (${tl})`} />}
+                                    <p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · {embutida ? `${a.sucPct || ''}% da condenação ${brl2(calc.condenacao)} (embutida no alvará)` : (parseValor(a.sucBase || '') > 0 ? `${a.sucPct || ''}% sobre ${tl}` : `⚠️ informe o valor (${tl})`)}</p>
                                   </div>; })()}
                                 </Field>
                                 <Field label="Parte do cliente (repasse)"><div className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-right text-sm tabular-nums text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">{brl2(calc.cli)}</div></Field>
