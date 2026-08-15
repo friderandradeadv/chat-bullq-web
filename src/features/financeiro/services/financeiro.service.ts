@@ -328,15 +328,15 @@ export const financeiroService = {
     return data.data ?? data;
   },
   async lerExtratoPdf(base64: string): Promise<{ texto: string }> {
-    const { data } = await api.post('/financeiro/extrato/ler-pdf', { base64 });
+    const { data } = await api.post('/financeiro/extrato/ler-pdf', { base64 }, { timeout: 180000 });
     return data.data ?? data;
   },
   async classificarExtrato(itens: { descricao: string; valor: number }[]): Promise<{ i: number; tipo: 'receita' | 'despesa'; categoria: string; party: string }[]> {
-    const { data } = await api.post('/financeiro/conciliacao/classificar', { itens });
+    const { data } = await api.post('/financeiro/conciliacao/classificar', { itens }, { timeout: 180000 });
     return data.data ?? data;
   },
   async extrairExtrato(texto: string): Promise<{ data: string; valor: number; descricao: string }[]> {
-    const { data } = await api.post('/financeiro/conciliacao/extrair', { texto });
+    const { data } = await api.post('/financeiro/conciliacao/extrair', { texto }, { timeout: 180000 });
     return data.data ?? data;
   },
   async getHonorariosPct(): Promise<Record<string, number>> {
