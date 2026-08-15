@@ -446,11 +446,12 @@ export const financeiroService = {
     return data.data ?? data;
   },
   async conferirExtrato(conta: string | null, linhas: { data: string; valor: number; descricao: string }[]): Promise<ExtratoConferencia> {
-    const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false });
+    // Extrato grande roda dedup + classificação por IA das despesas → pode passar dos 15s padrão.
+    const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false }, { timeout: 180000 });
     return data.data ?? data;
   },
   async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[]; caseId?: string | null; contactId?: string | null; clienteNome?: string | null; exito?: { bruto: number; cliente: number; sucumbencia: number; honorarios: number; valorCausa?: number; sucumbenciaPct?: number; honorariosPct?: number; sucumbenciaBase?: string } | null; liquidarTxId?: string | null }[], saldoFinal?: number | null): Promise<{ importados: number; duplicados: number; baixados?: number; total: number; reconciliacao?: ReconConta | null }> {
-    const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true, ...(saldoFinal != null && Number.isFinite(saldoFinal) ? { saldoFinal } : {}) });
+    const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true, ...(saldoFinal != null && Number.isFinite(saldoFinal) ? { saldoFinal } : {}) }, { timeout: 180000 });
     return data.data ?? data;
   },
   // Fixa (ou limpa, com saldo=null) o saldo REAL de uma conta e devolve a diferença vs. o razão.
