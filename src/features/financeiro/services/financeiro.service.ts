@@ -28,6 +28,7 @@ export interface PrestacaoDados {
   cliente: string; autos: string; reu: string;
   bruto: number; suc: number; hon: number; condenacao: number; liquido: number;
   valorCausa: number | null; sucPct: number | null; honPct: number | null; sucBaseTipo: string | null;
+  caseId?: string | null;
   anexos: { key: string; url: string; mime: string; name: string }[];
 }
 
@@ -474,6 +475,16 @@ export const financeiroService = {
   },
   async prestacaoDados(txId: string): Promise<PrestacaoDados> {
     const { data } = await api.get(`/financeiro/prestacao-contas/${txId}/dados`);
+    return data.data ?? data;
+  },
+  /**
+   * Avisa o cliente no WhatsApp: ganhamos a ação, o alvará foi depositado, manda a
+   * prestação de contas em PDF e pede os dados bancários pro repasse. Manda o PDF
+   * renderizado AQUI (layout oficial) — sem ele o servidor gera o fallback.
+   * Fora da janela de 24h vai como template HSM com o PDF anexado no header.
+   */
+  async enviarPrestacaoAoCliente(txId: string, pdfBase64?: string): Promise<{ enviado: boolean; motivo?: string; pdfUrl?: string }> {
+    const { data } = await api.post(`/financeiro/prestacao-contas/${txId}/enviar-cliente`, { pdfBase64 }, { timeout: 120000 });
     return data.data ?? data;
   },
   async rateioSugerido(caseId: string, vertical?: string): Promise<{ vertical: string; responsavelId: string | null; split: Array<{ tipo: 'socio'; userId: string; nome: string; pct: number }> }> {
