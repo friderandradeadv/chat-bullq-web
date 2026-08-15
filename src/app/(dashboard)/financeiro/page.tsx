@@ -742,6 +742,9 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const [editor, setEditor] = useState<Editor | null>(null);
   const [serieDel, setSerieDel] = useState<FinTransacao | null>(null);
   const [celebra, setCelebra] = useState<'ka' | 'pago' | null>(null); // animação ao lançar (receita=ka-ching, despesa=✓)
+  const [contaDoc, setContaDoc] = useState<File | null>(null); // boleto/DARF lido pela IA → anexado ao lançamento quando salvar
+  const [lendoConta, setLendoConta] = useState(false); // IA lendo o documento
+  const contaFileRef = useRef<HTMLInputElement | null>(null);
 
   const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Agência de tráfego', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
   const contas = data.contas ?? [];
@@ -821,7 +824,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const ficha = useFichaCliente(); // clicar no nome abre a ficha do processo
   const invalidate = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
 
-  const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r, i) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); setCelebra((i?.tipo === 'receita') ? 'ka' : 'pago'); setTimeout(() => setCelebra(null), 1400); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
+  const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: async (r, i) => { const novoId = r?.transacoes?.[0]?.id; if (contaDoc && novoId) { try { await financeiroService.uploadAnexos(novoId, [contaDoc]); toast.success('Boleto anexado ao lançamento'); } catch { toast.error('Lancei, mas não consegui anexar o arquivo — anexe pelo clipe.'); } } setContaDoc(null); invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); setCelebra((i?.tipo === 'receita') ? 'ka' : 'pago'); setTimeout(() => setCelebra(null), 1400); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
   const updM = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpdateTransacaoInput }) => financeiroService.updateTransacao(id, input), onSuccess: () => { invalidate(); toast.success('Lançamento atualizado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar') });
   const delM = useMutation({ mutationFn: ({ id, escopo }: { id: string; escopo: 'uma' | 'proximas' }) => financeiroService.removeTransacao(id, escopo), onSuccess: (r) => { invalidate(); toast.success(`${r.removidos} lançamento(s) removido(s)`); setSerieDel(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
   // Repasses pendentes (rateio de honorários ainda não pago ao advogado) — selo + botão
@@ -922,7 +925,30 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const toggleAnex = (id: string) => setAnexOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const [importing, setImporting] = useState(false);
-  const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), competencia: toISOInput(hojeBR()).slice(0, 7), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' });
+  const openNew = () => { setContaDoc(null); setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), competencia: toISOInput(hojeBR()).slice(0, 7), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' }); };
+  // IA lê boleto/DARF/guia (PDF ou foto) → abre o editor já preenchido como despesa "a pagar"
+  // com vencimento, e guarda o arquivo pra anexar ao lançamento quando salvar.
+  const fileToB64 = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f); });
+  const lerContaDoc = async (file: File | null | undefined) => {
+    if (!file) return;
+    setLendoConta(true);
+    try {
+      const b64 = await fileToB64(file);
+      const r = await financeiroService.lerConta(b64, file.type || 'application/pdf', cats);
+      const vencISO = r.vencimento ? toISOInput(r.vencimento) : '';
+      const catFit = r.categoria && cats.includes(r.categoria) ? r.categoria : 'Outros';
+      setContaDoc(file);
+      setEditor({ id: null, serieId: null, tipo: 'despesa', dataISO: toISOInput(hojeBR()), vencISO, pagtoISO: toISOInput(hojeBR()), competencia: (vencISO || toISOInput(hojeBR())).slice(0, 7), categoria: catFit, subtipo: 'inicial', pagador: escritorioNome, recebedor: r.fornecedor || '', valor: r.valor != null ? fmtMoney(r.valor) : '', status: 'a_pagar', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' });
+      const faltou = [r.valor == null ? 'valor' : null, !vencISO ? 'vencimento' : null].filter(Boolean);
+      if (faltou.length) toast.warning(`Li o ${r.tipoDoc || 'documento'} — confira: faltou ${faltou.join(' e ')}.`);
+      else toast.success(`${r.tipoDoc === 'darf' ? 'DARF' : 'Boleto'} lido — confira e salve.`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui ler o documento.');
+    } finally {
+      setLendoConta(false);
+      if (contaFileRef.current) contaFileRef.current.value = '';
+    }
+  };
   const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), competencia: /^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '') ? (t.mes as string) : toISOInput(t.data).slice(0, 7), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? (t.valor < 0 ? escritorioNome : (t.party ?? '')), recebedor: t.recebedor ?? (t.valor < 0 ? (t.party ?? '') : ''), valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })), contribuintes: (t.contribuintes ?? []).map((x) => ({ userId: x.userId ?? undefined, nome: x.nome, modo: 'valor' as const, valor: fmtMoney(x.valor), pct: '' })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
@@ -1018,7 +1044,9 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
     )}
     <Card title={<>Lançamentos <span className="font-normal text-zinc-400">· livro-razão editável</span></>}
       action={<div className="flex items-center gap-2">
+        <input ref={contaFileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => lerContaDoc(e.target.files?.[0])} />
         <button onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-[#02883C] hover:text-[#02883C] dark:border-zinc-700 dark:text-zinc-300"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar extrato</button>
+        <button onClick={() => contaFileRef.current?.click()} disabled={lendoConta} title="A IA lê o boleto/DARF e já preenche a despesa a pagar com o vencimento" className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8]/50 bg-[#7048E8]/5 px-3 py-1.5 text-xs font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/10 disabled:opacity-60">{lendoConta ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> lendo…</> : <><Sparkles className="h-3.5 w-3.5" /> Lançar conta (IA lê boleto/DARF)</>}</button>
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>
       </div>}>
 
@@ -1111,12 +1139,24 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
         </div>
       </div>
 
-      {/* Resumo do filtro */}
-      <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-        <div className="rounded-lg bg-emerald-50 py-1.5 dark:bg-emerald-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Recebido</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(resumo.recebido)}</p></div>
-        <div className="rounded-lg bg-amber-50 py-1.5 dark:bg-amber-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">A receber</p><p className="text-sm font-bold tabular-nums text-amber-600">{brl(resumo.aReceber)}</p></div>
-        <div className="rounded-lg bg-rose-50 py-1.5 dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesas</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(resumo.despesas)}</p>{resumo.aPagar > 0 && <p className="text-[10px] text-amber-600">+{brl(resumo.aPagar)} a pagar</p>}</div>
-        <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo realizado{mesSel ? ' do mês' : ''}</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
+      {/* Resumo do filtro — adapta ao tipo escolhido: filtrando Despesas você vê só despesa
+          (nada de "Recebido R$ 0,00" enganoso); em "Todos" aparece o quadro completo com saldo. */}
+      <div className={`mt-3 grid grid-cols-2 gap-2 text-center ${aba === 'todos' ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}>
+        {aba !== 'despesas' && (
+          <div className="rounded-lg bg-emerald-50 py-1.5 dark:bg-emerald-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Recebido</p><p className="text-sm font-bold tabular-nums text-emerald-600">{brl(resumo.recebido)}</p></div>
+        )}
+        {aba !== 'despesas' && (
+          <div className="rounded-lg bg-amber-50 py-1.5 dark:bg-amber-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">A receber</p><p className="text-sm font-bold tabular-nums text-amber-600">{brl(resumo.aReceber)}</p></div>
+        )}
+        {aba !== 'receitas' && (
+          <div className="rounded-lg bg-rose-50 py-1.5 dark:bg-rose-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Despesas</p><p className="text-sm font-bold tabular-nums text-rose-600">{brl(resumo.despesas)}</p>{aba === 'todos' && resumo.aPagar > 0 && <p className="text-[10px] text-amber-600">+{brl(resumo.aPagar)} a pagar</p>}</div>
+        )}
+        {aba === 'despesas' && (
+          <div className="rounded-lg bg-amber-50 py-1.5 dark:bg-amber-900/15"><p className="text-[10px] uppercase tracking-wide text-zinc-400">A pagar</p><p className="text-sm font-bold tabular-nums text-amber-600">{brl(resumo.aPagar)}</p></div>
+        )}
+        {aba === 'todos' && (
+          <div className="rounded-lg bg-zinc-50 py-1.5 dark:bg-zinc-800/40"><p className="text-[10px] uppercase tracking-wide text-zinc-400">Saldo realizado{mesSel ? ' do mês' : ''}</p><p className={`text-sm font-bold tabular-nums ${resumo.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl(resumo.saldo)}</p></div>
+        )}
       </div>
 
       {saldoGeral && (
@@ -1321,7 +1361,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 scrollbar-thin">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">{editor.id ? 'Editar lançamento' : 'Novo lançamento'}{editor.parcelas && +editor.parcelas > 1 && !editor.id ? ` · ${editor.parcelas}×` : ''}</h3>
-              <button onClick={() => setEditor(null)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
+              <button onClick={() => { setContaDoc(null); setEditor(null); }} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-3">
@@ -1650,7 +1690,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
             <div className="mt-5 flex items-center justify-between gap-2">
               {editor.id ? <button onClick={() => { const t = data.transacoes.find((x) => x.id === editor.id); setEditor(null); if (t) pedirExcluir(t); }} className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"><Trash2 className="h-3.5 w-3.5" /> Excluir</button> : <span />}
               <div className="flex items-center gap-2">
-                <button onClick={() => setEditor(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+                <button onClick={() => { setContaDoc(null); setEditor(null); }} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
                 <button onClick={salvar} disabled={addM.isPending || updM.isPending} className="inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{(addM.isPending || updM.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}</button>
               </div>
             </div>

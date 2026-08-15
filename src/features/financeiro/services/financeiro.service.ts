@@ -266,6 +266,10 @@ export const financeiroService = {
     const { data } = await api.get('/financeiro/repasses-pendentes', { params: userId ? { userId } : undefined });
     return data.data ?? data;
   },
+  async lerConta(base64: string, mime: string, categorias?: string[]): Promise<{ valor: number | null; vencimento: string | null; fornecedor: string | null; categoria: string | null; descricao: string | null; tipoDoc: string | null }> {
+    const { data } = await api.post('/financeiro/ler-conta', { base64, mime, categorias }, { timeout: 120000 });
+    return data.data ?? data;
+  },
   async uploadAnexos(txId: string, files: File[]): Promise<FinAnexo[]> {
     const fd = new FormData();
     files.forEach((f) => fd.append('files', f));
