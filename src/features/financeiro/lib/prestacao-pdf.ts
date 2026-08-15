@@ -18,14 +18,14 @@ function buildHtml(d: PrestacaoDados): string {
   const F = `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
   const cell = `padding:11px 14px;font-size:12.5px;color:#20262f;border-bottom:1px solid #eef0f3`;
   const val = `padding:11px 14px;font-size:12.5px;text-align:right;white-space:nowrap;border-bottom:1px solid #eef0f3;font-variant-numeric:tabular-nums`;
-  const secNum = `color:#9aa6b6;font-weight:800;font-size:15px;margin-right:8px`;
+  const secNum = `color:#C1272D;font-weight:800;font-size:15px;margin-right:8px`;
   const secTit = `color:#1f2733;font-weight:800;font-size:15px`;
   const secSub = `color:#7b8798;font-style:italic;font-size:12.5px;margin:3px 0 12px`;
   return `
   <div style="width:794px;background:#fff;font-family:${F};color:#20262f;box-sizing:border-box">
-    <div style="background:#2b3242;padding:26px 40px 22px">
-      <span style="display:inline-block;background:#3f6db0;color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:4px 10px;border-radius:5px">Frider Andrade · Advogados</span>
-      <div style="color:#fff;font-size:29px;font-weight:800;margin:13px 0 7px;letter-spacing:-.01em">Prestação de contas</div>
+    <div style="background:#1f2126;padding:26px 40px 22px">
+      <span style="display:inline-block;background:#C1272D;color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:4px 10px;border-radius:5px">Frider Andrade&nbsp;<span style="color:#fff">▪</span>&nbsp;Advogados</span>
+      <div style="color:#fff;font-size:29px;font-weight:800;margin:13px 0 7px;letter-spacing:-.01em">Prestação de contas<span style="color:#C1272D">.</span></div>
       <div style="color:#b8c1d1;font-size:12.5px;line-height:1.5">${esc(sub)}</div>
       <div style="color:#b8c1d1;font-size:12.5px;line-height:1.5">${linha2}</div>
     </div>
@@ -55,12 +55,12 @@ function buildHtml(d: PrestacaoDados): string {
           <div style="flex:1;border:1px solid #e3e6eb;border-radius:10px;padding:14px 16px">
             <div style="font-weight:800;font-size:13px;color:#1f2733;margin-bottom:6px">Honorários de sucumbência</div>
             <div style="font-size:12px;line-height:1.55;color:#4a515c">Verba que a lei obriga a parte que perdeu a pagar diretamente ao advogado da parte vencedora (art. 85 do CPC). Não sai do seu bolso — esse dinheiro nunca foi seu.</div>
-            <div style="font-size:11.5px;font-weight:700;color:#3f6db0;margin-top:9px">${sucCap}</div>
+            <div style="font-size:11.5px;font-weight:700;color:#C1272D;margin-top:9px">${sucCap}</div>
           </div>
           <div style="flex:1;border:1px solid #e3e6eb;border-radius:10px;padding:14px 16px">
             <div style="font-weight:800;font-size:13px;color:#1f2733;margin-bottom:6px">Honorários contratuais</div>
             <div style="font-size:12px;line-height:1.55;color:#4a515c">Honorários de êxito previstos no contrato que você assinou. Incidem apenas sobre a sua condenação — não sobre o total do alvará.</div>
-            <div style="font-size:11.5px;font-weight:700;color:#3f6db0;margin-top:9px">${honCap}</div>
+            <div style="font-size:11.5px;font-weight:700;color:#C1272D;margin-top:9px">${honCap}</div>
           </div>
         </div>
       </div>
@@ -70,7 +70,7 @@ function buildHtml(d: PrestacaoDados): string {
         <div style="font-size:12.5px;line-height:1.6;margin-top:10px">O valor de <b>${brl(d.liquido)}</b> será transferido para a sua conta. Qualquer dúvida sobre esses números ou sobre o andamento do caso, estamos à disposição para explicar com calma.</div>
         <div style="font-size:12.5px;line-height:1.6;margin-top:8px">Foi um prazer lutar pelos seus direitos. Obrigado pela confiança!</div>
         <div style="margin-top:18px;font-size:12px;color:#7b8798">Atenciosamente,</div>
-        <div style="margin-top:4px;font-weight:800;color:#2b3242;font-size:13px">FRIDER ANDRADE · ADVOGADOS</div>
+        <div style="margin-top:4px;font-weight:800;color:#1f2126;font-size:13px">FRIDER ANDRADE <span style="color:#C1272D">▪</span> ADVOGADOS</div>
         <div style="font-size:11px;color:#9aa6b6">Seus direitos. Nossa prioridade.</div>
       </div>
     </div>

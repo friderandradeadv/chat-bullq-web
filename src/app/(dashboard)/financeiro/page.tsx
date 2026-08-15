@@ -11,7 +11,7 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt, Save,
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip, ReceiptText,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip, ReceiptText, Send,
 } from 'lucide-react';
 import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
 import { DropZone } from '@/components/drop-zone';
@@ -688,14 +688,14 @@ function AnexosTx({ tx, onChanged }: { tx: FinTransacao; onChanged: () => void }
   return (
     <div>
       <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => subir(e.target.files)} />
-      <DropZone onFiles={subir} disabled={subindo} overlayLabel="Solte o boleto/DARF aqui">
+      <DropZone onFiles={subir} disabled={subindo} overlayLabel="Solte o alvará / comprovante aqui">
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={subindo}
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#7048e8]/50 bg-[#7048e8]/5 px-3 py-2 text-xs font-medium text-[#7048e8] transition-colors hover:bg-[#7048e8]/10 disabled:opacity-60"
         >
-          {subindo ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> enviando…</> : <><Paperclip className="h-3.5 w-3.5" /> Anexar boleto / DARF / comprovante (ou arraste aqui)</>}
+          {subindo ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> enviando…</> : <><Paperclip className="h-3.5 w-3.5" /> Anexar alvará / comprovante / boleto (arraste aqui) — vai junto na prestação</>}
         </button>
       </DropZone>
       {anexos.length > 0 && (
@@ -1023,6 +1023,38 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
     finally { setPcLoad(null); }
   };
 
+  // Manda a prestação de contas PRO CLIENTE no WhatsApp (ganhamos + alvará depositado
+  // + PDF + pedido dos dados bancários). Renderiza o MESMO PDF do botão de cima e
+  // manda junto — o servidor só usa o fallback dele se não receber nada.
+  // Fora da janela de 24h o backend troca por template HSM com o PDF no header.
+  const [pcSend, setPcSend] = useState<string | null>(null);
+  const enviarPrestacaoCliente = async (t: FinTransacao) => {
+    const dados = await financeiroService.prestacaoDados(t.id!).catch((e: any) => {
+      toast.error(e?.response?.data?.message || 'Erro ao ler a prestação de contas'); return null;
+    });
+    if (!dados) return;
+    if (!confirm(
+      `Enviar a prestação de contas para ${dados.cliente} no WhatsApp?\n\n` +
+      `O cliente recebe o PDF e o aviso de que a parte dele é de ${brl2(dados.liquido)}, ` +
+      `com o pedido dos dados bancários para o repasse.\n\nIsso manda mensagem de verdade.`
+    )) return;
+    setPcSend(t.id!);
+    try {
+      const { gerarPrestacaoPdf } = await import('@/features/financeiro/lib/prestacao-pdf');
+      const blob = await gerarPrestacaoPdf(dados);
+      const pdfBase64 = await new Promise<string>((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result).replace(/^data:[^,]+,/, ''));
+        fr.onerror = () => rej(new Error('Falha ao ler o PDF gerado'));
+        fr.readAsDataURL(blob);
+      });
+      const r = await financeiroService.enviarPrestacaoAoCliente(t.id!, pdfBase64);
+      if (r.enviado) toast.success('Prestação de contas enviada ao cliente.');
+      else toast.error(r.motivo || 'Não foi possível enviar ao cliente.');
+    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao enviar ao cliente'); }
+    finally { setPcSend(null); }
+  };
+
   const ehSerie = !!editor?.serieId;
   const statusOpts: TxStatus[] = editor?.tipo === 'despesa' ? ['pago', 'a_pagar'] : ['recebido', 'a_receber'];
 
@@ -1134,7 +1166,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="flex shrink-0 items-center">
                           <button onClick={() => quickReceber(t)} title="Marcar como pago" className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>
                           {t.categoria === 'Repasse ao cliente' && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
-                          <button onClick={() => toggleAnex(t.id!)} title="Anexar boleto/DARF/comprovante" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" /></button>
+                          {t.categoria === 'Repasse ao cliente' && <button onClick={() => enviarPrestacaoCliente(t)} disabled={pcSend === t.id} title="Enviar ao cliente no WhatsApp: ganhamos + alvará depositado, PDF da prestação e pedido dos dados bancários" className="rounded-md bg-[#02883C]/12 p-1 text-[#02883C] ring-1 ring-inset ring-[#02883C]/25 transition hover:bg-[#02883C]/20 disabled:opacity-50 dark:bg-[#02883C]/20">{pcSend === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}</button>}
+                          <button onClick={() => toggleAnex(t.id!)} title="Anexar alvará / comprovante / boleto — vai junto na prestação" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" /></button>
                           <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </span>
@@ -1303,7 +1336,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="flex shrink-0 items-center">
                           {!ehLiquidado(st) && <button onClick={() => quickReceber(t)} title={t.valor >= 0 ? 'Marcar como recebido' : 'Marcar como pago'} className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>}
                           {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
-                          <button onClick={() => toggleAnex(t.id!)} title="Anexar boleto/DARF/comprovante" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" />{(t.anexos?.length ?? 0) > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#7048E8] px-0.5 text-[8px] font-bold leading-none text-white">{t.anexos!.length}</span>}</button>
+                          {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => enviarPrestacaoCliente(t)} disabled={pcSend === t.id} title="Enviar ao cliente no WhatsApp: ganhamos + alvará depositado, PDF da prestação e pedido dos dados bancários" className="rounded-md bg-[#02883C]/12 p-1 text-[#02883C] ring-1 ring-inset ring-[#02883C]/25 transition hover:bg-[#02883C]/20 disabled:opacity-50 dark:bg-[#02883C]/20">{pcSend === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}</button>}
+                          <button onClick={() => toggleAnex(t.id!)} title="Anexar alvará / comprovante / boleto — vai junto na prestação" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" />{(t.anexos?.length ?? 0) > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#7048E8] px-0.5 text-[8px] font-bold leading-none text-white">{t.anexos!.length}</span>}</button>
                           <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </span>
