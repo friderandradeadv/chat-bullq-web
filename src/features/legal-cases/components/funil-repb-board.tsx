@@ -22,6 +22,7 @@ import { RepescagemFollowupModal } from '@/features/legal-cases/components/repb-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
+import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { useAuthStore } from '@/stores/auth-store';
@@ -57,6 +58,8 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
     markRepbSeen();
   }, [markRepbSeen]);
 
+  // Seleção em massa (caixinha no card + barra de ações no rodapé).
+  const bulk = useKanbanBulk();
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
@@ -191,11 +194,12 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onAgendar={setAgendar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} bulk={bulk} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onAgendar={setAgendar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && canRename && <AddPhaseColumn board="repbc" accent={ACCENT} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
           </div>
           <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
+          <KanbanBulkBar bulk={bulk} cards={filtered} phases={phases} queryKey={KEY} accent={ACCENT} />
         </DndContext>
       )}
 
@@ -208,10 +212,12 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function Column({ phase, items, onOpen, onFechou, onApresentar, onAgendar, onFollowup, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; onFechou: (c: KanbanCard) => void; onApresentar: (c: KanbanCard) => void; onAgendar: (c: KanbanCard) => void; onFollowup: (c: KanbanCard) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; onMoveLeft?: () => void; onMoveRight?: () => void }) {
+function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar, onFollowup, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; bulk: KanbanBulk; onOpen: (id: string) => void; onFechou: (c: KanbanCard) => void; onApresentar: (c: KanbanCard) => void; onAgendar: (c: KanbanCard) => void; onFollowup: (c: KanbanCard) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; onMoveLeft?: () => void; onMoveRight?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
   const sorted = useMemo(() => applyCardSort(items, sort, kanbanCardKeys), [items, sort]);
+  // Ids na ordem da tela — habilitam o "selecionar todos" e o shift+clique.
+  const colIds = useMemo(() => sorted.map((c) => c.id), [sorted]);
   const isFechado = phase.key === 'repbc_contrato_fechado';
   const isRepescagem = phase.key === 'repbc_repescagem';
   // Apresentação de vendas: leads qualificados / com reunião marcada.
@@ -222,17 +228,20 @@ function Column({ phase, items, onOpen, onFechou, onApresentar, onAgendar, onFol
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#E8590C] bg-[#E8590C]/5 dark:bg-[#E8590C]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
-        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+        <span className="ml-auto flex items-center gap-1.5">
+          <KanbanColumnSelect bulk={bulk} ids={colIds} accent={ACCENT} />
+          <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+        </span>
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {sorted.map((c) => <Card key={c.id} c={c} isNovos={phase.key === 'repbc_novos_leads'} terminal={isTerminalPhase(phase)} onOpen={onOpen} onFechou={isFechado ? onFechou : undefined} onApresentar={podeApresentar ? onApresentar : undefined} onAgendar={podeAgendar ? onAgendar : undefined} onFollowup={isRepescagem ? onFollowup : undefined} staleFollowup={isRepescagem && (c.diasNaFase ?? 0) >= 7} />)}
+        {sorted.map((c) => <Card key={c.id} c={c} bulk={bulk} colIds={colIds} isNovos={phase.key === 'repbc_novos_leads'} terminal={isTerminalPhase(phase)} onOpen={onOpen} onFechou={isFechado ? onFechou : undefined} onApresentar={podeApresentar ? onApresentar : undefined} onAgendar={podeAgendar ? onAgendar : undefined} onFollowup={isRepescagem ? onFollowup : undefined} staleFollowup={isRepescagem && (c.diasNaFase ?? 0) >= 7} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, isNovos, terminal, onOpen, onFechou, onApresentar, onAgendar, onFollowup, staleFollowup }: { c: KanbanCard; isNovos?: boolean; terminal?: boolean; onOpen?: (id: string) => void; onFechou?: (c: KanbanCard) => void; onApresentar?: (c: KanbanCard) => void; onAgendar?: (c: KanbanCard) => void; onFollowup?: (c: KanbanCard) => void; staleFollowup?: boolean }) {
+function Card({ c, bulk, colIds, isNovos, terminal, onOpen, onFechou, onApresentar, onAgendar, onFollowup, staleFollowup }: { c: KanbanCard; bulk?: KanbanBulk; colIds?: string[]; isNovos?: boolean; terminal?: boolean; onOpen?: (id: string) => void; onFechou?: (c: KanbanCard) => void; onApresentar?: (c: KanbanCard) => void; onAgendar?: (c: KanbanCard) => void; onFollowup?: (c: KanbanCard) => void; staleFollowup?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const clickedIds = useRepbSeenStore((s) => s.clickedIds);
   const markCardClicked = useRepbSeenStore((s) => s.markCardClicked);
@@ -243,9 +252,12 @@ function Card({ c, isNovos, terminal, onOpen, onFechou, onApresentar, onAgendar,
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onClick={() => { markCardClicked(c.id); onOpen?.(c.id); }}
-      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''}`}>
-      {isNew && <span title="Novo lead — clique para ver" className="absolute right-2 top-2 z-10 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" />}
-      <div className="-ml-1 flex flex-wrap items-center gap-1">
+      className={`group relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#E8590C]' : ''}`}>
+      {/* Bolinha "novo lead" — fica à esquerda da caixinha de seleção (que ocupa o canto). */}
+      {isNew && <span title="Novo lead — clique para ver" className="absolute right-8 top-3 z-10 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" />}
+      {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent={ACCENT} />}
+      {/* pr-5 reserva o canto da caixinha de seleção */}
+      <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: ACCENT, color: '#fff' }}>REPB</span>
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
       </div>

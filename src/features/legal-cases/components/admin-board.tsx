@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/legal-cases/components/kanban-card-bits';
+import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { isTerminalPhase, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -72,6 +73,8 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   const qc = useQueryClient();
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  // Seleção em massa (caixinha no card + barra de ações no rodapé).
+  const bulk = useKanbanBulk();
   const dragScroll = useDragScroll();
 
   // Gerência de fases inline (só sócios) — mesma capacidade dos demais quadros.
@@ -138,6 +141,15 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     return Array.from(map, ([nome, cards]) => ({ nome, cards })).sort((a, b) => b.cards.length - a.cards.length);
   }, [filtered, colDefs, columnsFromPhases, data]);
 
+  // Destinos do "mover em massa": só colunas que são FASE deste quadro (o
+  // agrupamento por produto não tem `key` e não é destino possível).
+  const bulkPhases = columns
+    .filter((c) => !!c.key)
+    .map((c) => {
+      const p = data?.phases?.find((ph) => ph.key === c.key);
+      return { key: c.key!, label: c.nome, terminal: p?.terminal, status: p?.status };
+    });
+
   return (
     // lg:!pt-12 encolhe o respiro global do topo (o `.under-bar > *` põe 3.75rem;
     // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
@@ -194,11 +206,14 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                 ) : (
                   <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
                 )}
-                <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
+                <span className="ml-auto flex items-center gap-1.5">
+                  <KanbanColumnSelect bulk={bulk} ids={sortedCards.map((c) => c.id)} accent={accent} />
+                  <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
+                </span>
               </div>
               <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {sortedCards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-                {sortedCards.map((c) => <AdminCard key={c.id} c={c} terminal={colTerminal} onOpen={setOpenCaseId} />)}
+                {sortedCards.map((c) => <AdminCard key={c.id} c={c} terminal={colTerminal} bulk={bulk} colIds={sortedCards.map((x) => x.id)} accent={accent} onOpen={setOpenCaseId} />)}
               </div>
             </div>
             );
@@ -207,19 +222,26 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
         </div>
       )}
 
+      <KanbanBulkBar bulk={bulk} cards={filtered} phases={bulkPhases} queryKey={KEY} accent={accent} />
+
       {openCaseId && <CaseDetailDrawer caseId={openCaseId} phases={phasesOfBoard(data?.phases ?? [], drawerBoard ?? 'banco')} onClose={() => setOpenCaseId(null)} />}
     </div>
   );
 }
 
-function AdminCard({ c, terminal, onOpen }: { c: KanbanCard; terminal?: boolean; onOpen: (id: string) => void }) {
+function AdminCard({ c, terminal, bulk, colIds, accent, onOpen }: { c: KanbanCard; terminal?: boolean; bulk?: KanbanBulk; colIds?: string[]; accent?: string; onOpen: (id: string) => void }) {
   const prod = produtoColor(c.produto);
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   return (
-    <button onClick={() => onOpen(c.id)}
-      className={`w-full cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-[#1E2226] ${terminal ? terminalCardClass : ''}`}>
-      <div className="-ml-1 flex flex-wrap items-center gap-1">
+    // <div role=button> (não <button>): a caixinha de seleção é um controle
+    // dentro do card, e controle dentro de <button> é HTML inválido.
+    <div role="button" tabIndex={0} onClick={() => onOpen(c.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c.id); } }}
+      className={`group relative w-full cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-[#1E2226] ${terminal ? terminalCardClass : ''}`}
+      style={bulk?.has(c.id) && accent ? { boxShadow: `0 0 0 2px ${accent}` } : undefined}>
+      {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent={accent} />}
+      {/* pr-5 reserva o canto da caixinha de seleção */}
+      <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
         {/* Etiquetas (EntityTag/Astrea) NÃO vão na face do card — só na ficha (fix 406b46f). */}
@@ -245,6 +267,6 @@ function AdminCard({ c, terminal, onOpen }: { c: KanbanCard; terminal?: boolean;
           ? <img src={c.responsible.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" />
           : <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{iniciais}</span>)}
       </div>
-    </button>
+    </div>
   );
 }

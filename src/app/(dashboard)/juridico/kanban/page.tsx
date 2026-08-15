@@ -15,6 +15,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
+import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { membersService } from '@/features/settings/services/members.service';
@@ -102,6 +103,8 @@ export default function FaseJudicialKanbanPage() {
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Seleção em massa (caixinha no card + barra de ações no rodapé).
+  const bulk = useKanbanBulk();
   // Quantos filtros estão ativos (badge do botão "Filtros"). Busca e ordenação não contam.
   const activeFilters = [area, produto, resp].filter(Boolean).length + (phaseSel.length ? 1 : 0) + (tagSel.length ? 1 : 0) + (!showFora ? 1 : 0);
   const limparFiltros = () => { setArea(''); setProduto(''); setResp(''); setPhaseSel([]); setTagSel([]); setShowFora(true); };
@@ -375,11 +378,12 @@ export default function FaseJudicialKanbanPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && isOwner && <AddPhaseColumn board="judicial" accent="#e11970" onAdded={onChanged} />}
           </div>
           <DragOverlay>{active ? <Card c={active} phases={boardPhases} onMove={move} overlay /> : null}</DragOverlay>
+          <KanbanBulkBar bulk={bulk} cards={filtered} phases={boardPhases} queryKey={KEY} accent="#e11970" />
         </DndContext>
       )}
 
@@ -455,9 +459,9 @@ function MultiSelect({
 const COLUNA_INICIAL = 20;
 
 function Column({
-  phase, items, phases, onMove, onOpen, onChanged, canRename, onRename, onDelete, onMoveLeft, onMoveRight,
+  phase, items, phases, bulk, onMove, onOpen, onChanged, canRename, onRename, onDelete, onMoveLeft, onMoveRight,
 }: {
-  phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[];
+  phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[]; bulk: KanbanBulk;
   onMove: (c: KanbanCard, to: string) => void; onOpen: (id: string) => void;
   onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void;
   onDelete: (phase: KanbanPhase) => void;
@@ -471,13 +475,20 @@ function Column({
   const sortedItems = useMemo(() => applyCardSort(items, sort, kanbanCardKeys), [items, sort]);
   const shown = sortedItems.length > limit ? sortedItems.slice(0, limit) : sortedItems;
   const rest = sortedItems.length - shown.length;
+  // "Selecionar todos" pega a fase inteira (inclusive o que está atrás do "+ N mais");
+  // o shift+clique só faz intervalo entre os cards montados na tela.
+  const allIds = useMemo(() => sortedItems.map((c) => c.id), [sortedItems]);
+  const shownIds = useMemo(() => shown.map((c) => c.id), [shown]);
   return (
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       {/* Header da fase — DENTRO do painel escuro (englobado, tom vai até o nome) */}
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
-        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
-          {items.length}
+        <span className="ml-auto flex items-center gap-1.5">
+          <KanbanColumnSelect bulk={bulk} ids={allIds} accent="#e11970" />
+          <span className="rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">
+            {items.length}
+          </span>
         </span>
       </div>
       <div
@@ -489,7 +500,7 @@ function Column({
             Vazio
           </p>
         )}
-        {shown.map((c) => <Card key={c.id} c={c} phases={phases} onMove={onMove} onOpen={onOpen} onChanged={onChanged} />)}
+        {shown.map((c) => <Card key={c.id} c={c} phases={phases} bulk={bulk} colIds={shownIds} onMove={onMove} onOpen={onOpen} onChanged={onChanged} />)}
         {rest > 0 && (
           <button
             onClick={() => setLimit((l) => l + 50)}
@@ -504,9 +515,9 @@ function Column({
 }
 
 const Card = memo(function Card({
-  c, phases, onMove, onOpen, onChanged, overlay,
+  c, phases, bulk, colIds, onMove, onOpen, onChanged, overlay,
 }: {
-  c: KanbanCard; phases: KanbanPhase[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onChanged?: () => void; overlay?: boolean;
+  c: KanbanCard; phases: KanbanPhase[]; bulk?: KanbanBulk; colIds?: string[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onChanged?: () => void; overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const down = useRef<{ x: number; y: number } | null>(null);
@@ -537,12 +548,13 @@ const Card = memo(function Card({
         const d = down.current;
         if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
       }}
-      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
+      className={`group relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
         isDragging && !overlay ? 'opacity-40' : ''
-      } ${overlay ? 'rotate-2 shadow-lg' : ''} ${terminal && !overlay ? terminalCardClass : ''}`}
+      } ${overlay ? 'rotate-2 shadow-lg' : ''} ${terminal && !overlay ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}
     >
-      {/* Etiquetas: produto (cor) + área (cinza) */}
-      <div className="-ml-1 flex flex-wrap items-center gap-1">
+      {bulk && !overlay && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent="#e11970" />}
+      {/* Etiquetas: produto (cor) + área (cinza) — pr-5 reserva o canto da caixinha de seleção */}
+      <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
         {c.produto && (
           <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>
             {cleanProduto(c.produto)}

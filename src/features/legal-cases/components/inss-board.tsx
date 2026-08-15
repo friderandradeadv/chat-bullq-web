@@ -13,6 +13,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
+import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
 // inss_admin está na trilha 'pre' — escopa a busca por lane (mesma key/cache do
@@ -82,6 +83,8 @@ export function InssBoard() {
 
   const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'pre' }), refetchInterval: 60_000 });
 
+  // Seleção em massa (caixinha no card + barra de ações no rodapé).
+  const bulk = useKanbanBulk();
   const inss = useMemo(() => {
     return (data?.cards ?? []).filter((c) => {
       if (c.phase !== 'inss_admin') return false;
@@ -178,10 +181,20 @@ export function InssBoard() {
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {COLS.map((col) => (
-              <Column key={col.dropId} col={col} items={byRes[col.key]} onOpen={setOpenCaseId} onEntrarJudicial={entrarJudicial} />
+              <Column key={col.dropId} col={col} items={byRes[col.key]} bulk={bulk} onOpen={setOpenCaseId} onEntrarJudicial={entrarJudicial} />
             ))}
           </div>
           <DragOverlay>{active ? <InssCard c={active} onEntrarJudicial={entrarJudicial} overlay /> : null}</DragOverlay>
+          {/* As colunas daqui são o RESULTADO do requerimento (metadata), não fases —
+              então o destino do "mover em massa" é a própria fase do INSS ou uma fase
+              do Pré-Processual (mesma trilha 'pre', de onde estes cards vieram). */}
+          <KanbanBulkBar
+            bulk={bulk}
+            cards={inss}
+            phases={[...phasesOfBoard(data?.phases ?? [], 'inss'), ...phasesOfBoard(data?.phases ?? [], 'pre')]}
+            queryKey={KEY}
+            accent={ACCENT}
+          />
         </DndContext>
       )}
 
@@ -191,10 +204,11 @@ export function InssBoard() {
 }
 
 function Column({
-  col, items, onOpen, onEntrarJudicial,
+  col, items, bulk, onOpen, onEntrarJudicial,
 }: {
   col: { key: Resultado; dropId: string; label: string; color: string };
   items: KanbanCard[];
+  bulk: KanbanBulk;
   onOpen: (id: string) => void;
   onEntrarJudicial: (c: KanbanCard) => void;
 }) {
@@ -204,21 +218,26 @@ function Column({
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} />
         <h2 className="truncate text-sm font-medium" style={{ color: col.color }}>{col.label}</h2>
-        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+        <span className="ml-auto flex items-center gap-1.5">
+          <KanbanColumnSelect bulk={bulk} ids={items.map((c) => c.id)} accent={ACCENT} />
+          <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+        </span>
       </div>
       <div ref={setNodeRef}
         className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {items.map((c) => <InssCard key={c.id} c={c} onOpen={onOpen} onEntrarJudicial={onEntrarJudicial} />)}
+        {items.map((c) => <InssCard key={c.id} c={c} bulk={bulk} colIds={items.map((x) => x.id)} onOpen={onOpen} onEntrarJudicial={onEntrarJudicial} />)}
       </div>
     </div>
   );
 }
 
 function InssCard({
-  c, onOpen, onEntrarJudicial, overlay,
+  c, bulk, colIds, onOpen, onEntrarJudicial, overlay,
 }: {
   c: KanbanCard;
+  bulk?: KanbanBulk;
+  colIds?: string[];
   onOpen?: (id: string) => void;
   onEntrarJudicial: (c: KanbanCard) => void;
   overlay?: boolean;
@@ -247,9 +266,11 @@ function InssCard({
         const d = down.current;
         if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
       }}
-      className={`cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging && !overlay ? 'opacity-40' : ''} ${overlay ? 'rotate-2 shadow-lg' : ''}`}
+      className={`group relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging && !overlay ? 'opacity-40' : ''} ${overlay ? 'rotate-2 shadow-lg' : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#7048e8]' : ''}`}
     >
-      <div className="-ml-1 flex flex-wrap items-center gap-1">
+      {bulk && !overlay && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent={ACCENT} />}
+      {/* pr-5 reserva o canto da caixinha de seleção */}
+      <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {/* Etiquetas (EntityTag/Astrea) NÃO vão na face do card — só na ficha (fix 406b46f). */}
       </div>

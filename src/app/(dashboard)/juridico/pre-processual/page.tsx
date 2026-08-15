@@ -15,6 +15,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
+import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { boardOfPhase } from '@/features/legal-cases/lib/phase-board';
@@ -100,6 +101,8 @@ export default function PreProcessualPage() {
   const [resp, setResp] = useState('');
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
+  // Seleção em massa (caixinha no card + barra de ações no rodapé).
+  const bulk = useKanbanBulk();
   const dragScroll = useDragScroll();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -242,11 +245,12 @@ export default function PreProcessualPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} novoIds={novoIds} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} novoIds={novoIds} bulk={bulk} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && canRename && <AddPhaseColumn board="pre" accent="#e11970" onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
           </div>
           <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
+          <KanbanBulkBar bulk={bulk} cards={filtered} phases={phases} queryKey={KEY} accent="#e11970" />
         </DndContext>
       )}
 
@@ -258,26 +262,31 @@ export default function PreProcessualPage() {
   );
 }
 
-function Column({ phase, items, novoIds, onOpen, onProtocolar, onChanged, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; onMoveLeft?: () => void; onMoveRight?: () => void }) {
+function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onChanged, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; bulk: KanbanBulk; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; onMoveLeft?: () => void; onMoveRight?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
   const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
   const sorted = useMemo(() => applyCardSort(items, sort, kanbanCardKeys), [items, sort]);
+  // Ids na ordem da tela — habilitam o "selecionar todos" e o shift+clique.
+  const colIds = useMemo(() => sorted.map((c) => c.id), [sorted]);
   return (
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
-        <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+        <span className="ml-auto flex items-center gap-1.5">
+          <KanbanColumnSelect bulk={bulk} ids={colIds} accent="#e11970" />
+          <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
+        </span>
       </div>
       <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {sorted.map((c) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
+        {sorted.map((c) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} bulk={bulk} colIds={colIds} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, terminal, novo, onOpen, onProtocolar, onChanged }: { c: KanbanCard; terminal?: boolean; novo?: boolean; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void }) {
+function Card({ c, terminal, novo, bulk, colIds, onOpen, onProtocolar, onChanged }: { c: KanbanCard; terminal?: boolean; novo?: boolean; bulk?: KanbanBulk; colIds?: string[]; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const down = useRef<{ x: number; y: number } | null>(null);
   const prod = produtoColor(c.produto);
@@ -288,11 +297,12 @@ function Card({ c, terminal, novo, onOpen, onProtocolar, onChanged }: { c: Kanba
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id); }}
-      className={`relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''}`}>
+      className={`group relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}>
       {/* Cliente novo (entrou depois da última visita ao board) — bolinha vermelha */}
       {novo && <span className="absolute -right-1.5 -top-1.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" title="Novo cliente" />}
-      {/* Etiquetas: produto (cor) + área (cinza) */}
-      <div className="-ml-1 flex flex-wrap items-center gap-1">
+      {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent="#e11970" />}
+      {/* Etiquetas: produto (cor) + área (cinza) — pr-5 reserva o canto da caixinha de seleção */}
+      <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && (cleanProduto(c.produto) ?? '').toLowerCase().trim() !== c.areaJuridica.toLowerCase().trim() && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
       </div>
