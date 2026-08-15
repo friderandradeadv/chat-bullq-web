@@ -1906,7 +1906,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       if (hit) puxarRateioAlvara(idx, hit.id);
       const temSuc = r.sucumbencia === 'Sim' && ((r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) || (r.valorSucumbencia && r.valorSucumbencia > 0));
       toast.success(`Documentos lidos${hit ? ` · processo ${hit.cnjNumber || 'casado'}` : (r.cnj ? ` · CNJ ${r.cnj} não achei cadastrado` : '')}${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${temSuc ? (r.sucumbenciaModo === 'Percentual' ? ` · sucumbência ${r.sucumbenciaPct}%` : ` · sucumbência ${brl2(r.valorSucumbencia || 0)}`) : ''}. Confira${r.sucumbenciaModo === 'Percentual' && !r.sucumbenciaBaseValor ? ` e informe o valor da base da sucumbência (${r.sucumbenciaBase || 'condenação'})` : ''} antes de importar.`);
-      if (r.aviso) toast(r.aviso, { icon: '⚠️' });
+      // O "não encontrei o valor bruto" não vale aqui: o bruto do alvará é sempre o valor da
+      // linha do extrato (já preenchido) — só avisa outros problemas de leitura.
+      if (r.aviso && !/valor bruto/i.test(r.aviso)) toast(r.aviso, { icon: '⚠️' });
     } catch (e: any) { toast.error(e?.message || 'Não consegui ler os documentos'); }
     finally { setAlvaraBusy((b) => ({ ...b, [idx]: false })); }
   };
