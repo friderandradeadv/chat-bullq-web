@@ -23,6 +23,13 @@ export type CadastroTipo = 'escritorio' | 'fornecedor' | 'socio' | 'cliente' | '
 export interface FinCadastro { id: string; nome: string; tipo: CadastroTipo; doc?: string | null }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
 export interface RateioExito { bruto: number; cliente: number; sucumbencia: number; honorarios: number }
+export interface FinAnexo { id: string; name: string; mime: string; size: number; key: string; url: string; uploadedById?: string | null; uploadedAt: string }
+
+/** URL absoluta do anexo (a base da API já termina em /api/v1). */
+export function anexoHref(a: FinAnexo): string {
+  const base = (api.defaults.baseURL || '').replace(/\/$/, '');
+  return `${base}${a.url}`;
+}
 export interface FinTransacao {
   id?: string;
   serieId?: string | null;
@@ -52,6 +59,7 @@ export interface FinTransacao {
   area?: string | null; // vertical direta do lançamento (centro de custos)
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null; // rateio de despesa entre verticais
   contribuintes?: { userId?: string | null; nome: string; valor: number }[] | null; // contribuição pessoal (quem ajudou a pagar) — informativo, independente do rateio por vertical
+  anexos?: FinAnexo[] | null; // boletos/DARF/comprovantes anexados a uma conta a pagar
   verticais?: string[]; // verticais que o lançamento toca (centro de custos) — vazio = comum/escritório
   vertical?: string | null; // vertical resolvida do lançamento (visão Meu Espaço — p/ filtro das entradas)
   mine?: boolean; // no espelho do livro-razão: true = lançamento seu (casos/custeio); false = movimentação da vertical/transferência que aparece por paridade
@@ -256,6 +264,19 @@ export const financeiroService = {
   },
   async repassesPendentes(userId?: string): Promise<RepassesPendentes> {
     const { data } = await api.get('/financeiro/repasses-pendentes', { params: userId ? { userId } : undefined });
+    return data.data ?? data;
+  },
+  async uploadAnexos(txId: string, files: File[]): Promise<FinAnexo[]> {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    const { data } = await api.post(`/financeiro/transacoes/${txId}/anexos`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    });
+    return data.data ?? data;
+  },
+  async removeAnexo(txId: string, anexoId: string): Promise<FinAnexo[]> {
+    const { data } = await api.delete(`/financeiro/transacoes/${txId}/anexos/${anexoId}`);
     return data.data ?? data;
   },
   async repassar(txId: string, userId?: string): Promise<{ repassados: number; total: number }> {

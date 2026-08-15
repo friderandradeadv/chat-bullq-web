@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -11,9 +11,10 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt, Save,
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip,
 } from 'lucide-react';
-import { financeiroService, type FinDashboard, type FinTransacao, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
+import { DropZone } from '@/components/drop-zone';
 import { ASTREA_DESPESAS, APORTES } from '@/features/financeiro/data/astrea-despesas';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
@@ -646,6 +647,75 @@ function ClassificadorVertical({ data, onClose }: { data: FinDashboard; onClose:
   );
 }
 
+// Anexos de um lançamento (boleto / DARF / comprovante). Sobem pro /uploads da API e
+// ficam guardados no próprio lançamento (tx.anexos). Serve p/ deixar o documento junto
+// da conta a pagar e achar na hora de pagar.
+function AnexosTx({ tx, onChanged }: { tx: FinTransacao; onChanged: () => void }) {
+  const [subindo, setSubindo] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const anexos = tx.anexos ?? [];
+  const fmtTam = (b: number) => (b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${Math.round(b / 1024)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`);
+  const subir = async (files: File[] | FileList | null) => {
+    const todos = files ? Array.from(files) : [];
+    if (!todos.length || !tx.id) return;
+    if (todos.length > 10) toast.info('Muitos arquivos — enviei os primeiros 10.');
+    setSubindo(true);
+    try {
+      await financeiroService.uploadAnexos(tx.id, todos.slice(0, 10));
+      toast.success(todos.length > 1 ? `${Math.min(todos.length, 10)} anexos enviados` : 'Anexo enviado');
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Não consegui subir o anexo.');
+    } finally {
+      setSubindo(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+  const remover = async (a: FinAnexo) => {
+    if (!tx.id) return;
+    setBusy(a.id);
+    try {
+      await financeiroService.removeAnexo(tx.id, a.id);
+      toast.success('Anexo removido');
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao remover o anexo');
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div>
+      <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => subir(e.target.files)} />
+      <DropZone onFiles={subir} disabled={subindo} overlayLabel="Solte o boleto/DARF aqui">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={subindo}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#7048e8]/50 bg-[#7048e8]/5 px-3 py-2 text-xs font-medium text-[#7048e8] transition-colors hover:bg-[#7048e8]/10 disabled:opacity-60"
+        >
+          {subindo ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> enviando…</> : <><Paperclip className="h-3.5 w-3.5" /> Anexar boleto / DARF / comprovante (ou arraste aqui)</>}
+        </button>
+      </DropZone>
+      {anexos.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {anexos.map((a) => (
+            <li key={a.id} className="flex items-center gap-2 rounded-lg border border-[#DEE2E6] px-2.5 py-1.5 dark:border-zinc-700">
+              <FileText className="h-4 w-4 shrink-0 text-zinc-400" />
+              <a href={anexoHref(a)} target="_blank" rel="noreferrer" title={a.name} className="min-w-0 flex-1 truncate text-xs text-[#228BE6] hover:underline">{a.name}</a>
+              <span className="shrink-0 text-[11px] tabular-nums text-zinc-400">{fmtTam(a.size)}</span>
+              <button type="button" onClick={() => remover(a)} disabled={busy === a.id} title="Remover anexo" className="shrink-0 rounded p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-zinc-800">
+                {busy === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSel: string; setMesSel: (m: string) => void }) {
   const qc = useQueryClient();
   const mesesDisp = useMemo(() => Array.from(new Set(data.transacoes.map(mesKey))).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort((a, b) => b.localeCompare(a)), [data.transacoes]);
@@ -848,6 +918,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // Lançamentos com o rateio (verticais/honorários) expandido no livro-razão.
   const [rvOpen, setRvOpen] = useState<Set<string>>(new Set());
   const toggleRv = (id: string) => setRvOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const [anexOpen, setAnexOpen] = useState<Set<string>>(new Set());
+  const toggleAnex = (id: string) => setAnexOpen((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const [importing, setImporting] = useState(false);
   const openNew = () => setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), competencia: toISOInput(hojeBR()).slice(0, 7), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' });
@@ -1130,10 +1202,16 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="flex shrink-0 items-center">
                           {!ehLiquidado(st) && <button onClick={() => quickReceber(t)} title={t.valor >= 0 ? 'Marcar como recebido' : 'Marcar como pago'} className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>}
                           {t.subtipo === 'exito' && t.rateio && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded p-1 text-zinc-300 transition hover:text-[#7048E8] disabled:opacity-50">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}</button>}
+                          <button onClick={() => toggleAnex(t.id!)} title="Anexar boleto/DARF/comprovante" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" />{(t.anexos?.length ?? 0) > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#7048E8] px-0.5 text-[8px] font-bold leading-none text-white">{t.anexos!.length}</span>}</button>
                           <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </span>
                       </div>
+                      {anexOpen.has(t.id!) && (
+                        <div className="bg-[#7048E8]/[0.04] px-3 pb-2 pl-10 pt-1.5 dark:bg-[#7048E8]/[0.07]">
+                          <AnexosTx tx={t} onChanged={invalidate} />
+                        </div>
+                      )}
                       {open && (
                         <div className="bg-[#7048E8]/[0.04] px-3 pb-2 pl-10 pt-1 dark:bg-[#7048E8]/[0.07]">
                           {temRv && (
