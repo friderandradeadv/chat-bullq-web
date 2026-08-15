@@ -11,7 +11,7 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt, Save,
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip, ReceiptText,
 } from 'lucide-react';
 import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
 import { DropZone } from '@/components/drop-zone';
@@ -755,7 +755,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // extrato do cartão (fonteImport) OU ainda está em aberto (a_pagar). Uma despesa
   // LANÇADA À MÃO numa conta-cartão (ex.: repasse) NÃO é fatura — fica no livro-razão.
   const isFaturaCartao = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta) && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar');
-  const [modo, setModo] = useState<'ledger' | 'cartao'>('ledger');
+  const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>('ledger');
   // Verticais disponíveis para ratear uma despesa (ex.: agência 1/3 cada).
   const areasVert = useMemo(() => {
     const base = VERTICAIS_PADRAO;
@@ -1080,15 +1080,74 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       )}
 
       {/* Alternador: caixa (livro-razão) × cartão de crédito */}
-      {cardIds.size > 0 && (
-        <div className="mb-3 inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
-          {([['ledger', 'Livro-razão'], ['cartao', 'Cartão de crédito']] as const).map(([k, l]) => (
-            <button key={k} onClick={() => setModo(k)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition ${modo === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{k === 'cartao' && <CreditCard className="h-3.5 w-3.5" />}{l}</button>
-          ))}
-        </div>
-      )}
+      {(() => {
+        const tabs: Array<{ k: 'ledger' | 'apagar' | 'cartao'; l: string; Icon?: any }> = [
+          { k: 'ledger', l: 'Livro-razão' },
+          { k: 'apagar', l: 'Contas a pagar', Icon: CalendarClock },
+          ...(cardIds.size > 0 ? [{ k: 'cartao' as const, l: 'Cartão de crédito', Icon: CreditCard }] : []),
+        ];
+        return (
+          <div className="mb-3 inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+            {tabs.map(({ k, l, Icon }) => (
+              <button key={k} onClick={() => setModo(k)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition ${modo === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{Icon && <Icon className="h-3.5 w-3.5" />}{l}</button>
+            ))}
+          </div>
+        );
+      })()}
 
-      {modo === 'cartao' && cardIds.size > 0 ? <CartaoCreditoView data={data} contas={contas} onDone={invalidate} /> : (
+      {modo === 'cartao' && cardIds.size > 0 ? <CartaoCreditoView data={data} contas={contas} onDone={invalidate} /> : modo === 'apagar' ? (() => {
+        const bills = data.transacoes
+          .filter((t) => txStatus(t) === 'a_pagar' && t.valor < 0 && !isFaturaCartao(t))
+          .sort((a, b) => (toISOInput(a.vencimento || a.data) || '9999').localeCompare(toISOInput(b.vencimento || b.data) || '9999'));
+        const total = bills.reduce((s, t) => s + Math.abs(t.valor), 0);
+        const hojeISO = toISOInput(hojeBR());
+        return (
+          <div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-900/15">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300"><CalendarClock className="h-4 w-4" /> Contas a pagar · {bills.length}</div>
+              <div className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">{brl(total)}</div>
+            </div>
+            <p className="mb-2 text-xs text-zinc-400">Boletos, DARF, repasses e demais saídas em aberto — do cartão você cuida na aba "Cartão de crédito". Ordenado por vencimento; anexe o comprovante no clipe e baixe no ✓ quando pagar.</p>
+            {bills.length === 0 ? (
+              <div className="rounded-xl border border-zinc-200/70 py-10 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhuma conta a pagar em aberto. 🎉</div>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+                {bills.map((t) => {
+                  const venc = t.vencimento || t.data;
+                  const vencISO = toISOInput(venc);
+                  const atrasada = !!vencISO && vencISO < hojeISO;
+                  const nome = titleCase((t.recebedor || t.party || t.pagador) || '') || t.categoria;
+                  return (
+                    <div key={t.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/70">
+                      <div className="group flex items-center gap-2 px-3 py-2 text-sm">
+                        <span className={`w-12 shrink-0 rounded px-1 py-0.5 text-center text-[11px] font-semibold tabular-nums ${atrasada ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`} title={atrasada ? 'Vencida' : 'A vencer'}>{venc.slice(0, 5)}</span>
+                        <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <ClienteLink nome={nome} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />
+                          {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
+                          {(t.anexos?.length ?? 0) > 0 && <span className="shrink-0 text-[10px] text-[#7048E8]" title={`${t.anexos!.length} anexo(s)`}>📎{t.anexos!.length}</span>}
+                        </span>
+                        <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="truncate">{t.categoria}</span></span>
+                        <span className="w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums text-rose-600">{brl2(t.valor)}</span>
+                        <span className="flex shrink-0 items-center">
+                          <button onClick={() => quickReceber(t)} title="Marcar como pago" className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>
+                          {t.categoria === 'Repasse ao cliente' && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
+                          <button onClick={() => toggleAnex(t.id!)} title="Anexar boleto/DARF/comprovante" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" /></button>
+                          <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
+                          <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </span>
+                      </div>
+                      {anexOpen.has(t.id!) && (
+                        <div className="bg-[#7048E8]/[0.04] px-3 pb-2 pl-10 pt-1.5 dark:bg-[#7048E8]/[0.07]"><AnexosTx tx={t} onChanged={invalidate} /></div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })() : (
       <>
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
@@ -1241,7 +1300,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className={`w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
                         <span className="flex shrink-0 items-center">
                           {!ehLiquidado(st) && <button onClick={() => quickReceber(t)} title={t.valor >= 0 ? 'Marcar como recebido' : 'Marcar como pago'} className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>}
-                          {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded p-1 text-zinc-300 transition hover:text-[#7048E8] disabled:opacity-50">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}</button>}
+                          {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
                           <button onClick={() => toggleAnex(t.id!)} title="Anexar boleto/DARF/comprovante" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" />{(t.anexos?.length ?? 0) > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#7048E8] px-0.5 text-[8px] font-bold leading-none text-white">{t.anexos!.length}</span>}</button>
                           <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
