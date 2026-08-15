@@ -13,7 +13,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
-import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
+import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, KanbanSelectTrigger, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 
 // inss_admin está na trilha 'pre' — escopa a busca por lane (mesma key/cache do
@@ -214,10 +214,11 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.dropId });
   return (
-    <div className={`flex min-h-0 w-[300px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5 dark:bg-[#7048e8]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div className={`group/col flex min-h-0 w-[300px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5 dark:bg-[#7048e8]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} />
         <h2 className="truncate text-sm font-medium" style={{ color: col.color }}>{col.label}</h2>
+        <KanbanSelectTrigger bulk={bulk} accent={ACCENT} />
         <span className="ml-auto flex items-center gap-1.5">
           <KanbanColumnSelect bulk={bulk} ids={items.map((c) => c.id)} accent={ACCENT} />
           <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>

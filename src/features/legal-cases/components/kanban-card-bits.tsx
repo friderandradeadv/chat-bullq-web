@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp, CheckSquare, ListChecks } from 'lucide-react';
 import { toast } from 'sonner';
 import { SORT_OPTIONS, type CardSort } from '../lib/kanban-sort';
 import { legalCasesService, type LegalTag } from '../services/legal-cases.service';
@@ -26,6 +26,7 @@ export function PhaseHeader({
   onMoveRight,
   sort,
   onSort,
+  onSelect,
 }: {
   phase: { key: string; label: string; custom?: boolean };
   canRename: boolean;
@@ -38,14 +39,16 @@ export function PhaseHeader({
   /** Ordenar os cards DENTRO da coluna (preferência de visualização do usuário). */
   sort?: CardSort;
   onSort?: (s: CardSort) => void;
+  /** Liga o modo seleção em massa (igual ao chat). `todos` = já marca a fase inteira. */
+  onSelect?: (todos: boolean) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
   const [text, setText] = useState(phase.label);
   useEffect(() => setText(phase.label), [phase.label]);
 
-  // Sem permissão de renomear E sem ordenação → só o título (nada de menu).
-  if (!canRename && !onSort) {
+  // Sem permissão de renomear, sem ordenação e sem seleção → só o título (nada de menu).
+  if (!canRename && !onSort && !onSelect) {
     return (
       <h2 className="truncate text-sm font-medium text-[#e11970]/90 dark:text-[#f06595]/75">
         {phase.label}
@@ -98,6 +101,27 @@ export function PhaseHeader({
         <>
           <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
           <div className="absolute left-0 top-6 z-30 w-56 overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            {/* Seleção em massa (qualquer usuário) — igual ao chat: liga o modo e
+                depois você escolhe o que fazer na barra do rodapé. */}
+            {onSelect && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setMenu(false); onSelect(false); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <CheckSquare className="h-3.5 w-3.5 shrink-0" /> Selecionar cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMenu(false); onSelect(true); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <ListChecks className="h-3.5 w-3.5 shrink-0" /> Selecionar todos desta fase
+                </button>
+                {(canRename || onSort) && <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />}
+              </>
+            )}
             {/* Ações da fase — só sócios (OWNER/ADMIN) */}
             {canRename && (
               <button

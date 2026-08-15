@@ -2,10 +2,13 @@
 
 // Seleção e AÇÕES EM MASSA dos kanbans jurídicos — compartilhado por todos os
 // quadros (pré-processual, judicial, planejamento, funil REPB, bancária e os
-// quadros custom). Três peças:
-//   - useKanbanBulk()        → estado da seleção (com shift+clique = intervalo)
+// quadros custom). Fluxo igual ao do chat: no ⋮ da fase você escolhe "Selecionar
+// cards", as caixinhas aparecem, você vai marcando e a barra do rodapé diz o que
+// fazer com a seleção. Peças:
+//   - useKanbanBulk()        → estado da seleção + modo seleção (shift+clique = intervalo)
 //   - <KanbanSelectBox/>     → caixinha no canto do card (não arrasta, não abre a ficha)
-//   - <KanbanColumnSelect/>  → "selecionar todos" no cabeçalho da coluna
+//   - <KanbanColumnSelect/>  → "selecionar todos" no cabeçalho da coluna (no modo seleção)
+//   - <KanbanSelectTrigger/> → liga o modo onde não há menu ⋮ (INSS, colunas por produto)
 //   - <KanbanBulkBar/>       → barra flutuante com as ações (mover fase, responsável,
 //                              status, etiquetas, arquivar)
 //
@@ -20,7 +23,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Ban, Check, CheckCircle2, ChevronDown, Loader2, MoveRight, PauseCircle,
+  Ban, Check, CheckCircle2, CheckSquare, ChevronDown, Loader2, MoveRight, PauseCircle,
   Plus, Tag, Trash2, UserCog, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,7 +40,11 @@ const ACCENT_PADRAO = '#e11970';
 export interface KanbanBulk {
   ids: Set<string>;
   count: number;
-  /** true quando há algo selecionado (modo seleção: caixinhas sempre visíveis). */
+  /** Modo seleção ligado pelo ⋮ da fase ("Selecionar cards"), como no chat. */
+  selecting: boolean;
+  /** Liga o modo seleção (caixinhas visíveis em todos os cards + barra na tela). */
+  startSelecting: () => void;
+  /** true no modo seleção OU com algo já selecionado. */
   active: boolean;
   has: (id: string) => boolean;
   /** Marca/desmarca um card. Com `shift` + `range` (ids da coluna, na ordem da tela) seleciona o intervalo. */
@@ -52,6 +59,7 @@ export interface KanbanBulk {
 /** Estado da seleção em massa de um quadro. */
 export function useKanbanBulk(): KanbanBulk {
   const [ids, setIds] = useState<Set<string>>(() => new Set());
+  const [selecting, setSelecting] = useState(false);
   // Âncora do shift+clique (último card clicado).
   const lastRef = useRef<string | null>(null);
 
@@ -93,14 +101,20 @@ export function useKanbanBulk(): KanbanBulk {
   }, []);
 
   const replace = useCallback((list: string[]) => setIds(new Set(list)), []);
-  const clear = useCallback(() => { lastRef.current = null; setIds(new Set()); }, []);
+  // "Limpar" sai do modo seleção também — é o mesmo botão de fechar a barra.
+  const clear = useCallback(() => { lastRef.current = null; setIds(new Set()); setSelecting(false); }, []);
+  const startSelecting = useCallback(() => setSelecting(true), []);
   const has = useCallback((id: string) => ids.has(id), [ids]);
 
   // Identidade estável enquanto a seleção não muda — o Card do quadro judicial é
   // React.memo (centenas de cards) e um objeto novo a cada render mataria o memo.
   return useMemo(
-    () => ({ ids, count: ids.size, active: ids.size > 0, has, toggle, setMany, replace, clear }),
-    [ids, has, toggle, setMany, replace, clear],
+    () => ({
+      ids, count: ids.size, selecting, startSelecting,
+      active: selecting || ids.size > 0,
+      has, toggle, setMany, replace, clear,
+    }),
+    [ids, selecting, startSelecting, has, toggle, setMany, replace, clear],
   );
 }
 
@@ -137,7 +151,7 @@ export function KanbanSelectBox({
   );
 }
 
-/** "Selecionar todos" da coluna — vai no cabeçalho da fase, ao lado da contagem. */
+/** "Selecionar todos" da coluna — só aparece no modo seleção, ao lado da contagem. */
 export function KanbanColumnSelect({
   bulk, ids, accent = ACCENT_PADRAO,
 }: {
@@ -145,7 +159,7 @@ export function KanbanColumnSelect({
   ids: string[];
   accent?: string;
 }) {
-  if (!ids.length) return null;
+  if (!bulk.active || !ids.length) return null;
   const todos = ids.every((id) => bulk.has(id));
   const alguns = !todos && ids.some((id) => bulk.has(id));
   return (
@@ -160,6 +174,23 @@ export function KanbanColumnSelect({
     >
       {todos && <Check className="h-3 w-3 text-white" />}
       {alguns && <span className="h-0.5 w-2 rounded bg-white" />}
+    </button>
+  );
+}
+
+/** Atalho pra LIGAR o modo seleção em cabeçalhos que não têm o menu ⋮ (ex.: INSS,
+ *  cujas colunas são o resultado do requerimento, não fases). */
+export function KanbanSelectTrigger({ bulk, accent = ACCENT_PADRAO }: { bulk: KanbanBulk; accent?: string }) {
+  if (bulk.active) return null;
+  return (
+    <button
+      type="button"
+      onClick={bulk.startSelecting}
+      title="Selecionar cards"
+      className="shrink-0 rounded p-0.5 text-zinc-400 opacity-0 transition hover:bg-zinc-100 group-hover/col:opacity-100 dark:hover:bg-zinc-800"
+      style={{ color: accent }}
+    >
+      <CheckSquare className="h-3.5 w-3.5" />
     </button>
   );
 }
@@ -217,7 +248,9 @@ export function KanbanBulkBar({
     queryFn: () => activitiesService.listAvailableTags(),
   });
 
-  if (total === 0) return null;
+  // Só some quando o modo seleção está desligado E nada está marcado.
+  if (!bulk.active) return null;
+  const vazio = total === 0;
 
   const recarregar = () => qc.invalidateQueries({ queryKey: queryKey as unknown[] });
 
@@ -303,12 +336,14 @@ export function KanbanBulkBar({
     // Acima da barra inferior de navegação (fixa, 3.5rem + safe-area).
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-3">
       <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1.5 rounded-xl border border-[#cfe0ed] bg-white/95 px-3 py-2 shadow-[0_8px_24px_rgba(16,24,32,.18)] backdrop-blur dark:border-zinc-700 dark:bg-[#15181A]/95">
-        <span className="mr-1 text-sm font-semibold" style={{ color: accent }}>
+        <span className="mr-1 text-sm font-semibold" style={{ color: vazio ? undefined : accent }}>
           {busy && <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" />}
-          {total} selecionado{total > 1 ? 's' : ''}
+          {vazio
+            ? <span className="text-zinc-500 dark:text-zinc-400">Clique nos cards para selecionar <span className="text-zinc-400">(shift = intervalo)</span></span>
+            : `${total} selecionado${total > 1 ? 's' : ''}`}
         </span>
 
-        <BulkMenu label="Mover para a fase" icon={<MoveRight className="h-4 w-4" />} disabled={busy} accent={accent}>
+        <BulkMenu label="Mover para a fase" icon={<MoveRight className="h-4 w-4" />} disabled={busy || vazio} accent={accent}>
           {(close) => (
             <>
               {phases.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Nenhuma fase neste quadro.</p>}
@@ -319,7 +354,7 @@ export function KanbanBulkBar({
           )}
         </BulkMenu>
 
-        <BulkMenu label="Etiquetas" icon={<Tag className="h-4 w-4" />} disabled={busy} accent={accent}>
+        <BulkMenu label="Etiquetas" icon={<Tag className="h-4 w-4" />} disabled={busy || vazio} accent={accent}>
           {(close) => (
             <>
               <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">Adicionar a todos</p>
@@ -349,7 +384,7 @@ export function KanbanBulkBar({
         {/* Responsável, status e arquivar são de sócio (o /bulk é OWNER/ADMIN). */}
         {canDeleteCases && (
           <>
-            <BulkMenu label="Responsável" icon={<UserCog className="h-4 w-4" />} disabled={busy} accent={accent}>
+            <BulkMenu label="Responsável" icon={<UserCog className="h-4 w-4" />} disabled={busy || vazio} accent={accent}>
               {(close) => (
                 <>
                   <BulkItem onClick={() => { close(); rodarBulk('responsible', { responsibleId: '' }, 'Responsável removido.'); }}>
@@ -365,7 +400,7 @@ export function KanbanBulkBar({
               )}
             </BulkMenu>
 
-            <BulkMenu label="Status" icon={<CheckCircle2 className="h-4 w-4" />} disabled={busy} accent={accent}>
+            <BulkMenu label="Status" icon={<CheckCircle2 className="h-4 w-4" />} disabled={busy || vazio} accent={accent}>
               {(close) => (
                 <>
                   <BulkItem onClick={() => { close(); rodarBulk('status', { status: 'ACTIVE' }); }}>
@@ -383,7 +418,7 @@ export function KanbanBulkBar({
 
             <button
               onClick={arquivar}
-              disabled={busy}
+              disabled={busy || vazio}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 px-3 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
             >
               <Trash2 className="h-4 w-4" /> Arquivar
@@ -394,10 +429,10 @@ export function KanbanBulkBar({
         <button
           onClick={bulk.clear}
           disabled={busy}
-          title="Limpar seleção"
+          title="Sair da seleção"
           className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm text-zinc-500 hover:text-zinc-800 disabled:opacity-50 dark:hover:text-zinc-200"
         >
-          <X className="h-4 w-4" /> Limpar
+          <X className="h-4 w-4" /> {vazio ? 'Cancelar' : 'Limpar'}
         </button>
       </div>
     </div>

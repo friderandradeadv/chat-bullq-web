@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/legal-cases/components/kanban-card-bits';
-import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
+import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, KanbanSelectTrigger, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { isTerminalPhase, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -190,7 +190,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
             const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys) : col.cards;
             const colTerminal = isTerminalPhase(col.key ? data?.phases?.find((p) => p.key === col.key) : null);
             return (
-            <div key={col.key ?? col.nome} className="flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
+            <div key={col.key ?? col.nome} className="group/col flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
                 {col.key ? (
                   <PhaseHeader
@@ -202,9 +202,13 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                     onMoveRight={canManage && i < columns.length - 1 && columns[i + 1]?.key ? () => reorderPhaseCol(col.key!, 'right') : undefined}
                     sort={sortOf(col.key)}
                     onSort={(s) => setSortFor(col.key!, s)}
+                    onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(sortedCards.map((c) => c.id), true); }}
                   />
                 ) : (
-                  <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
+                  <>
+                    <h2 className="truncate text-sm font-medium" style={{ color: accent }}>{col.nome}</h2>
+                    <KanbanSelectTrigger bulk={bulk} accent={accent} />
+                  </>
                 )}
                 <span className="ml-auto flex items-center gap-1.5">
                   <KanbanColumnSelect bulk={bulk} ids={sortedCards.map((c) => c.id)} accent={accent} />

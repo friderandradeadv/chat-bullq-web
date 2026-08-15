@@ -187,7 +187,7 @@ function Column({ phase, items, bulk, onOpen, canRename, onRename, onDelete, onM
   return (
     <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#12B886] bg-[#12B886]/5 dark:bg-[#12B886]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(colIds, true); }} />
         <span className="ml-auto flex items-center gap-1.5">
           <KanbanColumnSelect bulk={bulk} ids={colIds} accent={ACCENT} />
           <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
