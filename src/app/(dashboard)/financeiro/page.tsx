@@ -1012,12 +1012,14 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const abrirPrestacao = async (t: FinTransacao) => {
     setPcLoad(t.id!);
     try {
-      const { pdfBase64 } = await financeiroService.prestacaoContasPdf(t.id!);
-      const bytes = Uint8Array.from(atob(pdfBase64), (c) => c.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      // Renderiza o PDF no navegador (HTML/CSS real) + anexa o alvará — visual idêntico ao layout.
+      const dados = await financeiroService.prestacaoDados(t.id!);
+      const { gerarPrestacaoPdf } = await import('@/features/financeiro/lib/prestacao-pdf');
+      const blob = await gerarPrestacaoPdf(dados);
+      const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (e: any) { toast.error(e?.message || 'Erro ao gerar a prestação de contas'); }
+    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao gerar a prestação de contas'); }
     finally { setPcLoad(null); }
   };
 

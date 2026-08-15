@@ -24,6 +24,12 @@ export interface FinCadastro { id: string; nome: string; tipo: CadastroTipo; doc
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
 export interface RateioExito { bruto: number; cliente: number; sucumbencia: number; honorarios: number }
 export interface FinAnexo { id: string; name: string; mime: string; size: number; key: string; url: string; uploadedById?: string | null; uploadedAt: string }
+export interface PrestacaoDados {
+  cliente: string; autos: string; reu: string;
+  bruto: number; suc: number; hon: number; condenacao: number; liquido: number;
+  valorCausa: number | null; sucPct: number | null; honPct: number | null; sucBaseTipo: string | null;
+  anexos: { key: string; url: string; mime: string; name: string }[];
+}
 
 /** URL absoluta do anexo (a base da API já termina em /api/v1). */
 export function anexoHref(a: FinAnexo): string {
@@ -464,6 +470,10 @@ export const financeiroService = {
   // ── Importar extrato (PDF/CSV/OFX) como lançamentos, com dedup ──
   async prestacaoContasPdf(txId: string): Promise<{ pdfBase64: string; nome: string }> {
     const { data } = await api.get(`/financeiro/prestacao-contas/${txId}/pdf`);
+    return data.data ?? data;
+  },
+  async prestacaoDados(txId: string): Promise<PrestacaoDados> {
+    const { data } = await api.get(`/financeiro/prestacao-contas/${txId}/dados`);
     return data.data ?? data;
   },
   async rateioSugerido(caseId: string, vertical?: string): Promise<{ vertical: string; responsavelId: string | null; split: Array<{ tipo: 'socio'; userId: string; nome: string; pct: number }> }> {
