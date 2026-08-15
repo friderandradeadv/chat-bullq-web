@@ -7,9 +7,14 @@ import {
   Users, UserPlus, KanbanSquare, Loader2, Plus, Trash2, X, Save, GripVertical,
   Mail, Phone, Star, Lock, MapPin, IdCard, FileText, ExternalLink,
   Network, LayoutGrid, Sparkles, SlidersHorizontal, HandCoins, TrendingUp, UploadCloud, Receipt,
+  UserMinus, FileSignature, Archive, History, Clock,
 } from 'lucide-react';
 import { SociosSection } from '@/features/financeiro/components/socios-divisao';
-import { rhService, type Rh, type Candidato, type Etapa, type Ficha, type Documento } from '@/features/rh/services/rh.service';
+import { rhService, isPreKey, type Rh, type Candidato, type Etapa, type Ficha, type Documento } from '@/features/rh/services/rh.service';
+import {
+  ContratarModal, PromoverModal, AlterarContratoModal, DesligarModal, Desligados,
+  Timeline, tempoDeCasa, type CicloCtx,
+} from '@/features/rh/components/ciclo-vida';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { escritorioService, type Cargo, type Vertical, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
 import { financeiroService, type AcessoNivel } from '@/features/financeiro/services/financeiro.service';
@@ -41,10 +46,10 @@ const roleLabel = (r?: string) => (r === 'OWNER' ? 'Proprietário' : r === 'ADMI
 
 export default function RhPage() {
   const qc = useQueryClient();
-  const { organizations, activeOrgId } = useAuthStore();
+  const { organizations, activeOrgId, user } = useAuthStore();
   const orgRole = organizations.find((o) => o.id === activeOrgId)?.role;
   const isSocio = orgRole === 'OWNER' || orgRole === 'ADMIN';
-  const [tab, setTab] = useState<'membros' | 'config' | 'selecao'>('membros');
+  const [tab, setTab] = useState<'membros' | 'desligados' | 'config' | 'selecao'>('membros');
   const { data: rh } = useQuery({ queryKey: ['rh'], queryFn: () => rhService.get(), staleTime: 30_000, retry: false, enabled: isSocio });
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list(), enabled: isSocio });
   const { data: esc } = useQuery({ queryKey: ['escritorio'], queryFn: () => escritorioService.get(), staleTime: 60_000, enabled: isSocio });
@@ -53,8 +58,77 @@ export default function RhPage() {
   const { data: acessoFin = {} } = useQuery({ queryKey: ['financeiro', 'acesso'], queryFn: () => financeiroService.getAcesso(), enabled: isSocio });
 
   const cargoById = useMemo(() => Object.fromEntries((esc?.cargos ?? []).map((c) => [c.id, c])), [esc]);
-  const team = useMemo(() => members.filter((m) => m.assignable !== false), [members]);
+  const fichas = rh?.fichas ?? {};
+  // Quem foi desligado sai da equipe ativa (mesmo que ainda apareça nos seletores)
+  // e passa a viver no arquivo. A ficha é a fonte da verdade — não o `assignable`.
+  const team = useMemo(
+    () => members.filter((m) => m.assignable !== false && !fichas[m.user.id]?.desligamento),
+    [members, fichas],
+  );
+  const arquivados = useMemo(() => members.filter((m) => !!fichas[m.user.id]?.desligamento), [members, fichas]);
   const canEdit = rh?.canEdit ?? false;
+
+  // Contexto único que os modais do ciclo de vida usam para gravar nos quatro storages.
+  const ciclo: CicloCtx = {
+    fichas,
+    pessoas: esc?.pessoas ?? {},
+    cargos: esc?.cargos ?? [],
+    verticais: esc?.verticais ?? [],
+    honorariosPct: honorariosPct as Record<string, number>,
+    acessoFin: acessoFin as Record<string, AcessoNivel>,
+    autor: user?.name ?? 'RH',
+    meuUserId: user?.id ?? '',
+  };
+
+  // Contratação registrada antes de o convidado ter conta fica guardada como ficha
+  // `pre:<email>`. Quando ele aceita o convite e vira membro, aplicamos cargo,
+  // contrato e condições de uma vez e apagamos o rascunho.
+  const conciliando = useRef(false);
+  useEffect(() => {
+    const pendentes = Object.entries(fichas).filter(([k, f]) => isPreKey(k) && f?.preAdmissao);
+    if (!canEdit || pendentes.length === 0 || members.length === 0 || conciliando.current) return;
+    const casados = pendentes
+      .map(([k, f]) => ({ k, f, membro: members.find((m) => m.user.email.toLowerCase() === (f.preAdmissao!.email ?? '').toLowerCase()) }))
+      .filter((x) => !!x.membro);
+    if (casados.length === 0) return;
+    conciliando.current = true;
+    (async () => {
+      try {
+        const mapa: Record<string, Ficha> = { ...fichas };
+        const pessoas = { ...(esc?.pessoas ?? {}) };
+        for (const { k, f, membro } of casados) {
+          const uid = membro!.user.id;
+          const { preAdmissao: pa, ...limpa } = f;
+          delete mapa[k];
+          // Se já existir ficha para esse userId, as duas linhas do tempo se somam.
+          const atual = mapa[uid] ?? {};
+          mapa[uid] = { ...atual, ...limpa, historico: [...(atual.historico ?? []), ...(limpa.historico ?? [])] };
+          pessoas[uid] = {
+            ...(pessoas[uid] ?? {}),
+            ...(pa!.cargoId ? { cargoId: pa!.cargoId } : {}),
+            ...(pa!.atuacao?.length ? { atuacao: pa!.atuacao } : {}),
+            ...(limpa.admissao ? { contratadaDesde: limpa.admissao, conoscoDesde: limpa.admissao } : {}),
+          };
+          if (pa!.honorariosPct != null) await financeiroService.setHonorariosPct(uid, pa!.honorariosPct);
+          if (pa!.acessoFin && pa!.acessoFin !== 'none') await financeiroService.setAcesso(uid, pa!.acessoFin as AcessoNivel);
+        }
+        await rhService.save({ fichas: mapa });
+        await escritorioService.save({ pessoas });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ['rh'] }),
+          qc.invalidateQueries({ queryKey: ['escritorio'] }),
+          qc.invalidateQueries({ queryKey: ['financeiro'] }),
+        ]);
+        toast.success(casados.length === 1
+          ? `${casados[0].membro!.user.name} aceitou o convite — cargo e contrato aplicados.`
+          : `${casados.length} contratações pendentes foram aplicadas.`);
+      } catch {
+        // Silencioso de propósito: é uma conciliação de fundo; tenta de novo na próxima abertura.
+      } finally {
+        conciliando.current = false;
+      }
+    })();
+  }, [fichas, members, esc, canEdit, qc]);
 
   const saveM = useMutation({
     mutationFn: (d: Partial<Rh>) => rhService.save(d),
@@ -130,14 +204,16 @@ export default function RhPage() {
         </div>
 
         <div className="mt-4 flex gap-1 overflow-x-auto border-b border-zinc-200/70 dark:border-zinc-800">
-          {([['membros', 'Membros', Users], ['config', 'Configurações', SlidersHorizontal], ['selecao', 'Processo Seletivo', KanbanSquare]] as const).map(([k, label, Icon]) => (
+          {([['membros', 'Membros', Users], ['desligados', 'Desligados', Archive], ['config', 'Configurações', SlidersHorizontal], ['selecao', 'Processo Seletivo', KanbanSquare]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setTab(k)} className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition ${tab === k ? 'border-[#7048E8] text-[#7048E8]' : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
               <Icon className="h-4 w-4" /> {label}
+              {k === 'desligados' && arquivados.length > 0 && <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{arquivados.length}</span>}
             </button>
           ))}
         </div>
 
-        {tab === 'membros' && <MembrosView team={team} pessoas={esc?.pessoas ?? {}} cargos={esc?.cargos ?? []} verticais={esc?.verticais ?? []} cargoById={cargoById} fichas={rh?.fichas ?? {}} honorariosPct={honorariosPct as Record<string, number>} acessoFin={acessoFin as Record<string, AcessoNivel>} canEdit={canEdit} onSaveFicha={saveFichaCompleta} />}
+        {tab === 'desligados' && <Desligados ctx={ciclo} desligados={arquivados} canEdit={canEdit} onChanged={() => { qc.invalidateQueries({ queryKey: ['rh'] }); qc.invalidateQueries({ queryKey: ['org-members'] }); }} />}
+        {tab === 'membros' && <MembrosView team={team} ciclo={ciclo} pessoas={esc?.pessoas ?? {}} cargos={esc?.cargos ?? []} verticais={esc?.verticais ?? []} cargoById={cargoById} fichas={fichas} honorariosPct={honorariosPct as Record<string, number>} acessoFin={acessoFin as Record<string, AcessoNivel>} canEdit={canEdit} onSaveFicha={saveFichaCompleta} onVerArquivo={() => setTab('desligados')} />}
         {tab === 'config' && <ConfiguracoesView team={team} members={members} honorariosPct={honorariosPct as Record<string, number>} acessoFin={acessoFin as Record<string, AcessoNivel>} pessoas={esc?.pessoas ?? {}} cargoById={cargoById} canEdit={canEdit} />}
         {tab === 'selecao' && (rh
           ? <ProcessoSeletivo rh={rh} canEdit={canEdit} patch={patch} saving={saveM.isPending} />
@@ -395,17 +471,25 @@ function AcessosHonorariosTable({ team, honorariosPct, acessoFin, pessoas, cargo
 }
 
 // ─────────────────────────── Membros ───────────────────────────
-function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, honorariosPct, acessoFin, canEdit, onSaveFicha }: { team: Member[]; pessoas: Record<string, any>; cargos: Cargo[]; verticais: Vertical[]; cargoById: Record<string, any>; fichas: Record<string, Ficha>; honorariosPct: Record<string, number>; acessoFin: Record<string, AcessoNivel>; canEdit: boolean; onSaveFicha: (userId: string, ficha: Ficha, funcionais: Pick<PessoaInfo, 'cargoId' | 'atuacao' | 'conoscoDesde' | 'contratadaDesde'>, financeiro?: FinColaborador) => Promise<void> }) {
+function MembrosView({ team, ciclo, pessoas, cargos, verticais, cargoById, fichas, honorariosPct, acessoFin, canEdit, onSaveFicha, onVerArquivo }: { team: Member[]; ciclo: CicloCtx; pessoas: Record<string, any>; cargos: Cargo[]; verticais: Vertical[]; cargoById: Record<string, any>; fichas: Record<string, Ficha>; honorariosPct: Record<string, number>; acessoFin: Record<string, AcessoNivel>; canEdit: boolean; onSaveFicha: (userId: string, ficha: Ficha, funcionais: Pick<PessoaInfo, 'cargoId' | 'atuacao' | 'conoscoDesde' | 'contratadaDesde'>, financeiro?: FinColaborador) => Promise<void>; onVerArquivo: () => void }) {
   const [fichaId, setFichaId] = useState<string | null>(null);
   const [view, setView] = useState<'cards' | 'org'>('cards');
-  const [addOpen, setAddOpen] = useState(false);
+  const [contratarOpen, setContratarOpen] = useState(false);
+  // Ação do ciclo de vida aberta para um colaborador (promover / contrato / desligar).
+  const [acao, setAcao] = useState<{ tipo: 'promover' | 'contrato' | 'desligar'; uid: string } | null>(null);
   const membro = team.find((m) => m.user.id === fichaId);
+  const alvoAcao = team.find((m) => m.user.id === acao?.uid);
+  // Contratações registradas cujo convite ainda não foi aceito (fichas `pre:<email>`).
+  const pendentes = useMemo(
+    () => Object.entries(fichas).filter(([k, f]) => isPreKey(k) && f?.preAdmissao).map(([k, f]) => ({ k, f })),
+    [fichas],
+  );
   return (
     <div className="mt-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-zinc-500">{team.length} {team.length === 1 ? 'pessoa' : 'pessoas'} no escritório · clique num colaborador para abrir a ficha completa.</p>
         <div className="flex shrink-0 items-center gap-2">
-          {canEdit && <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#5f3dd0]"><UserPlus className="h-3.5 w-3.5" /> Adicionar colaborador</button>}
+          {canEdit && <button onClick={() => setContratarOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"><UserPlus className="h-3.5 w-3.5" /> Contratar</button>}
           {/* Alternar entre cartões e organograma (hierarquia por cargo). */}
           <div className="inline-flex rounded-lg border border-zinc-200 bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
             {([['cards', 'Cartões', LayoutGrid], ['org', 'Organograma', Network]] as const).map(([k, label, Icon]) => (
@@ -416,7 +500,26 @@ function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, hono
           </div>
         </div>
       </div>
-      {addOpen && <AddColaboradorModal onClose={() => setAddOpen(false)} />}
+      {contratarOpen && <ContratarModal ctx={ciclo} onClose={() => setContratarOpen(false)} onDone={() => {}} />}
+      {acao && alvoAcao && acao.tipo === 'promover' && <PromoverModal ctx={ciclo} membro={alvoAcao} onClose={() => setAcao(null)} onDone={() => {}} />}
+      {acao && alvoAcao && acao.tipo === 'contrato' && <AlterarContratoModal ctx={ciclo} membro={alvoAcao} onClose={() => setAcao(null)} onDone={() => {}} />}
+      {acao && alvoAcao && acao.tipo === 'desligar' && <DesligarModal ctx={ciclo} membro={alvoAcao} onClose={() => setAcao(null)} onDone={onVerArquivo} />}
+
+      {pendentes.length > 0 && (
+        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400"><Clock className="h-3.5 w-3.5" /> {pendentes.length === 1 ? 'Contratação aguardando o aceite do convite' : `${pendentes.length} contratações aguardando aceite do convite`}</p>
+          <div className="mt-1.5 space-y-1">
+            {pendentes.map(({ k, f }) => (
+              <p key={k} className="text-xs text-amber-700/90 dark:text-amber-400/90">
+                <strong>{f.preAdmissao!.email}</strong>
+                {f.admissao ? ` · admissão ${f.admissao}` : ''}
+                {f.contrato ? ` · ${f.contrato}` : ''}
+              </p>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-amber-700/80 dark:text-amber-400/80">Assim que a pessoa criar a conta, cargo, contrato e condições entram sozinhos — é só abrir esta tela.</p>
+        </div>
+      )}
 
       {view === 'org' && <Organograma team={team} pessoas={pessoas} cargos={cargos} cargoById={cargoById} fichas={fichas} onOpen={setFichaId} />}
 
@@ -427,42 +530,53 @@ function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, hono
           const cargo = cargoById[info.cargoId ?? ''];
           const foto = m.user.avatarUrl || info.fotoUrl;
           const ficha = fichas[m.user.id] ?? {};
+          const casa = tempoDeCasa(ficha.admissao);
           return (
-            <button key={m.user.id} onClick={() => setFichaId(m.user.id)} className="group rounded-2xl border border-zinc-200/80 bg-white p-4 text-left transition hover:-translate-y-px hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="flex items-center gap-3">
-                {foto ? <img src={foto} alt={m.user.name} className="h-14 w-14 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#7048E8] text-lg font-bold text-white">{ini(m.user.name)}</div>}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-zinc-800 dark:text-zinc-100">{m.user.name}</p>
-                  <p className="truncate text-xs text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p>
+            <div key={m.user.id} className="group flex flex-col rounded-2xl border border-zinc-200/80 bg-white p-4 text-left transition hover:-translate-y-px hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+              <button onClick={() => setFichaId(m.user.id)} className="text-left">
+                <div className="flex items-center gap-3">
+                  {foto ? <img src={foto} alt={m.user.name} className="h-14 w-14 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#7048E8] text-lg font-bold text-white">{ini(m.user.name)}</div>}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold text-zinc-800 dark:text-zinc-100">{m.user.name}</p>
+                    <p className="truncate text-xs text-zinc-400">{cargo?.nome ?? roleLabel(m.role)}</p>
+                  </div>
                 </div>
-              </div>
-              {/* Ordem pedida no RH: CPF · Endereço · Email · Telefone */}
-              <div className="mt-3 space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                {ficha.cpf && <p className="flex items-center gap-1.5"><IdCard className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> CPF {ficha.cpf}</p>}
-                {ficha.endereco && <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#E64980]" /> <span className="truncate">{ficha.endereco}</span></p>}
-                <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{m.user.email}</span></p>
-                {ficha.telefone && <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 shrink-0 text-[#02883C]" /> {ficha.telefone}</p>}
-              </div>
-              {(info.atuacao?.length ?? 0) > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {(info.atuacao as string[]).map((a) => (
-                    <span key={a} className="rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-[10px] font-semibold text-[#7048E8] dark:bg-[#7048E8]/20">{a}</span>
-                  ))}
+                {/* Ordem pedida no RH: CPF · Endereço · Email · Telefone */}
+                <div className="mt-3 space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {ficha.cpf && <p className="flex items-center gap-1.5"><IdCard className="h-3.5 w-3.5 shrink-0 text-[#228BE6]" /> CPF {ficha.cpf}</p>}
+                  {ficha.endereco && <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-[#E64980]" /> <span className="truncate">{ficha.endereco}</span></p>}
+                  <p className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{m.user.email}</span></p>
+                  {ficha.telefone && <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 shrink-0 text-[#02883C]" /> {ficha.telefone}</p>}
+                </div>
+                {(info.atuacao?.length ?? 0) > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(info.atuacao as string[]).map((a) => (
+                      <span key={a} className="rounded-full bg-[#7048E8]/10 px-2 py-0.5 text-[10px] font-semibold text-[#7048E8] dark:bg-[#7048E8]/20">{a}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${m.role === 'AGENT' ? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'}`}>{roleLabel(m.role)}</span>
+                  {casa && <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" title={`Na casa desde ${ficha.admissao}`}><History className="h-3 w-3" /> {casa}</span>}
+                  {typeof honorariosPct[m.user.id] === 'number' && <span className="inline-flex items-center gap-1 rounded-full bg-[#02883C]/10 px-2 py-0.5 text-[10px] font-semibold text-[#02883C] dark:bg-[#02883C]/20 dark:text-emerald-400" title="Percentual de honorários do colaborador">{honorariosPct[m.user.id]}% honor.</span>}
+                  {acessoFin[m.user.id] && acessoFin[m.user.id] !== 'none' && <span className="inline-flex items-center gap-1 rounded-full bg-[#228BE6]/10 px-2 py-0.5 text-[10px] font-semibold text-[#228BE6] dark:bg-[#228BE6]/20" title="Acesso ao Financeiro">fin.: {ACESSO_LABEL[acessoFin[m.user.id]]}</span>}
+                  {(ficha.documentos?.length ?? 0) > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"><FileText className="h-3 w-3" /> {ficha.documentos!.length} doc</span>}
+                </div>
+              </button>
+              {/* Ciclo de vida do colaborador — sempre à mão, sem entrar na ficha. */}
+              {canEdit && (
+                <div className="mt-3 flex items-center gap-1 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
+                  <button onClick={() => setAcao({ tipo: 'contrato', uid: m.user.id })} title="Alterar contrato" className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold text-zinc-500 transition hover:bg-[#228BE6]/10 hover:text-[#228BE6]"><FileSignature className="h-3.5 w-3.5" /> Contrato</button>
+                  <button onClick={() => setAcao({ tipo: 'promover', uid: m.user.id })} title="Promover" className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold text-zinc-500 transition hover:bg-[#7048E8]/10 hover:text-[#7048E8]"><TrendingUp className="h-3.5 w-3.5" /> Promover</button>
+                  <button onClick={() => setAcao({ tipo: 'desligar', uid: m.user.id })} title="Demitir / desligar" className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold text-zinc-500 transition hover:bg-[#E64980]/10 hover:text-[#E64980]"><UserMinus className="h-3.5 w-3.5" /> Desligar</button>
                 </div>
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${m.role === 'AGENT' ? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'}`}>{roleLabel(m.role)}</span>
-                {typeof honorariosPct[m.user.id] === 'number' && <span className="inline-flex items-center gap-1 rounded-full bg-[#02883C]/10 px-2 py-0.5 text-[10px] font-semibold text-[#02883C] dark:bg-[#02883C]/20 dark:text-emerald-400" title="Percentual de honorários do colaborador">{honorariosPct[m.user.id]}% honor.</span>}
-                {acessoFin[m.user.id] && acessoFin[m.user.id] !== 'none' && <span className="inline-flex items-center gap-1 rounded-full bg-[#228BE6]/10 px-2 py-0.5 text-[10px] font-semibold text-[#228BE6] dark:bg-[#228BE6]/20" title="Acesso ao Financeiro">fin.: {ACESSO_LABEL[acessoFin[m.user.id]]}</span>}
-                {(ficha.documentos?.length ?? 0) > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"><FileText className="h-3 w-3" /> {ficha.documentos!.length} doc</span>}
-                <span className="ml-auto text-[11px] font-semibold text-[#7048E8] opacity-0 transition group-hover:opacity-100">Abrir ficha →</span>
-              </div>
-            </button>
+            </div>
           );
         })}
       </div>
       )}
-      <p className="mt-4 text-xs text-zinc-400">Use <strong>Adicionar colaborador</strong> aqui em cima para cadastrar alguém novo. Para remover, mudar papel ou canais, vá em <strong>Configurações › Membros</strong>. As fotos aparecem no organograma, nos kanbans e onde mais o nome da pessoa aparecer.</p>
+      <p className="mt-4 text-xs text-zinc-400">Use <strong>Contratar</strong> aqui em cima para trazer alguém novo — já com cargo, admissão e contrato. Cada cartão tem <strong>Contrato</strong>, <strong>Promover</strong> e <strong>Desligar</strong>; quem sai vai para <button onClick={onVerArquivo} className="font-semibold text-[#7048E8] hover:underline">Desligados</button> com a ficha inteira. Para mudar canais ou apagar de vez o vínculo, siga em <strong>Configurações › Membros</strong>.</p>
       {membro && (
         <FichaModal
           membro={membro}
@@ -478,67 +592,6 @@ function MembrosView({ team, pessoas, cargos, verticais, cargoById, fichas, hono
           onSave={async (f, funcionais, financeiro) => { await onSaveFicha(membro.user.id, f, funcionais, financeiro); setFichaId(null); }}
         />
       )}
-    </div>
-  );
-}
-
-// Cadastro de um novo colaborador direto do RH (mesmo convite de Configurações › Membros).
-// Ao adicionar, ele já aparece na equipe, no organograma e recebe ficha para preencher.
-function AddColaboradorModal({ onClose }: { onClose: () => void }) {
-  const qc = useQueryClient();
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('AGENT');
-  const [busy, setBusy] = useState(false);
-  const [link, setLink] = useState<string | null>(null);
-  const salvar = async () => {
-    if (!email.trim()) { toast.error('Informe o e-mail do colaborador'); return; }
-    setBusy(true);
-    try {
-      const r = await membersService.invite({ email: email.trim(), role });
-      await qc.invalidateQueries({ queryKey: ['org-members'] });
-      await qc.invalidateQueries({ queryKey: ['members'] });
-      if (r?.autoAccepted) {
-        toast.success('Colaborador adicionado! Abra a ficha dele para completar os dados.');
-        onClose();
-      } else {
-        setLink(`${window.location.origin}/register?invite=${r.token}`);
-        toast.success('Convite criado — mande o link para o colaborador.');
-      }
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || e?.message || 'Erro ao adicionar colaborador');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-3.5 dark:border-zinc-800">
-          <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><UserPlus className="h-4 w-4 text-[#7048E8]" /> Adicionar colaborador</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
-        </div>
-        <div className="space-y-3 p-5">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">É o mesmo cadastro de <strong>Configurações › Membros</strong> — não precisa fazer duas vezes. Ao adicionar, o colaborador já aparece no RH e no organograma. O nome vem quando ele aceitar o convite (ou renomeie depois em Configurações › Membros).</p>
-          <div><p className={LABEL}>E-mail</p><input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && salvar()} type="email" placeholder="email@exemplo.com" className={`${INPUT} mt-1`} /></div>
-          <div>
-            <p className={LABEL}>Papel</p>
-            <select value={role} onChange={(e) => setRole(e.target.value)} className={`${INPUT} mt-1`}>
-              <option value="AGENT">Associado / Agente</option>
-              <option value="ADMIN">Sócio / Admin</option>
-            </select>
-          </div>
-          {link && (
-            <div className="flex items-center gap-2 rounded-lg border border-[#7048E8]/25 bg-[#7048E8]/5 p-2.5 dark:bg-[#7048E8]/10">
-              <p className="min-w-0 flex-1 truncate text-xs text-zinc-600 dark:text-zinc-300">{link}</p>
-              <button onClick={() => { navigator.clipboard.writeText(link); toast.success('Link copiado!'); }} className="shrink-0 rounded-md bg-[#7048E8] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#5f3dd0]">Copiar</button>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
-          <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">{link ? 'Fechar' : 'Cancelar'}</button>
-          {!link && <button onClick={salvar} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Adicionar</button>}
-        </div>
-      </div>
     </div>
   );
 }
@@ -860,6 +913,12 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
             </div>
           </div>
           <div><p className={LABEL}>Observações internas de RH</p><textarea value={f.obs ?? ''} onChange={(e) => set({ obs: e.target.value })} disabled={!canEdit} rows={3} placeholder="Anotações, histórico, avaliações…" className={`${INPUT} mt-1`} /></div>
+
+          {/* Linha do tempo funcional — alimentada pelas ações de contratar/promover/contrato/desligar. */}
+          <div>
+            <p className={`${LABEL} mb-1.5 flex items-center gap-1.5`}><History className="h-3.5 w-3.5" /> Histórico funcional</p>
+            <Timeline historico={f.historico ?? []} />
+          </div>
         </div>
         {canEdit && (
           <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-zinc-100 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900">
