@@ -67,6 +67,7 @@ export interface FinTransacao {
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null; // rateio de despesa entre verticais
   contribuintes?: { userId?: string | null; nome: string; valor: number }[] | null; // contribuição pessoal (quem ajudou a pagar) — informativo, independente do rateio por vertical
   anexos?: FinAnexo[] | null; // boletos/DARF/comprovantes anexados a uma conta a pagar
+  obs?: string | null; // observação livre do lançamento (ex.: "repasse via depósito judicial")
   verticais?: string[]; // verticais que o lançamento toca (centro de custos) — vazio = comum/escritório
   vertical?: string | null; // vertical resolvida do lançamento (visão Meu Espaço — p/ filtro das entradas)
   mine?: boolean; // no espelho do livro-razão: true = lançamento seu (casos/custeio); false = movimentação da vertical/transferência que aparece por paridade

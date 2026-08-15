@@ -1160,6 +1160,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                           <ClienteLink nome={nome} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {(t.anexos?.length ?? 0) > 0 && <span className="shrink-0 text-[10px] text-[#7048E8]" title={`${t.anexos!.length} anexo(s)`}>📎{t.anexos!.length}</span>}
+                          {t.obs ? <span className="hidden truncate text-[11px] italic text-zinc-400 md:inline" title={t.obs}>· {t.obs}</span> : null}
                         </span>
                         <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="truncate">{t.categoria}</span></span>
                         <span className="w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums text-rose-600">{brl2(t.valor)}</span>
@@ -1329,6 +1330,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                           {(t.verticais?.length ?? 0) > 0 && <span className="hidden shrink-0 rounded px-1 text-[9px] font-semibold text-white lg:inline" style={{ background: corArea(t.verticais![0]) }} title={t.verticais!.join(' · ')}>{t.verticais!.length > 1 ? `${t.verticais!.length}×vert.` : t.verticais![0]}</span>}
                           {(t.verticais?.length ?? 0) === 0 && t.valor < 0 && <span className="hidden shrink-0 rounded bg-sky-100 px-1 text-[9px] font-semibold text-sky-600 lg:inline dark:bg-sky-900/30 dark:text-sky-300" title="custo comum do escritório — rateado por igual em todas as verticais">comum</span>}
                           {podeExpandir ? <button onClick={() => toggleRv(t.id!)} title="Ver o rateio" className="inline-flex shrink-0 items-center gap-0.5 rounded bg-[#7048E8]/10 px-1 text-[9px] font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/20">{temRv ? 'rateado' : 'rateio'} {open ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}</button> : null}
+                          {t.obs ? <span className="hidden truncate text-[11px] italic text-zinc-400 lg:inline" title={t.obs}>· {t.obs}</span> : null}
                         </span>
                         <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden truncate md:inline">{t.categoria}</span></span>
                         <span className="hidden w-20 shrink-0 text-center sm:block"><span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span></span>
