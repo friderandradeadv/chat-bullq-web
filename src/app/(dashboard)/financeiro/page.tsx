@@ -1591,6 +1591,7 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   const [dataPg, setDataPg] = useState<string>(toISOInput(hojeBR()));
   // Fatura selecionada para pagar (mês/ciclo).
   const [pgFatura, setPgFatura] = useState<{ key: string; label: string; venc: string; txIds: string[]; total: number } | null>(null);
+  const [pagaOk, setPagaOk] = useState(false); // animação "fatura paga" (✅, dinheiro saindo — não é o ka-ching)
   const qc = useQueryClient();
 
   const fechamento = cartao?.fechamento ?? 0;
@@ -1647,7 +1648,7 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
 
   const pagarM = useMutation({
     mutationFn: () => financeiroService.pagarFatura({ cartaoId: cartao!.id, contaPagamentoId: contaPg, data: toBR(dataPg), txIds: pgFatura!.txIds }),
-    onSuccess: (r) => { toast.success(`Fatura ${pgFatura?.label} paga: ${brl2(r.pago)} · ${r.baixados} gasto(s)`); setPgFatura(null); onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] }); },
+    onSuccess: (r) => { toast.success(`Fatura ${pgFatura?.label} paga: ${brl2(r.pago)} · ${r.baixados} gasto(s)`); setPgFatura(null); setPagaOk(true); setTimeout(() => setPagaOk(false), 1400); onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] }); },
     onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pagar fatura'),
   });
 
@@ -1681,6 +1682,14 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   const semCiclo = !(fechamento > 0);
   return (
     <div>
+      {pagaOk && (
+        <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
+          <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
+            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#02883C] text-6xl text-white shadow-2xl">✓</div>
+            <div className="mt-3 rounded-full bg-[#02883C] px-5 py-1.5 text-sm font-extrabold tracking-wide text-white shadow-xl">Fatura paga! 🧾✅</div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {cartoes.length > 1 ? (
           <select value={cardId} onChange={(e) => setCardId(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
