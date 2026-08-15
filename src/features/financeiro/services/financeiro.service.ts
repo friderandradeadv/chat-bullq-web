@@ -437,6 +437,10 @@ export const financeiroService = {
     return data.data ?? data;
   },
   // ── Importar extrato (PDF/CSV/OFX) como lançamentos, com dedup ──
+  async prestacaoContasPdf(txId: string): Promise<{ pdfBase64: string; nome: string }> {
+    const { data } = await api.get(`/financeiro/prestacao-contas/${txId}/pdf`);
+    return data.data ?? data;
+  },
   async rateioSugerido(caseId: string, vertical?: string): Promise<{ vertical: string; responsavelId: string | null; split: Array<{ tipo: 'socio'; userId: string; nome: string; pct: number }> }> {
     const { data } = await api.get('/financeiro/rateio-sugerido', { params: { caseId, ...(vertical ? { vertical } : {}) } });
     return data.data ?? data;
@@ -445,7 +449,7 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false });
     return data.data ?? data;
   },
-  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[]; caseId?: string | null; contactId?: string | null; clienteNome?: string | null; exito?: { bruto: number; cliente: number; sucumbencia: number; honorarios: number } | null; liquidarTxId?: string | null }[], saldoFinal?: number | null): Promise<{ importados: number; duplicados: number; baixados?: number; total: number; reconciliacao?: ReconConta | null }> {
+  async importarExtratoLinhas(conta: string | null, linhas: { data: string; valor: number; descricao: string; area?: string | null; rateioVerticais?: { area: string; valor: number; label?: string }[]; contribuintes?: { userId?: string; nome: string; valor: number }[]; caseId?: string | null; contactId?: string | null; clienteNome?: string | null; exito?: { bruto: number; cliente: number; sucumbencia: number; honorarios: number; valorCausa?: number; sucumbenciaPct?: number; honorariosPct?: number } | null; liquidarTxId?: string | null }[], saldoFinal?: number | null): Promise<{ importados: number; duplicados: number; baixados?: number; total: number; reconciliacao?: ReconConta | null }> {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: true, ...(saldoFinal != null && Number.isFinite(saldoFinal) ? { saldoFinal } : {}) });
     return data.data ?? data;
   },
