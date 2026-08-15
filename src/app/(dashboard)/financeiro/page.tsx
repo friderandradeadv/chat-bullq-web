@@ -1777,7 +1777,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -1880,6 +1880,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         if (r.sucumbencia === 'Sim') {
           if (r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) {
             patch.sucMode = 'pct'; patch.sucPct = String(r.sucumbenciaPct);
+            patch.sucBaseTipo = r.sucumbenciaBase === 'Valor corrigido da causa' ? 'Valor da causa' : (r.sucumbenciaBase || 'Condenação');
             if (r.sucumbenciaBaseValor && r.sucumbenciaBaseValor > 0) patch.sucBase = fmtMoney(r.sucumbenciaBaseValor);
           } else if (r.valorSucumbencia && r.valorSucumbencia > 0) {
             patch.sucMode = 'valor'; patch.sucumbencia = fmtMoney(r.valorSucumbencia);
@@ -1890,7 +1891,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       // Com o processo casado, puxa a vertical + o rateio entre advogados salvo.
       if (hit) puxarRateioAlvara(idx, hit.id);
       const temSuc = r.sucumbencia === 'Sim' && ((r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) || (r.valorSucumbencia && r.valorSucumbencia > 0));
-      toast.success(`Documentos lidos${hit ? ` · processo ${hit.cnjNumber || 'casado'}` : (r.cnj ? ` · CNJ ${r.cnj} não achei cadastrado` : '')}${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${temSuc ? (r.sucumbenciaModo === 'Percentual' ? ` · sucumbência ${r.sucumbenciaPct}%` : ` · sucumbência ${brl2(r.valorSucumbencia || 0)}`) : ''}. Confira${r.sucumbenciaModo === 'Percentual' && !r.sucumbenciaBaseValor ? ' e informe o VALOR DA CAUSA (base da sucumbência)' : ''} antes de importar.`);
+      toast.success(`Documentos lidos${hit ? ` · processo ${hit.cnjNumber || 'casado'}` : (r.cnj ? ` · CNJ ${r.cnj} não achei cadastrado` : '')}${r.honorariosPct ? ` · honorário ${r.honorariosPct}%` : ''}${temSuc ? (r.sucumbenciaModo === 'Percentual' ? ` · sucumbência ${r.sucumbenciaPct}%` : ` · sucumbência ${brl2(r.valorSucumbencia || 0)}`) : ''}. Confira${r.sucumbenciaModo === 'Percentual' && !r.sucumbenciaBaseValor ? ` e informe o valor da base da sucumbência (${r.sucumbenciaBase || 'condenação'})` : ''} antes de importar.`);
       if (r.aviso) toast(r.aviso, { icon: '⚠️' });
     } catch (e: any) { toast.error(e?.message || 'Não consegui ler os documentos'); }
     finally { setAlvaraBusy((b) => ({ ...b, [idx]: false })); }
@@ -1913,7 +1914,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? parseValor(a?.sucBase || '') || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? parseValor(a?.sucBase || '') || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -2178,7 +2179,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                       : <MoneyInput value={a.sucumbencia} onChange={(v) => set({ sucumbencia: v })} />}
                                     <button type="button" title="Alternar R$ / %" onClick={() => set({ sucMode: a.sucMode === 'pct' ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{a.sucMode === 'pct' ? '%' : 'R$'}</button>
                                   </div>
-                                  {a.sucMode === 'pct' && <div className="mt-1 space-y-0.5"><MoneyInput value={a.sucBase ?? ''} onChange={(v) => set({ sucBase: v })} placeholder="valor atualizado da causa" /><p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · {parseValor(a.sucBase || '') > 0 ? 'sobre o valor da causa' : '⚠️ informe o valor da causa'}</p></div>}
+                                  {a.sucMode === 'pct' && (() => { const tipo = (a.sucBaseTipo || 'Condenação'); const tl = tipo.toLowerCase(); return <div className="mt-1 space-y-1">
+                                    <select value={tipo} onChange={(e) => set({ sucBaseTipo: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-1.5 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900" title="Base da sucumbência (conforme a sentença)">
+                                      <option>Condenação</option><option>Valor da causa</option><option>Proveito econômico</option>
+                                    </select>
+                                    <MoneyInput value={a.sucBase ?? ''} onChange={(v) => set({ sucBase: v })} placeholder={`valor (${tl})`} />
+                                    <p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · {parseValor(a.sucBase || '') > 0 ? `${a.sucPct || ''}% sobre ${tl}` : `⚠️ informe o valor (${tl})`}</p>
+                                  </div>; })()}
                                 </Field>
                                 <Field label="Parte do cliente (repasse)"><div className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-right text-sm tabular-nums text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">{brl2(calc.cli)}</div></Field>
                               </div>
