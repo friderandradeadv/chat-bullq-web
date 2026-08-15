@@ -773,9 +773,10 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const txs = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return data.transacoes.filter((t) => {
-      // Débitos de cartão A PAGAR APARECEM no livro-razão (seção "a pagar") — são a despesa.
-      // Ao pagar a fatura eles migram pra conta e viram liquidados. Só escondo pago-no-cartão (legado).
-      if (isFaturaCartao(t) && txStatus(t) !== 'a_pagar') return false;
+      // Gastos do CARTÃO ficam SÓ na aba "Cartão de crédito" — fora do livro-razão (inclusive
+      // do "a pagar"), pra não misturar com as contas a pagar de verdade (DARF, boleto, agência…).
+      // Quando a fatura é paga, o pagamento entra na conta como lançamento normal do livro-razão.
+      if (isFaturaCartao(t)) return false;
       const iso = toISOInput(t.data);
       if (temPeriodo) { if (deISO && iso < deISO) return false; if (ateISO && iso > ateISO) return false; }
       else if (mesSel && mesKey(t) !== mesSel) return false;
