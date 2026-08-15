@@ -671,6 +671,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<Editor | null>(null);
   const [serieDel, setSerieDel] = useState<FinTransacao | null>(null);
+  const [celebra, setCelebra] = useState<'ka' | 'pago' | null>(null); // animação ao lançar (receita=ka-ching, despesa=✓)
 
   const cats = data.categoriasConhecidas ?? ['Honorários', 'Aluguel', 'Suprimentos escritório', 'Agência de tráfego', 'Contador', 'Anuidade OAB', 'GPS - INSS', 'Pró-labore', 'Outros'];
   const contas = data.contas ?? [];
@@ -750,7 +751,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const ficha = useFichaCliente(); // clicar no nome abre a ficha do processo
   const invalidate = () => qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
 
-  const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
+  const addM = useMutation({ mutationFn: (i: AddTransacaoInput) => financeiroService.addTransacao(i), onSuccess: (r, i) => { invalidate(); toast.success(r.criados > 1 ? `${r.criados} parcelas lançadas` : 'Lançamento adicionado'); setEditor(null); setCelebra((i?.tipo === 'receita') ? 'ka' : 'pago'); setTimeout(() => setCelebra(null), 1400); }, onError: (e: any) => toast.error(e?.message || 'Erro ao lançar') });
   const updM = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpdateTransacaoInput }) => financeiroService.updateTransacao(id, input), onSuccess: () => { invalidate(); toast.success('Lançamento atualizado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar') });
   const delM = useMutation({ mutationFn: ({ id, escopo }: { id: string; escopo: 'uma' | 'proximas' }) => financeiroService.removeTransacao(id, escopo), onSuccess: (r) => { invalidate(); toast.success(`${r.removidos} lançamento(s) removido(s)`); setSerieDel(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
   // Repasses pendentes (rateio de honorários ainda não pago ao advogado) — selo + botão
@@ -925,6 +926,23 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const statusOpts: TxStatus[] = editor?.tipo === 'despesa' ? ['pago', 'a_pagar'] : ['recebido', 'a_receber'];
 
   return (
+    <>
+    {celebra && (
+      <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
+        {celebra === 'ka' ? (
+          <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
+            <div className="text-[80px] leading-none drop-shadow-lg">🧾</div>
+            <div className="mt-1 text-3xl" style={{ animation: 'caixaCoins 1.4s ease-out forwards' }}>💰💰💰</div>
+            <div className="mt-2 rounded-full bg-[#02883C] px-5 py-1.5 text-sm font-extrabold tracking-wide text-white shadow-xl">Lançado! ka-ching 🤑</div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
+            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#02883C] text-6xl text-white shadow-2xl">✓</div>
+            <div className="mt-3 rounded-full bg-[#02883C] px-5 py-1.5 text-sm font-extrabold tracking-wide text-white shadow-xl">Lançado! 🧾✅</div>
+          </div>
+        )}
+      </div>
+    )}
     <Card title={<>Lançamentos <span className="font-normal text-zinc-400">· livro-razão editável</span></>}
       action={<div className="flex items-center gap-2">
         <button onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-[#02883C] hover:text-[#02883C] dark:border-zinc-700 dark:text-zinc-300"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar extrato</button>
@@ -1578,6 +1596,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       {importing && <ImportExtratoModal contas={contas} onClose={() => setImporting(false)} />}
       <FichaDrawerMount ficha={ficha} />
     </Card>
+    </>
   );
 }
 
