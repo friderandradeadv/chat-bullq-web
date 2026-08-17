@@ -96,6 +96,10 @@ export function CaseDetailDrawer({
   const [cadastroOpen, setCadastroOpen] = useState(true);
   const [faseAvanco, setFaseAvanco] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | 'acoes_vencidas' | 'acoes_perdidas' | null>(null);
   const [dossieLoad, setDossieLoad] = useState(false);
+  const [contaEdit, setContaEdit] = useState(false);
+  const [contaLoad, setContaLoad] = useState(false);
+  const [contaForm, setContaForm] = useState({ banco: '', agencia: '', conta: '', pix: '' });
+  const [contaSalva, setContaSalva] = useState<string | null>(null);
   const { isSocio } = usePermissions();
 
   const { data: c, isLoading } = useQuery({
@@ -137,6 +141,33 @@ export function CaseDetailDrawer({
   const cliente = c?.parties?.find((p) => p.role === 'CLIENT') ?? null;
   const adversa = c?.parties?.find((p) => p.role === 'OPPONENT') ?? null;
   const phaseKey = (c as any)?.legalPhase as string | undefined;
+  // Conta do cliente para o repasse. `contaSalva` guarda o retorno do PATCH pra
+  // refletir na hora, sem esperar o refetch da ficha.
+  const dbCliente = (c?.parties?.find((p) => p.role === 'CLIENT')?.contact?.metadata as any)?.cadastro?.dadosBancarios as
+    | { banco?: string; conta?: string; pix?: string }
+    | undefined;
+  const fim4 = (s?: string) => { const d = String(s ?? '').replace(/\D/g, ''); return d.length >= 4 ? d.slice(-4) : ''; };
+  const contaAtual = contaSalva ?? (
+    dbCliente?.banco && fim4(dbCliente.conta) ? `do ${dbCliente.banco}, final ${fim4(dbCliente.conta)}`
+    : dbCliente?.banco ? `do ${dbCliente.banco}`
+    : fim4(dbCliente?.pix) ? `de Pix terminada em ${fim4(dbCliente?.pix)}`
+    : null
+  );
+  const salvarConta = async () => {
+    setContaLoad(true);
+    try {
+      const r = await legalCasesService.definirDadosBancarios(caseId, contaForm);
+      setContaSalva(r.comoApareceNaMensagem);
+      setContaEdit(false);
+      toast.success('Conta cadastrada.');
+      qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao salvar a conta');
+    } finally {
+      setContaLoad(false);
+    }
+  };
+
   // Registro probatório do repasse do alvará (append-only, gravado pelo backend).
   const repasse = (c?.metadata as any)?.repasseAlvara as
     | { tentativas: Array<Record<string, unknown>>; encerradoEm?: string; encerradoMotivo?: string }
@@ -458,6 +489,45 @@ export function CaseDetailDrawer({
                 </div>
               </div>
             )}
+            {/* CONTA PARA REPASSE — pré-requisito do aviso do alvará. A mensagem
+                CONFIRMA a conta (só os 4 últimos dígitos vão no texto) em vez de
+                pedir os dados: pedir dado por mensagem é o formato do golpe. */}
+            {c && phaseKey && ['transito', 'cumprimento', 'prestacao_contas', 'acoes_vencidas'].includes(phaseKey) && (
+              <div className="mt-4 rounded-lg border border-[#cfe0ed] p-3 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Conta para repasse</p>
+                {contaAtual && !contaEdit ? (
+                  <p className="mt-1.5 text-xs text-zinc-600 dark:text-zinc-300">
+                    Na mensagem o cliente vê: <span className="font-semibold">“{contaAtual}”</span>
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-500">
+                    Sem conta cadastrada — o aviso do alvará não sai enquanto não houver o que confirmar.
+                  </p>
+                )}
+                {contaEdit ? (
+                  <div className="mt-2 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={contaForm.banco} onChange={(e) => setContaForm({ ...contaForm, banco: e.target.value })} placeholder="Banco (ex.: Banco do Brasil)" className="rounded-lg border border-[#DEE2E6] px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                      <input value={contaForm.agencia} onChange={(e) => setContaForm({ ...contaForm, agencia: e.target.value })} placeholder="Agência" className="rounded-lg border border-[#DEE2E6] px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                      <input value={contaForm.conta} onChange={(e) => setContaForm({ ...contaForm, conta: e.target.value })} placeholder="Conta (com dígito)" className="rounded-lg border border-[#DEE2E6] px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                      <input value={contaForm.pix} onChange={(e) => setContaForm({ ...contaForm, pix: e.target.value })} placeholder="Chave Pix (opcional)" className="rounded-lg border border-[#DEE2E6] px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+                    </div>
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                      Colha esses dados por telefone ou presencialmente — é o canal que o golpista não imita. Só os 4 últimos dígitos aparecem na mensagem.
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={salvarConta} disabled={contaLoad} className="rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60">{contaLoad ? 'salvando…' : 'Salvar'}</button>
+                      <button onClick={() => setContaEdit(false)} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setContaEdit(true)} className="mt-2 rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-[#02883C] hover:bg-[#02883C]/5 dark:border-zinc-700 dark:text-zinc-200">
+                    {contaAtual ? 'Alterar conta' : 'Cadastrar conta'}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* REPASSE AO CLIENTE — só aparece quando já houve tentativa registrada.
                 O dossiê é a prova de diligência para uma eventual consignação em
                 pagamento (cliente que some depois da onda de golpes). */}

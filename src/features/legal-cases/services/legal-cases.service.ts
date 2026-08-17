@@ -762,4 +762,16 @@ export const legalCasesService = {
     const { data } = await api.get(`/legal-cases/${id}/dossie-repasse`, { timeout: 60000 });
     return data.data ?? data;
   },
+  /**
+   * Conta do cliente para o repasse. Pré-requisito do aviso do alvará: a mensagem
+   * CONFIRMA a conta (só os 4 últimos dígitos aparecem no texto) em vez de pedir
+   * os dados — pedir dado por mensagem é o formato do golpe do falso advogado.
+   */
+  async definirDadosBancarios(
+    id: string,
+    dto: { banco?: string; agencia?: string; conta?: string; tipo?: string; pix?: string },
+  ): Promise<{ ok: boolean; dadosBancarios: Record<string, unknown>; comoApareceNaMensagem: string | null }> {
+    const { data } = await api.patch(`/legal-cases/${id}/cliente/dados-bancarios`, dto);
+    return data.data ?? data;
+  },
 };
