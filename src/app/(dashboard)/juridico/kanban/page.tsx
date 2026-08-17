@@ -12,6 +12,7 @@ import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
+import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
@@ -87,6 +88,9 @@ export default function FaseJudicialKanbanPage() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
+  // Botão "Iniciar CS" no card de Trânsito em julgado → abre o mini-form de Cumprimento
+  // (sobe petição de CS + cálculo, IA lê e move o card pro Cumprimento com os dados).
+  const [csCase, setCsCase] = useState<{ id: string; title: string } | null>(null);
   // Abre direto a ficha quando vier ?case=<id> (link "Ver no Kanban" do chat).
   useEffect(() => {
     const cid = new URLSearchParams(window.location.search).get('case');
@@ -381,7 +385,7 @@ export default function FaseJudicialKanbanPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onIniciarCs={setCsCase} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && isOwner && <AddPhaseColumn board="judicial" accent="#e11970" onAdded={onChanged} />}
           </div>
@@ -392,6 +396,15 @@ export default function FaseJudicialKanbanPage() {
 
       {openCaseId && (
         <CaseDetailDrawer caseId={openCaseId} phases={boardPhases} onClose={() => setOpenCaseId(null)} />
+      )}
+      {csCase && (
+        <AvancoFaseModal
+          phase="cumprimento"
+          caseId={csCase.id}
+          caseTitle={csCase.title}
+          onClose={() => setCsCase(null)}
+          onDone={() => { onChanged(); setCsCase(null); }}
+        />
       )}
       {novo && <NovoCasoDialog targetPhase="admissao" phases={visiblePhases} onClose={() => setNovo(false)} onCreated={() => { setNovo(false); qc.invalidateQueries({ queryKey: KEY }); }} />}
     </div>
@@ -462,10 +475,11 @@ function MultiSelect({
 const COLUNA_INICIAL = 20;
 
 function Column({
-  phase, items, phases, bulk, onMove, onOpen, onChanged, canRename, onRename, onDelete, onMoveLeft, onMoveRight,
+  phase, items, phases, bulk, onMove, onOpen, onIniciarCs, onChanged, canRename, onRename, onDelete, onMoveLeft, onMoveRight,
 }: {
   phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[]; bulk: KanbanBulk;
   onMove: (c: KanbanCard, to: string) => void; onOpen: (id: string) => void;
+  onIniciarCs: (c: { id: string; title: string }) => void;
   onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void;
   onDelete: (phase: KanbanPhase) => void;
   onMoveLeft?: () => void; onMoveRight?: () => void;
@@ -503,7 +517,7 @@ function Column({
             Vazio
           </p>
         )}
-        {shown.map((c) => <Card key={c.id} c={c} phases={phases} bulk={bulk} colIds={shownIds} onMove={onMove} onOpen={onOpen} onChanged={onChanged} />)}
+        {shown.map((c) => <Card key={c.id} c={c} phases={phases} bulk={bulk} colIds={shownIds} onMove={onMove} onOpen={onOpen} onIniciarCs={onIniciarCs} onChanged={onChanged} />)}
         {rest > 0 && (
           <button
             onClick={() => setLimit((l) => l + 50)}
@@ -518,9 +532,9 @@ function Column({
 }
 
 const Card = memo(function Card({
-  c, phases, bulk, colIds, onMove, onOpen, onChanged, overlay,
+  c, phases, bulk, colIds, onMove, onOpen, onIniciarCs, onChanged, overlay,
 }: {
-  c: KanbanCard; phases: KanbanPhase[]; bulk?: KanbanBulk; colIds?: string[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onChanged?: () => void; overlay?: boolean;
+  c: KanbanCard; phases: KanbanPhase[]; bulk?: KanbanBulk; colIds?: string[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onIniciarCs?: (c: { id: string; title: string }) => void; onChanged?: () => void; overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
   const down = useRef<{ x: number; y: number } | null>(null);
@@ -655,6 +669,22 @@ const Card = memo(function Card({
             {c.proximoPrazo.type === 'FATAL' && <span className="font-semibold text-[#c22e00]">· fatal</span>}
           </p>
         )
+      )}
+
+      {/* Trânsito em julgado → CS: pílula que abre o mini-form de Cumprimento (sobe petição
+          + cálculo, IA lê, move o card pro Cumprimento com os dados). Gêmea do "Protocolar"
+          da pré-judicial, mas do outro lado da esteira. */}
+      {!overlay && onIniciarCs && c.phase === 'transito' && (
+        <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onIniciarCs({ id: c.id, title: c.title }); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="Subir petição de CS + cálculo (IA lê) e mover pro Cumprimento de Sentença"
+            className="inline-flex items-center gap-1 rounded-full bg-[#7048e8] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90"
+          >
+            <Scale className="h-3 w-3" /> Iniciar CS
+          </button>
+        </div>
       )}
 
       {/* Rodapé: 3 relógios + mover + avatar */}
