@@ -158,6 +158,7 @@ export const calculadoraCsService = {
     valorSucumbencia: number | null;
     cliente: string | null;
     cnj: string | null;
+    totalExecutado: number | null;
     aviso?: string;
   }> {
     const fd = new FormData();

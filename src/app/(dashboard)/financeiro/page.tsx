@@ -2226,6 +2226,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             patch.sucMode = 'valor'; patch.sucumbencia = fmtMoney(r.valorSucumbencia);
           }
         }
+        // Total devido (executado) lido da CS → se for MAIOR que o bruto recebido, é pagamento
+        // PARCIAL: marca sozinho e preenche o total (o rateio já sai proporcional).
+        if (r.totalExecutado && r.totalExecutado > 0) {
+          patch.totalDevido = fmtMoney(r.totalExecutado);
+          const brutoLin = Math.abs(conf.linhas[idx]?.valor || 0);
+          if (r.totalExecutado > brutoLin + 0.01) patch.parcial = true;
+        }
         return { ...s, [idx]: patch };
       });
       // Com o processo casado, puxa a vertical + o rateio entre advogados salvo.
