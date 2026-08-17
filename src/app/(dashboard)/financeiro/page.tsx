@@ -1083,6 +1083,9 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const [pcSend, setPcSend] = useState<string | null>(null);
   // Picker "vincular contato do cliente" — abre quando a prestação não acha contato/conversa.
   const [vincModal, setVincModal] = useState<{ tx: FinTransacao; caseId: string; clienteNome: string; motivo: string } | null>(null);
+  // Formulário "cadastrar conta do cliente para repasse" — abre quando a prestação não acha a conta.
+  const [contaModal, setContaModal] = useState<{ tx: FinTransacao; caseId: string; clienteNome: string; motivo: string; banco: string; agencia: string; conta: string; pix: string } | null>(null);
+  const [contaSaving, setContaSaving] = useState(false);
   // Em vez de disparar direto, PREPARA a prestação e abre a conversa do cliente em outra guia
   // com o texto + PDF no compositor pra revisar/editar/aprovar. Após as 18h, abre já no modo
   // agendar (a barra de agendamento com o seletor de hora). O envio real (com as travas anti-golpe
@@ -1106,6 +1109,11 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       // Cliente sem contato/conversa → abre o picker pra vincular o contato CERTO (confirmação humana).
       if ('precisaVincularContato' in r) {
         setVincModal({ tx: t, caseId: r.caseId, clienteNome: r.clienteNome || dados.cliente, motivo: r.motivo });
+        return;
+      }
+      // Cliente sem conta bancária → abre o formulário pra cadastrar a conta do repasse e retenta.
+      if ('precisaCadastrarConta' in r) {
+        setContaModal({ tx: t, caseId: r.caseId, clienteNome: r.clienteNome || dados.cliente, motivo: r.motivo, banco: '', agencia: '', conta: '', pix: '' });
         return;
       }
       const posDe18h = new Date().getHours() >= 18;
@@ -1926,6 +1934,43 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
               } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao vincular o contato'); }
             }} onText={() => { /* precisa escolher um contato existente */ }} />
             <p className="mt-3 text-[11px] text-zinc-400">Depois de vincular, o processo passa a saber o WhatsApp do cliente — não precisa repetir na próxima.</p>
+          </div>
+        </div>
+      )}
+      {contaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setContaModal(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Landmark className="h-4 w-4 text-[#02883C]" /> Conta de {titleCase(contaModal.clienteNome)} para o repasse</h3>
+              <button onClick={() => setContaModal(null)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">Colha esses dados <strong>por telefone ou presencialmente</strong> — é o canal que o golpista não imita. Na mensagem ao cliente só aparecem os <strong>4 últimos dígitos</strong> (a mensagem confirma a conta, não pede).</p>
+            <div className="grid grid-cols-2 gap-2">
+              <input value={contaModal.banco} onChange={(e) => setContaModal({ ...contaModal, banco: e.target.value })} placeholder="Banco (ex.: Banco do Brasil)" className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <input value={contaModal.agencia} onChange={(e) => setContaModal({ ...contaModal, agencia: e.target.value })} placeholder="Agência" className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <input value={contaModal.conta} onChange={(e) => setContaModal({ ...contaModal, conta: e.target.value })} placeholder="Conta (com dígito)" className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+              <input value={contaModal.pix} onChange={(e) => setContaModal({ ...contaModal, pix: e.target.value })} placeholder="Chave Pix (opcional)" className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
+            </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button onClick={() => setContaModal(null)} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              <button
+                disabled={contaSaving || !(contaModal.conta.trim() || contaModal.pix.trim())}
+                onClick={async () => {
+                  setContaSaving(true);
+                  try {
+                    const r = await financeiroService.definirContaCliente(contaModal.caseId, { banco: contaModal.banco.trim() || undefined, agencia: contaModal.agencia.trim() || undefined, conta: contaModal.conta.trim() || undefined, pix: contaModal.pix.trim() || undefined });
+                    if (!r.ok) { toast.error('Não consegui salvar a conta'); return; }
+                    const tx = contaModal.tx; setContaModal(null);
+                    toast.success(`Conta salva${r.comoApareceNaMensagem ? ` — na mensagem: "${r.comoApareceNaMensagem}"` : ''}. Abrindo a prévia…`);
+                    enviarPrestacaoCliente(tx);
+                  } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao salvar a conta'); }
+                  finally { setContaSaving(false); }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {contaSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Salvar e continuar
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -493,13 +493,18 @@ export const financeiroService = {
   },
   // Prepara a prévia (não envia): guarda o PDF, monta o texto sugerido e devolve a conversa do cliente.
   // Se o cliente não tiver contato/conversa, devolve { precisaVincularContato } pro web abrir o picker.
-  async prepararPrestacaoRevisao(txId: string, pdfBase64?: string): Promise<{ conversationId: string; texto: string; pdfUrl: string; pdfNome: string } | { precisaVincularContato: true; caseId: string; clienteNome: string | null; motivo: string }> {
+  async prepararPrestacaoRevisao(txId: string, pdfBase64?: string): Promise<{ conversationId: string; texto: string; pdfUrl: string; pdfNome: string } | { precisaVincularContato: true; caseId: string; clienteNome: string | null; motivo: string } | { precisaCadastrarConta: true; caseId: string; clienteNome: string | null; motivo: string }> {
     const { data } = await api.post(`/financeiro/prestacao-contas/${txId}/preparar-revisao`, { pdfBase64 }, { timeout: 120000 });
     return data.data ?? data;
   },
   // Vincula um contato (WhatsApp) à parte CLIENTE do processo — picker no envio da prestação.
   async vincularContatoCliente(caseId: string, contactId: string): Promise<{ ok: boolean; motivo?: string }> {
     const { data } = await api.patch(`/legal-cases/${caseId}/cliente/contato`, { contactId });
+    return data.data ?? data;
+  },
+  // Cadastra a conta do cliente para o repasse (a mensagem CONFIRMA os 4 últimos dígitos, não pede).
+  async definirContaCliente(caseId: string, dto: { banco?: string; agencia?: string; conta?: string; tipo?: string; pix?: string }): Promise<{ ok: boolean; comoApareceNaMensagem?: string | null }> {
+    const { data } = await api.patch(`/legal-cases/${caseId}/cliente/dados-bancarios`, dto);
     return data.data ?? data;
   },
   // Lê o rascunho preparado (o chat mostra a barra de revisão com o texto + PDF).
