@@ -9,11 +9,12 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp, CheckSquare, ListChecks, GripVertical } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Check, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp, CheckSquare, ListChecks, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { SORT_OPTIONS, type CardSort } from '../lib/kanban-sort';
 import type { PhaseDragHandle } from '../lib/phase-drag';
 import { legalCasesService, type LegalTag } from '../services/legal-cases.service';
+import { emLote } from './kanban-bulk';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { ColorPicker } from '@/features/settings/components/color-picker';
 import { chipTextColor } from '@/lib/avatar';
@@ -29,6 +30,8 @@ export function PhaseHeader({
   onSort,
   onSelect,
   drag,
+  cardIds,
+  phases,
 }: {
   phase: { key: string; label: string; custom?: boolean };
   canRename: boolean;
@@ -45,9 +48,14 @@ export function PhaseHeader({
   onSelect?: (todos: boolean) => void;
   /** Segurar o cabeçalho e arrastar a coluna pra outra posição (usePhaseDrag). */
   drag?: PhaseDragHandle;
+  /** ids dos processos NESTA fase — o diálogo de excluir move antes de remover. */
+  cardIds?: string[];
+  /** fases deste quadro — destinos possíveis ao excluir uma fase com processos. */
+  phases?: { key: string; label: string }[];
 }) {
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const [text, setText] = useState(phase.label);
   useEffect(() => setText(phase.label), [phase.label]);
 
@@ -169,11 +177,10 @@ export function PhaseHeader({
             {canRename && onDelete && (
               <button
                 type="button"
-                onClick={() => { setMenu(false); onDelete(phase); }}
+                onClick={() => { setMenu(false); setExcluindo(true); }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
               >
-                {phase.custom ? <Trash2 className="h-3.5 w-3.5 shrink-0" /> : <EyeOff className="h-3.5 w-3.5 shrink-0" />}
-                {phase.custom ? 'Excluir fase' : 'Esconder fase do quadro'}
+                <Trash2 className="h-3.5 w-3.5 shrink-0" /> Excluir fase
               </button>
             )}
             {/* Ordenar cards da coluna — disponível para qualquer usuário */}
@@ -199,6 +206,118 @@ export function PhaseHeader({
           </div>
         </>
       )}
+      {excluindo && onDelete && (
+        <ExcluirFaseDialog
+          phase={phase}
+          cardIds={cardIds ?? []}
+          phases={phases ?? []}
+          onConfirm={() => onDelete(phase)}
+          onClose={() => setExcluindo(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Excluir a fase pelo próprio quadro. Duas situações, e o texto diz qual é:
+ *
+ * • Fase PRÓPRIA (criada pelo escritório) → sai de vez da configuração.
+ * • Fase PADRÃO (do sistema) → some do quadro; volta em Configurações › Fases.
+ *   Não dá pra apagar de verdade: a chave dela vive no código e é o que liga
+ *   DJEN, SLA e as automações.
+ *
+ * Se a fase tem processos, exige um DESTINO: os cards são movidos um a um
+ * (PATCH :id/phase — nunca em massa no banco, pra cada card registrar a
+ * movimentação) e só então a fase é removida. Sem isso, fase padrão escondida
+ * deixaria processo sem coluna e fase própria nem deixaria excluir.
+ */
+export function ExcluirFaseDialog({
+  phase,
+  cardIds,
+  phases,
+  onConfirm,
+  onClose,
+}: {
+  phase: { key: string; label: string; custom?: boolean };
+  /** ids dos processos que estão nesta fase */
+  cardIds: string[];
+  /** destinos possíveis (as fases deste quadro) */
+  phases: { key: string; label: string }[];
+  /** remove a fase de fato (o board chama o service) */
+  onConfirm: () => Promise<void> | void;
+  onClose: () => void;
+}) {
+  const destinos = phases.filter((p) => p.key !== phase.key);
+  const [destino, setDestino] = useState(destinos[0]?.key ?? '');
+  const [busy, setBusy] = useState(false);
+  const total = cardIds.length;
+
+  const excluir = async () => {
+    if (total && !destino) { toast.error('Escolha para onde vão os processos.'); return; }
+    setBusy(true);
+    try {
+      if (total) {
+        const aviso = toast.loading(`Movendo ${total} processo(s)…`);
+        const falhas = await emLote(cardIds, 4, (id) => legalCasesService.movePhase(id, destino));
+        toast.dismiss(aviso);
+        if (falhas.length) {
+          toast.error(`${falhas.length} processo(s) não puderam ser movidos — a fase não foi excluída.`);
+          setBusy(false);
+          return;
+        }
+      }
+      await onConfirm();
+      onClose();
+    } catch {
+      // o board já avisa o erro na sua própria chamada
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/20" onClick={busy ? undefined : onClose} />
+      <div className="relative w-[440px] max-w-[94vw] rounded-xl bg-white p-5 shadow-2xl dark:bg-zinc-950">
+        <button onClick={onClose} disabled={busy} className="absolute right-3 top-3 rounded-md p-1 text-zinc-400 hover:bg-zinc-100 disabled:opacity-40 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
+        <h2 className="text-base font-bold text-[#101820] dark:text-zinc-100">Excluir a fase “{phase.label}”?</h2>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {phase.custom
+            ? 'Esta fase foi criada pelo escritório — ela sai de vez, para todo mundo.'
+            : 'Esta é uma fase padrão do sistema: ela some do quadro para todo mundo, e você pode trazê-la de volta em Configurações › Fases.'}
+        </p>
+
+        {total > 0 && (
+          <div className="mt-4">
+            <p className="text-sm text-[#101820] dark:text-zinc-200">
+              A fase tem <b>{total}</b> processo(s). Para onde eles vão?
+            </p>
+            <select
+              value={destino}
+              disabled={busy}
+              onChange={(e) => setDestino(e.target.value)}
+              className="mt-1.5 h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] outline-none focus:border-[#4a90e2] disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+            >
+              {destinos.length === 0 && <option value="">Não há outra fase neste quadro</option>}
+              {destinos.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+            <p className="mt-1 text-[11px] text-zinc-400">
+              Cada processo é movido individualmente e registra a movimentação, como se você arrastasse o card.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} disabled={busy} className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800">Cancelar</button>
+          <button
+            onClick={excluir}
+            disabled={busy || (total > 0 && !destino)}
+            className="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-40"
+          >
+            {busy ? 'Excluindo…' : total > 0 ? `Mover ${total} e excluir` : 'Excluir fase'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

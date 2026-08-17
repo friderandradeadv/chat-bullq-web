@@ -134,13 +134,10 @@ export default function RepbPage() {
     }
   };
   const deletePhase = async (phase: KanbanPhase) => {
-    const msg = phase.custom
-      ? `Excluir a fase "${phase.label}"? Só é possível se não houver processos nela.`
-      : `Esconder a fase "${phase.label}" do quadro? Os processos nela continuam existindo — você reexibe em Configurações › Fases.`;
-    if (!confirm(msg)) return;
+    // Confirmação (e a saída dos processos) já vieram do ExcluirFaseDialog.
     try {
       const res = await legalCasesService.deletePhase(phase.key);
-      toast.success(res.mode === 'hidden' ? 'Fase escondida' : 'Fase excluída');
+      toast.success(res.mode === 'hidden' ? 'Fase removida do quadro — volta em Configurações › Fases' : 'Fase excluída');
       qc.invalidateQueries({ queryKey: KEY });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao remover fase');

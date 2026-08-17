@@ -88,13 +88,10 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     catch (e: any) { toast.error(e?.response?.data?.message || 'Só sócios podem renomear fases'); }
   };
   const deletePhase = async (phase: { key: string; label: string; custom?: boolean }) => {
-    const msg = phase.custom
-      ? `Excluir a fase "${phase.label}"? Só é possível se não houver processos nela.`
-      : `Esconder a fase "${phase.label}" do quadro? Os processos nela continuam existindo — você reexibe em Configurações › Fases.`;
-    if (!confirm(msg)) return;
+    // Confirmação (e a saída dos processos) já vieram do ExcluirFaseDialog.
     try {
       const res = await legalCasesService.deletePhase(phase.key);
-      toast.success(res.mode === 'hidden' ? 'Fase escondida' : 'Fase excluída');
+      toast.success(res.mode === 'hidden' ? 'Fase removida do quadro — volta em Configurações › Fases' : 'Fase excluída');
       qc.invalidateQueries({ queryKey: KEY });
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao remover fase'); }
   };
@@ -224,6 +221,8 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                     onRename={renamePhase}
                     onDelete={deletePhase}
                     drag={phaseDrag.handle(col.key)}
+                    cardIds={sortedCards.map((c) => c.id)}
+                    phases={columns.filter((c) => !!c.key).map((c) => ({ key: c.key!, label: c.nome }))}
                     onMoveLeft={canManage && i > 0 && columns[i - 1]?.key ? () => reorderPhaseCol(col.key!, 'left') : undefined}
                     onMoveRight={canManage && i < columns.length - 1 && columns[i + 1]?.key ? () => reorderPhaseCol(col.key!, 'right') : undefined}
                     sort={sortOf(col.key)}

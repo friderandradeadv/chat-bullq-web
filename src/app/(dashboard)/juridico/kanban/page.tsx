@@ -227,13 +227,10 @@ export default function FaseJudicialKanbanPage() {
   }, [qc]);
 
   const deletePhase = useCallback(async (phase: KanbanPhase) => {
-    const msg = phase.custom
-      ? `Excluir a fase "${phase.label}"? Só é possível se não houver processos nela.`
-      : `Esconder a fase "${phase.label}" do quadro? Os processos nela continuam existindo — você reexibe em Configurações › Fases.`;
-    if (!confirm(msg)) return;
+    // Confirmação (e a saída dos processos) já vieram do ExcluirFaseDialog.
     try {
       const res = await legalCasesService.deletePhase(phase.key);
-      toast.success(res.mode === 'hidden' ? 'Fase escondida' : 'Fase excluída');
+      toast.success(res.mode === 'hidden' ? 'Fase removida do quadro — volta em Configurações › Fases' : 'Fase excluída');
       qc.invalidateQueries({ queryKey: KEY });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao remover fase');
@@ -532,7 +529,7 @@ function Column({
     <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       {/* Header da fase — DENTRO do painel escuro (englobado, tom vai até o nome) */}
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(allIds, true); }} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(allIds, true); }} cardIds={allIds} phases={phases} />
         <span className="ml-auto flex items-center gap-1.5">
           <KanbanColumnSelect bulk={bulk} ids={allIds} accent="#e11970" />
           <span className="rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">

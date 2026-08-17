@@ -196,7 +196,7 @@ export function KanbanSelectTrigger({ bulk, accent = ACCENT_PADRAO }: { bulk: Ka
 }
 
 /** Roda uma ação por card com paralelismo curto; devolve os que falharam. */
-async function emLote<T>(itens: T[], limite: number, fn: (item: T) => Promise<unknown>): Promise<T[]> {
+export async function emLote<T>(itens: T[], limite: number, fn: (item: T) => Promise<unknown>): Promise<T[]> {
   const falhas: T[] = [];
   let i = 0;
   const trabalhadores = Array.from({ length: Math.min(limite, itens.length) }, async () => {

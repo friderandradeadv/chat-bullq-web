@@ -112,13 +112,10 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
     }
   };
   const deletePhase = async (phase: KanbanPhase) => {
-    const msg = phase.custom
-      ? `Excluir a fase "${phase.label}"? Só é possível se não houver leads nela.`
-      : `Esconder a fase "${phase.label}" do funil? Os leads nela continuam existindo — você reexibe em Configurações › Fases.`;
-    if (!confirm(msg)) return;
+    // Confirmação (e a saída dos processos) já vieram do ExcluirFaseDialog.
     try {
       const res = await legalCasesService.deletePhase(phase.key);
-      toast.success(res.mode === 'hidden' ? 'Fase escondida' : 'Fase excluída');
+      toast.success(res.mode === 'hidden' ? 'Fase removida do quadro — volta em Configurações › Fases' : 'Fase excluída');
       qc.invalidateQueries({ queryKey: KEY });
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao remover fase');
@@ -222,7 +219,7 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} bulk={bulk} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onAgendar={setAgendar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} bulk={bulk} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onAgendar={setAgendar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} phases={phases} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && canRename && <AddPhaseColumn board="repbc" accent={ACCENT} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
           </div>
@@ -240,7 +237,7 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar, onFollowup, canRename, onRename, onDelete, phaseDrag, cardOrder, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; bulk: KanbanBulk; onOpen: (id: string) => void; onFechou: (c: KanbanCard) => void; onApresentar: (c: KanbanCard) => void; onAgendar: (c: KanbanCard) => void; onFollowup: (c: KanbanCard) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; cardOrder?: string[]; onMoveLeft?: () => void; onMoveRight?: () => void }) {
+function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar, onFollowup, canRename, onRename, onDelete, phaseDrag, cardOrder, phases, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; bulk: KanbanBulk; onOpen: (id: string) => void; onFechou: (c: KanbanCard) => void; onApresentar: (c: KanbanCard) => void; onAgendar: (c: KanbanCard) => void; onFollowup: (c: KanbanCard) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; cardOrder?: string[]; phases: KanbanPhase[]; onMoveLeft?: () => void; onMoveRight?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
   const sorted = useMemo(() => applyCardSort(items, sort, kanbanCardKeys, cardOrder), [items, sort, cardOrder]);
@@ -255,7 +252,7 @@ function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar,
   return (
     <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#E8590C] bg-[#E8590C]/5 dark:bg-[#E8590C]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(colIds, true); }} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(colIds, true); }} cardIds={colIds} phases={phases} />
         <span className="ml-auto flex items-center gap-1.5">
           <KanbanColumnSelect bulk={bulk} ids={colIds} accent={ACCENT} />
           <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
