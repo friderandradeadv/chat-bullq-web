@@ -154,8 +154,10 @@ export default function ProcessoDetailPage() {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{c.title}</h1>
-            {/* Veio do DJEN sem partes identificáveis (nota administrativa / Projudi) → cadastro pendente. */}
-            {(c.metadata as { djen?: { revisarCadastro?: boolean } } | null)?.djen?.revisarCadastro && (
+            {/* Veio do DJEN sem partes identificáveis (nota administrativa / Projudi) → cadastro pendente.
+                Só enquanto SEGUIR sem partes: assim que ganha cliente/réu (manual ou herdado do apenso),
+                o badge some — antes ele ficava eterno porque a flag nunca era limpa. */}
+            {(c.metadata as { djen?: { revisarCadastro?: boolean } } | null)?.djen?.revisarCadastro && c.parties.length === 0 && (
               <button
                 onClick={() => setEditing(true)}
                 title="Este processo entrou pelo DJEN sem partes identificáveis — clique para cadastrar cliente/réu, comarca etc."
