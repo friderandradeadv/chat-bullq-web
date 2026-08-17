@@ -383,6 +383,24 @@ export interface ClientCaseRow {
   legalPhaseAt: string | null;
 }
 
+/** Candidato a vínculo: processo de cliente com o mesmo nome, amarrado a OUTRO
+ *  contato (cliente da casa escrevendo de número novo). Só entra no painel
+ *  depois que um humano confirma no botão "Vincular". */
+export interface ClientCaseSuggestion {
+  partyId: string;
+  caseId: string;
+  cnjNumber: string | null;
+  title: string;
+  area: string | null;
+  produto: string | null;
+  faseLabel: string | null;
+  status: string;
+  responsavel: string | null;
+  clienteNoProcesso: string;
+  outroContato: { id: string; name: string | null; phone: string | null } | null;
+  cpfNoProcesso: string | null;
+}
+
 export const legalCasesService = {
   async list(query: ListCasesQuery = {}): Promise<CaseListItem[]> {
     const { data } = await api.get(`/legal-cases${qs(query)}`);
@@ -420,6 +438,23 @@ export const legalCasesService = {
   },
   async casesByContact(contactId: string): Promise<{ cases: ClientCaseRow[] }> {
     const { data } = await api.get(`/legal-cases/by-contact/${contactId}`);
+    return data.data ?? data;
+  },
+  async casesByContactSuggestions(
+    contactId: string,
+  ): Promise<{ sugestoes: ClientCaseSuggestion[] }> {
+    const { data } = await api.get(`/legal-cases/by-contact/${contactId}/sugestoes`);
+    return data.data ?? data;
+  },
+  /** Confirma (humano) que o contato desta conversa é a mesma pessoa do cliente
+   *  daquele processo. Devolve a lista de processos já atualizada. */
+  async vincularContato(
+    contactId: string,
+    partyId: string,
+  ): Promise<{ cases: ClientCaseRow[] }> {
+    const { data } = await api.post(`/legal-cases/by-contact/${contactId}/vincular`, {
+      partyId,
+    });
     return data.data ?? data;
   },
   async jurimetria(): Promise<JurimetriaData> {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Popover,
   PopoverButton,
@@ -56,6 +56,7 @@ import { toast } from 'sonner';
 import {
   legalCasesService,
   type ClientCaseRow,
+  type ClientCaseSuggestion,
 } from '@/features/legal-cases/services/legal-cases.service';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import {
@@ -267,6 +268,112 @@ function ClientRegistrationSection({
   );
 }
 
+/** Cliente da casa que escreve de um número NOVO entra como contato zerado: a
+ *  parte do processo continua amarrada ao contato antigo e a trava anti-homônimo
+ *  (correta) impede o match por nome — o painel fica vazio e a triagem trata
+ *  cliente como lead. Aqui mostramos os CANDIDATOS (mesmo nome, cadastro do
+ *  processo à vista pra conferir) e o vínculo só acontece no clique do humano.
+ *  Depois de vinculado, TODOS os processos daquela pessoa aparecem, o robô
+ *  também os enxerga, e não se pergunta o CPF de novo. */
+function ClientCaseSuggestionsSection({ contactId }: { contactId: string }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ['cases-by-contact-sugestoes', contactId],
+    queryFn: () => legalCasesService.casesByContactSuggestions(contactId),
+    enabled: !!contactId,
+    staleTime: 60_000,
+  });
+  const vincular = useMutation({
+    mutationFn: (partyId: string) => legalCasesService.vincularContato(contactId, partyId),
+    onSuccess: (res) => {
+      toast.success(
+        res.cases.length === 1
+          ? 'Contato vinculado ao cliente — 1 processo'
+          : `Contato vinculado ao cliente — ${res.cases.length} processos`,
+      );
+      qc.invalidateQueries({ queryKey: ['cases-by-contact', contactId] });
+      qc.invalidateQueries({ queryKey: ['cases-by-contact-sugestoes', contactId] });
+      qc.invalidateQueries({ queryKey: ['contact-full', contactId] });
+    },
+    onError: () => toast.error('Não foi possível vincular'),
+  });
+  const sugestoes = data?.sugestoes ?? [];
+  if (sugestoes.length === 0) return null;
+
+  return (
+    <div className="mt-4 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
+      <div className="mb-2 flex items-center gap-2">
+        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+        <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+          Pode ser cliente da casa
+        </p>
+      </div>
+      <p className="mb-2 text-[11px] leading-snug text-zinc-400">
+        Mesmo nome, mas o processo está em outro contato (número antigo). Confira o
+        cadastro e vincule — o processo só aparece depois da sua confirmação.
+      </p>
+      <div className="space-y-1.5">
+        {sugestoes.map((s: ClientCaseSuggestion) => (
+          <div
+            key={s.partyId}
+            className="rounded-lg border border-amber-300/60 bg-amber-50/60 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/5"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                {s.produto || s.area || 'Processo'}
+              </span>
+              {s.faseLabel && (
+                <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                  {s.faseLabel.replace(/^\d+(\.\d+)?\.?\s*/, '')}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 truncate text-[13px] font-medium text-zinc-800 dark:text-zinc-200">
+              {s.title}
+            </p>
+            <p className="mt-0.5 truncate font-mono text-[11px] text-zinc-400">
+              {s.cnjNumber || 'sem nº'}
+            </p>
+            <div className="mt-1 space-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <p className="truncate">
+                Cliente no processo: <span className="font-medium">{s.clienteNoProcesso}</span>
+              </p>
+              {s.cpfNoProcesso && <p className="truncate">CPF do cadastro: {s.cpfNoProcesso}</p>}
+              {s.outroContato?.phone && (
+                <p className="truncate">Número antigo: {formatPhone(s.outroContato.phone)}</p>
+              )}
+            </div>
+            <div className="mt-2 flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={vincular.isPending}
+                onClick={() => vincular.mutate(s.partyId)}
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {vincular.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Check className="h-3 w-3" />
+                )}
+                É o mesmo cliente · vincular
+              </button>
+              <button
+                type="button"
+                onClick={() => window.open(`/processos/${s.caseId}`, '_blank', 'noopener')}
+                title="Abrir o processo para conferir"
+                className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-500 hover:text-primary dark:border-zinc-700 dark:text-zinc-400"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Conferir
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ClientCasesSection({ contactId }: { contactId: string }) {
   const router = useRouter();
   const { data, isLoading } = useQuery({
@@ -292,8 +399,11 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
     }
   };
 
-  // Painel limpo p/ leads: só aparece quando há processo vinculado.
-  if (isLoading || cases.length === 0) return null;
+  // Painel limpo p/ leads: só aparece quando há processo vinculado. Sem
+  // processo, ainda pode haver CANDIDATO (cliente da casa escrevendo de número
+  // novo) — aí entra o bloco de vínculo, que exige confirmação humana.
+  if (isLoading) return null;
+  if (cases.length === 0) return <ClientCaseSuggestionsSection contactId={contactId} />;
 
   return (
     <div className="mt-4 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
