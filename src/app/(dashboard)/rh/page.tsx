@@ -39,6 +39,27 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 const rid = () => `x_${Math.round(Math.random() * 1e9)}`;
+
+/**
+ * Assinatura estável de um rascunho, para saber se a ficha tem alteração pendente.
+ * Ordena as chaves e ignora vazio/nulo — assim "campo que nunca existiu" e "campo
+ * apagado de volta" contam como iguais, e o aviso de descarte não dispara à toa.
+ */
+function chaveEstavel(v: any): string {
+  const limpo = (x: any): any => {
+    if (Array.isArray(x)) return x.map(limpo);
+    if (x && typeof x === 'object') {
+      return Object.fromEntries(
+        Object.entries(x)
+          .filter(([, y]) => y !== undefined && y !== null && y !== '')
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(([k, y]) => [k, limpo(y)]),
+      );
+    }
+    return x;
+  };
+  return JSON.stringify(limpo(v));
+}
 const INPUT = 'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100';
 const LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-zinc-400';
 const ini = (n?: string | null) => (n ?? '?').split(' ').filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -738,6 +759,24 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
   const foto = membro.user.avatarUrl || info.fotoUrl;
   // Documento aguardando confirmação de remoção (some do rascunho; só vale ao salvar a ficha).
   const [confirmDoc, setConfirmDoc] = useState<string | null>(null);
+
+  // ── Alterações pendentes: fechar sem salvar (X ou clique fora) pedia nada e perdia tudo. ──
+  const [confirmSair, setConfirmSair] = useState(false);
+  const original = useMemo(
+    () => chaveEstavel({
+      f: { ...ficha, documentos: ficha.documentos ?? [] },
+      cargoId: info.cargoId ?? '',
+      atuacao: Array.isArray(info.atuacao) ? info.atuacao : [],
+      conoscoDesde: info.conoscoDesde ?? '',
+      contratadaDesde: info.contratadaDesde ?? '',
+      honor: honorariosPct != null ? String(honorariosPct) : '',
+      nivelFin: acesso ?? 'none',
+    }),
+    [ficha, info, honorariosPct, acesso],
+  );
+  const sujo = chaveEstavel({ f, cargoId, atuacao, conoscoDesde, contratadaDesde, honor, nivelFin }) !== original;
+  /** Único caminho de saída do modal: se houver rascunho pendente, pergunta antes. */
+  const tentarFechar = () => { if (sujo) setConfirmSair(true); else onClose(); };
   const addDoc = () => set({ documentos: [...(f.documentos ?? []), { id: rid(), nome: '', url: '' }] });
   const updDoc = (id: string, p: Partial<{ nome: string; url: string }>) => set({ documentos: (f.documentos ?? []).map((d) => (d.id === id ? { ...d, ...p } : d)) });
   const delDoc = (id: string) => set({ documentos: (f.documentos ?? []).filter((d) => d.id !== id) });
@@ -791,12 +830,33 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
     }
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={tentarFechar}>
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-100 bg-white px-5 py-3.5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Ficha do colaborador</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
+          <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100">
+            Ficha do colaborador
+            {sujo && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">alterações não salvas</span>}
+          </h3>
+          <button onClick={tentarFechar} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-4 w-4" /></button>
         </div>
+
+        {confirmSair && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmSair(false)}>
+            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+              <p className="text-base font-bold text-zinc-800 dark:text-zinc-100">Descartar alterações?</p>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                A ficha de <strong className="text-zinc-700 dark:text-zinc-200">{membro.user.name}</strong> tem edição que ainda não foi salva. Se sair agora, ela se perde.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                <button onClick={() => setConfirmSair(false)} className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Continuar editando</button>
+                <button onClick={() => { setConfirmSair(false); onClose(); }} className="rounded-lg border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-900/60 dark:hover:bg-rose-900/20">Descartar</button>
+                <button onClick={() => { setConfirmSair(false); salvar(); }} disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar e fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="space-y-3 p-5">
           <div className="flex items-center gap-3">
             {foto ? <img src={foto} alt={membro.user.name} className="h-16 w-16 rounded-full object-cover ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#7048E8] text-xl font-bold text-white">{ini(membro.user.name)}</div>}
@@ -939,7 +999,7 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
         </div>
         {canEdit && (
           <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-zinc-100 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-            <button onClick={onClose} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+            <button onClick={tentarFechar} className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
             <button onClick={salvar} disabled={saving} className="inline-flex items-center gap-1 rounded-lg bg-[#228BE6] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#1c7ed6] disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar ficha</button>
           </div>
         )}
