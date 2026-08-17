@@ -36,20 +36,20 @@ function buildHtml(d: PrestacaoDados): string {
   const secSub = `color:#7b8798;font-style:italic;font-size:12.5px;margin:3px 0 12px`;
   return `
   <div style="width:794px;background:#fff;font-family:${F};color:#20262f;box-sizing:border-box">
-    <div style="background:#1f2126;padding:26px 40px 22px">
+    <div data-b style="background:#1f2126;padding:26px 34px 22px;border-radius:12px">
       <span style="display:inline-block;background:#C1272D;color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:4px 10px;border-radius:5px">Frider Andrade&nbsp;<span style="color:#fff">▪</span>&nbsp;Advogados</span>
       <div style="color:#fff;font-size:29px;font-weight:800;margin:13px 0 7px;letter-spacing:-.01em">Prestação de contas<span style="color:#C1272D">.</span></div>
       <div style="color:#b8c1d1;font-size:12.5px;line-height:1.5">${esc(sub)}</div>
       <div style="color:#b8c1d1;font-size:12.5px;line-height:1.5">${linha2}</div>
     </div>
-    <div style="padding:26px 40px 34px">
-      <div style="background:#e9f7ef;border:1px solid #7cc79a;border-left:5px solid #2f9e57;border-radius:10px;padding:15px 20px">
+    <div style="padding:22px 34px 14px">
+      <div data-b style="background:#e9f7ef;border:1px solid #7cc79a;border-left:5px solid #2f9e57;border-radius:10px;padding:15px 20px">
         <div style="color:#2f7d4f;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">Valor líquido que será transferido a você${ex ? ' agora' : ''}</div>
         <div style="color:#1f8a4c;font-size:31px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums">${brl(d.liquido)}</div>
         ${ex ? `<div style="color:#2f7d4f;font-size:11.5px;margin-top:6px">Este é um <b>pagamento parcial</b>. O processo continua, e ainda cobramos ${brl(ex.remanescente)} do banco.</div>` : ''}
       </div>
 
-      <div style="margin-top:28px">
+      <div data-b style="margin-top:28px">
         <div><span style="${secNum}">01</span><span style="${secTit}">Como chegamos a esse valor</span></div>
         <div style="${secSub}">Do valor depositado no alvará até o que é efetivamente seu.</div>
         <div style="font-size:12.5px;margin-bottom:12px">A parte contrária depositou <b>${brl(d.bruto)}</b> no alvará judicial. Veja como esse valor se divide:</div>
@@ -62,7 +62,7 @@ function buildHtml(d: PrestacaoDados): string {
         </table>
       </div>
 
-      <div style="margin-top:26px">
+      <div data-b style="margin-top:26px">
         <div><span style="${secNum}">02</span><span style="${secTit}">Entendendo as verbas</span></div>
         <div style="${secSub}">Por que o depósito é maior do que você recebe. São duas partes distintas.</div>
         <div style="display:flex;gap:14px">
@@ -77,14 +77,14 @@ function buildHtml(d: PrestacaoDados): string {
             <div style="font-size:11.5px;font-weight:700;color:#C1272D;margin-top:9px">${honCap}</div>
           </div>
         </div>
-        <div style="margin-top:14px;background:#f7f9fc;border:1px solid #e3e6eb;border-left:4px solid #1f2126;border-radius:9px;padding:13px 16px">
+        <div data-b style="margin-top:14px;background:#f7f9fc;border:1px solid #e3e6eb;border-left:4px solid #1f2126;border-radius:9px;padding:13px 16px">
           <div style="font-weight:800;font-size:12.5px;color:#1f2733;margin-bottom:5px">Por que este valor é seu</div>
           <div style="font-size:12px;line-height:1.6;color:#4a515c">Este valor é seu por direito: corresponde à sua condenação (${brl(d.condenacao)}) menos os honorários contratuais que você aceitou em contrato. A sucumbência não entra nessa conta — a lei manda a parte contrária pagá-la diretamente ao escritório (art. 85 do CPC), e por isso ela nunca reduz o que é seu.${respeitaTeto ? ` Seguimos ainda o art. 50 do Código de Ética da OAB: os honorários do escritório (contratuais somados à sucumbência) <b>não superam</b> o que fica com você.` : ''}${reduziu ? ` Neste caso, para respeitar esse limite, <b>reduzimos os honorários contratuais</b> abaixo do previsto no contrato — de modo que você não recebesse menos que o escritório.` : ''}</div>
         </div>
       </div>
 
       ${ex ? `
-      <div style="margin-top:26px">
+      <div data-b style="margin-top:26px">
         <div><span style="${secNum}">03</span><span style="${secTit}">O que ainda vamos buscar</span></div>
         <div style="${secSub}">Este pagamento é parcial. A diferença segue em cobrança na Justiça.</div>
         <div style="font-size:12.5px;line-height:1.6;margin-bottom:12px">Executamos no processo um crédito de <b>${brl(ex.totalExecutado)}</b>. O banco depositou <b>${brl(ex.recebido)}</b>, que é o que estamos repassando agora. Falta <b>${brl(ex.remanescente)}</b>, ${pctFalta}% do total, e é isso que continuamos cobrando.</div>
@@ -103,7 +103,7 @@ function buildHtml(d: PrestacaoDados): string {
         <div style="font-size:12.5px;line-height:1.6;margin-top:12px">Receber esta parte <b>não encerra o processo</b> e não significa que aceitamos o valor pago: o levantamento é feito sobre o que o próprio banco reconheceu como devido, e a diferença continua sendo discutida. Quando houver decisão sobre o restante, você recebe uma nova prestação de contas como esta.</div>
       </div>` : ''}
 
-      <div style="margin-top:26px">
+      <div data-b style="margin-top:26px">
         <div><span style="${secNum}">${ex ? '04' : '03'}</span><span style="${secTit}">Considerações finais</span></div>
         <div style="font-size:12.5px;line-height:1.6;margin-top:10px">O valor de <b>${brl(d.liquido)}</b> será transferido para a sua conta. Qualquer dúvida sobre esses números ou sobre o andamento do caso, estamos à disposição para explicar com calma.</div>
         <div style="font-size:12.5px;line-height:1.6;margin-top:8px">${ex ? 'Seguimos com o processo até o pagamento integral. Obrigado pela confiança!' : 'Foi um prazer lutar pelos seus direitos. Obrigado pela confiança!'}</div>
@@ -122,13 +122,11 @@ export async function gerarPrestacaoPdf(d: PrestacaoDados): Promise<Blob> {
   host.innerHTML = buildHtml(d);
   document.body.appendChild(host);
   const root = host.firstElementChild as HTMLElement;
-  // Blocos lógicos: a banda escura + cada seção (hero, 01, 02, [03], final). A quebra de página só
-  // pode cair no espaço ENTRE blocos — nunca no meio de uma seção (era o "quebrando" da tabela/cards).
-  const banner = root.children[0] as HTMLElement;
-  const wrapper = root.children[1] as HTMLElement;
-  const blocos = [banner, ...(Array.from(wrapper?.children ?? []) as HTMLElement[])];
+  // Pontos de quebra SEGUROS: os elementos marcados com data-b (banda, hero, seções e a caixa
+  // "por que"). A página só quebra no topo de um deles — nunca no meio de uma tabela/card.
   const rootTop = root.getBoundingClientRect().top;
-  const topos = blocos.map((b) => b.getBoundingClientRect().top - rootTop); // topo de cada bloco (px CSS)
+  const marcados = Array.from(root.querySelectorAll('[data-b]')) as HTMLElement[];
+  const topos = (marcados.length ? marcados : [root]).map((b) => b.getBoundingClientRect().top - rootTop);
 
   let full: HTMLCanvasElement;
   try {
@@ -140,12 +138,15 @@ export async function gerarPrestacaoPdf(d: PrestacaoDados): Promise<Blob> {
   const pdf = await PDFDocument.create();
   const A4W = 595.28, A4H = 841.89;
   const S = full.width / 794;                 // escala real do canvas (≈ 2)
-  const MARGIN = 24;                           // pt de respiro no rodapé
-  const pxPorPagina = (A4H - MARGIN) * (full.width / A4W); // px-canvas que cabem numa página A4
-  const quebras = topos.map((t) => t * S).concat([full.height]); // candidatos (em px-canvas) + o fim
+  // Margem de página uniforme nas 4 bordas — o conteúdo respeita a folha, com topo/rodapé/lados iguais.
+  const MARG_LAT = 26, MARG_TOPO = 30, MARG_BASE = 30; // pt
+  const larguraPt = A4W - 2 * MARG_LAT;       // área útil de conteúdo (largura)
+  const sf = larguraPt / full.width;          // pt por px-canvas (o 794 vira `larguraPt`)
+  const pxPorPagina = (A4H - MARG_TOPO - MARG_BASE) / sf; // px-canvas que cabem na altura útil
+  const quebras = topos.map((t) => t * S).concat([full.height]); // candidatos (px-canvas) + o fim
   let y = 0;
   while (y < full.height - 1) {
-    // maior início-de-bloco que ainda cabe na página; se nenhum couber (bloco > 1 página), corta forçado.
+    // maior ponto-de-quebra que ainda cabe na página; se nenhum couber (bloco > 1 página), corta forçado.
     const cabem = quebras.filter((b) => b > y + 1 && b <= y + pxPorPagina);
     const end = cabem.length ? Math.max(...cabem) : Math.min(y + pxPorPagina, full.height);
     const sliceH = Math.max(1, Math.round(end - y));
@@ -156,9 +157,9 @@ export async function gerarPrestacaoPdf(d: PrestacaoDados): Promise<Blob> {
     ctx.drawImage(full, 0, y, full.width, sliceH, 0, 0, full.width, sliceH);
     const png = await (await fetch(cut.toDataURL('image/png'))).arrayBuffer();
     const img = await pdf.embedPng(png);
-    const hpt = (sliceH / full.width) * A4W; // altura da faixa em pt (≤ A4H − MARGIN)
+    const hpt = sliceH * sf;                   // altura da faixa em pt (≤ altura útil)
     const page = pdf.addPage([A4W, A4H]);
-    page.drawImage(img, { x: 0, y: A4H - hpt, width: A4W, height: hpt }); // faixa no topo, branco embaixo
+    page.drawImage(img, { x: MARG_LAT, y: A4H - MARG_TOPO - hpt, width: larguraPt, height: hpt }); // dentro da margem
     y = end;
   }
 
