@@ -2098,7 +2098,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2234,6 +2234,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
           const brutoLin = Math.abs(conf.linhas[idx]?.valor || 0);
           if (r.totalExecutado > brutoLin + 0.01) patch.parcial = true;
         }
+        // Data-base + índice de correção da causa → pré-preenchem o botão "Atualizar" da sucumbência.
+        if (r.dataBaseCalculo) patch.dataBase = r.dataBaseCalculo;
+        if (r.indiceCorrecao) patch.indiceCausa = r.indiceCorrecao;
         return { ...s, [idx]: patch };
       });
       // Com o processo casado, puxa a vertical + o rateio entre advogados salvo.
@@ -2552,6 +2555,26 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                       <option>Condenação</option><option>Valor da causa</option><option>Proveito econômico</option>
                                     </select>
                                     {!embutida && <MoneyInput value={a.sucBase ?? ''} onChange={(v) => set({ sucBase: v })} placeholder={`valor (${tl})`} />}
+                                    {!embutida && (
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <input type="date" value={a.dataBase ?? ''} onChange={(e) => set({ dataBase: e.target.value })} className="rounded border border-zinc-300 bg-white px-1 py-0.5 text-[10px] dark:border-zinc-700 dark:bg-zinc-900" title="Data-base do cálculo (a IA preenche da CS)" />
+                                        <select value={a.indiceCausa || 'INPC'} onChange={(e) => set({ indiceCausa: e.target.value })} className="rounded border border-zinc-300 bg-white px-1 py-0.5 text-[10px] dark:border-zinc-700 dark:bg-zinc-900" title="Índice de correção da causa">
+                                          {['INPC', 'IPCA-E', 'IPCA', 'IGP-M', 'SELIC'].map((x) => <option key={x}>{x}</option>)}
+                                        </select>
+                                        <button type="button" title="Corrige o valor da base da data-base até a data do alvará pelo índice" onClick={async () => {
+                                          const base = parseValor(a.sucBase || '');
+                                          const de = a.dataBase || '';
+                                          const ate = toISOInput(conf.linhas[i]?.data || '');
+                                          if (!(base > 0)) { toast.error('Informe o valor da base (valor da causa) primeiro.'); return; }
+                                          if (!/^\d{4}-\d{2}-\d{2}$/.test(de)) { toast.error('Informe a data-base do cálculo.'); return; }
+                                          try {
+                                            const rc = await calculadoraCsService.corrigirValor({ valor: base, data: de, indice: a.indiceCausa || 'INPC', ate: ate || undefined });
+                                            set({ sucBase: fmtMoney(rc.valorCorrigido) });
+                                            toast.success(`Base atualizada: ${brl2(base)} → ${brl2(rc.valorCorrigido)} (${rc.indice}, fator ${rc.fator})`);
+                                          } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Não consegui atualizar'); }
+                                        }} className="inline-flex items-center gap-0.5 rounded bg-[#228BE6]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#228BE6] transition hover:bg-[#228BE6]/20">🔄 Atualizar até {(conf.linhas[i]?.data || '').slice(0, 5)}</button>
+                                      </div>
+                                    )}
                                     <p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · {embutida ? `${a.sucPct || ''}% da condenação ${brl2(calc.condenacao)} (embutida no alvará)` : (parseValor(a.sucBase || '') > 0 ? `${a.sucPct || ''}% sobre ${tl}` : `⚠️ informe o valor (${tl})`)}</p>
                                   </div>; })()}
                                 </Field>

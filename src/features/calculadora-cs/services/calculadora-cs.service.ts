@@ -159,6 +159,8 @@ export const calculadoraCsService = {
     cliente: string | null;
     cnj: string | null;
     totalExecutado: number | null;
+    dataBaseCalculo: string | null;
+    indiceCorrecao: string | null;
     aviso?: string;
   }> {
     const fd = new FormData();
@@ -171,7 +173,7 @@ export const calculadoraCsService = {
   },
 
   // Correção monetária de um valor (ex.: valor da causa) de uma data até hoje.
-  async corrigirValor(input: { valor: number; data: string; indice: string }): Promise<{
+  async corrigirValor(input: { valor: number; data: string; indice: string; ate?: string }): Promise<{
     valorCorrigido: number; fator: number; indice: string; de: string; ate: string;
   }> {
     const { data } = await api.post('/calculadora-cs/corrigir-valor', input);
