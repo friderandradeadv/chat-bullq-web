@@ -1594,11 +1594,21 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                       const cliente = parseValor(editor.rateio.cliente);
                       const nosso = parseValor(editor.rateio.honorarios) + parseValor(editor.rateio.sucumbencia);
                       const conferir = bruto - cliente - nosso;
+                      // Trava OAB (art. 50 CED): em êxito, o nosso não pode superar o cliente.
+                      const excedeCliente = bruto > 0 && nosso > cliente + 0.01;
                       return (
+                        <>
                         <div className="flex items-center justify-between border-t border-violet-200/60 pt-2 text-[11px] dark:border-violet-900/40">
                           <span className="text-zinc-500 dark:text-zinc-400">Escritório (caixa): <strong className="text-violet-700 dark:text-violet-300">{brl2(nosso)}</strong></span>
                           {bruto > 0 && Math.abs(conferir) > 0.01 && <span className="text-amber-600 dark:text-amber-400">⚠️ bruto ≠ cliente + escritório (dif. {brl2(conferir)})</span>}
                         </div>
+                        {excedeCliente && (
+                          <div className="flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
+                            <span className="mt-0.5 text-sm">🛡️</span>
+                            <span><strong>Trava da OAB (art. 50 do Código de Ética):</strong> em contrato de êxito, o escritório ({brl2(nosso)}) não pode ficar com mais que o cliente ({brl2(cliente)}), nem somando a sucumbência ao contratual. Reveja o rateio.</span>
+                          </div>
+                        )}
+                        </>
                       );
                     })()}
                   </div>
@@ -2180,7 +2190,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const hon = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
     const nosso = r2(suc + hon);
     const cli = r2(condenacao - hon);
-    return { suc, condenacao, hon, nosso, cli, valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 };
+    // BLINDAGEM OAB — art. 50 do Código de Ética e Disciplina (quota litis / êxito): os honorários
+    // contratuais somados aos de sucumbência NÃO podem superar a vantagem que fica com o cliente.
+    // `excedeCliente` acende o alerta vermelho na tela quando o escritório levaria mais que o cliente.
+    // `excedente` = quanto teria de ser devolvido/renegociado para respeitar o teto (cli === nosso).
+    const excedeCliente = bruto > 0 && nosso > cli + 0.01;
+    const excedente = excedeCliente ? r2((nosso - cli) / 2) : 0; // devolver isso ao cliente iguala os dois lados
+    return { suc, condenacao, hon, nosso, cli, excedeCliente, excedente, valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 };
   };
   // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
   const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
@@ -2303,8 +2319,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
 
   const toggle = (i: number) => setSel((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
+  // Clicar fora NÃO fecha: o import guarda muito trabalho (arquivos lidos, rateios, sucumbência).
+  // Fecha só no X / Cancelar / Fechar — evita perder tudo por um clique no vazio.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       {celebra && (
         <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
           <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
@@ -2584,6 +2602,17 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 <span className="text-zinc-400">bruto {brl2(bruto)} − sucumbência {brl2(calc.suc)} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong></span>
                                 <span className={calc.valido ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{calc.valido ? 'fecha com o bruto ✓' : 'sucumbência/contratual maior que o disponível — confira'}</span>
                               </div>
+                              {/* BLINDAGEM OAB — art. 50 do Código de Ética (quota litis): contratual + sucumbência
+                                  não podem superar a vantagem do cliente. Acende quando o nosso > cliente. */}
+                              {calc.excedeCliente && (
+                                <div className="mt-1.5 flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
+                                  <span className="mt-0.5 text-sm">🛡️</span>
+                                  <span>
+                                    <strong>Trava da OAB (art. 50 do Código de Ética):</strong> em contrato de êxito, o que fica com o escritório (<strong>{brl2(calc.nosso)}</strong>) não pode superar o que fica com o cliente (<strong>{brl2(calc.cli)}</strong>).
+                                    Reveja o contratual/sucumbência — devolvendo <strong>{brl2(calc.excedente)}</strong> ao cliente os dois lados se igualam. A sucumbência é do escritório (art. 23 EAOAB), mas <strong>somada</strong> ao contratual não pode ultrapassar o cliente.
+                                  </span>
+                                </div>
+                              )}
                               {/* Pagamento PARCIAL: banco depositou menos que o total devido → rateia a sucumbência
                                   proporcional, grava recebido/falta no processo e mantém o card no cumprimento (não move). */}
                               <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50/50 px-2 py-1.5 dark:border-amber-900/40 dark:bg-amber-900/10">
