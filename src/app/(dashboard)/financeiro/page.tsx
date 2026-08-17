@@ -234,7 +234,7 @@ export default function FinanceiroPage() {
         {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
-        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} />
+        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={contasEmAberto(data)} />
 
         {view === 'lancamentos' && <LancamentosTab data={data} mesSel={mesSel} setMesSel={setMesSel} />}
         {view === 'honorarios' && <HonorariosTab data={data} />}
@@ -263,7 +263,7 @@ export default function FinanceiroPage() {
   );
 }
 
-function TabsMenu({ view, setView, lancCount }: { view: View; setView: (v: View) => void; lancCount?: number }) {
+function TabsMenu({ view, setView, lancCount, aPagar }: { view: View; setView: (v: View) => void; lancCount?: number; aPagar?: { atrasadas: number; hoje: number } }) {
   // Barra de abas HORIZONTAL fixa (não é dropdown): ícone + label, a ativa
   // sublinhada. Rola na horizontal se não couber (mobile). Sem sticky.
   return (
@@ -275,6 +275,8 @@ function TabsMenu({ view, setView, lancCount }: { view: View; setView: (v: View)
             <t.icon className="h-4 w-4 shrink-0" />
             <span className="whitespace-nowrap">{t.label.replace(' e crescimento', '')}</span>
             {t.key === 'lancamentos' && lancCount != null && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${ativo ? 'bg-[#228BE6]/10 text-[#228BE6]' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800'}`}>{lancCount}</span>}
+            {/* Conta atrasada/vencendo hoje aparece na aba mesmo de outra seção. */}
+            {t.key === 'lancamentos' && aPagar && <DotPendencia atrasadas={aPagar.atrasadas} hoje={aPagar.hoje} />}
           </button>
         );
       })}
@@ -413,6 +415,55 @@ const STATUS_TX: Record<TxStatus, { label: string; badge: string; cor: string }>
 };
 const txStatus = (t: FinTransacao): TxStatus => t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
 const ehLiquidado = (s: TxStatus) => s === 'recebido' || s === 'pago';
+
+/**
+ * Contas a pagar que JÁ VENCERAM (atrasadas) ou vencem HOJE — fonte única dos
+ * marcadores internos do Financeiro (bolinha da aba "Lançamentos", da subaba
+ * "Contas a pagar" e do resumo do topo da lista).
+ * Mesma regra do endpoint /financeiro/vencimentos-hoje, que alimenta a bolinha da
+ * barra de baixo: saída com status 'a_pagar', e gasto de CARTÃO fora (quita na
+ * fatura). Vencimento cai em `t.data` quando o lançamento não tem vencimento —
+ * é a mesma data que a subaba usa para ordenar e pintar a linha.
+ */
+function contasEmAberto(data: FinDashboard) {
+  const hojeISO = toISOInput(hojeBR());
+  const cardIds = new Set((data.contas ?? []).filter((c) => c.cartao).map((c) => c.id));
+  let atrasadas = 0, hoje = 0, totalAtrasadas = 0, totalHoje = 0;
+  for (const t of data.transacoes ?? []) {
+    if (txStatus(t) !== 'a_pagar' || !(t.valor < 0)) continue;
+    if (t.conta && cardIds.has(t.conta)) continue;
+    const vencISO = toISOInput(t.vencimento || t.data);
+    if (!vencISO || vencISO > hojeISO) continue;
+    if (vencISO < hojeISO) { atrasadas++; totalAtrasadas += Math.abs(t.valor); }
+    else { hoje++; totalHoje += Math.abs(t.valor); }
+  }
+  return { atrasadas, hoje, count: atrasadas + hoje, totalAtrasadas, totalHoje };
+}
+
+/** Dias de atraso de um vencimento (0 = vence hoje). */
+const diasAtraso = (vencISO: string, hojeISO: string) =>
+  Math.round((Date.parse(hojeISO) - Date.parse(vencISO)) / 86400000);
+
+/**
+ * Bolinha de pendência do Financeiro. Vermelha quando há conta ATRASADA, laranja
+ * quando só vence hoje — mesmo código de cor da barra de baixo e dos avisos de
+ * vencimento (🟠 hoje / 🔴 vencido).
+ */
+function DotPendencia({ atrasadas, hoje, className = '' }: { atrasadas: number; hoje: number; className?: string }) {
+  const n = atrasadas + hoje;
+  if (n <= 0) return null;
+  const atrasado = atrasadas > 0;
+  return (
+    <span
+      title={atrasado
+        ? `${atrasadas} conta(s) atrasada(s)${hoje ? ` · ${hoje} vencendo hoje` : ''}`
+        : `${hoje} conta(s) vencendo hoje`}
+      className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ${atrasado ? 'bg-rose-500' : 'bg-orange-500'} ${className}`}
+    >
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+}
 
 interface SplitRow { tipo: 'socio' | 'associado'; userId: string; valor: string; modo: 'valor' | 'pct'; pct: string }
 interface RateioForm { bruto: string; cliente: string; sucumbencia: string; honorarios: string }
@@ -755,6 +806,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // extrato do cartão (fonteImport) OU ainda está em aberto (a_pagar). Uma despesa
   // LANÇADA À MÃO numa conta-cartão (ex.: repasse) NÃO é fatura — fica no livro-razão.
   const isFaturaCartao = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta) && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar');
+  // Atrasadas × vencendo hoje — alimenta as bolinhas da subaba e do topo da lista.
+  const emAberto = useMemo(() => contasEmAberto(data), [data]);
   const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>('ledger');
   // Verticais disponíveis para ratear uma despesa (ex.: agência 1/3 cada).
   const areasVert = useMemo(() => {
@@ -1123,7 +1176,10 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
         return (
           <div className="mb-3 inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
             {tabs.map(({ k, l, Icon }) => (
-              <button key={k} onClick={() => setModo(k)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition ${modo === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{Icon && <Icon className="h-3.5 w-3.5" />}{l}</button>
+              <button key={k} onClick={() => setModo(k)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition ${modo === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>
+                {Icon && <Icon className="h-3.5 w-3.5" />}{l}
+                {k === 'apagar' && <DotPendencia atrasadas={emAberto.atrasadas} hoje={emAberto.hoje} />}
+              </button>
             ))}
           </div>
         );
@@ -1137,9 +1193,22 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
         const hojeISO = toISOInput(hojeBR());
         return (
           <div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-900/15">
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300"><CalendarClock className="h-4 w-4" /> Contas a pagar · {bills.length}</div>
-              <div className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">{brl(total)}</div>
+            <div className={`mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 ${emAberto.atrasadas > 0 ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-900/15' : 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-900/15'}`}>
+              <div className={`flex flex-wrap items-center gap-2 text-sm font-semibold ${emAberto.atrasadas > 0 ? 'text-rose-800 dark:text-rose-300' : 'text-amber-800 dark:text-amber-300'}`}>
+                <CalendarClock className="h-4 w-4" /> Contas a pagar · {bills.length}
+                {/* O que está ATRASADO vem primeiro e em vermelho — é o que cobra ação hoje. */}
+                {emAberto.atrasadas > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                    {emAberto.atrasadas} atrasada{emAberto.atrasadas > 1 ? 's' : ''} · {brl(emAberto.totalAtrasadas)}
+                  </span>
+                )}
+                {emAberto.hoje > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                    {emAberto.hoje} vence{emAberto.hoje > 1 ? 'm' : ''} hoje · {brl(emAberto.totalHoje)}
+                  </span>
+                )}
+              </div>
+              <div className={`text-lg font-bold tabular-nums ${emAberto.atrasadas > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'}`}>{brl(total)}</div>
             </div>
             <p className="mb-2 text-xs text-zinc-400">Boletos, DARF, repasses e demais saídas em aberto — do cartão você cuida na aba "Cartão de crédito". Ordenado por vencimento; anexe o comprovante no clipe e baixe no ✓ quando pagar.</p>
             {bills.length === 0 ? (
@@ -1149,12 +1218,18 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                 {bills.map((t) => {
                   const venc = t.vencimento || t.data;
                   const vencISO = toISOInput(venc);
+                  const dias = vencISO ? diasAtraso(vencISO, hojeISO) : -1;
                   const atrasada = !!vencISO && vencISO < hojeISO;
+                  const venceHoje = !!vencISO && vencISO === hojeISO;
                   const nome = titleCase((t.recebedor || t.party || t.pagador) || '') || t.categoria;
                   return (
-                    <div key={t.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/70">
+                    <div key={t.id} className={`border-b border-zinc-100 last:border-0 dark:border-zinc-800/70 ${atrasada ? 'bg-rose-50/40 dark:bg-rose-900/10' : ''}`}>
                       <div className="group flex items-center gap-2 px-3 py-2 text-sm">
-                        <span className={`w-12 shrink-0 rounded px-1 py-0.5 text-center text-[11px] font-semibold tabular-nums ${atrasada ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`} title={atrasada ? 'Vencida' : 'A vencer'}>{venc.slice(0, 5)}</span>
+                        {/* Faixa de status na ponta: vermelha = atrasada, laranja = vence hoje. */}
+                        <span className={`-ml-1 h-5 w-1 shrink-0 rounded-full ${atrasada ? 'bg-rose-500' : venceHoje ? 'bg-orange-500' : 'bg-transparent'}`} />
+                        <span className={`w-12 shrink-0 rounded px-1 py-0.5 text-center text-[11px] font-semibold tabular-nums ${atrasada ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`} title={atrasada ? `Vencida há ${dias} dia(s)` : venceHoje ? 'Vence hoje' : 'A vencer'}>{venc.slice(0, 5)}</span>
+                        {atrasada && <span className="hidden shrink-0 rounded bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white sm:inline">{dias}d atrás</span>}
+                        {venceHoje && <span className="hidden shrink-0 rounded bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white sm:inline">hoje</span>}
                         <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
                           <ClienteLink nome={nome} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />
