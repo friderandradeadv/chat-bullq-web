@@ -853,6 +853,40 @@ function Linha({ Icon, label, valor }: { Icon: typeof Mail; label: string; valor
   );
 }
 
+/** Documento do dossiê em modo leitura: abre em nova aba e, para sócio, remove com confirmação. */
+function DocLinha({
+  doc, corClass, podeRemover, confirmando, busy, onPedir, onCancelar, onRemover,
+}: {
+  doc: Documento; corClass: string; podeRemover: boolean; confirmando: boolean; busy: boolean;
+  onPedir: () => void; onCancelar: () => void; onRemover: () => void;
+}) {
+  return (
+    <div className={`rounded-lg border ${confirmando ? 'border-rose-300 dark:border-rose-900/60' : `border-zinc-200 dark:border-zinc-800 ${corClass}`}`}>
+      <div className="flex items-center gap-2 px-2.5 py-1.5">
+        <a href={doc.url} target="_blank" rel="noreferrer" className="flex min-w-0 flex-1 items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <ExternalLink className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{doc.nome || 'Documento'}</span>
+        </a>
+        {podeRemover && !confirmando && (
+          <button onClick={onPedir} title="Remover do dossiê" className="shrink-0 rounded p-1 text-zinc-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
+        )}
+      </div>
+      {confirmando && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-rose-200 bg-rose-50/60 px-2.5 py-1.5 dark:border-rose-900/50 dark:bg-rose-900/10">
+          <p className="text-xs text-zinc-600 dark:text-zinc-300">
+            Remover <strong>{doc.nome || 'este documento'}</strong> do dossiê? <span className="text-zinc-400">O arquivo em si continua no storage — quem já tiver o link ainda abre.</span>
+          </p>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <button onClick={onCancelar} className="rounded px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+            <button onClick={onRemover} disabled={busy} className="inline-flex items-center gap-1 rounded bg-rose-500 px-2 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Remover
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Dossiê completo do ex-colaborador — leitura, edição da ficha e opção de readmitir. */
 function DossieModal({
   ctx, membro, canEdit, onClose, onChanged,
@@ -869,11 +903,13 @@ function DossieModal({
   const [dataRe, setDataRe] = useState(hojeBR());
   /** Rascunho da edição — null = só leitura. Guarda ficha e desligamento juntos. */
   const [rascunho, setRascunho] = useState<{ f: Ficha; d: Desligamento } | null>(null);
+  /** Documento aguardando confirmação de remoção (na leitura, sem entrar na edição). */
+  const [removendo, setRemovendo] = useState<{ escopo: 'pessoal' | 'rescisao'; id: string } | null>(null);
 
   const d = ficha.desligamento;
   if (!d) return null;
 
-  const abrirEdicao = () => { setReadmitir(false); setRascunho({ f: ficha, d }); };
+  const abrirEdicao = () => { setReadmitir(false); setRemovendo(null); setRascunho({ f: ficha, d }); };
   const setF = (patch: Partial<Ficha>) => setRascunho((r) => (r ? { ...r, f: { ...r.f, ...patch } } : r));
   const setD = (patch: Partial<Desligamento>) => setRascunho((r) => (r ? { ...r, d: { ...r.d, ...patch } } : r));
 
@@ -899,6 +935,26 @@ function DossieModal({
       toast.success('Dossiê atualizado.');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao salvar o dossiê');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Remove um documento direto da leitura — grava na hora, sem passar pela edição. */
+  const removerDoc = async (escopo: 'pessoal' | 'rescisao', id: string) => {
+    setBusy(true);
+    try {
+      const carimbo = { retificadoPor: ctx.autor, retificadoEm: new Date().toISOString() };
+      const nova: Ficha = escopo === 'pessoal'
+        ? { ...ficha, documentos: (ficha.documentos ?? []).filter((x) => x.id !== id), desligamento: { ...d, ...carimbo } }
+        : { ...ficha, desligamento: { ...d, documentos: (d.documentos ?? []).filter((x) => x.id !== id), ...carimbo } };
+      await salvarFicha(ctx, uid, nova);
+      await qc.invalidateQueries({ queryKey: ['rh'] });
+      setFicha(nova);
+      setRemovendo(null);
+      toast.success('Documento removido do dossiê.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao remover o documento');
     } finally {
       setBusy(false);
     }
@@ -1082,9 +1138,13 @@ function DossieModal({
           <div className="mt-1 space-y-1">
             {docsPessoais.length === 0 && <p className="text-xs text-zinc-400">Nenhum documento pessoal arquivado.</p>}
             {docsPessoais.map((doc) => (
-              <a key={doc.id} href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-800 dark:text-zinc-300">
-                <ExternalLink className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{doc.nome || 'Documento'}</span>
-              </a>
+              <DocLinha
+                key={doc.id} doc={doc} corClass="hover:border-[#228BE6]" podeRemover={canEdit} busy={busy}
+                confirmando={removendo?.escopo === 'pessoal' && removendo.id === doc.id}
+                onPedir={() => setRemovendo({ escopo: 'pessoal', id: doc.id })}
+                onCancelar={() => setRemovendo(null)}
+                onRemover={() => removerDoc('pessoal', doc.id)}
+              />
             ))}
           </div>
         )}
@@ -1102,9 +1162,13 @@ function DossieModal({
           <div className="mt-1 space-y-1">
             {docsRescisao.length === 0 && <p className="text-xs text-zinc-400">Nenhum documento de rescisão anexado.</p>}
             {docsRescisao.map((doc) => (
-              <a key={doc.id} href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-600 hover:border-[#E64980] hover:text-[#E64980] dark:border-zinc-800 dark:text-zinc-300">
-                <ExternalLink className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{doc.nome || 'Documento'}</span>
-              </a>
+              <DocLinha
+                key={doc.id} doc={doc} corClass="hover:border-[#E64980]" podeRemover={canEdit} busy={busy}
+                confirmando={removendo?.escopo === 'rescisao' && removendo.id === doc.id}
+                onPedir={() => setRemovendo({ escopo: 'rescisao', id: doc.id })}
+                onCancelar={() => setRemovendo(null)}
+                onRemover={() => removerDoc('rescisao', doc.id)}
+              />
             ))}
           </div>
         )}
