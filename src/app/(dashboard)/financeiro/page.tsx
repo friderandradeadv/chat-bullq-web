@@ -2023,7 +2023,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2079,22 +2079,27 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   //   • condenação = bruto − sucumbência (o que é do cliente)
   //   • honorário contratual = % sobre a CONDENAÇÃO (não sobre o bruto)
   //   • cliente (líquido) = condenação − contratual = bruto − sucumbência − contratual
-  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string } | undefined, bruto: number) => {
+  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string } | undefined, bruto: number) => {
     const r2 = (n: number) => Math.round(n * 100) / 100;
+    // Pagamento PARCIAL: o banco depositou menos que o total devido. A sucumbência de base
+    // explícita (fixa) é rateada proporcional ao que entrou — senão o cliente absorveria toda
+    // a diferença e o escritório levaria a sucumbência cheia de um pagamento pela metade.
+    const totalDev = a?.parcial ? parseValor(a?.totalDevido || '') : 0;
+    const fracao = a?.parcial && totalDev > bruto && totalDev > 0 ? bruto / totalDev : 1;
     let suc: number;
     if (a?.sucMode === 'pct') {
       const pct = parsePct(a?.sucPct);
       if ((a?.sucBaseTipo || 'Condenação') === 'Condenação') {
         // Sucumbência EMBUTIDA no alvará: bruto = condenação + sucumbência e sucumbência = pct% da
-        // condenação → condenação = bruto/(1+pct/100); sucumbência = bruto − condenação. (não precisa digitar base)
+        // condenação → condenação = bruto/(1+pct/100); sucumbência = bruto − condenação. (já é proporcional ao bruto)
         const cond = pct > 0 ? r2(bruto / (1 + pct / 100)) : bruto;
         suc = r2(bruto - cond);
       } else {
-        // Base explícita (valor da causa / proveito econômico): sucumbência = base × pct.
-        suc = r2(parseValor(a?.sucBase || '') * (pct / 100));
+        // Base explícita (valor da causa / proveito econômico): sucumbência = base × pct, rateada pela fração recebida.
+        suc = r2(parseValor(a?.sucBase || '') * (pct / 100) * fracao);
       }
     } else {
-      suc = parseValor(a?.sucumbencia || ''); // valor fixo arbitrado
+      suc = r2(parseValor(a?.sucumbencia || '') * fracao); // valor fixo arbitrado (rateado se parcial)
     }
     const condenacao = r2(bruto - suc);
     const hon = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
@@ -2176,7 +2181,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -2472,6 +2477,25 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                                 <span className="text-zinc-400">bruto {brl2(bruto)} − sucumbência {brl2(calc.suc)} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong></span>
                                 <span className={calc.valido ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{calc.valido ? 'fecha com o bruto ✓' : 'sucumbência/contratual maior que o disponível — confira'}</span>
+                              </div>
+                              {/* Pagamento PARCIAL: banco depositou menos que o total devido → rateia a sucumbência
+                                  proporcional, grava recebido/falta no processo e mantém o card no cumprimento (não move). */}
+                              <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50/50 px-2 py-1.5 dark:border-amber-900/40 dark:bg-amber-900/10">
+                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                                  <input type="checkbox" checked={!!a.parcial} onChange={(e) => set({ parcial: e.target.checked })} className="h-3 w-3 accent-amber-600" />
+                                  Pagamento parcial (o banco depositou menos que o total devido)
+                                </label>
+                                {a.parcial && (() => {
+                                  const total = parseValor(a.totalDevido || '');
+                                  const falta = total > bruto ? total - bruto : 0;
+                                  return (
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                      <span className="text-[11px] text-zinc-500">Total devido (executado):</span>
+                                      <div className="w-32"><MoneyInput value={a.totalDevido ?? ''} onChange={(v) => set({ totalDevido: v })} placeholder="total" /></div>
+                                      {total > 0 && <span className="text-[11px] text-zinc-500">recebido {brl2(bruto)} · <span className="font-semibold text-amber-700 dark:text-amber-400">falta {brl2(falta)}</span> · card fica no cumprimento</span>}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                               {/* Rateio entre advogados — % sobre o NOSSO; Escritório fica com a sobra. */}
                               <div className="space-y-1.5 rounded-lg border border-emerald-200/60 p-2 dark:border-emerald-900/40">
