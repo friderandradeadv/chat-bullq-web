@@ -562,7 +562,7 @@ function uItemKeys(it: UItem): SortKeys {
   if (it.kind === 'bank') {
     const p: any = it.party;
     const t = (s?: string | null) => (s ? new Date(s).getTime() || 0 : 0);
-    return { title: it.cliente ?? '', created: t(p?.createdAt), updated: t(p?.updatedAt), due: null };
+    return { id: it.id, title: it.cliente ?? '', created: t(p?.createdAt), updated: t(p?.updatedAt), due: null };
   }
   return kanbanCardKeys(it.card);
 }

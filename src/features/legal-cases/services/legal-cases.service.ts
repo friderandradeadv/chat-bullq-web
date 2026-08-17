@@ -283,6 +283,10 @@ export interface KanbanCard {
 export interface KanbanData {
   phases: KanbanPhase[];
   cards: KanbanCard[];
+  // Ordem MANUAL dos cards por fase (arrastar o card dentro da coluna). É do
+  // escritório inteiro (org.settings.kanbanCardOrder) e só vale na ordenação
+  // "Padrão (manual)"; card fora da lista (entrou depois) sobe pro topo.
+  cardOrder?: Record<string, string[]>;
   // Fotos dos responsáveis DEDUPLICADAS (1 entrada por usuário, não por card): as
   // fotos são data URIs base64 (~14 KB) e repeti-las por card inchava a resposta.
   // O service backfill preenche card.responsible.avatarUrl a partir deste mapa.
@@ -604,6 +608,13 @@ export const legalCasesService = {
       hidden: cfg.config.hidden ?? [],
       custom: cfg.config.custom ?? [],
     });
+  },
+  // Ordem manual dos cards de UMA fase (arrastar o card na coluna). Manda os ids
+  // na ordem da tela; o backend descarta id de card morto e grava em
+  // org.settings.kanbanCardOrder — vale pro escritório inteiro.
+  async saveCardOrder(phase: string, ids: string[]): Promise<{ phase: string; ids: string[] }> {
+    const { data } = await api.patch('/legal-cases/kanban/card-order', { phase, ids });
+    return data.data ?? data;
   },
   // Criar/excluir fase inline no kanban (só sócios — gate no backend). `board`
   // pode ser um quadro base OU a chave de um quadro custom (board_*).

@@ -17,7 +17,8 @@ import { CasesListView } from '@/features/legal-cases/components/cases-list-view
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
-import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
+import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, SORT_OPTIONS, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
+import { avisoOrdenacaoAtiva, cardAttr, colAttr, dropIndexAt, idsWithMove, persistCardOrder } from '@/features/legal-cases/lib/card-order';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { usePhaseDrag, applyPhaseDrag, type PhaseDrag } from '@/features/legal-cases/lib/phase-drag';
 import { membersService } from '@/features/settings/services/members.service';
@@ -273,11 +274,30 @@ export default function FaseJudicialKanbanPage() {
     }
   }, [qc]);
 
-  const onDragEnd = (e: DragEndEvent) => {
+  const onDragEnd = async (e: DragEndEvent) => {
     setActiveId(null);
     const to = e.over?.id as string | undefined;
     const card = cards.find((x) => x.id === e.active.id);
-    if (to && card && phases.some((p) => p.key === to)) move(card, to);
+    if (!to || !card || !phases.some((p) => p.key === to)) return;
+    const mesmaFase = card.phase === to;
+    // Ordem à mão só faz sentido na coluna em "Padrão (manual)" — com uma regra
+    // de ordenação ligada, ela reordenaria tudo de novo no próximo render.
+    const sort = loadPhaseSort(to);
+    if (sort !== 'manual') {
+      if (mesmaFase) avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
+      else move(card, to);
+      return;
+    }
+    // Y do ponteiro ao soltar = onde o arraste começou + o quanto andou.
+    const y = ((e.activatorEvent as PointerEvent | undefined)?.clientY ?? 0) + e.delta.y;
+    const idx = dropIndexAt(to, y, card.id);
+    if (idx >= 0) {
+      const exibidos = applyCardSort(byPhase[to] ?? [], 'manual', kanbanCardKeys, data?.cardOrder?.[to]);
+      // Grava a ordem ANTES de mover de fase: mover invalida o quadro, e o
+      // refetch já volta com a ordem nova (sem o card piscar de lugar).
+      await persistCardOrder(qc, KEY, to, idsWithMove(exibidos.map((c) => c.id), card.id, idx));
+    }
+    if (!mesmaFase) move(card, to);
   };
 
   // Exporta a lista FILTRADA (as mesmas linhas que aparecem no quadro/lista) em CSV.
@@ -394,7 +414,7 @@ export default function FaseJudicialKanbanPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onIniciarCs={setCsCase} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onIniciarCs={setCsCase} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && isOwner && <AddPhaseColumn board="judicial" accent="#e11970" onAdded={onChanged} />}
           </div>
@@ -484,7 +504,7 @@ function MultiSelect({
 const COLUNA_INICIAL = 20;
 
 function Column({
-  phase, items, phases, bulk, onMove, onOpen, onIniciarCs, onChanged, canRename, onRename, onDelete, phaseDrag, onMoveLeft, onMoveRight,
+  phase, items, phases, bulk, onMove, onOpen, onIniciarCs, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, onMoveLeft, onMoveRight,
 }: {
   phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[]; bulk: KanbanBulk;
   onMove: (c: KanbanCard, to: string) => void; onOpen: (id: string) => void;
@@ -492,6 +512,8 @@ function Column({
   onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void;
   onDelete: (phase: KanbanPhase) => void;
   phaseDrag?: PhaseDrag;
+  /** ordem manual salva desta fase (do escritório) */
+  cardOrder?: string[];
   onMoveLeft?: () => void; onMoveRight?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
@@ -499,7 +521,7 @@ function Column({
   const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
   // Reseta o limite quando o conjunto de cards muda (filtro/refetch/troca de fase).
   useEffect(() => { setLimit(COLUNA_INICIAL); }, [phase.key, items.length]);
-  const sortedItems = useMemo(() => applyCardSort(items, sort, kanbanCardKeys), [items, sort]);
+  const sortedItems = useMemo(() => applyCardSort(items, sort, kanbanCardKeys, cardOrder), [items, sort, cardOrder]);
   const shown = sortedItems.length > limit ? sortedItems.slice(0, limit) : sortedItems;
   const rest = sortedItems.length - shown.length;
   // "Selecionar todos" pega a fase inteira (inclusive o que está atrás do "+ N mais");
@@ -520,6 +542,7 @@ function Column({
       </div>
       <div
         ref={setNodeRef}
+        {...colAttr(phase.key)}
         className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
       >
         {items.length === 0 && (
@@ -569,6 +592,7 @@ const Card = memo(function Card({
       style={style}
       {...listeners}
       {...attributes}
+      {...(overlay ? {} : cardAttr(c.id))}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => {
         if (overlay || !onOpen) return;

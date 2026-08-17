@@ -17,6 +17,7 @@ export const SORT_OPTIONS: { id: CardSort; label: string }[] = [
 
 /** Campos que a ordenação usa — cada board mapeia seu item para isto. */
 export interface SortKeys {
+  id: string;        // id do item — usado pela ordem MANUAL (arrastar o card)
   title: string;
   created: number;   // epoch ms (0 = sem data)
   updated: number;   // epoch ms
@@ -27,6 +28,7 @@ const ts = (s?: string | null): number => (s ? new Date(s).getTime() || 0 : 0);
 
 export function kanbanCardKeys(c: KanbanCard): SortKeys {
   return {
+    id: c.id,
     title: c.title ?? '',
     created: ts(c.createdAt),
     updated: ts(c.updatedAt),
@@ -34,9 +36,19 @@ export function kanbanCardKeys(c: KanbanCard): SortKeys {
   };
 }
 
-/** Aplica a ordenação escolhida sem mutar o array original. */
-export function applyCardSort<T>(items: T[], sort: CardSort, keys: (it: T) => SortKeys): T[] {
-  if (sort === 'manual') return items;
+/**
+ * Aplica a ordenação escolhida sem mutar o array original. Em "manual", segue a
+ * ordem que o escritório arrastou (`manual` = ids na ordem salva); card que não
+ * está na lista (entrou depois) fica no topo, pra ninguém perder novidade.
+ */
+export function applyCardSort<T>(items: T[], sort: CardSort, keys: (it: T) => SortKeys, manual?: string[]): T[] {
+  if (sort === 'manual') {
+    if (!manual?.length) return items;
+    const pos = new Map(manual.map((id, i) => [id, i]));
+    // -1 pros desconhecidos (topo); o sort do JS é estável, então empate mantém
+    // a ordem que veio do servidor.
+    return [...items].sort((a, b) => (pos.get(keys(a).id) ?? -1) - (pos.get(keys(b).id) ?? -1));
+  }
   const arr = [...items];
   arr.sort((a, b) => {
     const ka = keys(a), kb = keys(b);

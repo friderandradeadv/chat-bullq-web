@@ -8,7 +8,9 @@ import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/legal-cases/components/kanban-card-bits';
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, KanbanSelectTrigger, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
-import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
+import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, SORT_OPTIONS, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
+import { avisoOrdenacaoAtiva, cardAttr, colAttr, idsWithMove, persistCardOrder } from '@/features/legal-cases/lib/card-order';
+import { useCardDrag, type CardDragHandle } from '@/features/legal-cases/lib/card-drag';
 import { isTerminalPhase, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { usePhaseDrag, applyPhaseDrag } from '@/features/legal-cases/lib/phase-drag';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -110,6 +112,21 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     scrollRef: dragScroll.ref,
     onDrop: (k, alvo, onde) => applyPhaseDrag(qc, KEY, k, alvo, onde),
   });
+  // Arrastar o CARD dentro da fase (só ordem — aqui o card nunca troca de coluna).
+  const cardDrag = useCardDrag({
+    accent,
+    onDrop: (cardId, phaseKey, index) => {
+      const sort = sortOf(phaseKey);
+      if (sort !== 'manual') {
+        avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
+        return;
+      }
+      const col = columns.find((c) => c.key === phaseKey);
+      if (!col) return;
+      const exibidos = applyCardSort(col.cards, 'manual', kanbanCardKeys, data?.cardOrder?.[phaseKey]);
+      persistCardOrder(qc, KEY, phaseKey, idsWithMove(exibidos.map((c) => c.id), cardId, index));
+    },
+  });
   // Ordenação dos cards por coluna (preferência de visualização, no localStorage).
   const [sorts, setSorts] = useState<Record<string, CardSort>>({});
   const sortOf = (key: string): CardSort => sorts[key] ?? loadPhaseSort(key);
@@ -195,7 +212,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
       ) : (
         <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col, i) => {
-            const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys) : col.cards;
+            const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys, data?.cardOrder?.[col.key]) : col.cards;
             const colTerminal = isTerminalPhase(col.key ? data?.phases?.find((p) => p.key === col.key) : null);
             return (
             <div key={col.key ?? col.nome} ref={col.key ? phaseDrag.columnRef(col.key) : undefined} style={col.key ? phaseDrag.columnStyle(col.key) : undefined} className="group/col flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
@@ -224,9 +241,9 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                   <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
                 </span>
               </div>
-              <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              <div {...(col.key ? colAttr(col.key) : {})} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {sortedCards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-                {sortedCards.map((c) => <AdminCard key={c.id} c={c} terminal={colTerminal} bulk={bulk} colIds={sortedCards.map((x) => x.id)} accent={accent} onOpen={setOpenCaseId} />)}
+                {sortedCards.map((c) => <AdminCard key={c.id} c={c} terminal={colTerminal} bulk={bulk} colIds={sortedCards.map((x) => x.id)} accent={accent} drag={col.key ? cardDrag.handle(c.id, col.key) : undefined} dragStyle={cardDrag.cardStyle(c.id)} onOpen={setOpenCaseId} />)}
               </div>
             </div>
             );
@@ -242,16 +259,25 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   );
 }
 
-function AdminCard({ c, terminal, bulk, colIds, accent, onOpen }: { c: KanbanCard; terminal?: boolean; bulk?: KanbanBulk; colIds?: string[]; accent?: string; onOpen: (id: string) => void }) {
+function AdminCard({ c, terminal, bulk, colIds, accent, drag, dragStyle, onOpen }: { c: KanbanCard; terminal?: boolean; bulk?: KanbanBulk; colIds?: string[]; accent?: string;
+  /** arrastar o card pra reordenar a fase (useCardDrag) */
+  drag?: CardDragHandle; dragStyle?: React.CSSProperties; onOpen: (id: string) => void }) {
   const prod = produtoColor(c.produto);
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   return (
     // <div role=button> (não <button>): a caixinha de seleção é um controle
     // dentro do card, e controle dentro de <button> é HTML inválido.
-    <div role="button" tabIndex={0} onClick={() => onOpen(c.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c.id); } }}
-      className={`group relative w-full cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-[#1E2226] ${terminal ? terminalCardClass : ''}`}
-      style={bulk?.has(c.id) && accent ? { boxShadow: `0 0 0 2px ${accent}` } : undefined}>
+    <div role="button" tabIndex={0} {...cardAttr(c.id)}
+      onPointerDown={drag?.onPointerDown}
+      onClick={() => { if (drag?.blockedClick()) return; onOpen(c.id); }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c.id); } }}
+      className={`group relative w-full rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-[#1E2226] ${drag?.dragging ? 'cursor-grabbing' : 'cursor-pointer'} ${terminal ? terminalCardClass : ''}`}
+      style={{
+        ...(bulk?.has(c.id) && accent ? { boxShadow: `0 0 0 2px ${accent}` } : undefined),
+        ...dragStyle,
+        ...(drag ? { touchAction: 'none' } : undefined),
+      }}>
       {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent={accent} />}
       {/* pr-5 reserva o canto da caixinha de seleção */}
       <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
