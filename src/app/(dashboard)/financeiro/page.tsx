@@ -1081,6 +1081,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // manda junto — o servidor só usa o fallback dele se não receber nada.
   // Fora da janela de 24h o backend troca por template HSM com o PDF no header.
   const [pcSend, setPcSend] = useState<string | null>(null);
+  // Picker "vincular contato do cliente" — abre quando a prestação não acha contato/conversa.
+  const [vincModal, setVincModal] = useState<{ tx: FinTransacao; caseId: string; clienteNome: string; motivo: string } | null>(null);
   // Em vez de disparar direto, PREPARA a prestação e abre a conversa do cliente em outra guia
   // com o texto + PDF no compositor pra revisar/editar/aprovar. Após as 18h, abre já no modo
   // agendar (a barra de agendamento com o seletor de hora). O envio real (com as travas anti-golpe
@@ -1101,6 +1103,11 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
         fr.readAsDataURL(blob);
       });
       const r = await financeiroService.prepararPrestacaoRevisao(t.id!, pdfBase64);
+      // Cliente sem contato/conversa → abre o picker pra vincular o contato CERTO (confirmação humana).
+      if ('precisaVincularContato' in r) {
+        setVincModal({ tx: t, caseId: r.caseId, clienteNome: r.clienteNome || dados.cliente, motivo: r.motivo });
+        return;
+      }
       const posDe18h = new Date().getHours() >= 18;
       const url = `/inbox?conversationId=${encodeURIComponent(r.conversationId)}&prestacao=${encodeURIComponent(t.id!)}${posDe18h ? '&agendar=1' : ''}`;
       window.open(url, '_blank', 'noopener');
@@ -1900,6 +1907,28 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       )}
 
       {importing && <ImportExtratoModal contas={contas} onClose={() => setImporting(false)} />}
+      {vincModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setVincModal(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Send className="h-4 w-4 text-[#02883C]" /> Vincular contato de {titleCase(vincModal.clienteNome)}</h3>
+              <button onClick={() => setVincModal(null)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">{vincModal.motivo} Busque e escolha o contato de WhatsApp <strong>certo</strong> deste cliente — <strong>confira o número</strong> antes de vincular (cuidado com homônimo: não vá só pelo nome).</p>
+            <BuscaCliente value="" onPick={async (c) => {
+              if (!c?.id) return;
+              try {
+                const r = await financeiroService.vincularContatoCliente(vincModal.caseId, c.id);
+                if (!r.ok) { toast.error(r.motivo || 'Não consegui vincular o contato'); return; }
+                const tx = vincModal.tx; setVincModal(null);
+                toast.success('Contato vinculado ✅ Abrindo a prévia…');
+                enviarPrestacaoCliente(tx);
+              } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao vincular o contato'); }
+            }} onText={() => { /* precisa escolher um contato existente */ }} />
+            <p className="mt-3 text-[11px] text-zinc-400">Depois de vincular, o processo passa a saber o WhatsApp do cliente — não precisa repetir na próxima.</p>
+          </div>
+        </div>
+      )}
       <FichaDrawerMount ficha={ficha} />
     </Card>
     </>
