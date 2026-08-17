@@ -2098,7 +2098,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2230,6 +2230,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         // PARCIAL: marca sozinho e preenche o total (o rateio já sai proporcional).
         if (r.totalExecutado && r.totalExecutado > 0) {
           patch.totalDevido = fmtMoney(r.totalExecutado);
+          patch.totalFromIA = true; // veio da petição → pode estar sem a correção até o depósito
           const brutoLin = Math.abs(conf.linhas[idx]?.valor || 0);
           if (r.totalExecutado > brutoLin + 0.01) patch.parcial = true;
         }
@@ -2571,10 +2572,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   const total = parseValor(a.totalDevido || '');
                                   const falta = total > bruto ? total - bruto : 0;
                                   return (
-                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                      <span className="text-[11px] text-zinc-500">Total devido (executado):</span>
-                                      <div className="w-32"><MoneyInput value={a.totalDevido ?? ''} onChange={(v) => set({ totalDevido: v })} placeholder="total" /></div>
-                                      {total > 0 && <span className="text-[11px] text-zinc-500">recebido {brl2(bruto)} · <span className="font-semibold text-amber-700 dark:text-amber-400">falta {brl2(falta)}</span> · card fica no cumprimento</span>}
+                                    <div className="mt-1.5">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-[11px] text-zinc-500">Total devido (executado):</span>
+                                        <div className="w-32"><MoneyInput value={a.totalDevido ?? ''} onChange={(v) => set({ totalDevido: v, totalFromIA: false })} placeholder="total" /></div>
+                                        {total > 0 && <span className="text-[11px] text-zinc-500">recebido {brl2(bruto)} · <span className="font-semibold text-amber-700 dark:text-amber-400">falta {brl2(falta)}</span> · card fica no cumprimento</span>}
+                                      </div>
+                                      {a.totalFromIA && <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">⚠️ Total lido da petição pela IA — confira se está atualizado até a data do depósito (pode faltar a correção do período).</p>}
                                     </div>
                                   );
                                 })()}
