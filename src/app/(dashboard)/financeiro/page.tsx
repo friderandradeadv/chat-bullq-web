@@ -1081,16 +1081,15 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // manda junto — o servidor só usa o fallback dele se não receber nada.
   // Fora da janela de 24h o backend troca por template HSM com o PDF no header.
   const [pcSend, setPcSend] = useState<string | null>(null);
+  // Em vez de disparar direto, PREPARA a prestação e abre a conversa do cliente em outra guia
+  // com o texto + PDF no compositor pra revisar/editar/aprovar. Após as 18h, abre já no modo
+  // agendar (a barra de agendamento com o seletor de hora). O envio real (com as travas anti-golpe
+  // e o registro probatório) continua sendo disparado de dentro do chat.
   const enviarPrestacaoCliente = async (t: FinTransacao) => {
     const dados = await financeiroService.prestacaoDados(t.id!).catch((e: any) => {
       toast.error(e?.response?.data?.message || 'Erro ao ler a prestação de contas'); return null;
     });
     if (!dados) return;
-    if (!confirm(
-      `Enviar a prestação de contas para ${dados.cliente} no WhatsApp?\n\n` +
-      `O cliente recebe o PDF e o aviso de que a parte dele é de ${brl2(dados.liquido)}, ` +
-      `com o pedido dos dados bancários para o repasse.\n\nIsso manda mensagem de verdade.`
-    )) return;
     setPcSend(t.id!);
     try {
       const { gerarPrestacaoPdf } = await import('@/features/financeiro/lib/prestacao-pdf');
@@ -1101,10 +1100,12 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
         fr.onerror = () => rej(new Error('Falha ao ler o PDF gerado'));
         fr.readAsDataURL(blob);
       });
-      const r = await financeiroService.enviarPrestacaoAoCliente(t.id!, pdfBase64);
-      if (r.enviado) toast.success('Prestação de contas enviada ao cliente.');
-      else toast.error(r.motivo || 'Não foi possível enviar ao cliente.');
-    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao enviar ao cliente'); }
+      const r = await financeiroService.prepararPrestacaoRevisao(t.id!, pdfBase64);
+      const posDe18h = new Date().getHours() >= 18;
+      const url = `/inbox?conversationId=${encodeURIComponent(r.conversationId)}&prestacao=${encodeURIComponent(t.id!)}${posDe18h ? '&agendar=1' : ''}`;
+      window.open(url, '_blank', 'noopener');
+      toast.success(`Prévia aberta no chat de ${dados.cliente}${posDe18h ? ' (modo agendar — após 18h)' : ''}. Revise e aprove por lá.`);
+    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao preparar a prévia'); }
     finally { setPcSend(null); }
   };
 
@@ -1243,7 +1244,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="flex w-40 shrink-0 items-center justify-end gap-0.5">
                           <button onClick={() => quickReceber(t)} title="Marcar como pago" className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>
                           {t.categoria === 'Repasse ao cliente' && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
-                          {t.categoria === 'Repasse ao cliente' && <button onClick={() => enviarPrestacaoCliente(t)} disabled={pcSend === t.id} title="Enviar ao cliente no WhatsApp: ganhamos + alvará depositado, PDF da prestação e pedido dos dados bancários" className="rounded-md bg-[#02883C]/12 p-1 text-[#02883C] ring-1 ring-inset ring-[#02883C]/25 transition hover:bg-[#02883C]/20 disabled:opacity-50 dark:bg-[#02883C]/20">{pcSend === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}</button>}
+                          {t.categoria === 'Repasse ao cliente' && <button onClick={() => enviarPrestacaoCliente(t)} disabled={pcSend === t.id} title="Abrir a prévia no chat do cliente (texto + PDF) pra revisar, editar e enviar — após 18h, agendar" className="rounded-md bg-[#02883C]/12 p-1 text-[#02883C] ring-1 ring-inset ring-[#02883C]/25 transition hover:bg-[#02883C]/20 disabled:opacity-50 dark:bg-[#02883C]/20">{pcSend === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}</button>}
                           <button onClick={() => toggleAnex(t.id!)} title="Anexar alvará / comprovante / boleto — vai junto na prestação" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" /></button>
                           <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -1417,7 +1418,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="flex w-40 shrink-0 items-center justify-end gap-0.5">
                           {!ehLiquidado(st) && <button onClick={() => quickReceber(t)} title={t.valor >= 0 ? 'Marcar como recebido' : 'Marcar como pago'} className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>}
                           {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
-                          {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => enviarPrestacaoCliente(t)} disabled={pcSend === t.id} title="Enviar ao cliente no WhatsApp: ganhamos + alvará depositado, PDF da prestação e pedido dos dados bancários" className="rounded-md bg-[#02883C]/12 p-1 text-[#02883C] ring-1 ring-inset ring-[#02883C]/25 transition hover:bg-[#02883C]/20 disabled:opacity-50 dark:bg-[#02883C]/20">{pcSend === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}</button>}
+                          {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => enviarPrestacaoCliente(t)} disabled={pcSend === t.id} title="Abrir a prévia no chat do cliente (texto + PDF) pra revisar, editar e enviar — após 18h, agendar" className="rounded-md bg-[#02883C]/12 p-1 text-[#02883C] ring-1 ring-inset ring-[#02883C]/25 transition hover:bg-[#02883C]/20 disabled:opacity-50 dark:bg-[#02883C]/20">{pcSend === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}</button>}
                           <button onClick={() => toggleAnex(t.id!)} title="Anexar alvará / comprovante / boleto — vai junto na prestação" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" />{(t.anexos?.length ?? 0) > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#7048E8] px-0.5 text-[8px] font-bold leading-none text-white">{t.anexos!.length}</span>}</button>
                           <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>

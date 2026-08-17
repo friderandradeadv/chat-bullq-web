@@ -4,6 +4,8 @@ import { Fragment, useEffect, useRef, useState, useCallback, useMemo, type React
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, CheckCheck, Clock, AlertCircle, ExternalLink, Reply, Trash2, X, Ban, StickyNote, Bot, Hand, Loader2, Copy, Star, Forward, Smile, Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Info, Paperclip, Eye, EyeOff, Pencil, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSearchParams } from 'next/navigation';
+import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import { scheduledMessagesService } from '../services/scheduled-messages.service';
 import { ScheduledMessagesBar } from './scheduled-messages-bar';
@@ -964,6 +966,37 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
       clearDraft();
     }
   }, [draftPending, conversation.id, clearDraft]);
+
+  // PRÉVIA DA PRESTAÇÃO: veio do Financeiro com ?prestacao=<txId> — carrega o rascunho
+  // (texto + PDF) no compositor pra revisar/editar/enviar. O ENVIO real (travas anti-golpe
+  // + registro probatório) continua sendo o do especializado; aqui é a revisão humana.
+  const searchParams = useSearchParams();
+  const prestacaoTx = searchParams.get('prestacao');
+  const prestacaoAgendar = !!searchParams.get('agendar');
+  const prestacaoLoaded = useRef<string | null>(null);
+  useEffect(() => {
+    if (!prestacaoTx || prestacaoLoaded.current === prestacaoTx) return;
+    prestacaoLoaded.current = prestacaoTx;
+    (async () => {
+      try {
+        const r = await financeiroService.prestacaoRascunho(prestacaoTx);
+        if (!r) { toast.error('Rascunho da prestação não encontrado — reabra pelo Financeiro.'); return; }
+        if (r.conversationId !== conversation.id) return; // rascunho é de outro cliente
+        chatInputRef.current?.setText(r.texto);
+        try {
+          const resp = await fetch(r.pdfUrl);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            chatInputRef.current?.addFiles([new File([blob], r.pdfNome || 'Prestacao de Contas.pdf', { type: 'application/pdf' })]);
+          }
+        } catch { /* o texto já entrou; se o PDF não veio, anexe pelo clipe */ }
+        toast.success(`Prévia da prestação carregada — revise, edite e envie.${prestacaoAgendar ? ' É após 18h: use o relógio do compositor para agendar o envio.' : ''}`, { duration: 7000 });
+      } catch (e: any) {
+        toast.error(e?.response?.data?.message || 'Não consegui carregar a prévia da prestação.');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prestacaoTx, conversation.id]);
   const dragCounter = useRef(0);
   const [dragOver, setDragOver] = useState(false);
   const hasFiles = (e: React.DragEvent) =>
