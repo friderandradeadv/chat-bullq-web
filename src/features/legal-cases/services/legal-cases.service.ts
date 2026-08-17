@@ -752,4 +752,14 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/cadastro/sugerir`);
     return data.data ?? data;
   },
+  /**
+   * Dossiê em PDF das tentativas de contato para o repasse do alvará — prova de
+   * diligência para eventual consignação em pagamento. Os acks (enviada/entregue/
+   * lida) são lidos no servidor no momento da emissão, então cada download traz o
+   * estado atual, não uma foto antiga.
+   */
+  async dossieRepasse(id: string): Promise<{ pdfBase64: string; nome: string }> {
+    const { data } = await api.get(`/legal-cases/${id}/dossie-repasse`, { timeout: 60000 });
+    return data.data ?? data;
+  },
 };

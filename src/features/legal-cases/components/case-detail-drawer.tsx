@@ -95,6 +95,7 @@ export function CaseDetailDrawer({
   const [picker, setPicker] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(true);
   const [faseAvanco, setFaseAvanco] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | 'acoes_vencidas' | 'acoes_perdidas' | null>(null);
+  const [dossieLoad, setDossieLoad] = useState(false);
   const { isSocio } = usePermissions();
 
   const { data: c, isLoading } = useQuery({
@@ -136,6 +137,28 @@ export function CaseDetailDrawer({
   const cliente = c?.parties?.find((p) => p.role === 'CLIENT') ?? null;
   const adversa = c?.parties?.find((p) => p.role === 'OPPONENT') ?? null;
   const phaseKey = (c as any)?.legalPhase as string | undefined;
+  // Registro probatório do repasse do alvará (append-only, gravado pelo backend).
+  const repasse = (c?.metadata as any)?.repasseAlvara as
+    | { tentativas: Array<Record<string, unknown>>; encerradoEm?: string; encerradoMotivo?: string }
+    | undefined;
+  const baixarDossie = async () => {
+    setDossieLoad(true);
+    try {
+      const { pdfBase64, nome } = await legalCasesService.dossieRepasse(caseId);
+      const bin = atob(pdfBase64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = nome || 'dossie-repasse.pdf';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao gerar o dossiê');
+    } finally {
+      setDossieLoad(false);
+    }
+  };
   const fase = phases.find((p) => p.key === phaseKey);
   // Fases de sentença (favorável/desfavorável) leem do bucket compartilhado 'sentenca'.
   const faseBucket = (phaseKey ?? '').startsWith('sentenca_') ? 'sentenca' : (phaseKey ?? '');
@@ -433,6 +456,28 @@ export function CaseDetailDrawer({
                   <button onClick={() => setFaseAvanco('acoes_vencidas')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#2f9e44] hover:bg-[#2f9e44]/5 dark:border-zinc-700 dark:text-zinc-200">Ações vencidas</button>
                   <button onClick={() => setFaseAvanco('acoes_perdidas')} className="rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-[#e03131] hover:bg-[#e03131]/5 dark:border-zinc-700 dark:text-zinc-200">Ações perdidas</button>
                 </div>
+              </div>
+            )}
+            {/* REPASSE AO CLIENTE — só aparece quando já houve tentativa registrada.
+                O dossiê é a prova de diligência para uma eventual consignação em
+                pagamento (cliente que some depois da onda de golpes). */}
+            {repasse && repasse.tentativas.length > 0 && (
+              <div className="mt-4 rounded-lg border border-[#cfe0ed] p-3 dark:border-zinc-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Repasse ao cliente</p>
+                <p className="mt-1.5 text-xs text-zinc-600 dark:text-zinc-300">
+                  {repasse.tentativas.length} tentativa{repasse.tentativas.length > 1 ? 's' : ''} de contato registrada{repasse.tentativas.length > 1 ? 's' : ''}
+                  {repasse.encerradoEm ? ` · encerrado: ${repasse.encerradoMotivo ?? '-'}` : ' · ciclo em andamento'}
+                </p>
+                <button
+                  onClick={baixarDossie}
+                  disabled={dossieLoad}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-[#02883C] hover:bg-[#02883C]/5 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200"
+                >
+                  {dossieLoad ? 'gerando…' : 'Baixar dossiê (PDF)'}
+                </button>
+                <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  Relatório das tentativas com data de envio, entrega e leitura — gerado no momento do download.
+                </p>
               </div>
             )}
             {c && faseAvanco && (
