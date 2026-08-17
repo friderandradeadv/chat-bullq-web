@@ -2108,7 +2108,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2290,7 +2290,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -2546,6 +2546,30 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 <label className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#228BE6]/40 bg-[#228BE6]/10 px-2 py-1 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/20 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
                                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownCircle className="h-3.5 w-3.5" />} {busy ? 'Lendo…' : '📎 Ler documentos (IA)'}
                                   <input type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={(e) => { lerDocsAlvara(i, e.target.files); e.currentTarget.value = ''; }} />
+                                </label>
+                              </div>
+                              {/* ANEXAR ALVARÁ — vai junto no PDF da prestação de contas (transparência). Só o
+                                  alvará/comprovante, NUNCA o contrato (é privado). Guardado como anexo do êxito. */}
+                              <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-emerald-300/70 bg-emerald-50/40 px-2.5 py-1.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
+                                <span className="text-[11px] font-medium text-emerald-800 dark:text-emerald-300">📎 Alvará (sai junto na prestação)</span>
+                                {(a.anexoAlvara ?? []).map((f, k) => (
+                                  <span key={k} className="inline-flex items-center gap-1 rounded-full bg-emerald-600/10 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+                                    {f.name}
+                                    <button type="button" onClick={() => set({ anexoAlvara: (a.anexoAlvara ?? []).filter((_, kk) => kk !== k) })} className="text-emerald-600 hover:text-rose-600"><X className="h-3 w-3" /></button>
+                                  </span>
+                                ))}
+                                <label className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300">
+                                  {(a.anexoAlvara?.length ?? 0) ? 'trocar/adicionar' : 'anexar PDF'}
+                                  <input type="file" accept=".pdf,application/pdf,image/*" multiple className="hidden" onChange={async (e) => {
+                                    const fs = Array.from(e.target.files ?? []); e.currentTarget.value = '';
+                                    const lidos = await Promise.all(fs.slice(0, 4).map((f) => new Promise<{ name: string; mime: string; base64: string }>((res, rej) => {
+                                      const rd = new FileReader();
+                                      rd.onload = () => res({ name: f.name, mime: f.type || 'application/pdf', base64: String(rd.result || '').split(',')[1] || '' });
+                                      rd.onerror = rej; rd.readAsDataURL(f);
+                                    })));
+                                    const validos = lidos.filter((x) => x.base64);
+                                    if (validos.length) set({ anexoAlvara: [...(a.anexoAlvara ?? []), ...validos].slice(0, 4) });
+                                  }} />
                                 </label>
                               </div>
                               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">

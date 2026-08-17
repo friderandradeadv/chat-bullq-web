@@ -121,23 +121,45 @@ export async function gerarPrestacaoPdf(d: PrestacaoDados): Promise<Blob> {
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1;pointer-events:none';
   host.innerHTML = buildHtml(d);
   document.body.appendChild(host);
-  let canvas: HTMLCanvasElement;
+  const root = host.firstElementChild as HTMLElement;
+  // Blocos lógicos: a banda escura + cada seção (hero, 01, 02, [03], final). A quebra de página só
+  // pode cair no espaço ENTRE blocos — nunca no meio de uma seção (era o "quebrando" da tabela/cards).
+  const banner = root.children[0] as HTMLElement;
+  const wrapper = root.children[1] as HTMLElement;
+  const blocos = [banner, ...(Array.from(wrapper?.children ?? []) as HTMLElement[])];
+  const rootTop = root.getBoundingClientRect().top;
+  const topos = blocos.map((b) => b.getBoundingClientRect().top - rootTop); // topo de cada bloco (px CSS)
+
+  let full: HTMLCanvasElement;
   try {
-    canvas = await html2canvas(host.firstElementChild as HTMLElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+    full = await html2canvas(root, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
   } finally {
     document.body.removeChild(host);
   }
-  const pngBytes = await (await fetch(canvas.toDataURL('image/png'))).arrayBuffer();
 
   const pdf = await PDFDocument.create();
   const A4W = 595.28, A4H = 841.89;
-  const img = await pdf.embedPng(pngBytes);
-  const scale = A4W / img.width;
-  const imgHpt = img.height * scale;
-  const nPages = Math.max(1, Math.ceil(imgHpt / A4H));
-  for (let i = 0; i < nPages; i++) {
+  const S = full.width / 794;                 // escala real do canvas (≈ 2)
+  const MARGIN = 24;                           // pt de respiro no rodapé
+  const pxPorPagina = (A4H - MARGIN) * (full.width / A4W); // px-canvas que cabem numa página A4
+  const quebras = topos.map((t) => t * S).concat([full.height]); // candidatos (em px-canvas) + o fim
+  let y = 0;
+  while (y < full.height - 1) {
+    // maior início-de-bloco que ainda cabe na página; se nenhum couber (bloco > 1 página), corta forçado.
+    const cabem = quebras.filter((b) => b > y + 1 && b <= y + pxPorPagina);
+    const end = cabem.length ? Math.max(...cabem) : Math.min(y + pxPorPagina, full.height);
+    const sliceH = Math.max(1, Math.round(end - y));
+    const cut = document.createElement('canvas');
+    cut.width = full.width; cut.height = sliceH;
+    const ctx = cut.getContext('2d')!;
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cut.width, cut.height);
+    ctx.drawImage(full, 0, y, full.width, sliceH, 0, 0, full.width, sliceH);
+    const png = await (await fetch(cut.toDataURL('image/png'))).arrayBuffer();
+    const img = await pdf.embedPng(png);
+    const hpt = (sliceH / full.width) * A4W; // altura da faixa em pt (≤ A4H − MARGIN)
     const page = pdf.addPage([A4W, A4H]);
-    page.drawImage(img, { x: 0, y: A4H * (i + 1) - imgHpt, width: A4W, height: imgHpt });
+    page.drawImage(img, { x: 0, y: A4H - hpt, width: A4W, height: hpt }); // faixa no topo, branco embaixo
+    y = end;
   }
 
   // Anexa o alvará/comprovante (PDF → páginas; imagem → página cheia)
