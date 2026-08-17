@@ -251,6 +251,7 @@ export interface KanbanCard {
   produto: string | null; // 1ª etiqueta (RMC/BPC-LOAS…)
   areaJuridica: string | null; // 2ª etiqueta (Bancário/Previdenciário…)
   vencemos: string | null; // 'Sim' | 'Não' | 'Parcial' | resultado da sentença → badge
+  execucao: { recebido: number; remanescente: number; parcial: boolean } | null; // alvará parcial: "Recebido X · Falta Y" + barrinha
   // Selo "revisar fase": tribunal registrou ato terminal/adiantado à frente da
   // fase (via DataJud/Astrea). Badge de alerta — conferir e mover o card.
   revisarFase: { evento: string | null; desde: string | null } | null;

@@ -611,6 +611,24 @@ const Card = memo(function Card({
         </p>
       )}
 
+      {/* Execução parcial: banco depositou menos — "Recebido X · Falta Y" + barrinha.
+          Card fica no cumprimento até o saldo zerar. Fonte: metadata.execucao do processo. */}
+      {c.execucao && (c.execucao.recebido + c.execucao.remanescente) > 0 && (() => {
+        const tot = c.execucao.recebido + c.execucao.remanescente;
+        const pct = Math.max(0, Math.min(100, Math.round((c.execucao.recebido / tot) * 100)));
+        return (
+          <div className="mt-2 rounded-md bg-zinc-50 px-2 py-1.5 dark:bg-zinc-800/50" title={`Execução parcial — recebido ${pct}% do total`}>
+            <div className="flex items-center justify-between text-[10px] font-semibold leading-3">
+              <span className="text-emerald-600 dark:text-emerald-400">Recebido {fmtMoney(c.execucao.recebido)}</span>
+              <span className="text-amber-600 dark:text-amber-400">Falta {fmtMoney(c.execucao.remanescente)}</span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Valor · data protocolo */}
       <div className="mt-1.5 flex items-center justify-between gap-2">
         {c.value != null && c.value > 0 ? (
