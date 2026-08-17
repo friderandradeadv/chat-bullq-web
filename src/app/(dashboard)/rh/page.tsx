@@ -13,7 +13,7 @@ import { SociosSection } from '@/features/financeiro/components/socios-divisao';
 import { rhService, isPreKey, type Rh, type Candidato, type Etapa, type Ficha, type Documento } from '@/features/rh/services/rh.service';
 import {
   ContratarModal, PromoverModal, AlterarContratoModal, DesligarModal, Desligados,
-  Timeline, tempoDeCasa, type CicloCtx,
+  Timeline, tempoDeCasa, apagarArquivos, avisarRemocao, type CicloCtx,
 } from '@/features/rh/components/ciclo-vida';
 import { membersService, type Member } from '@/features/settings/services/members.service';
 import { escritorioService, type Cargo, type Vertical, type PessoaInfo } from '@/features/escritorio/services/escritorio.service';
@@ -752,6 +752,13 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
         { cargoId: cargoId || undefined, atuacao, conoscoDesde: conoscoDesde || undefined, contratadaDesde: contratadaDesde || undefined },
         { honorariosPct: pct, acesso: nivelFin },
       );
+      // Documentos removidos nesta sessão: o arquivo só pode ser apagado agora,
+      // depois que a ficha gravada já não aponta para ele.
+      if (removidos.length) {
+        const urls = removidos;
+        setRemovidos([]);
+        avisarRemocao('Ficha salva.', await apagarArquivos(urls));
+      }
     } finally {
       setSaving(false);
     }
@@ -759,6 +766,8 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
   const foto = membro.user.avatarUrl || info.fotoUrl;
   // Documento aguardando confirmação de remoção (some do rascunho; só vale ao salvar a ficha).
   const [confirmDoc, setConfirmDoc] = useState<string | null>(null);
+  // URLs dos documentos tirados nesta sessão — os arquivos são apagados após o save.
+  const [removidos, setRemovidos] = useState<string[]>([]);
 
   // ── Alterações pendentes: fechar sem salvar (X ou clique fora) pedia nada e perdia tudo. ──
   const [confirmSair, setConfirmSair] = useState(false);
@@ -975,11 +984,12 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
                   {confirmDoc === d.id && (
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 dark:border-rose-900/50 dark:bg-rose-900/10">
                       <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                        Remover <strong>{d.nome || 'este documento'}</strong> da ficha? <span className="text-zinc-400">O arquivo continua no storage — quem já tiver o link ainda abre.</span>
+                        Remover <strong>{d.nome || 'este documento'}</strong> da ficha? <span className="text-zinc-400">Ao salvar, o arquivo também é apagado do servidor — a menos que esteja em uso em outro cadastro ou numa conversa.</span>
                       </p>
                       <div className="ml-auto flex shrink-0 items-center gap-1.5">
                         <button onClick={() => setConfirmDoc(null)} className="rounded px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
-                        <button onClick={() => { delDoc(d.id); setConfirmDoc(null); toast.success('Documento removido — salve a ficha para valer.'); }} className="inline-flex items-center gap-1 rounded bg-rose-500 px-2 py-1 text-xs font-semibold text-white hover:opacity-90">
+                        <button onClick={() => { if (d.url) setRemovidos((xs) => [...xs, d.url!]); delDoc(d.id); setConfirmDoc(null); toast.success('Documento removido — salve a ficha para valer.'); }} className="inline-flex items-center gap-1 rounded bg-rose-500 px-2 py-1 text-xs font-semibold text-white hover:opacity-90">
+
                           <Trash2 className="h-3 w-3" /> Remover
                         </button>
                       </div>

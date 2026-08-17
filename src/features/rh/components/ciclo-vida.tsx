@@ -138,7 +138,47 @@ export function Timeline({ historico }: { historico: EventoRh[] }) {
   );
 }
 
-// ─────────────────────────── upload de documentos ───────────────────────────
+// ─────────────────────────── upload / exclusão de documentos ───────────────────────────
+
+/**
+ * Manda a API apagar do servidor os arquivos dos documentos que acabaram de sair
+ * da ficha. Chamar SÓ depois de gravar a ficha sem eles — a API se recusa a apagar
+ * arquivo ainda referenciado, e a referência antiga contaria.
+ *
+ * Ela também recusa (sem erro) quando o mesmo arquivo é usado em outro cadastro
+ * ou numa conversa do WhatsApp. Isso não é falha: o documento saiu da ficha do
+ * mesmo jeito — só o arquivo é que fica, e o aviso diz por quê.
+ */
+export async function apagarArquivos(urls: (string | undefined)[]): Promise<{ apagados: number; mantidos: number; detalhe?: string }> {
+  let apagados = 0;
+  let mantidos = 0;
+  let detalhe: string | undefined;
+  for (const url of urls) {
+    if (!url) continue;
+    try {
+      const r = await rhService.excluirDocumento(url);
+      if (r.removido) apagados += 1;
+      else { mantidos += 1; detalhe = detalhe ?? r.detalhe; }
+    } catch (e: any) {
+      mantidos += 1;
+      detalhe = detalhe ?? (e?.response?.data?.message || 'Não consegui apagar o arquivo no servidor.');
+    }
+  }
+  return { apagados, mantidos, detalhe };
+}
+
+/** Um único aviso ao fim da remoção, dizendo o que sumiu de verdade e o que ficou. */
+export function avisarRemocao(prefixo: string, r: { apagados: number; mantidos: number; detalhe?: string }) {
+  if (r.mantidos > 0) {
+    toast.warning(`${prefixo} ${r.detalhe ?? 'O arquivo continua no servidor.'}`, { duration: 8000 });
+    return;
+  }
+  if (r.apagados > 0) {
+    toast.success(`${prefixo} ${r.apagados === 1 ? 'Arquivo apagado' : `${r.apagados} arquivos apagados`} do servidor.`);
+    return;
+  }
+  toast.success(prefixo);
+}
 
 function ListaDocumentos({
   docs, onChange, canEdit, dica,
@@ -873,7 +913,7 @@ function DocLinha({
       {confirmando && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-rose-200 bg-rose-50/60 px-2.5 py-1.5 dark:border-rose-900/50 dark:bg-rose-900/10">
           <p className="text-xs text-zinc-600 dark:text-zinc-300">
-            Remover <strong>{doc.nome || 'este documento'}</strong> do dossiê? <span className="text-zinc-400">O arquivo em si continua no storage — quem já tiver o link ainda abre.</span>
+            Remover <strong>{doc.nome || 'este documento'}</strong> do dossiê? <span className="text-zinc-400">O arquivo também é apagado do servidor, a menos que esteja em uso em outro cadastro ou numa conversa.</span>
           </p>
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <button onClick={onCancelar} className="rounded px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
@@ -928,11 +968,20 @@ function DossieModal({
           retificadoEm: new Date().toISOString(),
         },
       };
+      // Documentos que sumiram na edição: apagar o arquivo depois de gravar.
+      const depois = new Set(
+        [...(nova.documentos ?? []), ...(nova.desligamento?.documentos ?? [])].map((x) => x.url),
+      );
+      const sumiram = [...(ficha.documentos ?? []), ...(d.documentos ?? [])]
+        .map((x) => x.url)
+        .filter((u): u is string => !!u && !depois.has(u));
+
       await salvarFicha(ctx, uid, nova);
       await qc.invalidateQueries({ queryKey: ['rh'] });
       setFicha(nova);
       setRascunho(null);
-      toast.success('Dossiê atualizado.');
+      if (sumiram.length) avisarRemocao('Dossiê atualizado.', await apagarArquivos(sumiram));
+      else toast.success('Dossiê atualizado.');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao salvar o dossiê');
     } finally {
@@ -952,7 +1001,9 @@ function DossieModal({
       await qc.invalidateQueries({ queryKey: ['rh'] });
       setFicha(nova);
       setRemovendo(null);
-      toast.success('Documento removido do dossiê.');
+      // Só agora dá para apagar o arquivo: a ficha já não aponta para ele.
+      const doc = (escopo === 'pessoal' ? ficha.documentos : d.documentos)?.find((x) => x.id === id);
+      avisarRemocao('Documento removido do dossiê.', await apagarArquivos([doc?.url]));
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao remover o documento');
     } finally {

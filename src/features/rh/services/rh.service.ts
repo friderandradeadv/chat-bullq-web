@@ -147,6 +147,16 @@ export const rhService = {
     const { data } = await api.post('/organizations/rh/extrair-ficha', input);
     return data.data ?? data;
   },
+  /**
+   * Apaga do servidor o arquivo de um documento que saiu da ficha.
+   * Chamar SÓ DEPOIS de gravar a ficha sem ele — a API recusa apagar arquivo
+   * ainda referenciado em algum cadastro ou numa conversa, e a referência antiga
+   * contaria. `removido:false` não é erro: o documento saiu, o arquivo é que ficou.
+   */
+  async excluirDocumento(url: string): Promise<{ removido: boolean; motivo?: string; detalhe?: string }> {
+    const { data } = await api.post('/organizations/rh/documentos/excluir', { url });
+    return data.data ?? data;
+  },
   // Aniversariantes do escritório (hoje + próximos 15 dias) — todos os membros veem.
   async aniversarios(): Promise<{ aniversariantes: Aniversariante[] }> {
     const { data } = await api.get('/organizations/rh/aniversarios');
