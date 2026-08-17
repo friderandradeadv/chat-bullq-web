@@ -21,6 +21,7 @@ import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
 import { useRepassesPendentesCount } from '@/features/notifications/use-repasses-pendentes';
+import { useVencimentosHojeCount } from '@/features/notifications/use-vencimentos-hoje';
 
 // Barra de abas inferior — só no mobile (lg:hidden). Dá a navegação principal
 // com toque de app nativo; respeita a barra de gestos do iPhone (pb-safe).
@@ -45,6 +46,7 @@ export function MobileTabBar() {
   const disconnected = useDisconnectedChannels();
   const { alert: creditAlert } = useAiCreditHealth();
   const repassesPend = useRepassesPendentesCount();
+  const vencemHoje = useVencimentosHojeCount();
   const { user, organizations, activeOrgId, logout } = useAuthStore();
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
@@ -106,7 +108,8 @@ export function MobileTabBar() {
         <Link href="/financeiro" className={linkCls(isActive(['/financeiro']))}>
           <span className="relative">
             <CircleDollarSign className="h-5 w-5" />
-            <Badge count={payslipUnread + repassesPend} />
+            {/* holerite + repasses a fazer + contas vencendo hoje/vencidas */}
+            <Badge count={payslipUnread + repassesPend + vencemHoje} />
           </span>
           <span>Financeiro</span>
         </Link>

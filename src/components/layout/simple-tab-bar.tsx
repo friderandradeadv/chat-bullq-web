@@ -12,6 +12,7 @@ import { useRepbNewLeadsCount } from '@/features/notifications/use-repb-new-lead
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
 import { useRepassesPendentesCount } from '@/features/notifications/use-repasses-pendentes';
+import { useVencimentosHojeCount } from '@/features/notifications/use-vencimentos-hoje';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
 import { useNavMode, barItemById, DEFAULT_SIMPLE_BAR } from '@/stores/nav-mode-store';
 import { useDockSafeArea } from '@/components/layout/use-dock-safe-area';
@@ -48,6 +49,7 @@ export function SimpleTabBar() {
   const disconnected = useDisconnectedChannels();
   const { alert: creditAlert } = useAiCreditHealth();
   const repassesPend = useRepassesPendentesCount();
+  const vencemHoje = useVencimentosHojeCount();
   const nav = useMobileNav();
   const { barItems, hydrated } = useNavMode();
   const { user, organizations, activeOrgId, logout } = useAuthStore();
@@ -84,14 +86,15 @@ export function SimpleTabBar() {
       {items.map((it) => {
         const Icon = it.icon;
         // Contagem do badge por atalho: conversas (não lidas), agenda (tarefas a
-        // concluir hoje), financeiro/espaço (movimentações do holerite).
+        // concluir hoje), financeiro (holerite + repasses + contas vencendo/vencidas),
+        // espaço (movimentações do holerite).
         const count =
           it.id === 'conversas' ? unread :
           it.id === 'agenda' ? pendingTasks :
           it.id === 'pre-processual' ? preUnseen :
           it.id === 'repb' ? repbNew :
           it.id === 'config' ? disconnected + (creditAlert ? 1 : 0) :
-          it.id === 'financeiro' ? payslipUnread + repassesPend :
+          it.id === 'financeiro' ? payslipUnread + repassesPend + vencemHoje :
           it.id === 'espaco' ? payslipUnread : 0;
         const baseIcon = it.id === 'espaco' ? avatarEl(isActive('/escritorio')) : <Icon className="h-5 w-5" />;
         const iconEl = <span className="relative">{baseIcon}<Badge count={count} /></span>;
