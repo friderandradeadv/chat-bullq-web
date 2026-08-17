@@ -18,6 +18,7 @@ import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dial
 import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort, type SortKeys } from '@/features/legal-cases/lib/kanban-sort';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
+import { usePhaseDrag, applyPhaseDrag, type PhaseDrag } from '@/features/legal-cases/lib/phase-drag';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { FunilRepbBoard } from '@/features/legal-cases/components/funil-repb-board';
@@ -156,6 +157,13 @@ export default function RepbPage() {
       toast.error(err?.response?.data?.message || 'Só sócios podem reordenar fases');
     }
   };
+  // Arrastar a COLUNA (segurar o cabeçalho da fase e soltar na posição nova).
+  const phaseDrag = usePhaseDrag({
+    enabled: canRename,
+    accent: ACCENT,
+    scrollRef: dragScroll.ref,
+    onDrop: (k, alvo, onde) => applyPhaseDrag(qc, KEY, k, alvo, onde),
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
@@ -215,7 +223,7 @@ export default function RepbPage() {
           onOpenCase={(cid) => setOpenCaseId(cid)}
           onMovedCase={() => qc.invalidateQueries({ queryKey: KEY })}
           canRename={canRename} onRename={renamePhase} onDelete={deletePhase} onReorder={reorderPhaseCol}
-          scroll={dragScroll}
+          phaseDrag={phaseDrag} scroll={dragScroll}
         />
       )}
 
@@ -487,11 +495,12 @@ type UItem =
   | { kind: 'bank'; id: string; caseId: string; cliente: string; produto: string | null; area: string | null; party: PartyDetail }
   | { kind: 'case'; id: string; caseId: string; card: KanbanCard };
 
-function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMovedCase, canRename, onRename, onDelete, onReorder, scroll }: {
+function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMovedCase, canRename, onRename, onDelete, onReorder, phaseDrag, scroll }: {
   clientes: KanbanCard[]; foco: string; phases: KanbanPhase[];
   onOpenBank: (caseId: string, bankId: string) => void; onOpenCase: (caseId: string) => void; onMovedCase: () => void;
   canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void;
   onReorder: (phase: KanbanPhase, dir: 'left' | 'right') => void;
+  phaseDrag?: PhaseDrag;
   scroll: ReturnType<typeof useDragScroll>;
 }) {
   const qc = useQueryClient();
@@ -539,7 +548,7 @@ function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMo
     <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
       <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
         {loading && !items.length && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
-        {phases.map((phase, i) => <UnifiedColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpenBank={onOpenBank} onOpenCase={onOpenCase} canRename={canRename} onRename={onRename} onDelete={onDelete} onMoveLeft={canRename && i > 0 ? () => onReorder(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => onReorder(phase, 'right') : undefined} />)}
+        {phases.map((phase, i) => <UnifiedColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpenBank={onOpenBank} onOpenCase={onOpenCase} canRename={canRename} onRename={onRename} onDelete={onDelete} phaseDrag={phaseDrag} onMoveLeft={canRename && i > 0 ? () => onReorder(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => onReorder(phase, 'right') : undefined} />)}
         {canRename && <AddPhaseColumn board="repb" accent={ACCENT} onAdded={onMovedCase} />}
       </div>
       <DragOverlay>{activeItem ? (activeItem.kind === 'bank' ? <UnifiedBankCard it={activeItem} /> : <Card c={activeItem.card} />) : null}</DragOverlay>
@@ -558,19 +567,19 @@ function uItemKeys(it: UItem): SortKeys {
   return kanbanCardKeys(it.card);
 }
 
-function UnifiedColumn({ phase, items, onOpenBank, onOpenCase, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: {
+function UnifiedColumn({ phase, items, onOpenBank, onOpenCase, canRename, onRename, onDelete, phaseDrag, onMoveLeft, onMoveRight }: {
   phase: KanbanPhase; items: UItem[]; onOpenBank: (caseId: string, bankId: string) => void; onOpenCase: (caseId: string) => void;
   canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void;
-  onMoveLeft?: () => void; onMoveRight?: () => void;
+  phaseDrag?: PhaseDrag; onMoveLeft?: () => void; onMoveRight?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
   const sorted = useMemo(() => applyCardSort(items, sort, uItemKeys), [items, sort]);
   const total = items.reduce((a, it) => a + (it.kind === 'bank' ? parseBRL((it.party.metadata as any)?.saldoDevedor) : (it.card.value ?? 0)), 0);
   return (
-    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
         {total > 0 && <span className="text-[11px] text-zinc-400">{fmtMoney(total)}</span>}
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>

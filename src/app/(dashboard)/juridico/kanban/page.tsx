@@ -19,6 +19,7 @@ import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/k
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
+import { usePhaseDrag, applyPhaseDrag, type PhaseDrag } from '@/features/legal-cases/lib/phase-drag';
 import { membersService } from '@/features/settings/services/members.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -246,6 +247,14 @@ export default function FaseJudicialKanbanPage() {
     catch (err: any) { toast.error(err?.response?.data?.message || 'Só sócios podem reordenar fases'); }
   }, [qc, visiblePhases]);
 
+  // Arrastar a COLUNA (segurar o cabeçalho da fase e soltar na posição nova).
+  const phaseDrag = usePhaseDrag({
+    enabled: isOwner,
+    accent: '#e11970',
+    scrollRef: dragScroll.ref,
+    onDrop: useCallback((k: string, alvo: string, onde: 'before' | 'after') => applyPhaseDrag(qc, KEY, k, alvo, onde), [qc]),
+  });
+
   const move = useCallback(async (card: KanbanCard, toPhase: string) => {
     if (card.phase === toPhase) return;
     if (shouldCelebrate(qc.getQueryData<KanbanData>(KEY)?.phases.find((p) => p.key === toPhase))) fireConfetti();
@@ -385,7 +394,7 @@ export default function FaseJudicialKanbanPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onIniciarCs={setCsCase} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onIniciarCs={setCsCase} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && isOwner && <AddPhaseColumn board="judicial" accent="#e11970" onAdded={onChanged} />}
           </div>
@@ -475,13 +484,14 @@ function MultiSelect({
 const COLUNA_INICIAL = 20;
 
 function Column({
-  phase, items, phases, bulk, onMove, onOpen, onIniciarCs, onChanged, canRename, onRename, onDelete, onMoveLeft, onMoveRight,
+  phase, items, phases, bulk, onMove, onOpen, onIniciarCs, onChanged, canRename, onRename, onDelete, phaseDrag, onMoveLeft, onMoveRight,
 }: {
   phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[]; bulk: KanbanBulk;
   onMove: (c: KanbanCard, to: string) => void; onOpen: (id: string) => void;
   onIniciarCs: (c: { id: string; title: string }) => void;
   onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void;
   onDelete: (phase: KanbanPhase) => void;
+  phaseDrag?: PhaseDrag;
   onMoveLeft?: () => void; onMoveRight?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
@@ -497,10 +507,10 @@ function Column({
   const allIds = useMemo(() => sortedItems.map((c) => c.id), [sortedItems]);
   const shownIds = useMemo(() => shown.map((c) => c.id), [shown]);
   return (
-    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       {/* Header da fase — DENTRO do painel escuro (englobado, tom vai até o nome) */}
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(allIds, true); }} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(allIds, true); }} />
         <span className="ml-auto flex items-center gap-1.5">
           <KanbanColumnSelect bulk={bulk} ids={allIds} accent="#e11970" />
           <span className="rounded bg-[#edeff3] px-1 text-[13px] font-normal text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">

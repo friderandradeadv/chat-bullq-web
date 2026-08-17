@@ -9,9 +9,10 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp, CheckSquare, ListChecks } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, Check, EyeOff, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp, CheckSquare, ListChecks, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { SORT_OPTIONS, type CardSort } from '../lib/kanban-sort';
+import type { PhaseDragHandle } from '../lib/phase-drag';
 import { legalCasesService, type LegalTag } from '../services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { ColorPicker } from '@/features/settings/components/color-picker';
@@ -27,6 +28,7 @@ export function PhaseHeader({
   sort,
   onSort,
   onSelect,
+  drag,
 }: {
   phase: { key: string; label: string; custom?: boolean };
   canRename: boolean;
@@ -41,6 +43,8 @@ export function PhaseHeader({
   onSort?: (s: CardSort) => void;
   /** Liga o modo seleção em massa (igual ao chat). `todos` = já marca a fase inteira. */
   onSelect?: (todos: boolean) => void;
+  /** Segurar o cabeçalho e arrastar a coluna pra outra posição (usePhaseDrag). */
+  drag?: PhaseDragHandle;
 }) {
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -80,11 +84,23 @@ export function PhaseHeader({
   }
 
   return (
-    <div className="group/ph relative flex min-w-0 flex-1 items-center gap-1">
+    // Com `drag`: segurar o cabeçalho e puxar move a COLUNA de lugar. O clique curto
+    // continua abrindo o rename (o arraste só nasce depois de andar alguns px, e o
+    // clique que vem depois de arrastar é bloqueado). `data-no-drag-scroll` impede
+    // que o pan lateral do quadro (useDragScroll) roube o gesto.
+    <div
+      className={`group/ph relative flex min-w-0 flex-1 items-center gap-1 ${drag ? (drag.dragging ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+      {...(drag ? { onPointerDown: drag.onPointerDown, 'data-no-drag-scroll': true, style: { touchAction: 'none' } } : {})}
+    >
+      {drag && (
+        <GripVertical
+          className={`-ml-1 h-3.5 w-3.5 shrink-0 text-zinc-400 transition dark:text-zinc-600 ${drag.dragging ? 'opacity-100' : 'opacity-0 group-hover/ph:opacity-100'}`}
+        />
+      )}
       <h2
-        onClick={canRename ? () => setEditing(true) : undefined}
-        title={canRename ? 'Clique pra renomear a fase (só sócios)' : undefined}
-        className={`min-w-0 truncate text-sm font-medium text-[#e11970]/90 dark:text-[#f06595]/75 ${canRename ? 'cursor-text hover:underline' : ''}`}
+        onClick={canRename ? () => { if (drag?.blockedClick()) return; setEditing(true); } : undefined}
+        title={canRename ? (drag ? 'Clique pra renomear · segure e arraste pra mover a fase' : 'Clique pra renomear a fase (só sócios)') : undefined}
+        className={`min-w-0 truncate text-sm font-medium text-[#e11970]/90 dark:text-[#f06595]/75 ${canRename ? (drag ? 'hover:underline' : 'cursor-text hover:underline') : ''}`}
       >
         {phase.label}
       </h2>

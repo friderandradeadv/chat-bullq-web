@@ -25,6 +25,7 @@ import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/k
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
+import { usePhaseDrag, applyPhaseDrag, type PhaseDrag } from '@/features/legal-cases/lib/phase-drag';
 import { useAuthStore } from '@/stores/auth-store';
 import { useRepbSeenStore } from '@/stores/repb-seen-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -137,6 +138,13 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
     try { await legalCasesService.reorderPhase(phase.key, nb.key); qc.invalidateQueries({ queryKey: KEY }); }
     catch (err: any) { toast.error(err?.response?.data?.message || 'Só sócios podem reordenar fases'); }
   };
+  // Arrastar a COLUNA (segurar o cabeçalho da fase e soltar na posição nova).
+  const phaseDrag = usePhaseDrag({
+    enabled: canRename,
+    accent: ACCENT,
+    scrollRef: dragScroll.ref,
+    onDrop: (k, alvo, onde) => applyPhaseDrag(qc, KEY, k, alvo, onde),
+  });
 
   // Fechou o contrato → o lead vira cliente e migra pro board padrão (Pré-Processual
   // "01. NOVOS CLIENTES"), saindo do funil. Ação explícita (não é arrastar).
@@ -194,7 +202,7 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} bulk={bulk} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onAgendar={setAgendar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} bulk={bulk} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onAgendar={setAgendar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && canRename && <AddPhaseColumn board="repbc" accent={ACCENT} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
           </div>
@@ -212,7 +220,7 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar, onFollowup, canRename, onRename, onDelete, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; bulk: KanbanBulk; onOpen: (id: string) => void; onFechou: (c: KanbanCard) => void; onApresentar: (c: KanbanCard) => void; onAgendar: (c: KanbanCard) => void; onFollowup: (c: KanbanCard) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; onMoveLeft?: () => void; onMoveRight?: () => void }) {
+function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar, onFollowup, canRename, onRename, onDelete, phaseDrag, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; bulk: KanbanBulk; onOpen: (id: string) => void; onFechou: (c: KanbanCard) => void; onApresentar: (c: KanbanCard) => void; onAgendar: (c: KanbanCard) => void; onFollowup: (c: KanbanCard) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; onMoveLeft?: () => void; onMoveRight?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const [sort, setSort] = useState<CardSort>(() => loadPhaseSort(phase.key));
   const sorted = useMemo(() => applyCardSort(items, sort, kanbanCardKeys), [items, sort]);
@@ -225,9 +233,9 @@ function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar,
   // Agendar reunião: só antes de estar agendado (Novos Leads).
   const podeAgendar = phase.key === 'repbc_novos_leads';
   return (
-    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#E8590C] bg-[#E8590C]/5 dark:bg-[#E8590C]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#E8590C] bg-[#E8590C]/5 dark:bg-[#E8590C]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
-        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(colIds, true); }} />
+        <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(colIds, true); }} />
         <span className="ml-auto flex items-center gap-1.5">
           <KanbanColumnSelect bulk={bulk} ids={colIds} accent={ACCENT} />
           <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>

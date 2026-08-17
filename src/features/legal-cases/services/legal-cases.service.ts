@@ -577,6 +577,34 @@ export const legalCasesService = {
       custom: cfg.config.custom ?? [],
     });
   },
+  // Move uma fase para ANTES/DEPOIS de outra (arrastar a coluna no quadro). Igual
+  // ao reorderPhase, mas em vez de trocar dois `order` ele REMOVE a fase da lista
+  // global e REINSERE na posição do alvo — é o que um arraste de várias casas faz.
+  // Como a lista é global (base + custom, inclusive escondidas) e o alvo é sempre
+  // uma fase do mesmo quadro, a ordem relativa dos outros quadros não muda.
+  async movePhaseOrder(key: string, targetKey: string, place: 'before' | 'after'): Promise<PhaseConfigResponse> {
+    const cfg = await this.getPhaseConfig();
+    const ord0 = cfg.config.order ?? {};
+    const list = [
+      ...cfg.defaults.map((d) => ({ key: d.key, o: ord0[d.key] ?? d.order })),
+      ...(cfg.config.custom ?? []).map((c, i) => ({ key: c.key, o: ord0[c.key] ?? 400 + i })),
+    ]
+      .sort((a, b) => a.o - b.o)
+      .map((p) => p.key);
+    const from = list.indexOf(key);
+    if (from < 0 || !list.includes(targetKey) || key === targetKey) return cfg;
+    list.splice(from, 1);
+    const at = list.indexOf(targetKey) + (place === 'before' ? 0 : 1);
+    list.splice(at, 0, key);
+    const order: Record<string, number> = {};
+    list.forEach((k, i) => { order[k] = (i + 1) * 10; });
+    return this.savePhaseConfig({
+      labels: cfg.config.labels ?? {},
+      order,
+      hidden: cfg.config.hidden ?? [],
+      custom: cfg.config.custom ?? [],
+    });
+  },
   // Criar/excluir fase inline no kanban (só sócios — gate no backend). `board`
   // pode ser um quadro base OU a chave de um quadro custom (board_*).
   async addPhase(board: string, label: string): Promise<PhaseConfigResponse> {

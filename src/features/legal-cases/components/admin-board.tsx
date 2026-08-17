@@ -10,6 +10,7 @@ import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/lega
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, KanbanSelectTrigger, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { isTerminalPhase, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
+import { usePhaseDrag, applyPhaseDrag } from '@/features/legal-cases/lib/phase-drag';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard, type Board } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
@@ -102,6 +103,13 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     try { await legalCasesService.reorderPhase(key, nb.key); qc.invalidateQueries({ queryKey: KEY }); }
     catch (e: any) { toast.error(e?.response?.data?.message || 'Só sócios podem reordenar fases'); }
   };
+  // Arrastar a COLUNA (segurar o cabeçalho da fase e soltar na posição nova).
+  const phaseDrag = usePhaseDrag({
+    enabled: canManage,
+    accent,
+    scrollRef: dragScroll.ref,
+    onDrop: (k, alvo, onde) => applyPhaseDrag(qc, KEY, k, alvo, onde),
+  });
   // Ordenação dos cards por coluna (preferência de visualização, no localStorage).
   const [sorts, setSorts] = useState<Record<string, CardSort>>({});
   const sortOf = (key: string): CardSort => sorts[key] ?? loadPhaseSort(key);
@@ -190,7 +198,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
             const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys) : col.cards;
             const colTerminal = isTerminalPhase(col.key ? data?.phases?.find((p) => p.key === col.key) : null);
             return (
-            <div key={col.key ?? col.nome} className="group/col flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
+            <div key={col.key ?? col.nome} ref={col.key ? phaseDrag.columnRef(col.key) : undefined} style={col.key ? phaseDrag.columnStyle(col.key) : undefined} className="group/col flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
                 {col.key ? (
                   <PhaseHeader
@@ -198,6 +206,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                     canRename={canManage}
                     onRename={renamePhase}
                     onDelete={deletePhase}
+                    drag={phaseDrag.handle(col.key)}
                     onMoveLeft={canManage && i > 0 && columns[i - 1]?.key ? () => reorderPhaseCol(col.key!, 'left') : undefined}
                     onMoveRight={canManage && i < columns.length - 1 && columns[i + 1]?.key ? () => reorderPhaseCol(col.key!, 'right') : undefined}
                     sort={sortOf(col.key)}
