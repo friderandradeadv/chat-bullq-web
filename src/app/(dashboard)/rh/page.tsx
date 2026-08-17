@@ -736,6 +736,8 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
     }
   };
   const foto = membro.user.avatarUrl || info.fotoUrl;
+  // Documento aguardando confirmação de remoção (some do rascunho; só vale ao salvar a ficha).
+  const [confirmDoc, setConfirmDoc] = useState<string | null>(null);
   const addDoc = () => set({ documentos: [...(f.documentos ?? []), { id: rid(), nome: '', url: '' }] });
   const updDoc = (id: string, p: Partial<{ nome: string; url: string }>) => set({ documentos: (f.documentos ?? []).map((d) => (d.id === id ? { ...d, ...p } : d)) });
   const delDoc = (id: string) => set({ documentos: (f.documentos ?? []).filter((d) => d.id !== id) });
@@ -903,11 +905,26 @@ function FichaModal({ membro, info, cargo, cargos, verticais, ficha, honorariosP
             <div className="mt-1.5 space-y-1.5">
               {(f.documentos ?? []).length === 0 && <p className="text-xs text-zinc-400">Nenhum documento ainda. Suba os arquivos ou cole links do Drive.</p>}
               {(f.documentos ?? []).map((d) => (
-                <div key={d.id} className="flex items-center gap-1.5">
-                  <input value={d.nome} onChange={(e) => updDoc(d.id, { nome: e.target.value })} disabled={!canEdit} placeholder="Nome (ex.: RG)" className={`${INPUT} w-1/3 min-w-0`} />
-                  <input value={d.url ?? ''} onChange={(e) => updDoc(d.id, { url: e.target.value })} disabled={!canEdit} placeholder="link do documento" className={`${INPUT} min-w-0 flex-1`} />
-                  {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-[#228BE6]"><ExternalLink className="h-4 w-4" /></a>}
-                  {canEdit && <button onClick={() => delDoc(d.id)} className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>}
+                <div key={d.id}>
+                  <div className="flex items-center gap-1.5">
+                    <input value={d.nome} onChange={(e) => updDoc(d.id, { nome: e.target.value })} disabled={!canEdit} placeholder="Nome (ex.: RG)" className={`${INPUT} w-1/3 min-w-0`} />
+                    <input value={d.url ?? ''} onChange={(e) => updDoc(d.id, { url: e.target.value })} disabled={!canEdit} placeholder="link do documento" className={`${INPUT} min-w-0 flex-1`} />
+                    {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-[#228BE6]"><ExternalLink className="h-4 w-4" /></a>}
+                    {canEdit && <button onClick={() => setConfirmDoc(d.id)} title="Remover documento" className="shrink-0 rounded p-1.5 text-zinc-400 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>}
+                  </div>
+                  {confirmDoc === d.id && (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 dark:border-rose-900/50 dark:bg-rose-900/10">
+                      <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                        Remover <strong>{d.nome || 'este documento'}</strong> da ficha? <span className="text-zinc-400">O arquivo continua no storage — quem já tiver o link ainda abre.</span>
+                      </p>
+                      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                        <button onClick={() => setConfirmDoc(null)} className="rounded px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+                        <button onClick={() => { delDoc(d.id); setConfirmDoc(null); toast.success('Documento removido — salve a ficha para valer.'); }} className="inline-flex items-center gap-1 rounded bg-rose-500 px-2 py-1 text-xs font-semibold text-white hover:opacity-90">
+                          <Trash2 className="h-3 w-3" /> Remover
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
