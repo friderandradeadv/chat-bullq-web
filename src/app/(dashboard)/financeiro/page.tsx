@@ -2548,10 +2548,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   <input type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={(e) => { lerDocsAlvara(i, e.target.files); e.currentTarget.value = ''; }} />
                                 </label>
                               </div>
-                              {/* ANEXAR ALVARÁ — vai junto no PDF da prestação de contas (transparência). Só o
-                                  alvará/comprovante, NUNCA o contrato (é privado). Guardado como anexo do êxito. */}
+                              {/* ANEXOS DA PRESTAÇÃO — vão junto no PDF (transparência): alvará (sempre), e
+                                  sentença/acórdão quando quiser mostrar a base dos valores. Guardados no êxito. */}
                               <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-emerald-300/70 bg-emerald-50/40 px-2.5 py-1.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
-                                <span className="text-[11px] font-medium text-emerald-800 dark:text-emerald-300">📎 Alvará (sai junto na prestação)</span>
+                                <span className="text-[11px] font-medium text-emerald-800 dark:text-emerald-300" title="Vão anexados ao PDF da prestação. Sugestão: alvará + sentença + acórdão.">📎 Anexos da prestação <span className="font-normal text-emerald-700/70">(alvará, sentença, acórdão)</span></span>
                                 {(a.anexoAlvara ?? []).map((f, k) => (
                                   <span key={k} className="inline-flex items-center gap-1 rounded-full bg-emerald-600/10 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
                                     {f.name}
@@ -2562,13 +2562,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   {(a.anexoAlvara?.length ?? 0) ? 'trocar/adicionar' : 'anexar PDF'}
                                   <input type="file" accept=".pdf,application/pdf,image/*" multiple className="hidden" onChange={async (e) => {
                                     const fs = Array.from(e.target.files ?? []); e.currentTarget.value = '';
-                                    const lidos = await Promise.all(fs.slice(0, 4).map((f) => new Promise<{ name: string; mime: string; base64: string }>((res, rej) => {
+                                    const lidos = await Promise.all(fs.slice(0, 6).map((f) => new Promise<{ name: string; mime: string; base64: string }>((res, rej) => {
                                       const rd = new FileReader();
                                       rd.onload = () => res({ name: f.name, mime: f.type || 'application/pdf', base64: String(rd.result || '').split(',')[1] || '' });
                                       rd.onerror = rej; rd.readAsDataURL(f);
                                     })));
                                     const validos = lidos.filter((x) => x.base64);
-                                    if (validos.length) set({ anexoAlvara: [...(a.anexoAlvara ?? []), ...validos].slice(0, 4) });
+                                    if (validos.length) set({ anexoAlvara: [...(a.anexoAlvara ?? []), ...validos].slice(0, 6) });
                                   }} />
                                 </label>
                               </div>
