@@ -185,7 +185,10 @@ export default function FaseJudicialKanbanPage() {
 
   const FORA = new Set(['arquivado', 'abandonado', 'perdidos_valeska']);
   const visiblePhases = useMemo(() => {
-    let ph = phases.filter((p) => p.lane !== 'pre' && (showFora || !FORA.has(p.key)));
+    // Colunas do quadro Judicial = fases DESTE quadro (exclui as de Execução & Repasse,
+    // que têm lane 'judicial' mas board 'execucao'; mantém Vencidas/Perdidas, que são o
+    // desfecho e ficam aqui). Sem isso, as fases de execução vazavam como colunas vazias.
+    let ph = phasesOfBoard(phases, 'judicial').filter((p) => showFora || !FORA.has(p.key));
     if (phaseSel.length) ph = ph.filter((p) => phaseSel.includes(p.key));
     return ph;
   }, [phases, showFora, phaseSel]);

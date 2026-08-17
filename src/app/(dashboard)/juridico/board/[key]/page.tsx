@@ -33,10 +33,14 @@ export default function CustomBoardPage() {
     queryFn: () => legalCasesService.kanban({ lane: key }),
     enabled: !!board,
   });
+  // Execução & Repasse mostra também o DESFECHO (Ações Vencidas/Perdidas) — as mesmas
+  // colunas do Fase Judicial, ao vivo — pra ver o que graduou/encerrou sem trocar de quadro.
+  const noQuadro = (p: { key: string; lane?: 'pre' | 'judicial'; board?: string | null }) =>
+    boardOfPhase(p.key, p.lane, p.board) === key || (key === 'execucao' && (p.key === 'acoes_vencidas' || p.key === 'acoes_perdidas'));
   const boardPhases = useMemo(
     () =>
       (kb?.phases ?? [])
-        .filter((p) => boardOfPhase(p.key, p.lane, p.board) === key)
+        .filter(noQuadro)
         .sort((a, b) => a.order - b.order)
         .map((p) => ({ key: p.key, label: p.label })),
     [kb, key],
@@ -66,7 +70,7 @@ export default function CustomBoardPage() {
         accent={board.color || '#6741d9'}
         lane={key}
         filter={() => true}
-        columnsFromPhases={(p) => boardOfPhase(p.key, p.lane, p.board) === key}
+        columnsFromPhases={(p) => noQuadro(p)}
         manageBoard={key}
         drawerBoard={key}
         onNewCard={boardPhases.length ? () => setNovo(true) : undefined}
