@@ -29,6 +29,9 @@ export interface PrestacaoDados {
   bruto: number; suc: number; hon: number; condenacao: number; liquido: number;
   valorCausa: number | null; sucPct: number | null; honPct: number | null; sucBaseTipo: string | null;
   caseId?: string | null;
+  /** Execução PARCIAL: presente só quando o banco depositou menos que o executado e ainda
+   *  falta receber. Vem de `case.metadata.execucao`, gravado no import do alvará. */
+  execucao?: { totalExecutado: number; recebido: number; remanescente: number } | null;
   anexos: { key: string; url: string; mime: string; name: string }[];
 }
 

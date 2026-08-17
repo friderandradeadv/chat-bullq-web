@@ -13,6 +13,11 @@ function buildHtml(d: PrestacaoDados): string {
   const baseVal = (d.sucBaseTipo === 'Valor da causa' || d.sucBaseTipo === 'Proveito econômico') ? d.valorCausa : d.condenacao;
   const sucCap = d.sucPct && baseVal ? `${d.sucPct}% sobre ${baseTxt} (${brl(baseVal)}) = ${brl(d.suc)}` : `Total: ${brl(d.suc)}`;
   const honCap = d.honPct ? `${d.honPct}% sobre a condenação (${brl(d.condenacao)}) = ${brl(d.hon)}` : `Total: ${brl(d.hon)}`;
+  // PAGAMENTO PARCIAL: o banco depositou menos que o executado. Sem este bloco o cliente
+  // recebe um documento que parece encerrar o caso, quando ainda se briga pelo resto.
+  const ex = d.execucao && d.execucao.remanescente > 0 ? d.execucao : null;
+  const pctFalta = ex && ex.totalExecutado > 0 ? Math.round((ex.remanescente / ex.totalExecutado) * 100) : 0;
+  const pctPago = 100 - pctFalta;
   const sub = [`Ação judicial`, d.autos ? `Autos nº ${esc(d.autos)}` : ''].filter(Boolean).join(' · ');
   const linha2 = `Cliente: ${esc(d.cliente || '-')}${d.reu ? `&nbsp;&nbsp;·&nbsp;&nbsp;Réu: ${esc(d.reu)}` : ''}`;
   const F = `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
@@ -31,8 +36,9 @@ function buildHtml(d: PrestacaoDados): string {
     </div>
     <div style="padding:26px 40px 34px">
       <div style="background:#e9f7ef;border:1px solid #7cc79a;border-left:5px solid #2f9e57;border-radius:10px;padding:15px 20px">
-        <div style="color:#2f7d4f;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">Valor líquido que será transferido a você</div>
+        <div style="color:#2f7d4f;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">Valor líquido que será transferido a você${ex ? ' agora' : ''}</div>
         <div style="color:#1f8a4c;font-size:31px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums">${brl(d.liquido)}</div>
+        ${ex ? `<div style="color:#2f7d4f;font-size:11.5px;margin-top:6px">Este é um <b>pagamento parcial</b>. O processo continua, e ainda cobramos ${brl(ex.remanescente)} do banco.</div>` : ''}
       </div>
 
       <div style="margin-top:28px">
@@ -65,10 +71,30 @@ function buildHtml(d: PrestacaoDados): string {
         </div>
       </div>
 
+      ${ex ? `
       <div style="margin-top:26px">
-        <div><span style="${secNum}">03</span><span style="${secTit}">Considerações finais</span></div>
+        <div><span style="${secNum}">03</span><span style="${secTit}">O que ainda vamos buscar</span></div>
+        <div style="${secSub}">Este pagamento é parcial. A diferença segue em cobrança na Justiça.</div>
+        <div style="font-size:12.5px;line-height:1.6;margin-bottom:12px">Executamos no processo um crédito de <b>${brl(ex.totalExecutado)}</b>. O banco depositou <b>${brl(ex.recebido)}</b>, que é o que estamos repassando agora. Falta <b>${brl(ex.remanescente)}</b>, ${pctFalta}% do total, e é isso que continuamos cobrando.</div>
+        <div style="display:flex;height:20px;border-radius:5px;overflow:hidden;border:1px solid #e3e6eb">
+          <div style="width:${pctPago}%;background:#2f9e57"></div><div style="width:${pctFalta}%;background:#C1272D"></div>
+        </div>
+        <div style="display:flex;gap:14px;margin-top:6px;font-size:11px;color:#6b7480">
+          <div style="flex:1"><span style="color:#2f9e57">■</span> Recebido agora · ${brl(ex.recebido)}</div>
+          <div style="flex:1;text-align:right"><span style="color:#C1272D">■</span> Em cobrança · ${brl(ex.remanescente)}</div>
+        </div>
+        <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e3e6eb;border-radius:10px;overflow:hidden;margin-top:14px">
+          <tr><td style="${cell}">Valor total que executamos no processo</td><td style="${val}">${brl(ex.totalExecutado)}</td></tr>
+          <tr><td style="${cell}">Valor que o banco depositou e estamos repassando agora</td><td style="${val}">(-) ${brl(ex.recebido)}</td></tr>
+          <tr style="background:#fdf0f0"><td style="${cell};border-bottom:none;font-weight:800">Valor que continua em cobrança na Justiça</td><td style="${val};border-bottom:none;font-weight:800;color:#C1272D">(=) ${brl(ex.remanescente)}</td></tr>
+        </table>
+        <div style="font-size:12.5px;line-height:1.6;margin-top:12px">Receber esta parte <b>não encerra o processo</b> e não significa que aceitamos o valor pago: o levantamento é feito sobre o que o próprio banco reconheceu como devido, e a diferença continua sendo discutida. Quando houver decisão sobre o restante, você recebe uma nova prestação de contas como esta.</div>
+      </div>` : ''}
+
+      <div style="margin-top:26px">
+        <div><span style="${secNum}">${ex ? '04' : '03'}</span><span style="${secTit}">Considerações finais</span></div>
         <div style="font-size:12.5px;line-height:1.6;margin-top:10px">O valor de <b>${brl(d.liquido)}</b> será transferido para a sua conta. Qualquer dúvida sobre esses números ou sobre o andamento do caso, estamos à disposição para explicar com calma.</div>
-        <div style="font-size:12.5px;line-height:1.6;margin-top:8px">Foi um prazer lutar pelos seus direitos. Obrigado pela confiança!</div>
+        <div style="font-size:12.5px;line-height:1.6;margin-top:8px">${ex ? 'Seguimos com o processo até o pagamento integral. Obrigado pela confiança!' : 'Foi um prazer lutar pelos seus direitos. Obrigado pela confiança!'}</div>
         <div style="margin-top:18px;font-size:12px;color:#7b8798">Atenciosamente,</div>
         <div style="margin-top:4px;font-weight:800;color:#1f2126;font-size:13px">FRIDER ANDRADE <span style="color:#C1272D">▪</span> ADVOGADOS</div>
         <div style="font-size:11px;color:#9aa6b6">Seus direitos. Nossa prioridade.</div>
