@@ -914,7 +914,7 @@ export function BuscaCliente({ value, onPick, onText }: { value: string; onPick:
 }
 
 /** Busca de processo — autocomplete (pra quitar/vincular). */
-export function BuscaProcesso({ onPick }: { onPick: (c: { id: string; label: string }) => void }) {
+export function BuscaProcesso({ onPick }: { onPick: (c: { id: string; label: string; cnj?: string | null }) => void }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const { data, isFetching } = useQuery({ queryKey: ['fin-busca-proc', q], queryFn: () => legalCasesService.list({ search: q }), enabled: open && q.trim().length >= 2, staleTime: 30_000 });
@@ -928,7 +928,7 @@ export function BuscaProcesso({ onPick }: { onPick: (c: { id: string; label: str
           {isFetching && opts.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">buscando…</p>}
           {!isFetching && opts.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">nenhum processo encontrado.</p>}
           {opts.map((c) => (
-            <button key={c.id} onMouseDown={(e) => e.preventDefault()} onClick={() => { onPick({ id: c.id, label: `${c.title}${c.cnjNumber ? ` · ${c.cnjNumber}` : ''}` }); setOpen(false); }} className="flex w-full flex-col px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <button key={c.id} onMouseDown={(e) => e.preventDefault()} onClick={() => { onPick({ id: c.id, label: `${c.title}${c.cnjNumber ? ` · ${c.cnjNumber}` : ''}`, cnj: c.cnjNumber }); setOpen(false); }} className="flex w-full flex-col px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800">
               <span className="truncate text-zinc-700 dark:text-zinc-200">{c.title}</span>
               <span className="truncate text-[11px] text-zinc-400">{c.cnjNumber || 'sem nº'}{c.area ? ` · ${c.area}` : ''}</span>
             </button>

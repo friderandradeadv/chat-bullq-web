@@ -2108,7 +2108,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2230,6 +2230,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         if (r.cliente || cliParty?.name) patch.clienteNome = cliParty?.name || r.cliente || cur.clienteNome;
         if (cliParty?.contactId) patch.contactId = cliParty.contactId;
         if (hit) { patch.caseId = hit.id; patch.procLabel = `${hit.title}${hit.cnjNumber ? ` · ${hit.cnjNumber}` : ''}`; }
+        if (hit?.cnjNumber || r.cnj) patch.cnj = hit?.cnjNumber || r.cnj || cur.cnj; // p/ puxar o valor da causa no DataJud
         // Honorário contratual em % → incide sobre o BRUTO do alvará.
         if (r.honorariosPct) { patch.honMode = 'pct'; patch.honPct = String(r.honorariosPct); }
         // Sucumbência: % sobre a BASE própria (condenação/proveito) OU valor fixo arbitrado.
@@ -2548,7 +2549,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                     <span className="truncate text-zinc-700 dark:text-zinc-200">{a.procLabel}</span>
                                     <button type="button" onClick={() => set({ caseId: undefined, procLabel: undefined })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                                   </div>
-                                ) : <BuscaProcesso onPick={(c) => { set({ caseId: c.id, procLabel: c.label }); puxarRateioAlvara(i, c.id, a.vertical); }} />}</Field>
+                                ) : <BuscaProcesso onPick={(c) => { set({ caseId: c.id, procLabel: c.label, cnj: c.cnj ?? undefined }); puxarRateioAlvara(i, c.id, a.vertical); }} />}</Field>
                                 <Field label="Vertical"><ComboBox className="w-full" value={a.vertical ?? ''} options={VERTICAIS_PADRAO} placeholder="vertical…" onChange={(v) => { set({ vertical: v }); if (a.caseId) puxarRateioAlvara(i, a.caseId, v); }} /></Field>
                               </div>
                               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
@@ -2579,6 +2580,15 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                         <select value={a.indiceCausa || 'INPC'} onChange={(e) => set({ indiceCausa: e.target.value })} className="rounded border border-zinc-300 bg-white px-1 py-0.5 text-[10px] dark:border-zinc-700 dark:bg-zinc-900" title="Índice de correção da causa">
                                           {['INPC', 'IPCA-E', 'IPCA', 'IGP-M', 'SELIC'].map((x) => <option key={x}>{x}</option>)}
                                         </select>
+                                        <button type="button" disabled={!a.cnj} title={a.cnj ? `Puxa o valor da causa do processo ${a.cnj} na API Pública do DataJud (valor nominal — confira)` : 'Escolha o processo (ou leia a CS pela IA) para ter o CNJ'} onClick={async () => {
+                                          if (!a.cnj) { toast.error('Sem CNJ — escolha o processo ou leia a petição de CS pela IA.'); return; }
+                                          try {
+                                            const vc = await legalCasesService.valorCausaCnj(a.cnj);
+                                            if (!(vc.valorCausa && vc.valorCausa > 0)) { toast('DataJud não trouxe o valor da causa desse processo — informe à mão.', { icon: '⚠️' }); return; }
+                                            set({ sucBase: fmtMoney(vc.valorCausa), dataBase: a.dataBase || (vc.dataAjuizamento ? vc.dataAjuizamento.slice(0, 10) : '') });
+                                            toast.success(`Valor da causa (DataJud): ${brl2(vc.valorCausa)}${vc.dataAjuizamento ? ` · ajuizado ${vc.dataAjuizamento.slice(0, 10).split('-').reverse().join('/')}` : ''}. É nominal — use o 🔄 pra atualizar até o depósito.`);
+                                          } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Não consegui consultar o DataJud'); }
+                                        }} className="inline-flex items-center gap-0.5 rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 transition hover:bg-violet-500/20 disabled:opacity-40 dark:text-violet-300">📡 CNJ</button>
                                         <button type="button" title="Corrige o valor da base da data-base até a data do alvará pelo índice" onClick={async () => {
                                           const base = parseValor(a.sucBase || '');
                                           const de = a.dataBase || '';

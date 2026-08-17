@@ -763,6 +763,13 @@ export const legalCasesService = {
     const { data } = await api.get(`/legal-cases/${id}/dossie-repasse`, { timeout: 60000 });
     return data.data ?? data;
   },
+  /** Valor da causa (nominal, da distribuição) + ajuizamento pelo CNJ na API Pública do DataJud.
+   *  Pré-preenche a base da sucumbência ("% sobre o valor da causa atualizado") — o número é
+   *  NOMINAL (o advogado confere e o botão de correção atualiza até a data do depósito). */
+  async valorCausaCnj(cnj: string): Promise<{ valorCausa: number | null; dataAjuizamento: string | null }> {
+    const { data } = await api.get(`/datajud/valor-causa`, { params: { cnj }, timeout: 30000 });
+    return data.data ?? data;
+  },
   /**
    * Conta do cliente para o repasse. Pré-requisito do aviso do alvará: a mensagem
    * CONFIRMA a conta (só os 4 últimos dígitos aparecem no texto) em vez de pedir
