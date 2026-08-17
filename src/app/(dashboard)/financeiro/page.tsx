@@ -2108,7 +2108,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; split?: { userId?: string; nome: string; pct: string }[] }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2164,7 +2164,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   //   • condenação = bruto − sucumbência (o que é do cliente)
   //   • honorário contratual = % sobre a CONDENAÇÃO (não sobre o bruto)
   //   • cliente (líquido) = condenação − contratual = bruto − sucumbência − contratual
-  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string } | undefined, bruto: number) => {
+  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string; clienteAjustado?: string } | undefined, bruto: number) => {
     const r2 = (n: number) => Math.round(n * 100) / 100;
     // Pagamento PARCIAL: o banco depositou menos que o total devido. A sucumbência de base
     // explícita (fixa) é rateada proporcional ao que entrou — senão o cliente absorveria toda
@@ -2187,16 +2187,22 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       suc = r2(parseValor(a?.sucumbencia || '') * fracao); // valor fixo arbitrado (rateado se parcial)
     }
     const condenacao = r2(bruto - suc);
-    const hon = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
+    const honAuto = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
+    // AJUSTE DO REPASSE: o advogado pode FIXAR a parte do cliente (ex.: pra respeitar o art. 50).
+    // Quem cede é o CONTRATUAL — a sucumbência é do escritório e fica intacta (art. 23 EAOAB).
+    const cliOverride = parseValor(a?.clienteAjustado || '');
+    const ajustado = cliOverride > 0 && cliOverride <= condenacao + 0.01;
+    const cli = ajustado ? r2(cliOverride) : r2(condenacao - honAuto);
+    const hon = ajustado ? r2(condenacao - cli) : honAuto;
     const nosso = r2(suc + hon);
-    const cli = r2(condenacao - hon);
     // BLINDAGEM OAB — art. 50 do Código de Ética e Disciplina (quota litis / êxito): os honorários
     // contratuais somados aos de sucumbência NÃO podem superar a vantagem que fica com o cliente.
     // `excedeCliente` acende o alerta vermelho na tela quando o escritório levaria mais que o cliente.
-    // `excedente` = quanto teria de ser devolvido/renegociado para respeitar o teto (cli === nosso).
+    // `igualarCliente` = a parte do cliente que iguala os dois lados (cede só o contratual).
     const excedeCliente = bruto > 0 && nosso > cli + 0.01;
     const excedente = excedeCliente ? r2((nosso - cli) / 2) : 0; // devolver isso ao cliente iguala os dois lados
-    return { suc, condenacao, hon, nosso, cli, excedeCliente, excedente, valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 };
+    const igualarCliente = r2((suc + condenacao) / 2); // cli tal que nosso === cli (aparando o contratual)
+    return { suc, condenacao, hon, honAuto, nosso, cli, ajustado, igualarCliente, excedeCliente, excedente, valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 };
   };
   // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
   const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
@@ -2606,7 +2612,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                     <p className="text-[10px] text-zinc-400">= {brl2(calc.suc)} · {embutida ? `${a.sucPct || ''}% da condenação ${brl2(calc.condenacao)} (embutida no alvará)` : (parseValor(a.sucBase || '') > 0 ? `${a.sucPct || ''}% sobre ${tl}` : `⚠️ informe o valor (${tl})`)}</p>
                                   </div>; })()}
                                 </Field>
-                                <Field label="Parte do cliente (repasse)"><div className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-right text-sm tabular-nums text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">{brl2(calc.cli)}</div></Field>
+                                <Field label="Parte do cliente (repasse)">
+                                  <MoneyInput value={a.clienteAjustado ?? ''} onChange={(v) => set({ clienteAjustado: v })} placeholder={brl2(calc.cli).replace('R$', '').trim()} />
+                                  {calc.ajustado
+                                    ? <p className="mt-0.5 text-[10px] text-violet-600 dark:text-violet-300">ajustado — pelo contrato daria {brl2(calc.condenacao - calc.honAuto)} · <button type="button" onClick={() => set({ clienteAjustado: '' })} className="font-semibold hover:underline">voltar ao contrato</button></p>
+                                    : <p className="mt-0.5 text-[10px] text-zinc-400">= automático pelo contrato · edite pra fixar o repasse</p>}
+                                </Field>
                               </div>
                               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                                 <span className="text-zinc-400">bruto {brl2(bruto)} − sucumbência {brl2(calc.suc)} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong></span>
@@ -2617,10 +2628,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               {calc.excedeCliente && (
                                 <div className="mt-1.5 flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
                                   <span className="mt-0.5 text-sm">🛡️</span>
-                                  <span>
-                                    <strong>Trava da OAB (art. 50 do Código de Ética):</strong> em contrato de êxito, o que fica com o escritório (<strong>{brl2(calc.nosso)}</strong>) não pode superar o que fica com o cliente (<strong>{brl2(calc.cli)}</strong>).
-                                    Reveja o contratual/sucumbência — devolvendo <strong>{brl2(calc.excedente)}</strong> ao cliente os dois lados se igualam. A sucumbência é do escritório (art. 23 EAOAB), mas <strong>somada</strong> ao contratual não pode ultrapassar o cliente.
-                                  </span>
+                                  <div className="space-y-1.5">
+                                    <span className="block">
+                                      <strong>Trava da OAB (art. 50 do Código de Ética):</strong> em contrato de êxito, o que fica com o escritório (<strong>{brl2(calc.nosso)}</strong>) não pode superar o que fica com o cliente (<strong>{brl2(calc.cli)}</strong>).
+                                      A sucumbência é do escritório (art. 23 EAOAB), mas <strong>somada</strong> ao contratual não pode ultrapassar o cliente — quem cede é o contratual.
+                                    </span>
+                                    <button type="button" onClick={() => set({ clienteAjustado: fmtMoney(calc.igualarCliente) })} className="inline-flex items-center gap-1 rounded bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-700">🛡️ Igualar ao teto (cliente {brl2(calc.igualarCliente)})</button>
+                                  </div>
                                 </div>
                               )}
                               {/* Pagamento PARCIAL: banco depositou menos que o total devido → rateia a sucumbência
