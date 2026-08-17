@@ -12,7 +12,7 @@ import { useRepbNewLeadsCount } from '@/features/notifications/use-repb-new-lead
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
 import { useRepassesPendentesCount } from '@/features/notifications/use-repasses-pendentes';
-import { useVencimentosHojeCount } from '@/features/notifications/use-vencimentos-hoje';
+import { useContasVencendo } from '@/features/notifications/use-vencimentos-hoje';
 import { useMobileNav } from '@/components/ui/sidebar-layout';
 import { useNavMode, barItemById, DEFAULT_SIMPLE_BAR } from '@/stores/nav-mode-store';
 import { useDockSafeArea } from '@/components/layout/use-dock-safe-area';
@@ -30,10 +30,17 @@ import { UserCircle, Settings, LogOut } from 'lucide-react';
 // mobile, mas com os atalhos que o usuário escolhe (editável nas Configurações).
 // O item 'menu' abre o menu lateral completo (drawer). Só no desktop (lg:flex).
 
-function Badge({ count }: { count: number }) {
+// tone: vermelho é o padrão (algo atrasado/pendente); laranja é o "atenção hoje",
+// usado quando a bolinha do Financeiro só tem conta vencendo no próprio dia.
+function Badge({ count, tone = 'red' }: { count: number; tone?: 'red' | 'orange' }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-2 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#15181A]">
+    <span
+      className={cn(
+        'absolute -right-2 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#15181A]',
+        tone === 'orange' ? 'bg-orange-500' : 'bg-red-500',
+      )}
+    >
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -49,7 +56,7 @@ export function SimpleTabBar() {
   const disconnected = useDisconnectedChannels();
   const { alert: creditAlert } = useAiCreditHealth();
   const repassesPend = useRepassesPendentesCount();
-  const vencemHoje = useVencimentosHojeCount();
+  const contas = useContasVencendo();
   const nav = useMobileNav();
   const { barItems, hydrated } = useNavMode();
   const { user, organizations, activeOrgId, logout } = useAuthStore();
@@ -94,10 +101,14 @@ export function SimpleTabBar() {
           it.id === 'pre-processual' ? preUnseen :
           it.id === 'repb' ? repbNew :
           it.id === 'config' ? disconnected + (creditAlert ? 1 : 0) :
-          it.id === 'financeiro' ? payslipUnread + repassesPend + vencemHoje :
+          it.id === 'financeiro' ? payslipUnread + repassesPend + contas.count :
           it.id === 'espaco' ? payslipUnread : 0;
+        // Financeiro fica LARANJA só quando tudo que a bolinha mostra vence hoje;
+        // qualquer atraso (conta vencida, holerite, repasse) a põe em vermelho.
+        const tone: 'red' | 'orange' =
+          it.id === 'financeiro' && contas.vencidas + payslipUnread + repassesPend === 0 ? 'orange' : 'red';
         const baseIcon = it.id === 'espaco' ? avatarEl(isActive('/escritorio')) : <Icon className="h-5 w-5" />;
-        const iconEl = <span className="relative">{baseIcon}<Badge count={count} /></span>;
+        const iconEl = <span className="relative">{baseIcon}<Badge count={count} tone={tone} /></span>;
         if (it.action === 'menu') {
           return (
             <button key={it.id} type="button" onClick={() => nav?.openSidebar()} className={linkCls(false)}>

@@ -21,12 +21,15 @@ async function fetchVencimentos(): Promise<VencimentosHoje | null> {
 
 /**
  * Contas a pagar que vencem HOJE + as já VENCIDAS e não pagas — alimenta a bolinha
- * vermelha do item "Financeiro" na barra de baixo. A vencida continua contando
- * enquanto ninguém paga (igual tarefa atrasada); quem zera é a baixa do lançamento.
+ * do item "Financeiro" na barra de baixo. A vencida continua contando enquanto
+ * ninguém paga (igual tarefa atrasada); quem zera é a baixa do lançamento.
+ * Devolve os dois números separados porque a COR da bolinha depende disso:
+ * laranja quando só vence hoje, vermelho assim que existe atrasada — mesmo código
+ * de cor dos avisos de vencimento (🟠 hoje / 🔴 vencido).
  * Só consulta para OWNER/ADMIN (o endpoint é dos sócios). Cai na hora quando a tela
  * do financeiro invalida a queryKey ['financeiro', ...] (ex.: ao dar baixa na conta).
  */
-export function useVencimentosHojeCount() {
+export function useContasVencendo(): { count: number; hoje: number; vencidas: number } {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const user = useAuthStore((s) => s.user);
   const organizations = useAuthStore((s) => s.organizations);
@@ -41,5 +44,6 @@ export function useVencimentosHojeCount() {
     staleTime: 15_000,
   });
 
-  return query.data?.count ?? 0;
+  const d = query.data;
+  return { count: d?.count ?? 0, hoje: d?.hoje?.count ?? 0, vencidas: d?.vencidas?.count ?? 0 };
 }

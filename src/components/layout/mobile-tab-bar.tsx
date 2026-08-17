@@ -21,16 +21,23 @@ import { usePreUnseenCount } from '@/features/notifications/use-pre-unseen-count
 import { useDisconnectedChannels } from '@/features/notifications/use-disconnected-channels';
 import { useAiCreditHealth } from '@/features/notifications/use-ai-credit-health';
 import { useRepassesPendentesCount } from '@/features/notifications/use-repasses-pendentes';
-import { useVencimentosHojeCount } from '@/features/notifications/use-vencimentos-hoje';
+import { useContasVencendo } from '@/features/notifications/use-vencimentos-hoje';
 
 // Barra de abas inferior — só no mobile (lg:hidden). Dá a navegação principal
 // com toque de app nativo; respeita a barra de gestos do iPhone (pb-safe).
 // As notificações (sino) ficam no topo, canto superior direito (não aqui).
 
-function Badge({ count }: { count: number }) {
+// tone: vermelho é o padrão (algo atrasado/pendente); laranja é o "atenção hoje",
+// usado quando a bolinha do Financeiro só tem conta vencendo no próprio dia.
+function Badge({ count, tone = 'red' }: { count: number; tone?: 'red' | 'orange' }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-2 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#15181A]">
+    <span
+      className={cn(
+        'absolute -right-2 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-[#15181A]',
+        tone === 'orange' ? 'bg-orange-500' : 'bg-red-500',
+      )}
+    >
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -46,8 +53,13 @@ export function MobileTabBar() {
   const disconnected = useDisconnectedChannels();
   const { alert: creditAlert } = useAiCreditHealth();
   const repassesPend = useRepassesPendentesCount();
-  const vencemHoje = useVencimentosHojeCount();
+  const contas = useContasVencendo();
   const { user, organizations, activeOrgId, logout } = useAuthStore();
+  // Bolinha do Financeiro: holerite + repasses + contas (hoje e vencidas). Fica
+  // LARANJA só quando tudo que ela mostra vence hoje; qualquer atraso a põe em
+  // vermelho — holerite e repasse pendente também são coisa atrasada.
+  const finCount = payslipUnread + repassesPend + contas.count;
+  const finTone = contas.vencidas + payslipUnread + repassesPend > 0 ? 'red' : 'orange';
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
   const iniciais = (user?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -108,8 +120,7 @@ export function MobileTabBar() {
         <Link href="/financeiro" className={linkCls(isActive(['/financeiro']))}>
           <span className="relative">
             <CircleDollarSign className="h-5 w-5" />
-            {/* holerite + repasses a fazer + contas vencendo hoje/vencidas */}
-            <Badge count={payslipUnread + repassesPend + vencemHoje} />
+            <Badge count={finCount} tone={finTone} />
           </span>
           <span>Financeiro</span>
         </Link>
