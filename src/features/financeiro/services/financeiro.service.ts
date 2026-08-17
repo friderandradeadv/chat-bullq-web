@@ -496,9 +496,14 @@ export const financeiroService = {
     const { data } = await api.post(`/financeiro/prestacao-contas/${txId}/preparar-revisao`, { pdfBase64 }, { timeout: 120000 });
     return data.data ?? data;
   },
-  // Lê o rascunho preparado (o chat pré-preenche o compositor com o texto + PDF).
-  async prestacaoRascunho(txId: string): Promise<{ texto: string; pdfUrl: string; pdfNome: string; conversationId: string } | null> {
+  // Lê o rascunho preparado (o chat mostra a barra de revisão com o texto + PDF).
+  async prestacaoRascunho(txId: string): Promise<{ texto: string; pdfUrl: string; pdfNome: string; conversationId: string; agendarAt: string | null; enviadaEm: string | null } | null> {
     const { data } = await api.get(`/financeiro/prestacao-contas/${txId}/rascunho`);
+    return data.data ?? data;
+  },
+  // Aprova o rascunho: envia agora (envio especializado) ou agenda para uma hora futura.
+  async aprovarPrestacao(txId: string, body: { texto?: string; agendarAt?: string }): Promise<{ enviado?: boolean; agendado?: boolean; quando?: string; motivo?: string }> {
+    const { data } = await api.post(`/financeiro/prestacao-contas/${txId}/aprovar`, body, { timeout: 120000 });
     return data.data ?? data;
   },
   async rateioSugerido(caseId: string, vertical?: string): Promise<{ vertical: string; responsavelId: string | null; split: Array<{ tipo: 'socio'; userId: string; nome: string; pct: number }> }> {
