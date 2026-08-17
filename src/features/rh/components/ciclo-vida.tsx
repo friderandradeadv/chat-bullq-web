@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import {
   X, Save, Loader2, UserPlus, UserMinus, TrendingUp, FileSignature, Trash2, Plus,
   ExternalLink, UploadCloud, Archive, CalendarDays, RotateCcw, History, IdCard, MapPin,
-  Mail, Phone, ShieldOff, Briefcase,
+  Mail, Phone, ShieldOff, Briefcase, Pencil,
 } from 'lucide-react';
 import {
   rhService, preKey, MOTIVO_LABEL, AVISO_LABEL,
@@ -33,7 +33,7 @@ import { escritorioService, type Cargo, type Vertical, type PessoaInfo } from '@
 import { financeiroService, type AcessoNivel } from '@/features/financeiro/services/financeiro.service';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { DropZone } from '@/components/drop-zone';
-import { maskDataBR } from '@/lib/masks';
+import { maskDataBR, maskCpf, maskTelefoneBR } from '@/lib/masks';
 
 export const INPUT = 'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100';
 export const LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-zinc-400';
@@ -853,19 +853,56 @@ function Linha({ Icon, label, valor }: { Icon: typeof Mail; label: string; valor
   );
 }
 
-/** Dossiê completo do ex-colaborador — leitura, com opção de readmitir. */
+/** Dossiê completo do ex-colaborador — leitura, edição da ficha e opção de readmitir. */
 function DossieModal({
   ctx, membro, canEdit, onClose, onChanged,
 }: { ctx: CicloCtx; membro: Member; canEdit: boolean; onClose: () => void; onChanged: () => void }) {
   const qc = useQueryClient();
   const uid = membro.user.id;
-  const ficha = ctx.fichas[uid] ?? {};
-  const d = ficha.desligamento!;
   const info = ctx.pessoas[uid] ?? {};
   const foto = membro.user.avatarUrl || info.fotoUrl;
+
+  // A ficha vive em estado local para que a correção apareça na hora, sem esperar o refetch.
+  const [ficha, setFicha] = useState<Ficha>(ctx.fichas[uid] ?? {});
   const [busy, setBusy] = useState(false);
   const [readmitir, setReadmitir] = useState(false);
   const [dataRe, setDataRe] = useState(hojeBR());
+  /** Rascunho da edição — null = só leitura. Guarda ficha e desligamento juntos. */
+  const [rascunho, setRascunho] = useState<{ f: Ficha; d: Desligamento } | null>(null);
+
+  const d = ficha.desligamento;
+  if (!d) return null;
+
+  const abrirEdicao = () => { setReadmitir(false); setRascunho({ f: ficha, d }); };
+  const setF = (patch: Partial<Ficha>) => setRascunho((r) => (r ? { ...r, f: { ...r.f, ...patch } } : r));
+  const setD = (patch: Partial<Desligamento>) => setRascunho((r) => (r ? { ...r, d: { ...r.d, ...patch } } : r));
+
+  const salvarEdicao = async () => {
+    if (!rascunho) return;
+    if (!rascunho.d.data.trim()) { toast.error('A data do desligamento não pode ficar em branco.'); return; }
+    setBusy(true);
+    try {
+      const nova: Ficha = {
+        ...rascunho.f,
+        documentos: (rascunho.f.documentos ?? []).filter((x) => x.nome || x.url),
+        desligamento: {
+          ...rascunho.d,
+          documentos: (rascunho.d.documentos ?? []).filter((x) => x.nome || x.url),
+          retificadoPor: ctx.autor,
+          retificadoEm: new Date().toISOString(),
+        },
+      };
+      await salvarFicha(ctx, uid, nova);
+      await qc.invalidateQueries({ queryKey: ['rh'] });
+      setFicha(nova);
+      setRascunho(null);
+      toast.success('Dossiê atualizado.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao salvar o dossiê');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const confirmarReadmissao = async () => {
     setBusy(true);
@@ -891,33 +928,55 @@ function DossieModal({
     }
   };
 
-  const docsPessoais = ficha.documentos ?? [];
-  const docsRescisao = d.documentos ?? [];
+  const editando = rascunho != null;
+  const vista = rascunho?.f ?? ficha;
+  const vd = rascunho?.d ?? d;
+  const docsPessoais = vista.documentos ?? [];
+  const docsRescisao = vd.documentos ?? [];
 
   return (
-    <Modal titulo="Dossiê do ex-colaborador" Icon={Archive} cor="#E64980" onClose={onClose} largo
+    <Modal titulo={editando ? 'Editar dossiê do ex-colaborador' : 'Dossiê do ex-colaborador'} Icon={Archive} cor="#E64980" onClose={onClose} largo
       footer={canEdit ? (
-        <>
-          <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Fechar</button>
-          {readmitir
-            ? <BotaoSalvar onClick={confirmarReadmissao} busy={busy} cor="#02883C" label="Confirmar readmissão" Icon={RotateCcw} />
-            : <button onClick={() => setReadmitir(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#02883C] px-3.5 py-2 text-sm font-semibold text-[#02883C] hover:bg-[#02883C]/10"><RotateCcw className="h-4 w-4" /> Readmitir</button>}
-        </>
+        editando ? (
+          <>
+            <button onClick={() => setRascunho(null)} className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Cancelar</button>
+            <BotaoSalvar onClick={salvarEdicao} busy={busy} cor="#7048E8" label="Salvar alterações" Icon={Save} />
+          </>
+        ) : (
+          <>
+            <button onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Fechar</button>
+            {readmitir
+              ? <BotaoSalvar onClick={confirmarReadmissao} busy={busy} cor="#02883C" label="Confirmar readmissão" Icon={RotateCcw} />
+              : (
+                <>
+                  <button onClick={abrirEdicao} className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8] px-3.5 py-2 text-sm font-semibold text-[#7048E8] hover:bg-[#7048E8]/10"><Pencil className="h-4 w-4" /> Editar</button>
+                  <button onClick={() => setReadmitir(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#02883C] px-3.5 py-2 text-sm font-semibold text-[#02883C] hover:bg-[#02883C]/10"><RotateCcw className="h-4 w-4" /> Readmitir</button>
+                </>
+              )}
+          </>
+        )
       ) : undefined}>
       <div className="flex items-center gap-3">
         {foto ? <img src={foto} alt={membro.user.name} className="h-16 w-16 rounded-full object-cover grayscale ring-2 ring-zinc-100 dark:ring-zinc-800" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-400 text-xl font-bold text-white">{ini(membro.user.name)}</div>}
         <div className="min-w-0 flex-1">
           <p className="truncate text-lg font-bold text-zinc-800 dark:text-zinc-100">{membro.user.name}</p>
-          <p className="truncate text-xs text-zinc-400">{d.cargoNaSaida ?? roleLabel(d.papelNaSaida ?? membro.role)} · {membro.user.email}</p>
+          <p className="truncate text-xs text-zinc-400">{vd.cargoNaSaida ?? roleLabel(vd.papelNaSaida ?? membro.role)} · {membro.user.email}</p>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            <span className="rounded-full bg-[#E64980]/10 px-2 py-0.5 text-[10px] font-semibold text-[#E64980] dark:bg-[#E64980]/20">Desligado em {d.data}</span>
-            {ficha.admissao && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{tempoDeCasa(ficha.admissao, d.data)} de casa</span>}
-            {d.elegivelRecontratacao && <span className="rounded-full bg-[#02883C]/10 px-2 py-0.5 text-[10px] font-semibold text-[#02883C] dark:bg-[#02883C]/20">recontratável</span>}
+            <span className="rounded-full bg-[#E64980]/10 px-2 py-0.5 text-[10px] font-semibold text-[#E64980] dark:bg-[#E64980]/20">Desligado em {vd.data}</span>
+            {vista.admissao && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{tempoDeCasa(vista.admissao, vd.data)} de casa</span>}
+            {vd.elegivelRecontratacao && <span className="rounded-full bg-[#02883C]/10 px-2 py-0.5 text-[10px] font-semibold text-[#02883C] dark:bg-[#02883C]/20">recontratável</span>}
           </div>
         </div>
       </div>
 
-      {readmitir && (
+      {editando && (
+        <p className="rounded-lg border border-[#7048E8]/25 bg-[#7048E8]/5 p-2.5 text-xs text-zinc-600 dark:bg-[#7048E8]/10 dark:text-zinc-300">
+          Corrigindo o dossiê. Dá para <strong>juntar documentos</strong> (pessoais e da rescisão) e ajustar os dados do desligamento e do cadastro.
+          A <strong>linha do tempo não é alterada</strong> — ela é a memória do RH; a correção fica marcada com o seu nome.
+        </p>
+      )}
+
+      {readmitir && !editando && (
         <div className="rounded-xl border border-[#02883C]/25 bg-[#02883C]/5 p-3 dark:bg-[#02883C]/10">
           <p className="text-sm text-zinc-700 dark:text-zinc-200">Readmitir devolve o acesso ao Hub e traz a pessoa de volta para os seletores de responsável. O desligamento sai da ficha, mas <strong>continua na linha do tempo</strong>.</p>
           <div className="mt-2 flex items-end gap-2">
@@ -929,60 +988,131 @@ function DossieModal({
 
       <div className="rounded-xl border border-[#E64980]/25 bg-[#E64980]/5 p-3 dark:bg-[#E64980]/10">
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#E64980]">Desligamento</p>
-        <div className="space-y-1">
-          <Linha Icon={UserMinus} label="Motivo" valor={MOTIVO_LABEL[d.motivo]} />
-          <Linha Icon={CalendarDays} label="Data" valor={d.data} />
-          <Linha Icon={CalendarDays} label="Último dia" valor={d.ultimoDia} />
-          <Linha Icon={FileSignature} label="Aviso prévio" valor={d.avisoPrevio ? AVISO_LABEL[d.avisoPrevio] : undefined} />
-          <Linha Icon={ShieldOff} label="Acesso ao Hub" valor={d.acessoBloqueado ? 'bloqueado no ato' : 'mantido'} />
-          <Linha Icon={History} label="Registrado por" valor={d.registradoPor} />
-        </div>
-        {d.detalhe && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white/70 p-2 text-sm text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">{d.detalhe}</p>}
+        {editando ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div><p className={LABEL}>Data do desligamento *</p><input value={vd.data} onChange={(e) => setD({ data: maskDataBR(e.target.value) })} inputMode="numeric" placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /></div>
+              <div><p className={LABEL}>Último dia trabalhado</p><input value={vd.ultimoDia ?? ''} onChange={(e) => setD({ ultimoDia: maskDataBR(e.target.value) })} inputMode="numeric" placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /></div>
+              <div>
+                <p className={LABEL}>Motivo</p>
+                <select value={vd.motivo} onChange={(e) => setD({ motivo: e.target.value as MotivoDesligamento })} className={`${INPUT} mt-1`}>
+                  {(Object.keys(MOTIVO_LABEL) as MotivoDesligamento[]).map((k) => <option key={k} value={k}>{MOTIVO_LABEL[k]}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className={LABEL}>Aviso prévio</p>
+                <select value={vd.avisoPrevio ?? 'nao_aplica'} onChange={(e) => setD({ avisoPrevio: e.target.value as AvisoPrevio })} className={`${INPUT} mt-1`}>
+                  {(Object.keys(AVISO_LABEL) as AvisoPrevio[]).map((k) => <option key={k} value={k}>{AVISO_LABEL[k]}</option>)}
+                </select>
+              </div>
+              <div><p className={LABEL}>Cargo na saída</p><input value={vd.cargoNaSaida ?? ''} onChange={(e) => setD({ cargoNaSaida: e.target.value })} placeholder="ex.: Sócio Júnior" className={`${INPUT} mt-1`} /></div>
+              <label className="flex items-end gap-2 pb-2 text-sm text-zinc-600 dark:text-zinc-300">
+                <input type="checkbox" checked={!!vd.elegivelRecontratacao} onChange={(e) => setD({ elegivelRecontratacao: e.target.checked })} className="mb-0.5 h-4 w-4 accent-[#02883C]" />
+                Elegível a recontratação
+              </label>
+            </div>
+            <div><p className={LABEL}>Relato interno</p><textarea value={vd.detalhe ?? ''} onChange={(e) => setD({ detalhe: e.target.value })} rows={3} placeholder="O que aconteceu, o que foi combinado, pendências. Fica só no RH." className={`${INPUT} mt-1`} /></div>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-1">
+              <Linha Icon={UserMinus} label="Motivo" valor={MOTIVO_LABEL[d.motivo]} />
+              <Linha Icon={CalendarDays} label="Data" valor={d.data} />
+              <Linha Icon={CalendarDays} label="Último dia" valor={d.ultimoDia} />
+              <Linha Icon={FileSignature} label="Aviso prévio" valor={d.avisoPrevio ? AVISO_LABEL[d.avisoPrevio] : undefined} />
+              <Linha Icon={ShieldOff} label="Acesso ao Hub" valor={d.acessoBloqueado ? 'bloqueado no ato' : 'mantido'} />
+              <Linha Icon={History} label="Registrado por" valor={d.registradoPor} />
+              <Linha Icon={Pencil} label="Corrigido por" valor={d.retificadoPor} />
+            </div>
+            {d.detalhe && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white/70 p-2 text-sm text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">{d.detalhe}</p>}
+          </>
+        )}
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#7048E8]">Dados cadastrais</p>
-        <div className="space-y-1">
-          <Linha Icon={IdCard} label="CPF" valor={ficha.cpf} />
-          <Linha Icon={IdCard} label="RG" valor={ficha.rg} />
-          <Linha Icon={CalendarDays} label="Nascimento" valor={ficha.nascimento} />
-          <Linha Icon={IdCard} label="Estado civil" valor={ficha.estadoCivil} />
-          <Linha Icon={Phone} label="Telefone" valor={ficha.telefone} />
-          <Linha Icon={Mail} label="E-mail" valor={membro.user.email} />
-          <Linha Icon={MapPin} label="Endereço" valor={ficha.endereco} />
-          <Linha Icon={CalendarDays} label="Admissão" valor={ficha.admissao} />
-          <Linha Icon={FileSignature} label="Contrato" valor={ficha.contrato} />
-          {(info.atuacao?.length ?? 0) > 0 && <Linha Icon={Briefcase} label="Atuação" valor={(info.atuacao as string[]).join(', ')} />}
-        </div>
-        {ficha.obs && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white/70 p-2 text-sm text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">{ficha.obs}</p>}
+        {editando ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div><p className={LABEL}>CPF</p><input value={vista.cpf ?? ''} onChange={(e) => setF({ cpf: maskCpf(e.target.value) })} inputMode="numeric" placeholder="000.000.000-00" className={`${INPUT} mt-1`} /></div>
+              <div><p className={LABEL}>RG</p><input value={vista.rg ?? ''} onChange={(e) => setF({ rg: e.target.value })} className={`${INPUT} mt-1`} /></div>
+              <div><p className={LABEL}>Nascimento</p><input value={vista.nascimento ?? ''} onChange={(e) => setF({ nascimento: maskDataBR(e.target.value) })} inputMode="numeric" placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /></div>
+              <div><p className={LABEL}>Estado civil</p><input value={vista.estadoCivil ?? ''} onChange={(e) => setF({ estadoCivil: e.target.value })} className={`${INPUT} mt-1`} /></div>
+              <div><p className={LABEL}>Telefone</p><input value={vista.telefone ?? ''} onChange={(e) => setF({ telefone: maskTelefoneBR(e.target.value) })} inputMode="tel" placeholder="+55 (44) 99185-6865" className={`${INPUT} mt-1`} /></div>
+              <div><p className={LABEL}>Admissão</p><input value={vista.admissao ?? ''} onChange={(e) => setF({ admissao: maskDataBR(e.target.value) })} inputMode="numeric" placeholder="dd/mm/aaaa" className={`${INPUT} mt-1`} /></div>
+              <div className="col-span-2"><p className={LABEL}>Endereço</p><input value={vista.endereco ?? ''} onChange={(e) => setF({ endereco: e.target.value })} className={`${INPUT} mt-1`} /></div>
+              <div className="col-span-2">
+                <p className={LABEL}>Contrato</p>
+                <input list="rh-tipos-contrato-dossie" value={vista.contrato ?? ''} onChange={(e) => setF({ contrato: e.target.value })} className={`${INPUT} mt-1`} />
+                <datalist id="rh-tipos-contrato-dossie">{TIPOS_CONTRATO.map((t) => <option key={t} value={t} />)}</datalist>
+              </div>
+            </div>
+            <div><p className={LABEL}>Observações de RH</p><textarea value={vista.obs ?? ''} onChange={(e) => setF({ obs: e.target.value })} rows={2} className={`${INPUT} mt-1`} /></div>
+            <p className="text-[10px] text-zinc-400">E-mail e papel no Hub continuam em <strong>Configurações › Membros</strong>.</p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-1">
+              <Linha Icon={IdCard} label="CPF" valor={ficha.cpf} />
+              <Linha Icon={IdCard} label="RG" valor={ficha.rg} />
+              <Linha Icon={CalendarDays} label="Nascimento" valor={ficha.nascimento} />
+              <Linha Icon={IdCard} label="Estado civil" valor={ficha.estadoCivil} />
+              <Linha Icon={Phone} label="Telefone" valor={ficha.telefone} />
+              <Linha Icon={Mail} label="E-mail" valor={membro.user.email} />
+              <Linha Icon={MapPin} label="Endereço" valor={ficha.endereco} />
+              <Linha Icon={CalendarDays} label="Admissão" valor={ficha.admissao} />
+              <Linha Icon={FileSignature} label="Contrato" valor={ficha.contrato} />
+              {(info.atuacao?.length ?? 0) > 0 && <Linha Icon={Briefcase} label="Atuação" valor={(info.atuacao as string[]).join(', ')} />}
+            </div>
+            {ficha.obs && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white/70 p-2 text-sm text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">{ficha.obs}</p>}
+          </>
+        )}
       </div>
 
       <div>
-        <p className={LABEL}>Documentos pessoais ({docsPessoais.length})</p>
-        <div className="mt-1 space-y-1">
-          {docsPessoais.length === 0 && <p className="text-xs text-zinc-400">Nenhum documento pessoal arquivado.</p>}
-          {docsPessoais.map((doc) => (
-            <a key={doc.id} href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-800 dark:text-zinc-300">
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{doc.nome || 'Documento'}</span>
-            </a>
-          ))}
+        <div className="flex items-center justify-between gap-2">
+          <p className={LABEL}>Documentos pessoais ({docsPessoais.length})</p>
+          {canEdit && !editando && <button onClick={abrirEdicao} className="inline-flex items-center gap-1 text-xs font-semibold text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> juntar documento</button>}
         </div>
+        {editando ? (
+          <div className="mt-1">
+            <ListaDocumentos docs={docsPessoais} onChange={(docs) => setF({ documentos: docs })} canEdit dica="Arraste os documentos pessoais ou clique para escolher" />
+          </div>
+        ) : (
+          <div className="mt-1 space-y-1">
+            {docsPessoais.length === 0 && <p className="text-xs text-zinc-400">Nenhum documento pessoal arquivado.</p>}
+            {docsPessoais.map((doc) => (
+              <a key={doc.id} href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-800 dark:text-zinc-300">
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{doc.nome || 'Documento'}</span>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
       <div>
-        <p className={LABEL}>Documentos da rescisão ({docsRescisao.length})</p>
-        <div className="mt-1 space-y-1">
-          {docsRescisao.length === 0 && <p className="text-xs text-zinc-400">Nenhum documento de rescisão anexado.</p>}
-          {docsRescisao.map((doc) => (
-            <a key={doc.id} href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-600 hover:border-[#E64980] hover:text-[#E64980] dark:border-zinc-800 dark:text-zinc-300">
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{doc.nome || 'Documento'}</span>
-            </a>
-          ))}
+        <div className="flex items-center justify-between gap-2">
+          <p className={LABEL}>Documentos da rescisão ({docsRescisao.length})</p>
+          {canEdit && !editando && <button onClick={abrirEdicao} className="inline-flex items-center gap-1 text-xs font-semibold text-[#E64980] hover:underline"><Plus className="h-3.5 w-3.5" /> juntar documento</button>}
         </div>
+        {editando ? (
+          <div className="mt-1">
+            <ListaDocumentos docs={docsRescisao} onChange={(docs) => setD({ documentos: docs })} canEdit dica="TRCT, distrato, termo de quitação — arraste ou clique para escolher" />
+          </div>
+        ) : (
+          <div className="mt-1 space-y-1">
+            {docsRescisao.length === 0 && <p className="text-xs text-zinc-400">Nenhum documento de rescisão anexado.</p>}
+            {docsRescisao.map((doc) => (
+              <a key={doc.id} href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-sm text-zinc-600 hover:border-[#E64980] hover:text-[#E64980] dark:border-zinc-800 dark:text-zinc-300">
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{doc.nome || 'Documento'}</span>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>
         <p className={`${LABEL} mb-1.5 flex items-center gap-1.5`}><History className="h-3.5 w-3.5" /> Linha do tempo na casa</p>
-        <Timeline historico={ficha.historico ?? []} />
+        <Timeline historico={vista.historico ?? []} />
       </div>
     </Modal>
   );

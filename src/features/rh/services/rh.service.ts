@@ -73,6 +73,9 @@ export interface Desligamento {
   acessoBloqueado?: boolean;     // login desativado no ato do desligamento
   registradoPor?: string;
   registradoEm?: string;         // ISO
+  /** Quem corrigiu o dossiê depois do ato (o registro original não é apagado). */
+  retificadoPor?: string;
+  retificadoEm?: string;         // ISO
 }
 
 /** Contratação registrada antes de o convidado aceitar o convite (ainda sem userId). */
