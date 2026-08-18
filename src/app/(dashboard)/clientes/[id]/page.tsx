@@ -88,6 +88,20 @@ export default function ClienteDetailPage() {
     return cases.filter((c) => c.parties.some((p) => norm(p.name) === key));
   }, [cases, cliente]);
 
+  // Agrupa os processos por DESFECHO — visão visual "vencidos / em andamento / perdidos / arquivados".
+  const gruposCasos = useMemo(() => {
+    const arqPhases = new Set(['arquivado', 'abandonado', 'arq_provisorio', 'perdidos_valeska']);
+    const g: Record<string, typeof meusCasos> = { vencidos: [], parcial: [], andamento: [], perdidos: [], arquivados: [] };
+    for (const c of meusCasos) {
+      if (c.resultado === 'vencemos') g.vencidos.push(c);
+      else if (c.resultado === 'parcial') g.parcial.push(c);
+      else if (c.resultado === 'perdemos') g.perdidos.push(c);
+      else if (c.status === 'ARCHIVED' || arqPhases.has(c.faseKey || '')) g.arquivados.push(c);
+      else g.andamento.push(c);
+    }
+    return g;
+  }, [meusCasos]);
+
   // Cadastro migrado do Pipefy (CPF/RG/endereço/login/senha gov) vive na party do
   // detalhe do caso — puxa o 1º processo do cliente e extrai a party CLIENT dele.
   const repCaseId = meusCasos[0]?.id;
@@ -200,33 +214,44 @@ export default function ClienteDetailPage() {
             {meusCasos.length === 0 ? (
               <p className="py-6 text-center text-sm text-zinc-400">Nenhum processo deste cliente.</p>
             ) : (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {meusCasos.map((c) => {
-                  const monitorado = !!c.cnjNumber;
+              <div className="space-y-4">
+                {([
+                  { key: 'vencidos', label: 'Vencidos', cor: '#2F9E44', bg: 'bg-emerald-50 dark:bg-emerald-900/15', dot: 'bg-emerald-500', chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+                  { key: 'parcial', label: 'Recebimento parcial', cor: '#F59F00', bg: 'bg-amber-50 dark:bg-amber-900/15', dot: 'bg-amber-500', chip: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+                  { key: 'andamento', label: 'Em andamento', cor: '#228BE6', bg: 'bg-blue-50 dark:bg-blue-900/15', dot: 'bg-blue-500', chip: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+                  { key: 'perdidos', label: 'Perdidos', cor: '#E03131', bg: 'bg-rose-50 dark:bg-rose-900/15', dot: 'bg-rose-500', chip: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
+                  { key: 'arquivados', label: 'Arquivados / encerrados', cor: '#868E96', bg: 'bg-zinc-50 dark:bg-zinc-800/40', dot: 'bg-zinc-400', chip: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' },
+                ] as const).map((grp) => {
+                  const lista = gruposCasos[grp.key] ?? [];
+                  if (lista.length === 0) return null;
                   return (
-                    <li key={c.id} className="flex items-start gap-2 py-3">
-                      <span title={monitorado ? 'Monitorado via DJEN' : 'Sem nº CNJ'} className="mt-0.5 shrink-0">
-                        <Rss className={`h-3.5 w-3.5 ${monitorado ? 'text-emerald-500' : 'text-zinc-300'}`} />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <Link href={`/processos/${c.id}`} className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-200">
-                            {c.title}
-                          </Link>
-                          {c.resultado === 'vencemos' && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">✓ Vencemos</span>}
-                          {c.resultado === 'perdemos' && <span className="shrink-0 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">✗ Perdemos</span>}
-                          {c.resultado === 'parcial' && <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">◐ Parcial</span>}
-                        </div>
-                        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
-                          {c.faseLabel && <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{c.faseLabel}</span>}
-                          <span>{c.area ?? 'Processo'}{STATUS_LABEL[c.status] ? ` · ${STATUS_LABEL[c.status].toLowerCase()}` : ''}</span>
-                          {c.cnjNumber ? <span>· <CnjNumber value={c.cnjNumber} /></span> : null}
-                        </p>
+                    <div key={grp.key} className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+                      <div className={`flex items-center gap-2 px-3 py-2 ${grp.bg}`}>
+                        <span className={`h-2.5 w-2.5 rounded-full ${grp.dot}`} />
+                        <span className="text-sm font-bold" style={{ color: grp.cor }}>{grp.label}</span>
+                        <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] font-bold tabular-nums dark:bg-zinc-900/60" style={{ color: grp.cor }}>{lista.length}</span>
                       </div>
-                    </li>
+                      <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        {lista.map((c) => (
+                          <li key={c.id} className="flex items-start gap-2 px-3 py-2.5">
+                            <span title={c.cnjNumber ? 'Monitorado via DJEN' : 'Sem nº CNJ'} className="mt-0.5 shrink-0">
+                              <Rss className={`h-3.5 w-3.5 ${c.cnjNumber ? 'text-emerald-500' : 'text-zinc-300'}`} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <Link href={`/processos/${c.id}`} className="block truncate text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-200" title={c.title}>{c.title}</Link>
+                              <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+                                {c.faseLabel && <span className={`rounded px-1.5 py-0.5 font-medium ${grp.chip}`}>{c.faseLabel}</span>}
+                                <span>{c.area ?? 'Processo'}</span>
+                                {c.cnjNumber ? <span>· <CnjNumber value={c.cnjNumber} /></span> : null}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   );
                 })}
-              </ul>
+              </div>
             )}
           </Card>
 
