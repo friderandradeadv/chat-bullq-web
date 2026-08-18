@@ -53,6 +53,15 @@ const VIEW_KEY = 'agenda:view';
 type StatusFilter = 'todas' | 'aconcluir' | 'concluidas' | 'canceladas';
 const STATUS_VALUES: StatusFilter[] = ['todas', 'aconcluir', 'concluidas', 'canceladas'];
 const STATUS_KEY = 'agenda:status';
+type ExibirFilter = { tarefas: boolean; eventos: boolean };
+const EXIBIR_KEY = 'agenda:exibir';
+// Só aceita o que tem a forma certa (localStorage/prefs podem vir de versão antiga).
+const parseExibir = (v: unknown): ExibirFilter | null =>
+  v && typeof v === 'object'
+    && typeof (v as ExibirFilter).tarefas === 'boolean'
+    && typeof (v as ExibirFilter).eventos === 'boolean'
+    ? { tarefas: (v as ExibirFilter).tarefas, eventos: (v as ExibirFilter).eventos }
+    : null;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toDatetimeLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -305,7 +314,7 @@ export default function AgendaPage() {
   const [fAtiv, setFAtiv] = useState(false);
   const [fAtrib, setFAtrib] = useState(false);
   const [dispOpen, setDispOpen] = useState(false);
-  const [exibir, setExibir] = useState({ tarefas: true, eventos: true });
+  const [exibir, setExibir] = useState<ExibirFilter>({ tarefas: true, eventos: true });
   // Padrão "A concluir" só para quem NUNCA escolheu: agenda é lista do que FALTA
   // fazer. Com "todas", prazo concluído e prazo CANCELADO seguiam ocupando o dia
   // (riscados, e com a bolinha de "adicionado hoje" se tivessem nascido no dia) —
@@ -334,7 +343,7 @@ export default function AgendaPage() {
   // Grava o objeto `agenda` INTEIRO nas preferências do usuário. O merge do
   // backend é RASO no topo, então mandar só um campo (view OU seenNew) apagaria
   // o outro — por isso sempre reenviamos o objeto completo.
-  const patchAgendaPrefs = (partial: { view?: ViewMode; seenNew?: string[]; status?: StatusFilter }) => {
+  const patchAgendaPrefs = (partial: { view?: ViewMode; seenNew?: string[]; status?: StatusFilter; exibir?: ExibirFilter }) => {
     const cur =
       (qcPrefs.getQueryData(['user-preferences']) as { agenda?: Record<string, unknown> } | undefined)
         ?.agenda ?? {};
@@ -391,6 +400,11 @@ export default function AgendaPage() {
     if (saved && saved in VIEW_LABEL) setMode(saved);
     const st = (typeof window !== 'undefined' && localStorage.getItem(STATUS_KEY)) as StatusFilter | null;
     if (st && STATUS_VALUES.includes(st)) { setStatus(st); setDStatus(st); }
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(EXIBIR_KEY) : null;
+      const ex = raw ? parseExibir(JSON.parse(raw)) : null;
+      if (ex) { setExibir(ex); setDExibir(ex); }
+    } catch { /* */ }
   }, []);
 
   // 2) Preferência POR USUÁRIO (servidor) — segue o Matheus entre aparelhos
@@ -413,19 +427,27 @@ export default function AgendaPage() {
     }
   }, [prefsQ.isSuccess, prefsQ.data]);
 
-  // 2b) MESMA lógica para o filtro de STATUS ("A concluir" / "Concluídas" /
-  //     "Canceladas" / "Todas"): quem escolheu "Todas" no desktop abre em "Todas"
-  //     no celular. Só sobrepõe se o usuário ainda não mexeu no filtro nesta
-  //     sessão (didApplyServerStatus vira true no Aplicar).
-  const didApplyServerStatus = useRef(false);
+  // 2b) MESMA lógica para o painel "Todas as atividades" — Exibir (Tarefas /
+  //     Eventos) e Status ("A concluir" / "Concluídas" / "Canceladas" / "Todas"):
+  //     quem escolheu "Todas" no desktop abre em "Todas" no celular. Os dois saem
+  //     do MESMO botão Aplicar, então uma trava só cobre os dois; ela vira true no
+  //     Aplicar para um fetch tardio de preferências não desfazer a escolha.
+  const didApplyServerFiltros = useRef(false);
   useEffect(() => {
-    if (didApplyServerStatus.current || !prefsQ.isSuccess) return;
-    didApplyServerStatus.current = true;
-    const st = (prefsQ.data?.agenda as { status?: StatusFilter } | undefined)?.status;
+    if (didApplyServerFiltros.current || !prefsQ.isSuccess) return;
+    didApplyServerFiltros.current = true;
+    const ag = prefsQ.data?.agenda as { status?: StatusFilter; exibir?: unknown } | undefined;
+    const st = ag?.status;
     if (st && STATUS_VALUES.includes(st)) {
       setStatus(st);
       setDStatus(st);
       try { localStorage.setItem(STATUS_KEY, st); } catch { /* */ }
+    }
+    const ex = parseExibir(ag?.exibir);
+    if (ex) {
+      setExibir(ex);
+      setDExibir(ex);
+      try { localStorage.setItem(EXIBIR_KEY, JSON.stringify(ex)); } catch { /* */ }
     }
   }, [prefsQ.isSuccess, prefsQ.data]);
 
@@ -618,16 +640,20 @@ export default function AgendaPage() {
     // o objeto agenda inteiro — o merge do backend é raso no topo).
     patchAgendaPrefs({ view: m });
   };
-  // Aplicar o filtro de status = escolha do usuário: vale nesta sessão, fica no
-  // localStorage (instantâneo no próximo load) e vai para as preferências DELE no
-  // servidor (patchAgendaPrefs reenvia o objeto `agenda` inteiro — o merge do
-  // backend é raso no topo, mandar só `status` apagaria view/seenNew).
-  const pickStatus = (st: StatusFilter) => {
+  // Aplicar o painel "Todas as atividades" = escolha do usuário: vale nesta sessão,
+  // fica no localStorage (instantâneo no próximo load) e vai para as preferências
+  // DELE no servidor (patchAgendaPrefs reenvia o objeto `agenda` inteiro — o merge
+  // do backend é raso no topo, mandar só um campo apagaria view/seenNew).
+  const pickFiltros = (ex: ExibirFilter, st: StatusFilter) => {
+    setExibir(ex);
     setStatus(st);
     // já escolheu nesta sessão → um fetch tardio de preferências não sobrescreve.
-    didApplyServerStatus.current = true;
-    try { localStorage.setItem(STATUS_KEY, st); } catch { /* */ }
-    patchAgendaPrefs({ status: st });
+    didApplyServerFiltros.current = true;
+    try {
+      localStorage.setItem(STATUS_KEY, st);
+      localStorage.setItem(EXIBIR_KEY, JSON.stringify(ex));
+    } catch { /* */ }
+    patchAgendaPrefs({ status: st, exibir: ex });
   };
   const openCreate = (type: 'evento' | 'tarefa' | 'atendimento', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
@@ -755,7 +781,7 @@ export default function AgendaPage() {
               ))}
               <div className="mt-3 flex justify-end gap-4 border-t border-[#DEE2E6] pt-3 text-sm font-semibold dark:border-zinc-700">
                 <button onClick={() => setFAtiv(false)} className="uppercase text-zinc-500">Cancelar</button>
-                <button onClick={() => { setExibir(dExibir); pickStatus(dStatus); setFAtiv(false); }} className="uppercase text-[#228BE6]">Aplicar</button>
+                <button onClick={() => { pickFiltros(dExibir, dStatus); setFAtiv(false); }} className="uppercase text-[#228BE6]">Aplicar</button>
               </div>
             </div></>)}
         </div>
