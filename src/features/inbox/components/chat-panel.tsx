@@ -342,13 +342,39 @@ function TemplateMessage({
     text?: string;
     buttons?: TemplateButtonShape[];
     elements?: TemplateElementShape[];
+    /** Anexo do HEADER do template (ex.: PDF da prestação de contas). O cliente
+     *  recebe pelo próprio template; sem isto aqui a equipe não via o anexo e
+     *  concluía que a mensagem tinha ido sem ele. */
+    headerDocument?: { link?: string; filename?: string };
   };
-  const headerText = tpl.text || content?.text;
+  const doc = tpl.headerDocument?.link ? tpl.headerDocument : null;
+  // A prévia do backend já começa com "📎 arquivo.pdf" para os canais que só têm
+  // texto; com o cartão abaixo isso duplicaria, então tiramos da bolha.
+  const rawText = tpl.text || content?.text;
+  const headerText = doc && typeof rawText === 'string'
+    ? rawText.replace(/^📎[^\n]*\n+/, '')
+    : rawText;
   const elements = tpl.elements ?? [];
   const buttons = tpl.buttons ?? [];
 
   return (
     <div className="space-y-2">
+      {doc && (
+        <a
+          href={doc.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 transition ${
+            isOutbound
+              ? 'border-black/10 bg-black/5 hover:bg-black/10 dark:border-white/15 dark:bg-white/10 dark:hover:bg-white/15'
+              : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <Paperclip className="h-4 w-4 shrink-0 opacity-70" />
+          <span className="truncate text-xs font-medium">{doc.filename || 'Documento'}</span>
+          <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
+        </a>
+      )}
       {headerText && <MessageText text={headerText} isOutbound={isOutbound} />}
 
       {elements.map((el, i) => (
