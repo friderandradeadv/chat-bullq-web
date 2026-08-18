@@ -50,6 +50,10 @@ type ViewMode = 'list' | 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth';
 const VIEW_LABEL: Record<ViewMode, string> = { list: 'Em lista', timeGridDay: 'Por dia', timeGridWeek: 'Por semana', dayGridMonth: 'Por mês' };
 const VIEW_KEY = 'agenda:view';
 
+type StatusFilter = 'todas' | 'aconcluir' | 'concluidas' | 'canceladas';
+const STATUS_VALUES: StatusFilter[] = ['todas', 'aconcluir', 'concluidas', 'canceladas'];
+const STATUS_KEY = 'agenda:status';
+
 const pad = (n: number) => String(n).padStart(2, '0');
 const toDatetimeLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const toDateInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -302,12 +306,14 @@ export default function AgendaPage() {
   const [fAtrib, setFAtrib] = useState(false);
   const [dispOpen, setDispOpen] = useState(false);
   const [exibir, setExibir] = useState({ tarefas: true, eventos: true });
-  // Padrão "A concluir": agenda é lista do que FALTA fazer. Com "todas", prazo
-  // concluído e prazo CANCELADO seguiam ocupando o dia (riscados, e com a bolinha
-  // de "adicionado hoje" se tivessem nascido no dia) — foi o que poluiu a agenda
-  // depois do backfill do DJEN de 18/08/2026. Concluídas/Canceladas continuam a
-  // um clique no filtro.
-  const [status, setStatus] = useState<'todas' | 'aconcluir' | 'concluidas' | 'canceladas'>('aconcluir');
+  // Padrão "A concluir" só para quem NUNCA escolheu: agenda é lista do que FALTA
+  // fazer. Com "todas", prazo concluído e prazo CANCELADO seguiam ocupando o dia
+  // (riscados, e com a bolinha de "adicionado hoje" se tivessem nascido no dia) —
+  // foi o que poluiu a agenda depois do backfill do DJEN de 18/08/2026. Assim que
+  // o usuário aplica um status, a escolha DELE manda e é salva (localStorage +
+  // preferências do usuário no servidor), por usuário, valendo em qualquer
+  // aparelho — nunca mais volta sozinho para "A concluir".
+  const [status, setStatus] = useState<StatusFilter>('aconcluir');
   const [personId, setPersonId] = useState<string>('all');
   const [dExibir, setDExibir] = useState(exibir);
   const [dStatus, setDStatus] = useState(status);
@@ -328,7 +334,7 @@ export default function AgendaPage() {
   // Grava o objeto `agenda` INTEIRO nas preferências do usuário. O merge do
   // backend é RASO no topo, então mandar só um campo (view OU seenNew) apagaria
   // o outro — por isso sempre reenviamos o objeto completo.
-  const patchAgendaPrefs = (partial: { view?: ViewMode; seenNew?: string[] }) => {
+  const patchAgendaPrefs = (partial: { view?: ViewMode; seenNew?: string[]; status?: StatusFilter }) => {
     const cur =
       (qcPrefs.getQueryData(['user-preferences']) as { agenda?: Record<string, unknown> } | undefined)
         ?.agenda ?? {};
@@ -383,6 +389,8 @@ export default function AgendaPage() {
   useEffect(() => {
     const saved = (typeof window !== 'undefined' && localStorage.getItem(VIEW_KEY)) as ViewMode | null;
     if (saved && saved in VIEW_LABEL) setMode(saved);
+    const st = (typeof window !== 'undefined' && localStorage.getItem(STATUS_KEY)) as StatusFilter | null;
+    if (st && STATUS_VALUES.includes(st)) { setStatus(st); setDStatus(st); }
   }, []);
 
   // 2) Preferência POR USUÁRIO (servidor) — segue o Matheus entre aparelhos
@@ -402,6 +410,22 @@ export default function AgendaPage() {
     if (v && v in VIEW_LABEL) {
       setMode(v);
       try { localStorage.setItem(VIEW_KEY, v); } catch { /* */ }
+    }
+  }, [prefsQ.isSuccess, prefsQ.data]);
+
+  // 2b) MESMA lógica para o filtro de STATUS ("A concluir" / "Concluídas" /
+  //     "Canceladas" / "Todas"): quem escolheu "Todas" no desktop abre em "Todas"
+  //     no celular. Só sobrepõe se o usuário ainda não mexeu no filtro nesta
+  //     sessão (didApplyServerStatus vira true no Aplicar).
+  const didApplyServerStatus = useRef(false);
+  useEffect(() => {
+    if (didApplyServerStatus.current || !prefsQ.isSuccess) return;
+    didApplyServerStatus.current = true;
+    const st = (prefsQ.data?.agenda as { status?: StatusFilter } | undefined)?.status;
+    if (st && STATUS_VALUES.includes(st)) {
+      setStatus(st);
+      setDStatus(st);
+      try { localStorage.setItem(STATUS_KEY, st); } catch { /* */ }
     }
   }, [prefsQ.isSuccess, prefsQ.data]);
 
@@ -594,6 +618,17 @@ export default function AgendaPage() {
     // o objeto agenda inteiro — o merge do backend é raso no topo).
     patchAgendaPrefs({ view: m });
   };
+  // Aplicar o filtro de status = escolha do usuário: vale nesta sessão, fica no
+  // localStorage (instantâneo no próximo load) e vai para as preferências DELE no
+  // servidor (patchAgendaPrefs reenvia o objeto `agenda` inteiro — o merge do
+  // backend é raso no topo, mandar só `status` apagaria view/seenNew).
+  const pickStatus = (st: StatusFilter) => {
+    setStatus(st);
+    // já escolheu nesta sessão → um fetch tardio de preferências não sobrescreve.
+    didApplyServerStatus.current = true;
+    try { localStorage.setItem(STATUS_KEY, st); } catch { /* */ }
+    patchAgendaPrefs({ status: st });
+  };
   const openCreate = (type: 'evento' | 'tarefa' | 'atendimento', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
   // Abrir a atividade = visualizá-la → tira a bolinha de "novo".
@@ -720,7 +755,7 @@ export default function AgendaPage() {
               ))}
               <div className="mt-3 flex justify-end gap-4 border-t border-[#DEE2E6] pt-3 text-sm font-semibold dark:border-zinc-700">
                 <button onClick={() => setFAtiv(false)} className="uppercase text-zinc-500">Cancelar</button>
-                <button onClick={() => { setExibir(dExibir); setStatus(dStatus); setFAtiv(false); }} className="uppercase text-[#228BE6]">Aplicar</button>
+                <button onClick={() => { setExibir(dExibir); pickStatus(dStatus); setFAtiv(false); }} className="uppercase text-[#228BE6]">Aplicar</button>
               </div>
             </div></>)}
         </div>
