@@ -444,6 +444,20 @@ function contasEmAberto(data: FinDashboard) {
 const diasAtraso = (vencISO: string, hojeISO: string) =>
   Math.round((Date.parse(hojeISO) - Date.parse(vencISO)) / 86400000);
 
+/** Ciclo/vencimento da fatura de um gasto de cartão (mesma regra da aba Cartão):
+ *  gasto no DIA do fechamento (>=) já entra no ciclo do mês seguinte; vence no dia
+ *  `vencDia` do mês seguinte ao ciclo (ex.: fecha 27/08 → vence 03/09). */
+function faturaCiclo(dataBR: string, fechamento: number, vencDia: number): { key: string; venc: string } {
+  const m = (dataBR || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return { key: '0000-00', venc: '' };
+  const dia = +m[1]; let mes = +m[2]; let ano = +m[3];
+  if (fechamento > 0 && dia >= fechamento) { mes += 1; if (mes > 12) { mes = 1; ano += 1; } }
+  const key = `${ano}-${String(mes).padStart(2, '0')}`;
+  let vm = mes + 1, va = ano; if (vm > 12) { vm = 1; va += 1; }
+  const venc = vencDia > 0 ? `${String(vencDia).padStart(2, '0')}/${String(vm).padStart(2, '0')}/${va}` : '';
+  return { key, venc };
+}
+
 /**
  * Bolinha de pendência do Financeiro. Vermelha quando há conta ATRASADA, laranja
  * quando só vence hoje — mesmo código de cor da barra de baixo e dos avisos de
@@ -806,6 +820,28 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // extrato do cartão (fonteImport) OU ainda está em aberto (a_pagar). Uma despesa
   // LANÇADA À MÃO numa conta-cartão (ex.: repasse) NÃO é fatura — fica no livro-razão.
   const isFaturaCartao = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta) && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar');
+  // Saldo do cartão como conta a pagar (ao vivo): agrega os gastos em ABERTO de cada cartão por
+  // CICLO de fatura → 1 linha sintética por fatura em aberto, com vencimento dia `venc` (ex.: 03).
+  // Atualiza sozinho conforme novos gastos entram. id `__card:<cartao>:<ciclo>` (não é tx real).
+  const cardBills = useMemo(() => {
+    const out: FinTransacao[] = [];
+    for (const card of contas.filter((c) => c.cartao)) {
+      const fech = card.fechamento ?? 0; const vd = card.vencimento ?? 0;
+      const gastos = data.transacoes.filter((t) => t.conta === card.id && txStatus(t) === 'a_pagar' && (t.valor < 0 || (t.valor > 0 && t.fonteImport === 'extrato')));
+      const byCycle = new Map<string, { venc: string; total: number }>();
+      for (const t of gastos) {
+        const ci = faturaCiclo(t.data, fech, vd);
+        const cur = byCycle.get(ci.key) ?? { venc: ci.venc, total: 0 };
+        cur.total += -t.valor; // despesa soma; estorno (positivo) abate
+        byCycle.set(ci.key, cur);
+      }
+      for (const [key, c] of byCycle) {
+        if (c.total <= 0.005) continue;
+        out.push({ id: `__card:${card.id}:${key}`, data: c.venc || hojeBR(), vencimento: c.venc || undefined, mes: key, tipo: 'despesa', categoria: `Fatura ${card.nome}`, valor: -(Math.round(c.total * 100) / 100), party: card.nome, recebedor: card.nome, pagador: null, status: 'a_pagar', conta: card.id } as FinTransacao);
+      }
+    }
+    return out;
+  }, [contas, data.transacoes]);
   // Atrasadas × vencendo hoje — alimenta as bolinhas da subaba e do topo da lista.
   const emAberto = useMemo(() => contasEmAberto(data), [data]);
   const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>('ledger');
@@ -1202,9 +1238,10 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       })()}
 
       {modo === 'cartao' && cardIds.size > 0 ? <CartaoCreditoView data={data} contas={contas} onDone={invalidate} /> : modo === 'apagar' ? (() => {
-        const bills = data.transacoes
-          .filter((t) => txStatus(t) === 'a_pagar' && t.valor < 0 && !isFaturaCartao(t))
-          .sort((a, b) => (toISOInput(a.vencimento || a.data) || '9999').localeCompare(toISOInput(b.vencimento || b.data) || '9999'));
+        const bills = [
+          ...data.transacoes.filter((t) => txStatus(t) === 'a_pagar' && t.valor < 0 && !isFaturaCartao(t)),
+          ...cardBills, // saldo do cartão por fatura (ao vivo)
+        ].sort((a, b) => (toISOInput(a.vencimento || a.data) || '9999').localeCompare(toISOInput(b.vencimento || b.data) || '9999'));
         const total = bills.reduce((s, t) => s + Math.abs(t.valor), 0);
         const hojeISO = toISOInput(hojeBR());
         return (
@@ -1238,6 +1275,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                   const atrasada = !!vencISO && vencISO < hojeISO;
                   const venceHoje = !!vencISO && vencISO === hojeISO;
                   const nome = titleCase((t.recebedor || t.party || t.pagador) || '') || t.categoria;
+                  const isCard = (t.id || '').startsWith('__card:'); // linha sintética = saldo do cartão
                   return (
                     <div key={t.id} className={`border-b border-zinc-100 last:border-0 dark:border-zinc-800/70 ${atrasada ? 'bg-rose-50/40 dark:bg-rose-900/10' : ''}`}>
                       <div className="group flex items-center gap-2 px-3 py-2 text-sm">
@@ -1248,8 +1286,11 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         {venceHoje && <span className="hidden shrink-0 rounded bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white sm:inline">hoje</span>}
                         <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                          <ClienteLink nome={nome} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />
-                          {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
+                          {isCard
+                            ? <span className="flex items-center gap-1 truncate font-medium text-zinc-700 dark:text-zinc-200"><CreditCard className="h-3.5 w-3.5 shrink-0 text-[#820AD1]" /> {t.categoria}</span>
+                            : <ClienteLink nome={nome} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />}
+                          {isCard && <span className="shrink-0 rounded bg-[#820AD1]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#820AD1]">saldo ao vivo</span>}
+                          {!isCard && t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {(t.anexos?.length ?? 0) > 0 && <span className="shrink-0 text-[10px] text-[#7048E8]" title={`${t.anexos!.length} anexo(s)`}>📎{t.anexos!.length}</span>}
                           {t.obs ? <span className="hidden truncate text-[11px] italic text-zinc-400 md:inline" title={t.obs}>· {t.obs}</span> : null}
                         </span>
@@ -1257,12 +1298,18 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums text-rose-600">{brl2(t.valor)}</span>
                         {/* Mesma largura fixa da coluna de ações do livro-razão (repasse tem prestação+enviar). */}
                         <span className="flex w-40 shrink-0 items-center justify-end gap-0.5">
+                          {isCard ? (
+                            <button onClick={() => setModo('cartao')} title="Abrir a fatura na aba Cartão de crédito (pra pagar/conferir)" className="inline-flex items-center gap-1 rounded-md bg-[#820AD1]/10 px-2 py-1 text-[11px] font-semibold text-[#820AD1] transition hover:bg-[#820AD1]/20"><CreditCard className="h-3.5 w-3.5" /> Cartão</button>
+                          ) : (
+                          <>
                           <button onClick={() => quickReceber(t)} title="Marcar como pago" className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>
                           {t.categoria === 'Repasse ao cliente' && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
                           {t.categoria === 'Repasse ao cliente' && <button onClick={() => enviarPrestacaoCliente(t)} disabled={pcSend === t.id} title="Abrir a prévia no chat do cliente (texto + PDF) pra revisar, editar e enviar — após 18h, agendar" className="rounded-md bg-[#02883C]/12 p-1 text-[#02883C] ring-1 ring-inset ring-[#02883C]/25 transition hover:bg-[#02883C]/20 disabled:opacity-50 dark:bg-[#02883C]/20">{pcSend === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}</button>}
                           <button onClick={() => toggleAnex(t.id!)} title="Anexar alvará / comprovante / boleto — vai junto na prestação" className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" /></button>
                           <button onClick={() => openEdit(t)} title="Editar" className="rounded p-1 text-zinc-300 transition hover:text-[#228BE6]"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => pedirExcluir(t)} title="Excluir" className="rounded p-1 text-zinc-300 transition hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                          </>
+                          )}
                         </span>
                       </div>
                       {anexOpen.has(t.id!) && (
