@@ -15,6 +15,7 @@ import {
   Search,
   ChevronLeft,
   IdCard,
+  ExternalLink,
 } from 'lucide-react';
 import { formatPhone } from '@/lib/brazil-states';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -81,6 +82,7 @@ function ClientRecordButton({ contactId }: { contactId: string }) {
     >
       <IdCard className="h-3.5 w-3.5" />
       <span className="hidden sm:inline">Ficha do cliente</span>
+      <ExternalLink className="h-3 w-3" />
     </button>
   );
 }

@@ -399,6 +399,7 @@ function OpenClientRecordButton({ contactId }: { contactId: string }) {
     >
       <IdCard className="h-3.5 w-3.5" />
       Abrir ficha do cliente
+      <ExternalLink className="h-3 w-3" />
     </button>
   );
 }
