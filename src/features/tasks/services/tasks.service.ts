@@ -39,7 +39,10 @@ export interface CreateTaskInput {
 
 export type UpdateTaskInput = Partial<
   Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'dueAt' | 'assigneeId' | 'order'>
->;
+> & {
+  /** Processo vinculado. null (ou '') desvincula a tarefa do processo. */
+  caseId?: string | null;
+};
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   TODO: 'A fazer',

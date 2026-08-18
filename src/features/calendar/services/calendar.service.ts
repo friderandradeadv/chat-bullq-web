@@ -71,7 +71,7 @@ export const calendarService = {
     const { data } = await api.post('/calendar', input);
     return data.data ?? data;
   },
-  async update(id: string, input: Partial<CreateEventInput> & { completedAt?: string | null }): Promise<CalendarEvent> {
+  async update(id: string, input: Omit<Partial<CreateEventInput>, 'endsAt'> & { completedAt?: string | null; /** null = tira o horário de término. */ endsAt?: string | null }): Promise<CalendarEvent> {
     const { data } = await api.patch(`/calendar/${id}`, input);
     return data.data ?? data;
   },

@@ -43,6 +43,24 @@ export interface CreateDeadlineInput {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Edição de prazo. Além do que o create aceita, dá pra TROCAR O PROCESSO (caseId
+ * — a relação é obrigatória, não existe prazo sem processo), corrigir a data da
+ * intimação (triggerDate) e escrever a descrição (que mora em
+ * metadata.djen.descricao, sem coluna própria).
+ */
+export interface UpdateDeadlineInput {
+  title?: string;
+  type?: DeadlineType;
+  status?: DeadlineStatus;
+  assignedToId?: string;
+  caseId?: string;
+  dueDate?: string;
+  safeDate?: string;
+  triggerDate?: string;
+  descricao?: string;
+}
+
 export interface PreviewPrazoInput {
   dias: number;
   publicacao?: string;
@@ -92,7 +110,7 @@ export const deadlinesService = {
     const { data } = await api.post('/deadlines', input);
     return data.data ?? data;
   },
-  async update(id: string, input: Partial<CreateDeadlineInput>): Promise<Deadline> {
+  async update(id: string, input: UpdateDeadlineInput): Promise<Deadline> {
     const { data } = await api.patch(`/deadlines/${id}`, input);
     return data.data ?? data;
   },

@@ -16,6 +16,7 @@ import {
   type Task, type TaskStatus, type TaskPriority,
 } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
+import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { useAuthStore } from '@/stores/auth-store';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -256,8 +257,17 @@ function TaskDialog({
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? 'MEDIUM');
   const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? '');
   const [dueAt, setDueAt] = useState(task?.dueAt ? task.dueAt.slice(0, 10) : '');
+  const [caseId, setCaseId] = useState(task?.case?.id ?? '');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { data: casesRaw = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
+  // O processo da tarefa pode estar arquivado (fora da lista ACTIVE) — injeta pra
+  // não sumir do select e a edição desvincular sem querer.
+  const cases = useMemo(() => {
+    const list = casesRaw.map((c) => ({ id: c.id, title: c.title, cnjNumber: c.cnjNumber ?? null }));
+    if (task?.case && !list.some((c) => c.id === task.case!.id)) list.unshift({ id: task.case.id, title: task.case.title, cnjNumber: task.case.cnjNumber });
+    return list;
+  }, [casesRaw, task]);
 
   const save = async () => {
     if (!title.trim()) { toast.error('Dê um título à tarefa.'); return; }
@@ -269,9 +279,10 @@ function TaskDialog({
         priority,
         assigneeId: assigneeId || null,
         dueAt: dueAt ? new Date(dueAt + 'T12:00:00').toISOString() : null,
+        caseId: caseId || null,
       };
       if (task) await tasksService.update(task.id, payload);
-      else await tasksService.create(payload);
+      else await tasksService.create({ ...payload, caseId: caseId || undefined, assigneeId: assigneeId || undefined, dueAt: payload.dueAt });
       toast.success(task ? 'Tarefa atualizada' : 'Tarefa criada');
       onSaved();
     } catch (err: any) {
@@ -320,6 +331,15 @@ function TaskDialog({
                 <option value="">Sem responsável</option>
                 {members.map((m) => (
                   <option key={m.user?.id} value={m.user?.id}>{m.user?.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-medium text-zinc-500">Processo</span>
+              <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className={inputCls}>
+                <option value="">Sem processo</option>
+                {cases.map((c) => (
+                  <option key={c.id} value={c.id}>{c.title}{c.cnjNumber ? ` — ${c.cnjNumber}` : ''}</option>
                 ))}
               </select>
             </label>

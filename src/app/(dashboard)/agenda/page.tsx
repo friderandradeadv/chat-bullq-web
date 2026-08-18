@@ -89,6 +89,10 @@ interface Activity {
   caseId: string | null; caseTitle: string | null; cnj: string | null;
   responsibleId: string | null; responsibleName: string | null; createdName: string | null;
   priorityLabel: string | null; completedAt: string | null; description: string | null;
+  // Valores CRUS (não o rótulo) — o formulário de edição precisa deles.
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | null; // tarefa
+  deadlineType: 'FATAL' | 'ORDINARY' | 'INTERNAL' | null; // prazo
+  kind: EventKind | null; // evento
   prazoFatal: string | null; recorte: string | null; tipoPublicacao: string | null;
   faseMovida: { de: string; para: string } | null; dispositivo: string | null;
   // Ação DJEN + sugestão de recurso (espécie/quem/motivo) já extraída pela IA —
@@ -298,7 +302,12 @@ export default function AgendaPage() {
   const [fAtrib, setFAtrib] = useState(false);
   const [dispOpen, setDispOpen] = useState(false);
   const [exibir, setExibir] = useState({ tarefas: true, eventos: true });
-  const [status, setStatus] = useState<'todas' | 'aconcluir' | 'concluidas' | 'canceladas'>('todas');
+  // Padrão "A concluir": agenda é lista do que FALTA fazer. Com "todas", prazo
+  // concluído e prazo CANCELADO seguiam ocupando o dia (riscados, e com a bolinha
+  // de "adicionado hoje" se tivessem nascido no dia) — foi o que poluiu a agenda
+  // depois do backfill do DJEN de 18/08/2026. Concluídas/Canceladas continuam a
+  // um clique no filtro.
+  const [status, setStatus] = useState<'todas' | 'aconcluir' | 'concluidas' | 'canceladas'>('aconcluir');
   const [personId, setPersonId] = useState<string>('all');
   const [dExibir, setDExibir] = useState(exibir);
   const [dStatus, setDStatus] = useState(status);
@@ -466,6 +475,7 @@ export default function AgendaPage() {
         responsibleId: t.assigneeId, responsibleName: t.assigneeId ? userMap.get(t.assigneeId) ?? null : null,
         createdName: t.createdById ? userMap.get(t.createdById) ?? null : null,
         priorityLabel: PRIORITY_LABEL[t.priority] ?? null, completedAt: t.completedAt, description: t.description,
+        priority: t.priority, deadlineType: null, kind: null,
         prazoFatal: dj?.prazoFatal ?? null, recorte: dj?.recorte ?? null, tipoPublicacao: dj?.tipoPublicacao ?? null,
         faseMovida: dj?.faseMovida ?? null, dispositivo: dj?.dispositivo ?? null,
         djenAction: (dj as any)?.action ?? null, recursoSugestao: (dj as any)?.recurso ?? null,
@@ -487,6 +497,7 @@ export default function AgendaPage() {
         caseId: d.case?.id ?? null, caseTitle: d.case?.title ?? null, cnj: d.case?.cnjNumber ?? null,
         responsibleId: d.assignedTo?.id ?? null, responsibleName: d.assignedTo?.name ?? null,
         createdName: null, priorityLabel: null, completedAt: null, description: ddj?.descricao ?? null,
+        priority: null, deadlineType: d.type, kind: null,
         prazoFatal: d.dueDate, recorte: ddj?.recorte ?? null, tipoPublicacao: ddj?.tipoPublicacao ?? null,
         faseMovida: ddj?.faseMovida ?? null, dispositivo: ddj?.dispositivo ?? null,
         djenAction: (ddj as any)?.action ?? null, recursoSugestao: (ddj as any)?.recurso ?? null,
@@ -506,6 +517,7 @@ export default function AgendaPage() {
         caseId: e.caseId, caseTitle: e.case?.title ?? null, cnj: e.case?.cnjNumber ?? null,
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
         createdName: null, priorityLabel: null, completedAt: (e.metadata?.completedAt as string) ?? null, description: e.location,
+        priority: null, deadlineType: null, kind: e.kind,
         prazoFatal: null, recorte: null, tipoPublicacao: null,
         faseMovida: null, dispositivo: null,
         djenAction: null, recursoSugestao: null, processosRelacionados: null,
@@ -513,6 +525,11 @@ export default function AgendaPage() {
     }
     return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
   }, [tkQ.data, dlQ.data, evQ.data, userMap, tagMap]);
+
+  // O painel de detalhe recebe SEMPRE a versão FRESCA da atividade — `detail` é só
+  // um snapshot do clique. Sem isto, editar (processo, prioridade, descrição…) só
+  // aparecia depois de fechar e reabrir o card.
+  const detailLive = useMemo(() => (detail ? activities.find((a) => a.id === detail.id) ?? detail : null), [detail, activities]);
 
   const q = searchQuery.trim().toLowerCase();
   const qDigits = q.replace(/\D/g, '');
@@ -796,7 +813,7 @@ export default function AgendaPage() {
       {dialog?.type === 'evento' && <CreateEventDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {dialog?.type === 'tarefa' && <CreateTaskDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {dialog?.type === 'atendimento' && <CreateAtendimentoDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
-      {detail && <ActivityDetailModal activity={detail} onClose={() => setDetail(null)} onRefetch={refetchAll} onOpenCase={(id) => window.open(`/processos/${id}`, '_blank', 'noopener')} onOpenConversation={(id) => router.push(`/inbox?conversationId=${id}`)} />}
+      {detailLive && <ActivityDetailModal activity={detailLive} onClose={() => setDetail(null)} onRefetch={refetchAll} onOpenCase={(id) => window.open(`/processos/${id}`, '_blank', 'noopener')} onOpenConversation={(id) => router.push(`/inbox?conversationId=${id}`)} />}
       {dispOpen && <DisponibilidadeModal onClose={() => setDispOpen(false)} />}
     </div>
   );
@@ -1000,6 +1017,164 @@ function Modal({ title, children, onClose, wide, headerRight }: { title: string;
   );
 }
 
+// ── Edição COMPLETA da atividade (o lápis "Editar" do card) ──────────────────
+// Antes só dava pra trocar o título. Aqui edita tudo o que a atividade tem, por
+// tipo: tarefa (processo, responsável, prioridade, data/hora, descrição), prazo
+// (processo, responsável, tipo, prazo de segurança, prazo FATAL, intimação,
+// descrição) e evento (processo, responsável, tipo, início/fim, local, lembretes).
+// Os co-responsáveis e as etiquetas seguem no painel (já eram editáveis lá).
+function ActivityEditForm({ activity, onCancel, onSaved }: { activity: Activity; onCancel: () => void; onSaved: () => void }) {
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
+  const { data: casesRaw = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
+  // O processo atual pode estar arquivado (fora da lista ACTIVE) — injeta pra não
+  // "sumir" da busca e a edição acabar desvinculando sem querer.
+  const cases = useMemo(() => {
+    const list = casesRaw.map((c) => ({ id: c.id, title: c.title, cnjNumber: c.cnjNumber ?? null }));
+    if (activity.caseId && !list.some((c) => c.id === activity.caseId)) {
+      list.unshift({ id: activity.caseId, title: activity.caseTitle ?? 'Processo vinculado', cnjNumber: activity.cnj });
+    }
+    return list;
+  }, [casesRaw, activity.caseId, activity.caseTitle, activity.cnj]);
+
+  const d0 = new Date(activity.date);
+  // Data-pura (tarefa/prazo sem hora) é gravada em UTC → lê o dia UTC. Item com
+  // hora real (evento) usa os componentes LOCAIS.
+  const dayOf = (iso: string | null, hasTime: boolean) => (!iso ? '' : hasTime ? toDateInput(new Date(iso)) : iso.slice(0, 10));
+
+  const [title, setTitle] = useState(activity.title);
+  const [caseId, setCaseId] = useState(activity.caseId ?? '');
+  const [assigneeId, setAssigneeId] = useState(activity.responsibleId ?? '');
+  const [descricao, setDescricao] = useState(activity.source === 'evento' ? '' : (activity.description ?? ''));
+  // tarefa
+  const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>(activity.priority ?? 'MEDIUM');
+  const [dia, setDia] = useState(dayOf(activity.date, activity.hasTime));
+  const [hora, setHora] = useState(activity.source === 'tarefa' && activity.hasTime ? `${pad(d0.getHours())}:${pad(d0.getMinutes())}` : '');
+  // prazo
+  const [tipoPrazo, setTipoPrazo] = useState<'FATAL' | 'ORDINARY' | 'INTERNAL'>(activity.deadlineType ?? 'ORDINARY');
+  const [safeDia, setSafeDia] = useState(dayOf(activity.date, false));
+  const [fatalDia, setFatalDia] = useState(dayOf(activity.prazoFatal, false));
+  const [trigDia, setTrigDia] = useState(dayOf(activity.triggerDate, false));
+  // evento
+  const [kind, setKind] = useState<EventKind>(activity.kind ?? 'outro');
+  const [startsAt, setStartsAt] = useState(activity.source === 'evento' ? toDatetimeLocal(d0) : '');
+  const [endsAt, setEndsAt] = useState(activity.endDate ? toDatetimeLocal(new Date(activity.endDate)) : '');
+  const [local, setLocal] = useState(activity.source === 'evento' ? (activity.description ?? '') : '');
+  const [reminders, setReminders] = useState<number[]>(activity.reminders ?? [1440, 60]);
+
+  const [saving, setSaving] = useState(false);
+  // Dia (YYYY-MM-DD) → ISO às 09:00 LOCAL: a hora canônica dos itens "dia todo" do
+  // app (meia-noite local virava 03:00Z e jogava o item pro dia anterior).
+  const diaISO = (v: string) => new Date(`${v}T09:00:00`).toISOString();
+
+  const submit = async () => {
+    if (!title.trim()) return toast.error('Informe o título');
+    if (activity.source === 'prazo' && !caseId) return toast.error('Prazo precisa de um processo vinculado');
+    if (activity.source === 'prazo' && (!safeDia || !fatalDia)) return toast.error('Informe o prazo de segurança e o prazo fatal');
+    if (activity.source === 'evento' && !startsAt) return toast.error('Informe a data e hora');
+    setSaving(true);
+    try {
+      if (activity.source === 'tarefa') {
+        await tasksService.update(activity.rawId, {
+          title: title.trim(),
+          description: descricao.trim() || null,
+          priority,
+          dueAt: dia ? new Date(`${dia}T${hora || '09:00'}:00`).toISOString() : null,
+          assigneeId: assigneeId || null,
+          caseId: caseId || null,
+        });
+      } else if (activity.source === 'prazo') {
+        await deadlinesService.update(activity.rawId, {
+          title: title.trim(),
+          type: tipoPrazo,
+          caseId,
+          assignedToId: assigneeId, // '' = tira o responsável
+          safeDate: diaISO(safeDia),
+          dueDate: diaISO(fatalDia),
+          ...(trigDia ? { triggerDate: diaISO(trigDia) } : {}),
+          descricao: descricao.trim(),
+        });
+      } else {
+        await calendarService.update(activity.rawId, {
+          title: title.trim(),
+          kind,
+          startsAt: new Date(startsAt).toISOString(),
+          endsAt: endsAt ? new Date(endsAt).toISOString() : null,
+          location: local,
+          caseId, // '' = desvincula
+          assignedToId: assigneeId,
+          reminders,
+        });
+      }
+      toast.success('Atividade atualizada');
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao salvar');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="mb-4 rounded-lg border border-[#DEE2E6] bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
+      <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#6C757D]">Editar {TYPE_TAG[activity.source].label.toLowerCase()}</p>
+      <div className="space-y-4">
+        <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} autoFocus /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={activity.source === 'prazo' ? <>Processo <span className="text-rose-500">*</span></> : 'Processo'}><CaseSearch value={caseId} onChange={setCaseId} cases={cases} /></Field>
+          <Field label="Responsável">
+            <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={inputCls}>
+              <option value="">Ninguém</option>
+              {members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}</option>)}
+            </select>
+          </Field>
+        </div>
+
+        {activity.source === 'tarefa' && (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Prioridade"><select value={priority} onChange={(e) => setPriority(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH')} className={inputCls}><option value="LOW">Baixa</option><option value="MEDIUM">Média</option><option value="HIGH">Alta</option></select></Field>
+              <Field label="Data"><input type="date" value={dia} onChange={(e) => setDia(e.target.value)} className={inputCls} /></Field>
+              <Field label="Hora (opcional)"><input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className={inputCls} /></Field>
+            </div>
+            <Field label="Descrição"><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} className={`${inputCls} resize-y`} /></Field>
+          </>
+        )}
+
+        {activity.source === 'prazo' && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Tipo do prazo"><select value={tipoPrazo} onChange={(e) => setTipoPrazo(e.target.value as 'FATAL' | 'ORDINARY' | 'INTERNAL')} className={inputCls}><option value="FATAL">Fatal (peremptório)</option><option value="ORDINARY">Ordinário</option><option value="INTERNAL">Interno</option></select></Field>
+              <Field label="Intimação / disponibilização"><input type="date" value={trigDia} onChange={(e) => setTrigDia(e.target.value)} className={inputCls} /></Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={<>Prazo de segurança <span className="text-rose-500">*</span></>}><input type="date" value={safeDia} onChange={(e) => setSafeDia(e.target.value)} className={inputCls} /></Field>
+              <Field label={<>Prazo fatal <span className="text-rose-500">*</span></>}><input type="date" value={fatalDia} onChange={(e) => setFatalDia(e.target.value)} className={inputCls} /></Field>
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">O prazo de segurança é a data que aparece na agenda; o <span className="font-medium text-rose-600 dark:text-rose-400">fatal</span> é a data legal. Mexer aqui é ajuste MANUAL — não recalcula dias úteis.</p>
+            <Field label="Descrição"><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} className={`${inputCls} resize-y`} /></Field>
+          </>
+        )}
+
+        {activity.source === 'evento' && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Tipo"><select value={kind} onChange={(e) => setKind(e.target.value as EventKind)} className={inputCls}>{(Object.keys(KIND_LABEL) as EventKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></Field>
+              <Field label={<>Início <span className="text-rose-500">*</span></>}><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={inputCls} /></Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Fim (opcional)"><input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={inputCls} /></Field>
+              <Field label="Local"><div className="relative"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><input value={local} onChange={(e) => setLocal(e.target.value)} className={`${inputCls} pl-9`} placeholder="Fórum, sala, link…" /></div></Field>
+            </div>
+            <Field label="Lembretes"><RemindersField value={reminders} onChange={setReminders} /></Field>
+          </>
+        )}
+      </div>
+      <div className="mt-4 flex items-center justify-end gap-1">
+        <button onClick={onCancel} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button>
+        <button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Detalhe da atividade (layout estilo Astrea: checkbox+título, dados, abas) ──
 function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenConversation }: { activity: Activity; onClose: () => void; onRefetch: () => void; onOpenCase: (id: string) => void; onOpenConversation: (convId: string) => void }) {
   const [busy, setBusy] = useState(false);
@@ -1112,7 +1287,17 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const entityType = ENTITY_TYPE[activity.source];
   const [titleVal, setTitleVal] = useState(activity.title);
   const [editing, setEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(activity.title);
+  // `activity` chega FRESCO do refetch (detailLive) — re-sincroniza os espelhos
+  // locais, senão o painel seguia mostrando título/data/responsável antigos
+  // depois de editar.
+  const coKey = (activity.coResponsibleIds ?? []).join(',');
+  useEffect(() => {
+    setTitleVal(activity.title); setDateISO(activity.date);
+    setRespId(activity.responsibleId); setRespName(activity.responsibleName);
+    setCoIds(activity.coResponsibleIds ?? []);
+    setDone(activity.done); setCancelled(activity.cancelled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity.title, activity.date, activity.responsibleId, activity.responsibleName, activity.done, activity.cancelled, coKey]);
   const [tagPicker, setTagPicker] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#E03131');
@@ -1146,16 +1331,6 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
       etagsQ.refetch(); onRefetch();
       toast.success('Cor da etiqueta atualizada');
     } catch (e: any) { toast.error(e?.message || 'Erro ao atualizar cor'); } finally { setBusy(false); }
-  };
-  const saveEdit = async () => {
-    if (!editTitle.trim()) return;
-    setBusy(true);
-    try {
-      if (activity.source === 'tarefa') await tasksService.update(activity.rawId, { title: editTitle.trim() });
-      else if (activity.source === 'prazo') await deadlinesService.update(activity.rawId, { title: editTitle.trim() });
-      else await calendarService.update(activity.rawId, { title: editTitle.trim() });
-      setTitleVal(editTitle.trim()); setEditing(false); setOptMenu(false); toast.success('Salvo'); onRefetch();
-    } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
   };
 
   // Lembretes do evento (só source === 'evento'). null = usa o padrão (1 dia + 1
@@ -1375,7 +1550,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             {clientConv && <button onClick={() => onOpenConversation(clientConv.id)} title="Abrir conversa do cliente" className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><MessageCircle className="h-4 w-4 text-[#25D366]" /></button>}
             <div className="relative">
               <button onClick={() => setOptMenu((v) => !v)} title="Opções" className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><MoreVertical className="h-4 w-4" /></button>
-              {optMenu && (<><div className="fixed inset-0 z-10" onClick={() => setOptMenu(false)} /><div className="absolute right-0 top-9 z-20 w-40 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"><button onClick={() => { setEditTitle(titleVal); setEditing(true); setOptMenu(false); }} className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">Editar</button><button disabled={busy} onClick={del} className="block w-full px-4 py-2 text-left text-sm text-[#CE0000] hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800">{activity.source === 'prazo' ? 'Cancelar prazo' : 'Excluir'}</button></div></>)}
+              {optMenu && (<><div className="fixed inset-0 z-10" onClick={() => setOptMenu(false)} /><div className="absolute right-0 top-9 z-20 w-40 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"><button onClick={() => { setEditing(true); setOptMenu(false); }} className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">Editar</button><button disabled={busy} onClick={del} className="block w-full px-4 py-2 text-left text-sm text-[#CE0000] hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800">{activity.source === 'prazo' ? 'Cancelar prazo' : 'Excluir'}</button></div></>)}
             </div>
             <button onClick={onClose} className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
           </div>
@@ -1435,21 +1610,21 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           </div>
         </div>
 
+        {/* Edição COMPLETA (título, processo, responsável, data, prioridade/tipo,
+            descrição, local/lembretes) — substitui os dados enquanto está aberta. */}
+        {editing && <ActivityEditForm activity={activity} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); onRefetch(); }} />}
+
         {/* Checkbox + título */}
+        {!editing && (
         <div className="mb-4 flex items-start gap-3">
           <button onClick={toggleDone} disabled={busy} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${done ? 'border-[#228BE6] bg-[#228BE6] text-white' : 'border-zinc-300 dark:border-zinc-600'} disabled:opacity-40`}>{done && <Check className="h-3.5 w-3.5" />}</button>
-          {editing ? (
-            <div className="flex flex-1 items-center gap-2">
-              <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') { setEditing(false); setEditTitle(titleVal); } }} className="flex-1 rounded-md border border-zinc-300 px-2 py-1 text-lg outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" />
-              <button disabled={busy} onClick={saveEdit} className="rounded-md px-3 py-1 text-sm font-medium text-white disabled:opacity-50" style={{ backgroundColor: ASTREA_BLUE }}>Salvar</button>
-              <button onClick={() => { setEditing(false); setEditTitle(titleVal); }} className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Cancelar</button>
-            </div>
-          ) : (
-            <h3 className={`flex-1 text-lg font-medium text-[#202124] dark:text-zinc-100 ${done ? 'text-zinc-400 line-through' : ''}`}>{titleVal}</h3>
-          )}
+          <h3 className={`flex-1 text-lg font-medium text-[#202124] dark:text-zinc-100 ${done ? 'text-zinc-400 line-through' : ''}`}>{titleVal}</h3>
+          <button onClick={() => setEditing(true)} title="Editar" className="mt-0.5 shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"><Pencil className="h-4 w-4" /></button>
         </div>
+        )}
 
         {/* Dados */}
+        {!editing && (
         <dl className="space-y-2 text-sm">
           {/* Data → menu de reagendamento (igual Astrea) */}
           <div className="flex gap-2">
@@ -1639,6 +1814,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             </div>
           )}
         </dl>
+        )}
 
         {/* Criar prazo de recurso — quando a atividade é a análise de uma decisão.
             Acórdão (2º grau): REsp/RE, Embargos de Declaração, Agravo Interno.
