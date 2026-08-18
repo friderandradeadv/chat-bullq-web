@@ -1148,6 +1148,11 @@ export default function InicioPage() {
         {/* Aniversariantes do escritório — confete no dia + próximos */}
         {mounted && <Aniversariantes onCelebrate={() => setBurst((b) => b + 1)} />}
 
+        {/* Conquistas — resumo logo abaixo dos aniversários (a aba cheia vive
+            em /conquistas). Fica no alto de propósito: é o que lembra por que
+            o trabalho do dia importa. */}
+        {mounted && <ConquistasResumo />}
+
         {/* Bloco "Seu financeiro" removido do Início a pedido do Matheus (fica em /financeiro). */}
 
         {/* Painel — 2 colunas em telas largas: mensagens | agenda + compromissos */}
@@ -1199,9 +1204,6 @@ export default function InicioPage() {
             </div>
           </div>
         )}
-
-        {/* Conquistas — resumo; a aba cheia vive em /conquistas */}
-        {mounted && <ConquistasResumo />}
 
         {/* Notícias do dia — mundo + jurídico (no fim da página, colapsável, clicável) */}
         {mounted && <HojeNoMundo />}

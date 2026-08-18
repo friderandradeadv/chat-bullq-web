@@ -367,6 +367,9 @@ export default function ConquistasPage() {
   const [search, setSearch] = useState('');
   const [area, setArea] = useState('');
   const [form, setForm] = useState<{ open: boolean; edit: Depoimento | null }>({ open: false, edit: null });
+  const [progresso, setProgresso] = useState<
+    { rodadas: number; criados: number; transcritos: number; pendentes: number } | null
+  >(null);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['depoimentos', aba],
@@ -381,17 +384,57 @@ export default function ConquistasPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['depoimentos'] });
 
+  // Varredura PROFUNDA, em rodadas. Transcrever áudio é lento (é ali que mora o
+  // agradecimento de verdade — "caiu o dinheiro, muito obrigado"), então cada
+  // chamada transcreve uma fatia e devolve quantos faltam; repetimos até zerar.
+  // Uma requisição única transcrevendo tudo estouraria o tempo limite do proxy.
+  const MAX_RODADAS = 40;
   const varredura = useMutation({
-    mutationFn: () => depoimentosService.varrer({ dias: 180, limite: 60 }),
+    mutationFn: async () => {
+      let criados = 0;
+      let transcritos = 0;
+      let candidatos = 0;
+      let ia = false;
+      let rodadas = 0;
+      let pendentes = 0;
+      for (;;) {
+        const r = await depoimentosService.varrer({
+          dias: 3650, // histórico inteiro
+          limite: 120,
+          transcrever: 12,
+        });
+        rodadas += 1;
+        criados += r.criados;
+        transcritos += r.audiosTranscritos;
+        candidatos = r.candidatos;
+        pendentes = r.audiosPendentes;
+        ia = ia || r.ia;
+        setProgresso({ rodadas, criados, transcritos, pendentes });
+        if (pendentes <= 0 || rodadas >= MAX_RODADAS) break;
+      }
+      return { criados, transcritos, candidatos, ia, rodadas, pendentes };
+    },
+    onSettled: () => setProgresso(null),
     onSuccess: (r) => {
       invalidate();
+      const detalhe = [
+        r.transcritos > 0 ? `${r.transcritos} áudio${r.transcritos > 1 ? 's' : ''} transcrito${r.transcritos > 1 ? 's' : ''}` : null,
+        r.ia ? 'IA confirmou' : 'sem IA — só palavras-chave',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
       if (r.criados > 0) {
         setAba('SUGESTAO');
         toast.success(
-          `${r.criados} ${r.criados === 1 ? 'agradecimento novo' : 'agradecimentos novos'} — confira nas Sugestões.`,
+          `${r.criados} ${r.criados === 1 ? 'agradecimento novo' : 'agradecimentos novos'} — confira nas Sugestões. (${detalhe})`,
         );
       } else {
-        toast.info(`Nenhum agradecimento novo (${r.candidatos} mensagens já conferidas).`);
+        toast.info(`Nenhum agradecimento novo (${r.candidatos} mensagens já conferidas · ${detalhe}).`);
+      }
+      // Parou no teto de rodadas: ainda há áudio na fila, vale clicar de novo.
+      if (r.pendentes > 0) {
+        toast.info(`Ainda faltam ${r.pendentes} áudios pra transcrever — clique de novo pra continuar de onde parou.`);
       }
     },
     onError: () => toast.error('Não consegui varrer as conversas agora.'),
@@ -456,7 +499,9 @@ export default function ConquistasPage() {
               className="inline-flex items-center gap-2 rounded-lg border border-[#DEE2E6] bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
               {varredura.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4 text-[#7048E8]" />}
-              Procurar agradecimentos
+              {varredura.isPending && progresso
+                ? `Varrendo… ${progresso.criados} achados${progresso.pendentes > 0 ? ` · ${progresso.pendentes} áudios na fila` : ''}`
+                : 'Procurar agradecimentos'}
             </button>
             <button
               onClick={() => setForm({ open: true, edit: null })}

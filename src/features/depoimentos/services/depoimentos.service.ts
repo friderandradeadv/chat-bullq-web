@@ -48,7 +48,11 @@ export interface VarreduraResult {
   analisadas: number;
   candidatos: number;
   criados: number;
+  /** true = o Gemini confirmou/extraiu; false = só a peneira de palavras. */
   ia: boolean;
+  audiosTranscritos: number;
+  /** > 0 = ainda há áudio pra transcrever — vale outra rodada. */
+  audiosPendentes: number;
   depoimentos: Depoimento[];
 }
 
@@ -104,7 +108,9 @@ export const depoimentosService = {
     const { data } = await api.get('/depoimentos/stats');
     return data.data ?? data;
   },
-  async varrer(input: { dias?: number; limite?: number; usarIa?: boolean } = {}): Promise<VarreduraResult> {
+  async varrer(
+    input: { dias?: number; limite?: number; transcrever?: number; usarIa?: boolean } = {},
+  ): Promise<VarreduraResult> {
     const { data } = await api.post('/depoimentos/varrer', input);
     return data.data ?? data;
   },
