@@ -115,7 +115,11 @@ export default function ClienteDetailPage() {
     const key = norm(cliente.name);
     const party = caseDetail.parties.find((p) => p.role === 'CLIENT' && norm(p.name) === key)
       ?? caseDetail.parties.find((p) => p.role === 'CLIENT');
-    return (party?.contact?.metadata?.cadastro as Cadastro | undefined) ?? null;
+    // Contato tem prioridade; se não houver (cliente sem contato vinculado), lê do próprio party
+    // (é onde a varredura das procurações grava o cadastro, casado por CPF).
+    return (party?.contact?.metadata?.cadastro as Cadastro | undefined)
+      ?? ((party?.metadata as any)?.cadastro as Cadastro | undefined)
+      ?? null;
   }, [caseDetail, cliente]);
 
   if (!id) return null;
