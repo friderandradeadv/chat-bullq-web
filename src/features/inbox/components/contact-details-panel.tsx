@@ -464,14 +464,14 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
           <div
             role="button"
             tabIndex={0}
-            onClick={() => router.push(`/processos/${c.id}`)}
+            onClick={() => window.open(`/processos/${c.id}`, '_blank', 'noopener')}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                router.push(`/processos/${c.id}`);
+                window.open(`/processos/${c.id}`, '_blank', 'noopener');
               }
             }}
-            title="Abrir processo"
+            title="Abrir processo em outra guia"
             className="block w-full cursor-pointer rounded-lg border border-zinc-200/70 bg-white px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/60"
           >
             <div className="flex items-center justify-between gap-2">
@@ -520,15 +520,9 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
               members={members}
             />
           </div>
-          {/* Ações no hover: abrir em nova guia · ver no Kanban */}
+          {/* Ação no hover: ver no Kanban. O ↗ "abrir em nova guia" saiu — o
+              próprio card já abre em guia nova. */}
           <div className="absolute right-1.5 top-1.5 hidden gap-0.5 group-hover:flex">
-            <button
-              onClick={(e) => { e.stopPropagation(); window.open(`/processos/${c.id}`, '_blank', 'noopener'); }}
-              title="Abrir em nova guia"
-              className="rounded bg-white/90 p-1 text-zinc-400 shadow-sm hover:text-primary dark:bg-zinc-900/90"
-            >
-              <ExternalLink className="h-3 w-3" />
-            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
