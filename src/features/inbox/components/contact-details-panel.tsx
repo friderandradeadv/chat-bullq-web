@@ -520,9 +520,17 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
               members={members}
             />
           </div>
-          {/* Ação no hover: ver no Kanban. O ↗ "abrir em nova guia" saiu — o
-              próprio card já abre em guia nova. */}
+          {/* Ações no hover: abrir em nova guia · ver no Kanban. O ↗ repete o
+              clique no card de propósito — é a PISTA VISUAL de que o processo
+              abre fora, sem levar a conversa junto. */}
           <div className="absolute right-1.5 top-1.5 hidden gap-0.5 group-hover:flex">
+            <button
+              onClick={(e) => { e.stopPropagation(); window.open(`/processos/${c.id}`, '_blank', 'noopener'); }}
+              title="Abrir em nova guia"
+              className="rounded bg-white/90 p-1 text-zinc-400 shadow-sm hover:text-primary dark:bg-zinc-900/90"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
