@@ -23,6 +23,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { FunilRepbBoard } from '@/features/legal-cases/components/funil-repb-board';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
+import { useCasesFilter, CasesFilterBanner } from '@/features/legal-cases/lib/use-cases-filter';
 
 const KEY = ['legal-cases', 'kanban', 'repb'];
 const ACCENT = '#B7791F'; // gold/âmbar — trilha REPB (reestruturação de passivo bancário)
@@ -108,15 +109,18 @@ export default function RepbPage() {
   );
   const focoNome = clientes.find((c) => c.id === foco)?.nome ?? '';
 
+  // Recorte "só os processos deste cliente" (?cases=… vindo do chat).
+  const casesFilter = useCasesFilter();
   const repbKeys = new Set(phases.map((p) => p.key));
   const filtered = useMemo(() => {
     return cards.filter((c) => {
       if (!repbKeys.has(c.phase)) return false;
       if (resp && c.responsible?.id !== resp) return false;
       if (!matchesKanbanSearch(c, search, [c.title, c.client])) return false;
+      if (!casesFilter.matchesCasesFilter(c.id)) return false;
       return true;
     });
-  }, [cards, search, resp, phases]);
+  }, [cards, search, resp, phases, casesFilter.caseIds]);
 
   // Só sócios (OWNER/ADMIN) renomeiam as fases — igual aos demais quadros.
   const activeOrg = useAuthStore((s) => s.organizations.find((o) => o.id === s.activeOrgId));
@@ -165,6 +169,13 @@ export default function RepbPage() {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
       {/* Toggle Passivo | Funil de vendas — o Funil é a fase comercial pré-contrato. */}
+      {casesFilter.caseIds && (
+        <CasesFilterBanner
+          cliente={casesFilter.cliente}
+          total={filtered.length}
+          onClear={casesFilter.clear}
+        />
+      )}
       <div className="shrink-0 border-b border-[#dbeaf5] px-4 py-3 dark:border-zinc-800 lg:px-6">
         <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
           <button onClick={() => setTab('funil')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-semibold ${tab === 'funil' ? 'bg-[#E8590C] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Megaphone className="h-4 w-4" /> Funil de vendas</button>

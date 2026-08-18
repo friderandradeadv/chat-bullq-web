@@ -28,3 +28,25 @@ export function boardOfPhase(key: string, lane?: 'pre' | 'judicial', board?: str
 export function phasesOfBoard(all: KanbanPhase[], board: Board): KanbanPhase[] {
   return all.filter((p) => boardOfPhase(p.key, (p as any).lane, (p as any).board) === board);
 }
+
+/** Rota do quadro de cada board. Estava duplicada em 3 telas (ficha do processo,
+ *  painel do chat, atalho "Ver no Kanban") — agora sai daqui. */
+export const BOARD_ROUTE: Record<string, string> = {
+  judicial: '/juridico/kanban',
+  pre: '/juridico/pre-processual',
+  banco: '/juridico/fase-bancaria',
+  inss: '/juridico/inss-administrativo',
+  plan: '/juridico/planejamento',
+  repb: '/juridico/repb',
+  repbc: '/juridico/repb-funil',
+};
+
+/** Rota do quadro onde ESTA fase mora (quadro custom cai em /juridico/board/<key>). */
+export function boardHrefOfPhase(
+  key: string | null | undefined,
+  lane?: 'pre' | 'judicial',
+  board?: string | null,
+): string {
+  const b = boardOfPhase(key ?? '', lane, board);
+  return BOARD_ROUTE[b] ?? `/juridico/board/${b}`;
+}

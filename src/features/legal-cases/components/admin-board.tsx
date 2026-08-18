@@ -17,6 +17,7 @@ import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard, type Board } from '@/features/legal-cases/lib/phase-board';
 import { useAuthStore } from '@/stores/auth-store';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
+import { useCasesFilter, CasesFilterBanner } from '@/features/legal-cases/lib/use-cases-filter';
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -134,6 +135,9 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     if (cid) setOpenCaseId(cid);
   }, []);
 
+  // Recorte "só os processos deste cliente" (?cases=… vindo do chat).
+  const casesFilter = useCasesFilter();
+
   const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban(lane ? { lane } : {}), refetchInterval: 60_000 });
   const preKeys = useMemo(() => new Set((data?.phases ?? []).filter((p) => p.lane === 'pre').map((p) => p.key)), [data]);
 
@@ -141,9 +145,10 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     return (data?.cards ?? []).filter((c) => {
       if (!filter(c, preKeys)) return false;
       if (!matchesKanbanSearch(c, search, [c.title, c.client, c.opponent])) return false;
+      if (!casesFilter.matchesCasesFilter(c.id)) return false;
       return true;
     });
-  }, [data, search, filter, preKeys]);
+  }, [data, search, filter, preKeys, casesFilter.caseIds]);
 
   const columns = useMemo<{ nome: string; cards: KanbanCard[]; key?: string; custom?: boolean }[]>(() => {
     // Colunas derivadas das fases do endpoint (respeita Configurações › Fases).
@@ -177,6 +182,13 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
     // o quadro sobe e os cards ganham altura, sem esmagar nada.
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+      {casesFilter.caseIds && (
+        <CasesFilterBanner
+          cliente={casesFilter.cliente}
+          total={filtered.length}
+          onClear={casesFilter.clear}
+        />
+      )}
       <div className="shrink-0 border-b border-[#dbeaf5] px-4 py-2 lg:px-6 dark:border-zinc-800">
         {/* Título + dica + busca na MESMA linha (quebra se faltar espaço) */}
         <div className="flex flex-wrap items-center gap-2">

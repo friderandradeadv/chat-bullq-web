@@ -59,6 +59,7 @@ import {
   type ClientCaseRow,
   type ClientCaseSuggestion,
 } from '@/features/legal-cases/services/legal-cases.service';
+import { boardHrefOfPhase } from '@/features/legal-cases/lib/phase-board';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
 import {
   scheduledMessagesService,
@@ -404,7 +405,7 @@ function OpenClientRecordButton({ contactId }: { contactId: string }) {
   );
 }
 
-function ClientCasesSection({ contactId }: { contactId: string }) {
+function ClientCasesSection({ contactId, clienteNome }: { contactId: string; clienteNome: string | null }) {
   const router = useRouter();
   const { data, isLoading } = useQuery({
     queryKey: ['cases-by-contact', contactId],
@@ -420,6 +421,28 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
   });
   const cases = data?.cases ?? [];
   const clientePartyId = data?.clientePartyId ?? null;
+
+  /** Abre o Kanban recortado NESTE cliente. O quadro escolhido é onde estão os
+   *  processos dele — quem tem RMC e RCC na fase judicial cai no Fase Judicial;
+   *  quem só tem card de REPB cai no REPB. Empate: o primeiro da lista, que já
+   *  vem ordenada (com CNJ e fase mais adiantada primeiro).
+   *  O recorte viaja por ID (?cases=), nunca por nome — homônimo no quadro
+   *  traria processo de outra pessoa. */
+  const abrirNoKanban = () => {
+    if (!cases.length) return;
+    const porQuadro = new Map<string, number>();
+    for (const c of cases) {
+      const href = boardHrefOfPhase(c.legalPhase, c.lane);
+      porQuadro.set(href, (porQuadro.get(href) ?? 0) + 1);
+    }
+    const primeiro = boardHrefOfPhase(cases[0].legalPhase, cases[0].lane);
+    const board = [...porQuadro.entries()].sort(
+      (a, b) => b[1] - a[1] || (a[0] === primeiro ? -1 : b[0] === primeiro ? 1 : 0),
+    )[0][0];
+    const q = new URLSearchParams({ cases: cases.map((c) => c.id).join(',') });
+    if (clienteNome) q.set('cliente', clienteNome);
+    window.open(`${board}?${q.toString()}`, '_blank', 'noopener');
+  };
 
   const copyCnj = async (value: string) => {
     try {
@@ -440,9 +463,15 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
     <div className="mt-4 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
       <div className="mb-2 flex items-center gap-2">
         <Scale className="h-3.5 w-3.5 text-zinc-400" />
-        <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+        <button
+          type="button"
+          onClick={abrirNoKanban}
+          title="Ver esses processos no Kanban, em outra guia (o quadro abre recortado neste cliente)"
+          className="group/kb inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 transition-colors hover:text-primary dark:text-zinc-400"
+        >
           Processos do cliente
-        </p>
+          <Columns3 className="h-3 w-3 opacity-0 transition-opacity group-hover/kb:opacity-100" />
+        </button>
         <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
           {cases.length}
         </span>
@@ -1662,7 +1691,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
       />
 
       {/* Processos do cliente — vínculo chat ↔ jurídico */}
-      <ClientCasesSection contactId={contact.id} />
+      <ClientCasesSection contactId={contact.id} clienteNome={contact.name} />
 
       {/* Criar tarefa na agenda direto daqui (opcionalmente ligada a um processo) */}
       <QuickTaskSection contactId={contact.id} conversationId={conversation.id} />

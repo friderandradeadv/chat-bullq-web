@@ -23,6 +23,7 @@ import { usePhaseDrag, applyPhaseDrag, type PhaseDrag } from '@/features/legal-c
 import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
+import { useCasesFilter, CasesFilterBanner } from '@/features/legal-cases/lib/use-cases-filter';
 
 const KEY = ['legal-cases', 'kanban', 'plan'];
 const ACCENT = '#12B886'; // teal — trilha de planejamento previdenciário
@@ -60,15 +61,18 @@ export default function PlanejamentoPage() {
     return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [cards]);
 
+  // Recorte "só os processos deste cliente" (?cases=… vindo do chat).
+  const casesFilter = useCasesFilter();
   const planKeys = new Set(phases.map((p) => p.key));
   const filtered = useMemo(() => {
     return cards.filter((c) => {
       if (!planKeys.has(c.phase)) return false;
       if (resp && c.responsible?.id !== resp) return false;
       if (!matchesKanbanSearch(c, search, [c.title, c.client])) return false;
+      if (!casesFilter.matchesCasesFilter(c.id)) return false;
       return true;
     });
-  }, [cards, search, resp, phases]);
+  }, [cards, search, resp, phases, casesFilter.caseIds]);
 
   const byPhase = useMemo(() => {
     const map: Record<string, KanbanCard[]> = {};
@@ -154,6 +158,13 @@ export default function PlanejamentoPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+      {casesFilter.caseIds && (
+        <CasesFilterBanner
+          cliente={casesFilter.cliente}
+          total={filtered.length}
+          onClear={casesFilter.clear}
+        />
+      )}
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-2 lg:px-6">
         <div className="flex flex-wrap items-center gap-2">
           <TrendingUp className="h-4 w-4 shrink-0" style={{ color: ACCENT }} />

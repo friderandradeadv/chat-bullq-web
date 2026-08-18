@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
+import { useCasesFilter, CasesFilterBanner } from '@/features/legal-cases/lib/use-cases-filter';
 
 // queryKey por lane: cada board escopa a busca no servidor à sua trilha; keys
 // distintas evitam que o cache de um board sirva os cards de outro.
@@ -98,6 +99,8 @@ export default function FaseJudicialKanbanPage() {
     const cid = new URLSearchParams(window.location.search).get('case');
     if (cid) setOpenCaseId(cid);
   }, []);
+  // Recorte "só os processos deste cliente" (?cases=… vindo do chat).
+  const casesFilter = useCasesFilter();
   const [search, setSearch] = useState('');
   const [area, setArea] = useState('');
   const [produto, setProduto] = useState('');
@@ -165,9 +168,10 @@ export default function FaseJudicialKanbanPage() {
       if (resp && c.responsible?.id !== resp) return false;
       if (tagSel.length && !(c.tags ?? []).some((t) => tagSel.includes(t.id))) return false;
       if (!matchesKanbanSearch(c, search, [c.title, c.cnj, c.client, c.opponent])) return false;
+      if (!casesFilter.matchesCasesFilter(c.id)) return false;
       return true;
     });
-  }, [cards, search, area, produto, resp, tagSel]);
+  }, [cards, search, area, produto, resp, tagSel, casesFilter.caseIds]);
 
   const byPhase = useMemo(() => {
     const map: Record<string, KanbanCard[]> = {};
@@ -332,6 +336,13 @@ export default function FaseJudicialKanbanPage() {
     // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
     // o quadro sobe e os cards ganham altura, sem esmagar nada.
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12" style={{ fontFamily: INTER }}>
+      {casesFilter.caseIds && (
+        <CasesFilterBanner
+          cliente={casesFilter.cliente}
+          total={filtered.length}
+          onClear={casesFilter.clear}
+        />
+      )}
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-2 lg:px-6">
         {/* Título + busca + filtros + ações na MESMA linha (quebra se faltar espaço) */}
         <div className="flex flex-wrap items-center gap-2">

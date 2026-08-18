@@ -25,6 +25,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { usePreSeenStore } from '@/stores/pre-seen-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
+import { useCasesFilter, CasesFilterBanner } from '@/features/legal-cases/lib/use-cases-filter';
 
 const KEY = ['legal-cases', 'kanban', 'pre'];
 const INPUT = 'h-[38px] w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
@@ -124,15 +125,18 @@ export default function PreProcessualPage() {
     return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [cards]);
 
+  // Recorte "só os processos deste cliente" (?cases=… vindo do chat).
+  const casesFilter = useCasesFilter();
   const preKeys = new Set(phases.map((p) => p.key));
   const filtered = useMemo(() => {
     return cards.filter((c) => {
       if (!preKeys.has(c.phase)) return false;
       if (resp && c.responsible?.id !== resp) return false;
       if (!matchesKanbanSearch(c, search, [c.title, c.client])) return false;
+      if (!casesFilter.matchesCasesFilter(c.id)) return false;
       return true;
     });
-  }, [cards, search, resp, phases]);
+  }, [cards, search, resp, phases, casesFilter.caseIds]);
 
   const byPhase = useMemo(() => {
     const map: Record<string, KanbanCard[]> = {};
@@ -236,6 +240,13 @@ export default function PreProcessualPage() {
     // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
     // o quadro sobe e os cards ganham altura, sem esmagar nada.
     <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+      {casesFilter.caseIds && (
+        <CasesFilterBanner
+          cliente={casesFilter.cliente}
+          total={filtered.length}
+          onClear={casesFilter.clear}
+        />
+      )}
       <div className="shrink-0 border-b border-[#dbeaf5] dark:border-zinc-800 px-4 py-2 lg:px-6">
         {/* Título + dica + busca + ações na MESMA linha (quebra se faltar espaço) */}
         <div className="flex flex-wrap items-center gap-2">
