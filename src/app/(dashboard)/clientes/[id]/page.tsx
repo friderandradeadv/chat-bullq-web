@@ -25,11 +25,15 @@ import {
   MapPin,
   KeyRound,
   IdCard,
+  Loader2,
+  Paperclip,
+  ReceiptText,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
-import { financeiroService } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, anexoHref } from '@/features/financeiro/services/financeiro.service';
 import { clienteFinanceiro, STATUS_FIN } from '@/features/financeiro/lib/clientes';
 import { formatPhone } from '@/lib/brazil-states';
 import { CnjNumber, ASTREA_BLUE } from '../../processos/page';
@@ -261,6 +265,36 @@ function ClienteFinanceiroCard({ nome }: { nome: string }) {
   const fin = useMemo(() => clienteFinanceiro(dash, nome), [dash, nome]);
   const cob = useMemo(() => cobrancas.find((c) => norm(c.cliente) === norm(nome)) ?? null, [cobrancas, nome]);
 
+  // Registro dos ALVARÁS/PRESTAÇÕES do cliente: agrupa por processo os lançamentos de êxito
+  // (têm o rateio bruto→cliente/sucumbência/honorário) + junta os anexos (alvará, comprovante) e o
+  // status do repasse. Fonte: as transações do dashboard já filtradas pelo nome do cliente.
+  const alvaras = useMemo(() => {
+    const txs = dash?.transacoes ?? [];
+    const byCase = new Map<string, { caseId: string; rateio: any; prestacaoTxId: string; data: string; anexos: { key: string; url: string; name: string; mime: string }[]; repasseStatus?: string }>();
+    for (const t of txs) {
+      if (!t.caseId) continue;
+      if (norm(t.party || t.recebedor || t.pagador || '') !== norm(nome)) continue;
+      let g = byCase.get(t.caseId);
+      if (!g) { g = { caseId: t.caseId, rateio: null, prestacaoTxId: t.id!, data: t.data, anexos: [] }; byCase.set(t.caseId, g); }
+      if (t.rateio) { g.rateio = t.rateio; g.prestacaoTxId = t.id!; g.data = t.data; }
+      if (/repasse ao cliente/i.test(t.categoria || '')) g.repasseStatus = t.status ?? undefined;
+      for (const an of (t.anexos ?? [])) if (an?.key && !g.anexos.some((x) => x.key === an.key)) g.anexos.push(an as any);
+    }
+    return [...byCase.values()].filter((g) => g.rateio);
+  }, [dash, nome]);
+
+  const [prestBusy, setPrestBusy] = useState<string | null>(null);
+  const gerarPrest = async (txId: string) => {
+    setPrestBusy(txId);
+    try {
+      const dados = await financeiroService.prestacaoDados(txId);
+      const { gerarPrestacaoPdf } = await import('@/features/financeiro/lib/prestacao-pdf');
+      const blob = await gerarPrestacaoPdf(dados);
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao gerar a prestação de contas'); }
+    finally { setPrestBusy(null); }
+  };
+
   const blocoCobranca = cob ? (
     <div className={`mt-3 rounded-lg border px-3 py-2.5 ${cob.statusCalc === 'atrasada' ? 'border-rose-200 bg-rose-50/50 dark:border-rose-900/40 dark:bg-rose-900/10' : cob.statusCalc === 'quitada' ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-900/10' : 'border-blue-200 bg-blue-50/40 dark:border-blue-900/40 dark:bg-blue-900/10'}`}>
       <div className="flex items-center justify-between">
@@ -312,6 +346,49 @@ function ClienteFinanceiroCard({ nome }: { nome: string }) {
           </div>
           {blocoCobranca}
         </>
+      )}
+
+      {/* REGISTRO DOS ALVARÁS / PRESTAÇÃO DE CONTAS — valores e anexos por processo. */}
+      {alvaras.length > 0 && (
+        <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400"><ReceiptText className="h-3.5 w-3.5" /> Alvarás e prestação de contas ({alvaras.length})</p>
+          <div className="space-y-2">
+            {alvaras.map((a) => {
+              const bruto = Number(a.rateio.bruto) || 0; const suc = Number(a.rateio.sucumbencia) || 0;
+              const hon = Number(a.rateio.honorarios) || 0; const cli = Number(a.rateio.cliente) || 0;
+              const nosso = hon + suc;
+              const pago = a.repasseStatus === 'pago';
+              return (
+                <div key={a.caseId} className="rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Alvará {brlc(bruto)}</span>
+                    <span className="flex items-center gap-1.5 text-[10px]">
+                      <span className="text-zinc-400">{a.data}</span>
+                      {a.repasseStatus && <span className={`rounded-full px-1.5 py-0.5 font-semibold ${pago ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>{pago ? 'repasse pago' : 'repasse a pagar'}</span>}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] sm:grid-cols-4">
+                    <div><span className="text-zinc-400">Bruto</span><br /><b className="tabular-nums text-zinc-700 dark:text-zinc-200">{brlc(bruto)}</b></div>
+                    <div><span className="text-zinc-400">Sucumbência</span><br /><b className="tabular-nums text-zinc-600 dark:text-zinc-300">{brlc(suc)}</b></div>
+                    <div><span className="text-zinc-400">Nossa parte</span><br /><b className="tabular-nums text-emerald-600">{brlc(nosso)}</b></div>
+                    <div><span className="text-zinc-400">Parte do cliente</span><br /><b className="tabular-nums text-[#228BE6]">{brlc(cli)}</b></div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <button onClick={() => gerarPrest(a.prestacaoTxId)} disabled={prestBusy === a.prestacaoTxId} className="inline-flex items-center gap-1 rounded-md bg-[#7048E8]/10 px-2 py-1 text-[11px] font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/20 disabled:opacity-50">
+                      {prestBusy === a.prestacaoTxId ? <Loader2 className="h-3 w-3 animate-spin" /> : <ReceiptText className="h-3 w-3" />} Prestação de contas (PDF)
+                    </button>
+                    {a.anexos.map((an, k) => (
+                      <a key={k} href={anexoHref(an as any)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-600 transition hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700 dark:text-zinc-300">
+                        <Paperclip className="h-3 w-3" /> <span className="max-w-[140px] truncate">{an.name}</span>
+                      </a>
+                    ))}
+                    {a.anexos.length === 0 && <span className="text-[10px] text-zinc-400">sem anexos — suba o alvará/comprovante no lançamento do financeiro</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </Card>
   );
