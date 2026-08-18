@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   XCircle,
@@ -14,6 +15,7 @@ import {
   MoreHorizontal,
   Search,
   ChevronLeft,
+  IdCard,
 } from 'lucide-react';
 import { formatPhone } from '@/lib/brazil-states';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -22,6 +24,7 @@ import { AssignmentPopover } from './assignment-popover';
 import { AgentPinPopover } from './agent-pin-popover';
 import { PipelinePopover } from './pipeline-popover';
 import { ArchiveModal } from './archive-modal';
+import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { inboxService, type Conversation } from '../services/inbox.service';
 
 interface ConversationHeaderProps {
@@ -53,6 +56,33 @@ function HeaderAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: str
     >
       {avatarInitials(name)}
     </div>
+  );
+}
+
+/** Atalho no cabeçalho do chat pra FICHA DO CLIENTE (/clientes/[partyId]).
+ *  Só aparece pra quem já é cliente do jurídico — o backend só devolve
+ *  `clientePartyId` quando há processo fora do pré-judicial. Mesma query
+ *  (e mesmo cache) do painel lateral, então não custa requisição extra. */
+function ClientRecordButton({ contactId }: { contactId: string }) {
+  const router = useRouter();
+  const { data } = useQuery({
+    queryKey: ['cases-by-contact', contactId],
+    queryFn: () => legalCasesService.casesByContact(contactId),
+    enabled: !!contactId,
+    staleTime: 60_000,
+  });
+  const partyId = data?.clientePartyId;
+  if (!partyId) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => router.push(`/clientes/${partyId}`)}
+      title="Abrir ficha do cliente"
+      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
+    >
+      <IdCard className="h-3.5 w-3.5" />
+      <span className="hidden sm:inline">Ficha do cliente</span>
+    </button>
   );
 }
 
@@ -165,6 +195,7 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
         )}
+        <ClientRecordButton contactId={conversation.contact.id} />
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 pl-2">

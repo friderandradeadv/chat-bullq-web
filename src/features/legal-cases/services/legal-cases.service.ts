@@ -444,7 +444,12 @@ export const legalCasesService = {
     const { data } = await api.get('/legal-cases/contratos');
     return data.data ?? data;
   },
-  async casesByContact(contactId: string): Promise<{ cases: ClientCaseRow[] }> {
+  /** Processos do cliente desta conversa + a party que abre a ficha
+   *  (/clientes/[partyId]). `clientePartyId` é null quando o contato ainda não
+   *  tem processo fora do pré-judicial — aí não existe ficha pra abrir. */
+  async casesByContact(
+    contactId: string,
+  ): Promise<{ cases: ClientCaseRow[]; clientePartyId?: string | null }> {
     const { data } = await api.get(`/legal-cases/by-contact/${contactId}`);
     return data.data ?? data;
   },
