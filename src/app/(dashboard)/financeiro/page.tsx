@@ -177,6 +177,11 @@ export default function FinanceiroPage() {
   }
 
   const k = data.kpis;
+  // Obrigações e recebíveis em aberto (posição real fiel). A pagar inclui repasses a clientes,
+  // boletos/DARF/despesas e a fatura do cartão (gastos a_pagar do cartão). A receber = honorários etc.
+  const aPagarTotal = (data.transacoes ?? []).filter((t) => (t.status ?? (t.valor >= 0 ? 'recebido' : 'pago')) === 'a_pagar' && t.valor < 0).reduce((s, t) => s + Math.abs(t.valor), 0);
+  const aPagarRepasses = (data.transacoes ?? []).filter((t) => (t.status ?? '') === 'a_pagar' && t.valor < 0 && /repasse ao cliente/i.test(t.categoria || '')).reduce((s, t) => s + Math.abs(t.valor), 0);
+  const aReceberTotal = (data.transacoes ?? []).filter((t) => (t.status ?? '') === 'a_receber' && t.valor > 0).reduce((s, t) => s + t.valor, 0);
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-[#f5f6f8] dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200">
@@ -222,8 +227,14 @@ export default function FinanceiroPage() {
         <>
         {/* KPIs — pulso financeiro sempre visível */}
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {(() => { const caixa = kpiMes.caixa; const divida = k.aporteAcumulado ?? 0; const pos = caixa - divida; const temDivida = divida > 0; const valor = temDivida ? pos : caixa; return (
-          <Kpi icon={Scale} accent={valor < 0 ? '#E03131' : '#2F9E44'} label={`${temDivida ? 'Posição real' : 'Caixa real'} · ${kpiMes.label}`} value={brl(valor)} hint={temDivida ? `${brl(caixa)} em caixa − ${brl(divida)} devido aos sócios` : `${brl(caixa)} em caixa no fim do mês`} onClick={() => setShowSaldo(true)} />
+          {(() => {
+            const caixa = kpiMes.caixa; const divida = k.aporteAcumulado ?? 0;
+            // POSIÇÃO REAL FIEL: caixa − o que DEVEMOS (repasses a clientes + boletos/DARF/despesas +
+            // fatura do cartão em aberto) − empréstimo dos sócios. Grande parte do caixa é dinheiro de
+            // cliente (alvará a repassar) — não é do escritório, por isso sai da conta.
+            const pos = caixa - aPagarTotal - divida;
+            return (
+          <Kpi icon={Scale} accent={pos < 0 ? '#E03131' : '#2F9E44'} label={`Posição real · ${kpiMes.label}`} value={brl(pos)} hint={`${brl(caixa)} caixa − ${brl(aPagarTotal)} a pagar${divida > 0 ? ` − ${brl(divida)} sócios` : ''}`} onClick={() => setShowSaldo(true)} />
           ); })()}
           <Kpi icon={kpiMes.resultado >= 0 ? TrendingUp : TrendingDown} accent={kpiMes.resultado >= 0 ? '#2F9E44' : '#E03131'} label={`Resultado · ${kpiMes.label}`} value={brl(kpiMes.resultado)} hint={`receita ${brl(kpiMes.receita)} · despesa ${brl(kpiMes.despesa)}`} />
           <Kpi icon={Landmark} accent={(k.caixaContas ?? 0) < 0 ? '#E03131' : '#12B886'} label="Total em conta" value={brl(k.caixaContas ?? 0)} hint="Nubank + ASAAS (dinheiro nas contas)" onClick={() => setShowSaldo(true)} />
@@ -231,7 +242,7 @@ export default function FinanceiroPage() {
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
-        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} onClose={() => setShowSaldo(false)} />}
+        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} aPagarTotal={aPagarTotal} aPagarRepasses={aPagarRepasses} aReceberTotal={aReceberTotal} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={contasEmAberto(data)} />
@@ -300,7 +311,7 @@ function Kpi({ icon: Icon, accent, label, value, hint, onClick }: { icon: React.
 }
 
 // Detalhe do saldo acumulado: saldo inicial das contas + soma dos resultados mês a mês.
-function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, onClose }: { meses: FinMes[]; saldoAtual: number; saldoOperacional: number; caixaContas: number; onClose: () => void }) {
+function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, aPagarTotal, aPagarRepasses, aReceberTotal, onClose }: { meses: FinMes[]; saldoAtual: number; saldoOperacional: number; caixaContas: number; aPagarTotal: number; aPagarRepasses: number; aReceberTotal: number; onClose: () => void }) {
   const realizados = meses.filter((m) => !m.projecao);
   const saldoInicial = realizados.length ? realizados[0].acumulado - realizados[0].resultado - (realizados[0].aporte ?? 0) : 0;
   const totalReceita = realizados.reduce((s, m) => s + m.receita, 0);
@@ -340,9 +351,15 @@ function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, o
           <div className="flex items-center justify-between text-zinc-500"><span>Total de despesas</span><span className="tabular-nums text-rose-600">− {brl2(totalDespesa)}</span></div>
           {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Resultado operacional <span className="text-[11px] text-zinc-400">(o que o escritório gerou/queimou)</span></span><span className={`font-semibold tabular-nums ${saldoOperacional >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoOperacional)}</span></div>}
           <div className="flex items-center justify-between border-t border-dashed border-zinc-200 pt-1.5 font-semibold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Caixa real <span className="text-[11px] font-normal text-zinc-400">(dinheiro nas contas agora)</span></span><span className={`tabular-nums ${caixaContas >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(caixaContas)}</span></div>
+          {aPagarTotal > 0 && <div className="flex items-center justify-between text-zinc-500"><span>A pagar <span className="text-[11px] text-zinc-400">(repasses a clientes{aPagarRepasses > 0 ? ` ${brl2(aPagarRepasses)}` : ''} + contas + cartão)</span></span><span className="tabular-nums text-rose-600">− {brl2(aPagarTotal)}</span></div>}
           {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Empréstimo dos sócios <span className="text-[11px] text-zinc-400">(dívida a devolver aos CPFs)</span></span><span className="tabular-nums text-amber-600">− {brl2(totalAporte)}</span></div>}
-          {totalAporte > 0 && <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Posição real <span className="text-[11px] font-normal text-zinc-400">(caixa − empréstimo dos sócios)</span></span><span className={`tabular-nums ${caixaContas - totalAporte >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(caixaContas - totalAporte)}</span></div>}
-          {totalAporte > 0 && <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">O escritório está com <strong>{brl2(caixaContas)}</strong> em caixa mas deve <strong>{brl2(totalAporte)}</strong> aos sócios (dinheiro que os CPFs gastaram e ainda não foi devolvido). A <strong>posição real</strong> é de <strong>{brl2(caixaContas - totalAporte)}</strong> — o rombo verdadeiro. Conforme o escritório for pagando os sócios de volta, essa dívida cai.</p>}
+          {(() => { const pos = caixaContas - aPagarTotal - totalAporte; return (
+          <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Posição real <span className="text-[11px] font-normal text-zinc-400">(caixa − a pagar{totalAporte > 0 ? ' − sócios' : ''})</span></span><span className={`tabular-nums ${pos >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(pos)}</span></div>
+          ); })()}
+          {aReceberTotal > 0 && <div className="flex items-center justify-between text-zinc-500"><span>A receber <span className="text-[11px] text-zinc-400">(honorários/valores ainda a entrar)</span></span><span className="tabular-nums text-emerald-600">+ {brl2(aReceberTotal)}</span></div>}
+          {(() => { const pos = caixaContas - aPagarTotal - totalAporte; return (
+          <p className="mt-1 rounded-md bg-zinc-50 px-2 py-1.5 text-[11px] text-zinc-600 dark:bg-zinc-800/40 dark:text-zinc-300">Você tem <strong>{brl2(caixaContas)}</strong> em caixa, mas <strong>{brl2(aPagarTotal)}</strong> são obrigações{aPagarRepasses > 0 ? <> — das quais <strong>{brl2(aPagarRepasses)}</strong> é dinheiro de cliente a repassar (não é do escritório)</> : ''}{totalAporte > 0 ? <> — e ainda deve <strong>{brl2(totalAporte)}</strong> aos sócios</> : ''}. A <strong>posição real</strong> livre é <strong className={pos < 0 ? 'text-rose-600' : 'text-emerald-600'}>{brl2(pos)}</strong>{aReceberTotal > 0 ? <>; com o que ainda há a receber (<strong>{brl2(aReceberTotal)}</strong>), fica <strong>{brl2(pos + aReceberTotal)}</strong></> : ''}.</p>
+          ); })()}
         </div>
         <p className="mt-3 text-[11px] text-zinc-400">Dica: para ver os lançamentos de um mês, use o filtro de mês no livro-razão abaixo.</p>
       </div>
