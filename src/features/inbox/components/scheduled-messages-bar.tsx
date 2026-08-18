@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, X, ChevronDown, Pencil, Trash2, Loader2, CalendarClock } from 'lucide-react';
+import { Clock, X, ChevronDown, Pencil, Trash2, Loader2, CalendarClock, Paperclip, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   scheduledMessagesService,
+  scheduledAnexoHref,
+  type ScheduledAnexo,
   type ScheduledMessage,
 } from '../services/scheduled-messages.service';
 
@@ -35,6 +37,44 @@ function toLocalInput(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Diz se a agendada leva arquivo e QUAL — quem lê "segue em anexo a prestação de
+ * contas" precisa conferir que o PDF está mesmo junto antes da hora do envio.
+ * Sem anexo o aviso é discreto, mas explícito: a ausência também é informação.
+ */
+export function ScheduledAnexos({ anexos, tom = 'claro' }: { anexos?: ScheduledAnexo[]; tom?: 'claro' | 'escuro' }) {
+  const lista = anexos ?? [];
+  if (lista.length === 0) {
+    return (
+      <p className="mt-1.5 flex items-center gap-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+        <Paperclip className="h-3 w-3 shrink-0" /> Sem anexo
+      </p>
+    );
+  }
+  return (
+    <div className="mt-1.5 space-y-1">
+      {lista.map((a) => (
+        <a
+          key={a.url}
+          href={scheduledAnexoHref(a)}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title={`Abrir ${a.nome}`}
+          className={`flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+            tom === 'escuro'
+              ? 'bg-black/5 text-zinc-700 hover:bg-black/10 dark:bg-white/10 dark:text-zinc-200 dark:hover:bg-white/15'
+              : 'bg-white/70 text-zinc-700 hover:bg-white dark:bg-white/10 dark:text-zinc-200 dark:hover:bg-white/15'
+          }`}
+        >
+          <FileText className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+          <span className="truncate">{a.nome}</span>
+        </a>
+      ))}
+    </div>
+  );
 }
 
 export function ScheduledMessagesBar({ conversationId }: { conversationId: string }) {
@@ -75,6 +115,12 @@ export function ScheduledMessagesBar({ conversationId }: { conversationId: strin
           <span className="truncate">
             Sua próxima mensagem será enviada em{' '}
             <strong className="tabular-nums">{countdown(next.scheduledAt, now)}</strong>
+            {(next.anexos?.length ?? 0) > 0 && (
+              <span className="ml-1.5 inline-flex items-center gap-1 align-middle" title={next.anexos!.map((a) => a.nome).join(', ')}>
+                <Paperclip className="h-3.5 w-3.5" />
+                {next.anexos!.length === 1 ? next.anexos![0].nome : `${next.anexos!.length} anexos`}
+              </span>
+            )}
           </span>
         </span>
         <button
@@ -188,6 +234,7 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
           rows={3}
           className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
         />
+        <ScheduledAnexos anexos={item.anexos} tom="escuro" />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
             type="datetime-local"
@@ -219,9 +266,12 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
   return (
     <div className="relative rounded-xl bg-emerald-50 p-3 dark:bg-emerald-900/15">
       <div className="flex items-start justify-between gap-2">
-        <p className="whitespace-pre-wrap break-words text-sm text-zinc-800 dark:text-zinc-100">
-          {item.content?.text}
-        </p>
+        <div className="min-w-0">
+          <p className="whitespace-pre-wrap break-words text-sm text-zinc-800 dark:text-zinc-100">
+            {item.content?.text}
+          </p>
+          <ScheduledAnexos anexos={item.anexos} tom="escuro" />
+        </div>
         <div className="relative shrink-0">
           <button
             onClick={() => setMenuOpen((v) => !v)}

@@ -7,17 +7,32 @@ export type ScheduledMessageStatus =
   | 'CANCELED'
   | 'FAILED';
 
+/** Arquivo que vai junto com a agendada (hoje: o PDF da prestação de contas). */
+export interface ScheduledAnexo {
+  nome: string;
+  /** caminho relativo à base da API (ex.: /uploads/prestacao/...) */
+  url: string;
+}
+
 export interface ScheduledMessage {
   id: string;
   conversationId: string;
   channelId: string;
   type: string;
   content: { text?: string };
+  /** Resolvido pelo backend: vazio = a mensagem vai sem anexo. */
+  anexos?: ScheduledAnexo[];
   scheduledAt: string;
   status: ScheduledMessageStatus;
   sentAt?: string | null;
   error?: string | null;
   createdAt: string;
+}
+
+/** URL completa pra abrir/baixar o anexo (a API serve o /uploads). */
+export function scheduledAnexoHref(a: ScheduledAnexo): string {
+  const base = (api.defaults.baseURL || '').replace(/\/$/, '');
+  return a.url.startsWith('http') ? a.url : `${base}${a.url}`;
 }
 
 export const scheduledMessagesService = {

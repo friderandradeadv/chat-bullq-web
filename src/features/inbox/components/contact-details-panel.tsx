@@ -63,6 +63,7 @@ import {
   scheduledMessagesService,
   type ScheduledMessage,
 } from '../services/scheduled-messages.service';
+import { ScheduledAnexos } from './scheduled-messages-bar';
 import {
   zapSignService,
   type ZapSignTemplate,
@@ -2762,6 +2763,7 @@ function ScheduledTab({ conversationId }: { conversationId: string }) {
                     onChange={(e) => setEditWhen(e.target.value)}
                     className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-[12px] outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:[color-scheme:dark]"
                   />
+                  <ScheduledAnexos anexos={m.anexos} />
                   <div className="flex gap-2">
                     <button
                       onClick={() => saveEdit(m.id)}
@@ -2781,6 +2783,7 @@ function ScheduledTab({ conversationId }: { conversationId: string }) {
                     <Clock className="h-3 w-3" /> {fmt(m.scheduledAt)}
                   </div>
                   <p className="whitespace-pre-wrap break-words text-sm text-zinc-700 dark:text-zinc-200">{m.content?.text}</p>
+                  <ScheduledAnexos anexos={m.anexos} />
                   <div className="mt-1.5 flex gap-3">
                     <button onClick={() => startEdit(m)} className="text-[11px] font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
                       Editar
@@ -2810,6 +2813,7 @@ function ScheduledTab({ conversationId }: { conversationId: string }) {
                 <ScheduledStatusBadge status={m.status} />
               </div>
               <p className="whitespace-pre-wrap break-words text-sm text-zinc-500 dark:text-zinc-400">{m.content?.text}</p>
+              <ScheduledAnexos anexos={m.anexos} />
               {m.error && <p className="mt-1 text-[11px] text-red-500">{m.error}</p>}
             </div>
           ))}
