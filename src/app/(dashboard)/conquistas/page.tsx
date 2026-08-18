@@ -53,12 +53,15 @@ function Placar({
   value,
   label,
   hint,
+  erro,
 }: {
   icon: React.ElementType;
   color: string;
   value: string | number;
   label: string;
   hint?: string;
+  /** true = a consulta falhou. Mostra "—", nunca zero: zero é um fato, falha não. */
+  erro?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-zinc-200/70 bg-white/70 p-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/60">
@@ -66,8 +69,14 @@ function Placar({
         <Icon className="h-4 w-4 shrink-0" style={{ color }} />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{label}</span>
       </div>
-      <p className="mt-1.5 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-zinc-400">{hint}</p>}
+      <p className={`mt-1.5 text-2xl font-bold tracking-tight ${erro ? 'text-zinc-400 dark:text-zinc-600' : 'text-zinc-900 dark:text-zinc-50'}`}>
+        {erro ? '—' : value}
+      </p>
+      {(erro || hint) && (
+        <p className={`mt-0.5 text-[11px] ${erro ? 'text-rose-500' : 'text-zinc-400'}`}>
+          {erro ? 'não consegui carregar' : hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -376,10 +385,11 @@ export default function ConquistasPage() {
     queryFn: () => depoimentosService.list({ status: aba }),
     staleTime: 30_000,
   });
-  const { data: stats } = useQuery({
+  const { data: stats, isError: statsErro } = useQuery({
     queryKey: ['depoimentos', 'stats'],
     queryFn: () => depoimentosService.stats(),
     staleTime: 60_000,
+    retry: 1,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['depoimentos'] });
@@ -401,7 +411,7 @@ export default function ConquistasPage() {
         const r = await depoimentosService.varrer({
           dias: 3650, // histórico inteiro
           limite: 120,
-          transcrever: 12,
+          transcrever: 6,
         });
         rodadas += 1;
         criados += r.criados;
@@ -437,7 +447,20 @@ export default function ConquistasPage() {
         toast.info(`Ainda faltam ${r.pendentes} áudios pra transcrever — clique de novo pra continuar de onde parou.`);
       }
     },
-    onError: () => toast.error('Não consegui varrer as conversas agora.'),
+    onError: (e: unknown) => {
+      // Mensagem genérica esconde a causa e nos deixa adivinhando. Mostra o que
+      // o servidor disse — status e texto — pra dar pra agir.
+      const err = e as { response?: { status?: number; data?: { message?: string | string[] } }; message?: string };
+      const status = err?.response?.status;
+      const detalhe = Array.isArray(err?.response?.data?.message)
+        ? err.response!.data!.message!.join(', ')
+        : err?.response?.data?.message ?? err?.message ?? 'erro desconhecido';
+      const dica =
+        status === 504 || status === 502 || /timeout/i.test(String(detalhe))
+          ? ' A varredura demorou demais e o servidor cortou — clique de novo, ela continua de onde parou.'
+          : '';
+      toast.error(`Falha na varredura${status ? ` (HTTP ${status})` : ''}: ${detalhe}.${dica}`, { duration: 12_000 });
+    },
   });
 
   const salvar = useMutation({
@@ -517,9 +540,10 @@ export default function ConquistasPage() {
 
         {/* Placar */}
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Placar icon={Heart} color="#E64980" value={stats?.total ?? 0} label="histórias" hint={stats?.noMes ? `${stats.noMes} neste mês` : undefined} />
-          <Placar icon={Users} color="#7048E8" value={stats?.vidas ?? 0} label="vidas alcançadas" hint="pessoas diferentes" />
+          <Placar erro={statsErro} icon={Heart} color="#E64980" value={stats?.total ?? 0} label="histórias" hint={stats?.noMes ? `${stats.noMes} neste mês` : undefined} />
+          <Placar erro={statsErro} icon={Users} color="#7048E8" value={stats?.vidas ?? 0} label="vidas alcançadas" hint="pessoas diferentes" />
           <Placar
+            erro={statsErro}
             icon={HandCoins}
             color="#02883C"
             value={brl(stats?.repassadoAosClientes ?? 0) ?? 'R$ 0,00'}
@@ -527,6 +551,7 @@ export default function ConquistasPage() {
             hint="prestações de contas dos processos"
           />
           <Placar
+            erro={statsErro}
             icon={Sparkles}
             color="#F59F00"
             value={brl(stats?.valorCitado ?? 0) ?? 'R$ 0,00'}
