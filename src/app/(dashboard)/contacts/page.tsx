@@ -251,7 +251,16 @@ export default function ContactsPage() {
                 : 'Carregando…'}
             </p>
           </div>
-          <PageSizeSelect value={limit} onChange={(v) => { setLimit(v); setPage(1); }} />
+          <div className="flex items-center gap-2">
+            {/* Mesma pessoa cadastrada 2x (mesmo telefone/CPF, nomes diferentes). */}
+            <Link
+              href="/contacts/parecidos"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <Users className="h-4 w-4" /> Contatos parecidos
+            </Link>
+            <PageSizeSelect value={limit} onChange={(v) => { setLimit(v); setPage(1); }} />
+          </div>
         </div>
 
         {/* Barra de busca */}

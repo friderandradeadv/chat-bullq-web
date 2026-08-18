@@ -42,7 +42,36 @@ export interface FunnelBoard {
   cards: Record<string, FunnelCard[]>;
 }
 
+/** Um contato dentro de um grupo de "parecidos". */
+export interface ContatoParecido {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  avatarUrl: string | null;
+  cpf: string | null;
+  conversas: number;
+  criadoEm: string;
+  /** nº de palavras do nome — o mais completo vira o nome sugerido do grupo */
+  palavras: number;
+}
+export interface GrupoParecido {
+  /** telefone ou CPF que amarra o grupo */
+  chave: string;
+  tipo: 'telefone' | 'cpf';
+  contatos: ContatoParecido[];
+}
+
 export const contactsService = {
+  /**
+   * Mesma pessoa cadastrada 2x com nomes diferentes ("Nara" e "Nara Regina dos
+   * Passos Silva"). Agrupado por TELEFONE/CPF — nunca por nome parecido, que
+   * na base do escritório junta dezenas de homônimos.
+   */
+  async parecidos(): Promise<{ grupos: GrupoParecido[] }> {
+    const { data } = await api.get('/contacts/parecidos');
+    return data.data ?? data;
+  },
+
   async funnelBoard(departmentId?: string): Promise<FunnelBoard> {
     const { data } = await api.get('/contacts/funnel-board', {
       params: departmentId ? { departmentId } : {},
