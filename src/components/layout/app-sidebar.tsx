@@ -41,6 +41,7 @@ import {
   Sparkles,
   HelpCircle,
   TrendingUp,
+  Heart,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -245,6 +246,10 @@ export function AppSidebar() {
           {/* INÍCIO — item avulso no topo (Hub de boas-vindas), fora das seções */}
           <div className="mb-1 border-b border-zinc-200/70 pb-2 dark:border-zinc-800">
             <NavItem href="/inicio" icon={Sparkles} label="Início" />
+            {/* Conquistas — depoimentos dos clientes + placar do escritório.
+                Fica junto do Início (o cartão de lá aponta pra cá), fora das
+                seções: é do escritório inteiro, não de uma área. */}
+            <NavItem href="/conquistas" icon={Heart} label="Conquistas" />
           </div>
 
           {/* COMERCIAL — BullQ / WhatsApp (Cadastros/Ajustes/Automações em subabas) */}

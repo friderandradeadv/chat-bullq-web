@@ -37,6 +37,7 @@ import {
   HandCoins,
   Cake,
   Gift,
+  Heart,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
@@ -48,6 +49,7 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
 import { isTerminalPhase } from '@/features/legal-cases/lib/kanban-terminal';
 import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
 import { dashboardService, type HubNewsItem } from '@/features/dashboard/services/dashboard.service';
+import { depoimentosService } from '@/features/depoimentos/services/depoimentos.service';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { formatPhone } from '@/lib/brazil-states';
 
@@ -937,6 +939,54 @@ function Aniversariantes({ onCelebrate }: { onCelebrate: () => void }) {
   );
 }
 
+// ─── Conquistas (resumo) ──────────────────────────────────────────────────────
+// Cartão enxuto: o placar + a história em destaque. A aba cheia (mural,
+// sugestões da varredura, cadastro) fica em /conquistas — o Início só chama.
+function ConquistasResumo() {
+  const statsQ = useQuery({ queryKey: ['hub', 'depo-stats'], queryFn: () => depoimentosService.stats(), staleTime: 300_000, retry: 1 });
+  const destaqueQ = useQuery({ queryKey: ['hub', 'depo-destaque'], queryFn: () => depoimentosService.list({ status: 'APROVADO' }), staleTime: 300_000, retry: 1 });
+
+  const st = statsQ.data;
+  const d = (destaqueQ.data ?? [])[0] ?? null;
+  const brlc = (n?: number | null) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+  // Sem nenhuma história ainda: convite curto, sem ocupar espaço.
+  if (!st || (st.total === 0 && !d)) {
+    return (
+      <Link href="/conquistas" className="welcome-pop mt-4 flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-zinc-300 px-4 py-3 text-left transition hover:border-[#E64980]/60 dark:border-zinc-700" style={{ animationDelay: '0.31s' }}>
+        <Heart className="h-4 w-4 shrink-0 text-[#E64980]" />
+        <span className="flex-1 text-sm text-zinc-500">Guarde os agradecimentos dos clientes em Conquistas — o hub procura por eles nas conversas.</span>
+        <ArrowRight className="h-4 w-4 shrink-0 text-zinc-400" />
+      </Link>
+    );
+  }
+
+  return (
+    <Link href="/conquistas" className="welcome-pop mt-4 block w-full rounded-2xl border border-zinc-200/60 bg-white/60 p-4 text-left backdrop-blur transition hover:border-[#E64980]/50 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50" style={{ animationDelay: '0.31s' }}>
+      <div className="flex items-center gap-1.5">
+        <Heart className="h-3.5 w-3.5 text-[#E64980]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#E64980]">Conquistas</span>
+        {st.sugestoes > 0 && (
+          <span className="rounded-full bg-[#E64980] px-1.5 py-0.5 text-[10px] font-bold text-white">{st.sugestoes} nova{st.sugestoes > 1 ? 's' : ''}</span>
+        )}
+        <span className="ml-auto text-[11px] font-semibold text-[#228BE6]">ver tudo →</span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span className="text-sm text-zinc-600 dark:text-zinc-300"><strong className="text-zinc-900 dark:text-zinc-50">{st.vidas}</strong> vidas alcançadas</span>
+        <span className="text-sm text-zinc-600 dark:text-zinc-300"><strong className="text-emerald-600 dark:text-emerald-400">{brlc(st.repassadoAosClientes)}</strong> devolvidos aos clientes</span>
+      </div>
+
+      {d && (
+        <div className="mt-2.5 border-l-2 border-[#7048E8]/60 pl-3">
+          <p className="line-clamp-3 text-sm italic leading-relaxed text-zinc-600 dark:text-zinc-300">"{d.mensagem}"</p>
+          <p className="mt-1 text-xs font-semibold text-zinc-400">— {d.clienteNome}{d.resultado ? ` · ${d.resultado}` : ''}</p>
+        </div>
+      )}
+    </Link>
+  );
+}
+
 export default function InicioPage() {
   const { user } = useAuthStore();
   const [mounted, setMounted] = useState(false);
@@ -1047,6 +1097,7 @@ export default function InicioPage() {
     setBurst((b) => b + 1);
   };
 
+
   const statOn = mounted && !stats.loading;
 
   return (
@@ -1148,6 +1199,9 @@ export default function InicioPage() {
             </div>
           </div>
         )}
+
+        {/* Conquistas — resumo; a aba cheia vive em /conquistas */}
+        {mounted && <ConquistasResumo />}
 
         {/* Notícias do dia — mundo + jurídico (no fim da página, colapsável, clicável) */}
         {mounted && <HojeNoMundo />}

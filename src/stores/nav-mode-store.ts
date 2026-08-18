@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import {
   Menu, Sparkles, MessageSquare, CalendarCheck, Folder, Newspaper, Workflow,
   Landmark, Banknote, Columns3, Stethoscope, Calculator, Users, CircleDollarSign, UserCircle,
-  Bot, HelpCircle, Settings, TrendingUp, Gavel, type LucideIcon,
+  Bot, HelpCircle, Settings, TrendingUp, Gavel, Heart, type LucideIcon,
 } from 'lucide-react';
 
 // ── Modo da navegação (desktop) ────────────────────────────────────────────────
@@ -28,6 +28,7 @@ export interface SimpleBarItem {
 export const SIMPLE_BAR_CATALOG: SimpleBarItem[] = [
   { id: 'menu', label: 'Menu', icon: Menu, action: 'menu' },
   { id: 'inicio', label: 'Início', icon: Sparkles, href: '/inicio' },
+  { id: 'conquistas', label: 'Conquistas', icon: Heart, href: '/conquistas' },
   { id: 'conversas', label: 'Conversas', icon: MessageSquare, href: '/inbox' },
   { id: 'agenda', label: 'Agenda', icon: CalendarCheck, href: '/agenda' },
   { id: 'processos', label: 'Processos', icon: Folder, href: '/processos' },
