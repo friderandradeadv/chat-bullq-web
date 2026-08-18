@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   XCircle,
@@ -59,12 +58,12 @@ function HeaderAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: str
   );
 }
 
-/** Atalho no cabeçalho do chat pra FICHA DO CLIENTE (/clientes/[partyId]).
+/** Atalho no cabeçalho do chat pra FICHA DO CLIENTE (/clientes/[partyId]),
+ *  em GUIA NOVA — o atendimento em curso não pode sumir da tela.
  *  Só aparece pra quem já é cliente do jurídico — o backend só devolve
  *  `clientePartyId` quando há processo fora do pré-judicial. Mesma query
  *  (e mesmo cache) do painel lateral, então não custa requisição extra. */
 function ClientRecordButton({ contactId }: { contactId: string }) {
-  const router = useRouter();
   const { data } = useQuery({
     queryKey: ['cases-by-contact', contactId],
     queryFn: () => legalCasesService.casesByContact(contactId),
@@ -76,8 +75,8 @@ function ClientRecordButton({ contactId }: { contactId: string }) {
   return (
     <button
       type="button"
-      onClick={() => router.push(`/clientes/${partyId}`)}
-      title="Abrir ficha do cliente"
+      onClick={() => window.open(`/clientes/${partyId}`, '_blank', 'noopener')}
+      title="Abrir ficha do cliente em outra guia"
       className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
     >
       <IdCard className="h-3.5 w-3.5" />

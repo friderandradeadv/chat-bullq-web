@@ -377,11 +377,11 @@ function ClientCaseSuggestionsSection({ contactId }: { contactId: string }) {
 }
 
 /** Atalho pra FICHA DO CLIENTE (/clientes/[partyId]) — a aba com cadastro,
- *  processos conosco e etiquetas. Só aparece pra quem já é cliente do jurídico
+ *  processos conosco e etiquetas. Abre em GUIA NOVA: quem está atendendo não
+ *  pode perder a conversa de vista. Só aparece pra quem já é cliente do jurídico
  *  (tem processo fora do pré-judicial); lead segue com o painel limpo.
  *  Reusa a query de casesByContact (mesmo cache das outras seções). */
 function OpenClientRecordButton({ contactId }: { contactId: string }) {
-  const router = useRouter();
   const { data } = useQuery({
     queryKey: ['cases-by-contact', contactId],
     queryFn: () => legalCasesService.casesByContact(contactId),
@@ -393,8 +393,8 @@ function OpenClientRecordButton({ contactId }: { contactId: string }) {
   return (
     <button
       type="button"
-      onClick={() => router.push(`/clientes/${partyId}`)}
-      title="Abrir a ficha do cliente (cadastro, processos e etiquetas)"
+      onClick={() => window.open(`/clientes/${partyId}`, '_blank', 'noopener')}
+      title="Abrir a ficha do cliente em outra guia (cadastro, processos e etiquetas)"
       className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10"
     >
       <IdCard className="h-3.5 w-3.5" />
@@ -448,8 +448,8 @@ function ClientCasesSection({ contactId }: { contactId: string }) {
         {clientePartyId && (
           <button
             type="button"
-            onClick={() => router.push(`/clientes/${clientePartyId}`)}
-            title="Abrir a ficha do cliente (cadastro, processos e etiquetas)"
+            onClick={() => window.open(`/clientes/${clientePartyId}`, '_blank', 'noopener')}
+            title="Abrir a ficha do cliente em outra guia (cadastro, processos e etiquetas)"
             className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-primary hover:underline"
           >
             Ficha do cliente <ExternalLink className="h-3 w-3" />
