@@ -209,12 +209,18 @@ export default function ClienteDetailPage() {
                         <Rss className={`h-3.5 w-3.5 ${monitorado ? 'text-emerald-500' : 'text-zinc-300'}`} />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <Link href={`/processos/${c.id}`} className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-200">
-                          {c.title}
-                        </Link>
-                        <p className="mt-0.5 text-xs text-zinc-400">
-                          {c.area ?? 'Processo'} {STATUS_LABEL[c.status] ? `· ${STATUS_LABEL[c.status].toLowerCase()}` : ''}
-                          {c.cnjNumber ? <> · <CnjNumber value={c.cnjNumber} /></> : null}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Link href={`/processos/${c.id}`} className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-200">
+                            {c.title}
+                          </Link>
+                          {c.resultado === 'vencemos' && <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">✓ Vencemos</span>}
+                          {c.resultado === 'perdemos' && <span className="shrink-0 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">✗ Perdemos</span>}
+                          {c.resultado === 'parcial' && <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">◐ Parcial</span>}
+                        </div>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+                          {c.faseLabel && <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{c.faseLabel}</span>}
+                          <span>{c.area ?? 'Processo'}{STATUS_LABEL[c.status] ? ` · ${STATUS_LABEL[c.status].toLowerCase()}` : ''}</span>
+                          {c.cnjNumber ? <span>· <CnjNumber value={c.cnjNumber} /></span> : null}
                         </p>
                       </div>
                     </li>
@@ -226,7 +232,7 @@ export default function ClienteDetailPage() {
 
           {/* Financeiro do cliente — honorários vinculados aos lançamentos */}
           <div className="mt-5">
-            <ClienteFinanceiroCard nome={cliente.name} />
+            <ClienteFinanceiroCard nome={cliente.name} cases={meusCasos} />
           </div>
 
           {/* Cobrança ASAAS — gera boleto/pix e concilia com o caixa */}
@@ -251,7 +257,8 @@ export default function ClienteDetailPage() {
 }
 
 /** Resumo de honorários do cliente (recebidos, pagamentos, status) — casa por nome. */
-function ClienteFinanceiroCard({ nome }: { nome: string }) {
+function ClienteFinanceiroCard({ nome, cases = [] }: { nome: string; cases?: { id: string; title: string; cnjNumber: string | null }[] }) {
+  const casoLabel = (caseId: string) => cases.find((c) => c.id === caseId) ?? null;
   const { data: dash, isLoading } = useQuery({
     queryKey: ['financeiro', 'dashboard'],
     queryFn: () => financeiroService.dashboard(),
@@ -270,15 +277,20 @@ function ClienteFinanceiroCard({ nome }: { nome: string }) {
   // status do repasse. Fonte: as transações do dashboard já filtradas pelo nome do cliente.
   const alvaras = useMemo(() => {
     const txs = dash?.transacoes ?? [];
-    const byCase = new Map<string, { caseId: string; rateio: any; prestacaoTxId: string; data: string; anexos: { key: string; url: string; name: string; mime: string }[]; repasseStatus?: string }>();
+    type An = { key: string; url: string; name: string; mime: string };
+    const byCase = new Map<string, { caseId: string; rateio: any; prestacaoTxId: string; data: string; anexos: An[]; comprovantes: An[]; repasseStatus?: string }>();
     for (const t of txs) {
       if (!t.caseId) continue;
       if (norm(t.party || t.recebedor || t.pagador || '') !== norm(nome)) continue;
       let g = byCase.get(t.caseId);
-      if (!g) { g = { caseId: t.caseId, rateio: null, prestacaoTxId: t.id!, data: t.data, anexos: [] }; byCase.set(t.caseId, g); }
+      if (!g) { g = { caseId: t.caseId, rateio: null, prestacaoTxId: t.id!, data: t.data, anexos: [], comprovantes: [] }; byCase.set(t.caseId, g); }
       if (t.rateio) { g.rateio = t.rateio; g.prestacaoTxId = t.id!; g.data = t.data; }
-      if (/repasse ao cliente/i.test(t.categoria || '')) g.repasseStatus = t.status ?? undefined;
-      for (const an of (t.anexos ?? [])) if (an?.key && !g.anexos.some((x) => x.key === an.key)) g.anexos.push(an as any);
+      const ehRepasse = /repasse ao cliente/i.test(t.categoria || '');
+      if (ehRepasse) g.repasseStatus = t.status ?? undefined;
+      // Anexo do REPASSE = comprovante do Pix ao cliente (prova de pagamento); dos demais = alvará/docs.
+      const alvo = ehRepasse ? g.comprovantes : g.anexos;
+      const outro = ehRepasse ? g.anexos : g.comprovantes;
+      for (const an of (t.anexos ?? [])) if (an?.key && !alvo.some((x) => x.key === an.key) && !outro.some((x) => x.key === an.key)) alvo.push(an as any);
     }
     return [...byCase.values()].filter((g) => g.rateio);
   }, [dash, nome]);
@@ -358,11 +370,15 @@ function ClienteFinanceiroCard({ nome }: { nome: string }) {
               const hon = Number(a.rateio.honorarios) || 0; const cli = Number(a.rateio.cliente) || 0;
               const nosso = hon + suc;
               const pago = a.repasseStatus === 'pago';
+              const proc = casoLabel(a.caseId);
               return (
                 <div key={a.caseId} className="rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Alvará {brlc(bruto)}</span>
-                    <span className="flex items-center gap-1.5 text-[10px]">
+                  <div className="mb-1.5 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Alvará {brlc(bruto)}</span>
+                      {proc ? <Link href={`/processos/${proc.id}`} className="mt-0.5 block truncate text-[11px] text-[#228BE6] hover:underline" title={proc.title}>{proc.title}{proc.cnjNumber ? ` · ${proc.cnjNumber}` : ''}</Link> : null}
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1.5 text-[10px]">
                       <span className="text-zinc-400">{a.data}</span>
                       {a.repasseStatus && <span className={`rounded-full px-1.5 py-0.5 font-semibold ${pago ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>{pago ? 'repasse pago' : 'repasse a pagar'}</span>}
                     </span>
@@ -378,11 +394,16 @@ function ClienteFinanceiroCard({ nome }: { nome: string }) {
                       {prestBusy === a.prestacaoTxId ? <Loader2 className="h-3 w-3 animate-spin" /> : <ReceiptText className="h-3 w-3" />} Prestação de contas (PDF)
                     </button>
                     {a.anexos.map((an, k) => (
-                      <a key={k} href={anexoHref(an as any)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-600 transition hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700 dark:text-zinc-300">
+                      <a key={k} href={anexoHref(an as any)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-600 transition hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700 dark:text-zinc-300" title="Documento (alvará/prova)">
                         <Paperclip className="h-3 w-3" /> <span className="max-w-[140px] truncate">{an.name}</span>
                       </a>
                     ))}
-                    {a.anexos.length === 0 && <span className="text-[10px] text-zinc-400">sem anexos — suba o alvará/comprovante no lançamento do financeiro</span>}
+                    {a.comprovantes.map((an, k) => (
+                      <a key={`c${k}`} href={anexoHref(an as any)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50/50 px-2 py-1 text-[11px] font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-900/10 dark:text-emerald-300" title="Comprovante do repasse (Pix ao cliente)">
+                        <Check className="h-3 w-3" /> comprovante <span className="max-w-[110px] truncate">{an.name}</span>
+                      </a>
+                    ))}
+                    {a.anexos.length === 0 && a.comprovantes.length === 0 && <span className="text-[10px] text-zinc-400">sem anexos — suba o alvará/comprovante no clipe do lançamento no financeiro</span>}
                   </div>
                 </div>
               );

@@ -90,6 +90,10 @@ export interface CaseListItem {
   updatedAt: string;
   metadata?: { astrea?: { tags?: string[]; instanciaAtual?: string; raw?: Record<string, string> } } | null;
   legalTags: LegalTag[];
+  // Enriquecido pelo backend: fase atual (label) + resultado do processo (desfecho).
+  faseKey?: string | null;
+  faseLabel?: string | null;
+  resultado?: 'vencemos' | 'perdemos' | 'parcial' | null;
 }
 
 export interface MovementItem {
