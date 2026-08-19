@@ -59,6 +59,7 @@ import { tagsService } from '@/features/settings/services/tags.service';
 import { financeiroService, anexoHref } from '@/features/financeiro/services/financeiro.service';
 import { clienteFinanceiro, STATUS_FIN } from '@/features/financeiro/lib/clientes';
 import { formatPhone } from '@/lib/brazil-states';
+import { StateFlag } from '@/components/ui/state-flag';
 import { CnjNumber, ASTREA_BLUE, LegalTagChip } from '../../processos/page';
 
 const brlc = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -107,10 +108,27 @@ function idadeDe(nascimento?: string | null): number | null {
   return anos >= 0 && anos < 130 ? anos : null;
 }
 
-/** "Cidade/UF" tirada do endereço completo, que termina em "…, Cidade/UF, CEP …". */
-function cidadeDe(endereco?: string | null): string | null {
-  const m = (endereco ?? '').match(/(?:na cidade de\s+)?([A-Za-zÀ-ÿ'.\s]+)\/([A-Z]{2})\b/);
-  return m ? `${m[1].trim()}/${m[2]}` : null;
+/**
+ * "Cidade/UF" tirada do endereço completo. O trecho vem como "…, na cidade de
+ * Volta Redonda/RJ, CEP …" e o "na cidade de" é linguagem de peça — no
+ * cabeçalho da ficha ele só atrapalha, então sai aqui e fica só na qualificação.
+ */
+function cidadeDe(endereco?: string | null): { cidade: string; uf: string } | null {
+  const m = (endereco ?? '').match(/([^,\/]+)\/([A-Z]{2})\b/);
+  if (!m) return null;
+  const cidade = m[1].replace(/^\s*na cidade de\s+/i, '').trim();
+  return cidade ? { cidade, uf: m[2] } : null;
+}
+
+/** Endereço enxuto para a ficha: "Rua, Nº, Bairro, Cidade/CEP" — sem juridiquês. */
+function enderecoCurto(endereco?: string | null): string | null {
+  const e = (endereco ?? '').trim();
+  if (!e) return null;
+  return e
+    .replace(/,?\s*na cidade de\s+/i, ', ')
+    .replace(/\s*,\s*CEP\s+/i, ' · CEP ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 /** "há 2 anos", "há 8 meses" — tempo desde o primeiro vínculo com o escritório. */
@@ -208,14 +226,20 @@ export default function ClienteDetailPage() {
   const docPrincipal = cadastro?.cpf || cadastro?.cnpj || cliente?.document || null;
   const idade = idadeDe(cadastro?.nascimento);
   const cidade = cidadeDe(cadastro?.endereco);
-  // Tempo de casa = o processo mais ANTIGO do cliente (distribuição ou cadastro).
+  // Há quanto tempo é cliente = data do CONTRATO. Preferimos a assinatura; sem
+  // ela (contrato importado do Drive, que não passou pelo ZapSign) vale a data
+  // do arquivo lá. Só se não houver contrato datado caímos no processo mais
+  // antigo — a data de INDEXAÇÃO no hub nunca entra, ela diria "há 2 dias".
   const conosco = useMemo(() => {
+    const contrato = docsDoCliente.find((d) => d.categoria === 'CONTRATO');
+    const doContrato = contrato?.assinadoEm ?? contrato?.driveModifiedAt ?? null;
+    if (doContrato) return tempoDeCasa(doContrato);
     const datas = meusCasos
       .map((c: any) => c.distribuidoEm ?? c.createdAt)
       .filter(Boolean)
       .sort();
     return tempoDeCasa(datas[0] ?? null);
-  }, [meusCasos]);
+  }, [docsDoCliente, meusCasos]);
 
   // Resumo financeiro para a faixa de indicadores. Mesma chave do cartão da aba
   // Financeiro, então o React Query serve do cache em vez de buscar duas vezes.
@@ -261,7 +285,15 @@ export default function ClienteDetailPage() {
                     nos cartões de Qualificação e Contato. */}
                 <span>Cliente</span>
                 {idade != null && (<><span>·</span><span>{idade} anos</span></>)}
-                {cidade && (<><span>·</span><span>{cidade}</span></>)}
+                {cidade && (
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <StateFlag uf={cidade.uf} className="h-2.5 w-4 shrink-0 rounded-[1px] object-cover ring-1 ring-black/10" />
+                      {cidade.cidade}/{cidade.uf}
+                    </span>
+                  </>
+                )}
                 <span>·</span>
                 <span className="font-medium text-zinc-600 dark:text-zinc-300">
                   {meusCasos.length} processo(s) conosco
@@ -269,7 +301,7 @@ export default function ClienteDetailPage() {
                 {conosco && (
                   <>
                     <span>·</span>
-                    <span title="desde o processo mais antigo do cliente">{conosco}</span>
+                    <span title="desde o contrato de honorários (ou o processo mais antigo)">{conosco} conosco</span>
                   </>
                 )}
               </div>
@@ -290,19 +322,6 @@ export default function ClienteDetailPage() {
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Ações rápidas: o que se faz de fato ao abrir um cliente */}
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <CopiarQualificacao nome={cliente.name} cadastro={cadastro} />
-            {contact?.conversationId && (
-              <Link
-                href={`/inbox?conversationId=${contact.conversationId}`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-              >
-                <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
-              </Link>
-            )}
           </div>
         </div>
 
@@ -389,10 +408,10 @@ export default function ClienteDetailPage() {
                       <DataRow icon={IdCard} label="RG" value={cadastro.rg} copyable />
                       <DataRow icon={User} label="Estado civil" value={cadastro.estadoCivil} />
                       <DataRow icon={User} label="Profissão" value={cadastro.profissao} />
-                      <DataRow icon={MapPin} label="Endereço" value={cadastro.endereco} copyable />
+                      <EnderecoRow endereco={cadastro.endereco} />
                     </dl>
                     <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                      <CopiarQualificacao nome={cliente.name} cadastro={cadastro} largo />
+                      <CopiarQualificacao nome={cliente.name} cadastro={cadastro} />
                     </div>
                   </>
                 ) : (
@@ -1370,55 +1389,107 @@ function montarQualificacao(nome: string, c: Cadastro | null): { texto: string; 
   return { texto: partes.join(', '), faltando };
 }
 
-function CopiarQualificacao({
-  nome,
-  cadastro,
-  largo,
-}: {
-  nome: string;
-  cadastro: Cadastro | null;
-  largo?: boolean;
-}) {
+function CopiarQualificacao({ nome, cadastro }: { nome: string; cadastro: Cadastro | null }) {
+  const [aberto, setAberto] = useState(false);
+  const [texto, setTexto] = useState('');
   const [copiado, setCopiado] = useState(false);
-  const { texto, faltando } = useMemo(() => montarQualificacao(nome, cadastro), [nome, cadastro]);
+  const { faltando } = useMemo(() => montarQualificacao(nome, cadastro), [nome, cadastro]);
+
+  const gerar = () => {
+    setTexto(montarQualificacao(nome, cadastro).texto);
+    setAberto(true);
+    setCopiado(false);
+  };
 
   const copiar = async () => {
     try {
       await navigator.clipboard.writeText(texto);
       setCopiado(true);
-      toast.success('Qualificação copiada — confira antes de colar na peça.');
+      toast.success('Qualificação copiada.');
       setTimeout(() => setCopiado(false), 2000);
     } catch {
       toast.error('Não consegui copiar.');
     }
   };
 
-  const botao = (
-    <button
-      type="button"
-      onClick={copiar}
-      title={texto}
-      className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:text-zinc-300"
-    >
-      {copiado ? <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-      {copiado ? 'Copiado' : 'Copiar qualificação'}
-    </button>
-  );
-
-  if (!largo) return botao;
+  if (!aberto) {
+    return (
+      <button
+        type="button"
+        onClick={gerar}
+        className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:text-zinc-300"
+      >
+        <FileSignature className="h-3.5 w-3.5" /> Gerar qualificação completa
+      </button>
+    );
+  }
 
   return (
     <div>
-      <p className="mb-2 rounded-md bg-zinc-50 px-3 py-2 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400">
-        {texto}
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        {botao}
+      {/* Editável de propósito: o cadastro nunca cobre todo caso (nacionalidade,
+          união estável, nome social, endereço com complemento). Melhor ajustar
+          aqui, ver o resultado e só então copiar, do que colar e corrigir na peça. */}
+      <textarea
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        rows={5}
+        spellCheck={false}
+        className="w-full resize-y rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs leading-relaxed text-zinc-700 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-200"
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={copiar}
+          className="inline-flex items-center gap-1.5 rounded-md bg-[#228BE6] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1c7ed6]"
+        >
+          {copiado ? <ClipboardCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copiado ? 'Copiado' : 'Copiar'}
+        </button>
+        <button
+          type="button"
+          onClick={gerar}
+          title="Descarta as edições e refaz a partir do cadastro"
+          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Refazer
+        </button>
+        <button
+          type="button"
+          onClick={() => setAberto(false)}
+          className="rounded-md px-2 py-1.5 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+        >
+          Fechar
+        </button>
         {faltando.length > 0 && (
           <span className="text-[11px] text-amber-600 dark:text-amber-400">
             confira: {faltando.join(', ')}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * Endereço na ficha, enxuto: "Rua, Nº, Bairro, Cidade/UF · CEP". O "na cidade
+ * de" é linguagem de peça — fica na qualificação, não aqui. A bandeirinha do
+ * estado é a mesma do chat, para a ficha e o atendimento falarem a mesma língua.
+ */
+function EnderecoRow({ endereco }: { endereco?: string | null }) {
+  const curto = enderecoCurto(endereco);
+  const uf = cidadeDe(endereco)?.uf;
+  if (!curto) return null;
+  return (
+    <div className="flex items-start gap-2">
+      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+      <div className="min-w-0 flex-1">
+        <dt className="text-xs text-zinc-400">Endereço</dt>
+        <dd className="flex items-start gap-1.5 text-zinc-700 dark:text-zinc-300">
+          {uf && <StateFlag uf={uf} className="mt-1 h-2.5 w-4 shrink-0 rounded-[1px] object-cover ring-1 ring-black/10" />}
+          <span className="min-w-0 flex-1">{curto}</span>
+          <CopyBtn value={curto} />
+        </dd>
       </div>
     </div>
   );
@@ -1440,12 +1511,15 @@ const ESTILO_MARCO: Record<MarcoTipo, { icon: React.ElementType; cor: string; ro
 };
 
 /**
- * Linha do tempo do cliente: contrato assinado → distribuição → andamentos →
- * sentença → alvará → repasse, numa sequência só.
+ * Histórico do cliente, UM BLOCO POR PROCESSO.
  *
- * O filtro "só marcos" nasce LIGADO de propósito. Um processo antigo tem
- * centenas de despachos, e mostrar tudo de cara transformaria a história do
- * cliente num log de cartório — o que interessa primeiro é o que mudou o rumo.
+ * A primeira versão era uma lista única com tudo misturado, e não contava
+ * história nenhuma: "juiz pediu documento" de um caso encostava em "sentença" do
+ * outro. Cada processo agora tem a sua narrativa em ordem, e o que é do CLIENTE
+ * (contrato, documentos) fica num bloco à parte, no topo.
+ *
+ * O filtro "só marcos" nasce LIGADO: um processo antigo tem centenas de
+ * despachos e o bloco viraria log de cartório.
  */
 function LinhaDoTempo({ partyId }: { partyId: string }) {
   const [soMarcos, setSoMarcos] = useState(true);
@@ -1454,45 +1528,73 @@ function LinhaDoTempo({ partyId }: { partyId: string }) {
     queryFn: () => clientTimelineService.get(partyId),
   });
 
-  const marcos = useMemo(() => {
-    const lista = data?.marcos ?? [];
-    return soMarcos ? lista.filter((m) => m.destaque) : lista;
+  const grupos = useMemo(() => {
+    const gs = data?.grupos ?? [];
+    if (!soMarcos) return gs;
+    return gs
+      .map((g) => ({ ...g, marcos: g.marcos.filter((m) => m.destaque) }))
+      .filter((g) => g.marcos.length > 0);
   }, [data, soMarcos]);
 
-  const ocultos = (data?.marcos.length ?? 0) - marcos.length;
+  const total = data?.marcos.length ?? 0;
+  const mostrando = grupos.reduce((n, g) => n + g.marcos.length, 0);
 
-  if (isLoading) return <Card title="Histórico" icon={History}><p className="py-6 text-center text-sm text-zinc-400">Montando a linha do tempo…</p></Card>;
-  if (error) return <Card title="Histórico" icon={History}><p className="py-6 text-center text-sm text-rose-500">{(error as Error).message}</p></Card>;
+  if (isLoading)
+    return <Card title="Histórico" icon={History}><p className="py-6 text-center text-sm text-zinc-400">Montando o histórico…</p></Card>;
+  if (error)
+    return <Card title="Histórico" icon={History}><p className="py-6 text-center text-sm text-rose-500">{(error as Error).message}</p></Card>;
 
   return (
-    <Card title={`Histórico do cliente (${marcos.length})`} icon={History}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-zinc-400">
-          Contrato, distribuição, andamentos, alvará e repasse na mesma linha.
+          Cada processo com a sua história: distribuição, andamentos, sentença, alvará e repasse.
         </p>
         <button
           type="button"
           onClick={() => setSoMarcos((v) => !v)}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:text-zinc-300"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
         >
-          {soMarcos ? `Mostrar tudo${ocultos > 0 ? ` (+${ocultos})` : ''}` : 'Só os marcos'}
+          {soMarcos ? `Mostrar tudo (${total - mostrando} a mais)` : 'Só os marcos'}
         </button>
       </div>
 
-      {marcos.length === 0 ? (
-        <p className="py-6 text-center text-sm text-zinc-400">
-          Nada registrado ainda para este cliente.
-        </p>
+      {grupos.length === 0 ? (
+        <Card title="Histórico" icon={History}>
+          <p className="py-6 text-center text-sm text-zinc-400">Nada registrado ainda para este cliente.</p>
+        </Card>
       ) : (
-        <ol className="relative space-y-0">
-          {/* Trilho vertical: é ele que faz a sequência ser lida como história */}
-          <span className="absolute bottom-2 left-[15px] top-2 w-px bg-zinc-200 dark:bg-zinc-800" />
-          {marcos.map((m, i) => (
-            <MarcoItem key={`${m.data}-${i}`} m={m} />
-          ))}
-        </ol>
+        grupos.map((g) => (
+          <div
+            key={g.caseId ?? 'relacionamento'}
+            className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_4px_12px_-4px_rgba(16,24,40,0.08)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none"
+          >
+            <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 bg-zinc-50/70 px-4 py-2.5 dark:border-zinc-800 dark:bg-zinc-800/40">
+              {g.caseId ? <Scale className="h-4 w-4 text-[#228BE6]" /> : <User className="h-4 w-4 text-[#868E96]" />}
+              {g.caseId ? (
+                <Link href={`/processos/${g.caseId}`} className="text-sm font-semibold text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-100">
+                  {g.titulo}
+                </Link>
+              ) : (
+                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{g.titulo}</span>
+              )}
+              {g.area && <span className="text-xs text-zinc-400">· {g.area}</span>}
+              {g.cnjNumber && <span className="text-xs text-zinc-400">· <CnjNumber value={g.cnjNumber} /></span>}
+              <span className="ml-auto rounded-full bg-white px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-zinc-500 dark:bg-zinc-900">
+                {g.marcos.length}
+              </span>
+            </div>
+            <ol className="relative px-4 py-2">
+              {/* Trilho vertical: é ele que faz a sequência ser lida como história */}
+              <span className="absolute bottom-4 left-[31px] top-4 w-px bg-zinc-200 dark:bg-zinc-800" />
+              {g.marcos.map((m, i) => (
+                <MarcoItem key={`${m.data}-${i}`} m={m} />
+              ))}
+            </ol>
+          </div>
+        ))
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -1501,10 +1603,13 @@ function MarcoItem({ m }: { m: Marco }) {
   const Icon = est.icon;
   const data = new Date(m.data);
   return (
-    <li className="relative flex gap-3 py-2.5 pl-0">
+    <li className="relative flex gap-3 py-2.5">
       <span
         className="relative z-10 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-4 ring-white dark:ring-zinc-900"
-        style={{ backgroundColor: m.destaque ? est.cor : 'transparent', border: m.destaque ? 'none' : `1.5px solid ${est.cor}` }}
+        style={{
+          backgroundColor: m.destaque ? est.cor : 'transparent',
+          border: m.destaque ? 'none' : `1.5px solid ${est.cor}`,
+        }}
       >
         <Icon className="h-4 w-4" style={{ color: m.destaque ? '#fff' : est.cor }} />
       </span>
@@ -1524,14 +1629,6 @@ function MarcoItem({ m }: { m: Marco }) {
           <span className="rounded px-1.5 py-0.5 font-medium" style={{ backgroundColor: `${est.cor}1a`, color: est.cor }}>
             {est.rotulo}
           </span>
-          {m.caseId && m.caseTitulo && (
-            <>
-              <span>·</span>
-              <Link href={`/processos/${m.caseId}`} className="truncate hover:text-[#228BE6] hover:underline" title={m.caseTitulo}>
-                {m.caseTitulo}
-              </Link>
-            </>
-          )}
           {m.detalhe && <span className="truncate">· {m.detalhe}</span>}
         </p>
       </div>

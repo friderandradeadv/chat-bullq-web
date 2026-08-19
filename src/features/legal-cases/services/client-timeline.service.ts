@@ -24,8 +24,19 @@ export interface Marco {
   documentoId?: string | null;
 }
 
+/** Um processo (ou o relacionamento com o escritório) com os seus marcos. */
+export interface GrupoTimeline {
+  caseId: string | null;
+  titulo: string;
+  cnjNumber: string | null;
+  area: string | null;
+  marcos: Marco[];
+}
+
 export const clientTimelineService = {
-  async get(partyId: string): Promise<{ cliente: string; marcos: Marco[] }> {
+  async get(
+    partyId: string,
+  ): Promise<{ cliente: string; marcos: Marco[]; grupos: GrupoTimeline[] }> {
     const { data } = await api.get(`/client-documents/timeline/${partyId}`);
     return data.data ?? data;
   },

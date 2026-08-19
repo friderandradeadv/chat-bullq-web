@@ -31,6 +31,8 @@ export interface ClientDocument {
   driveWebViewLink: string | null;
   origem: 'DRIVE_IMPORT' | 'ZAPSIGN' | string;
   assinadoEm: string | null;
+  /** `modifiedTime` do arquivo no Drive — proxy da data do documento. */
+  driveModifiedAt: string | null;
   atualizadoEm: string;
   caseId: string | null;
   /**
