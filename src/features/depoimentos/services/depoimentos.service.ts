@@ -1,7 +1,7 @@
 import { api } from '@/lib/api';
 
 export type DepoimentoStatus = 'SUGESTAO' | 'APROVADO' | 'DESCARTADO';
-export type DepoimentoOrigem = 'CHAT' | 'IA' | 'MANUAL';
+export type DepoimentoOrigem = 'CHAT' | 'IA' | 'MANUAL' | 'GOOGLE';
 
 export interface Depoimento {
   id: string;
@@ -92,6 +92,7 @@ export const ORIGEM_LABEL: Record<DepoimentoOrigem, string> = {
   CHAT: 'achado no chat',
   IA: 'achado pela IA',
   MANUAL: 'cadastrado à mão',
+  GOOGLE: '★ avaliação no Google',
 };
 
 function qs(params: object): string {
