@@ -33,6 +33,7 @@ import {
   Trash2,
   FileSignature,
   ExternalLink,
+  ClipboardCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService } from '@/features/inbox/services/inbox.service';
@@ -158,6 +159,20 @@ export default function ClienteDetailPage() {
     enabled: !!cliente,
   });
   const qtdDocs = docsDoCliente.length;
+  const temContrato = docsDoCliente.some((d) => d.categoria === 'CONTRATO');
+  const docPrincipal = cadastro?.cpf || cadastro?.cnpj || cliente?.document || null;
+
+  // Resumo financeiro para a faixa de indicadores. Mesma chave do cartão da aba
+  // Financeiro, então o React Query serve do cache em vez de buscar duas vezes.
+  const { data: dashFin } = useQuery({
+    queryKey: ['financeiro', 'dashboard'],
+    queryFn: () => financeiroService.dashboard(),
+    staleTime: 60_000,
+  });
+  const fin = useMemo(
+    () => (cliente ? clienteFinanceiro(dashFin, cliente.name) : null),
+    [dashFin, cliente],
+  );
 
   if (!id) return null;
   if (isLoading)
@@ -167,29 +182,112 @@ export default function ClienteDetailPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-      {/* Cabeçalho fixo: quem é o cliente não some ao rolar a aba */}
+      {/* ── Topo fixo: quem é o cliente não some ao rolar a aba ── */}
       <div className="shrink-0 border-b border-[#DEE2E6] px-4 pt-3 lg:px-6 dark:border-zinc-800">
         <button onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-[#228BE6]">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
-        <div className="flex items-center gap-3">
-          <ClienteAvatar
-            nome={cliente.name}
-            avatarUrl={contact?.avatarUrl ?? null}
-            contactId={contact?.id ?? null}
-            onSynced={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
-          />
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl font-medium text-[#202124] dark:text-zinc-100">{cliente.name}</h1>
-            <p className="text-sm text-zinc-500">
-              Cliente · {meusCasos.length} processo(s) conosco
-              {cliente.document ? ` · ${cliente.document}` : ''}
-            </p>
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <ClienteAvatar
+              nome={cliente.name}
+              avatarUrl={contact?.avatarUrl ?? null}
+              contactId={contact?.id ?? null}
+              onSynced={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
+            />
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-medium text-[#202124] dark:text-zinc-100">
+                {cliente.name}
+              </h1>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500">
+                <span>Cliente</span>
+                {docPrincipal && (
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-1">
+                      {docPrincipal}
+                      <CopyBtn value={docPrincipal} />
+                    </span>
+                  </>
+                )}
+                {contact?.phone && (
+                  <>
+                    <span>·</span>
+                    <span>{formatPhone(contact.phone)}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Etiquetas logo abaixo do nome — mesma lógica da ficha do processo */}
+              <div className="mt-2">
+                {contact ? (
+                  <TagsEditor
+                    contactId={contact.id}
+                    tags={contact.tags}
+                    onChanged={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
+                  />
+                ) : (
+                  <span className="text-xs text-zinc-400">
+                    Etiquetas disponíveis após vincular o cliente a um contato do Comercial
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Ações rápidas: o que se faz de fato ao abrir um cliente */}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <CopiarQualificacao nome={cliente.name} cadastro={cadastro} />
+            {contact?.conversationId && (
+              <Link
+                href={`/inbox?conversationId=${contact.conversationId}`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
+              </Link>
+            )}
           </div>
         </div>
 
-        {/* Abas: a ficha inteira numa tela só virou rolagem sem fim */}
-        <nav className="-mb-px mt-3 flex gap-1 overflow-x-auto">
+        {/* ── Faixa de indicadores: clicar leva à aba correspondente ── */}
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Indicador
+            label="Processos"
+            valor={String(meusCasos.length)}
+            detalhe={gruposCasos.andamento.length ? `${gruposCasos.andamento.length} em andamento` : 'nenhum em andamento'}
+            icon={Scale}
+            cor="#228BE6"
+            onClick={() => setAba('processos')}
+          />
+          <Indicador
+            label="Documentos"
+            valor={String(qtdDocs)}
+            detalhe={temContrato ? 'contrato na ficha' : 'sem contrato ainda'}
+            icon={FolderOpen}
+            cor={temContrato ? '#2F9E44' : '#868E96'}
+            onClick={() => setAba('documentos')}
+          />
+          <Indicador
+            label="Recebido"
+            valor={fin ? brlc(fin.recebido) : '—'}
+            detalhe={fin ? `${fin.n} pagamento(s)` : 'sem lançamentos'}
+            icon={CircleDollarSign}
+            cor="#2F9E44"
+            onClick={() => setAba('financeiro')}
+          />
+          <Indicador
+            label="Situação"
+            valor={fin ? STATUS_FIN[fin.status].label : '—'}
+            detalhe={fin ? STATUS_FIN[fin.status].dica : 'sem histórico financeiro'}
+            icon={CircleDollarSign}
+            cor={fin ? STATUS_FIN[fin.status].cor : '#868E96'}
+            onClick={() => setAba('financeiro')}
+          />
+        </div>
+
+        {/* ── Abas ── */}
+        <nav className="-mb-px mt-4 flex gap-1 overflow-x-auto">
           {ABAS.map((a) => {
             const ativa = aba === a.key;
             const n = a.key === 'processos' ? meusCasos.length : a.key === 'documentos' ? qtdDocs : null;
@@ -222,13 +320,13 @@ export default function ClienteDetailPage() {
       <div className="flex-1 overflow-y-auto px-4 py-5 lg:px-6">
         {aba === 'dados' && (
           <div className="grid gap-5 lg:grid-cols-2">
-            {/* Esquerda: o que mais se consulta no dia a dia — CPF, RG, endereço
-                e a senha do gov.br. Antes ficava do lado direito, atrás da ficha. */}
+            {/* QUALIFICAÇÃO — o que identifica a pessoa numa petição (CPF, RG,
+                estado civil, profissão, endereço). Vem do cadastro extraído da
+                procuração / migrado do Pipefy. */}
             <div className="space-y-5">
-              {cadastro &&
-                (cadastro.cpf || cadastro.cnpj || cadastro.rg || cadastro.endereco ||
-                  cadastro.login || cadastro.senha || cadastro.estadoCivil || cadastro.profissao) && (
-                  <Card title="Dados cadastrais" icon={IdCard}>
+              <Card title="Qualificação" icon={IdCard}>
+                {cadastro && (cadastro.cpf || cadastro.cnpj || cadastro.rg || cadastro.endereco || cadastro.estadoCivil || cadastro.profissao) ? (
+                  <>
                     <dl className="space-y-3 text-sm">
                       <DataRow icon={Fingerprint} label="CPF" value={cadastro.cpf} copyable />
                       <DataRow icon={IdCard} label="CNPJ" value={cadastro.cnpj} copyable />
@@ -236,54 +334,53 @@ export default function ClienteDetailPage() {
                       <DataRow icon={User} label="Estado civil" value={cadastro.estadoCivil} />
                       <DataRow icon={User} label="Profissão" value={cadastro.profissao} />
                       <DataRow icon={MapPin} label="Endereço" value={cadastro.endereco} copyable />
-                      <DataRow icon={KeyRound} label="Login gov.br / Meu INSS" value={cadastro.login} copyable />
-                      <DataRow icon={KeyRound} label="Senha gov.br / Meu INSS" value={cadastro.senha} copyable secret />
                     </dl>
-                  </Card>
-                )}
-            </div>
-
-            <div className="space-y-5">
-              <Card title="Ficha cadastral" icon={User}>
-                {contact ? (
-                  <>
-                    <dl className="space-y-3 text-sm">
-                      <Row icon={Phone} label="Telefone" value={formatPhone(contact.phone)} />
-                      <Row icon={Mail} label="E-mail" value={contact.email} />
-                      {contact.notes && <Row icon={FileText} label="Observações" value={contact.notes} />}
-                      {contact.status && (
-                        <div className="flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
-                          <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
-                        </div>
-                      )}
-                    </dl>
-                    {contact.conversationId && (
-                      <Link
-                        href={`/inbox?conversationId=${contact.conversationId}`}
-                        className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
-                      </Link>
-                    )}
+                    <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                      <CopiarQualificacao nome={cliente.name} cadastro={cadastro} largo />
+                    </div>
                   </>
                 ) : (
                   <p className="text-sm text-zinc-400">
-                    Cliente ainda sem ficha no Comercial. Quando houver um contato com o mesmo nome (ou ao
-                    vincular), a ficha cadastral e as etiquetas aparecem aqui.
+                    Sem qualificação cadastrada. Ela é extraída da procuração assinada ou veio da
+                    migração do Pipefy.
                   </p>
                 )}
               </Card>
 
-              <Card title="Etiquetas" icon={TagIcon}>
+              {/* ACESSOS — credencial de terceiro (gov.br / Meu INSS). Separada de
+                  propósito: é o dado mais sensível da ficha e não deve ficar
+                  misturado com telefone e e-mail. */}
+              {(cadastro?.login || cadastro?.senha) && (
+                <Card title="Acessos gov.br / Meu INSS" icon={KeyRound}>
+                  <dl className="space-y-3 text-sm">
+                    <DataRow icon={KeyRound} label="Login" value={cadastro.login} copyable />
+                    <DataRow icon={KeyRound} label="Senha" value={cadastro.senha} copyable secret />
+                  </dl>
+                </Card>
+              )}
+            </div>
+
+            {/* CONTATO — como se fala com a pessoa. Vem do Comercial (Contact),
+                fonte diferente da qualificação. */}
+            <div className="space-y-5">
+              <Card title="Contato" icon={MessageCircle}>
                 {contact ? (
-                  <TagsEditor
-                    contactId={contact.id}
-                    tags={contact.tags}
-                    onChanged={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
-                  />
+                  <dl className="space-y-3 text-sm">
+                    <Row icon={Phone} label="Telefone" value={formatPhone(contact.phone)} />
+                    <Row icon={Mail} label="E-mail" value={contact.email} />
+                    {contact.notes && <Row icon={FileText} label="Observações" value={contact.notes} />}
+                    {contact.status && (
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
+                        <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
+                      </div>
+                    )}
+                  </dl>
                 ) : (
-                  <p className="text-sm text-zinc-400">Disponível após vincular o cliente a um contato do Comercial.</p>
+                  <p className="text-sm text-zinc-400">
+                    Cliente ainda sem ficha no Comercial. Quando houver um contato com o mesmo nome
+                    (ou ao vincular), telefone, e-mail e etiquetas aparecem aqui.
+                  </p>
                 )}
               </Card>
             </div>
@@ -1136,5 +1233,128 @@ function DocumentosCard({
         </div>
       )}
     </Card>
+  );
+}
+
+
+/**
+ * Cartão de indicador do topo. Clicar leva à aba correspondente — a faixa é
+ * atalho, não enfeite: quem abre um cliente quer saber em quantos processos ele
+ * está, se o contrato já está na ficha e quanto já entrou.
+ */
+function Indicador({
+  label,
+  valor,
+  detalhe,
+  icon: Icon,
+  cor,
+  onClick,
+}: {
+  label: string;
+  valor: string;
+  detalhe: string;
+  icon: React.ElementType;
+  cor: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group rounded-lg border border-[#DEE2E6] bg-white px-3 py-2 text-left transition hover:border-[#228BE6] hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+    >
+      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#6C757D]">
+        <Icon className="h-3.5 w-3.5" style={{ color: cor }} />
+        {label}
+      </span>
+      <span className="mt-0.5 block truncate text-lg font-semibold tabular-nums" style={{ color: cor }}>
+        {valor}
+      </span>
+      <span className="block truncate text-[11px] text-zinc-400">{detalhe}</span>
+    </button>
+  );
+}
+
+/**
+ * Monta e copia a QUALIFICAÇÃO da parte no formato que vai no preâmbulo da
+ * petição. É o dado que mais se copia à mão da ficha, campo por campo — aqui sai
+ * pronto, na ordem do costume forense.
+ *
+ * Só usa o que está cadastrado: campo em branco é OMITIDO da frase e listado
+ * como pendência embaixo do botão, para o advogado ver o que falta antes de
+ * colar. A nacionalidade não existe no cadastro e vai como "brasileiro(a)" —
+ * está avisado no aviso de pendências, porque é o único trecho presumido.
+ */
+function montarQualificacao(nome: string, c: Cadastro | null): { texto: string; faltando: string[] } {
+  const partes: string[] = [nome.trim().toUpperCase()];
+  const faltando: string[] = ['nacionalidade (presumida "brasileiro(a)")'];
+
+  partes.push('brasileiro(a)');
+  if (c?.estadoCivil) partes.push(c.estadoCivil.toLowerCase());
+  else faltando.push('estado civil');
+  if (c?.profissao) partes.push(c.profissao.toLowerCase());
+  else faltando.push('profissão');
+  if (c?.rg) partes.push(`portador(a) da cédula de identidade RG nº ${c.rg.trim()}`);
+  else faltando.push('RG');
+  if (c?.cpf) partes.push(`inscrito(a) no CPF sob o nº ${c.cpf.trim()}`);
+  else if (c?.cnpj) partes.push(`inscrito(a) no CNPJ sob o nº ${c.cnpj.trim()}`);
+  else faltando.push('CPF');
+  if (c?.endereco) partes.push(`residente e domiciliado(a) na ${c.endereco.trim()}`);
+  else faltando.push('endereço');
+
+  return { texto: partes.join(', '), faltando };
+}
+
+function CopiarQualificacao({
+  nome,
+  cadastro,
+  largo,
+}: {
+  nome: string;
+  cadastro: Cadastro | null;
+  largo?: boolean;
+}) {
+  const [copiado, setCopiado] = useState(false);
+  const { texto, faltando } = useMemo(() => montarQualificacao(nome, cadastro), [nome, cadastro]);
+
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(true);
+      toast.success('Qualificação copiada — confira antes de colar na peça.');
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      toast.error('Não consegui copiar.');
+    }
+  };
+
+  const botao = (
+    <button
+      type="button"
+      onClick={copiar}
+      title={texto}
+      className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:text-zinc-300"
+    >
+      {copiado ? <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+      {copiado ? 'Copiado' : 'Copiar qualificação'}
+    </button>
+  );
+
+  if (!largo) return botao;
+
+  return (
+    <div>
+      <p className="mb-2 rounded-md bg-zinc-50 px-3 py-2 text-xs leading-relaxed text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400">
+        {texto}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {botao}
+        {faltando.length > 0 && (
+          <span className="text-[11px] text-amber-600 dark:text-amber-400">
+            confira: {faltando.join(', ')}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
