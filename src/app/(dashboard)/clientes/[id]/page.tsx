@@ -253,7 +253,7 @@ export default function ClienteDetailPage() {
     const anos = meusCasos.map((c) => anoDoCnj(c.cnjNumber)).filter((a): a is number => a != null);
     if (!anos.length) return null;
     // Só o ANO é conhecido — dizer "há 2 anos e 7 meses" seria precisão falsa.
-    return `cliente desde ${Math.min(...anos)}`;
+    return `conosco desde ${Math.min(...anos)}`;
   }, [docsDoCliente, meusCasos]);
 
   // Resumo financeiro para a faixa de indicadores. Mesma chave do cartão da aba
@@ -313,7 +313,7 @@ export default function ClienteDetailPage() {
                   <>
                     <span>·</span>
                     <span title="pela assinatura do contrato; sem ela, pelo ano do número CNJ">
-                      {conosco.startsWith('cliente desde') ? conosco : `${conosco} conosco`}
+                      {conosco.startsWith('conosco desde') ? conosco : `${conosco} conosco`}
                     </span>
                   </>
                 )}
