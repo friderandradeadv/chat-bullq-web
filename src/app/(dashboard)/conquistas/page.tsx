@@ -33,6 +33,7 @@ import {
 } from '@/features/depoimentos/services/depoimentos.service';
 import { titleCaseName } from '@/lib/names';
 import { trechoDeGratidao } from '@/features/depoimentos/lib/trecho-gratidao';
+import { AutomacaoFeedback } from '@/features/depoimentos/components/automacao-feedback';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
 
 const brl = (n: number | null | undefined) =>
@@ -614,6 +615,8 @@ export default function ConquistasPage() {
             hint="valores que os próprios clientes contaram"
           />
         </div>
+
+        <AutomacaoFeedback />
 
         {/* Abas + filtros */}
         <div className="mt-5 flex flex-wrap items-center gap-2">

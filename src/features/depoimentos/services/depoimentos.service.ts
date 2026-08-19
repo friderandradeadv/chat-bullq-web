@@ -48,6 +48,16 @@ export interface DepoimentoStats {
   porArea: { nome: string; total: number }[];
 }
 
+export interface ConquistasConfig {
+  /** Liga o pedido automático de feedback depois da prestação de contas. */
+  pedirFeedback: boolean;
+  diasFeedback: number;
+  diasAvaliacao: number;
+  googleUrl: string;
+  textoFeedback: string;
+  textoAvaliacao: string;
+}
+
 export interface VarreduraResult {
   analisadas: number;
   candidatos: number;
@@ -113,6 +123,14 @@ export const depoimentosService = {
   },
   async stats(): Promise<DepoimentoStats> {
     const { data } = await api.get('/depoimentos/stats');
+    return data.data ?? data;
+  },
+  async getConfig(): Promise<ConquistasConfig> {
+    const { data } = await api.get('/depoimentos/config');
+    return data.data ?? data;
+  },
+  async setConfig(input: Partial<ConquistasConfig>): Promise<ConquistasConfig> {
+    const { data } = await api.patch('/depoimentos/config', input);
     return data.data ?? data;
   },
   /** Busca no WhatsApp a foto de quem está no mural sem avatar. */
