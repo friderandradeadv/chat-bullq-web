@@ -1187,23 +1187,11 @@ export default function InicioPage() {
           </div>
         )}
 
-        {/* Casos que pedem atenção — largura total */}
-        {mounted && <CasosParaAtencao />}
-
-        {/* Frase + Dica do dia */}
-        {mounted && (
-          <div className="welcome-pop mt-9 grid gap-3 text-left sm:grid-cols-2" style={{ animationDelay: '0.3s' }}>
-            <div key={'q' + quoteIdx} className="welcome-pop rounded-2xl border border-zinc-200/60 bg-white/60 px-4 py-3.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/50">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#7048E8]"><Quote className="h-3.5 w-3.5" />Frase do dia</div>
-              <p className="mt-1.5 text-sm font-medium italic leading-relaxed text-zinc-600 dark:text-zinc-300">"{quote.t}"</p>
-              <p className="mt-1 text-xs font-semibold text-zinc-400">— {quote.a}</p>
-            </div>
-            <div key={'d' + dicaIdx} className="welcome-pop rounded-2xl border border-zinc-200/60 bg-white/60 px-4 py-3.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/50">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#F59F00]"><Lightbulb className="h-3.5 w-3.5" />Dica do dia</div>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{dica}</p>
-            </div>
-          </div>
-        )}
+        {/* Removidos do Início a pedido do Matheus (19/08/2026 — "está muito
+            poluído"): o bloco "Casos que pedem atenção" (Pré-Processual e REPB)
+            e os cartões Frase do dia / Dica do dia. O componente e o sorteio das
+            frases continuam no arquivo — voltar é só reinserir estas linhas. Os
+            casos seguem visíveis nos kanbans de Pré-Processual e REPB. */}
 
         {/* Notícias do dia — mundo + jurídico (no fim da página, colapsável, clicável) */}
         {mounted && <HojeNoMundo />}
