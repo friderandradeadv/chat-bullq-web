@@ -28,9 +28,21 @@ import {
   Loader2,
   Paperclip,
   ReceiptText,
+  FolderOpen,
+  Download,
+  RefreshCw,
+  Trash2,
+  FileSignature,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { inboxService } from '@/features/inbox/services/inbox.service';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
+import {
+  clientDocumentsService,
+  CATEGORIA_LABEL,
+  type ClientDocument,
+} from '@/features/legal-cases/services/client-documents.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { financeiroService, anexoHref } from '@/features/financeiro/services/financeiro.service';
@@ -135,9 +147,12 @@ export default function ClienteDetailPage() {
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
         <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#228BE6]/10 text-lg font-semibold text-[#228BE6]">
-            {cliente.name.trim().slice(0, 2).toUpperCase()}
-          </span>
+          <ClienteAvatar
+            nome={cliente.name}
+            avatarUrl={contact?.avatarUrl ?? null}
+            contactId={contact?.id ?? null}
+            onSynced={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
+          />
           <div>
             <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{cliente.name}</h1>
             <p className="text-sm text-zinc-500">
@@ -258,6 +273,16 @@ export default function ClienteDetailPage() {
               </div>
             )}
           </Card>
+
+          {/* Documentos do cliente vindos do Drive (contrato, procuração, docs pessoais) */}
+          <div className="mt-5">
+            <DocumentosCard
+              nome={cliente.name}
+              partyId={cliente.partyId}
+              contactId={contact?.id ?? null}
+              documento={cadastro?.cpf || cadastro?.cnpj || cliente.document || null}
+            />
+          </div>
 
           {/* Financeiro do cliente — honorários vinculados aos lançamentos */}
           <div className="mt-5">
@@ -768,5 +793,289 @@ function DataRow({ icon: Icon, label, value, copyable, secret }: { icon?: React.
         </dd>
       </div>
     </div>
+  );
+}
+
+/**
+ * Foto do cliente no cabeçalho da ficha. A foto vem do WhatsApp, já re-hospedada
+ * no nosso domínio pelo enricher (o link cru do WhatsApp é CDN de curta duração
+ * e quebra depois). Sem foto: iniciais, com um botão discreto pra buscar agora.
+ */
+function ClienteAvatar({
+  nome,
+  avatarUrl,
+  contactId,
+  onSynced,
+}: {
+  nome: string;
+  avatarUrl: string | null;
+  contactId: string | null;
+  onSynced: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [quebrou, setQuebrou] = useState(false);
+  const temFoto = !!avatarUrl && !quebrou;
+
+  const buscar = async () => {
+    if (!contactId) return;
+    setBusy(true);
+    try {
+      const { avatarUrl: nova } = await inboxService.syncContactAvatar(contactId);
+      if (nova) {
+        setQuebrou(false);
+        toast.success('Foto atualizada do WhatsApp.');
+        onSynced();
+      } else {
+        toast.info('Esse cliente não tem foto de perfil pública no WhatsApp.');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Não consegui buscar a foto no WhatsApp.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="group relative h-12 w-12 shrink-0">
+      {temFoto ? (
+        <img
+          src={avatarUrl!}
+          alt={nome}
+          onError={() => setQuebrou(true)}
+          className="h-12 w-12 rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-700"
+        />
+      ) : (
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#228BE6]/10 text-lg font-semibold text-[#228BE6]">
+          {nome.trim().slice(0, 2).toUpperCase()}
+        </span>
+      )}
+      {contactId && (
+        <button
+          type="button"
+          onClick={buscar}
+          disabled={busy}
+          title={temFoto ? 'Atualizar a foto pelo WhatsApp' : 'Buscar a foto no WhatsApp'}
+          className="absolute -bottom-0.5 -right-0.5 rounded-full border border-zinc-200 bg-white p-1 text-zinc-400 opacity-0 shadow-sm transition group-hover:opacity-100 hover:text-[#228BE6] disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Ícone e cor por categoria — contrato salta à vista, o resto fica sóbrio. */
+const ESTILO_CATEGORIA: Record<string, { cor: string; chip: string }> = {
+  CONTRATO: { cor: '#2F9E44', chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  PROCURACAO: { cor: '#228BE6', chip: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  HIPOSSUFICIENCIA: { cor: '#7048E8', chip: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
+  RENUNCIA: { cor: '#7048E8', chip: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
+  RESIDENCIA: { cor: '#F59F00', chip: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  PESSOAL: { cor: '#F59F00', chip: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+  KIT: { cor: '#868E96', chip: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' },
+  PROCESSO: { cor: '#868E96', chip: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' },
+  OUTRO: { cor: '#868E96', chip: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' },
+};
+
+const tamanhoLegivel = (b: number | null) => {
+  if (!b) return null;
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+/**
+ * Documentos do cliente que moram no Google Drive — contrato de honorários,
+ * procuração, hipossuficiência e os documentos pessoais (RG/CNH/comprovante).
+ *
+ * O arquivo NÃO é copiado pro hub: a ficha guarda o ponteiro e a API baixa do
+ * Drive na hora, atrás da autenticação. Por isso "Excluir" tira só daqui — no
+ * Drive o arquivo continua.
+ */
+function DocumentosCard({
+  nome,
+  partyId,
+  contactId,
+  documento,
+}: {
+  nome: string;
+  partyId: string;
+  contactId: string | null;
+  documento: string | null;
+}) {
+  const qc = useQueryClient();
+  const [abrindo, setAbrindo] = useState<string | null>(null);
+  const [importando, setImportando] = useState(false);
+
+  const chave = ['client-documents', partyId, contactId, documento] as const;
+  const { data: docs = [], isLoading } = useQuery({
+    queryKey: chave,
+    queryFn: () =>
+      clientDocumentsService.list({
+        partyId,
+        contactId: contactId ?? undefined,
+        cliente: nome,
+        documento: documento ?? undefined,
+      }),
+  });
+
+  // Contrato e afins em cima; documentos pessoais logo abaixo, separados —
+  // é como o advogado procura (primeiro o que assina, depois o que qualifica).
+  const { escritorio, pessoais } = useMemo(() => {
+    const pes = new Set(['PESSOAL', 'RESIDENCIA']);
+    return {
+      escritorio: docs.filter((d) => !pes.has(d.categoria)),
+      pessoais: docs.filter((d) => pes.has(d.categoria)),
+    };
+  }, [docs]);
+
+  const abrir = async (d: ClientDocument) => {
+    setAbrindo(d.id);
+    try {
+      const { url } = await clientDocumentsService.abrir(d.id);
+      window.open(url, '_blank', 'noopener');
+    } catch (e: any) {
+      toast.error(e?.message || 'Não consegui abrir o documento.');
+    } finally {
+      setAbrindo(null);
+    }
+  };
+
+  const importar = async () => {
+    setImportando(true);
+    try {
+      const r = await clientDocumentsService.importar({ apenasCliente: nome });
+      await qc.invalidateQueries({ queryKey: ['client-documents'] });
+      if (!r.pastasVarridas) toast.info(`Nenhuma pasta de "${nome}" encontrada em 01.CLIENTES.`);
+      else if (r.indexados) toast.success(`${r.indexados} documento(s) importado(s) do Drive.`);
+      else toast.info('Nada novo — os documentos do Drive já estavam na ficha.');
+      if (r.erros.length) toast.warning(r.erros[0]);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao importar do Drive.');
+    } finally {
+      setImportando(false);
+    }
+  };
+
+  const remover = async (d: ClientDocument) => {
+    if (!confirm(`Tirar "${d.nome}" da ficha?\n\nO arquivo CONTINUA no Google Drive — some só daqui.`))
+      return;
+    try {
+      await clientDocumentsService.remover(d.id);
+      await qc.invalidateQueries({ queryKey: ['client-documents'] });
+      toast.success('Removido da ficha (o arquivo continua no Drive).');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao remover.');
+    }
+  };
+
+  const Linha = ({ d }: { d: ClientDocument }) => {
+    const est = ESTILO_CATEGORIA[d.categoria] ?? ESTILO_CATEGORIA.OUTRO;
+    const tam = tamanhoLegivel(d.tamanho);
+    return (
+      <li className="flex items-start gap-2 px-3 py-2.5">
+        <FileSignature className="mt-0.5 h-4 w-4 shrink-0" style={{ color: est.cor }} />
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => abrir(d)}
+            disabled={abrindo === d.id}
+            className="block max-w-full truncate text-left text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline disabled:opacity-60 dark:text-zinc-200"
+            title={d.nome}
+          >
+            {abrindo === d.id && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
+            {d.nome}
+          </button>
+          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+            <span className={`rounded px-1.5 py-0.5 font-medium ${est.chip}`}>
+              {CATEGORIA_LABEL[d.categoria] ?? 'Documento'}
+            </span>
+            {d.origem === 'ZAPSIGN' && <span title="Assinado pelo ZapSign">· assinado</span>}
+            {d.assinadoEm && <span>· {new Date(d.assinadoEm).toLocaleDateString('pt-BR')}</span>}
+            {tam && <span>· {tam}</span>}
+            {d.drivePath && <span className="truncate">· {d.drivePath}</span>}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => abrir(d)}
+            title="Abrir / baixar"
+            className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+          {d.driveWebViewLink && (
+            <a
+              href={d.driveWebViewLink}
+              target="_blank"
+              rel="noreferrer"
+              title="Abrir no Google Drive"
+              className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => remover(d)}
+            title="Tirar da ficha (não apaga no Drive)"
+            className="rounded p-1.5 text-zinc-300 hover:bg-rose-50 hover:text-rose-500 dark:text-zinc-600 dark:hover:bg-rose-900/20"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </li>
+    );
+  };
+
+  const Bloco = ({ titulo, lista }: { titulo: string; lista: ClientDocument[] }) =>
+    lista.length === 0 ? null : (
+      <div className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+        <div className="flex items-center gap-2 bg-zinc-50 px-3 py-2 dark:bg-zinc-800/40">
+          <span className="text-sm font-bold text-zinc-500 dark:text-zinc-400">{titulo}</span>
+          <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-zinc-500 dark:bg-zinc-900/60">
+            {lista.length}
+          </span>
+        </div>
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {lista.map((d) => (
+            <Linha key={d.id} d={d} />
+          ))}
+        </ul>
+      </div>
+    );
+
+  return (
+    <Card title={`Documentos (${docs.length})`} icon={FolderOpen}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs text-zinc-400">
+          Os arquivos ficam no Google Drive — a ficha só mostra e abre. Remover aqui não apaga lá.
+        </p>
+        <button
+          type="button"
+          onClick={importar}
+          disabled={importando}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#DEE2E6] px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300"
+        >
+          {importando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          Importar do Drive
+        </button>
+      </div>
+
+      {isLoading ? (
+        <p className="py-6 text-center text-sm text-zinc-400">Carregando…</p>
+      ) : docs.length === 0 ? (
+        <p className="py-6 text-center text-sm text-zinc-400">
+          Nenhum documento na ficha. Clique em <strong className="font-medium">Importar do Drive</strong> para
+          trazer o contrato de honorários e os documentos pessoais da pasta deste cliente.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          <Bloco titulo="Contrato e documentos assinados" lista={escritorio} />
+          <Bloco titulo="Documentos pessoais" lista={pessoais} />
+        </div>
+      )}
+    </Card>
   );
 }
