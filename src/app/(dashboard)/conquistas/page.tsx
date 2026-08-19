@@ -22,6 +22,7 @@ import {
   Pencil,
   ExternalLink,
   ShieldAlert,
+  Trophy,
 } from 'lucide-react';
 import {
   depoimentosService,
@@ -542,9 +543,24 @@ export default function ConquistasPage() {
         </p>
 
         {/* Placar */}
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
           <Placar erro={statsErro} icon={Heart} color="#E64980" value={stats?.total ?? 0} label="histórias" hint={stats?.noMes ? `${stats.noMes} neste mês` : undefined} />
-          <Placar erro={statsErro} icon={Users} color="#7048E8" value={stats?.vidas ?? 0} label="vidas alcançadas" hint="pessoas diferentes" />
+          <Placar
+            erro={statsErro}
+            icon={Trophy}
+            color="#02883C"
+            value={stats?.vitorias ?? 0}
+            label="ações vencidas"
+            hint="favoráveis e ganhas"
+          />
+          <Placar
+            erro={statsErro}
+            icon={Users}
+            color="#7048E8"
+            value={stats?.vidas ?? 0}
+            label="vidas alcançadas"
+            hint="pessoas com vitória ou depoimento"
+          />
           <Placar
             erro={statsErro}
             icon={HandCoins}

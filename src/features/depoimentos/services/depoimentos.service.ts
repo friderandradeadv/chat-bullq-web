@@ -34,6 +34,8 @@ export interface Depoimento {
 
 export interface DepoimentoStats {
   total: number;
+  /** Ações com desfecho favorável (vitória conta como história, mesmo sem mensagem). */
+  vitorias: number;
   sugestoes: number;
   vidas: number;
   noMes: number;
