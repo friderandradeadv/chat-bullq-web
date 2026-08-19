@@ -13,7 +13,6 @@ import {
   MessageCircle,
   Rss,
   Plus,
-  X,
   Check,
   Tag as TagIcon,
   FileText,
@@ -48,7 +47,7 @@ import { tagsService } from '@/features/settings/services/tags.service';
 import { financeiroService, anexoHref } from '@/features/financeiro/services/financeiro.service';
 import { clienteFinanceiro, STATUS_FIN } from '@/features/financeiro/lib/clientes';
 import { formatPhone } from '@/lib/brazil-states';
-import { CnjNumber, ASTREA_BLUE } from '../../processos/page';
+import { CnjNumber, ASTREA_BLUE, LegalTagChip } from '../../processos/page';
 
 const brlc = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -223,64 +222,70 @@ export default function ClienteDetailPage() {
       <div className="flex-1 overflow-y-auto px-4 py-5 lg:px-6">
         {aba === 'dados' && (
           <div className="grid gap-5 lg:grid-cols-2">
+            {/* Esquerda: o que mais se consulta no dia a dia — CPF, RG, endereço
+                e a senha do gov.br. Antes ficava do lado direito, atrás da ficha. */}
+            <div className="space-y-5">
+              {cadastro &&
+                (cadastro.cpf || cadastro.cnpj || cadastro.rg || cadastro.endereco ||
+                  cadastro.login || cadastro.senha || cadastro.estadoCivil || cadastro.profissao) && (
+                  <Card title="Dados cadastrais" icon={IdCard}>
+                    <dl className="space-y-3 text-sm">
+                      <DataRow icon={Fingerprint} label="CPF" value={cadastro.cpf} copyable />
+                      <DataRow icon={IdCard} label="CNPJ" value={cadastro.cnpj} copyable />
+                      <DataRow icon={IdCard} label="RG" value={cadastro.rg} copyable />
+                      <DataRow icon={User} label="Estado civil" value={cadastro.estadoCivil} />
+                      <DataRow icon={User} label="Profissão" value={cadastro.profissao} />
+                      <DataRow icon={MapPin} label="Endereço" value={cadastro.endereco} copyable />
+                      <DataRow icon={KeyRound} label="Login gov.br / Meu INSS" value={cadastro.login} copyable />
+                      <DataRow icon={KeyRound} label="Senha gov.br / Meu INSS" value={cadastro.senha} copyable secret />
+                    </dl>
+                  </Card>
+                )}
+            </div>
+
             <div className="space-y-5">
               <Card title="Ficha cadastral" icon={User}>
-                          {contact ? (
-                            <>
-                              <dl className="space-y-3 text-sm">
-                                <Row icon={Phone} label="Telefone" value={formatPhone(contact.phone)} />
-                                <Row icon={Mail} label="E-mail" value={contact.email} />
-                                {contact.notes && <Row icon={FileText} label="Observações" value={contact.notes} />}
-                                {contact.status && (
-                                  <div className="flex items-center gap-2">
-                                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
-                                    <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
-                                  </div>
-                                )}
-                              </dl>
-                              {contact.conversationId && (
-                                <Link
-                                  href={`/inbox?conversationId=${contact.conversationId}`}
-                                  className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-                                >
-                                  <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
-                                </Link>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-sm text-zinc-400">
-                              Cliente ainda sem ficha no Comercial. Quando houver um contato com o mesmo nome (ou ao
-                              vincular), a ficha cadastral e as etiquetas aparecem aqui.
-                            </p>
-                          )}
-                        </Card>
-            </div>
-            <div className="space-y-5">
-              {cadastro && (cadastro.cpf || cadastro.cnpj || cadastro.rg || cadastro.endereco || cadastro.login || cadastro.senha || cadastro.estadoCivil || cadastro.profissao) && (
-                          <Card title="Dados cadastrais" icon={IdCard}>
-                            <dl className="space-y-3 text-sm">
-                              <DataRow icon={Fingerprint} label="CPF" value={cadastro.cpf} copyable />
-                              <DataRow icon={IdCard} label="CNPJ" value={cadastro.cnpj} copyable />
-                              <DataRow icon={IdCard} label="RG" value={cadastro.rg} copyable />
-                              <DataRow icon={User} label="Estado civil" value={cadastro.estadoCivil} />
-                              <DataRow icon={User} label="Profissão" value={cadastro.profissao} />
-                              <DataRow icon={MapPin} label="Endereço" value={cadastro.endereco} copyable />
-                              <DataRow icon={KeyRound} label="Login gov.br / Meu INSS" value={cadastro.login} copyable />
-                              <DataRow icon={KeyRound} label="Senha gov.br / Meu INSS" value={cadastro.senha} copyable secret />
-                            </dl>
-                          </Card>
-                        )}
+                {contact ? (
+                  <>
+                    <dl className="space-y-3 text-sm">
+                      <Row icon={Phone} label="Telefone" value={formatPhone(contact.phone)} />
+                      <Row icon={Mail} label="E-mail" value={contact.email} />
+                      {contact.notes && <Row icon={FileText} label="Observações" value={contact.notes} />}
+                      {contact.status && (
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
+                          <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
+                        </div>
+                      )}
+                    </dl>
+                    {contact.conversationId && (
+                      <Link
+                        href={`/inbox?conversationId=${contact.conversationId}`}
+                        className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
+                      </Link>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-zinc-400">
+                    Cliente ainda sem ficha no Comercial. Quando houver um contato com o mesmo nome (ou ao
+                    vincular), a ficha cadastral e as etiquetas aparecem aqui.
+                  </p>
+                )}
+              </Card>
+
               <Card title="Etiquetas" icon={TagIcon}>
-                          {contact ? (
-                            <TagsEditor
-                              contactId={contact.id}
-                              tags={contact.tags}
-                              onChanged={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
-                            />
-                          ) : (
-                            <p className="text-sm text-zinc-400">Disponível após vincular o cliente a um contato do Comercial.</p>
-                          )}
-                        </Card>
+                {contact ? (
+                  <TagsEditor
+                    contactId={contact.id}
+                    tags={contact.tags}
+                    onChanged={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
+                  />
+                ) : (
+                  <p className="text-sm text-zinc-400">Disponível após vincular o cliente a um contato do Comercial.</p>
+                )}
+              </Card>
             </div>
           </div>
         )}
@@ -552,21 +557,15 @@ function TagsEditor({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
+        {/* Mesmo chip da aba Processos (LegalTagChip): fundo na cor real da
+            etiqueta, texto em caixa alta. A pílula clara daqui destoava. */}
         {tags.map((t) => (
-          <span
+          <LegalTagChip
             key={t.id}
-            className="group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-            style={{ backgroundColor: `${t.color}22`, color: t.color }}
-          >
-            {t.name}
-            <button
-              onClick={() => remove.mutate(t.id)}
-              className="opacity-60 hover:opacity-100"
-              title="Remover etiqueta"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
+            label={t.name}
+            color={t.color}
+            onRemove={() => remove.mutate(t.id)}
+          />
         ))}
         <div className="relative">
           <button
