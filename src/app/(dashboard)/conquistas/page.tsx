@@ -420,7 +420,10 @@ export default function ConquistasPage() {
         pendentes = r.audiosPendentes;
         ia = ia || r.ia;
         setProgresso({ rodadas, criados, transcritos, pendentes });
-        if (pendentes <= 0 || rodadas >= MAX_RODADAS) break;
+        // O backend corta por tempo, então "sem áudio na fila" não significa
+        // "acabou": pode ter sobrado candidato sem analisar.
+        const sobrou = r.maisPorFazer ?? pendentes > 0;
+        if (!sobrou || rodadas >= MAX_RODADAS) break;
       }
       return { criados, transcritos, candidatos, ia, rodadas, pendentes };
     },

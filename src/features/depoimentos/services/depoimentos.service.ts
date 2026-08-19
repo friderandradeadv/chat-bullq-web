@@ -53,6 +53,8 @@ export interface VarreduraResult {
   audiosTranscritos: number;
   /** > 0 = ainda há áudio pra transcrever — vale outra rodada. */
   audiosPendentes: number;
+  /** true = sobrou trabalho (áudio na fila ou candidato não analisado). */
+  maisPorFazer?: boolean;
   depoimentos: Depoimento[];
 }
 
@@ -111,7 +113,11 @@ export const depoimentosService = {
   async varrer(
     input: { dias?: number; limite?: number; transcrever?: number; usarIa?: boolean } = {},
   ): Promise<VarreduraResult> {
-    const { data } = await api.post('/depoimentos/varrer', input);
+    // A varredura é DELIBERADAMENTE longa (transcreve áudio, chama a IA). O
+    // timeout global do cliente é 15s — bom pro resto do app, fatal aqui: o
+    // navegador abortava antes de o servidor responder. Timeout próprio, com
+    // folga sobre o orçamento de tempo do backend.
+    const { data } = await api.post('/depoimentos/varrer', input, { timeout: 180_000 });
     return data.data ?? data;
   },
   async create(input: CreateDepoimentoInput): Promise<Depoimento> {
