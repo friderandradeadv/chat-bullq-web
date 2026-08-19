@@ -90,7 +90,40 @@ type Cadastro = {
   cpf?: string | null; cnpj?: string | null; rg?: string | null;
   estadoCivil?: string | null; profissao?: string | null; endereco?: string | null;
   login?: string | null; senha?: string | null;
+  /** DD/MM/AAAA — lida do RG/CNH pelo extrator. Alimenta idade e aniversário. */
+  nascimento?: string | null;
 };
+
+/** Idade em anos a partir de DD/MM/AAAA. null se a data não for utilizável. */
+function idadeDe(nascimento?: string | null): number | null {
+  const m = (nascimento ?? '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - Number(m[3]);
+  const jaFez =
+    hoje.getMonth() + 1 > Number(m[2]) ||
+    (hoje.getMonth() + 1 === Number(m[2]) && hoje.getDate() >= Number(m[1]));
+  if (!jaFez) anos--;
+  return anos >= 0 && anos < 130 ? anos : null;
+}
+
+/** "Cidade/UF" tirada do endereço completo, que termina em "…, Cidade/UF, CEP …". */
+function cidadeDe(endereco?: string | null): string | null {
+  const m = (endereco ?? '').match(/(?:na cidade de\s+)?([A-Za-zÀ-ÿ'.\s]+)\/([A-Z]{2})\b/);
+  return m ? `${m[1].trim()}/${m[2]}` : null;
+}
+
+/** "há 2 anos", "há 8 meses" — tempo desde o primeiro vínculo com o escritório. */
+function tempoDeCasa(desde?: string | Date | null): string | null {
+  if (!desde) return null;
+  const d = new Date(desde);
+  if (isNaN(d.getTime())) return null;
+  const meses = Math.max(0, Math.round((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
+  if (meses < 1) return 'há poucos dias';
+  if (meses < 12) return `há ${meses} ${meses === 1 ? 'mês' : 'meses'}`;
+  const anos = Math.floor(meses / 12);
+  return `há ${anos} ${anos === 1 ? 'ano' : 'anos'}`;
+}
 
 export default function ClienteDetailPage() {
   const params = useParams<{ id: string }>();
@@ -173,6 +206,16 @@ export default function ClienteDetailPage() {
   const qtdDocs = docsDoCliente.length;
   const temContrato = docsDoCliente.some((d) => d.categoria === 'CONTRATO');
   const docPrincipal = cadastro?.cpf || cadastro?.cnpj || cliente?.document || null;
+  const idade = idadeDe(cadastro?.nascimento);
+  const cidade = cidadeDe(cadastro?.endereco);
+  // Tempo de casa = o processo mais ANTIGO do cliente (distribuição ou cadastro).
+  const conosco = useMemo(() => {
+    const datas = meusCasos
+      .map((c: any) => c.distribuidoEm ?? c.createdAt)
+      .filter(Boolean)
+      .sort();
+    return tempoDeCasa(datas[0] ?? null);
+  }, [meusCasos]);
 
   // Resumo financeiro para a faixa de indicadores. Mesma chave do cartão da aba
   // Financeiro, então o React Query serve do cache em vez de buscar duas vezes.
@@ -213,29 +256,24 @@ export default function ClienteDetailPage() {
                 {cliente.name}
               </h1>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500">
+                {/* Quem é, em uma linha: idade, de onde e há quanto tempo é do
+                    escritório. CPF e telefone saíram daqui — estão logo abaixo,
+                    nos cartões de Qualificação e Contato. */}
                 <span>Cliente</span>
+                {idade != null && (<><span>·</span><span>{idade} anos</span></>)}
+                {cidade && (<><span>·</span><span>{cidade}</span></>)}
                 <span>·</span>
-                {/* Quantos processos conosco — some daqui e a ficha perde a
-                    primeira coisa que se quer saber ao abrir um cliente. */}
                 <span className="font-medium text-zinc-600 dark:text-zinc-300">
                   {meusCasos.length} processo(s) conosco
                 </span>
-                {docPrincipal && (
+                {conosco && (
                   <>
                     <span>·</span>
-                    <span className="inline-flex items-center gap-1">
-                      {docPrincipal}
-                      <CopyBtn value={docPrincipal} />
-                    </span>
-                  </>
-                )}
-                {contact?.phone && (
-                  <>
-                    <span>·</span>
-                    <span>{formatPhone(contact.phone)}</span>
+                    <span title="desde o processo mais antigo do cliente">{conosco}</span>
                   </>
                 )}
               </div>
+
 
               {/* Etiquetas logo abaixo do nome — mesma lógica da ficha do processo */}
               <div className="mt-2">
@@ -411,7 +449,7 @@ export default function ClienteDetailPage() {
             nome={cliente.name}
             partyId={cliente.partyId}
             contactId={contact?.id ?? null}
-            documento={cadastro?.cpf || cadastro?.cnpj || cliente.document || null}
+            documento={docPrincipal}
           />
         )}
 
@@ -469,7 +507,7 @@ export default function ClienteDetailPage() {
             <ClienteFinanceiroCard nome={cliente.name} cases={meusCasos} />
             <CobrancaAsaasCard
               nome={cliente.name}
-              documento={cadastro?.cpf || cadastro?.cnpj || cliente.document || ''}
+              documento={docPrincipal || ''}
               email={contact?.email || ''}
               telefone={contact?.phone || ''}
               contactId={contact?.id || undefined}
