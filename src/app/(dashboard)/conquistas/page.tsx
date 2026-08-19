@@ -23,6 +23,7 @@ import {
   ExternalLink,
   ShieldAlert,
   Trophy,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   depoimentosService,
@@ -110,9 +111,9 @@ function DepoimentoCard({
     <div className="flex flex-col rounded-2xl border border-zinc-200/70 bg-white p-4 text-left shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/60">
       {/* Quem */}
       <div className="flex items-start gap-3">
-        {d.contact?.avatarUrl ? (
+        {d.fotoUrl || d.contact?.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={d.contact.avatarUrl} alt={nome} className="h-10 w-10 shrink-0 rounded-full object-cover" />
+          <img src={(d.fotoUrl ?? d.contact?.avatarUrl) as string} alt={nome} className="h-10 w-10 shrink-0 rounded-full object-cover" />
         ) : (
           <span
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
@@ -482,6 +483,17 @@ export default function ConquistasPage() {
     },
   });
 
+  const fotos = useMutation({
+    mutationFn: () => depoimentosService.buscarFotos(),
+    onSuccess: (r) => {
+      invalidate();
+      if (r.comFoto > 0) toast.success(`${r.comFoto} de ${r.tentados} ganharam foto do WhatsApp.`);
+      else if (r.tentados === 0) toast.info('Todo mundo do mural já tem foto.');
+      else toast.info(`Nenhuma foto nova (${r.tentados} tentados${r.semCanal ? `, ${r.semCanal} sem WhatsApp vinculado` : ''}).`);
+    },
+    onError: () => toast.error('Não consegui buscar as fotos agora.'),
+  });
+
   const salvar = useMutation({
     mutationFn: (v: Record<string, unknown>) =>
       form.edit
@@ -544,6 +556,15 @@ export default function ConquistasPage() {
               {varredura.isPending && progresso
                 ? `Varrendo… ${progresso.criados} achados${progresso.pendentes > 0 ? ` · ${progresso.pendentes} áudios na fila` : ''}`
                 : 'Procurar agradecimentos'}
+            </button>
+            <button
+              onClick={() => fotos.mutate()}
+              disabled={fotos.isPending}
+              title="Busca no WhatsApp a foto de quem está sem avatar"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#DEE2E6] bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              {fotos.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4 text-[#228BE6]" />}
+              Buscar fotos
             </button>
             <button
               onClick={() => setForm({ open: true, edit: null })}

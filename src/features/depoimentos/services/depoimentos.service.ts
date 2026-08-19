@@ -19,6 +19,8 @@ export interface Depoimento {
   mensagemEm: string | null;
   midiaUrl: string | null;
   midiaTipo: string | null;
+  /** Foto própria (avaliação do Google, cadastro à mão) — vence o avatar do contato. */
+  fotoUrl: string | null;
   origem: DepoimentoOrigem;
   sourceConversationId: string | null;
   sourceMessageId: string | null;
@@ -111,6 +113,11 @@ export const depoimentosService = {
   },
   async stats(): Promise<DepoimentoStats> {
     const { data } = await api.get('/depoimentos/stats');
+    return data.data ?? data;
+  },
+  /** Busca no WhatsApp a foto de quem está no mural sem avatar. */
+  async buscarFotos(): Promise<{ tentados: number; comFoto: number; semCanal: number; nomes: string[] }> {
+    const { data } = await api.post('/depoimentos/fotos', {}, { timeout: 120_000 });
     return data.data ?? data;
   },
   async varrer(
