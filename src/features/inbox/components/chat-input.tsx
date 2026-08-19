@@ -121,16 +121,19 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       toast.error('Falta o link de avaliação. Configure em Conquistas → "Pedir feedback depois da prestação de contas".');
       return;
     }
+    // Sem gênero de propósito: "o senhor ficou satisfeito" quebra na primeira
+    // cliente mulher, e boa parte do mural é de mulheres. Nada de senhor/senhora,
+    // satisfeito/satisfeita — só "você" e verbos neutros.
     const convite =
-      'Que bom que o senhor ficou satisfeito! 🙏\n\n' +
-      'Se puder deixar uma avaliação pra gente no Google, ajuda demais outras pessoas que estão passando pelo mesmo que o senhor passou.\n\n' +
+      'Que bom que deu tudo certo! 🙏\n\n' +
+      'Se puder deixar uma avaliação pra gente no Google, ajuda demais outras pessoas que estão passando pela mesma situação.\n\n' +
       'É bem rapidinho:\n' +
       '1️⃣ Toque no link aqui embaixo\n' +
       '2️⃣ Toque nas 5 estrelinhas ⭐\n' +
       '3️⃣ Escreva em poucas palavras o que achou\n' +
       '4️⃣ Toque em Publicar\n\n' +
       url +
-      '\n\nQualquer dificuldade é só me chamar que eu te ajudo. Muito obrigado! 💙';
+      '\n\nQualquer dificuldade é só chamar aqui que a gente ajuda. A gente agradece muito! 💙';
     setText((t) => (t.trim() ? `${t}\n\n${convite}` : convite));
     setTimeout(() => {
       textareaRef.current?.focus();
