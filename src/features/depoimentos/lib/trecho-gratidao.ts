@@ -23,9 +23,13 @@ function emFrases(texto: string): string[] {
 }
 
 export function trechoDeGratidao(mensagem: string, max = 300): string {
-  const texto = (mensagem ?? '').replace(/\s+/g, ' ').trim();
-  if (!texto) return '';
-  if (texto.length <= max) return texto;
+  const original = (mensagem ?? '').trim();
+  if (!original) return '';
+  // Coube inteiro: devolve o ORIGINAL, com as quebras de linha. Bloco de vários
+  // balões (o Gilvan mandou três) tem que continuar em três linhas — achatar
+  // tudo numa linha só descaracteriza a fala.
+  if (original.replace(/\s+/g, ' ').length <= max) return original;
+  const texto = original.replace(/\s+/g, ' ');
 
   const frases = emFrases(texto);
 

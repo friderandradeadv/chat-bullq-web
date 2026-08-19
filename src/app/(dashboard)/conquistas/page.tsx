@@ -31,6 +31,7 @@ import {
   type DepoimentoStatus,
 } from '@/features/depoimentos/services/depoimentos.service';
 import { titleCaseName } from '@/lib/names';
+import { trechoDeGratidao } from '@/features/depoimentos/lib/trecho-gratidao';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
 
 const brl = (n: number | null | undefined) =>
@@ -98,6 +99,12 @@ function DepoimentoCard({
   const nome = titleCaseName(d.clienteNome);
   const bg = avatarColor(nome);
   const valor = brl(d.valorRecuperado);
+  // Cliente costuma abrir explicando o problema e só agradecer no fim. O card
+  // mostra o trecho que interessa; a fala inteira fica a um clique, porque ela
+  // é a prova de que a pessoa disse aquilo.
+  const [completa, setCompleta] = useState(false);
+  const resumo = trechoDeGratidao(d.mensagem, 400);
+  const cortada = resumo !== d.mensagem.trim();
 
   return (
     <div className="flex flex-col rounded-2xl border border-zinc-200/70 bg-white p-4 text-left shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/60">
@@ -165,8 +172,16 @@ function DepoimentoCard({
       <blockquote className="relative mt-3 flex-1 rounded-xl border-l-2 border-[#7048E8] bg-[#7048E8]/[0.04] px-3 py-2.5 dark:bg-[#7048E8]/10">
         <Quote className="absolute right-2 top-2 h-3.5 w-3.5 text-[#7048E8]/25" />
         <p className="whitespace-pre-wrap text-sm italic leading-relaxed text-zinc-700 dark:text-zinc-200">
-          {d.mensagem}
+          {completa ? d.mensagem : resumo}
         </p>
+        {cortada && (
+          <button
+            onClick={() => setCompleta((v) => !v)}
+            className="mt-1.5 text-[11px] font-semibold text-[#7048E8] hover:underline"
+          >
+            {completa ? 'mostrar só o trecho' : 'ver mensagem completa'}
+          </button>
+        )}
       </blockquote>
 
       {/* Rodapé: prova + ações */}
