@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon, Maximize2, Minimize2, UserRound, MessageSquareText } from 'lucide-react';
+import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon, Maximize2, Minimize2, UserRound, MessageSquareText, Star } from 'lucide-react';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '../hooks/use-audio-recorder';
+import { depoimentosService } from '@/features/depoimentos/services/depoimentos.service';
 import { EmojiPicker } from './emoji-picker';
 import { ContactPickerModal, type PickedContact } from './contact-picker-modal';
 import { TemplatePickerModal } from './template-picker-modal';
@@ -97,6 +98,48 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [qrIndex, setQrIndex] = useState(0);
   const [qrDismissed, setQrDismissed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Monta o convite para avaliar no Google e joga no compositor — não envia
+   * sozinho. Quem está na conversa lê, ajusta o tratamento (senhor/você) e
+   * manda. Pedir avaliação é publicidade da advocacia (Prov. 205/2021 CFOAB):
+   * tem que passar por decisão humana, sempre.
+   *
+   * O passo a passo existe porque a maior parte dos clientes do escritório é
+   * idosa e nunca avaliou nada no Google — sem as instruções, o link sozinho
+   * não vira avaliação.
+   */
+  const pedirAvaliacaoGoogle = async () => {
+    let url = '';
+    try {
+      const cfg = await depoimentosService.getConfig();
+      url = (cfg.googleUrl ?? '').trim();
+    } catch {
+      /* segue sem link */
+    }
+    if (!url) {
+      toast.error('Falta o link de avaliação. Configure em Conquistas → "Pedir feedback depois da prestação de contas".');
+      return;
+    }
+    const convite =
+      'Que bom que o senhor ficou satisfeito! 🙏\n\n' +
+      'Se puder deixar uma avaliação pra gente no Google, ajuda demais outras pessoas que estão passando pelo mesmo que o senhor passou.\n\n' +
+      'É bem rapidinho:\n' +
+      '1️⃣ Toque no link aqui embaixo\n' +
+      '2️⃣ Toque nas 5 estrelinhas ⭐\n' +
+      '3️⃣ Escreva em poucas palavras o que achou\n' +
+      '4️⃣ Toque em Publicar\n\n' +
+      url +
+      '\n\nQualquer dificuldade é só me chamar que eu te ajudo. Muito obrigado! 💙';
+    setText((t) => (t.trim() ? `${t}\n\n${convite}` : convite));
+    setTimeout(() => {
+      textareaRef.current?.focus();
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      }
+    }, 0);
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recorder = useAudioRecorder();
 
@@ -811,6 +854,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                     Enviar template
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => { close(); void pedirAvaliacaoGoogle(); }}
+                  className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <Star className="h-4 w-4 text-amber-500" />
+                  Pedir avaliação no Google
+                </button>
                 {onGenerateSummary && (
                   <button
                     type="button"
