@@ -50,6 +50,7 @@ import { isTerminalPhase } from '@/features/legal-cases/lib/kanban-terminal';
 import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
 import { dashboardService, type HubNewsItem } from '@/features/dashboard/services/dashboard.service';
 import { depoimentosService } from '@/features/depoimentos/services/depoimentos.service';
+import { trechoDeGratidao } from '@/features/depoimentos/lib/trecho-gratidao';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { formatPhone } from '@/lib/brazil-states';
 
@@ -979,7 +980,7 @@ function ConquistasResumo() {
 
       {d && (
         <div className="mt-2.5 border-l-2 border-[#7048E8]/60 pl-3">
-          <p className="line-clamp-3 text-sm italic leading-relaxed text-zinc-600 dark:text-zinc-300">"{d.mensagem}"</p>
+          <p className="line-clamp-3 text-sm italic leading-relaxed text-zinc-600 dark:text-zinc-300">"{trechoDeGratidao(d.mensagem)}"</p>
           <p className="mt-1 text-xs font-semibold text-zinc-400">— {d.clienteNome}{d.resultado ? ` · ${d.resultado}` : ''}</p>
         </div>
       )}
