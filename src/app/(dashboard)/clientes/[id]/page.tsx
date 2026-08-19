@@ -43,6 +43,7 @@ import {
   Folder,
   ChevronRight,
   HardDrive,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService } from '@/features/inbox/services/inbox.service';
@@ -165,6 +166,9 @@ export default function ClienteDetailPage() {
   const qc = useQueryClient();
   const id = params?.id;
   const [aba, setAba] = useState<AbaKey>('dados');
+  // Navegar no Drive TOMA a aba inteira: dentro de um cartão a lista rolava numa
+  // caixinha e não dava para trabalhar. Fora dela, é uma tela de arquivos.
+  const [navegandoDrive, setNavegandoDrive] = useState(false);
 
   const { data: clientes = [], isLoading } = useQuery({
     queryKey: ['legal-clients'],
@@ -480,17 +484,33 @@ export default function ClienteDetailPage() {
           </div>
         )}
 
-        {aba === 'documentos' && (
-          <div className="space-y-5">
-            <DocumentosCard
-              nome={cliente.name}
-              partyId={cliente.partyId}
-              contactId={contact?.id ?? null}
-              documento={docPrincipal}
-            />
-            <PastaNoDrive partyId={cliente.partyId} />
-          </div>
-        )}
+        {aba === 'documentos' &&
+          (navegandoDrive ? (
+            <PastaNoDrive partyId={cliente.partyId} onFechar={() => setNavegandoDrive(false)} />
+          ) : (
+            <div className="space-y-5">
+              <DocumentosCard
+                nome={cliente.name}
+                partyId={cliente.partyId}
+                contactId={contact?.id ?? null}
+                documento={docPrincipal}
+              />
+              <Card title="Pasta no Google Drive" icon={HardDrive}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-zinc-400">
+                    A pasta do cliente como está agora — inclusive o que ainda não foi indexado.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setNavegandoDrive(true)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    <HardDrive className="h-3.5 w-3.5" /> Abrir a pasta
+                  </button>
+                </div>
+              </Card>
+            </div>
+          ))}
 
         {aba === 'processos' && (
               <Card title={`Processos conosco (${meusCasos.length})`} icon={Scale}>
@@ -1658,26 +1678,21 @@ function MarcoItem({ m }: { m: Marco }) {
 
 
 /**
- * Pasta do cliente no Google Drive, AO VIVO.
+ * Pasta do cliente no Google Drive, AO VIVO — tela de arquivos, no estilo do
+ * Finder: barra com Voltar, trilha clicável e a lista ocupando a altura toda.
  *
- * Vem abaixo do índice de propósito, e as duas coisas não competem: o índice
- * acima é o que o hub SABE (contadores, categorias, deduplicação das cópias por
- * produto, linha do tempo); esta é a pasta como ela está AGORA. Documento que a
- * equipe subiu há um minuto aparece aqui sem ninguém rodar importação — e é o
- * que garante que a ficha nunca esconda um arquivo que existe.
- *
- * Só abre quando pedida: cada nível da árvore é uma chamada ao Drive, e abrir
- * sozinha faria toda visita à ficha pagar esse pedágio.
+ * Complementa o índice, não o substitui: o índice é o que o hub SABE
+ * (contadores, categorias, deduplicação das cópias por produto, linha do tempo)
+ * — perguntas sobre o conjunto, que uma pasta não responde. Esta é a pasta como
+ * está AGORA, e garante que a ficha nunca esconda um arquivo que existe.
  */
-function PastaNoDrive({ partyId }: { partyId: string }) {
-  const [aberta, setAberta] = useState(false);
+function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => void }) {
   const [caminho, setCaminho] = useState<string[]>([]);
   const [abrindo, setAbrindo] = useState<string | null>(null);
 
   const { data, isFetching, error } = useQuery({
     queryKey: ['drive-pasta', partyId, caminho.join('/')],
     queryFn: () => driveBrowserService.listar(partyId, caminho),
-    enabled: aberta,
     // Sempre fresco: o sentido desta visão é justamente não guardar estado.
     staleTime: 0,
     gcTime: 0,
@@ -1695,103 +1710,127 @@ function PastaNoDrive({ partyId }: { partyId: string }) {
     }
   };
 
-  if (!aberta) {
-    return (
-      <Card title="Pasta no Google Drive" icon={HardDrive}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-zinc-400">
-            A pasta do cliente como está agora — inclusive o que ainda não foi indexado.
-          </p>
-          <button
-            type="button"
-            onClick={() => setAberta(true)}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:text-zinc-300"
-          >
-            <HardDrive className="h-3.5 w-3.5" /> Abrir a pasta
-          </button>
-        </div>
-      </Card>
-    );
-  }
+  const subir = () => setCaminho((c) => c.slice(0, -1));
+  const naRaiz = caminho.length === 0;
 
   return (
-    <Card title="Pasta no Google Drive" icon={HardDrive}>
-      {/* Trilha de navegação */}
-      <div className="mb-3 flex flex-wrap items-center gap-1 text-xs">
+    <div className="flex min-h-[70vh] flex-col overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_4px_12px_-4px_rgba(16,24,40,0.08)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+      {/* Barra de navegação — Voltar sobe um nível, como no Finder */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200/80 bg-zinc-50/70 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800/40">
         <button
           type="button"
-          onClick={() => setCaminho([])}
-          className={`rounded px-1.5 py-0.5 font-medium ${caminho.length === 0 ? 'text-zinc-500' : 'text-[#228BE6] hover:underline'}`}
+          onClick={subir}
+          disabled={naRaiz}
+          title={naRaiz ? 'Você está na pasta do cliente' : `Voltar para ${caminho[caminho.length - 2] ?? data?.cliente ?? 'a pasta anterior'}`}
+          className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
         >
-          {data?.cliente ?? 'Cliente'}
+          <ArrowLeft className="h-3.5 w-3.5" /> Voltar
         </button>
-        {caminho.map((nome, i) => (
-          <span key={`${nome}-${i}`} className="flex items-center gap-1">
-            <ChevronRight className="h-3 w-3 text-zinc-300" />
-            <button
-              type="button"
-              onClick={() => setCaminho(caminho.slice(0, i + 1))}
-              className={`rounded px-1.5 py-0.5 font-medium ${i === caminho.length - 1 ? 'text-zinc-500' : 'text-[#228BE6] hover:underline'}`}
-            >
-              {nome}
-            </button>
-          </span>
-        ))}
-        {isFetching && <Loader2 className="ml-1 h-3 w-3 animate-spin text-zinc-400" />}
-        {data?.webViewLink && (
-          <a
-            href={data.webViewLink}
-            target="_blank"
-            rel="noreferrer"
-            className="ml-auto inline-flex items-center gap-1 text-zinc-400 hover:text-[#228BE6]"
+
+        <HardDrive className="h-4 w-4 shrink-0 text-zinc-400" />
+        {/* Trilha clicável: qualquer nível volta direto, sem subir de um em um */}
+        <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setCaminho([])}
+            className={`rounded px-1.5 py-0.5 font-medium ${naRaiz ? 'text-zinc-500' : 'text-[#228BE6] hover:underline'}`}
           >
-            <ExternalLink className="h-3 w-3" /> abrir no Drive
-          </a>
+            {data?.cliente ?? 'Cliente'}
+          </button>
+          {caminho.map((nome, i) => (
+            <span key={`${nome}-${i}`} className="flex items-center gap-1">
+              <ChevronRight className="h-3 w-3 text-zinc-300" />
+              <button
+                type="button"
+                onClick={() => setCaminho(caminho.slice(0, i + 1))}
+                className={`truncate rounded px-1.5 py-0.5 font-medium ${i === caminho.length - 1 ? 'text-zinc-500' : 'text-[#228BE6] hover:underline'}`}
+              >
+                {nome}
+              </button>
+            </span>
+          ))}
+          {isFetching && <Loader2 className="ml-1 h-3 w-3 animate-spin text-zinc-400" />}
+        </div>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {data?.webViewLink && (
+            <a
+              href={data.webViewLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-[#228BE6]"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> abrir no Drive
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={onFechar}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          >
+            <X className="h-3.5 w-3.5" /> Fechar
+          </button>
+        </div>
+      </div>
+
+      {/* Lista: rola com a aba, não dentro de uma caixinha */}
+      <div className="flex-1">
+        {error ? (
+          <p className="px-4 py-10 text-center text-sm text-rose-500">{(error as Error).message}</p>
+        ) : !data ? (
+          <p className="px-4 py-10 text-center text-sm text-zinc-400">Lendo a pasta no Drive…</p>
+        ) : data.itens.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-zinc-400">Pasta vazia.</p>
+        ) : (
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {data.itens.map((it) => (
+              <li key={it.id}>
+                <button
+                  type="button"
+                  onDoubleClick={() => it.pasta && setCaminho([...caminho, it.nome])}
+                  onClick={() => (it.pasta ? setCaminho([...caminho, it.nome]) : abrirArquivo(it))}
+                  disabled={abrindo === it.id}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-50 disabled:opacity-60 dark:hover:bg-zinc-800/50"
+                >
+                  {it.pasta ? (
+                    <Folder className="h-4.5 w-4.5 shrink-0 text-[#228BE6]" />
+                  ) : abrindo === it.id ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" />
+                  ) : (
+                    <FileText className="h-4 w-4 shrink-0 text-zinc-400" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm text-zinc-700 dark:text-zinc-300">
+                    {it.nome}
+                  </span>
+                  {!it.pasta && it.categoria && it.categoria !== 'OUTRO' && (
+                    <span className="hidden shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 sm:inline dark:bg-zinc-800 dark:text-zinc-400">
+                      {CATEGORIA_LABEL[it.categoria] ?? it.categoria}
+                    </span>
+                  )}
+                  {!it.pasta && it.tamanho != null && (
+                    <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-zinc-400">
+                      {tamanhoLegivel(it.tamanho)}
+                    </span>
+                  )}
+                  {it.modificadoEm && (
+                    <span className="hidden w-20 shrink-0 text-right text-[11px] tabular-nums text-zinc-400 sm:inline">
+                      {new Date(it.modificadoEm).toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
+                  <ChevronRight className={`h-3.5 w-3.5 shrink-0 ${it.pasta ? 'text-zinc-300' : 'invisible'}`} />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
-      {error ? (
-        <p className="py-6 text-center text-sm text-rose-500">{(error as Error).message}</p>
-      ) : !data ? (
-        <p className="py-6 text-center text-sm text-zinc-400">Lendo a pasta no Drive…</p>
-      ) : data.itens.length === 0 ? (
-        <p className="py-6 text-center text-sm text-zinc-400">Pasta vazia.</p>
-      ) : (
-        <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200/80 dark:divide-zinc-800 dark:border-zinc-800">
-          {data.itens.map((it) => (
-            <li key={it.id}>
-              <button
-                type="button"
-                onClick={() => (it.pasta ? setCaminho([...caminho, it.nome]) : abrirArquivo(it))}
-                disabled={abrindo === it.id}
-                className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-zinc-50 disabled:opacity-60 dark:hover:bg-zinc-800/50"
-              >
-                {it.pasta ? (
-                  <Folder className="h-4 w-4 shrink-0 text-[#228BE6]" />
-                ) : abrindo === it.id ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" />
-                ) : (
-                  <FileText className="h-4 w-4 shrink-0 text-zinc-400" />
-                )}
-                <span className="min-w-0 flex-1 truncate text-sm text-zinc-700 dark:text-zinc-300">
-                  {it.nome}
-                </span>
-                {!it.pasta && it.tamanho != null && (
-                  <span className="shrink-0 text-[11px] tabular-nums text-zinc-400">
-                    {tamanhoLegivel(it.tamanho)}
-                  </span>
-                )}
-                {it.modificadoEm && (
-                  <span className="hidden shrink-0 text-[11px] tabular-nums text-zinc-400 sm:inline">
-                    {new Date(it.modificadoEm).toLocaleDateString('pt-BR')}
-                  </span>
-                )}
-                {it.pasta && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-300" />}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {data && (
+        <div className="shrink-0 border-t border-zinc-100 px-4 py-2 text-[11px] text-zinc-400 dark:border-zinc-800">
+          {data.itens.filter((i) => i.pasta).length} pasta(s) ·{' '}
+          {data.itens.filter((i) => !i.pasta).length} arquivo(s) · lido do Drive agora
+        </div>
       )}
-    </Card>
+    </div>
   );
 }
