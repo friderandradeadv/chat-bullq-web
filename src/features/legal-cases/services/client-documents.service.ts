@@ -33,6 +33,22 @@ export interface ClientDocument {
   assinadoEm: string | null;
   atualizadoEm: string;
   caseId: string | null;
+  /**
+   * Outras pastas do Drive com a MESMA peça. A árvore é por produto (01. RMC,
+   * 02. RCC…) e o kit assinado foi copiado para cada uma — a ficha mostra uma
+   * linha só e lista aqui onde mais o arquivo está.
+   */
+  tambemEm: string[];
+}
+
+/** Progresso da varredura em massa (roda em segundo plano, leva dezenas de minutos). */
+export interface ImportacaoEmCurso {
+  rodando: boolean;
+  iniciadaEm: string;
+  terminadaEm: string | null;
+  totalPastas: number;
+  parcial: ImportarResultado;
+  erroFatal: string | null;
 }
 
 export interface ImportarResultado {
@@ -91,6 +107,21 @@ export const clientDocumentsService = {
       timeout: 180_000,
     });
     return data.data ?? data;
+  },
+
+  /**
+   * Dispara a varredura de TODOS os clientes. Volta na hora: o trabalho roda em
+   * segundo plano na API e avisa no sino ao terminar.
+   */
+  async importarTudo(params: { incluirProcesso?: boolean } = {}): Promise<ImportacaoEmCurso> {
+    const { data } = await api.post('/client-documents/importar-drive-tudo', params);
+    return data.data ?? data;
+  },
+
+  /** Progresso da varredura em massa. null se nunca rodou. */
+  async importarStatus(): Promise<ImportacaoEmCurso | null> {
+    const { data } = await api.get('/client-documents/importar-status');
+    return data.data ?? data ?? null;
   },
 
   /** Tira da ficha. O arquivo continua no Drive. */

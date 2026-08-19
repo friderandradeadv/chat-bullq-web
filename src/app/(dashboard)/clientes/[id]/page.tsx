@@ -59,6 +59,16 @@ const STATUS_LABEL: Record<string, string> = {
   CLOSED: 'Encerrado',
 };
 
+/** Abas da ficha. A tela única empilhava ficha + processos + documentos +
+ *  financeiro numa rolagem só; separadas, cada assunto abre onde se procura. */
+const ABAS = [
+  { key: 'dados', label: 'Dados', icon: User },
+  { key: 'documentos', label: 'Documentos', icon: FolderOpen },
+  { key: 'processos', label: 'Processos', icon: Scale },
+  { key: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
+] as const;
+type AbaKey = (typeof ABAS)[number]['key'];
+
 const norm = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -75,6 +85,7 @@ export default function ClienteDetailPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const id = params?.id;
+  const [aba, setAba] = useState<AbaKey>('dados');
 
   const { data: clientes = [], isLoading } = useQuery({
     queryKey: ['legal-clients'],
@@ -134,6 +145,21 @@ export default function ClienteDetailPage() {
       ?? null;
   }, [caseDetail, cliente]);
 
+  // Badge da aba Documentos. Mesma chave do card, então o React Query serve a
+  // resposta já em cache em vez de repetir a chamada.
+  const { data: docsDoCliente = [] } = useQuery({
+    queryKey: ['client-documents', cliente?.partyId, contact?.id ?? null, cadastro?.cpf || cadastro?.cnpj || cliente?.document || null],
+    queryFn: () =>
+      clientDocumentsService.list({
+        partyId: cliente!.partyId,
+        contactId: contact?.id ?? undefined,
+        cliente: cliente!.name,
+        documento: (cadastro?.cpf || cadastro?.cnpj || cliente!.document) ?? undefined,
+      }),
+    enabled: !!cliente,
+  });
+  const qtdDocs = docsDoCliente.length;
+
   if (!id) return null;
   if (isLoading)
     return <div className="bg-white p-6 text-sm text-zinc-400 dark:bg-zinc-950">Carregando…</div>;
@@ -141,8 +167,9 @@ export default function ClienteDetailPage() {
     return <div className="bg-white p-6 text-sm text-zinc-400 dark:bg-zinc-950">Cliente não encontrado.</div>;
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-      <div className="px-4 pt-3 lg:px-6">
+    <div className="flex h-full flex-col overflow-hidden bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+      {/* Cabeçalho fixo: quem é o cliente não some ao rolar a aba */}
+      <div className="shrink-0 border-b border-[#DEE2E6] px-4 pt-3 lg:px-6 dark:border-zinc-800">
         <button onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-[#228BE6]">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
@@ -153,144 +180,170 @@ export default function ClienteDetailPage() {
             contactId={contact?.id ?? null}
             onSynced={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
           />
-          <div>
-            <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{cliente.name}</h1>
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-medium text-[#202124] dark:text-zinc-100">{cliente.name}</h1>
             <p className="text-sm text-zinc-500">
               Cliente · {meusCasos.length} processo(s) conosco
               {cliente.document ? ` · ${cliente.document}` : ''}
             </p>
           </div>
         </div>
+
+        {/* Abas: a ficha inteira numa tela só virou rolagem sem fim */}
+        <nav className="-mb-px mt-3 flex gap-1 overflow-x-auto">
+          {ABAS.map((a) => {
+            const ativa = aba === a.key;
+            const n = a.key === 'processos' ? meusCasos.length : a.key === 'documentos' ? qtdDocs : null;
+            return (
+              <button
+                key={a.key}
+                type="button"
+                onClick={() => setAba(a.key)}
+                className={`flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${
+                  ativa
+                    ? 'border-[#228BE6] text-[#228BE6]'
+                    : 'border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:hover:text-zinc-300'
+                }`}
+              >
+                <a.icon className="h-4 w-4" />
+                {a.label}
+                {n !== null && n > 0 && (
+                  <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
+                    ativa ? 'bg-[#228BE6]/10 text-[#228BE6]' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                  }`}>
+                    {n}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      <div className="grid flex-1 gap-5 px-4 py-5 lg:grid-cols-3 lg:px-6">
-        {/* Ficha cadastral + etiquetas */}
-        <div className="space-y-5">
-          <Card title="Ficha cadastral" icon={User}>
-            {contact ? (
-              <>
-                <dl className="space-y-3 text-sm">
-                  <Row icon={Phone} label="Telefone" value={formatPhone(contact.phone)} />
-                  <Row icon={Mail} label="E-mail" value={contact.email} />
-                  {contact.notes && <Row icon={FileText} label="Observações" value={contact.notes} />}
-                  {contact.status && (
-                    <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
-                      <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
-                    </div>
-                  )}
-                </dl>
-                {contact.conversationId && (
-                  <Link
-                    href={`/inbox?conversationId=${contact.conversationId}`}
-                    className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
-                  </Link>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-zinc-400">
-                Cliente ainda sem ficha no Comercial. Quando houver um contato com o mesmo nome (ou ao
-                vincular), a ficha cadastral e as etiquetas aparecem aqui.
-              </p>
-            )}
-          </Card>
-
-          {/* Dados cadastrais migrados do Pipefy — CPF/senha copiáveis */}
-          {cadastro && (cadastro.cpf || cadastro.cnpj || cadastro.rg || cadastro.endereco || cadastro.login || cadastro.senha || cadastro.estadoCivil || cadastro.profissao) && (
-            <Card title="Dados cadastrais" icon={IdCard}>
-              <dl className="space-y-3 text-sm">
-                <DataRow icon={Fingerprint} label="CPF" value={cadastro.cpf} copyable />
-                <DataRow icon={IdCard} label="CNPJ" value={cadastro.cnpj} copyable />
-                <DataRow icon={IdCard} label="RG" value={cadastro.rg} copyable />
-                <DataRow icon={User} label="Estado civil" value={cadastro.estadoCivil} />
-                <DataRow icon={User} label="Profissão" value={cadastro.profissao} />
-                <DataRow icon={MapPin} label="Endereço" value={cadastro.endereco} copyable />
-                <DataRow icon={KeyRound} label="Login gov.br / Meu INSS" value={cadastro.login} copyable />
-                <DataRow icon={KeyRound} label="Senha gov.br / Meu INSS" value={cadastro.senha} copyable secret />
-              </dl>
-            </Card>
-          )}
-
-          {/* Etiquetas interativas (iguais ao Comercial) */}
-          <Card title="Etiquetas" icon={TagIcon}>
-            {contact ? (
-              <TagsEditor
-                contactId={contact.id}
-                tags={contact.tags}
-                onChanged={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
-              />
-            ) : (
-              <p className="text-sm text-zinc-400">Disponível após vincular o cliente a um contato do Comercial.</p>
-            )}
-          </Card>
-        </div>
-
-        {/* Processos do cliente conosco */}
-        <div className="lg:col-span-2">
-          <Card title={`Processos conosco (${meusCasos.length})`} icon={Scale}>
-            {meusCasos.length === 0 ? (
-              <p className="py-6 text-center text-sm text-zinc-400">Nenhum processo deste cliente.</p>
-            ) : (
-              <div className="space-y-4">
-                {([
-                  { key: 'vencidos', label: 'Vencidos', cor: '#2F9E44', bg: 'bg-emerald-50 dark:bg-emerald-900/15', dot: 'bg-emerald-500', chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
-                  { key: 'parcial', label: 'Recebimento parcial', cor: '#F59F00', bg: 'bg-amber-50 dark:bg-amber-900/15', dot: 'bg-amber-500', chip: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
-                  { key: 'andamento', label: 'Em andamento', cor: '#228BE6', bg: 'bg-blue-50 dark:bg-blue-900/15', dot: 'bg-blue-500', chip: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-                  { key: 'perdidos', label: 'Perdidos', cor: '#E03131', bg: 'bg-rose-50 dark:bg-rose-900/15', dot: 'bg-rose-500', chip: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
-                  { key: 'arquivados', label: 'Arquivados / encerrados', cor: '#868E96', bg: 'bg-zinc-50 dark:bg-zinc-800/40', dot: 'bg-zinc-400', chip: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' },
-                ] as const).map((grp) => {
-                  const lista = gruposCasos[grp.key] ?? [];
-                  if (lista.length === 0) return null;
-                  return (
-                    <div key={grp.key} className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
-                      <div className={`flex items-center gap-2 px-3 py-2 ${grp.bg}`}>
-                        <span className={`h-2.5 w-2.5 rounded-full ${grp.dot}`} />
-                        <span className="text-sm font-bold" style={{ color: grp.cor }}>{grp.label}</span>
-                        <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] font-bold tabular-nums dark:bg-zinc-900/60" style={{ color: grp.cor }}>{lista.length}</span>
-                      </div>
-                      <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                        {lista.map((c) => (
-                          <li key={c.id} className="flex items-start gap-2 px-3 py-2.5">
-                            <span title={c.cnjNumber ? 'Monitorado via DJEN' : 'Sem nº CNJ'} className="mt-0.5 shrink-0">
-                              <Rss className={`h-3.5 w-3.5 ${c.cnjNumber ? 'text-emerald-500' : 'text-zinc-300'}`} />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <Link href={`/processos/${c.id}`} className="block truncate text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-200" title={c.title}>{c.title}</Link>
-                              <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
-                                {c.faseLabel && <span className={`rounded px-1.5 py-0.5 font-medium ${grp.chip}`}>{c.faseLabel}</span>}
-                                <span>{c.area ?? 'Processo'}</span>
-                                {c.cnjNumber ? <span>· <CnjNumber value={c.cnjNumber} /></span> : null}
-                              </p>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          {/* Documentos do cliente vindos do Drive (contrato, procuração, docs pessoais) */}
-          <div className="mt-5">
-            <DocumentosCard
-              nome={cliente.name}
-              partyId={cliente.partyId}
-              contactId={contact?.id ?? null}
-              documento={cadastro?.cpf || cadastro?.cnpj || cliente.document || null}
-            />
+      <div className="flex-1 overflow-y-auto px-4 py-5 lg:px-6">
+        {aba === 'dados' && (
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="space-y-5">
+              <Card title="Ficha cadastral" icon={User}>
+                          {contact ? (
+                            <>
+                              <dl className="space-y-3 text-sm">
+                                <Row icon={Phone} label="Telefone" value={formatPhone(contact.phone)} />
+                                <Row icon={Mail} label="E-mail" value={contact.email} />
+                                {contact.notes && <Row icon={FileText} label="Observações" value={contact.notes} />}
+                                {contact.status && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
+                                    <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
+                                  </div>
+                                )}
+                              </dl>
+                              {contact.conversationId && (
+                                <Link
+                                  href={`/inbox?conversationId=${contact.conversationId}`}
+                                  className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+                                >
+                                  <MessageCircle className="h-3.5 w-3.5" /> Abrir conversa
+                                </Link>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-sm text-zinc-400">
+                              Cliente ainda sem ficha no Comercial. Quando houver um contato com o mesmo nome (ou ao
+                              vincular), a ficha cadastral e as etiquetas aparecem aqui.
+                            </p>
+                          )}
+                        </Card>
+            </div>
+            <div className="space-y-5">
+              {cadastro && (cadastro.cpf || cadastro.cnpj || cadastro.rg || cadastro.endereco || cadastro.login || cadastro.senha || cadastro.estadoCivil || cadastro.profissao) && (
+                          <Card title="Dados cadastrais" icon={IdCard}>
+                            <dl className="space-y-3 text-sm">
+                              <DataRow icon={Fingerprint} label="CPF" value={cadastro.cpf} copyable />
+                              <DataRow icon={IdCard} label="CNPJ" value={cadastro.cnpj} copyable />
+                              <DataRow icon={IdCard} label="RG" value={cadastro.rg} copyable />
+                              <DataRow icon={User} label="Estado civil" value={cadastro.estadoCivil} />
+                              <DataRow icon={User} label="Profissão" value={cadastro.profissao} />
+                              <DataRow icon={MapPin} label="Endereço" value={cadastro.endereco} copyable />
+                              <DataRow icon={KeyRound} label="Login gov.br / Meu INSS" value={cadastro.login} copyable />
+                              <DataRow icon={KeyRound} label="Senha gov.br / Meu INSS" value={cadastro.senha} copyable secret />
+                            </dl>
+                          </Card>
+                        )}
+              <Card title="Etiquetas" icon={TagIcon}>
+                          {contact ? (
+                            <TagsEditor
+                              contactId={contact.id}
+                              tags={contact.tags}
+                              onChanged={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
+                            />
+                          ) : (
+                            <p className="text-sm text-zinc-400">Disponível após vincular o cliente a um contato do Comercial.</p>
+                          )}
+                        </Card>
+            </div>
           </div>
+        )}
 
-          {/* Financeiro do cliente — honorários vinculados aos lançamentos */}
-          <div className="mt-5">
+        {aba === 'documentos' && (
+          <DocumentosCard
+            nome={cliente.name}
+            partyId={cliente.partyId}
+            contactId={contact?.id ?? null}
+            documento={cadastro?.cpf || cadastro?.cnpj || cliente.document || null}
+          />
+        )}
+
+        {aba === 'processos' && (
+              <Card title={`Processos conosco (${meusCasos.length})`} icon={Scale}>
+                      {meusCasos.length === 0 ? (
+                        <p className="py-6 text-center text-sm text-zinc-400">Nenhum processo deste cliente.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {([
+                            { key: 'vencidos', label: 'Vencidos', cor: '#2F9E44', bg: 'bg-emerald-50 dark:bg-emerald-900/15', dot: 'bg-emerald-500', chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+                            { key: 'parcial', label: 'Recebimento parcial', cor: '#F59F00', bg: 'bg-amber-50 dark:bg-amber-900/15', dot: 'bg-amber-500', chip: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+                            { key: 'andamento', label: 'Em andamento', cor: '#228BE6', bg: 'bg-blue-50 dark:bg-blue-900/15', dot: 'bg-blue-500', chip: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+                            { key: 'perdidos', label: 'Perdidos', cor: '#E03131', bg: 'bg-rose-50 dark:bg-rose-900/15', dot: 'bg-rose-500', chip: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
+                            { key: 'arquivados', label: 'Arquivados / encerrados', cor: '#868E96', bg: 'bg-zinc-50 dark:bg-zinc-800/40', dot: 'bg-zinc-400', chip: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400' },
+                          ] as const).map((grp) => {
+                            const lista = gruposCasos[grp.key] ?? [];
+                            if (lista.length === 0) return null;
+                            return (
+                              <div key={grp.key} className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+                                <div className={`flex items-center gap-2 px-3 py-2 ${grp.bg}`}>
+                                  <span className={`h-2.5 w-2.5 rounded-full ${grp.dot}`} />
+                                  <span className="text-sm font-bold" style={{ color: grp.cor }}>{grp.label}</span>
+                                  <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] font-bold tabular-nums dark:bg-zinc-900/60" style={{ color: grp.cor }}>{lista.length}</span>
+                                </div>
+                                <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                  {lista.map((c) => (
+                                    <li key={c.id} className="flex items-start gap-2 px-3 py-2.5">
+                                      <span title={c.cnjNumber ? 'Monitorado via DJEN' : 'Sem nº CNJ'} className="mt-0.5 shrink-0">
+                                        <Rss className={`h-3.5 w-3.5 ${c.cnjNumber ? 'text-emerald-500' : 'text-zinc-300'}`} />
+                                      </span>
+                                      <div className="min-w-0 flex-1">
+                                        <Link href={`/processos/${c.id}`} className="block truncate text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-200" title={c.title}>{c.title}</Link>
+                                        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+                                          {c.faseLabel && <span className={`rounded px-1.5 py-0.5 font-medium ${grp.chip}`}>{c.faseLabel}</span>}
+                                          <span>{c.area ?? 'Processo'}</span>
+                                          {c.cnjNumber ? <span>· <CnjNumber value={c.cnjNumber} /></span> : null}
+                                        </p>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </Card>
+        )}
+
+        {aba === 'financeiro' && (
+          <div className="space-y-5">
             <ClienteFinanceiroCard nome={cliente.name} cases={meusCasos} />
-          </div>
-
-          {/* Cobrança ASAAS — gera boleto/pix e concilia com o caixa */}
-          <div className="mt-5">
             <CobrancaAsaasCard
               nome={cliente.name}
               documento={cadastro?.cpf || cadastro?.cnpj || cliente.document || ''}
@@ -298,13 +351,12 @@ export default function ClienteDetailPage() {
               telefone={contact?.phone || ''}
               contactId={contact?.id || undefined}
             />
+            {/* Pipefy: Fase 3 — falta o valor da causa por processo */}
+            <div className="rounded-lg border border-dashed border-[#DEE2E6] bg-white p-4 text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
+              Valor da causa por processo (cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong>) — em breve.
+            </div>
           </div>
-
-          {/* Pipefy: Fase 3 — falta o valor da causa por processo */}
-          <div className="mt-5 rounded-lg border border-dashed border-[#DEE2E6] bg-white p-4 text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
-            Valor da causa por processo (cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong>) — em breve.
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -995,6 +1047,14 @@ function DocumentosCard({
             {tam && <span>· {tam}</span>}
             {d.drivePath && <span className="truncate">· {d.drivePath}</span>}
           </p>
+          {d.tambemEm.length > 0 && (
+            <p
+              className="mt-0.5 truncate text-[11px] text-zinc-400"
+              title={`O mesmo arquivo também está em: ${d.tambemEm.join(' | ')}`}
+            >
+              cópia idêntica também em {d.tambemEm.join(', ')}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <button

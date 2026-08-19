@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Users, Search, MessageSquare, Scale, Phone, Tag as TagIcon, Check, Plus, X, ChevronDown, CircleDot, Trash2,
+  FolderOpen, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { clientsService, type ClientRow } from '@/features/legal-cases/services/clients.service';
+import { clientDocumentsService } from '@/features/legal-cases/services/client-documents.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { formatPhone } from '@/lib/brazil-states';
@@ -109,6 +111,7 @@ export default function ClientesPage() {
         <h1 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
           <Users className="h-4 w-4" style={{ color: '#228BE6' }} /> Clientes
         </h1>
+        <ImportarDocumentosBotao />
       </div>
 
       {/* Filtros */}
@@ -416,5 +419,103 @@ function FilterItem({ children, onClick, active }: { children: React.ReactNode; 
     <button onClick={onClick} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800">
       {children} {active && <Check className="h-3.5 w-3.5 text-[#228BE6]" />}
     </button>
+  );
+}
+
+
+/**
+ * Traz do Google Drive, de uma vez, o contrato de honorários e os documentos
+ * pessoais de TODOS os clientes — em vez de abrir ficha por ficha.
+ *
+ * A varredura passa de dezenas de minutos (são centenas de pastas, cada uma com
+ * várias chamadas à API do Drive), então ela roda em segundo plano na API: o
+ * botão volta na hora, a barra mostra o progresso e o sino avisa no fim. Sair da
+ * tela não interrompe nada.
+ */
+function ImportarDocumentosBotao() {
+  const [ligado, setLigado] = useState(false);
+  const { data: status } = useQuery({
+    queryKey: ['client-documents', 'importar-status'],
+    queryFn: () => clientDocumentsService.importarStatus(),
+    // Só fica perguntando enquanto há varredura rolando.
+    refetchInterval: (q) => ((q.state.data as any)?.rodando ? 4000 : false),
+    enabled: ligado,
+  });
+  const qc = useQueryClient();
+  const [disparando, setDisparando] = useState(false);
+
+  // Se já havia uma varredura rolando (outra sessão, ou a tela foi recarregada),
+  // a barra reaparece sozinha.
+  useEffect(() => {
+    setLigado(true);
+  }, []);
+
+  const rodando = !!status?.rodando;
+  const pct =
+    rodando && status.totalPastas
+      ? Math.round((status.parcial.pastasVarridas / status.totalPastas) * 100)
+      : 0;
+
+  const disparar = async () => {
+    if (rodando) return;
+    if (
+      !confirm(
+        'Importar os documentos do Drive de TODOS os clientes?\n\n' +
+          'Traz o contrato de honorários, a procuração, a hipossuficiência e os documentos ' +
+          'pessoais de cada pasta em 01.CLIENTES.\n\n' +
+          'Leva dezenas de minutos e roda em segundo plano — pode fechar esta tela. ' +
+          'Os arquivos continuam no Drive; a ficha só passa a mostrá-los.',
+      )
+    )
+      return;
+    setDisparando(true);
+    try {
+      await clientDocumentsService.importarTudo({});
+      await qc.invalidateQueries({ queryKey: ['client-documents', 'importar-status'] });
+      toast.success('Importação começou. Pode sair desta tela — o sino avisa quando terminar.');
+    } catch (e: any) {
+      toast.error(e?.message || 'Não consegui iniciar a importação.');
+    } finally {
+      setDisparando(false);
+    }
+  };
+
+  // Terminou nesta sessão: mostra o saldo, sem obrigar a ir ao sino.
+  const fim = status && !status.rodando && status.terminadaEm ? status : null;
+
+  return (
+    <div className="flex items-center gap-3">
+      {rodando && (
+        <div className="hidden items-center gap-2 sm:flex">
+          <div className="h-1.5 w-32 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+            <div className="h-full rounded-full bg-[#228BE6] transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-xs tabular-nums text-zinc-500">
+            {status.parcial.pastasVarridas}/{status.totalPastas} · {status.parcial.indexados} doc(s)
+          </span>
+        </div>
+      )}
+      {!rodando && fim && (
+        <span className="hidden text-xs text-zinc-500 sm:inline">
+          {fim.erroFatal
+            ? `Falhou: ${fim.erroFatal}`
+            : `${fim.parcial.indexados} documento(s) importado(s) · ${fim.parcial.clientesComDocumento} cliente(s)`}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={disparar}
+        disabled={rodando || disparando}
+        title="Traz do Google Drive os documentos de todos os clientes"
+        className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300"
+      >
+        {rodando || disparando ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <FolderOpen className="h-3.5 w-3.5" />
+        )}
+        {rodando ? 'Importando…' : 'Importar documentos do Drive'}
+      </button>
+    </div>
   );
 }
