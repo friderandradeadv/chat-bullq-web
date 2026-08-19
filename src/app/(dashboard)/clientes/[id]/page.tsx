@@ -34,6 +34,12 @@ import {
   FileSignature,
   ExternalLink,
   ClipboardCheck,
+  History,
+  Gavel,
+  Landmark,
+  Banknote,
+  FileCheck2,
+  CircleDot,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService } from '@/features/inbox/services/inbox.service';
@@ -43,6 +49,11 @@ import {
   CATEGORIA_LABEL,
   type ClientDocument,
 } from '@/features/legal-cases/services/client-documents.service';
+import {
+  clientTimelineService,
+  type Marco,
+  type MarcoTipo,
+} from '@/features/legal-cases/services/client-timeline.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { tagsService } from '@/features/settings/services/tags.service';
 import { financeiroService, anexoHref } from '@/features/financeiro/services/financeiro.service';
@@ -65,6 +76,7 @@ const ABAS = [
   { key: 'dados', label: 'Dados', icon: User },
   { key: 'documentos', label: 'Documentos', icon: FolderOpen },
   { key: 'processos', label: 'Processos', icon: Scale },
+  { key: 'historico', label: 'Histórico', icon: History },
   { key: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
 ] as const;
 type AbaKey = (typeof ABAS)[number]['key'];
@@ -181,9 +193,9 @@ export default function ClienteDetailPage() {
     return <div className="bg-white p-6 text-sm text-zinc-400 dark:bg-zinc-950">Cliente não encontrado.</div>;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+    <div className="flex h-full flex-col overflow-hidden bg-[#F6F7F9] text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
       {/* ── Topo fixo: quem é o cliente não some ao rolar a aba ── */}
-      <div className="shrink-0 border-b border-[#DEE2E6] px-4 pt-3 lg:px-6 dark:border-zinc-800">
+      <div className="shrink-0 border-b border-zinc-200/80 bg-white px-4 pt-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] lg:px-6 dark:border-zinc-800 dark:bg-zinc-900/40 dark:shadow-none">
         <button onClick={() => router.back()} className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-[#228BE6]">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
@@ -202,6 +214,12 @@ export default function ClienteDetailPage() {
               </h1>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500">
                 <span>Cliente</span>
+                <span>·</span>
+                {/* Quantos processos conosco — some daqui e a ficha perde a
+                    primeira coisa que se quer saber ao abrir um cliente. */}
+                <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                  {meusCasos.length} processo(s) conosco
+                </span>
                 {docPrincipal && (
                   <>
                     <span>·</span>
@@ -347,17 +365,6 @@ export default function ClienteDetailPage() {
                 )}
               </Card>
 
-              {/* ACESSOS — credencial de terceiro (gov.br / Meu INSS). Separada de
-                  propósito: é o dado mais sensível da ficha e não deve ficar
-                  misturado com telefone e e-mail. */}
-              {(cadastro?.login || cadastro?.senha) && (
-                <Card title="Acessos gov.br / Meu INSS" icon={KeyRound}>
-                  <dl className="space-y-3 text-sm">
-                    <DataRow icon={KeyRound} label="Login" value={cadastro.login} copyable />
-                    <DataRow icon={KeyRound} label="Senha" value={cadastro.senha} copyable secret />
-                  </dl>
-                </Card>
-              )}
             </div>
 
             {/* CONTATO — como se fala com a pessoa. Vem do Comercial (Contact),
@@ -383,6 +390,18 @@ export default function ClienteDetailPage() {
                   </p>
                 )}
               </Card>
+
+              {/* ACESSOS — credencial de terceiro (gov.br / Meu INSS). Separada de
+                  propósito: é o dado mais sensível da ficha e não deve ficar
+                  misturado com telefone e e-mail. */}
+              {(cadastro?.login || cadastro?.senha) && (
+                <Card title="Acessos gov.br / Meu INSS" icon={KeyRound}>
+                  <dl className="space-y-3 text-sm">
+                    <DataRow icon={KeyRound} label="Login" value={cadastro.login} copyable />
+                    <DataRow icon={KeyRound} label="Senha" value={cadastro.senha} copyable secret />
+                  </dl>
+                </Card>
+              )}
             </div>
           </div>
         )}
@@ -442,6 +461,8 @@ export default function ClienteDetailPage() {
                       )}
                     </Card>
         )}
+
+        {aba === 'historico' && <LinhaDoTempo partyId={cliente.partyId} />}
 
         {aba === 'financeiro' && (
           <div className="space-y-5">
@@ -703,7 +724,7 @@ function TagsEditor({
 
 function Card({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-[#DEE2E6] bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-xl border border-zinc-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_4px_12px_-4px_rgba(16,24,40,0.08)] transition-shadow hover:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_8px_20px_-6px_rgba(16,24,40,0.12)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-[#6C757D]">
         <Icon className="h-4 w-4" style={{ color: ASTREA_BLUE }} /> {title}
       </h2>
@@ -1187,7 +1208,7 @@ function DocumentosCard({
 
   const Bloco = ({ titulo, lista }: { titulo: string; lista: ClientDocument[] }) =>
     lista.length === 0 ? null : (
-      <div className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+      <div className="overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.03)] dark:border-zinc-800 dark:bg-transparent dark:shadow-none">
         <div className="flex items-center gap-2 bg-zinc-50 px-3 py-2 dark:bg-zinc-800/40">
           <span className="text-sm font-bold text-zinc-500 dark:text-zinc-400">{titulo}</span>
           <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-zinc-500 dark:bg-zinc-900/60">
@@ -1228,8 +1249,11 @@ function DocumentosCard({
         </p>
       ) : (
         <div className="space-y-4">
-          <Bloco titulo="Contrato e documentos assinados" lista={escritorio} />
+          {/* Pessoais primeiro: RG, CNH e comprovante são o que se abre no dia a
+              dia (juntar em petição, conferir endereço). O contrato assinado se
+              consulta uma vez e fica. */}
           <Bloco titulo="Documentos pessoais" lista={pessoais} />
+          <Bloco titulo="Contrato e documentos assinados" lista={escritorio} />
         </div>
       )}
     </Card>
@@ -1261,8 +1285,11 @@ function Indicador({
     <button
       type="button"
       onClick={onClick}
-      className="group rounded-lg border border-[#DEE2E6] bg-white px-3 py-2 text-left transition hover:border-[#228BE6] hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+      className="group relative overflow-hidden rounded-xl border border-zinc-200/80 bg-white px-3 py-2.5 pl-4 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04),0_4px_12px_-4px_rgba(16,24,40,0.08)] transition-all hover:-translate-y-px hover:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_10px_24px_-8px_rgba(16,24,40,0.16)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none"
     >
+      {/* Faixa na cor do indicador: o que dá leitura imediata no modo claro,
+          onde caixa branca sobre fundo branco não tinha nenhum relevo. */}
+      <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: cor }} />
       <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#6C757D]">
         <Icon className="h-3.5 w-3.5" style={{ color: cor }} />
         {label}
@@ -1356,5 +1383,120 @@ function CopiarQualificacao({
         )}
       </div>
     </div>
+  );
+}
+
+
+/** Cada tipo de marco tem ícone e cor próprios — a linha se lê de relance. */
+const ESTILO_MARCO: Record<MarcoTipo, { icon: React.ElementType; cor: string; rotulo: string }> = {
+  contrato:     { icon: FileCheck2,       cor: '#2F9E44', rotulo: 'Contrato' },
+  documento:    { icon: FileText,         cor: '#868E96', rotulo: 'Documento' },
+  distribuicao: { icon: Landmark,         cor: '#228BE6', rotulo: 'Distribuição' },
+  andamento:    { icon: CircleDot,        cor: '#ADB5BD', rotulo: 'Andamento' },
+  sentenca:     { icon: Gavel,            cor: '#7048E8', rotulo: 'Sentença' },
+  recurso:      { icon: Scale,            cor: '#F59F00', rotulo: 'Recurso' },
+  alvara:       { icon: Banknote,         cor: '#2F9E44', rotulo: 'Alvará' },
+  honorario:    { icon: CircleDollarSign, cor: '#228BE6', rotulo: 'Honorários' },
+  repasse:      { icon: Banknote,         cor: '#12B886', rotulo: 'Repasse' },
+  fase:         { icon: CircleDot,        cor: '#868E96', rotulo: 'Fase' },
+};
+
+/**
+ * Linha do tempo do cliente: contrato assinado → distribuição → andamentos →
+ * sentença → alvará → repasse, numa sequência só.
+ *
+ * O filtro "só marcos" nasce LIGADO de propósito. Um processo antigo tem
+ * centenas de despachos, e mostrar tudo de cara transformaria a história do
+ * cliente num log de cartório — o que interessa primeiro é o que mudou o rumo.
+ */
+function LinhaDoTempo({ partyId }: { partyId: string }) {
+  const [soMarcos, setSoMarcos] = useState(true);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['client-timeline', partyId],
+    queryFn: () => clientTimelineService.get(partyId),
+  });
+
+  const marcos = useMemo(() => {
+    const lista = data?.marcos ?? [];
+    return soMarcos ? lista.filter((m) => m.destaque) : lista;
+  }, [data, soMarcos]);
+
+  const ocultos = (data?.marcos.length ?? 0) - marcos.length;
+
+  if (isLoading) return <Card title="Histórico" icon={History}><p className="py-6 text-center text-sm text-zinc-400">Montando a linha do tempo…</p></Card>;
+  if (error) return <Card title="Histórico" icon={History}><p className="py-6 text-center text-sm text-rose-500">{(error as Error).message}</p></Card>;
+
+  return (
+    <Card title={`Histórico do cliente (${marcos.length})`} icon={History}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-zinc-400">
+          Contrato, distribuição, andamentos, alvará e repasse na mesma linha.
+        </p>
+        <button
+          type="button"
+          onClick={() => setSoMarcos((v) => !v)}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:text-zinc-300"
+        >
+          {soMarcos ? `Mostrar tudo${ocultos > 0 ? ` (+${ocultos})` : ''}` : 'Só os marcos'}
+        </button>
+      </div>
+
+      {marcos.length === 0 ? (
+        <p className="py-6 text-center text-sm text-zinc-400">
+          Nada registrado ainda para este cliente.
+        </p>
+      ) : (
+        <ol className="relative space-y-0">
+          {/* Trilho vertical: é ele que faz a sequência ser lida como história */}
+          <span className="absolute bottom-2 left-[15px] top-2 w-px bg-zinc-200 dark:bg-zinc-800" />
+          {marcos.map((m, i) => (
+            <MarcoItem key={`${m.data}-${i}`} m={m} />
+          ))}
+        </ol>
+      )}
+    </Card>
+  );
+}
+
+function MarcoItem({ m }: { m: Marco }) {
+  const est = ESTILO_MARCO[m.tipo] ?? ESTILO_MARCO.andamento;
+  const Icon = est.icon;
+  const data = new Date(m.data);
+  return (
+    <li className="relative flex gap-3 py-2.5 pl-0">
+      <span
+        className="relative z-10 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-4 ring-white dark:ring-zinc-900"
+        style={{ backgroundColor: m.destaque ? est.cor : 'transparent', border: m.destaque ? 'none' : `1.5px solid ${est.cor}` }}
+      >
+        <Icon className="h-4 w-4" style={{ color: m.destaque ? '#fff' : est.cor }} />
+      </span>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className={`text-sm ${m.destaque ? 'font-semibold text-zinc-800 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-300'}`}>
+            {m.titulo}
+          </span>
+          {m.valor != null && (
+            <span className="text-sm font-semibold tabular-nums" style={{ color: est.cor }}>
+              {brlc(m.valor)}
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+          <span className="tabular-nums">{data.toLocaleDateString('pt-BR')}</span>
+          <span className="rounded px-1.5 py-0.5 font-medium" style={{ backgroundColor: `${est.cor}1a`, color: est.cor }}>
+            {est.rotulo}
+          </span>
+          {m.caseId && m.caseTitulo && (
+            <>
+              <span>·</span>
+              <Link href={`/processos/${m.caseId}`} className="truncate hover:text-[#228BE6] hover:underline" title={m.caseTitulo}>
+                {m.caseTitulo}
+              </Link>
+            </>
+          )}
+          {m.detalhe && <span className="truncate">· {m.detalhe}</span>}
+        </p>
+      </div>
+    </li>
   );
 }
