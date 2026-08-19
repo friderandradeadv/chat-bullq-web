@@ -131,6 +131,18 @@ function enderecoCurto(endereco?: string | null): string | null {
     .trim();
 }
 
+/**
+ * Ano em que a ação foi ajuizada, lido do número CNJ. O formato é
+ * NNNNNNN-DD.AAAA.J.TR.OOOO — o `AAAA` é o ano de distribuição, e é o dado mais
+ * confiável que temos quando o processo veio de migração sem data preenchida.
+ */
+function anoDoCnj(cnj?: string | null): number | null {
+  const m = (cnj ?? '').match(/^\d{7}-\d{2}\.(\d{4})\./);
+  if (!m) return null;
+  const ano = Number(m[1]);
+  return ano >= 1990 && ano <= new Date().getFullYear() ? ano : null;
+}
+
 /** "há 2 anos", "há 8 meses" — tempo desde o primeiro vínculo com o escritório. */
 function tempoDeCasa(desde?: string | Date | null): string | null {
   if (!desde) return null;
@@ -226,19 +238,22 @@ export default function ClienteDetailPage() {
   const docPrincipal = cadastro?.cpf || cadastro?.cnpj || cliente?.document || null;
   const idade = idadeDe(cadastro?.nascimento);
   const cidade = cidadeDe(cadastro?.endereco);
-  // Há quanto tempo é cliente = data do CONTRATO. Preferimos a assinatura; sem
-  // ela (contrato importado do Drive, que não passou pelo ZapSign) vale a data
-  // do arquivo lá. Só se não houver contrato datado caímos no processo mais
-  // antigo — a data de INDEXAÇÃO no hub nunca entra, ela diria "há 2 dias".
+  // Há quanto tempo é cliente. Em ordem de confiança:
+  //   1. assinatura do contrato (ZapSign) — a data exata;
+  //   2. data do arquivo do contrato no Drive — proxy da assinatura;
+  //   3. ANO do número CNJ mais antigo — quando o processo veio de migração sem
+  //      data, o `AAAA` do CNJ ainda diz o ano do ajuizamento.
+  // O `createdAt` do processo NUNCA entra: é quando o caso foi cadastrado no
+  // hub, e dizia "há 2 meses" de um cliente que está conosco desde 2024.
   const conosco = useMemo(() => {
     const contrato = docsDoCliente.find((d) => d.categoria === 'CONTRATO');
     const doContrato = contrato?.assinadoEm ?? contrato?.driveModifiedAt ?? null;
     if (doContrato) return tempoDeCasa(doContrato);
-    const datas = meusCasos
-      .map((c: any) => c.distribuidoEm ?? c.createdAt)
-      .filter(Boolean)
-      .sort();
-    return tempoDeCasa(datas[0] ?? null);
+
+    const anos = meusCasos.map((c) => anoDoCnj(c.cnjNumber)).filter((a): a is number => a != null);
+    if (!anos.length) return null;
+    // Só o ANO é conhecido — dizer "há 2 anos e 7 meses" seria precisão falsa.
+    return `cliente desde ${Math.min(...anos)}`;
   }, [docsDoCliente, meusCasos]);
 
   // Resumo financeiro para a faixa de indicadores. Mesma chave do cartão da aba
@@ -294,14 +309,12 @@ export default function ClienteDetailPage() {
                     </span>
                   </>
                 )}
-                <span>·</span>
-                <span className="font-medium text-zinc-600 dark:text-zinc-300">
-                  {meusCasos.length} processo(s) conosco
-                </span>
                 {conosco && (
                   <>
                     <span>·</span>
-                    <span title="desde o contrato de honorários (ou o processo mais antigo)">{conosco} conosco</span>
+                    <span title="pela assinatura do contrato; sem ela, pelo ano do número CNJ">
+                      {conosco.startsWith('cliente desde') ? conosco : `${conosco} conosco`}
+                    </span>
                   </>
                 )}
               </div>
