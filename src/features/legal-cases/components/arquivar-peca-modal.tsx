@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stamp, Upload, FileText, ArrowUp, ArrowDown, X, Loader2, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -100,6 +100,7 @@ export function ArquivarPecaModal({
   const [itens, setItens] = useState<ItemProtocolo[]>([]);
   const [salvando, setSalvando] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
   // As duas pastas autorizadas: de onde o arquivo sai e para onde ele vai.
   const [mesa, setMesa] = useState<any>(null);
   const [clientesDir, setClientesDir] = useState<any>(null);
@@ -136,6 +137,10 @@ export function ArquivarPecaModal({
     staleTime: 10_000,
   });
   const [semeou, setSemeou] = useState(false);
+  // Vindo da Mesa, o arquivo pode fazer as duas coisas de uma vez: virar anexo
+  // do prazo (o registro do que foi protocolado) e mudar de lugar para a pasta
+  // do cliente. Uma coisa não substitui a outra — o anexo prova, a pasta arquiva.
+  const [anexarNaTarefa, setAnexarNaTarefa] = useState(true);
   useEffect(() => {
     if (semeou || !anexosQ.data?.length) return;
     setItens(anexosQ.data.map((a) => ({ kind: 'anexo' as const, id: a.id, nome: a.name })));
@@ -261,6 +266,31 @@ export function ArquivarPecaModal({
       // Caminho do MOVIMENTO: a API diz onde e com que nome; o Mac executa.
       // Nada sobe pela rede e nada é apagado.
       if (podeMover) {
+        // ANEXAR PRIMEIRO, mover depois. Depois do `move` o arquivo não está
+        // mais na Mesa e o `File` na mão vira referência morta — se a ordem
+        // fosse a inversa, uma falha ao anexar deixaria o prazo sem registro e
+        // sem como refazer.
+        if (atividade && anexarNaTarefa) {
+          try {
+            await activitiesService.uploadAnexos(
+              atividade.entityType,
+              atividade.entityId,
+              itens.map((i) => (i as any).file as File),
+            );
+            // A lista de anexos do painel é a mesma query — sem isto o anexo só
+            // apareceria ao reabrir a tarefa.
+            qc.invalidateQueries({
+              queryKey: ['activity-anexos', atividade.entityType, atividade.entityId],
+            });
+          } catch (e: any) {
+            toast.error(
+              e?.response?.data?.message ||
+                'Não consegui anexar na tarefa — não movi nada da Mesa.',
+            );
+            return;
+          }
+        }
+
         const plano = await driveBrowserService.plano(
           alvoPartyId,
           fase.caminho,
@@ -282,7 +312,8 @@ export function ArquivarPecaModal({
           );
         else
           toast.success(
-            `${r2.movidos.length} arquivo(s) saíram da Mesa e entraram em ${plano.pasta}.`,
+            `${r2.movidos.length} arquivo(s) saíram da Mesa e entraram em ${plano.pasta}` +
+              (atividade && anexarNaTarefa ? ', e ficaram anexados na tarefa.' : '.'),
           );
         onPronto(
           { pasta: plano.pasta, caminho: plano.destino, arquivos: r2.movidos },
@@ -549,10 +580,26 @@ export function ArquivarPecaModal({
             {suportaMoverNoDisco() && itens.some((i) => i.kind === 'file' && i.daMesa) && (
               <div className="mt-2 rounded-lg border border-zinc-200 px-2.5 py-2 dark:border-zinc-800">
                 {podeMover ? (
-                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                    O arquivo <span className="font-medium">sai da Mesa e entra na pasta</span> — sem
-                    upload e sem apagar. O Google sincroniza depois.
-                  </p>
+                  <>
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                      O arquivo <span className="font-medium">sai da Mesa e entra na pasta</span> —
+                      sem apagar. O Google sincroniza depois.
+                    </p>
+                    {atividade && (
+                      <label className="mt-1.5 flex items-start gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        <input
+                          type="checkbox"
+                          checked={anexarNaTarefa}
+                          onChange={(e) => setAnexarNaTarefa(e.target.checked)}
+                          className="mt-0.5 accent-[#228BE6]"
+                        />
+                        <span>
+                          Anexar também na tarefa — fica o registro do que foi protocolado, junto do
+                          prazo.
+                        </span>
+                      </label>
+                    )}
+                  </>
                 ) : !clientesDir ? (
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                     Para mover de verdade, autorize a pasta{' '}
