@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -43,6 +43,11 @@ import {
   Folder,
   ChevronRight,
   HardDrive,
+  FolderPlus,
+  Upload,
+  Stamp,
+  ArrowUp,
+  ArrowDown,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -53,7 +58,12 @@ import {
   CATEGORIA_LABEL,
   type ClientDocument,
 } from '@/features/legal-cases/services/client-documents.service';
-import { driveBrowserService, type ItemDrive } from '@/features/legal-cases/services/drive-browser.service';
+import {
+  driveBrowserService,
+  type ItemDrive,
+  type FaseNoDrive,
+} from '@/features/legal-cases/services/drive-browser.service';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   clientTimelineService,
   type Marco,
@@ -1685,10 +1695,24 @@ function MarcoItem({ m }: { m: Marco }) {
  * (contadores, categorias, deduplicação das cópias por produto, linha do tempo)
  * — perguntas sobre o conjunto, que uma pasta não responde. Esta é a pasta como
  * está AGORA, e garante que a ficha nunca esconda um arquivo que existe.
+ *
+ * Desde 20/08/2026 também ESCREVE: cria pasta, sobe arquivo, manda para a
+ * lixeira e arquiva peça protocolada na fase certa. O que era só vitrine virou
+ * a pasta de verdade — sem sair do hub e sem abrir o Drive ao lado.
  */
 function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => void }) {
   const [caminho, setCaminho] = useState<string[]>([]);
   const [abrindo, setAbrindo] = useState<string | null>(null);
+  const [novaPasta, setNovaPasta] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  const [arquivarAberto, setArquivarAberto] = useState(false);
+  const inputArquivos = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+
+  // Remover é destrutivo: só sócio, como todo destrutivo do hub. A rota também
+  // trava — isto aqui é só não mostrar um botão que ia dar 403.
+  const activeOrg = useAuthStore((st) => st.organizations.find((o) => o.id === st.activeOrgId));
+  const podeRemover = activeOrg?.role === 'OWNER' || activeOrg?.role === 'ADMIN';
 
   const { data, isFetching, error } = useQuery({
     queryKey: ['drive-pasta', partyId, caminho.join('/')],
@@ -1697,6 +1721,8 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
     staleTime: 0,
     gcTime: 0,
   });
+
+  const recarregar = () => qc.invalidateQueries({ queryKey: ['drive-pasta', partyId] });
 
   const abrirArquivo = async (it: ItemDrive) => {
     setAbrindo(it.id);
@@ -1707,6 +1733,70 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
       toast.error(e?.message || 'Não consegui abrir o arquivo.');
     } finally {
       setAbrindo(null);
+    }
+  };
+
+  const criarPasta = async () => {
+    const nome = (novaPasta ?? '').trim();
+    if (!nome) return setNovaPasta(null);
+    setOcupado('pasta');
+    try {
+      await driveBrowserService.criarPasta(partyId, caminho, nome);
+      setNovaPasta(null);
+      await recarregar();
+      toast.success(`Pasta "${nome}" criada.`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Não consegui criar a pasta.');
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const enviarArquivos = async (lista: FileList | null) => {
+    const arquivos = Array.from(lista ?? []);
+    if (!arquivos.length) return;
+    setOcupado('enviar');
+    try {
+      const r = await driveBrowserService.enviar(partyId, caminho, arquivos);
+      await recarregar();
+      if (r.pulados?.length)
+        toast.warning(
+          `${r.enviados.length} enviado(s). Já existiam e não foram sobrescritos: ${r.pulados.join(', ')}`,
+        );
+      else toast.success(`${r.enviados.length} arquivo(s) na pasta.`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Não consegui enviar.');
+    } finally {
+      setOcupado(null);
+      if (inputArquivos.current) inputArquivos.current.value = '';
+    }
+  };
+
+  const remover = async (it: ItemDrive) => {
+    const oQue = it.pasta ? 'a pasta' : 'o arquivo';
+    if (!window.confirm(`Mandar ${oQue} "${it.nome}" para a lixeira do Drive?`)) return;
+    setOcupado(it.id);
+    try {
+      await driveBrowserService.excluir(partyId, caminho, it.id);
+      await recarregar();
+      toast.success(`"${it.nome}" foi para a lixeira do Drive.`);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || '';
+      // Pasta com conteúdo: a rota recusa e diz quantos itens vão junto. Quem
+      // decide é o advogado, com o número na frente.
+      if (/item\(ns\) dentro/.test(msg)) {
+        if (window.confirm(`${msg}\n\nMandar tudo para a lixeira?`)) {
+          try {
+            await driveBrowserService.excluir(partyId, caminho, it.id, true);
+            await recarregar();
+            toast.success(`"${it.nome}" foi para a lixeira do Drive.`);
+          } catch (e2: any) {
+            toast.error(e2?.response?.data?.message || 'Não consegui remover.');
+          }
+        }
+      } else toast.error(msg || 'Não consegui remover.');
+    } finally {
+      setOcupado(null);
     }
   };
 
@@ -1773,8 +1863,83 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
         </div>
       </div>
 
+      {/* Ações de escrita. "Arquivar peça" é a porta do protocolo: leva a peça
+          para a fase, na subpasta datada, com os PDFs numerados. As outras duas
+          são a pasta crua — um documento pessoal, um comprovante. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200/80 px-3 py-2 dark:border-zinc-800">
+        <button
+          type="button"
+          onClick={() => setArquivarAberto(true)}
+          className="inline-flex items-center gap-1.5 rounded-md bg-[#228BE6] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1c7ed6]"
+        >
+          <Stamp className="h-3.5 w-3.5" /> Arquivar peça
+        </button>
+        <button
+          type="button"
+          onClick={() => inputArquivos.current?.click()}
+          disabled={ocupado === 'enviar'}
+          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+        >
+          {ocupado === 'enviar' ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
+          Enviar arquivos
+        </button>
+        <button
+          type="button"
+          onClick={() => setNovaPasta('')}
+          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+        >
+          <FolderPlus className="h-3.5 w-3.5" /> Nova pasta
+        </button>
+        <input
+          ref={inputArquivos}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => enviarArquivos(e.target.files)}
+        />
+        <span className="ml-auto text-[11px] text-zinc-400">
+          {naRaiz ? 'raiz do cliente' : `em ${caminho[caminho.length - 1]}`}
+        </span>
+      </div>
+
       {/* Lista: rola com a aba, não dentro de uma caixinha */}
       <div className="flex-1">
+        {novaPasta !== null && (
+          <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50/60 px-4 py-2 dark:border-zinc-800 dark:bg-zinc-800/30">
+            <FolderPlus className="h-4 w-4 shrink-0 text-[#228BE6]" />
+            <input
+              autoFocus
+              value={novaPasta}
+              onChange={(e) => setNovaPasta(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') criarPasta();
+                if (e.key === 'Escape') setNovaPasta(null);
+              }}
+              placeholder="Nome da pasta (ex.: 10. COBRANÇAS)"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm text-zinc-700 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+            />
+            <button
+              type="button"
+              onClick={criarPasta}
+              disabled={ocupado === 'pasta'}
+              className="rounded-md bg-[#228BE6] px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              {ocupado === 'pasta' ? 'Criando…' : 'Criar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setNovaPasta(null)}
+              className="rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+
         {error ? (
           <p className="px-4 py-10 text-center text-sm text-rose-500">{(error as Error).message}</p>
         ) : !data ? (
@@ -1784,7 +1949,7 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
         ) : (
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {data.itens.map((it) => (
-              <li key={it.id}>
+              <li key={it.id} className="group relative">
                 <button
                   type="button"
                   onDoubleClick={() => it.pasta && setCaminho([...caminho, it.nome])}
@@ -1819,6 +1984,22 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
                   )}
                   <ChevronRight className={`h-3.5 w-3.5 shrink-0 ${it.pasta ? 'text-zinc-300' : 'invisible'}`} />
                 </button>
+
+                {podeRemover && (
+                  <button
+                    type="button"
+                    onClick={() => remover(it)}
+                    disabled={ocupado === it.id}
+                    title="Mandar para a lixeira do Drive"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-300 opacity-0 transition group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"
+                  >
+                    {ocupado === it.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -1831,6 +2012,271 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
           {data.itens.filter((i) => !i.pasta).length} arquivo(s) · lido do Drive agora
         </div>
       )}
+
+      {arquivarAberto && (
+        <ArquivarPeca
+          partyId={partyId}
+          onFechar={() => setArquivarAberto(false)}
+          onPronto={(destino) => {
+            setArquivarAberto(false);
+            setCaminho(destino);
+            recarregar();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Data de hoje no formato do escritório. */
+function hojeDDMMAAAA() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+}
+
+/**
+ * Arquivar peça protocolada — a porta do pós-protocolo.
+ *
+ * O advogado escolhe a FASE e anexa; o resto é convenção do escritório e sai
+ * pronto: a subpasta `<letra>) <DD.MM.AAAA>` com a letra na sequência da fase, e
+ * dentro dela os PDFs numerados NA ORDEM DO PROTOCOLO com o editável sem número.
+ * É a mesma regra do `arquivar_peca.py`, que arquiva pela Mesa — as duas portas
+ * têm de escrever igual, senão o acervo padronizado se desfaz pelo uso diário.
+ *
+ * A ordem dos anexos importa e por isso é editável aqui: numerar fora da ordem
+ * do protocolo é erro que só aparece meses depois, quando alguém procura a
+ * prova pelo número.
+ */
+function ArquivarPeca({
+  partyId,
+  onFechar,
+  onPronto,
+}: {
+  partyId: string;
+  onFechar: () => void;
+  onPronto: (destino: string[]) => void;
+}) {
+  const [faseSel, setFaseSel] = useState<string>('');
+  const [data, setData] = useState(hojeDDMMAAAA());
+  const [arquivos, setArquivos] = useState<File[]>([]);
+  const [salvando, setSalvando] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  const { data: fases, isLoading: carregandoFases, error: erroFases } = useQuery({
+    queryKey: ['drive-fases', partyId],
+    queryFn: () => driveBrowserService.fases(partyId),
+    staleTime: 60_000,
+  });
+
+  const fase: FaseNoDrive | undefined = fases?.find((f) => f.caminho.join('/') === faseSel);
+  const dataOk = /^\d{2}\.\d{2}\.\d{4}$/.test(data);
+
+  // Só para mostrar onde vai cair: quem decide a letra é o servidor, lendo a
+  // fase no Drive na hora de gravar.
+  const { data: destino } = useQuery({
+    queryKey: ['drive-destino', partyId, faseSel, data],
+    queryFn: () => driveBrowserService.destino(partyId, fase!.caminho, data),
+    enabled: !!fase && dataOk,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  // Espelha a regra do servidor: PDF entra numerado na ordem, editável sem
+  // número. O servidor é quem manda — isto é a prévia.
+  const nomeFinal = (f: File, i: number) => {
+    const pdfs = arquivos.filter((x) => /\.pdf$/i.test(x.name));
+    if (!/\.pdf$/i.test(f.name)) return f.name;
+    if (/^\d{2}\.\s/.test(f.name)) return f.name;
+    return `${String(pdfs.indexOf(f) + 1).padStart(2, '0')}. ${f.name}`;
+  };
+
+  const mover = (i: number, delta: number) => {
+    const j = i + delta;
+    if (j < 0 || j >= arquivos.length) return;
+    const copia = [...arquivos];
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+    setArquivos(copia);
+  };
+
+  const salvar = async () => {
+    if (!fase) return toast.error('Escolha a fase.');
+    if (!dataOk) return toast.error('A data do protocolo é DD.MM.AAAA.');
+    if (!arquivos.length) return toast.error('Anexe ao menos a peça.');
+    setSalvando(true);
+    try {
+      const r = await driveBrowserService.arquivar(partyId, fase.caminho, arquivos, data);
+      toast.success(`Peça arquivada em ${r.pasta} (${r.arquivos.length} arquivo(s)).`);
+      onPronto(r.caminho);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Não consegui arquivar.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800">
+          <Stamp className="h-4 w-4 text-[#228BE6]" />
+          <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+            Arquivar peça protocolada
+          </h3>
+          <button
+            type="button"
+            onClick={onFechar}
+            className="ml-auto rounded-md p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              Fase
+            </label>
+            {carregandoFases ? (
+              <p className="text-sm text-zinc-400">Lendo as fases no Drive…</p>
+            ) : erroFases ? (
+              <p className="text-sm text-rose-500">{(erroFases as Error).message}</p>
+            ) : !fases?.length ? (
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                Este cliente não tem pasta de fase no Drive. Crie a fase (ou rode a padronização)
+                antes de arquivar.
+              </p>
+            ) : (
+              <select
+                value={faseSel}
+                onChange={(e) => setFaseSel(e.target.value)}
+                className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-700 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              >
+                <option value="">Escolha a fase…</option>
+                {fases.map((f) => (
+                  <option key={f.caminho.join('/')} value={f.caminho.join('/')}>
+                    {f.caminho.join('  ›  ')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              Data do protocolo
+            </label>
+            <input
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              placeholder="DD.MM.AAAA"
+              className={`w-40 rounded-md border bg-white px-2 py-1.5 text-sm tabular-nums outline-none dark:bg-zinc-900 ${
+                dataOk
+                  ? 'border-zinc-200 text-zinc-700 focus:border-[#228BE6] dark:border-zinc-700 dark:text-zinc-200'
+                  : 'border-rose-300 text-rose-600 dark:border-rose-500/50'
+              }`}
+            />
+          </div>
+
+          {destino && (
+            <div className="rounded-lg border border-[#228BE6]/30 bg-[#228BE6]/5 px-3 py-2 text-xs dark:border-[#228BE6]/40 dark:bg-[#228BE6]/10">
+              <p className="text-zinc-500 dark:text-zinc-400">Vai cair em</p>
+              <p className="mt-0.5 font-medium text-[#228BE6]">
+                {destino.destino.join('  ›  ')}
+              </p>
+            </div>
+          )}
+
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                Arquivos — os PDFs na ordem do protocolo
+              </label>
+              <button
+                type="button"
+                onClick={() => input.current?.click()}
+                className="text-xs font-medium text-[#228BE6] hover:underline"
+              >
+                anexar
+              </button>
+            </div>
+            <input
+              ref={input}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                setArquivos((a) => [...a, ...Array.from(e.target.files ?? [])]);
+                if (input.current) input.current.value = '';
+              }}
+            />
+            {!arquivos.length ? (
+              <button
+                type="button"
+                onClick={() => input.current?.click()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-6 text-xs text-zinc-400 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700"
+              >
+                <Upload className="h-4 w-4" /> A peça (.docx) e os PDFs do protocolo
+              </button>
+            ) : (
+              <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+                {arquivos.map((f, i) => (
+                  <li key={`${f.name}-${i}`} className="flex items-center gap-2 px-2.5 py-2">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                    <span className="min-w-0 flex-1 truncate text-xs text-zinc-700 dark:text-zinc-300">
+                      {nomeFinal(f, i)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => mover(i, -1)}
+                      disabled={i === 0}
+                      className="rounded p-0.5 text-zinc-300 hover:text-[#228BE6] disabled:opacity-30"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => mover(i, 1)}
+                      disabled={i === arquivos.length - 1}
+                      className="rounded p-0.5 text-zinc-300 hover:text-[#228BE6] disabled:opacity-30"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setArquivos((a) => a.filter((_, j) => j !== i))}
+                      className="rounded p-0.5 text-zinc-300 hover:text-rose-500"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-1.5 text-[11px] text-zinc-400">
+              PDF entra numerado na ordem acima; o editável entra sem número. Nada é sobrescrito.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200/80 px-4 py-3 dark:border-zinc-800">
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvar}
+            disabled={salvando || !fase || !arquivos.length || !dataOk}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[#228BE6] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1c7ed6] disabled:opacity-40"
+          >
+            {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Stamp className="h-3.5 w-3.5" />}
+            Arquivar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

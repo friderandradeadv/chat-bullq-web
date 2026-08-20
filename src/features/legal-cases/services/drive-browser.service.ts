@@ -25,6 +25,25 @@ export interface PastaDrive {
   itens: ItemDrive[];
 }
 
+export interface FaseNoDrive {
+  chave: string;
+  rotulo: string;
+  /** Nome real da pasta no Drive (pode ser de geração antiga). */
+  pasta: string;
+  /** Trilha a partir da pasta do cliente, incluindo a própria fase. */
+  caminho: string[];
+}
+
+export interface DestinoDaPeca {
+  fase: string;
+  caminho: string[];
+  letra: string;
+  data: string;
+  /** `c) 20.08.2026` — a subpasta que será criada. */
+  pasta: string;
+  destino: string[];
+}
+
 export const driveBrowserService = {
   async listar(partyId: string, caminho: string[] = []): Promise<PastaDrive> {
     const { data } = await api.get(`/client-documents/drive/${partyId}`, {
@@ -42,5 +61,65 @@ export const driveBrowserService = {
       timeout: 60_000,
     });
     return URL.createObjectURL(data as Blob);
+  },
+
+  // ─── Escrita: a pasta do cliente é editável daqui ─────────────────────────
+
+  async criarPasta(partyId: string, caminho: string[], nome: string) {
+    const { data } = await api.post(`/client-documents/drive/${partyId}/pasta`, {
+      caminho: caminho.join('/'),
+      nome,
+    });
+    return data.data ?? data;
+  },
+
+  async enviar(partyId: string, caminho: string[], arquivos: File[]) {
+    const form = new FormData();
+    form.append('caminho', caminho.join('/'));
+    arquivos.forEach((f) => form.append('files', f));
+    const { data } = await api.post(`/client-documents/drive/${partyId}/enviar`, form, {
+      timeout: 180_000, // o Drive é lento com arquivo grande, e o advogado espera olhando
+    });
+    return data.data ?? data;
+  },
+
+  /** Manda para a LIXEIRA do Drive (30 dias para desfazer), nunca apaga de vez. */
+  async excluir(partyId: string, caminho: string[], itemId: string, confirmar = false) {
+    const { data } = await api.delete(`/client-documents/drive/${partyId}/item/${itemId}`, {
+      params: {
+        ...(caminho.length ? { caminho: caminho.join('/') } : {}),
+        ...(confirmar ? { confirmar: 'true' } : {}),
+      },
+    });
+    return data.data ?? data;
+  },
+
+  /** As fases que ESTE cliente tem — não a lista teórica das nove. */
+  async fases(partyId: string): Promise<FaseNoDrive[]> {
+    const { data } = await api.get(`/client-documents/drive/${partyId}/fases`, {
+      timeout: 60_000, // varre a árvore do cliente no Drive
+    });
+    return data.data ?? data;
+  },
+
+  /** Onde a peça de hoje cairia, sem escrever nada — é o que a tela mostra antes. */
+  async destino(partyId: string, caminho: string[], data?: string): Promise<DestinoDaPeca> {
+    const r = await api.get(`/client-documents/drive/${partyId}/destino`, {
+      params: { caminho: caminho.join('/'), ...(data ? { data } : {}) },
+      timeout: 45_000,
+    });
+    return r.data.data ?? r.data;
+  },
+
+  /** Arquiva a peça protocolada: cria `<letra>) <data>` e sobe os PDFs numerados. */
+  async arquivar(partyId: string, caminho: string[], arquivos: File[], data?: string) {
+    const form = new FormData();
+    form.append('caminho', caminho.join('/'));
+    if (data) form.append('data', data);
+    arquivos.forEach((f) => form.append('files', f));
+    const r = await api.post(`/client-documents/drive/${partyId}/arquivar`, form, {
+      timeout: 180_000,
+    });
+    return r.data.data ?? r.data;
   },
 };
