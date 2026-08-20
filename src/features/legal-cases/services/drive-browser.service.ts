@@ -140,6 +140,31 @@ export const driveBrowserService = {
     return data.data ?? data;
   },
 
+  /**
+   * O plano do arquivamento SEM escrever nada — para o caminho em que o Mac
+   * move o arquivo dentro do Drive montado. A API decide pasta, letra e
+   * numeração; o navegador só executa.
+   */
+  async plano(
+    partyId: string,
+    caminho: string[],
+    nomes: string[],
+    data?: string,
+  ): Promise<{
+    pastaCliente: string;
+    caminho: string[];
+    pasta: string;
+    destino: string[];
+    arquivos: { de: string; para: string }[];
+  }> {
+    const { data: r } = await api.post(`/client-documents/drive/${partyId}/plano`, {
+      caminho: caminho.join('/'),
+      nomes,
+      ...(data ? { data } : {}),
+    });
+    return r.data ?? r;
+  },
+
   /** Arquiva a peça protocolada: cria `<letra>) <data>` e sobe os PDFs numerados. */
   async arquivar(partyId: string, caminho: string[], arquivos: File[], data?: string) {
     const form = new FormData();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Stamp, Upload, FileText, ArrowUp, ArrowDown, X, Loader2, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,6 +8,13 @@ import {
   driveBrowserService,
   type FaseNoDrive,
 } from '@/features/legal-cases/services/drive-browser.service';
+import {
+  suportaMoverNoDisco,
+  moverParaAPastaDoCliente,
+  guardarPasta,
+  lerPasta,
+  permissaoDeEscrita,
+} from '@/features/legal-cases/services/mesa-drive';
 
 /**
  * Arquivar peça protocolada — a porta do pós-protocolo, com duas entradas.
@@ -30,15 +37,17 @@ import {
 /**
  * A Mesa (Desktop do Mac), quando o navegador deixa.
  *
- * Página web não apaga arquivo do computador — é o navegador que não deixa, e
+ * Página web não mexe em arquivo do computador — é o navegador que não deixa, e
  * com razão. A File System Access API abre a única fresta: o advogado autoriza
- * UMA pasta, explicitamente, e a partir daí a página pode ler e apagar DENTRO
- * dela. Só existe em Chromium (Opera GX, Chrome); no Safari e no celular o
- * botão some e o fluxo continua sendo anexar do jeito normal.
+ * pastas específicas, explicitamente, e a partir daí a página trabalha DENTRO
+ * delas. Só existe em Chromium (Opera GX, Chrome).
  *
- * A remoção é sempre DEPOIS e só do que o servidor confirmou ter arquivado —
- * `removeEntry` não tem lixeira, então o arquivo só sai da Mesa quando já está
- * no Drive, pelo nome que o Drive devolveu.
+ * Autorizadas a Mesa e a `01. CLIENTES`, a peça não precisa dar a volta pela
+ * nuvem para mudar de lugar: ela SAI da Mesa e ENTRA na pasta do cliente, numa
+ * operação só, sem upload e sem apagar. O Google sincroniza depois.
+ *
+ * Sem uma das duas pastas — ou fora do Chromium — o hub sobe os bytes como
+ * sempre, e o original fica onde está.
  */
 type ArquivoDaMesa = { nome: string; file: File; mtime: number };
 
@@ -54,7 +63,8 @@ export function hojeDDMMAAAA() {
 export interface ResultadoArquivamento {
   pasta: string;
   caminho: string[];
-  webViewLink: string;
+  /** Só existe no caminho de upload — movendo no disco, a nuvem ainda não sabe. */
+  webViewLink?: string;
   arquivos: string[];
 }
 
@@ -79,11 +89,22 @@ export function ArquivarPecaModal({
   const [arquivos, setArquivos] = useState<File[]>([]);
   const [salvando, setSalvando] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  // Mesa: a pasta autorizada e os nomes que vieram de lá (só esses podem sair).
+  // As duas pastas autorizadas: de onde o arquivo sai e para onde ele vai.
   const [mesa, setMesa] = useState<any>(null);
+  const [clientesDir, setClientesDir] = useState<any>(null);
   const [daMesa, setDaMesa] = useState<Set<string>>(new Set());
   const [listaMesa, setListaMesa] = useState<ArquivoDaMesa[] | null>(null);
-  const [tirarDaMesa, setTirarDaMesa] = useState(true);
+
+  // Handles guardados de sessões anteriores — a permissão em si só volta com um
+  // clique (o navegador exige gesto), mas o caminho o hub já sabe.
+  useEffect(() => {
+    if (!suportaMoverNoDisco()) return;
+    (async () => {
+      const [m, c] = await Promise.all([lerPasta('mesa'), lerPasta('clientes')]);
+      if (m && (await permissaoDeEscrita(m, false))) setMesa(m);
+      if (c && (await permissaoDeEscrita(c, false))) setClientesDir(c);
+    })();
+  }, []);
 
   // Da agenda: o servidor resolve cliente + fases + sugestão numa chamada só.
   const ctx = useQuery({
@@ -125,34 +146,61 @@ export function ArquivarPecaModal({
     gcTime: 0,
   });
 
-  /** Autoriza a Mesa e lista o que há de arquivável lá, do mais novo para o mais velho. */
-  const abrirMesa = async () => {
+  /** Autoriza uma pasta e guarda o handle para as próximas sessões. */
+  const escolherPasta = async (qual: 'mesa' | 'clientes') => {
     try {
       const dir = await (window as any).showDirectoryPicker({
-        id: 'mesa-frider',
+        id: `frider-${qual}`,
         mode: 'readwrite',
-        startIn: 'desktop',
+        startIn: qual === 'mesa' ? 'desktop' : 'documents',
       });
-      // `mode: 'readwrite'` no picker não garante a permissão: é preciso pedir.
-      const perm = await dir.requestPermission?.({ mode: 'readwrite' });
-      if (perm && perm !== 'granted') {
-        toast.error('Sem permissão de escrita na pasta — dá para anexar, mas não para tirar de lá.');
+      if (!(await permissaoDeEscrita(dir, true))) {
+        toast.error('Sem permissão de escrita nessa pasta.');
+        return;
       }
-      const itens: ArquivoDaMesa[] = [];
-      for await (const [nome, h] of dir.entries()) {
-        if (h.kind !== 'file' || nome.startsWith('.')) continue;
-        if (!/\.(pdf|docx?|jpe?g|png)$/i.test(nome)) continue;
-        const file = await h.getFile();
-        itens.push({ nome, file, mtime: file.lastModified });
-      }
-      // A peça que você acabou de protocolar é a mais recente — ela vem em cima.
-      itens.sort((a, b) => b.mtime - a.mtime);
-      setMesa(dir);
-      setListaMesa(itens.slice(0, 40));
+      await guardarPasta(qual, dir);
+      if (qual === 'mesa') {
+        setMesa(dir);
+        await listarMesa(dir);
+      } else setClientesDir(dir);
     } catch (e: any) {
       if (e?.name !== 'AbortError') toast.error(e?.message || 'Não consegui abrir a pasta.');
     }
   };
+
+  /** O que há de arquivável na Mesa, do mais novo para o mais velho. */
+  const listarMesa = async (dir: any) => {
+    const itens: ArquivoDaMesa[] = [];
+    for await (const [nome, h] of dir.entries()) {
+      if (h.kind !== 'file' || nome.startsWith('.')) continue;
+      if (!/\.(pdf|docx?|jpe?g|png)$/i.test(nome)) continue;
+      const file = await h.getFile();
+      itens.push({ nome, file, mtime: file.lastModified });
+    }
+    // A peça que você acabou de protocolar é a mais recente — ela vem em cima.
+    itens.sort((a, b) => b.mtime - a.mtime);
+    setListaMesa(itens.slice(0, 40));
+  };
+
+  /** Abre a Mesa: autoriza se preciso, senão só relista (o conteúdo muda). */
+  const abrirMesa = async () => {
+    if (mesa && (await permissaoDeEscrita(mesa, true))) return listarMesa(mesa);
+    return escolherPasta('mesa');
+  };
+
+  /**
+   * Mover no disco só quando NÃO há mistura: ou tudo veio da Mesa, ou nada.
+   *
+   * Se metade fosse movida no disco e metade subisse pela API, as duas criariam
+   * a subpasta datada — o Drive aceita duas `c) 20.08.2026` sem reclamar, e o
+   * protocolo acabaria partido em duas pastas irmãs.
+   */
+  const podeMover =
+    suportaMoverNoDisco() &&
+    !!mesa &&
+    !!clientesDir &&
+    arquivos.length > 0 &&
+    arquivos.every((f) => daMesa.has(f.name));
 
   const pegarDaMesa = (it: ArquivoDaMesa) => {
     if (arquivos.some((a) => a.name === it.nome)) return;
@@ -183,28 +231,41 @@ export function ArquivarPecaModal({
     if (!arquivos.length) return toast.error('Anexe ao menos a peça.');
     setSalvando(true);
     try {
+      // Caminho do MOVIMENTO: a API diz onde e com que nome; o Mac executa.
+      // Nada sobe pela rede e nada é apagado.
+      if (podeMover) {
+        const plano = await driveBrowserService.plano(
+          alvoPartyId,
+          fase.caminho,
+          arquivos.map((f) => f.name),
+          data,
+        );
+        const r2 = await moverParaAPastaDoCliente(mesa, clientesDir, plano);
+        if (!r2.movidos.length) {
+          toast.error(
+            `Não consegui mover: ${r2.ficaram.map((f) => `${f.nome} (${f.motivo})`).join('; ')}`,
+          );
+          return;
+        }
+        if (r2.ficaram.length)
+          toast.warning(
+            `${r2.movidos.length} movido(s). Ficaram na Mesa: ${r2.ficaram
+              .map((f) => `${f.nome} (${f.motivo})`)
+              .join('; ')}`,
+          );
+        else
+          toast.success(
+            `${r2.movidos.length} arquivo(s) saíram da Mesa e entraram em ${plano.pasta}.`,
+          );
+        onPronto(
+          { pasta: plano.pasta, caminho: plano.destino, arquivos: r2.movidos },
+          alvoPartyId,
+        );
+        return;
+      }
+
       const r = await driveBrowserService.arquivar(alvoPartyId, fase.caminho, arquivos, data);
       toast.success(`Peça arquivada em ${r.pasta} (${r.arquivos.length} arquivo(s)).`);
-
-      // Só agora, e só o que o Drive confirmou pelo nome que ele mesmo devolveu.
-      // `removeEntry` não tem lixeira: um arquivo que não subiu não pode sair da
-      // Mesa por engano.
-      if (mesa && tirarDaMesa && daMesa.size) {
-        const confirmados = new Set(r.arquivos);
-        const saiu: string[] = [];
-        for (const f of arquivos) {
-          if (!daMesa.has(f.name)) continue;
-          if (!confirmados.has(nomeFinal(f))) continue;
-          try {
-            await mesa.removeEntry(f.name);
-            saiu.push(f.name);
-          } catch {
-            /* arquivo aberto, renomeado ou permissão revogada — fica na Mesa */
-          }
-        }
-        if (saiu.length) toast.success(`${saiu.length} arquivo(s) saíram da Mesa.`);
-        else toast.warning('Arquivei, mas não consegui tirar da Mesa — apague por lá.');
-      }
 
       onPronto(r, alvoPartyId);
     } catch (e: any) {
@@ -320,7 +381,7 @@ export function ArquivarPecaModal({
                     onClick={abrirMesa}
                     className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"
                   >
-                    <Monitor className="h-3 w-3" /> {mesa ? 'trocar pasta' : 'pegar da Mesa'}
+                    <Monitor className="h-3 w-3" /> {mesa ? 'ver a Mesa' : 'pegar da Mesa'}
                   </button>
                 )}
                 <button
@@ -423,22 +484,32 @@ export function ArquivarPecaModal({
             <p className="mt-1.5 text-[11px] text-zinc-400">
               PDF entra numerado na ordem acima; o editável entra sem número. Nada é sobrescrito.
             </p>
-            {!!daMesa.size && (
-              <label className="mt-2 flex items-start gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                <input
-                  type="checkbox"
-                  checked={tirarDaMesa}
-                  onChange={(e) => setTirarDaMesa(e.target.checked)}
-                  className="mt-0.5 accent-[#228BE6]"
-                />
-                <span>
-                  Tirar da Mesa depois de arquivar ({daMesa.size} arquivo(s)).{' '}
-                  <span className="text-amber-600 dark:text-amber-400">
-                    Sai de vez, sem passar pela Lixeira
-                  </span>{' '}
-                  — e só sai o que o Drive confirmar.
-                </span>
-              </label>
+            {suportaMoverNoDisco() && !!daMesa.size && (
+              <div className="mt-2 rounded-lg border border-zinc-200 px-2.5 py-2 dark:border-zinc-800">
+                {podeMover ? (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                    O arquivo <span className="font-medium">sai da Mesa e entra na pasta</span> — sem
+                    upload e sem apagar. O Google sincroniza depois.
+                  </p>
+                ) : !clientesDir ? (
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Para mover de verdade, autorize a pasta{' '}
+                    <span className="font-medium">01. CLIENTES</span> do Drive uma vez.{' '}
+                    <button
+                      type="button"
+                      onClick={() => escolherPasta('clientes')}
+                      className="font-medium text-[#228BE6] hover:underline"
+                    >
+                      autorizar
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    Há arquivo que não veio da Mesa — vou <span className="font-medium">subir
+                    todos</span> e nada sai de lugar. Para mover, use só arquivos da Mesa.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
