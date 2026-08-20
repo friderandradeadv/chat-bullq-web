@@ -15,6 +15,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Plus, X, MapPin, RefreshCw,
   MoreVertical, Search, Tag, Check, CalendarClock, ExternalLink, CalendarDays,
   ClipboardList, Pencil, MessageSquare, Paperclip, List, MessageCircle,
+  Stamp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { calendarService, type CalendarEvent, type EventKind } from '@/features/calendar/services/calendar.service';
@@ -26,6 +27,7 @@ import { recursosService, type Recurso } from '@/features/recursos/services/recu
 import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { CommentsSection } from '@/features/activities/components/comments-section';
 import { AnexosSection } from '@/features/activities/components/anexos-section';
+import { ArquivarPecaModal } from '@/features/legal-cases/components/arquivar-peca-modal';
 import { MoverFaseManual } from '@/features/legal-cases/components/mover-fase-manual';
 import { DisponibilidadeModal } from '@/features/calendar/components/disponibilidade-modal';
 import { preferencesService } from '@/features/inbox/services/preferences.service';
@@ -1255,6 +1257,9 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [remessaFase, setRemessaFase] = useState('aguardando_sentenca'); // fase de retorno na origem
   const [remessaObs, setRemessaObs] = useState('');
   const [recursoForm, setRecursoForm] = useState(false); // mini-form "registrar recurso"
+  // "Concluir e arquivar": leva a peça para a pasta do cliente ANTES de rodar a
+  // conclusão normal (que, no prazo, ainda abre o mini-form de recurso/kanban).
+  const [arquivarForm, setArquivarForm] = useState(false);
   const [avancoForm, setAvancoForm] = useState<Avanco>(null); // modal de avanço de fase (kanban vivo)
   const [faseForm, setFaseForm] = useState<'cumprimento' | 'prestacao_contas' | 'transito' | null>(null);
   // Fase encadeada (ex.: trânsito → ações vencidas/perdidas) — SEM prazo, só caseId.
@@ -1992,9 +1997,39 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         <div className="mt-4 flex justify-end">
           {done || cancelled
             ? <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{cancelled ? 'Reabrir prazo' : 'Reabrir'}</button>
-            : <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Check className="h-4 w-4" /> Concluir</button>}
+            : <>
+                {/* Só faz sentido com processo: a pasta do cliente sai das PARTES
+                    do processo, não do título da tarefa. */}
+                {activity.caseId && (activity.source === 'tarefa' || activity.source === 'prazo') && (
+                  <button
+                    disabled={busy}
+                    onClick={() => setArquivarForm(true)}
+                    title="Manda a peça para a pasta do cliente, na fase e na data, e conclui"
+                    className="mr-2 inline-flex items-center gap-1.5 rounded-md border border-[#228BE6] px-4 py-2 text-sm font-medium text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-50"
+                  >
+                    <Stamp className="h-4 w-4" /> Concluir e arquivar
+                  </button>
+                )}
+                <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md bg-[#02883C] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Check className="h-4 w-4" /> Concluir</button>
+              </>}
         </div>
       </div>
+      {arquivarForm && (
+        <ArquivarPecaModal
+          atividade={{ entityType: entityType as 'task' | 'deadline', entityId: activity.rawId }}
+          titulo="Concluir e arquivar"
+          rotuloConfirmar="Arquivar e concluir"
+          onFechar={() => setArquivarForm(false)}
+          onPronto={(r) => {
+            setArquivarForm(false);
+            // Arquivou primeiro, conclui depois: a conclusão do PRAZO ainda pode
+            // abrir o mini-form de recurso / avanço de fase, e essa cadeia não
+            // pode ser encurtada por aqui.
+            toggleDone();
+            toast.success(`Arquivado em ${r.caminho.join(' › ')}`);
+          }}
+        />
+      )}
       {recursoForm && (
         <RegistrarRecursoModal
           activity={activity}

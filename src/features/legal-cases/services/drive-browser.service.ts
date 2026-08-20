@@ -44,6 +44,20 @@ export interface DestinoDaPeca {
   destino: string[];
 }
 
+export interface ArquivarPorAtividade {
+  partyId: string;
+  cliente: string;
+  processo: string | null;
+  /** Ação do DJEN, quando a atividade veio de publicação. */
+  acao: string | null;
+  faseSugerida: string;
+  fases: FaseNoDrive[];
+  /** Trilhas das fases que casam com a ação — mais de uma quando há RMC e RCC. */
+  sugeridas: string[][];
+  /** Já calculado quando não há dúvida de pasta; null quando a tela precisa perguntar. */
+  destino: DestinoDaPeca | null;
+}
+
 export const driveBrowserService = {
   async listar(partyId: string, caminho: string[] = []): Promise<PastaDrive> {
     const { data } = await api.get(`/client-documents/drive/${partyId}`, {
@@ -109,6 +123,21 @@ export const driveBrowserService = {
       timeout: 45_000,
     });
     return r.data.data ?? r.data;
+  },
+
+  /**
+   * De onde arquivar a peça de uma tarefa/prazo: cliente, fases e destino.
+   * É o que fecha o vão entre a Agenda e a pasta — o painel não precisa saber
+   * de qual cliente é o processo nem que fases ele tem.
+   */
+  async porAtividade(
+    entityType: 'task' | 'deadline',
+    entityId: string,
+  ): Promise<ArquivarPorAtividade> {
+    const { data } = await api.get(`/client-documents/drive/atividade/${entityType}/${entityId}`, {
+      timeout: 60_000,
+    });
+    return data.data ?? data;
   },
 
   /** Arquiva a peça protocolada: cria `<letra>) <data>` e sobe os PDFs numerados. */

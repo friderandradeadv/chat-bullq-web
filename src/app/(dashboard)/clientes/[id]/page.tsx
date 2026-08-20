@@ -46,8 +46,6 @@ import {
   FolderPlus,
   Upload,
   Stamp,
-  ArrowUp,
-  ArrowDown,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -61,9 +59,9 @@ import {
 import {
   driveBrowserService,
   type ItemDrive,
-  type FaseNoDrive,
 } from '@/features/legal-cases/services/drive-browser.service';
 import { useAuthStore } from '@/stores/auth-store';
+import { ArquivarPecaModal } from '@/features/legal-cases/components/arquivar-peca-modal';
 import {
   clientTimelineService,
   type Marco,
@@ -2014,269 +2012,16 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
       )}
 
       {arquivarAberto && (
-        <ArquivarPeca
+        <ArquivarPecaModal
           partyId={partyId}
           onFechar={() => setArquivarAberto(false)}
-          onPronto={(destino) => {
+          onPronto={(r) => {
             setArquivarAberto(false);
-            setCaminho(destino);
+            setCaminho(r.caminho);
             recarregar();
           }}
         />
       )}
-    </div>
-  );
-}
-
-/** Data de hoje no formato do escritório. */
-function hojeDDMMAAAA() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-}
-
-/**
- * Arquivar peça protocolada — a porta do pós-protocolo.
- *
- * O advogado escolhe a FASE e anexa; o resto é convenção do escritório e sai
- * pronto: a subpasta `<letra>) <DD.MM.AAAA>` com a letra na sequência da fase, e
- * dentro dela os PDFs numerados NA ORDEM DO PROTOCOLO com o editável sem número.
- * É a mesma regra do `arquivar_peca.py`, que arquiva pela Mesa — as duas portas
- * têm de escrever igual, senão o acervo padronizado se desfaz pelo uso diário.
- *
- * A ordem dos anexos importa e por isso é editável aqui: numerar fora da ordem
- * do protocolo é erro que só aparece meses depois, quando alguém procura a
- * prova pelo número.
- */
-function ArquivarPeca({
-  partyId,
-  onFechar,
-  onPronto,
-}: {
-  partyId: string;
-  onFechar: () => void;
-  onPronto: (destino: string[]) => void;
-}) {
-  const [faseSel, setFaseSel] = useState<string>('');
-  const [data, setData] = useState(hojeDDMMAAAA());
-  const [arquivos, setArquivos] = useState<File[]>([]);
-  const [salvando, setSalvando] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
-
-  const { data: fases, isLoading: carregandoFases, error: erroFases } = useQuery({
-    queryKey: ['drive-fases', partyId],
-    queryFn: () => driveBrowserService.fases(partyId),
-    staleTime: 60_000,
-  });
-
-  const fase: FaseNoDrive | undefined = fases?.find((f) => f.caminho.join('/') === faseSel);
-  const dataOk = /^\d{2}\.\d{2}\.\d{4}$/.test(data);
-
-  // Só para mostrar onde vai cair: quem decide a letra é o servidor, lendo a
-  // fase no Drive na hora de gravar.
-  const { data: destino } = useQuery({
-    queryKey: ['drive-destino', partyId, faseSel, data],
-    queryFn: () => driveBrowserService.destino(partyId, fase!.caminho, data),
-    enabled: !!fase && dataOk,
-    staleTime: 0,
-    gcTime: 0,
-  });
-
-  // Espelha a regra do servidor: PDF entra numerado na ordem, editável sem
-  // número. O servidor é quem manda — isto é a prévia.
-  const nomeFinal = (f: File, i: number) => {
-    const pdfs = arquivos.filter((x) => /\.pdf$/i.test(x.name));
-    if (!/\.pdf$/i.test(f.name)) return f.name;
-    if (/^\d{2}\.\s/.test(f.name)) return f.name;
-    return `${String(pdfs.indexOf(f) + 1).padStart(2, '0')}. ${f.name}`;
-  };
-
-  const mover = (i: number, delta: number) => {
-    const j = i + delta;
-    if (j < 0 || j >= arquivos.length) return;
-    const copia = [...arquivos];
-    [copia[i], copia[j]] = [copia[j], copia[i]];
-    setArquivos(copia);
-  };
-
-  const salvar = async () => {
-    if (!fase) return toast.error('Escolha a fase.');
-    if (!dataOk) return toast.error('A data do protocolo é DD.MM.AAAA.');
-    if (!arquivos.length) return toast.error('Anexe ao menos a peça.');
-    setSalvando(true);
-    try {
-      const r = await driveBrowserService.arquivar(partyId, fase.caminho, arquivos, data);
-      toast.success(`Peça arquivada em ${r.pasta} (${r.arquivos.length} arquivo(s)).`);
-      onPronto(r.caminho);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || e?.message || 'Não consegui arquivar.');
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200/80 px-4 py-3 dark:border-zinc-800">
-          <Stamp className="h-4 w-4 text-[#228BE6]" />
-          <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-            Arquivar peça protocolada
-          </h3>
-          <button
-            type="button"
-            onClick={onFechar}
-            className="ml-auto rounded-md p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              Fase
-            </label>
-            {carregandoFases ? (
-              <p className="text-sm text-zinc-400">Lendo as fases no Drive…</p>
-            ) : erroFases ? (
-              <p className="text-sm text-rose-500">{(erroFases as Error).message}</p>
-            ) : !fases?.length ? (
-              <p className="text-sm text-amber-600 dark:text-amber-400">
-                Este cliente não tem pasta de fase no Drive. Crie a fase (ou rode a padronização)
-                antes de arquivar.
-              </p>
-            ) : (
-              <select
-                value={faseSel}
-                onChange={(e) => setFaseSel(e.target.value)}
-                className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-700 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-              >
-                <option value="">Escolha a fase…</option>
-                {fases.map((f) => (
-                  <option key={f.caminho.join('/')} value={f.caminho.join('/')}>
-                    {f.caminho.join('  ›  ')}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              Data do protocolo
-            </label>
-            <input
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-              placeholder="DD.MM.AAAA"
-              className={`w-40 rounded-md border bg-white px-2 py-1.5 text-sm tabular-nums outline-none dark:bg-zinc-900 ${
-                dataOk
-                  ? 'border-zinc-200 text-zinc-700 focus:border-[#228BE6] dark:border-zinc-700 dark:text-zinc-200'
-                  : 'border-rose-300 text-rose-600 dark:border-rose-500/50'
-              }`}
-            />
-          </div>
-
-          {destino && (
-            <div className="rounded-lg border border-[#228BE6]/30 bg-[#228BE6]/5 px-3 py-2 text-xs dark:border-[#228BE6]/40 dark:bg-[#228BE6]/10">
-              <p className="text-zinc-500 dark:text-zinc-400">Vai cair em</p>
-              <p className="mt-0.5 font-medium text-[#228BE6]">
-                {destino.destino.join('  ›  ')}
-              </p>
-            </div>
-          )}
-
-          <div>
-            <div className="mb-1 flex items-center justify-between">
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                Arquivos — os PDFs na ordem do protocolo
-              </label>
-              <button
-                type="button"
-                onClick={() => input.current?.click()}
-                className="text-xs font-medium text-[#228BE6] hover:underline"
-              >
-                anexar
-              </button>
-            </div>
-            <input
-              ref={input}
-              type="file"
-              multiple
-              hidden
-              onChange={(e) => {
-                setArquivos((a) => [...a, ...Array.from(e.target.files ?? [])]);
-                if (input.current) input.current.value = '';
-              }}
-            />
-            {!arquivos.length ? (
-              <button
-                type="button"
-                onClick={() => input.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-6 text-xs text-zinc-400 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700"
-              >
-                <Upload className="h-4 w-4" /> A peça (.docx) e os PDFs do protocolo
-              </button>
-            ) : (
-              <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-                {arquivos.map((f, i) => (
-                  <li key={`${f.name}-${i}`} className="flex items-center gap-2 px-2.5 py-2">
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-                    <span className="min-w-0 flex-1 truncate text-xs text-zinc-700 dark:text-zinc-300">
-                      {nomeFinal(f, i)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => mover(i, -1)}
-                      disabled={i === 0}
-                      className="rounded p-0.5 text-zinc-300 hover:text-[#228BE6] disabled:opacity-30"
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => mover(i, 1)}
-                      disabled={i === arquivos.length - 1}
-                      className="rounded p-0.5 text-zinc-300 hover:text-[#228BE6] disabled:opacity-30"
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setArquivos((a) => a.filter((_, j) => j !== i))}
-                      className="rounded p-0.5 text-zinc-300 hover:text-rose-500"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-1.5 text-[11px] text-zinc-400">
-              PDF entra numerado na ordem acima; o editável entra sem número. Nada é sobrescrito.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200/80 px-4 py-3 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={onFechar}
-            className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={salvar}
-            disabled={salvando || !fase || !arquivos.length || !dataOk}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[#228BE6] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1c7ed6] disabled:opacity-40"
-          >
-            {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Stamp className="h-3.5 w-3.5" />}
-            Arquivar
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
