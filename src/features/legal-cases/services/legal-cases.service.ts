@@ -694,6 +694,19 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/viabilidade`);
     return data.data ?? data;
   },
+  /**
+   * Define ou troca o CLIENTE do processo. Mandar `contactId`/`document` do
+   * cadastro escolhido é o que une os processos da mesma pessoa — por nome,
+   * nunca (homônimo já custou processo trocado aqui).
+   */
+  async setCliente(
+    caseId: string,
+    dto: { name: string; document?: string | null; contactId?: string | null },
+  ) {
+    const { data } = await api.patch(`/legal-cases/${caseId}/cliente`, dto);
+    return data.data ?? data;
+  },
+
   async addParty(caseId: string, input: PartyInput): Promise<PartyDetail> {
     const { data } = await api.post(`/legal-cases/${caseId}/parties`, input);
     return data.data ?? data;

@@ -1556,6 +1556,20 @@ function EditCaseDialog({
   const [saving, setSaving] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
+  // Cliente: sai daqui porque é aqui que se procura por ele. Antes só existia
+  // em "Partes › Nova", e escondido atrás da troca de papel — processo sem
+  // cliente ficava sem cliente, e sem cliente não há pasta no Drive.
+  const clienteAtual = c.parties.find((p) => p.role === 'CLIENT');
+  const [cliente, setCliente] = useState<{
+    name: string;
+    document?: string | null;
+    contactId?: string | null;
+  }>({
+    name: clienteAtual?.name ?? '',
+    document: clienteAtual?.document ?? null,
+    contactId: clienteAtual?.contact?.id ?? null,
+  });
+
   const submit = async () => {
     if (!form.title.trim()) return toast.error('Informe o título');
     setSaving(true);
@@ -1572,6 +1586,19 @@ function EditCaseDialog({
         status: form.status,
         responsibleId: form.responsibleId || undefined,
       });
+      // Só mexe no cliente se mudou — assim salvar o processo não reescreve o
+      // vínculo de quem já estava certo.
+      const mudou =
+        cliente.name.trim() !== (clienteAtual?.name ?? '') ||
+        (cliente.contactId ?? null) !== (clienteAtual?.contact?.id ?? null) ||
+        (cliente.document ?? null) !== (clienteAtual?.document ?? null);
+      if (mudou && cliente.name.trim()) {
+        await legalCasesService.setCliente(c.id, {
+          name: cliente.name.trim(),
+          document: cliente.document ?? null,
+          contactId: cliente.contactId ?? null,
+        });
+      }
       toast.success('Processo atualizado');
       onClose();
       onSaved();
@@ -1590,6 +1617,35 @@ function EditCaseDialog({
       <div className="space-y-4">
         <Field label="Título *">
           <input autoFocus value={form.title} onChange={set('title')} className={inputCls} />
+        </Field>
+        <Field label="Cliente">
+          {/* Busca os já cadastrados: escolhendo da lista, o processo entra na
+              ficha daquele cliente (vínculo por contato/CPF). Digitando um nome
+              que não existe, cria um cliente novo — que passa a ser o cadastro
+              que os próximos processos vão encontrar. */}
+          <ClientCombobox
+            value={cliente.name}
+            onSelect={(sel) =>
+              setCliente({
+                name: sel.name,
+                document: sel.document ?? null,
+                contactId: sel.contactId ?? null,
+              })
+            }
+            inputClassName={`${inputCls} pl-8`}
+          />
+          <p className="mt-1 text-[11px] text-zinc-400">
+            {cliente.contactId || cliente.document ? (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                ✓ vinculado ao cadastro{cliente.document ? ` · ${cliente.document}` : ''} — os
+                processos desta pessoa ficam juntos na ficha
+              </span>
+            ) : cliente.name.trim() ? (
+              'Cliente novo, sem vínculo — confira se ele já não está na lista antes de salvar.'
+            ) : (
+              'Sem cliente o processo não tem pasta no Drive nem ficha.'
+            )}
+          </p>
         </Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Nº CNJ">

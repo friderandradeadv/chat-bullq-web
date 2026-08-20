@@ -59,7 +59,7 @@ type ArquivoDaMesa = { nome: string; file: File; mtime: number };
  * depende da ordem, e a ordem é entre todos eles, não dentro de cada grupo.
  */
 type ItemProtocolo =
-  | { kind: 'anexo'; id: string; nome: string }
+  | { kind: 'anexo'; id: string; nome: string; naMesa?: boolean }
   | { kind: 'file'; file: File; nome: string; daMesa: boolean };
 
 const suportaMesa = () =>
@@ -112,9 +112,16 @@ export function ArquivarPecaModal({
     if (!suportaMoverNoDisco()) return;
     (async () => {
       const [m, c] = await Promise.all([lerPasta('mesa'), lerPasta('clientes')]);
-      if (m && (await permissaoDeEscrita(m, false))) setMesa(m);
+      // Permissão ainda de pé: lê a Mesa SOZINHO, sem esperar clique. É o que
+      // permite reconhecer que o anexo da tarefa é o mesmo arquivo que está na
+      // Mesa — e que portanto ele pode mudar de lugar em vez de ficar lá.
+      if (m && (await permissaoDeEscrita(m, false))) {
+        setMesa(m);
+        listarMesa(m).catch(() => {});
+      }
       if (c && (await permissaoDeEscrita(c, false))) setClientesDir(c);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Da agenda: o servidor resolve cliente + fases + sugestão numa chamada só.
@@ -146,6 +153,26 @@ export function ArquivarPecaModal({
     setItens(anexosQ.data.map((a) => ({ kind: 'anexo' as const, id: a.id, nome: a.name })));
     setSemeou(true);
   }, [anexosQ.data, semeou]);
+
+  /**
+   * O anexo da tarefa e o arquivo da Mesa costumam ser o MESMO arquivo — foi de
+   * lá que ele subiu. Reconhecer isso pelo nome é o que faz a Mesa ficar limpa
+   * sem o advogado ter de lembrar de escolher a origem "certa" no modal.
+   *
+   * O anexo continua sendo o registro no prazo (já está no servidor); o que vai
+   * para o Drive é o arquivo do disco, movido.
+   */
+  useEffect(() => {
+    if (!listaMesa?.length) return;
+    const naMesa = new Set(listaMesa.map((m) => m.nome));
+    setItens((atuais) =>
+      atuais.some((i) => i.kind === 'anexo' && !!i.naMesa !== naMesa.has(i.nome))
+        ? atuais.map((i) =>
+            i.kind === 'anexo' ? { ...i, naMesa: naMesa.has(i.nome) } : i,
+          )
+        : atuais,
+    );
+  }, [listaMesa]);
 
   // Da ficha: só as fases daquele cliente.
   const fasesQ = useQuery({
@@ -228,12 +255,20 @@ export function ArquivarPecaModal({
    * a subpasta datada — o Drive aceita duas `c) 20.08.2026` sem reclamar, e o
    * protocolo acabaria partido em duas pastas irmãs.
    */
+  /**
+   * Mover vale quando TODO item existe na Mesa — venha ele do seletor, do
+   * botão "pegar da Mesa" ou dos anexos da tarefa cujo arquivo ainda está lá.
+   *
+   * Continua sem mistura: se um só item não estiver na Mesa, sobe tudo. Meio
+   * movendo e meio subindo criaria duas `c) 20.08.2026`, porque o Drive aceita
+   * duas pastas de mesmo nome sem reclamar.
+   */
   const podeMover =
     suportaMoverNoDisco() &&
     !!mesa &&
     !!clientesDir &&
     itens.length > 0 &&
-    itens.every((i) => i.kind === 'file' && i.daMesa);
+    itens.every((i) => (i.kind === 'file' ? i.daMesa : !!i.naMesa));
 
   const pegarDaMesa = (it: ArquivoDaMesa) => {
     if (itens.some((i) => i.nome === it.nome)) return;
@@ -270,12 +305,17 @@ export function ArquivarPecaModal({
         // mais na Mesa e o `File` na mão vira referência morta — se a ordem
         // fosse a inversa, uma falha ao anexar deixaria o prazo sem registro e
         // sem como refazer.
-        if (atividade && anexarNaTarefa) {
+        // Anexo que já existe na tarefa não sobe de novo — só os arquivos que
+        // ainda não têm registro no prazo.
+        const paraAnexar = itens
+          .filter((i) => i.kind === 'file')
+          .map((i) => (i as any).file as File);
+        if (atividade && anexarNaTarefa && paraAnexar.length) {
           try {
             await activitiesService.uploadAnexos(
               atividade.entityType,
               atividade.entityId,
-              itens.map((i) => (i as any).file as File),
+              paraAnexar,
             );
             // A lista de anexos do painel é a mesma query — sem isto o anexo só
             // apareceria ao reabrir a tarefa.
@@ -545,7 +585,13 @@ export function ArquivarPecaModal({
                     {/* De onde veio importa: anexo já está no servidor e não
                         sobe de novo; da Mesa, o arquivo muda de lugar. */}
                     <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      {it.kind === 'anexo' ? 'da tarefa' : it.daMesa ? 'da Mesa' : 'novo'}
+                      {it.kind === 'anexo'
+                        ? it.naMesa
+                          ? 'da tarefa · na Mesa'
+                          : 'da tarefa'
+                        : it.daMesa
+                          ? 'da Mesa'
+                          : 'novo'}
                     </span>
                     <button
                       type="button"
@@ -577,15 +623,15 @@ export function ArquivarPecaModal({
             <p className="mt-1.5 text-[11px] text-zinc-400">
               PDF entra numerado na ordem acima; o editável entra sem número. Nada é sobrescrito.
             </p>
-            {suportaMoverNoDisco() && itens.some((i) => i.kind === 'file' && i.daMesa) && (
+            {suportaMoverNoDisco() && !!itens.length && (
               <div className="mt-2 rounded-lg border border-zinc-200 px-2.5 py-2 dark:border-zinc-800">
                 {podeMover ? (
                   <>
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                      O arquivo <span className="font-medium">sai da Mesa e entra na pasta</span> —
-                      sem apagar. O Google sincroniza depois.
+                      Os arquivos <span className="font-medium">saem da Mesa e entram na pasta</span>{' '}
+                      — sem apagar. O Google sincroniza depois.
                     </p>
-                    {atividade && (
+                    {atividade && itens.some((i) => i.kind === 'file') && (
                       <label className="mt-1.5 flex items-start gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
                         <input
                           type="checkbox"
@@ -600,27 +646,40 @@ export function ArquivarPecaModal({
                       </label>
                     )}
                   </>
-                ) : !clientesDir ? (
+                ) : !mesa || !clientesDir ? (
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                    Para mover de verdade, autorize a pasta{' '}
-                    <span className="font-medium">01. CLIENTES</span> do Drive uma vez.{' '}
-                    <button
-                      type="button"
-                      onClick={() => escolherPasta('clientes')}
-                      className="font-medium text-[#228BE6] hover:underline"
-                    >
-                      autorizar
-                    </button>
+                    Para os arquivos saírem da Mesa, autorize{' '}
+                    {!mesa && (
+                      <button
+                        type="button"
+                        onClick={() => escolherPasta('mesa')}
+                        className="font-medium text-[#228BE6] hover:underline"
+                      >
+                        a Mesa
+                      </button>
+                    )}
+                    {!mesa && !clientesDir && ' e '}
+                    {!clientesDir && (
+                      <button
+                        type="button"
+                        onClick={() => escolherPasta('clientes')}
+                        className="font-medium text-[#228BE6] hover:underline"
+                      >
+                        a pasta 01. CLIENTES
+                      </button>
+                    )}
+                    . Uma vez cada; sem isso, eu subo e nada sai de lugar.
                   </p>
                 ) : (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                    Há item que não veio da Mesa (anexo da tarefa ou arquivo novo) — vou{' '}
-                    <span className="font-medium">arquivar todos por upload</span> e nada sai de
-                    lugar.
+                    {itens.filter((i) => (i.kind === 'file' ? !i.daMesa : !i.naMesa)).length} item(ns)
+                    não estão na Mesa — vou <span className="font-medium">subir todos</span> e nada
+                    sai de lugar.
                   </p>
                 )}
               </div>
             )}
+
           </div>
         </div>
 
