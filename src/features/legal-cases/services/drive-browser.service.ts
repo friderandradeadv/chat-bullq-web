@@ -165,11 +165,32 @@ export const driveBrowserService = {
     return r.data ?? r;
   },
 
-  /** Arquiva a peça protocolada: cria `<letra>) <data>` e sobe os PDFs numerados. */
-  async arquivar(partyId: string, caminho: string[], arquivos: File[], data?: string) {
+  /**
+   * Arquiva a peça protocolada: cria `<letra>) <data>` e sobe os PDFs numerados.
+   *
+   * `ordem` é a sequência do protocolo — o anexo que já está na tarefa não sobe
+   * de novo (o servidor lê do disco dele); só os arquivos escolhidos agora vão
+   * no multipart.
+   */
+  async arquivar(
+    partyId: string,
+    caminho: string[],
+    arquivos: File[],
+    data?: string,
+    fonte?: {
+      entityType: 'task' | 'deadline';
+      entityId: string;
+      ordem: { kind: 'anexo' | 'file'; ref: string }[];
+    },
+  ) {
     const form = new FormData();
     form.append('caminho', caminho.join('/'));
     if (data) form.append('data', data);
+    if (fonte) {
+      form.append('entityType', fonte.entityType);
+      form.append('entityId', fonte.entityId);
+      form.append('ordem', JSON.stringify(fonte.ordem));
+    }
     arquivos.forEach((f) => form.append('files', f));
     const r = await api.post(`/client-documents/drive/${partyId}/arquivar`, form, {
       timeout: 180_000,

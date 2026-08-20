@@ -8,6 +8,7 @@ import {
   driveBrowserService,
   type FaseNoDrive,
 } from '@/features/legal-cases/services/drive-browser.service';
+import { activitiesService } from '@/features/activities/services/activities.service';
 import {
   suportaMoverNoDisco,
   moverParaAPastaDoCliente,
@@ -51,6 +52,16 @@ import {
  */
 type ArquivoDaMesa = { nome: string; file: File; mtime: number };
 
+/**
+ * Um item do protocolo. Pode vir dos ANEXOS da própria tarefa — que o advogado
+ * já juntou ao trabalhar o prazo, e que estão no servidor — ou de um arquivo
+ * escolhido agora (da Mesa ou do seletor). A lista é uma só porque a NUMERAÇÃO
+ * depende da ordem, e a ordem é entre todos eles, não dentro de cada grupo.
+ */
+type ItemProtocolo =
+  | { kind: 'anexo'; id: string; nome: string }
+  | { kind: 'file'; file: File; nome: string; daMesa: boolean };
+
 const suportaMesa = () =>
   typeof window !== 'undefined' && 'showDirectoryPicker' in window;
 
@@ -86,13 +97,12 @@ export function ArquivarPecaModal({
   const [faseSel, setFaseSel] = useState<string>('');
   const [tocou, setTocou] = useState(false); // o advogado já mexeu no select?
   const [data, setData] = useState(hojeDDMMAAAA());
-  const [arquivos, setArquivos] = useState<File[]>([]);
+  const [itens, setItens] = useState<ItemProtocolo[]>([]);
   const [salvando, setSalvando] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   // As duas pastas autorizadas: de onde o arquivo sai e para onde ele vai.
   const [mesa, setMesa] = useState<any>(null);
   const [clientesDir, setClientesDir] = useState<any>(null);
-  const [daMesa, setDaMesa] = useState<Set<string>>(new Set());
   const [listaMesa, setListaMesa] = useState<ArquivoDaMesa[] | null>(null);
 
   // Handles guardados de sessões anteriores — a permissão em si só volta com um
@@ -113,6 +123,24 @@ export function ArquivarPecaModal({
     enabled: !!atividade,
     staleTime: 30_000,
   });
+
+  /**
+   * Os anexos que já estão na tarefa entram JÁ MARCADOS, na ordem em que foram
+   * juntados. É o caminho natural: quem trabalhou o prazo anexou a petição e os
+   * comprovantes ali; arquivar é levar aqueles, não escolher de novo.
+   */
+  const anexosQ = useQuery({
+    queryKey: ['activity-anexos', atividade?.entityType, atividade?.entityId],
+    queryFn: () => activitiesService.listAnexos(atividade!.entityType, atividade!.entityId),
+    enabled: !!atividade,
+    staleTime: 10_000,
+  });
+  const [semeou, setSemeou] = useState(false);
+  useEffect(() => {
+    if (semeou || !anexosQ.data?.length) return;
+    setItens(anexosQ.data.map((a) => ({ kind: 'anexo' as const, id: a.id, nome: a.name })));
+    setSemeou(true);
+  }, [anexosQ.data, semeou]);
 
   // Da ficha: só as fases daquele cliente.
   const fasesQ = useQuery({
@@ -199,36 +227,35 @@ export function ArquivarPecaModal({
     suportaMoverNoDisco() &&
     !!mesa &&
     !!clientesDir &&
-    arquivos.length > 0 &&
-    arquivos.every((f) => daMesa.has(f.name));
+    itens.length > 0 &&
+    itens.every((i) => i.kind === 'file' && i.daMesa);
 
   const pegarDaMesa = (it: ArquivoDaMesa) => {
-    if (arquivos.some((a) => a.name === it.nome)) return;
-    setArquivos((a) => [...a, it.file]);
-    setDaMesa((s2) => new Set(s2).add(it.nome));
+    if (itens.some((i) => i.nome === it.nome)) return;
+    setItens((a) => [...a, { kind: 'file', file: it.file, nome: it.nome, daMesa: true }]);
   };
 
   // Espelha a regra do servidor: PDF entra numerado na ordem, editável sem
   // número. O servidor é quem manda — isto é a prévia.
-  const nomeFinal = (f: File) => {
-    if (!/\.pdf$/i.test(f.name)) return f.name;
-    if (/^\d{2}\.\s/.test(f.name)) return f.name;
-    const pdfs = arquivos.filter((x) => /\.pdf$/i.test(x.name));
-    return `${String(pdfs.indexOf(f) + 1).padStart(2, '0')}. ${f.name}`;
+  const nomeFinal = (it: ItemProtocolo) => {
+    if (!/\.pdf$/i.test(it.nome)) return it.nome;
+    if (/^\d{2}\.\s/.test(it.nome)) return it.nome;
+    const pdfs = itens.filter((x) => /\.pdf$/i.test(x.nome));
+    return `${String(pdfs.indexOf(it) + 1).padStart(2, '0')}. ${it.nome}`;
   };
 
   const mover = (i: number, delta: number) => {
     const j = i + delta;
-    if (j < 0 || j >= arquivos.length) return;
-    const copia = [...arquivos];
+    if (j < 0 || j >= itens.length) return;
+    const copia = [...itens];
     [copia[i], copia[j]] = [copia[j], copia[i]];
-    setArquivos(copia);
+    setItens(copia);
   };
 
   const salvar = async () => {
     if (!alvoPartyId || !fase) return toast.error('Escolha a fase.');
     if (!dataOk) return toast.error('A data do protocolo é DD.MM.AAAA.');
-    if (!arquivos.length) return toast.error('Anexe ao menos a peça.');
+    if (!itens.length) return toast.error('Anexe ao menos a peça.');
     setSalvando(true);
     try {
       // Caminho do MOVIMENTO: a API diz onde e com que nome; o Mac executa.
@@ -237,7 +264,7 @@ export function ArquivarPecaModal({
         const plano = await driveBrowserService.plano(
           alvoPartyId,
           fase.caminho,
-          arquivos.map((f) => f.name),
+          itens.map((i) => i.nome),
           data,
         );
         const r2 = await moverParaAPastaDoCliente(mesa, clientesDir, plano);
@@ -264,9 +291,27 @@ export function ArquivarPecaModal({
         return;
       }
 
-      const r = await driveBrowserService.arquivar(alvoPartyId, fase.caminho, arquivos, data);
+      // Anexo da tarefa NÃO sobe de novo: já está no disco do servidor. Só os
+      // arquivos escolhidos agora vão no multipart; a `ordem` diz a sequência.
+      const novos = itens.filter((i) => i.kind === 'file').map((i) => (i as any).file as File);
+      const r = await driveBrowserService.arquivar(
+        alvoPartyId,
+        fase.caminho,
+        novos,
+        data,
+        atividade
+          ? {
+              entityType: atividade.entityType,
+              entityId: atividade.entityId,
+              ordem: itens.map((i) =>
+                i.kind === 'anexo'
+                  ? { kind: 'anexo' as const, ref: i.id }
+                  : { kind: 'file' as const, ref: i.nome },
+              ),
+            }
+          : undefined,
+      );
       toast.success(`Peça arquivada em ${r.pasta} (${r.arquivos.length} arquivo(s)).`);
-
       onPronto(r, alvoPartyId);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || 'Não consegui arquivar.');
@@ -373,6 +418,7 @@ export function ArquivarPecaModal({
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 Arquivos — os PDFs na ordem do protocolo
+                {anexosQ.data?.length ? ' · anexos da tarefa já entraram' : ''}
               </label>
               <div className="flex items-center gap-3">
                 {suportaMesa() && (
@@ -399,7 +445,15 @@ export function ArquivarPecaModal({
               multiple
               hidden
               onChange={(e) => {
-                setArquivos((a) => [...a, ...Array.from(e.target.files ?? [])]);
+                setItens((a) => [
+                  ...a,
+                  ...Array.from(e.target.files ?? []).map((f) => ({
+                    kind: 'file' as const,
+                    file: f,
+                    nome: f.name,
+                    daMesa: false,
+                  })),
+                ]);
                 if (input.current) input.current.value = '';
               }}
             />
@@ -413,7 +467,7 @@ export function ArquivarPecaModal({
                 ) : (
                   <ul className="max-h-40 divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
                     {listaMesa.map((it) => {
-                      const posto = arquivos.some((a) => a.name === it.nome);
+                      const posto = itens.some((a) => a.nome === it.nome);
                       return (
                         <li key={it.nome}>
                           <button
@@ -438,21 +492,29 @@ export function ArquivarPecaModal({
               </div>
             )}
 
-            {!arquivos.length ? (
+            {!itens.length ? (
               <button
                 type="button"
                 onClick={() => input.current?.click()}
                 className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-6 text-xs text-zinc-400 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700"
               >
-                <Upload className="h-4 w-4" /> A peça (.docx) e os PDFs do protocolo
+                <Upload className="h-4 w-4" />{' '}
+                {atividade && anexosQ.isLoading
+                  ? 'Lendo os anexos da tarefa…'
+                  : 'A peça (.docx) e os PDFs do protocolo'}
               </button>
             ) : (
               <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-                {arquivos.map((f, i) => (
-                  <li key={`${f.name}-${i}`} className="flex items-center gap-2 px-2.5 py-2">
+                {itens.map((it, i) => (
+                  <li key={`${it.nome}-${i}`} className="flex items-center gap-2 px-2.5 py-2">
                     <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
                     <span className="min-w-0 flex-1 truncate text-xs text-zinc-700 dark:text-zinc-300">
-                      {nomeFinal(f)}
+                      {nomeFinal(it)}
+                    </span>
+                    {/* De onde veio importa: anexo já está no servidor e não
+                        sobe de novo; da Mesa, o arquivo muda de lugar. */}
+                    <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      {it.kind === 'anexo' ? 'da tarefa' : it.daMesa ? 'da Mesa' : 'novo'}
                     </span>
                     <button
                       type="button"
@@ -465,14 +527,14 @@ export function ArquivarPecaModal({
                     <button
                       type="button"
                       onClick={() => mover(i, 1)}
-                      disabled={i === arquivos.length - 1}
+                      disabled={i === itens.length - 1}
                       className="rounded p-0.5 text-zinc-300 hover:text-[#228BE6] disabled:opacity-30"
                     >
                       <ArrowDown className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
-                      onClick={() => setArquivos((a) => a.filter((_, j) => j !== i))}
+                      onClick={() => setItens((a) => a.filter((_, j) => j !== i))}
                       className="rounded p-0.5 text-zinc-300 hover:text-rose-500"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -484,7 +546,7 @@ export function ArquivarPecaModal({
             <p className="mt-1.5 text-[11px] text-zinc-400">
               PDF entra numerado na ordem acima; o editável entra sem número. Nada é sobrescrito.
             </p>
-            {suportaMoverNoDisco() && !!daMesa.size && (
+            {suportaMoverNoDisco() && itens.some((i) => i.kind === 'file' && i.daMesa) && (
               <div className="mt-2 rounded-lg border border-zinc-200 px-2.5 py-2 dark:border-zinc-800">
                 {podeMover ? (
                   <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
@@ -505,8 +567,9 @@ export function ArquivarPecaModal({
                   </p>
                 ) : (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                    Há arquivo que não veio da Mesa — vou <span className="font-medium">subir
-                    todos</span> e nada sai de lugar. Para mover, use só arquivos da Mesa.
+                    Há item que não veio da Mesa (anexo da tarefa ou arquivo novo) — vou{' '}
+                    <span className="font-medium">arquivar todos por upload</span> e nada sai de
+                    lugar.
                   </p>
                 )}
               </div>
@@ -525,7 +588,7 @@ export function ArquivarPecaModal({
           <button
             type="button"
             onClick={salvar}
-            disabled={salvando || !fase || !arquivos.length || !dataOk}
+            disabled={salvando || !fase || !itens.length || !dataOk}
             className="inline-flex items-center gap-1.5 rounded-md bg-[#228BE6] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1c7ed6] disabled:opacity-40"
           >
             {salvando ? (
