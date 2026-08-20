@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Stamp, Upload, FileText, ArrowUp, ArrowDown, X, Loader2 } from 'lucide-react';
+import { Stamp, Upload, FileText, ArrowUp, ArrowDown, X, Loader2, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   driveBrowserService,
@@ -26,6 +26,24 @@ import {
  * É a mesma regra do `arquivar_peca.py`, que arquiva pela Mesa. As duas portas
  * têm de escrever igual, senão a padronização do acervo se desfaz pelo uso.
  */
+
+/**
+ * A Mesa (Desktop do Mac), quando o navegador deixa.
+ *
+ * Página web não apaga arquivo do computador — é o navegador que não deixa, e
+ * com razão. A File System Access API abre a única fresta: o advogado autoriza
+ * UMA pasta, explicitamente, e a partir daí a página pode ler e apagar DENTRO
+ * dela. Só existe em Chromium (Opera GX, Chrome); no Safari e no celular o
+ * botão some e o fluxo continua sendo anexar do jeito normal.
+ *
+ * A remoção é sempre DEPOIS e só do que o servidor confirmou ter arquivado —
+ * `removeEntry` não tem lixeira, então o arquivo só sai da Mesa quando já está
+ * no Drive, pelo nome que o Drive devolveu.
+ */
+type ArquivoDaMesa = { nome: string; file: File; mtime: number };
+
+const suportaMesa = () =>
+  typeof window !== 'undefined' && 'showDirectoryPicker' in window;
 
 /** Data de hoje no formato do escritório. */
 export function hojeDDMMAAAA() {
@@ -61,6 +79,11 @@ export function ArquivarPecaModal({
   const [arquivos, setArquivos] = useState<File[]>([]);
   const [salvando, setSalvando] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  // Mesa: a pasta autorizada e os nomes que vieram de lá (só esses podem sair).
+  const [mesa, setMesa] = useState<any>(null);
+  const [daMesa, setDaMesa] = useState<Set<string>>(new Set());
+  const [listaMesa, setListaMesa] = useState<ArquivoDaMesa[] | null>(null);
+  const [tirarDaMesa, setTirarDaMesa] = useState(true);
 
   // Da agenda: o servidor resolve cliente + fases + sugestão numa chamada só.
   const ctx = useQuery({
@@ -102,6 +125,41 @@ export function ArquivarPecaModal({
     gcTime: 0,
   });
 
+  /** Autoriza a Mesa e lista o que há de arquivável lá, do mais novo para o mais velho. */
+  const abrirMesa = async () => {
+    try {
+      const dir = await (window as any).showDirectoryPicker({
+        id: 'mesa-frider',
+        mode: 'readwrite',
+        startIn: 'desktop',
+      });
+      // `mode: 'readwrite'` no picker não garante a permissão: é preciso pedir.
+      const perm = await dir.requestPermission?.({ mode: 'readwrite' });
+      if (perm && perm !== 'granted') {
+        toast.error('Sem permissão de escrita na pasta — dá para anexar, mas não para tirar de lá.');
+      }
+      const itens: ArquivoDaMesa[] = [];
+      for await (const [nome, h] of dir.entries()) {
+        if (h.kind !== 'file' || nome.startsWith('.')) continue;
+        if (!/\.(pdf|docx?|jpe?g|png)$/i.test(nome)) continue;
+        const file = await h.getFile();
+        itens.push({ nome, file, mtime: file.lastModified });
+      }
+      // A peça que você acabou de protocolar é a mais recente — ela vem em cima.
+      itens.sort((a, b) => b.mtime - a.mtime);
+      setMesa(dir);
+      setListaMesa(itens.slice(0, 40));
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') toast.error(e?.message || 'Não consegui abrir a pasta.');
+    }
+  };
+
+  const pegarDaMesa = (it: ArquivoDaMesa) => {
+    if (arquivos.some((a) => a.name === it.nome)) return;
+    setArquivos((a) => [...a, it.file]);
+    setDaMesa((s2) => new Set(s2).add(it.nome));
+  };
+
   // Espelha a regra do servidor: PDF entra numerado na ordem, editável sem
   // número. O servidor é quem manda — isto é a prévia.
   const nomeFinal = (f: File) => {
@@ -127,6 +185,27 @@ export function ArquivarPecaModal({
     try {
       const r = await driveBrowserService.arquivar(alvoPartyId, fase.caminho, arquivos, data);
       toast.success(`Peça arquivada em ${r.pasta} (${r.arquivos.length} arquivo(s)).`);
+
+      // Só agora, e só o que o Drive confirmou pelo nome que ele mesmo devolveu.
+      // `removeEntry` não tem lixeira: um arquivo que não subiu não pode sair da
+      // Mesa por engano.
+      if (mesa && tirarDaMesa && daMesa.size) {
+        const confirmados = new Set(r.arquivos);
+        const saiu: string[] = [];
+        for (const f of arquivos) {
+          if (!daMesa.has(f.name)) continue;
+          if (!confirmados.has(nomeFinal(f))) continue;
+          try {
+            await mesa.removeEntry(f.name);
+            saiu.push(f.name);
+          } catch {
+            /* arquivo aberto, renomeado ou permissão revogada — fica na Mesa */
+          }
+        }
+        if (saiu.length) toast.success(`${saiu.length} arquivo(s) saíram da Mesa.`);
+        else toast.warning('Arquivei, mas não consegui tirar da Mesa — apague por lá.');
+      }
+
       onPronto(r, alvoPartyId);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || 'Não consegui arquivar.');
@@ -234,13 +313,24 @@ export function ArquivarPecaModal({
               <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 Arquivos — os PDFs na ordem do protocolo
               </label>
-              <button
-                type="button"
-                onClick={() => input.current?.click()}
-                className="text-xs font-medium text-[#228BE6] hover:underline"
-              >
-                anexar
-              </button>
+              <div className="flex items-center gap-3">
+                {suportaMesa() && (
+                  <button
+                    type="button"
+                    onClick={abrirMesa}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"
+                  >
+                    <Monitor className="h-3 w-3" /> {mesa ? 'trocar pasta' : 'pegar da Mesa'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => input.current?.click()}
+                  className="text-xs font-medium text-[#228BE6] hover:underline"
+                >
+                  anexar
+                </button>
+              </div>
             </div>
             <input
               ref={input}
@@ -252,6 +342,41 @@ export function ArquivarPecaModal({
                 if (input.current) input.current.value = '';
               }}
             />
+            {listaMesa && (
+              <div className="mb-2 rounded-lg border border-zinc-200 dark:border-zinc-800">
+                <p className="border-b border-zinc-100 px-2.5 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                  Na Mesa — mais recentes primeiro
+                </p>
+                {!listaMesa.length ? (
+                  <p className="px-2.5 py-3 text-xs text-zinc-400">Nada arquivável nessa pasta.</p>
+                ) : (
+                  <ul className="max-h-40 divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
+                    {listaMesa.map((it) => {
+                      const posto = arquivos.some((a) => a.name === it.nome);
+                      return (
+                        <li key={it.nome}>
+                          <button
+                            type="button"
+                            onClick={() => pegarDaMesa(it)}
+                            disabled={posto}
+                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-zinc-50 disabled:opacity-40 dark:hover:bg-zinc-800/50"
+                          >
+                            <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                            <span className="min-w-0 flex-1 truncate text-xs text-zinc-600 dark:text-zinc-300">
+                              {it.nome}
+                            </span>
+                            <span className="shrink-0 text-[10px] tabular-nums text-zinc-400">
+                              {new Date(it.mtime).toLocaleDateString('pt-BR')}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+
             {!arquivos.length ? (
               <button
                 type="button"
@@ -298,6 +423,23 @@ export function ArquivarPecaModal({
             <p className="mt-1.5 text-[11px] text-zinc-400">
               PDF entra numerado na ordem acima; o editável entra sem número. Nada é sobrescrito.
             </p>
+            {!!daMesa.size && (
+              <label className="mt-2 flex items-start gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={tirarDaMesa}
+                  onChange={(e) => setTirarDaMesa(e.target.checked)}
+                  className="mt-0.5 accent-[#228BE6]"
+                />
+                <span>
+                  Tirar da Mesa depois de arquivar ({daMesa.size} arquivo(s)).{' '}
+                  <span className="text-amber-600 dark:text-amber-400">
+                    Sai de vez, sem passar pela Lixeira
+                  </span>{' '}
+                  — e só sai o que o Drive confirmar.
+                </span>
+              </label>
+            )}
           </div>
         </div>
 
