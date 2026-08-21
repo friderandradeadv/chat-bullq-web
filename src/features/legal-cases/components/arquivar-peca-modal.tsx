@@ -493,7 +493,30 @@ export function ArquivarPecaModal({
 
       // Anexo da tarefa NÃO sobe de novo: já está no disco do servidor. Só os
       // arquivos escolhidos agora vão no multipart; a `ordem` diz a sequência.
-      const novos = itens.filter((i) => i.kind === 'file').map((i) => (i as any).file as File);
+      // RELÊ do disco na hora de enviar, em vez de confiar no File capturado
+      // quando a pasta foi listada. O File é um retrato: se o arquivo foi
+      // salvo de novo, renomeado ou a pasta mudou desde a listagem, ele vira
+      // referência morta — e o que chega ao servidor é NADA, sem erro nenhum
+      // no caminho.
+      const novos: File[] = [];
+      for (const i of itens) {
+        if (i.kind !== 'file') continue;
+        let f: File | null = (i as any).file ?? null;
+        if (mesa && (i as any).daMesa) {
+          try {
+            const sub = (listaMesa ?? []).find((x) => x.nome === i.nome)?.sub ?? null;
+            const dono = sub ? await mesa.getDirectoryHandle(sub) : mesa;
+            f = await (await dono.getFileHandle(i.nome)).getFile();
+          } catch {
+            /* some do disco entre listar e enviar: fica o retrato antigo */
+          }
+        }
+        if (!f) {
+          toast.error(`Não consegui ler "${i.nome}". Tire-o da lista ou anexe de novo.`);
+          return;
+        }
+        novos.push(f);
+      }
 
       // A caixa "Anexar também na tarefa" aparece nos DOIS caminhos, mas só o do
       // movimento a executava: no de upload ela ficava marcada sem fazer nada.

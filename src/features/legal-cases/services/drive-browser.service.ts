@@ -90,9 +90,13 @@ export const driveBrowserService = {
   async enviar(partyId: string, caminho: string[], arquivos: File[]) {
     const form = new FormData();
     form.append('caminho', caminho.join('/'));
-    arquivos.forEach((f) => form.append('files', f));
+    arquivos.forEach((f) => {
+      if (!f) return;
+      form.append('files', f, (f as File).name);
+    });
     const { data } = await api.post(`/client-documents/drive/${partyId}/enviar`, form, {
       timeout: 180_000, // o Drive é lento com arquivo grande, e o advogado espera olhando
+      headers: { 'Content-Type': undefined as unknown as string },
     });
     return data.data ?? data;
   },
@@ -191,9 +195,19 @@ export const driveBrowserService = {
       form.append('entityId', fonte.entityId);
       form.append('ordem', JSON.stringify(fonte.ordem));
     }
-    arquivos.forEach((f) => form.append('files', f));
+    // O NOME vai explícito. Sem ele, um Blob sem nome chega como "blob" no
+    // multipart e a `ordem` não acha o arquivo — e o servidor recusa o
+    // protocolo inteiro por causa do rótulo.
+    arquivos.forEach((f) => {
+      if (!f) return;
+      form.append('files', f, (f as File).name);
+    });
     const r = await api.post(`/client-documents/drive/${partyId}/arquivar`, form, {
       timeout: 180_000,
+      // O cliente HTTP do hub manda `application/json` por padrão. Com FormData
+      // quem tem de escrever o cabeçalho é o NAVEGADOR, porque só ele conhece o
+      // boundary — sem isso o servidor recebe um corpo que não sabe abrir.
+      headers: { 'Content-Type': undefined as unknown as string },
     });
     return r.data.data ?? r.data;
   },
