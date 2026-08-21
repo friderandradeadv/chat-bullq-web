@@ -149,6 +149,7 @@ export function ArquivarPecaModal({
     staleTime: 10_000,
   });
   const [semeou, setSemeou] = useState(false);
+  const [semeouPasta, setSemeouPasta] = useState(false);
   // Vindo da Mesa, o arquivo pode fazer as duas coisas de uma vez: virar anexo
   // do prazo (o registro do que foi protocolado) e mudar de lugar para a pasta
   // do cliente. Uma coisa não substitui a outra — o anexo prova, a pasta arquiva.
@@ -157,9 +158,39 @@ export function ArquivarPecaModal({
   const [limparMesa, setLimparMesa] = useState(true);
   useEffect(() => {
     if (semeou || !anexosQ.data?.length) return;
-    setItens(anexosQ.data.map((a) => ({ kind: 'anexo' as const, id: a.id, nome: a.name })));
+    // SOMA, não substitui: os arquivos da pasta de trabalho podem ter entrado
+    // antes (vêm do disco, que é mais rápido que a rede) e sobrescrever aqui
+    // apagaria a lista deles.
+    setItens((atuais) => [
+      ...atuais,
+      ...anexosQ.data
+        .filter((a) => !atuais.some((i) => i.nome === a.name))
+        .map((a) => ({ kind: 'anexo' as const, id: a.id, nome: a.name })),
+    ]);
     setSemeou(true);
   }, [anexosQ.data, semeou]);
+
+  /**
+   * Tudo que está na pasta de trabalho já entra na lista.
+   *
+   * A pasta se chama ARQUIVAR e existe para isso — pedir que o advogado clique
+   * arquivo por arquivo numa lista que ele mesmo montou é trabalho inventado. O
+   * que não for para arquivar, ele tira no X.
+   *
+   * Entram ordenados por NOME, não por data: `01. …`, `02. …` é a ordem do
+   * protocolo, e é dela que sai a numeração.
+   */
+  useEffect(() => {
+    if (semeouPasta || !listaMesa?.length) return;
+    setItens((atuais) => [
+      ...atuais,
+      ...listaMesa
+        .filter((f) => !atuais.some((i) => i.nome === f.nome))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }))
+        .map((f) => ({ kind: 'file' as const, file: f.file, nome: f.nome, daMesa: true })),
+    ]);
+    setSemeouPasta(true);
+  }, [listaMesa, semeouPasta]);
 
   // Da ficha: só as fases daquele cliente.
   const fasesQ = useQuery({
@@ -602,24 +633,24 @@ export function ArquivarPecaModal({
                 if (input.current) input.current.value = '';
               }}
             />
-            {listaMesa && (
-              <div className="mb-2 rounded-lg border border-zinc-200 dark:border-zinc-800">
+            {(() => {
+              // Só o que AINDA não está na lista: o resto já entrou sozinho, e
+              // repetir na tela faria parecer que falta escolher alguma coisa.
+              const fora = (listaMesa ?? []).filter((f) => !itens.some((i) => i.nome === f.nome));
+              return !listaMesa ? null : (
+              <div className={fora.length ? 'mb-2 rounded-lg border border-zinc-200 dark:border-zinc-800' : 'hidden'}>
                 <p className="border-b border-zinc-100 px-2.5 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                  Em {mesaNome} — mais recentes primeiro
+                  Também em {mesaNome} — clique para incluir
                 </p>
-                {!listaMesa.length ? (
-                  <p className="px-2.5 py-3 text-xs text-zinc-400">Nada arquivável nessa pasta.</p>
-                ) : (
+                {!fora.length ? null : (
                   <ul className="max-h-40 divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
-                    {listaMesa.map((it) => {
-                      const posto = itens.some((a) => a.nome === it.nome);
+                    {fora.map((it) => {
                       return (
                         <li key={it.nome}>
                           <button
                             type="button"
                             onClick={() => pegarDaMesa(it)}
-                            disabled={posto}
-                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-zinc-50 disabled:opacity-40 dark:hover:bg-zinc-800/50"
+                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                           >
                             <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
                             <span className="min-w-0 flex-1 truncate text-xs text-zinc-600 dark:text-zinc-300">
@@ -635,7 +666,8 @@ export function ArquivarPecaModal({
                   </ul>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {!itens.length ? (
               <button
