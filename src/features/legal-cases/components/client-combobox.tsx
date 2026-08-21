@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { titleCaseName } from '@/lib/names';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Plus } from 'lucide-react';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
@@ -80,7 +81,8 @@ export function ClientCombobox({
                 }}
                 className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800"
               >
-                <span className="flex-1 truncate text-zinc-800 dark:text-zinc-200">{c.name}</span>
+                {/* Nome de cliente é cadastro → "Primeira Letra Maiúscula". */}
+                <span className="flex-1 truncate text-zinc-800 dark:text-zinc-200">{titleCaseName(c.name)}</span>
                 {c.document && <span className="shrink-0 text-[10px] text-zinc-400">{c.document}</span>}
                 <span className="shrink-0 rounded bg-zinc-100 px-1 text-[10px] text-zinc-500 dark:bg-zinc-800" title="processos">
                   {c.cases}

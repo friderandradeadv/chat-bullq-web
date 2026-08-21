@@ -32,6 +32,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { titleCaseName } from '@/lib/names';
 import {
   legalCasesService,
   type ApensoRef,
@@ -238,7 +239,7 @@ export default function ProcessoDetailPage() {
                 href={`/clientes/${clientParty.id}`}
                 className="font-medium text-[#202124] hover:text-[#228BE6] hover:underline dark:text-zinc-100"
               >
-                {clientParty.name}
+                {titleCaseName(clientParty.name)}
               </Link>
             ) : (
               '—'
@@ -825,7 +826,7 @@ function ResumoTab({ c }: { c: CaseDetail }) {
                 href={`/clientes/${clientParty.id}`}
                 className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-100"
               >
-                {clientParty.contact.name ?? clientParty.name}
+                {titleCaseName(clientParty.contact.name ?? clientParty.name)}
               </Link>
               {clientParty.contact.phone && (
                 <p className="text-xs text-zinc-500">{clientParty.contact.phone}</p>
@@ -847,7 +848,7 @@ function ResumoTab({ c }: { c: CaseDetail }) {
               href={`/clientes/${clientParty.id}`}
               className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-100"
             >
-              {clientParty.name}
+              {titleCaseName(clientParty.name)}
             </Link>
           ) : (
             <EmptyState>Nenhum cliente vinculado.</EmptyState>
@@ -1565,7 +1566,9 @@ function EditCaseDialog({
     document?: string | null;
     contactId?: string | null;
   }>({
-    name: clienteAtual?.name ?? '',
+    // Abre no padrão do cadastro. Formatar a cada tecla brigaria com o cursor,
+    // então normalizamos só o valor INICIAL — quem digita, digita livre.
+    name: clienteAtual?.name ? titleCaseName(clienteAtual.name) : '',
     document: clienteAtual?.document ?? null,
     contactId: clienteAtual?.contact?.id ?? null,
   });
@@ -1821,7 +1824,7 @@ function PartiesCard({
               <span className="text-zinc-700 dark:text-zinc-200">
                 {p.role === 'CLIENT' ? (
                   <Link href={`/clientes/${p.id}`} className="hover:text-[#228BE6] hover:underline">
-                    {p.name}
+                    {titleCaseName(p.name)}
                   </Link>
                 ) : (
                   p.name
