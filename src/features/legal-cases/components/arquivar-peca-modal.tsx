@@ -149,6 +149,8 @@ export function ArquivarPecaModal({
   // do prazo (o registro do que foi protocolado) e mudar de lugar para a pasta
   // do cliente. Uma coisa não substitui a outra — o anexo prova, a pasta arquiva.
   const [anexarNaTarefa, setAnexarNaTarefa] = useState(true);
+  // Plano B quando o navegador recusa a pasta do Drive (ver `podeLimpar`).
+  const [limparMesa, setLimparMesa] = useState(true);
   useEffect(() => {
     if (semeou || !anexosQ.data?.length) return;
     setItens(anexosQ.data.map((a) => ({ kind: 'anexo' as const, id: a.id, nome: a.name })));
@@ -190,6 +192,11 @@ export function ArquivarPecaModal({
   /** Autoriza uma pasta e guarda o handle para as próximas sessões. */
   const escolherPasta = async (qual: 'mesa' | 'clientes') => {
     try {
+      // O Chromium recusa `~/Library` inteira ("contém arquivos do sistema"), e
+      // é lá que o Drive monta — por isso a pasta do Drive normalmente NÃO pode
+      // ser autorizada, e o hub cai no plano B (subir e limpar a Mesa). O botão
+      // continua existindo porque num Mac com o Drive espelhado fora de
+      // ~/Library ele funciona, e aí o arquivo muda de lugar sem upload.
       const dir = await (window as any).showDirectoryPicker({
         id: `frider-${qual}`,
         mode: 'readwrite',
@@ -269,12 +276,25 @@ export function ArquivarPecaModal({
     (i.kind === 'file' && i.daMesa) || nomesNaMesa.has(i.nome)
   );
 
-  const podeMover =
-    suportaMoverNoDisco() &&
-    !!mesa &&
-    !!clientesDir &&
-    itens.length > 0 &&
-    itens.every(estaNaMesa);
+  const todosNaMesa = itens.length > 0 && itens.every(estaNaMesa);
+
+  const podeMover = suportaMoverNoDisco() && !!mesa && !!clientesDir && todosNaMesa;
+
+  /**
+   * Plano B: subir pela API e TIRAR o arquivo da Mesa depois.
+   *
+   * O Chromium se recusa a autorizar qualquer pasta dentro de `~/Library` — a
+   * mensagem é "contém arquivos do sistema" — e é exatamente ali que o Google
+   * Drive monta (`~/Library/CloudStorage/GoogleDrive-…`). Ou seja: mover o
+   * arquivo para dentro do Drive pelo navegador é IMPOSSÍVEL nesta máquina,
+   * por regra do navegador, não por configuração.
+   *
+   * A Mesa (`~/Desktop`) não é bloqueada. Então dá para fazer as duas metades
+   * por caminhos diferentes: o arquivo chega à pasta certa pela API (que é
+   * quem sabe a fase, a letra e a numeração) e sai da Mesa aqui — **só depois
+   * que o Drive confirmar, e só pelo nome que ele devolveu**.
+   */
+  const podeLimpar = suportaMoverNoDisco() && !!mesa && !clientesDir && todosNaMesa;
 
   /** Arrastar da Mesa para cá é o gesto natural — e cai na mesma lista. */
   const receber = (lista: FileList | File[] | null) => {
@@ -402,9 +422,32 @@ export function ArquivarPecaModal({
       );
       toast.success(`Peça arquivada em ${r.pasta} (${r.arquivos.length} arquivo(s)).`);
 
+      // Só agora, e só o que o Drive confirmou pelo nome que ele mesmo devolveu:
+      // `removeEntry` não tem lixeira, então arquivo que não subiu não pode sair
+      // da Mesa por engano.
+      if (podeLimpar && limparMesa) {
+        const confirmados = new Set<string>(r.arquivos);
+        const saiu: string[] = [];
+        const ficou: string[] = [];
+        for (const i of itens) {
+          if (!confirmados.has(nomeFinal(i))) {
+            ficou.push(i.nome);
+            continue;
+          }
+          try {
+            await mesa.removeEntry(i.nome);
+            saiu.push(i.nome);
+          } catch {
+            ficou.push(i.nome);
+          }
+        }
+        if (saiu.length) toast.success(`${saiu.length} arquivo(s) saíram da Mesa.`);
+        if (ficou.length) toast.warning(`Ficaram na Mesa: ${ficou.join(', ')}`);
+      }
+
       // Subiu em vez de mover: DIGA por quê. Silêncio aqui foi o que fez a Mesa
       // continuar suja duas vezes sem ninguém entender o motivo.
-      if (suportaMoverNoDisco() && itens.length && !podeMover) {
+      if (suportaMoverNoDisco() && itens.length && !podeMover && !(podeLimpar && limparMesa)) {
         const falta = !mesa && !clientesDir
           ? 'a Mesa e a pasta 01. CLIENTES'
           : !mesa
@@ -689,35 +732,58 @@ export function ArquivarPecaModal({
                       </label>
                     )}
                   </>
-                ) : !mesa || !clientesDir ? (
+                ) : podeLimpar ? (
+                  <>
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                      Os arquivos vão para a pasta e{' '}
+                      <span className="font-medium">saem da Mesa</span> depois que o Drive
+                      confirmar.
+                    </p>
+                    <label className="mt-1.5 flex items-start gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      <input
+                        type="checkbox"
+                        checked={limparMesa}
+                        onChange={(e) => setLimparMesa(e.target.checked)}
+                        className="mt-0.5 accent-[#228BE6]"
+                      />
+                      <span>
+                        Tirar da Mesa ({itens.length}).{' '}
+                        <span className="text-amber-600 dark:text-amber-400">
+                          Sai de vez, sem passar pela Lixeira
+                        </span>{' '}
+                        — e só sai o que o Drive confirmar.
+                      </span>
+                    </label>
+                    {atividade && itens.some((i) => i.kind === 'file') && (
+                      <label className="mt-1 flex items-start gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        <input
+                          type="checkbox"
+                          checked={anexarNaTarefa}
+                          onChange={(e) => setAnexarNaTarefa(e.target.checked)}
+                          className="mt-0.5 accent-[#228BE6]"
+                        />
+                        <span>Anexar também na tarefa.</span>
+                      </label>
+                    )}
+                  </>
+                ) : !mesa ? (
                   <div className="space-y-1.5">
                     <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
                       Do jeito que está, eu subo os arquivos e eles CONTINUAM na Mesa.
                     </p>
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                      Para saírem de lá, autorize as pastas. O Opera vai abrir o seletor do Mac
-                      pedindo para você <span className="font-medium">escolher a pasta e clicar em
-                      Selecionar</span> — é a autorização, e vale para as próximas vezes.
+                      Autorize a Mesa uma vez: o Opera abre o seletor do Mac, você{' '}
+                      <span className="font-medium">escolhe a Mesa e clica em Selecionar</span>.
+                      Vale para as próximas vezes.
                     </p>
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      {!mesa && (
-                        <button
-                          type="button"
-                          onClick={() => escolherPasta('mesa')}
-                          className="inline-flex items-center gap-1 rounded-md border border-amber-400/60 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
-                        >
-                          <Monitor className="h-3 w-3" /> autorizar a Mesa
-                        </button>
-                      )}
-                      {!clientesDir && (
-                        <button
-                          type="button"
-                          onClick={() => escolherPasta('clientes')}
-                          className="inline-flex items-center gap-1 rounded-md border border-amber-400/60 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
-                        >
-                          <Monitor className="h-3 w-3" /> autorizar 01. CLIENTES
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => escolherPasta('mesa')}
+                        className="inline-flex items-center gap-1 rounded-md border border-amber-400/60 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
+                      >
+                        <Monitor className="h-3 w-3" /> autorizar a Mesa
+                      </button>
                     </div>
                   </div>
                 ) : (
