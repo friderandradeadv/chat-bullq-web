@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Search,
   ChevronLeft,
+  UserCheck,
 } from 'lucide-react';
 import { formatPhone } from '@/lib/brazil-states';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -108,6 +109,23 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
     }
   };
 
+  /**
+   * Aceitar o atendimento de dentro da conversa. Antes isso só existia no card
+   * da lista, então quem abria uma conversa PENDENTE ficava sem saída: a única
+   * ação do cabeçalho era "Arquivar chat" (arquivar ≠ atender). O endpoint
+   * assign-me já faz tudo do lado da API — vira responsável, PENDING→OPEN e
+   * `assumirComoHumano` tira da fila e joga em ATIVOS.
+   */
+  const handleAccept = async () => {
+    await handleAction(
+      () => inboxService.assignToMe(conversation.id),
+      'Atendimento aceito — a conversa foi para Ativos',
+    );
+    // Prefixo: revalida a lista e os contadores das abas (Pendentes/Ativos).
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    queryClient.invalidateQueries({ queryKey: ['conversation-counts'] });
+  };
+
   const handleArchiveConfirm = async (reason: string, nextResponsibleId: string | null) => {
     await inboxService.archive(conversation.id);
     if (nextResponsibleId) {
@@ -187,6 +205,20 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
         </button>
+        {/* Aceitar atendimento — só na fila (PENDENTES) e fora do arquivo.
+            É a ação PRINCIPAL aqui: sem ela, a conversa pendente só oferecia
+            "Arquivar chat" e ficava travada nos Pendentes. */}
+        {conversation.status === 'PENDING' && !conversation.isArchived && (
+          <button
+            onClick={handleAccept}
+            disabled={isLoading}
+            title="Assumir o atendimento e mover a conversa para Ativos"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            Aceitar atendimento
+          </button>
+        )}
         {/* Always visible: Arquivar / Desarquivar */}
         {!conversation.isArchived ? (
           <button
