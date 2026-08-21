@@ -140,7 +140,12 @@ export function ArquivarPecaModal({
     queryKey: ['drive-por-atividade', atividade?.entityType, atividade?.entityId],
     queryFn: () => driveBrowserService.porAtividade(atividade!.entityType, atividade!.entityId),
     enabled: !!atividade,
-    staleTime: 30_000,
+    // SEMPRE fresco. A pasta do cliente muda fora do hub — o advogado cria a
+    // pasta do produto no Drive e abre o modal em seguida. Guardar essa lista
+    // por um minuto significa oferecer a árvore de um minuto atrás, e foi o que
+    // fez uma pasta criada às 01:16 não aparecer às 01:17.
+    staleTime: 0,
+    gcTime: 0,
   });
 
   /**
@@ -152,7 +157,7 @@ export function ArquivarPecaModal({
     queryKey: ['activity-anexos', atividade?.entityType, atividade?.entityId],
     queryFn: () => activitiesService.listAnexos(atividade!.entityType, atividade!.entityId),
     enabled: !!atividade,
-    staleTime: 10_000,
+    staleTime: 0,
   });
   const [semeou, setSemeou] = useState(false);
   const [semeouPasta, setSemeouPasta] = useState(false);
@@ -203,7 +208,8 @@ export function ArquivarPecaModal({
     queryKey: ['drive-fases', partyId],
     queryFn: () => driveBrowserService.fases(partyId!),
     enabled: !!partyId && !atividade,
-    staleTime: 60_000,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const alvoPartyId = atividade ? ctx.data?.partyId : partyId;
