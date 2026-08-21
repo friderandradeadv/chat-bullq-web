@@ -469,7 +469,7 @@ function ClientCasesSection({ contactId, clienteNome }: { contactId: string; cli
           className="group/kb inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 transition-colors hover:text-primary dark:text-zinc-400"
         >
           Processos do cliente
-          <Columns3 className="h-3 w-3 opacity-0 transition-opacity group-hover/kb:opacity-100" />
+          <ExternalLink className="h-3 w-3 text-primary/70 transition-colors group-hover/kb:text-primary" />
         </button>
         <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
           {cases.length}
