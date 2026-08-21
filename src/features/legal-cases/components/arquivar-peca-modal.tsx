@@ -278,6 +278,10 @@ export function ArquivarPecaModal({
       await guardarPasta(qual, dir);
       if (qual === 'mesa') {
         setMesa(dir);
+        // Pasta trocada é lista nova: relê e deixa a auto-entrada acontecer de
+        // novo, senão a tela continuaria mostrando o que veio da pasta velha.
+        setListaMesa(null);
+        setSemeouPasta(false);
         await listarMesa(dir);
       } else setClientesDir(dir);
     } catch (e: any) {
@@ -678,13 +682,27 @@ export function ArquivarPecaModal({
               </label>
               <div className="flex items-center gap-3">
                 {suportaMesa() && (
-                  <button
-                    type="button"
-                    onClick={abrirMesa}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"
-                  >
-                    <Monitor className="h-3 w-3" /> {mesa ? `ver ${mesaNome}` : 'pegar da pasta'}
-                  </button>
+                  <span className="inline-flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={abrirMesa}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"
+                    >
+                      <Monitor className="h-3 w-3" /> {mesa ? `ver ${mesaNome}` : 'pegar da pasta'}
+                    </button>
+                    {/* Autorizou a pasta errada? Trocar tem de estar UM clique
+                        adiante — não havia como, e a escolha ficava presa. */}
+                    {mesa && (
+                      <button
+                        type="button"
+                        onClick={() => escolherPasta('mesa')}
+                        title="Autorizar outra pasta de trabalho"
+                        className="text-xs text-zinc-400 hover:text-[#228BE6] hover:underline"
+                      >
+                        trocar
+                      </button>
+                    )}
+                  </span>
                 )}
                 <button
                   type="button"
@@ -889,8 +907,8 @@ export function ArquivarPecaModal({
                       escolha a pasta e clique em Selecionar.{' '}
                       <span className="font-medium">
                         O navegador recusa a Mesa inteira (“contém arquivos do sistema”), então
-                        escolha a pasta PROTOCOLO que fica na Mesa (se não existir no seu Mac,
-                        crie uma com esse nome)
+                        escolha a pasta PROTOCOLO que fica na Mesa — a pasta MÃE, não a de um
+                        cliente (se não existir no seu Mac, crie uma com esse nome)
                       </span>{' '}
                       — é uma limitação do Chromium, vale para Documentos e Downloads também.
                     </p>
@@ -905,11 +923,24 @@ export function ArquivarPecaModal({
                     </div>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                    {itens.filter((i) => !estaNaMesa(i)).length} item(ns)
-                    não estão em {mesaNome} — vou <span className="font-medium">subir todos</span> e
-                    nada sai de lugar.
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      {itens.filter((i) => !estaNaMesa(i)).length} item(ns) não estão em{' '}
+                      {mesaNome} — vou <span className="font-medium">subir todos</span> e nada sai
+                      de lugar.
+                    </p>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Autorizou a pasta de um cliente em vez da PROTOCOLO?{' '}
+                      <button
+                        type="button"
+                        onClick={() => escolherPasta('mesa')}
+                        className="font-medium text-[#228BE6] hover:underline"
+                      >
+                        trocar a pasta
+                      </button>{' '}
+                      — a PROTOCOLO é a mãe, e o hub enxerga as de todos os clientes por ela.
+                    </p>
+                  </div>
                 )}
               </div>
             )}
