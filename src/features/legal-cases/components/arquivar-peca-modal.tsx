@@ -50,7 +50,12 @@ import {
  * Sem uma das duas pastas — ou fora do Chromium — o hub sobe os bytes como
  * sempre, e o original fica onde está.
  */
-type ArquivoDaMesa = { nome: string; file: File; mtime: number };
+/**
+ * Um arquivo na pasta de trabalho. `sub` é a subpasta do cliente — desde
+ * 21/08/2026 a peça não fica solta em PROTOCOLO, vai para `PROTOCOLO/<CLIENTE>/`,
+ * porque três prazos no mesmo dia viram doze arquivos misturados na raiz.
+ */
+type ArquivoDaMesa = { nome: string; file: File; mtime: number; sub: string | null };
 
 /**
  * Um item do protocolo. Pode vir dos ANEXOS da própria tarefa — que o advogado
@@ -61,6 +66,10 @@ type ArquivoDaMesa = { nome: string; file: File; mtime: number };
 type ItemProtocolo =
   | { kind: 'anexo'; id: string; nome: string }
   | { kind: 'file'; file: File; nome: string; daMesa: boolean };
+
+/** Normalização para casar nome de cliente com nome de pasta. */
+const chave = (s: string) =>
+  (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 const suportaMesa = () =>
   typeof window !== 'undefined' && 'showDirectoryPicker' in window;
@@ -193,15 +202,28 @@ export function ArquivarPecaModal({
    */
   useEffect(() => {
     if (semeouPasta || !listaMesa?.length) return;
+    // Sabendo de quem é o prazo, entram só os arquivos DAQUELE cliente: a
+    // subpasta existe justamente para não misturar três prazos do mesmo dia.
+    // Sem cliente conhecido (arquivando pela ficha), entra o que estiver solto
+    // na raiz — o resto fica na lista de baixo, a um clique.
+    const alvo = ctx.data?.cliente ? chave(ctx.data.cliente) : null;
+    const meus = listaMesa.filter((f) =>
+      alvo ? (f.sub ? chave(f.sub) === alvo : false) : f.sub === null,
+    );
+    const entram = meus.length ? meus : listaMesa.filter((f) => f.sub === null);
+    if (!entram.length) {
+      setSemeouPasta(true);
+      return;
+    }
     setItens((atuais) => [
       ...atuais,
-      ...listaMesa
+      ...entram
         .filter((f) => !atuais.some((i) => i.nome === f.nome))
         .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }))
         .map((f) => ({ kind: 'file' as const, file: f.file, nome: f.nome, daMesa: true })),
     ]);
     setSemeouPasta(true);
-  }, [listaMesa, semeouPasta]);
+  }, [listaMesa, semeouPasta, ctx.data?.cliente]);
 
   // Da ficha: só as fases daquele cliente.
   const fasesQ = useQuery({
@@ -263,18 +285,32 @@ export function ArquivarPecaModal({
     }
   };
 
-  /** O que há de arquivável na Mesa, do mais novo para o mais velho. */
+  /**
+   * O que há de arquivável na pasta de trabalho — raiz E subpastas de cliente.
+   *
+   * Desce UM nível de propósito: a estrutura é `PROTOCOLO/<CLIENTE>/arquivos`, e
+   * ir mais fundo só encontraria coisa que não é peça.
+   */
   const listarMesa = async (dir: any) => {
+    const serve = (n: string) => !n.startsWith('.') && /\.(pdf|docx?|jpe?g|png)$/i.test(n);
     const itens: ArquivoDaMesa[] = [];
-    for await (const [nome, h] of dir.entries()) {
-      if (h.kind !== 'file' || nome.startsWith('.')) continue;
-      if (!/\.(pdf|docx?|jpe?g|png)$/i.test(nome)) continue;
-      const file = await h.getFile();
-      itens.push({ nome, file, mtime: file.lastModified });
-    }
+
+    const ler = async (d: any, sub: string | null) => {
+      for await (const [nome, h] of d.entries()) {
+        if (h.kind === 'file') {
+          if (!serve(nome)) continue;
+          const file = await h.getFile();
+          itens.push({ nome, file, mtime: file.lastModified, sub });
+          continue;
+        }
+        if (sub === null && !nome.startsWith('.')) await ler(h, nome);
+      }
+    };
+    await ler(dir, null);
+
     // A peça que você acabou de protocolar é a mais recente — ela vem em cima.
     itens.sort((a, b) => b.mtime - a.mtime);
-    setListaMesa(itens.slice(0, 40));
+    setListaMesa(itens.slice(0, 60));
   };
 
   /** Abre a Mesa: autoriza se preciso, senão só relista (o conteúdo muda). */
@@ -476,16 +512,36 @@ export function ArquivarPecaModal({
         const confirmados = new Set<string>(r.arquivos);
         const saiu: string[] = [];
         const ficou: string[] = [];
+        const subsMexidas = new Set<string>();
         for (const i of itens) {
           if (!confirmados.has(nomeFinal(i))) {
             ficou.push(i.nome);
             continue;
           }
           try {
-            await mesa.removeEntry(i.nome);
+            const sub = (listaMesa ?? []).find((f) => f.nome === i.nome)?.sub ?? null;
+            const dono = sub ? await mesa.getDirectoryHandle(sub) : mesa;
+            await dono.removeEntry(i.nome);
             saiu.push(i.nome);
+            if (sub) subsMexidas.add(sub);
           } catch {
             ficou.push(i.nome);
+          }
+        }
+        // Pasta de cliente que ficou vazia é pendência resolvida: sai também.
+        // O que sobra em PROTOCOLO passa a ser, por construção, o que ainda não
+        // foi arquivado.
+        for (const sub of subsMexidas) {
+          try {
+            const d = await mesa.getDirectoryHandle(sub);
+            let vazia = true;
+            for await (const [nome] of d.entries()) {
+              if (nome !== '.DS_Store') { vazia = false; break; }
+              await d.removeEntry(nome).catch(() => {});
+            }
+            if (vazia) await mesa.removeEntry(sub, { recursive: true });
+          } catch {
+            /* pasta em uso ou já removida — fica, e não atrapalha nada */
           }
         }
         if (saiu.length) toast.success(`${saiu.length} arquivo(s) saíram de ${mesaNome}.`);
@@ -668,6 +724,11 @@ export function ArquivarPecaModal({
                             <span className="min-w-0 flex-1 truncate text-xs text-zinc-600 dark:text-zinc-300">
                               {it.nome}
                             </span>
+                            {it.sub && (
+                              <span className="shrink-0 truncate rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                {it.sub}
+                              </span>
+                            )}
                             <span className="shrink-0 text-[10px] tabular-nums text-zinc-400">
                               {new Date(it.mtime).toLocaleDateString('pt-BR')}
                             </span>
