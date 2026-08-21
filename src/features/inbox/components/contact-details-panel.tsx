@@ -420,7 +420,6 @@ function ClientCasesSection({ contactId, clienteNome }: { contactId: string; cli
     staleTime: 300_000,
   });
   const cases = data?.cases ?? [];
-  const clientePartyId = data?.clientePartyId ?? null;
 
   /** Abre o Kanban recortado NESTE cliente. O quadro escolhido é onde estão os
    *  processos dele — quem tem RMC e RCC na fase judicial cai no Fase Judicial;
@@ -475,16 +474,6 @@ function ClientCasesSection({ contactId, clienteNome }: { contactId: string; cli
         <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
           {cases.length}
         </span>
-        {clientePartyId && (
-          <button
-            type="button"
-            onClick={() => window.open(`/clientes/${clientePartyId}`, '_blank', 'noopener')}
-            title="Abrir a ficha do cliente em outra guia (cadastro, processos e etiquetas)"
-            className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-          >
-            Ficha do cliente <ExternalLink className="h-3 w-3" />
-          </button>
-        )}
       </div>
       <div className="space-y-1.5">
         {cases.map((c: ClientCaseRow) => (
