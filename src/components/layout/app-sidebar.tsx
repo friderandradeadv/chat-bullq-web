@@ -42,6 +42,7 @@ import {
   HelpCircle,
   TrendingUp,
   Heart,
+  GraduationCap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -369,6 +370,10 @@ export function AppSidebar() {
             <NavItem href="/copiloto" icon={Bot} label="Copiloto" />
           </div>
         )}
+        {/* Academia — trilhas de treinamento (vídeo + manual escrito), aberta a todos */}
+        <div className="mb-1">
+          <NavItem href="/academia" icon={GraduationCap} label="Academia" />
+        </div>
         {/* Ajuda — assistente que ensina a usar o BullQ, aberto a todos os usuários */}
         <div className="mb-1">
           <NavItem href="/ajuda" icon={HelpCircle} label="Ajuda" />

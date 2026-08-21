@@ -1,7 +1,8 @@
 'use client';
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Bot, ChevronDown, HelpCircle, ImageOff, Loader2, Send, Sparkles, User } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Bot, ChevronDown, GraduationCap, HelpCircle, ImageOff, Loader2, Send, Sparkles, User } from 'lucide-react';
 import { helpService, type HelpTurn } from '@/features/help/services/help.service';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
@@ -123,6 +124,19 @@ export default function AjudaPage() {
       <div className="grid flex-1 gap-4 overflow-hidden md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* Guias */}
         <div className="flex min-h-0 flex-col overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+          <Link
+            href="/academia"
+            className="mb-3 flex items-center gap-2.5 rounded-xl border border-[#7048E8]/30 bg-[#7048E8]/5 px-3 py-2.5 text-sm transition hover:bg-[#7048E8]/10"
+          >
+            <GraduationCap className="h-5 w-5 shrink-0 text-[#7048E8]" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-zinc-800 dark:text-zinc-100">Academia Frider</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                Trilhas completas: onboarding, hub, Claude, prazos, teses e ética
+              </span>
+            </span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-[#7048E8]" />
+          </Link>
           <p className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-zinc-400">Guias rápidos</p>
           <div className="space-y-2">
             {GUIAS.map((g, i) => (
