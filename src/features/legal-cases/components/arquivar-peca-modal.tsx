@@ -494,6 +494,20 @@ export function ArquivarPecaModal({
       // Anexo da tarefa NÃO sobe de novo: já está no disco do servidor. Só os
       // arquivos escolhidos agora vão no multipart; a `ordem` diz a sequência.
       const novos = itens.filter((i) => i.kind === 'file').map((i) => (i as any).file as File);
+
+      // A caixa "Anexar também na tarefa" aparece nos DOIS caminhos, mas só o do
+      // movimento a executava: no de upload ela ficava marcada sem fazer nada.
+      if (atividade && anexarNaTarefa && podeLimpar && novos.length) {
+        try {
+          await activitiesService.uploadAnexos(atividade.entityType, atividade.entityId, novos);
+          qc.invalidateQueries({
+            queryKey: ['activity-anexos', atividade.entityType, atividade.entityId],
+          });
+        } catch {
+          toast.warning('Arquivei, mas não consegui anexar na tarefa.');
+        }
+      }
+
       const r = await driveBrowserService.arquivar(
         alvoPartyId,
         fase.caminho,
