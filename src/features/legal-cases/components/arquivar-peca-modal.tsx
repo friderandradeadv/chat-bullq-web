@@ -104,6 +104,10 @@ export function ArquivarPecaModal({
   const qc = useQueryClient();
   // As duas pastas autorizadas: de onde o arquivo sai e para onde ele vai.
   const [mesa, setMesa] = useState<any>(null);
+  // Nome da pasta que o advogado autorizou. Nem sempre é a Mesa: o Chromium
+  // recusa as pastas que ficam DIRETO na home (Desktop, Documents, Downloads —
+  // "contém arquivos do sistema"), então na prática se autoriza uma subpasta.
+  const mesaNome = mesa?.name ?? 'pasta';
   const [clientesDir, setClientesDir] = useState<any>(null);
   const [listaMesa, setListaMesa] = useState<ArquivoDaMesa[] | null>(null);
 
@@ -441,24 +445,24 @@ export function ArquivarPecaModal({
             ficou.push(i.nome);
           }
         }
-        if (saiu.length) toast.success(`${saiu.length} arquivo(s) saíram da Mesa.`);
-        if (ficou.length) toast.warning(`Ficaram na Mesa: ${ficou.join(', ')}`);
+        if (saiu.length) toast.success(`${saiu.length} arquivo(s) saíram de ${mesaNome}.`);
+        if (ficou.length) toast.warning(`Ficaram em ${mesaNome}: ${ficou.join(', ')}`);
       }
 
       // Subiu em vez de mover: DIGA por quê. Silêncio aqui foi o que fez a Mesa
       // continuar suja duas vezes sem ninguém entender o motivo.
       if (suportaMoverNoDisco() && itens.length && !podeMover && !(podeLimpar && limparMesa)) {
         const falta = !mesa && !clientesDir
-          ? 'a Mesa e a pasta 01. CLIENTES'
+          ? 'a pasta de trabalho'
           : !mesa
-            ? 'a Mesa'
+            ? 'a pasta de trabalho'
             : !clientesDir
               ? 'a pasta 01. CLIENTES'
               : null;
         toast.warning(
           falta
-            ? `Os arquivos continuam na Mesa: falta autorizar ${falta} (uma vez só, no rodapé do modal).`
-            : 'Os arquivos continuam na Mesa: há item que não está lá, e misturar criaria duas pastas da mesma data.',
+            ? `Os arquivos continuam onde estão: falta autorizar ${falta} (uma vez só, no modal).`
+            : 'Os arquivos continuam onde estão: há item fora da pasta autorizada, e misturar criaria duas pastas da mesma data.',
         );
       }
       onPronto(r, alvoPartyId);
@@ -576,7 +580,7 @@ export function ArquivarPecaModal({
                     onClick={abrirMesa}
                     className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"
                   >
-                    <Monitor className="h-3 w-3" /> {mesa ? 'ver a Mesa' : 'pegar da Mesa'}
+                    <Monitor className="h-3 w-3" /> {mesa ? `ver ${mesaNome}` : 'pegar da pasta'}
                   </button>
                 )}
                 <button
@@ -601,7 +605,7 @@ export function ArquivarPecaModal({
             {listaMesa && (
               <div className="mb-2 rounded-lg border border-zinc-200 dark:border-zinc-800">
                 <p className="border-b border-zinc-100 px-2.5 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                  Na Mesa — mais recentes primeiro
+                  Em {mesaNome} — mais recentes primeiro
                 </p>
                 {!listaMesa.length ? (
                   <p className="px-2.5 py-3 text-xs text-zinc-400">Nada arquivável nessa pasta.</p>
@@ -673,10 +677,10 @@ export function ArquivarPecaModal({
                     <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                       {it.kind === 'anexo'
                         ? estaNaMesa(it)
-                          ? 'da tarefa · na Mesa'
+                          ? `da tarefa · em ${mesaNome}`
                           : 'da tarefa'
                         : it.daMesa
-                          ? 'da Mesa'
+                          ? `de ${mesaNome}`
                           : 'novo'}
                     </span>
                     <button
@@ -735,8 +739,8 @@ export function ArquivarPecaModal({
                 ) : podeLimpar ? (
                   <>
                     <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                      Os arquivos vão para a pasta e{' '}
-                      <span className="font-medium">saem da Mesa</span> depois que o Drive
+                      Os arquivos vão para a pasta do cliente e{' '}
+                      <span className="font-medium">saem de {mesaNome}</span> depois que o Drive
                       confirmar.
                     </p>
                     <label className="mt-1.5 flex items-start gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -747,7 +751,7 @@ export function ArquivarPecaModal({
                         className="mt-0.5 accent-[#228BE6]"
                       />
                       <span>
-                        Tirar da Mesa ({itens.length}).{' '}
+                        Tirar de {mesaNome} ({itens.length}).{' '}
                         <span className="text-amber-600 dark:text-amber-400">
                           Sai de vez, sem passar pela Lixeira
                         </span>{' '}
@@ -769,12 +773,16 @@ export function ArquivarPecaModal({
                 ) : !mesa ? (
                   <div className="space-y-1.5">
                     <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                      Do jeito que está, eu subo os arquivos e eles CONTINUAM na Mesa.
+                      Do jeito que está, eu subo os arquivos e eles CONTINUAM onde estão.
                     </p>
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                      Autorize a Mesa uma vez: o Opera abre o seletor do Mac, você{' '}
-                      <span className="font-medium">escolhe a Mesa e clica em Selecionar</span>.
-                      Vale para as próximas vezes.
+                      Autorize uma pasta de trabalho, uma vez só. O Opera abre o seletor do Mac —
+                      escolha a pasta e clique em Selecionar.{' '}
+                      <span className="font-medium">
+                        O navegador recusa a Mesa inteira (“contém arquivos do sistema”), então
+                        escolha a pasta ARQUIVAR que está na Mesa
+                      </span>{' '}
+                      — é uma limitação do Chromium, vale para Documentos e Downloads também.
                     </p>
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                       <button
@@ -782,15 +790,15 @@ export function ArquivarPecaModal({
                         onClick={() => escolherPasta('mesa')}
                         className="inline-flex items-center gap-1 rounded-md border border-amber-400/60 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
                       >
-                        <Monitor className="h-3 w-3" /> autorizar a Mesa
+                        <Monitor className="h-3 w-3" /> autorizar a pasta ARQUIVAR
                       </button>
                     </div>
                   </div>
                 ) : (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
                     {itens.filter((i) => !estaNaMesa(i)).length} item(ns)
-                    não estão na Mesa — vou <span className="font-medium">subir todos</span> e nada
-                    sai de lugar.
+                    não estão em {mesaNome} — vou <span className="font-medium">subir todos</span> e
+                    nada sai de lugar.
                   </p>
                 )}
               </div>
