@@ -99,6 +99,7 @@ export function ArquivarPecaModal({
   const [data, setData] = useState(hojeDDMMAAAA());
   const [itens, setItens] = useState<ItemProtocolo[]>([]);
   const [salvando, setSalvando] = useState(false);
+  const [arrastando, setArrastando] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   // As duas pastas autorizadas: de onde o arquivo sai e para onde ele vai.
@@ -253,13 +254,20 @@ export function ArquivarPecaModal({
    * DISCO, os anexos costumavam chegar depois — o efeito já tinha rodado e
    * ninguém marcava nada. Resultado: subia por upload e a Mesa ficava suja,
    * sem erro nenhum na tela.
+   *
+   * E vale por NOME para QUALQUER origem, não só para o botão "pegar da Mesa":
+   * arrastado para os anexos, escolhido no seletor ou já anexado ontem, se o
+   * arquivo está na Mesa com aquele nome, é ele. Exigir que tivesse entrado
+   * pela porta "certa" era a mesma armadilha de sempre — o hub sabendo a
+   * resposta e fingindo que não.
    */
   const nomesNaMesa = useMemo(
     () => new Set((listaMesa ?? []).map((m) => m.nome)),
     [listaMesa],
   );
-  const estaNaMesa = (i: ItemProtocolo) =>
-    i.kind === 'file' ? i.daMesa : nomesNaMesa.has(i.nome);
+  const estaNaMesa = (i: ItemProtocolo) => i.nome !== '' && (
+    (i.kind === 'file' && i.daMesa) || nomesNaMesa.has(i.nome)
+  );
 
   const podeMover =
     suportaMoverNoDisco() &&
@@ -267,6 +275,18 @@ export function ArquivarPecaModal({
     !!clientesDir &&
     itens.length > 0 &&
     itens.every(estaNaMesa);
+
+  /** Arrastar da Mesa para cá é o gesto natural — e cai na mesma lista. */
+  const receber = (lista: FileList | File[] | null) => {
+    const novos = Array.from(lista ?? []);
+    if (!novos.length) return;
+    setItens((a) => [
+      ...a,
+      ...novos
+        .filter((f) => !a.some((i) => i.nome === f.name))
+        .map((f) => ({ kind: 'file' as const, file: f, nome: f.name, daMesa: false })),
+    ]);
+  };
 
   const pegarDaMesa = (it: ArquivoDaMesa) => {
     if (itens.some((i) => i.nome === it.nome)) return;
@@ -531,15 +551,7 @@ export function ArquivarPecaModal({
               multiple
               hidden
               onChange={(e) => {
-                setItens((a) => [
-                  ...a,
-                  ...Array.from(e.target.files ?? []).map((f) => ({
-                    kind: 'file' as const,
-                    file: f,
-                    nome: f.name,
-                    daMesa: false,
-                  })),
-                ]);
+                receber(e.target.files);
                 if (input.current) input.current.value = '';
               }}
             />
@@ -582,12 +594,28 @@ export function ArquivarPecaModal({
               <button
                 type="button"
                 onClick={() => input.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-6 text-xs text-zinc-400 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setArrastando(true);
+                }}
+                onDragLeave={() => setArrastando(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setArrastando(false);
+                  receber(e.dataTransfer.files);
+                }}
+                className={`flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-6 text-xs ${
+                  arrastando
+                    ? 'border-[#228BE6] bg-[#228BE6]/5 text-[#228BE6]'
+                    : 'border-zinc-300 text-zinc-400 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700'
+                }`}
               >
                 <Upload className="h-4 w-4" />{' '}
                 {atividade && anexosQ.isLoading
                   ? 'Lendo os anexos da tarefa…'
-                  : 'A peça (.docx) e os PDFs do protocolo'}
+                  : arrastando
+                    ? 'Solte aqui'
+                    : 'Arraste da Mesa, ou clique para escolher'}
               </button>
             ) : (
               <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
@@ -667,7 +695,9 @@ export function ArquivarPecaModal({
                       Do jeito que está, eu subo os arquivos e eles CONTINUAM na Mesa.
                     </p>
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                      Para saírem de lá, autorize as pastas — uma vez só, o navegador lembra.
+                      Para saírem de lá, autorize as pastas. O Opera vai abrir o seletor do Mac
+                      pedindo para você <span className="font-medium">escolher a pasta e clicar em
+                      Selecionar</span> — é a autorização, e vale para as próximas vezes.
                     </p>
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
                       {!mesa && (
