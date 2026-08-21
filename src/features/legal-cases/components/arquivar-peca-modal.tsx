@@ -122,7 +122,13 @@ export function ArquivarPecaModal({
       // Mesa — e que portanto ele pode mudar de lugar em vez de ficar lá.
       if (m && (await permissaoDeEscrita(m, false))) {
         setMesa(m);
-        listarMesa(m).catch(() => {});
+        // Pasta renomeada ou apagada desde a última vez: o handle segue
+        // "autorizado" e não lê mais nada. Esquecer é melhor que ficar com uma
+        // permissão que aponta para o vazio — assim o bloco de autorizar volta.
+        listarMesa(m).catch(() => {
+          setMesa(null);
+          setListaMesa(null);
+        });
       }
       if (c && (await permissaoDeEscrita(c, false))) setClientesDir(c);
     })();
@@ -812,7 +818,8 @@ export function ArquivarPecaModal({
                       escolha a pasta e clique em Selecionar.{' '}
                       <span className="font-medium">
                         O navegador recusa a Mesa inteira (“contém arquivos do sistema”), então
-                        escolha a pasta ARQUIVAR que está na Mesa
+                        escolha a pasta PROTOCOLO que fica na Mesa (se não existir no seu Mac,
+                        crie uma com esse nome)
                       </span>{' '}
                       — é uma limitação do Chromium, vale para Documentos e Downloads também.
                     </p>
@@ -822,7 +829,7 @@ export function ArquivarPecaModal({
                         onClick={() => escolherPasta('mesa')}
                         className="inline-flex items-center gap-1 rounded-md border border-amber-400/60 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
                       >
-                        <Monitor className="h-3 w-3" /> autorizar a pasta ARQUIVAR
+                        <Monitor className="h-3 w-3" /> autorizar a pasta PROTOCOLO
                       </button>
                     </div>
                   </div>
