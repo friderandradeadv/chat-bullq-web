@@ -21,6 +21,7 @@ import { MeuFinanceiroConteudo } from '@/features/financeiro/components/meu-fina
 import { ComboBox } from '@/features/financeiro/components/combo-box';
 import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { DropZone } from '@/components/drop-zone';
+import { AcademiaCallout } from '@/features/academia/components/academia-callout';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMarkPayslipSeen } from '@/features/notifications/use-payslip-notifications';
 
@@ -467,6 +468,7 @@ export default function EscritorioPage() {
         {/* ─────────── ABA: MANUAIS ─────────── */}
         {tab === 'manuais' && (<>
         <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><BookOpen className="h-4 w-4 text-[#15AABF]" /> Manuais &amp; procedimentos</h2>
+        <AcademiaCallout contexto="manuais" />
         {!editing && (cur.manuais ?? []).length > 0 && <p className="mt-1 text-xs text-zinc-400">Toque num manual para abrir.</p>}
         <div className="mt-2 space-y-2">
           {editing ? (cur.manuais ?? []).map((mn, i) => (
@@ -490,6 +492,7 @@ export default function EscritorioPage() {
         {/* ─────────── ABA: ONBOARDING ─────────── */}
         {tab === 'onboarding' && (<>
         <h2 className="mt-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-500"><ListChecks className="h-4 w-4 text-[#02883C]" /> Onboarding do novo integrante</h2>
+        <AcademiaCallout contexto="onboarding" />
         <div className={`${CARD} mt-2`}>
           {editing ? (
             <textarea

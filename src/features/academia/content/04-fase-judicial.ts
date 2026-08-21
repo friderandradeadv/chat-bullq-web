@@ -13,7 +13,6 @@ export const FASE_JUDICIAL: Trilha = {
       titulo: 'Panorama: as etapas e o que se faz em cada uma',
       resumo: 'O mapa inteiro antes do detalhe.',
       minutos: 7,
-      video: { fonte: 'drive', id: '1j-RkJ5cxPaeM7cfh16OHzjCYjVYqlxzS' },
       acervo: {
         titulo: 'Acervo — Passo a passo da fase judicial (gravações antigas)',
         url: 'https://drive.google.com/drive/folders/1s9W7Nj9qhvyfbPWDDVwxHGnb7QWcX0lm',
