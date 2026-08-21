@@ -458,7 +458,11 @@ export function ArquivarPecaModal({
           itens.map((i) => i.nome),
           data,
         );
-        const r2 = await moverParaAPastaDoCliente(mesa, clientesDir, plano);
+        // O arquivo pode estar na subpasta do cliente (PROTOCOLO/<CLIENTE>/):
+        // quem sabe disso é a leitura da Mesa, que guarda o `sub` de cada um.
+        const r2 = await moverParaAPastaDoCliente(mesa, clientesDir, plano, (nome) =>
+          (listaMesa ?? []).find((f) => f.nome === nome)?.sub ?? null,
+        );
         if (!r2.movidos.length) {
           toast.error(
             `Não consegui mover: ${r2.ficaram.map((f) => `${f.nome} (${f.motivo})`).join('; ')}`,

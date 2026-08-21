@@ -133,11 +133,18 @@ export interface PlanoDeMovimento {
  * Devolve o que moveu e o que ficou. Falha de um arquivo não derruba os outros
  * nem o arquivamento: arquivo aberto no Word, por exemplo, o macOS recusa mover
  * — e é melhor ele ficar na Mesa do que sumir.
+ *
+ * `subDe` diz em qual SUBPASTA da Mesa cada arquivo está. Desde 21/08/2026 a
+ * PROTOCOLO é organizada por cliente (`PROTOCOLO/<CLIENTE>/peça.docx`), e esta
+ * função procurava o arquivo só na raiz: dava `"...pdf" não está mais na Mesa`
+ * com o arquivo ali, a um nível de distância. Quem lê a Mesa já carrega o `sub`
+ * de cada arquivo; sem `subDe` o comportamento é o antigo, só a raiz.
  */
 export async function moverParaAPastaDoCliente(
   mesa: any,
   clientes: any,
   plano: PlanoDeMovimento,
+  subDe?: (nome: string) => string | null,
 ): Promise<{ movidos: string[]; ficaram: { nome: string; motivo: string }[] }> {
   const cliente = await acharSubpasta(clientes, plano.pastaCliente);
   let atual = cliente;
@@ -150,9 +157,13 @@ export async function moverParaAPastaDoCliente(
   const movidos: string[] = [];
   const ficaram: { nome: string; motivo: string }[] = [];
 
+  const subsMexidas = new Set<string>();
+
   for (const item of plano.arquivos) {
     try {
-      const fh = await acharArquivo(mesa, item.de);
+      const sub = subDe?.(item.de) ?? null;
+      const dono = sub ? await acharSubpasta(mesa, sub) : mesa;
+      const fh = await acharArquivo(dono, item.de);
       if (typeof fh.move !== 'function')
         throw new Error('este navegador não move arquivo entre pastas');
       // Não sobrescreve: se já existe lá, o arquivo fica na Mesa e você decide.
@@ -166,9 +177,31 @@ export async function moverParaAPastaDoCliente(
       if (existe) throw new Error(`já existe "${item.para}" na pasta`);
       await fh.move(destino, item.para);
       movidos.push(item.para);
+      if (sub) subsMexidas.add(sub);
     } catch (e: any) {
       ficaram.push({ nome: item.de, motivo: e?.message || 'não consegui mover' });
     }
   }
+
+  // Pasta de cliente que ficou vazia é pendência resolvida: sai também, do mesmo
+  // modo que no caminho de upload. O que sobra em PROTOCOLO passa a ser, por
+  // construção, o que ainda não foi arquivado.
+  for (const sub of subsMexidas) {
+    try {
+      const d = await acharSubpasta(mesa, sub);
+      let vazia = true;
+      for await (const [nome] of d.entries()) {
+        if (nome !== '.DS_Store') {
+          vazia = false;
+          break;
+        }
+        await d.removeEntry(nome).catch(() => {});
+      }
+      if (vazia) await mesa.removeEntry(sub, { recursive: true });
+    } catch {
+      /* pasta em uso ou já removida — fica, e não atrapalha nada */
+    }
+  }
+
   return { movidos, ficaram };
 }
