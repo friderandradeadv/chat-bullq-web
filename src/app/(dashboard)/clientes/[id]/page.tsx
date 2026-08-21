@@ -47,6 +47,8 @@ import {
   Upload,
   Stamp,
   X,
+  Pencil,
+  Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService } from '@/features/inbox/services/inbox.service';
@@ -72,6 +74,7 @@ import { tagsService } from '@/features/settings/services/tags.service';
 import { financeiroService, anexoHref } from '@/features/financeiro/services/financeiro.service';
 import { clienteFinanceiro, STATUS_FIN } from '@/features/financeiro/lib/clientes';
 import { formatPhone } from '@/lib/brazil-states';
+import { titleCaseName } from '@/lib/names';
 import { StateFlag } from '@/components/ui/state-flag';
 import { CnjNumber, ASTREA_BLUE, LegalTagChip } from '../../processos/page';
 
@@ -177,6 +180,7 @@ export default function ClienteDetailPage() {
   // Navegar no Drive TOMA a aba inteira: dentro de um cartão a lista rolava numa
   // caixinha e não dava para trabalhar. Fora dela, é uma tela de arquivos.
   const [navegandoDrive, setNavegandoDrive] = useState(false);
+  const [editando, setEditando] = useState(false);
 
   const { data: clientes = [], isLoading } = useQuery({
     queryKey: ['legal-clients'],
@@ -301,14 +305,17 @@ export default function ClienteDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <ClienteAvatar
-              nome={cliente.name}
+              nome={titleCaseName(cliente.name)}
               avatarUrl={contact?.avatarUrl ?? null}
               contactId={contact?.id ?? null}
               onSynced={() => qc.invalidateQueries({ queryKey: ['legal-clients'] })}
             />
             <div className="min-w-0">
+              {/* No CADASTRO o nome do cliente é "Primeira Letra Maiúscula".
+                  Título de processo continua em caixa alta — é a praxe forense,
+                  e são coisas diferentes que não devem se contaminar. */}
               <h1 className="truncate text-2xl font-medium text-[#202124] dark:text-zinc-100">
-                {cliente.name}
+                {titleCaseName(cliente.name)}
               </h1>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500">
                 {/* Quem é, em uma linha: idade, de onde e há quanto tempo é do
@@ -422,7 +429,32 @@ export default function ClienteDetailPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5 lg:px-6">
-        {aba === 'dados' && (
+        {aba === 'dados' &&
+          (editando ? (
+            <EditarCliente
+              partyId={cliente.partyId}
+              nome={cliente.name}
+              cadastro={cadastro}
+              contato={contact}
+              onFechar={() => setEditando(false)}
+              onSalvo={() => {
+                setEditando(false);
+                qc.invalidateQueries({ queryKey: ['legal-clients'] });
+                qc.invalidateQueries({ queryKey: ['legal-case'] });
+              }}
+            />
+          ) : (
+            <div>
+              <div className="mb-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditando(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Editar ficha
+                </button>
+              </div>
+
           <div className="grid gap-5 lg:grid-cols-2">
             {/* QUALIFICAÇÃO — o que identifica a pessoa numa petição (CPF, RG,
                 estado civil, profissão, endereço). Vem do cadastro extraído da
@@ -490,7 +522,8 @@ export default function ClienteDetailPage() {
               )}
             </div>
           </div>
-        )}
+            </div>
+          ))}
 
         {aba === 'documentos' &&
           (navegandoDrive ? (
@@ -2022,6 +2055,188 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** Campo do formulário de edição — rótulo em cima, input embaixo. */
+function Campo({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-zinc-400">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-200"
+      />
+      {hint && <span className="mt-1 block text-[11px] text-zinc-400">{hint}</span>}
+    </label>
+  );
+}
+
+/**
+ * Edição da ficha do cliente direto na aba — qualificação, contato e acessos.
+ *
+ * Só os campos que MUDARAM sobem: uma edição parcial não pode apagar o resto do
+ * cadastro, e boa parte dele foi extraída da procuração com trabalho de IA.
+ *
+ * O nome é gravado em Title Case pelo servidor (padrão do cadastro), e ao
+ * renomear os documentos já indexados são reetiquetados — senão sumiriam da
+ * ficha, porque foram indexados sob a chave do nome antigo.
+ */
+function EditarCliente({
+  partyId,
+  nome,
+  cadastro,
+  contato,
+  onFechar,
+  onSalvo,
+}: {
+  partyId: string;
+  nome: string;
+  cadastro: Cadastro | null;
+  contato: { phone: string | null; email: string | null } | null;
+  onFechar: () => void;
+  onSalvo: () => void;
+}) {
+  const inicial = useMemo(
+    () => ({
+      nome: titleCaseName(nome),
+      telefone: contato?.phone ?? '',
+      email: contato?.email ?? '',
+      cpf: cadastro?.cpf ?? '',
+      cnpj: cadastro?.cnpj ?? '',
+      rg: cadastro?.rg ?? '',
+      estadoCivil: cadastro?.estadoCivil ?? '',
+      profissao: cadastro?.profissao ?? '',
+      endereco: cadastro?.endereco ?? '',
+      nascimento: cadastro?.nascimento ?? '',
+      login: cadastro?.login ?? '',
+      senha: cadastro?.senha ?? '',
+    }),
+    [nome, cadastro, contato],
+  );
+
+  const [form, setForm] = useState(inicial);
+  const [salvando, setSalvando] = useState(false);
+  const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const alterados = useMemo(
+    () => (Object.keys(form) as (keyof typeof form)[]).filter((k) => form[k] !== inicial[k]),
+    [form, inicial],
+  );
+
+  const salvar = async () => {
+    if (!alterados.length) {
+      onFechar();
+      return;
+    }
+    if (form.nascimento && !/^\d{2}\/\d{2}\/\d{4}$/.test(form.nascimento)) {
+      toast.error('Data de nascimento deve estar em DD/MM/AAAA.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      // Só o que mudou — o resto do cadastro fica intacto.
+      const patch: Record<string, string | null> = {};
+      for (const k of alterados) patch[k] = form[k] || null;
+      await clientsService.atualizar(partyId, patch);
+      toast.success('Ficha atualizada.');
+      onSalvo();
+    } catch (e: any) {
+      toast.error(e?.message || 'Não consegui salvar.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-zinc-400">
+          {alterados.length
+            ? `${alterados.length} campo(s) alterado(s) — só eles serão gravados.`
+            : 'Altere o que precisar e salve.'}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onFechar}
+            className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={salvar}
+            disabled={salvando}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[#228BE6] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1c7ed6] disabled:opacity-60"
+          >
+            {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Salvar
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="space-y-5">
+          <Card title="Qualificação" icon={IdCard}>
+            <div className="space-y-3">
+              <Campo label="Nome" value={form.nome} onChange={set('nome')}
+                hint="Gravado em Primeira Letra Maiúscula — padrão do cadastro." />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Campo label="CPF" value={form.cpf} onChange={set('cpf')} placeholder="000.000.000-00" />
+                <Campo label="CNPJ" value={form.cnpj} onChange={set('cnpj')} placeholder="00.000.000/0000-00" />
+                <Campo label="RG" value={form.rg} onChange={set('rg')} />
+                <Campo label="Nascimento" value={form.nascimento} onChange={set('nascimento')} placeholder="DD/MM/AAAA" />
+                <Campo label="Estado civil" value={form.estadoCivil} onChange={set('estadoCivil')} />
+                <Campo label="Profissão" value={form.profissao} onChange={set('profissao')} />
+              </div>
+              <Campo label="Endereço" value={form.endereco} onChange={set('endereco')}
+                placeholder="Rua, Nº, Bairro, Cidade/UF, CEP 00000-000" />
+            </div>
+          </Card>
+
+          <Card title="Acessos gov.br / Meu INSS" icon={KeyRound}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Login" value={form.login} onChange={set('login')} />
+              <Campo label="Senha" value={form.senha} onChange={set('senha')} />
+            </div>
+          </Card>
+        </div>
+
+        <div className="space-y-5">
+          <Card title="Contato" icon={MessageCircle}>
+            {contato ? (
+              <div className="space-y-3">
+                <Campo label="Telefone" value={form.telefone} onChange={set('telefone')} placeholder="+55 (00) 00000-0000" />
+                <Campo label="E-mail" value={form.email} onChange={set('email')} type="email" />
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-400">
+                Cliente sem contato no Comercial. Telefone e e-mail passam a ser editáveis depois de
+                vincular um contato — é nele que o chat lê esses dados.
+              </p>
+            )}
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

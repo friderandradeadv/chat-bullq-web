@@ -31,6 +31,15 @@ export const clientsService = {
     const { data } = await api.get('/legal-cases/clients');
     return data.data ?? data;
   },
+  /**
+   * Edita a ficha do cliente. Grava no contato do Comercial quando existe (é a
+   * ficha viva, que o chat também lê) e na party quando não há contato.
+   */
+  async atualizar(partyId: string, dados: Record<string, string | null>): Promise<{ ok: boolean; nome: string }> {
+    const { data } = await api.patch(`/client-documents/cliente/${partyId}`, dados);
+    return data.data ?? data;
+  },
+
   /** "Excluir cliente" = arquivar os processos das parties informadas (lixeira). */
   async archive(partyIds: string[]): Promise<{ ok: boolean; count: number }> {
     const { data } = await api.post('/legal-cases/clients/archive', { partyIds });
