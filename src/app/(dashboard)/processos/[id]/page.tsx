@@ -1555,6 +1555,9 @@ function EditCaseDialog({
     responsibleId: c.responsible?.id ?? '',
   });
   const [saving, setSaving] = useState(false);
+  // Instância editável: a detecção pelo texto da publicação erra para MENOS de
+  // propósito (ver detectInstancia), então quem sabe é o advogado.
+  const [instancia, setInstancia] = useState(getInstancia(c) ?? '');
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
   // Cliente: sai daqui porque é aqui que se procura por ele. Antes só existia
@@ -1578,6 +1581,7 @@ function EditCaseDialog({
     setSaving(true);
     try {
       await legalCasesService.update(c.id, {
+        instancia,
         title: form.title.trim(),
         cnjNumber: form.cnjNumber,
         internalCode: form.internalCode,
@@ -1685,7 +1689,14 @@ function EditCaseDialog({
           <Field label="Distribuído em">
             <input type="date" value={form.distributedAt} onChange={set('distributedAt')} className={inputCls} />
           </Field>
-          <Field label="Status">
+          <Field label="Instância">
+          <select value={instancia} onChange={(e) => setInstancia(e.target.value)} className={inputCls}>
+            <option value="">Não definida</option>
+            <option value="1º Grau">1º Grau</option>
+            <option value="2º Grau">2º Grau</option>
+          </select>
+        </Field>
+        <Field label="Status">
             <select value={form.status} onChange={set('status')} className={inputCls}>
               {(Object.keys(STATUS_LABEL) as (keyof typeof STATUS_LABEL)[]).map((s) => (
                 <option key={s} value={s}>

@@ -192,6 +192,8 @@ export interface CreateCaseInput {
   area?: string;
   status?: CaseStatus;
   distributedAt?: string;
+  /** "1º Grau" | "2º Grau" | "" para limpar. Palavra final do advogado sobre a instância. */
+  instancia?: string;
   value?: number;
   responsibleId?: string;
   parties?: PartyInput[];
