@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stamp, Upload, FileText, ArrowUp, ArrowDown, X, Loader2, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
@@ -59,7 +59,7 @@ type ArquivoDaMesa = { nome: string; file: File; mtime: number };
  * depende da ordem, e a ordem é entre todos eles, não dentro de cada grupo.
  */
 type ItemProtocolo =
-  | { kind: 'anexo'; id: string; nome: string; naMesa?: boolean }
+  | { kind: 'anexo'; id: string; nome: string }
   | { kind: 'file'; file: File; nome: string; daMesa: boolean };
 
 const suportaMesa = () =>
@@ -154,26 +154,6 @@ export function ArquivarPecaModal({
     setSemeou(true);
   }, [anexosQ.data, semeou]);
 
-  /**
-   * O anexo da tarefa e o arquivo da Mesa costumam ser o MESMO arquivo — foi de
-   * lá que ele subiu. Reconhecer isso pelo nome é o que faz a Mesa ficar limpa
-   * sem o advogado ter de lembrar de escolher a origem "certa" no modal.
-   *
-   * O anexo continua sendo o registro no prazo (já está no servidor); o que vai
-   * para o Drive é o arquivo do disco, movido.
-   */
-  useEffect(() => {
-    if (!listaMesa?.length) return;
-    const naMesa = new Set(listaMesa.map((m) => m.nome));
-    setItens((atuais) =>
-      atuais.some((i) => i.kind === 'anexo' && !!i.naMesa !== naMesa.has(i.nome))
-        ? atuais.map((i) =>
-            i.kind === 'anexo' ? { ...i, naMesa: naMesa.has(i.nome) } : i,
-          )
-        : atuais,
-    );
-  }, [listaMesa]);
-
   // Da ficha: só as fases daquele cliente.
   const fasesQ = useQuery({
     queryKey: ['drive-fases', partyId],
@@ -263,12 +243,30 @@ export function ArquivarPecaModal({
    * movendo e meio subindo criaria duas `c) 20.08.2026`, porque o Drive aceita
    * duas pastas de mesmo nome sem reclamar.
    */
+  /**
+   * O anexo da tarefa e o arquivo da Mesa costumam ser o MESMO arquivo — foi de
+   * lá que ele subiu. Reconhecer isso pelo nome é o que faz a Mesa ficar limpa
+   * sem o advogado ter de lembrar de escolher a origem "certa" no modal.
+   *
+   * DERIVADO, nunca guardado no item: era um `useEffect` que marcava `naMesa`
+   * quando a Mesa era lida, e como os anexos chegam pela REDE e a Mesa pelo
+   * DISCO, os anexos costumavam chegar depois — o efeito já tinha rodado e
+   * ninguém marcava nada. Resultado: subia por upload e a Mesa ficava suja,
+   * sem erro nenhum na tela.
+   */
+  const nomesNaMesa = useMemo(
+    () => new Set((listaMesa ?? []).map((m) => m.nome)),
+    [listaMesa],
+  );
+  const estaNaMesa = (i: ItemProtocolo) =>
+    i.kind === 'file' ? i.daMesa : nomesNaMesa.has(i.nome);
+
   const podeMover =
     suportaMoverNoDisco() &&
     !!mesa &&
     !!clientesDir &&
     itens.length > 0 &&
-    itens.every((i) => (i.kind === 'file' ? i.daMesa : !!i.naMesa));
+    itens.every(estaNaMesa);
 
   const pegarDaMesa = (it: ArquivoDaMesa) => {
     if (itens.some((i) => i.nome === it.nome)) return;
@@ -383,6 +381,23 @@ export function ArquivarPecaModal({
           : undefined,
       );
       toast.success(`Peça arquivada em ${r.pasta} (${r.arquivos.length} arquivo(s)).`);
+
+      // Subiu em vez de mover: DIGA por quê. Silêncio aqui foi o que fez a Mesa
+      // continuar suja duas vezes sem ninguém entender o motivo.
+      if (suportaMoverNoDisco() && itens.length && !podeMover) {
+        const falta = !mesa && !clientesDir
+          ? 'a Mesa e a pasta 01. CLIENTES'
+          : !mesa
+            ? 'a Mesa'
+            : !clientesDir
+              ? 'a pasta 01. CLIENTES'
+              : null;
+        toast.warning(
+          falta
+            ? `Os arquivos continuam na Mesa: falta autorizar ${falta} (uma vez só, no rodapé do modal).`
+            : 'Os arquivos continuam na Mesa: há item que não está lá, e misturar criaria duas pastas da mesma data.',
+        );
+      }
       onPronto(r, alvoPartyId);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || e?.message || 'Não consegui arquivar.');
@@ -586,7 +601,7 @@ export function ArquivarPecaModal({
                         sobe de novo; da Mesa, o arquivo muda de lugar. */}
                     <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                       {it.kind === 'anexo'
-                        ? it.naMesa
+                        ? estaNaMesa(it)
                           ? 'da tarefa · na Mesa'
                           : 'da tarefa'
                         : it.daMesa
@@ -647,32 +662,37 @@ export function ArquivarPecaModal({
                     )}
                   </>
                 ) : !mesa || !clientesDir ? (
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                    Para os arquivos saírem da Mesa, autorize{' '}
-                    {!mesa && (
-                      <button
-                        type="button"
-                        onClick={() => escolherPasta('mesa')}
-                        className="font-medium text-[#228BE6] hover:underline"
-                      >
-                        a Mesa
-                      </button>
-                    )}
-                    {!mesa && !clientesDir && ' e '}
-                    {!clientesDir && (
-                      <button
-                        type="button"
-                        onClick={() => escolherPasta('clientes')}
-                        className="font-medium text-[#228BE6] hover:underline"
-                      >
-                        a pasta 01. CLIENTES
-                      </button>
-                    )}
-                    . Uma vez cada; sem isso, eu subo e nada sai de lugar.
-                  </p>
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                      Do jeito que está, eu subo os arquivos e eles CONTINUAM na Mesa.
+                    </p>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Para saírem de lá, autorize as pastas — uma vez só, o navegador lembra.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {!mesa && (
+                        <button
+                          type="button"
+                          onClick={() => escolherPasta('mesa')}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-400/60 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
+                        >
+                          <Monitor className="h-3 w-3" /> autorizar a Mesa
+                        </button>
+                      )}
+                      {!clientesDir && (
+                        <button
+                          type="button"
+                          onClick={() => escolherPasta('clientes')}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-400/60 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
+                        >
+                          <Monitor className="h-3 w-3" /> autorizar 01. CLIENTES
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                    {itens.filter((i) => (i.kind === 'file' ? !i.daMesa : !i.naMesa)).length} item(ns)
+                    {itens.filter((i) => !estaNaMesa(i)).length} item(ns)
                     não estão na Mesa — vou <span className="font-medium">subir todos</span> e nada
                     sai de lugar.
                   </p>
