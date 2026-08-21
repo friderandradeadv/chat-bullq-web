@@ -16,7 +16,7 @@ export const HUB: Trilha = {
       manual: [
         '## O que o hub é',
         '',
-        'O hub (**hub.friderandrade.com.br**) é o sistema próprio do escritório. Ele juntou em um lugar só o que antes estava espalhado em Pipefy, LíderHub e Astrea: atendimento por WhatsApp, funil comercial, kanban dos processos, prazos, agenda, financeiro, RH e as calculadoras.',
+        'O hub (**hub.friderandrade.com.br**) é o sistema próprio do escritório. Ele reúne em um lugar só o atendimento por WhatsApp, o funil comercial, o kanban dos processos, os prazos, a agenda, o financeiro, o RH e as calculadoras.',
         '',
         '## A linha da vida de um caso',
         '',
@@ -63,7 +63,7 @@ export const HUB: Trilha = {
         'TOM: tour guiado, entusiasmado mas objetivo. Português do Brasil.',
         '',
         'ROTEIRO:',
-        '1. O que o hub é e o que ele aposentou: Pipefy, LíderHub e Astrea.',
+        '1. O que o hub é: o sistema próprio do escritório, que reúne atendimento, funil, processos, prazos, financeiro e RH em um lugar só.',
         '2. A linha da vida de um caso, em 7 passos: conversa, lead, cliente, processo, kanban jurídico, agenda e prazos, execução e repasse. Este é o miolo do vídeo, gaste tempo aqui.',
         '3. Os blocos da barra lateral: Início, Conquistas, Comercial, Jurídico, Administrativo e o rodapé.',
         '4. Recursos de conforto: barra simples, modo escuro, instalação no celular como aplicativo.',

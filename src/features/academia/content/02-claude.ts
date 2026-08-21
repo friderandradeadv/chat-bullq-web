@@ -16,7 +16,7 @@ export const CLAUDE: Trilha = {
       manual: [
         '## O que é',
         '',
-        'O Claude é a inteligência artificial de produção do escritório. Ele roda com as **skills do escritório** — procedimentos escritos que carregam nossos modelos, nossas teses, nosso timbrado e nossos acabamentos. Substituiu o Adapta One.',
+        'O Claude é a inteligência artificial de produção do escritório. Ele roda com as **skills do escritório** — procedimentos escritos que carregam nossos modelos, nossas teses, nosso timbrado e nossos acabamentos.',
         '',
         'Ele faz: montar peça sobre nossas bases, pesquisar jurisprudência citável, ler documento e extrair dado, revisar peça pronta, tirar dúvida de tese.',
         '',
@@ -63,7 +63,7 @@ export const CLAUDE: Trilha = {
         'TOM: firme e desmistificador, sem ser antitecnologia. Português do Brasil.',
         '',
         'ROTEIRO:',
-        '1. O que o Claude faz no escritório: monta peça sobre nossas bases, pesquisa jurisprudência, lê documento, revisa, tira dúvida de tese. Diga que substituiu o Adapta One.',
+        '1. O que o Claude faz no escritório: monta peça sobre nossas bases, pesquisa jurisprudência, lê documento, revisa, tira dúvida de tese.',
         '2. O que ele NÃO é, nos quatro pontos: não é advogado, não é fonte, não substitui a leitura dos autos, não decide estratégia.',
         '3. A regra de ouro, dita com todas as letras: se existe skill para a tarefa, a skill manda, improvisar é proibido. Explique que cada regra dentro da skill foi escrita depois de um erro medido em peça real.',
         '4. As quatro proibições práticas: escrever script próprio, pular passo, inventar regra nova, trocar de ferramenta no meio sem reler a skill.',

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { TRILHAS, TOTAL_AULAS, TOTAL_MINUTOS, OBRIGATORIAS } = require(process.argv[2]);
+const { TRILHAS, TOTAL_AULAS, TOTAL_MINUTOS, promptCompleto } = require(process.argv[2]);
 const DEST = process.argv[3];
 
 // Nome de arquivo seguro para Drive/Finder (dois-pontos vira travessão).
@@ -57,7 +57,7 @@ p.push('   Regimento Interno, Missão Visão e Valores, Manual do Associado e Ma
 p.push('3. Vá em **Video Overview** (Resumo em vídeo) e escolha **Personalizar**.');
 p.push('4. Cole o prompt da aula correspondente, que está abaixo.');
 p.push('5. Gere, assista inteiro e confira: nome do escritório correto ("Frider Andrade - Advogados", nunca "Advocacia"),');
-p.push('   nenhuma promessa de resultado, nenhuma citação de ferramenta aposentada (Pipefy, LíderHub, Adapta One, Astrea).');
+p.push('   nenhuma promessa de resultado, e todo texto que aparece na tela em português — o modelo traduz a fala e esquece a arte.');
 p.push('6. Baixe o vídeo e envie ao responsável pelo hub para publicar na Academia.');
 p.push('');
 p.push('> Regra fixa de todos os vídeos: idioma português do Brasil, e nunca prometer resultado processual (art. 41 do Código de Ética da OAB).');
@@ -83,7 +83,7 @@ TRILHAS.forEach((t, ti) => {
     p.push(`Aula ${ti + 1}.${ai + 1} · duração alvo compatível com ${a.minutos} min de aula`);
     p.push('');
     p.push('```');
-    p.push(a.promptVideo);
+    p.push(promptCompleto(a));
     p.push('```');
     p.push('');
   });
@@ -130,15 +130,13 @@ const leia = [
   '',
   '- [ ] O nome sai como **Frider Andrade - Advogados** (nunca "Advocacia").',
   '- [ ] Nenhuma promessa de resultado processual (art. 41 do Código de Ética da OAB).',
-  '- [ ] Nenhuma menção a Pipefy, LíderHub, Adapta One ou Astrea como ferramenta em uso.',
+  '- [ ] Todo texto que aparece na tela está em português — sem rótulo solto em inglês.',
   '- [ ] Nenhum dado real de cliente aparece ou é citado.',
   '- [ ] O áudio está em português do Brasil e o vídeo foi assistido inteiro por uma pessoa.',
   '',
   '## O acervo antigo',
   '',
-  'As gravações de 2024 e 2025 continuam na pasta `01. ESCRITÓRIO`. Elas seguem úteis como',
-  'histórico e nas partes que não mudaram (fase judicial, análise de contrato, Word). As que',
-  'ensinam Pipefy, LíderHub, Astrea e Adapta One estão **superadas** — o procedimento válido é o',
-  'da Academia.',
+  'As gravações de 2024 e 2025 continuam na pasta `01. ESCRITÓRIO`, como histórico. Onde uma delas',
+  'contradisser uma aula da Academia, **vale a Academia**.',
 ];
 fs.writeFileSync(path.join(DEST, '00. LEIA-ME.md'), leia.join('\n') + '\n');

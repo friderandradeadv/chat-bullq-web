@@ -6,7 +6,7 @@ import {
   ExternalLink, GraduationCap, Landmark, LayoutGrid, MessageSquare, PlayCircle, Rocket,
   Scale, Search, ShieldCheck, Sparkles, Video,
 } from 'lucide-react';
-import { TRILHAS, OBRIGATORIAS, TOTAL_AULAS, TOTAL_MINUTOS } from '@/features/academia/content';
+import { TRILHAS, OBRIGATORIAS, TOTAL_AULAS, TOTAL_MINUTOS, promptCompleto } from '@/features/academia/content';
 import { ManualRender } from '@/features/academia/components/manual-render';
 import type { Aula, Trilha } from '@/features/academia/types';
 import { useAuthStore } from '@/stores/auth-store';
@@ -128,7 +128,7 @@ export default function AcademiaPage() {
   const copiarPrompt = async () => {
     if (!aula.promptVideo) return;
     try {
-      await navigator.clipboard.writeText(aula.promptVideo);
+      await navigator.clipboard.writeText(promptCompleto(aula));
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
     } catch {
@@ -339,7 +339,7 @@ export default function AcademiaPage() {
               {promptAberto && (
                 <>
                   <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-[13px] leading-relaxed text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
-                    {aula.promptVideo}
+                    {promptCompleto(aula)}
                   </pre>
                   <button
                     onClick={() => void copiarPrompt()}
