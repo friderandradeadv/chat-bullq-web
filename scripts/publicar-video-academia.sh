@@ -31,9 +31,15 @@ API=/var/www/chat-bullq/chat-bullq-api
 DEST="$API/uploads/assets/academia"
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "📤 enviando $(du -h "$MP4" | cut -f1) para a VPS…"
+LOCAL_BYTES=$(wc -c < "$MP4" | tr -d ' ')
 "${SSH[@]}" "mkdir -p $DEST"
-"${SCP[@]}" "$MP4" "root@129.121.49.235:$DEST/$SLUG.mp4"
+REMOTE_BYTES=$("${SSH[@]}" "stat -c%s $DEST/$SLUG.mp4 2>/dev/null || echo 0")
+if [ "$LOCAL_BYTES" = "$REMOTE_BYTES" ]; then
+  echo "📦 mp4 já está na VPS com o mesmo tamanho — não reenvio."
+else
+  echo "📤 enviando $(du -h "$MP4" | cut -f1) para a VPS…"
+  "${SCP[@]}" "$MP4" "root@129.121.49.235:$DEST/$SLUG.mp4"
+fi
 "${SCP[@]}" "$AQUI/legendar-video.mjs" "root@129.121.49.235:/tmp/legendar-video.mjs"
 
 echo "🎧 extraindo áudio e transcrevendo…"
@@ -41,9 +47,14 @@ echo "🎧 extraindo áudio e transcrevendo…"
 set -euo pipefail
 cd $API
 # mono 16 kHz opus: fica pequeno o bastante para caber numa chamada inline.
-ffmpeg -y -loglevel error -i "$DEST/$SLUG.mp4" -vn -ac 1 -ar 16000 -c:a libopus -b:a 24k "/tmp/$SLUG.ogg"
+# -nostdin: sem isto o ffmpeg CONSOME o heredoc que alimenta este bash remoto
+# e engole o resto do script (o erro aparece como "Parse error ... 1 given").
+ffmpeg -nostdin -y -loglevel error -i "$DEST/$SLUG.mp4" -vn -ac 1 -ar 16000 -c:a libopus -b:a 24k "/tmp/$SLUG.ogg"
 echo "   áudio: \$(du -h /tmp/$SLUG.ogg | cut -f1)"
-set -a; . $API/.env; set +a
+# NÃO sourcear o .env inteiro: ele tem valores com "$" (chave do ASAAS) que o
+# shell expande, e com `set -u` isso derruba o script — além de despejar
+# segredo no log. Pega só a chave necessária.
+export GEMINI_API_KEY="\$(grep -m1 "^GEMINI_API_KEY=" $API/.env | cut -d= -f2-)"
 node /tmp/legendar-video.mjs "/tmp/$SLUG.ogg" "$DEST/$SLUG.vtt"
 rm -f "/tmp/$SLUG.ogg"
 chmod 644 "$DEST/$SLUG.mp4" "$DEST/$SLUG.vtt"
