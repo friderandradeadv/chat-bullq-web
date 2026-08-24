@@ -203,6 +203,17 @@ export function ArquivarPecaModal({
    */
   useEffect(() => {
     if (semeouPasta || !listaMesa?.length) return;
+    // ESPERA o cliente antes de semear. Arquivando por atividade, o nome do
+    // cliente vem pela REDE (`ctx`) e a Mesa vem do DISCO — e o disco chega
+    // primeiro. Sem esta espera, o efeito rodava com `ctx.data` ainda vazio,
+    // caía no ramo "sem cliente conhecido", não achava nada solto na raiz e
+    // mesmo assim marcava `semeouPasta`. Como o flag só levanta uma vez, a
+    // subpasta do cliente NUNCA era lida: iam embora só os anexos do prazo, o
+    // arquivo que existia apenas no disco ficava para trás e segurava a pasta
+    // em PROTOCOLO. Foi o que aconteceu com o MARTINHO em 24/08/2026 — três
+    // anexos arquivados, o PDF exportado depois esquecido, e o modal sabendo
+    // apenas dizer "apague à mão". Medido, não suposto.
+    if (atividade && ctx.isLoading) return;
     // Sabendo de quem é o prazo, entram só os arquivos DAQUELE cliente: a
     // subpasta existe justamente para não misturar três prazos do mesmo dia.
     // Sem cliente conhecido (arquivando pela ficha), entra o que estiver solto
@@ -224,7 +235,7 @@ export function ArquivarPecaModal({
         .map((f) => ({ kind: 'file' as const, file: f.file, nome: f.nome, daMesa: true })),
     ]);
     setSemeouPasta(true);
-  }, [listaMesa, semeouPasta, ctx.data?.cliente]);
+  }, [listaMesa, semeouPasta, ctx.data?.cliente, ctx.isLoading, atividade]);
 
   // Da ficha: só as fases daquele cliente.
   const fasesQ = useQuery({
