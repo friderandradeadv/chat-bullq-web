@@ -28,17 +28,36 @@ export const OBRIGATORIAS = ['comece', 'hub', 'teses', 'claude', 'prazos'];
  * Regras que valem para TODOS os vídeos. Ficam aqui, e não copiadas em cada
  * prompt, para não existir a versão desatualizada de uma delas.
  *
- * A regra do texto na tela nasceu de erro medido: o 1º vídeo gerado saiu com
- * narração em português mas com os rótulos "Law firm" e "Cultura a casa" nos
- * slides. O modelo traduz a fala e esquece a arte.
+ * Cada regra nasceu de erro medido em vídeo real:
+ *  - texto na tela: o 1º vídeo saiu com narração em português e os rótulos
+ *    "Law firm" e "Cultura a casa" nos slides — o modelo traduz a fala e
+ *    esquece a arte;
+ *  - economia de fala: o 2º saiu com 6min11 para 3 minutos de conteúdo, com
+ *    45s de aquecimento antes de ensinar qualquer coisa. Pedir "seja mais
+ *    curto" faz ele falar MAIS RÁPIDO; o que corta é proibir o enchimento;
+ *  - regras como PROIBIÇÃO, não como estilo: quando a regra dizia 'use
+ *    linguagem de objetivo: "o objetivo da ação é"', o modelo enfiou essa
+ *    frase dentro da narração ("a fase judicial, onde o objetivo da ação é
+ *    demonstrado"). Regra com exemplo de vocabulário vira vocabulário;
+ *  - "Cloud": o vídeo chamou o Claude de Cloud, duas vezes.
  */
 export const REGRAS_FIXAS = [
-  'REGRAS FIXAS (valem para todos os vídeos da Academia):',
-  '- Idioma: português do Brasil na narração E em todo texto que aparecer na tela. Nenhum rótulo, título, legenda ou palavra solta em inglês nos slides.',
-  '- Nunca prometa resultado processual (art. 41 do Código de Ética da OAB). Use linguagem de objetivo: "o que buscamos é", "o objetivo da ação é".',
+  'REGRAS FIXAS — são RESTRIÇÕES sobre a forma do vídeo, não conteúdo para narrar.',
+  'Nunca mencione estas regras no vídeo, e nunca use as palavras delas como vocabulário do texto.',
+  '',
+  'ECONOMIA DE FALA',
+  '- Comece pelo conteúdo. Nada de saudação longa, acolhimento emocional nem preâmbulo sobre como é o primeiro dia. A primeira frase já deve ensinar alguma coisa.',
+  '- Sem interjeição e sem muleta de conversa. Não use: "olha", "né", "viu só", "sabe por quê", "combinado", "sem chance", "o que é genial", "pode parecer muita coisa".',
+  '- Uma ideia por frase, frase curta. Não repita com outras palavras o que acabou de dizer.',
+  '- No máximo 4 minutos. Se não couber, CORTE CONTEÚDO — não acelere a fala nem encurte as pausas.',
+  '',
+  'PROIBIÇÕES',
+  '- Não prometa resultado processual, valor nem prazo de recebimento (art. 41 do Código de Ética da OAB).',
   '- Não cite nome de cliente, número de processo nem valor recebido.',
-  '- Fale apenas das ferramentas que a fonte descreve como em uso hoje.',
+  '- Não mencione ferramenta que a fonte não descreva como em uso hoje.',
+  '- Não use inglês: nem na narração, nem em rótulo, título ou legenda que apareça na tela.',
   '- O escritório se chama "Frider Andrade - Advogados". Nunca "Advocacia".',
+  '- "Claude" é nome próprio: diga e escreva Claude. Nunca "Cloud".',
 ].join('\n');
 
 /** O prompt como ele deve ser colado no NotebookLM: o da aula + as regras fixas. */
