@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  BookOpen, CalendarClock, CheckCircle2, ChevronDown, Circle, ClipboardCheck, Copy,
+  BookOpen, CalendarClock, Captions, CheckCircle2, ChevronDown, Circle, ClipboardCheck, Copy,
   ExternalLink, GraduationCap, Landmark, LayoutGrid, MessageSquare, PlayCircle, Rocket,
   Scale, Search, ShieldCheck, Sparkles, Video,
 } from 'lucide-react';
@@ -41,20 +41,49 @@ function VideoAula({ aula, cor }: { aula: Aula; cor: string }) {
     );
   }
 
-  const src =
-    aula.video.fonte === 'drive'
-      ? `https://drive.google.com/file/d/${aula.video.id}/preview`
-      : aula.video.url;
+  // Drive não deixa legendar: o vídeo vive dentro do player do Google, num
+  // iframe que não aceita faixa de texto nossa. Fica como estava.
+  if (aula.video.fonte === 'drive') {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-black dark:border-zinc-800">
+        <iframe
+          src={`https://drive.google.com/file/d/${aula.video.id}/preview`}
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+          className="aspect-video w-full"
+          title={aula.titulo}
+        />
+      </div>
+    );
+  }
 
+  // mp4 nosso: player nativo, que aceita legenda e funciona bem no celular.
+  const { url, legendas } = aula.video;
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-black dark:border-zinc-800">
-      <iframe
-        src={src}
-        allow="autoplay; encrypted-media"
-        allowFullScreen
-        className="aspect-video w-full"
-        title={aula.titulo}
-      />
+    <div>
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-black dark:border-zinc-800">
+        <video
+          key={url}
+          src={url}
+          controls
+          playsInline
+          preload="metadata"
+          /* Sem isto a faixa de legenda de outro domínio é bloqueada — e falha calada. */
+          crossOrigin="anonymous"
+          className="aspect-video w-full"
+        >
+          {legendas && (
+            <track kind="captions" src={legendas} srcLang="pt-BR" label="Português (Brasil)" default />
+          )}
+          Seu navegador não toca vídeo. Abra o arquivo direto: {url}
+        </video>
+      </div>
+      <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-400">
+        <Captions className="h-3.5 w-3.5" />
+        {legendas
+          ? 'Legenda em português — ligue no ícone de legendas do player.'
+          : 'Sem legenda ainda neste vídeo.'}
+      </p>
     </div>
   );
 }

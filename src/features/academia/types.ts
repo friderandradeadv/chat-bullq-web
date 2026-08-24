@@ -6,8 +6,17 @@
 export type Video =
   /** Arquivo no Google Drive do escritório (embed /preview — exige login com a conta do escritório). */
   | { fonte: 'drive'; id: string; duracao?: string }
-  /** URL direta (mp4 hospedado em /api/v1/uploads/assets, YouTube não listado, etc.). */
-  | { fonte: 'url'; url: string; duracao?: string };
+  /**
+   * URL direta de um mp4 (hospedado em /api/v1/uploads/assets). Toca no player
+   * nativo, o que permite LEGENDA — coisa que o embed do Drive não permite.
+   *
+   * `legendas` é a URL de um arquivo .vtt. Como o vídeo vem de outro domínio
+   * (api.friderandrade.com.br) que não o do hub, a faixa de legenda só carrega
+   * com `crossOrigin="anonymous"` no <video> E com CORS liberado no /uploads —
+   * as duas coisas já estão de pé. Sem uma delas, o vídeo toca e a legenda
+   * some silenciosamente.
+   */
+  | { fonte: 'url'; url: string; legendas?: string; duracao?: string };
 
 export interface Aula {
   id: string;
