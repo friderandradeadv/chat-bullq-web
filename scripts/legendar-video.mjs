@@ -69,6 +69,45 @@ let vtt = (data?.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '')
 // O modelo às vezes embrulha em cerca de código. Tira.
 vtt = vtt.replace(/^```(?:vtt|webvtt)?\s*/i, '').replace(/```\s*$/i, '').trim();
 
+/**
+ * O Gemini erra o formato do timestamp na metade do arquivo: escreve
+ * "02:12:700" (MM:SS:mmm) em vez de "00:02:12.700" (HH:MM:SS.mmm). O navegador
+ * DESCARTA as deixas invalidas sem avisar — a legenda some no meio do video e
+ * parece que "funcionou pela metade". Normaliza e, no fim, exige que TODAS as
+ * deixas estejam validas.
+ */
+function normalizarTempo(t) {
+  const p = t.trim().split(':');
+  let h = '00', m, s, ms;
+  if (p.length === 4) [h, m, s, ms] = p;                 // HH:MM:SS:mmm
+  else if (p.length === 3 && p[2].includes('.')) {       // HH:MM:SS.mmm (ja ok)
+    [h, m] = p; [s, ms] = p[2].split('.');
+  } else if (p.length === 3) [m, s, ms] = p;             // MM:SS:mmm
+  else if (p.length === 2) {                             // MM:SS.mmm
+    m = p[0]; [s, ms] = p[1].split('.');
+  } else return null;
+  if ([h, m, s, ms].some((x) => x === undefined || !/^\d+$/.test(x))) return null;
+  return `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${s.padStart(2, '0')}.${ms.padEnd(3, '0').slice(0, 3)}`;
+}
+
+let naoNormalizadas = 0;
+vtt = vtt
+  .split('\n')
+  .map((linha) => {
+    if (!linha.includes('-->')) return linha;
+    const [a, b] = linha.split('-->');
+    const ini = normalizarTempo(a);
+    const fim = normalizarTempo((b.trim().split(/\s+/)[0] ?? b));
+    if (!ini || !fim) { naoNormalizadas++; return linha; }
+    return `${ini} --> ${fim}`;
+  })
+  .join('\n');
+
+if (naoNormalizadas > 0) {
+  console.error(`${naoNormalizadas} deixa(s) com tempo que nao consegui normalizar — nao gravo legenda quebrada.`);
+  process.exit(6);
+}
+
 if (!vtt.startsWith('WEBVTT')) {
   // Sem o cabeçalho o navegador ignora a faixa inteira, calado. Melhor falhar aqui.
   console.error('A resposta não começa com WEBVTT — não vou gravar um .vtt inválido.');
@@ -76,6 +115,15 @@ if (!vtt.startsWith('WEBVTT')) {
   process.exit(5);
 }
 
-const blocos = (vtt.match(/-->/g) || []).length;
+// Ultima trava: toda deixa tem que casar com o formato estrito do WebVTT.
+const RE = /^\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}$/;
+const cues = vtt.split('\n').filter((l) => l.includes('-->'));
+const ruins = cues.filter((l) => !RE.test(l.trim()));
+if (ruins.length) {
+  console.error(`${ruins.length} de ${cues.length} deixas fora do formato. Exemplo: ${ruins[0].trim()}`);
+  process.exit(7);
+}
+
+const blocos = cues.length;
 writeFileSync(vttPath, vtt + '\n');
 console.log(`vtt gravado: ${vttPath} (${blocos} blocos)`);
