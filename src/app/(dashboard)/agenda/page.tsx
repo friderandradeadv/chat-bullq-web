@@ -2030,6 +2030,11 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           titulo="Concluir e arquivar"
           rotuloConfirmar="Arquivar e concluir"
           onFechar={() => setArquivarForm(false)}
+          // Tarefa que não gera peça ("tomar ciência", "juntar despacho") sai por
+          // aqui: conclui e não toca em pasta nenhuma. A conclusão é a mesma do
+          // botão verde — no prazo, ainda pode abrir recurso/avanço de fase.
+          onSoConcluir={() => { setArquivarForm(false); toggleDone(); }}
+          rotuloSoConcluir="Só concluir, sem arquivar"
           onPronto={(r) => {
             setArquivarForm(false);
             // Arquivou primeiro, conclui depois: a conclusão do PRAZO ainda pode

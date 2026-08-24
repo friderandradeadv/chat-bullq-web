@@ -96,6 +96,8 @@ export function ArquivarPecaModal({
   rotuloConfirmar = 'Arquivar',
   onFechar,
   onPronto,
+  onSoConcluir,
+  rotuloSoConcluir = 'Só concluir',
 }: {
   partyId?: string;
   atividade?: { entityType: 'task' | 'deadline'; entityId: string };
@@ -103,6 +105,15 @@ export function ArquivarPecaModal({
   rotuloConfirmar?: string;
   onFechar: () => void;
   onPronto: (r: ResultadoArquivamento, partyId: string) => void;
+  /**
+   * Escape: fecha a atividade SEM arquivar nada — nem Drive, nem Mesa, nem
+   * anexo. Existe porque a maior parte das tarefas ("tomar ciência", "juntar
+   * despacho") não gera peça nenhuma para guardar, e quem entrou aqui pelo
+   * checkbox do título só queria marcar o card como feito. Sem esta saída, a
+   * única alternativa era cancelar e ir procurar o botão do rodapé.
+   */
+  onSoConcluir?: () => void;
+  rotuloSoConcluir?: string;
 }) {
   const [faseSel, setFaseSel] = useState<string>('');
   const [tocou, setTocou] = useState(false); // o advogado já mexeu no select?
@@ -1000,6 +1011,17 @@ export function ArquivarPecaModal({
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-zinc-200/80 px-4 py-3 dark:border-zinc-800">
+          {onSoConcluir && (
+            <button
+              type="button"
+              disabled={salvando}
+              onClick={onSoConcluir}
+              title="Marca a atividade como concluída e não mexe em pasta nenhuma"
+              className="mr-auto inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              {rotuloSoConcluir}
+            </button>
+          )}
           <button
             type="button"
             onClick={onFechar}
