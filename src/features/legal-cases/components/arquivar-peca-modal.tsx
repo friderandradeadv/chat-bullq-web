@@ -12,6 +12,7 @@ import { activitiesService } from '@/features/activities/services/activities.ser
 import {
   suportaMoverNoDisco,
   moverParaAPastaDoCliente,
+  removerSubpastasVazias,
   guardarPasta,
   lerPasta,
   permissaoDeEscrita,
@@ -484,6 +485,14 @@ export function ArquivarPecaModal({
             `${r2.movidos.length} arquivo(s) saíram da Mesa e entraram em ${plano.pasta}` +
               (atividade && anexarNaTarefa ? ', e ficaram anexados na tarefa.' : '.'),
           );
+        // A pasta do cliente é embalagem: se ela ficou, DIGA — pasta vazia em
+        // PROTOCOLO finge pendência que não existe.
+        if (r2.pastas.ficaram.length)
+          toast.warning(
+            `Apague à mão em ${mesaNome}: ${r2.pastas.ficaram
+              .map((f) => `${f.sub} (${f.motivo})`)
+              .join('; ')}`,
+          );
         onPronto(
           { pasta: plano.pasta, caminho: plano.destino, arquivos: r2.movidos },
           alvoPartyId,
@@ -576,21 +585,15 @@ export function ArquivarPecaModal({
         // Pasta de cliente que ficou vazia é pendência resolvida: sai também.
         // O que sobra em PROTOCOLO passa a ser, por construção, o que ainda não
         // foi arquivado.
-        for (const sub of subsMexidas) {
-          try {
-            const d = await mesa.getDirectoryHandle(sub);
-            let vazia = true;
-            for await (const [nome] of d.entries()) {
-              if (nome !== '.DS_Store') { vazia = false; break; }
-              await d.removeEntry(nome).catch(() => {});
-            }
-            if (vazia) await mesa.removeEntry(sub, { recursive: true });
-          } catch {
-            /* pasta em uso ou já removida — fica, e não atrapalha nada */
-          }
-        }
+        const pastas = await removerSubpastasVazias(mesa, subsMexidas);
         if (saiu.length) toast.success(`${saiu.length} arquivo(s) saíram de ${mesaNome}.`);
         if (ficou.length) toast.warning(`Ficaram em ${mesaNome}: ${ficou.join(', ')}`);
+        if (pastas.ficaram.length)
+          toast.warning(
+            `Apague à mão em ${mesaNome}: ${pastas.ficaram
+              .map((f) => `${f.sub} (${f.motivo})`)
+              .join('; ')}`,
+          );
       }
 
       // Subiu em vez de mover: DIGA por quê. Silêncio aqui foi o que fez a Mesa

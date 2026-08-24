@@ -1599,6 +1599,18 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setBusy(false); }
   };
 
+  // Arquivar a peça só faz sentido com processo: a pasta do cliente sai das
+  // PARTES do processo, não do título da tarefa.
+  const podeArquivar = !!activity.caseId && (activity.source === 'tarefa' || activity.source === 'prazo');
+  // O checkbox do título é a MESMA porta do botão "Concluir e arquivar": marcar
+  // a caixa é o gesto natural de fechar o card, e fechar por ali sem passar pelo
+  // arquivamento deixava a peça protocolada fora da pasta do cliente. Quem quiser
+  // fechar sem arquivar continua tendo o botão "Concluir" no rodapé.
+  const concluirPeloCheckbox = () => {
+    if (!done && !cancelled && podeArquivar) { setArquivarForm(true); return; }
+    toggleDone();
+  };
+
   const headerType = activity.source === 'evento' ? 'Evento' : 'Tarefa';
   const now = new Date();
   const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
@@ -1683,7 +1695,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         {/* Checkbox + título */}
         {!editing && (
         <div className="mb-4 flex items-start gap-3">
-          <button onClick={toggleDone} disabled={busy} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${done ? 'border-[#228BE6] bg-[#228BE6] text-white' : 'border-zinc-300 dark:border-zinc-600'} disabled:opacity-40`}>{done && <Check className="h-3.5 w-3.5" />}</button>
+          <button onClick={concluirPeloCheckbox} disabled={busy} title={!done && !cancelled && podeArquivar ? 'Concluir e arquivar a peça na pasta do cliente' : undefined} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${done ? 'border-[#228BE6] bg-[#228BE6] text-white' : 'border-zinc-300 dark:border-zinc-600'} disabled:opacity-40`}>{done && <Check className="h-3.5 w-3.5" />}</button>
           <h3 className={`flex-1 text-lg font-medium text-[#202124] dark:text-zinc-100 ${done ? 'text-zinc-400 line-through' : ''}`}>{titleVal}</h3>
           <button onClick={() => setEditing(true)} title="Editar" className="mt-0.5 shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"><Pencil className="h-4 w-4" /></button>
         </div>
@@ -1998,9 +2010,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           {done || cancelled
             ? <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{cancelled ? 'Reabrir prazo' : 'Reabrir'}</button>
             : <>
-                {/* Só faz sentido com processo: a pasta do cliente sai das PARTES
-                    do processo, não do título da tarefa. */}
-                {activity.caseId && (activity.source === 'tarefa' || activity.source === 'prazo') && (
+                {podeArquivar && (
                   <button
                     disabled={busy}
                     onClick={() => setArquivarForm(true)}

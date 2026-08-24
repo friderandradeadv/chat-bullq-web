@@ -120,6 +120,63 @@ async function acharArquivo(dir: any, nome: string): Promise<any> {
   throw new Error(`"${nome}" não está mais na Mesa.`);
 }
 
+/**
+ * Lixo que o sistema cria sozinho e que NÃO conta como conteúdo da pasta.
+ * O `.DS_Store` existe em toda pasta que o Finder abriu — e o advogado abre a
+ * PROTOCOLO justamente para conferir o que arquivou.
+ */
+const lixoDoSistema = (nome: string) =>
+  nome === '.DS_Store' ||
+  nome === '.localized' ||
+  nome === 'Thumbs.db' ||
+  nome.startsWith('._') ||
+  nome.startsWith('Icon');
+
+/**
+ * Remove as subpastas de cliente que ficaram vazias depois do arquivamento.
+ *
+ * A pasta `PROTOCOLO/<CLIENTE>/` é embalagem: saindo as peças, ela vira sujeira
+ * que finge pendência. Sai junto — o que sobra em PROTOCOLO passa a ser, por
+ * construção, o que ainda não foi arquivado.
+ *
+ * A lista de nomes é lida INTEIRA antes de apagar qualquer coisa. Apagar dentro
+ * do `for await (… of d.entries())` derruba o iterador no Chromium, e era isso
+ * que deixava a pasta do cliente na Mesa depois de os arquivos saírem: a exceção
+ * morria num `catch` mudo e ninguém via. Quem apaga o `.DS_Store` é o
+ * `recursive: true` da remoção da própria pasta, não uma passada à parte.
+ */
+export async function removerSubpastasVazias(
+  mesa: any,
+  subs: Iterable<string>,
+): Promise<{ removidas: string[]; ficaram: { sub: string; motivo: string }[] }> {
+  const removidas: string[] = [];
+  const ficaram: { sub: string; motivo: string }[] = [];
+  for (const sub of subs) {
+    try {
+      const d = await acharSubpasta(mesa, sub);
+      const nomes: string[] = [];
+      for await (const [nome] of d.entries()) nomes.push(nome);
+      const sobra = nomes.filter((n) => !lixoDoSistema(n));
+      if (sobra.length) {
+        ficaram.push({ sub, motivo: `ainda tem ${sobra.length} arquivo(s) dentro` });
+        continue;
+      }
+      // `removeEntry` compara o nome cru, e o macOS entrega NFD onde a leitura
+      // pode ter trazido NFC: pega o nome como o disco escreve, não como veio.
+      const alvo = norm(sub);
+      let real = sub;
+      for await (const [n, h] of mesa.entries()) {
+        if (h.kind === 'directory' && norm(n) === alvo) { real = n; break; }
+      }
+      await mesa.removeEntry(real, { recursive: true });
+      removidas.push(sub);
+    } catch (e: any) {
+      ficaram.push({ sub, motivo: e?.message || 'não consegui remover a pasta' });
+    }
+  }
+  return { removidas, ficaram };
+}
+
 export interface PlanoDeMovimento {
   pastaCliente: string;
   caminho: string[];
@@ -145,7 +202,11 @@ export async function moverParaAPastaDoCliente(
   clientes: any,
   plano: PlanoDeMovimento,
   subDe?: (nome: string) => string | null,
-): Promise<{ movidos: string[]; ficaram: { nome: string; motivo: string }[] }> {
+): Promise<{
+  movidos: string[];
+  ficaram: { nome: string; motivo: string }[];
+  pastas: { removidas: string[]; ficaram: { sub: string; motivo: string }[] };
+}> {
   const cliente = await acharSubpasta(clientes, plano.pastaCliente);
   let atual = cliente;
   for (const nome of plano.caminho) atual = await acharSubpasta(atual, nome);
@@ -184,24 +245,8 @@ export async function moverParaAPastaDoCliente(
   }
 
   // Pasta de cliente que ficou vazia é pendência resolvida: sai também, do mesmo
-  // modo que no caminho de upload. O que sobra em PROTOCOLO passa a ser, por
-  // construção, o que ainda não foi arquivado.
-  for (const sub of subsMexidas) {
-    try {
-      const d = await acharSubpasta(mesa, sub);
-      let vazia = true;
-      for await (const [nome] of d.entries()) {
-        if (nome !== '.DS_Store') {
-          vazia = false;
-          break;
-        }
-        await d.removeEntry(nome).catch(() => {});
-      }
-      if (vazia) await mesa.removeEntry(sub, { recursive: true });
-    } catch {
-      /* pasta em uso ou já removida — fica, e não atrapalha nada */
-    }
-  }
+  // modo que no caminho de upload.
+  const pastas = await removerSubpastasVazias(mesa, subsMexidas);
 
-  return { movidos, ficaram };
+  return { movidos, ficaram, pastas };
 }
