@@ -39,17 +39,27 @@ export const OBRIGATORIAS = ['comece', 'hub', 'teses', 'claude', 'prazos'];
  *    linguagem de objetivo: "o objetivo da ação é"', o modelo enfiou essa
  *    frase dentro da narração ("a fase judicial, onde o objetivo da ação é
  *    demonstrado"). Regra com exemplo de vocabulário vira vocabulário;
- *  - "Cloud": o vídeo chamou o Claude de Cloud, duas vezes.
+ *  - "Cloud": o vídeo chamou o Claude de Cloud, duas vezes;
+ *  - voz e ritmo: a 1ª versao das regras de economia mandava "uma ideia por
+ *    frase, frase curta" e o 3º vídeo saiu truncado, lendo como lista de
+ *    tópicos. Economia é cortar o que não informa, não falar picado — e isso
+ *    precisa estar dito, senão o modelo escolhe o staccato.
  */
 export const REGRAS_FIXAS = [
   'REGRAS FIXAS — são RESTRIÇÕES sobre a forma do vídeo, não conteúdo para narrar.',
   'Nunca mencione estas regras no vídeo, e nunca use as palavras delas como vocabulário do texto.',
   '',
-  'ECONOMIA DE FALA',
+  'VOZ E RITMO',
+  '- Narração por UM locutor HOMEM, voz masculina, em português do Brasil.',
+  '- Fale como um advogado experiente explicando a um colega novo: natural, com frases ligadas por conectivos, ritmo de conversa.',
+  '- NÃO leia como quem lê tópicos de slide e NÃO enfileire frases curtas soltas. Isso soa robótico.',
+  '- Economia é cortar o que não informa — não é falar truncado. Cada frase carrega informação nova; a ligação entre elas deve ser fluida.',
+  '',
+  'ECONOMIA',
   '- Comece pelo conteúdo. Nada de saudação longa, acolhimento emocional nem preâmbulo sobre como é o primeiro dia. A primeira frase já deve ensinar alguma coisa.',
-  '- Sem interjeição e sem muleta de conversa. Não use: "olha", "né", "viu só", "sabe por quê", "combinado", "sem chance", "o que é genial", "pode parecer muita coisa".',
-  '- Uma ideia por frase, frase curta. Não repita com outras palavras o que acabou de dizer.',
-  '- No máximo 4 minutos. Se não couber, CORTE CONTEÚDO — não acelere a fala nem encurte as pausas.',
+  '- Sem muleta de conversa. Não use: "olha", "né", "viu só", "sabe por quê", "combinado", "sem chance", "o que é genial", "pode parecer muita coisa".',
+  '- Não repita com outras palavras o que acabou de dizer.',
+  '- Não ultrapasse a duração pedida no início do prompt. Se não couber, CORTE CONTEÚDO — não acelere a fala nem encurte as pausas.',
   '',
   'PROIBIÇÕES',
   '- Não prometa resultado processual, valor nem prazo de recebimento (art. 41 do Código de Ética da OAB).',

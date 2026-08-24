@@ -52,7 +52,7 @@ export const CLIENTE: Trilha = {
         'Registro no hub o que foi combinado.',
       ],
       promptVideo: [
-        'Gere um vídeo de 6 minutos sobre atendimento ao cliente no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo, de 3 a 5 minutos sobre atendimento ao cliente no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogados, estagiários e back office que falam com cliente por WhatsApp.',
         'TOM: humano e concreto, com foco na realidade do cliente idoso.',
@@ -114,7 +114,7 @@ export const CLIENTE: Trilha = {
         'Nunca dou data nem garantia.',
       ],
       promptVideo: [
-        'Gere um vídeo de 6 minutos ensinando a traduzir o processo judicial para o cliente leigo, no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo, de 3 a 5 minutos ensinando a traduzir o processo judicial para o cliente leigo, no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogados e estagiários que se comunicam com aposentados.',
         'TOM: prático, quase um dicionário falado, com exemplos ditos em voz alta.',
@@ -177,7 +177,7 @@ export const CLIENTE: Trilha = {
         'Não respondo no calor, por escrito.',
       ],
       promptVideo: [
-        'Gere um vídeo de 5 a 6 minutos sobre dar notícia ruim e lidar com cliente insatisfeito, no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo, de 3 a 5 minutos sobre dar notícia ruim e lidar com cliente insatisfeito, no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogados e back office. O vídeo precisa reduzir o medo dessa conversa.',
         'TOM: sereno, adulto, com exemplos de fala.',

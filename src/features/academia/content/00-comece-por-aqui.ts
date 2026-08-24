@@ -64,7 +64,7 @@ export const COMECE_POR_AQUI: Trilha = {
         'Sei que o manual escrito é o procedimento, não um resumo do vídeo.',
       ],
       promptVideo: [
-        'Gere o vídeo de abertura da Academia do escritório Frider Andrade | Advogados, de 3 a 4 minutos.',
+        'Gere o vídeo de abertura da Academia do escritório Frider Andrade | Advogados, de 3 a 5 minutos.',
         '',
         'PÚBLICO: pessoa no primeiro dia, abrindo a Academia pela primeira vez.',
         'TOM: acolhedor e organizado, de quem entrega um mapa. Português do Brasil. Trate a pessoa por "você".',
@@ -140,7 +140,7 @@ export const COMECE_POR_AQUI: Trilha = {
         'Entendi por que "agir na sorte" é falta grave de cultura aqui.',
       ],
       promptVideo: [
-        'Gere um vídeo de boas-vindas de 4 a 5 minutos para novos integrantes do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de boas-vindas, de 3 a 5 minutos para novos integrantes do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado, estagiário ou back office no primeiro dia. Nunca ouviu falar do escritório por dentro.',
         'TOM: caloroso, direto, orgulhoso sem ser pomposo. Português do Brasil. Trate a pessoa por "você".',
@@ -210,7 +210,7 @@ export const COMECE_POR_AQUI: Trilha = {
         'Sei os 4 números que medem um associado aqui.',
       ],
       promptVideo: [
-        'Gere um vídeo de 6 a 7 minutos explicando a estrutura interna do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo, de 3 a 5 minutos explicando a estrutura interna do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: pessoa recém-contratada, primeira semana.',
         'TOM: organizacional e claro, como quem desenha um mapa. Português do Brasil.',
@@ -282,7 +282,7 @@ export const COMECE_POR_AQUI: Trilha = {
         'Sei a quem avisar, e com quanto tempo, quando algo vai atrasar.',
       ],
       promptVideo: [
-        'Gere um vídeo de 5 a 6 minutos sobre o Regimento Interno do escritório Frider Andrade | Advogados, traduzido para o dia a dia.',
+        'Gere um vídeo, de 3 a 5 minutos sobre o Regimento Interno do escritório Frider Andrade | Advogados, traduzido para o dia a dia.',
         '',
         'PÚBLICO: pessoa recém-contratada. Não leu o regimento inteiro ainda.',
         'TOM: firme e adulto, sem tom de ameaça. Deixe claro que as regras existem para proteger cliente e equipe.',
@@ -301,7 +301,7 @@ export const COMECE_POR_AQUI: Trilha = {
     {
       id: 'ferramentas',
       titulo: 'Suas ferramentas e seus acessos',
-      resumo: 'O que cada sistema faz, o que morreu e o que substituiu.',
+      resumo: 'O que cada sistema faz, quais acessos você precisa e a regra de login.',
       minutos: 8,
       manual: [
         '## O que você usa hoje',
@@ -336,7 +336,7 @@ export const COMECE_POR_AQUI: Trilha = {
         'Meu certificado digital está instalado e testado em um tribunal.',
       ],
       promptVideo: [
-        'Gere um vídeo de 5 minutos apresentando as ferramentas do escritório Frider Andrade | Advogados a um novo contratado.',
+        'Gere um vídeo, de 3 a 5 minutos apresentando as ferramentas do escritório Frider Andrade | Advogados a um novo contratado.',
         '',
         'PÚBLICO: pessoa na primeira semana, ainda esperando alguns acessos.',
         'TOM: prático, de tour guiado.',
@@ -411,7 +411,7 @@ export const COMECE_POR_AQUI: Trilha = {
         'Sei que a partir do dia 16 o prazo é meu.',
       ],
       promptVideo: [
-        'Gere um vídeo de 5 a 6 minutos com o roteiro da primeira semana de trabalho no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo, de 3 a 5 minutos com o roteiro da primeira semana de trabalho no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: pessoa que acabou de ser contratada, provavelmente ansiosa.',
         'TOM: acolhedor e organizado, de quem entrega um mapa. Português do Brasil.',

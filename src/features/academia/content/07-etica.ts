@@ -60,7 +60,7 @@ export const ETICA: Trilha = {
         'Verifico conflito de interesses antes de aceitar caso.',
       ],
       promptVideo: [
-        'Gere um vídeo de 6 minutos sobre ética profissional no dia a dia do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo, de 3 a 5 minutos sobre ética profissional no dia a dia do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogados, estagiários e back office. Precisa ser aplicável, não teórico.',
         'TOM: firme e concreto, com exemplos de fala.',
@@ -120,7 +120,7 @@ export const ETICA: Trilha = {
         'Sei o que fazer nos primeiros minutos de um vazamento.',
       ],
       promptVideo: [
-        'Gere um vídeo de 5 minutos sobre LGPD e proteção de dados de cliente no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo, de 3 a 5 minutos sobre LGPD e proteção de dados de cliente no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: toda a equipe, incluindo quem não é advogado.',
         'TOM: prático e sem juridiquês.',
@@ -182,7 +182,7 @@ export const ETICA: Trilha = {
         'Confirmo mudança de conta de repasse pelo canal antigo.',
       ],
       promptVideo: [
-        'Gere um vídeo de 5 minutos sobre segurança digital no dia a dia do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo, de 3 a 5 minutos sobre segurança digital no dia a dia do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: toda a equipe.',
         'TOM: direto, com exemplos de golpe reais e reconhecíveis.',
