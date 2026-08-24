@@ -33,6 +33,13 @@ const PROMPT = [
   '- Transcreva o que foi DITO, sem resumir, sem corrigir e sem inventar.',
   '- Não use rótulo de locutor.',
   '- Não escreva mais nada além do WebVTT.',
+  '',
+  // Sem isto o transcritor troca nome próprio por palavra comum: ele ouviu
+  // "Claude" e escreveu "Cloud" nas duas transcrições, mesmo com o vídeo
+  // instruído a dizer Claude. Nome próprio do escritório vai listado.
+  'GRAFIA OBRIGATÓRIA destes nomes, mesmo que o áudio soe diferente:',
+  'Claude (nunca "Cloud"), Frider Andrade, hub, DJEN, RMC, RCC, HISCON, HISCRE,',
+  'PJe, e-SAJ, Projudi, ZapSign, Gemini, WhatsApp, OAB, CPC, INSS.',
 ].join('\n');
 
 const body = {
