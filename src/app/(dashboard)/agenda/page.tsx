@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { calendarService, type CalendarEvent, type EventKind } from '@/features/calendar/services/calendar.service';
-import { deadlinesService, type Deadline } from '@/features/deadlines/services/deadlines.service';
+import { deadlinesService, type Deadline, type PrazoPreview } from '@/features/deadlines/services/deadlines.service';
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
@@ -309,7 +309,7 @@ export default function AgendaPage() {
   const [title, setTitle] = useState('');
   const [titlePicker, setTitlePicker] = useState(false);
   const [chooser, setChooser] = useState<{ date?: Date } | null>(null);
-  const [dialog, setDialog] = useState<{ type: 'evento' | 'tarefa' | 'atendimento'; date?: Date } | null>(null);
+  const [dialog, setDialog] = useState<{ type: 'evento' | 'tarefa' | 'atendimento' | 'prazo'; date?: Date } | null>(null);
   const [detail, setDetail] = useState<Activity | null>(null);
 
   // Filtros (Astrea): Exibir tipo + Status + Pessoa
@@ -657,7 +657,7 @@ export default function AgendaPage() {
     } catch { /* */ }
     patchAgendaPrefs({ status: st, exibir: ex });
   };
-  const openCreate = (type: 'evento' | 'tarefa' | 'atendimento', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
+  const openCreate = (type: 'evento' | 'tarefa' | 'atendimento' | 'prazo', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
   // Abrir a atividade = visualizá-la → tira a bolinha de "novo".
   const openDetail = (a: Activity) => { markSeen(a.id); setDetail(a); };
@@ -718,6 +718,7 @@ export default function AgendaPage() {
             {addMenu && (<><div className="fixed inset-0 z-10" onClick={() => setAddMenu(false)} />
               <div className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
                 <button onClick={() => openCreate('tarefa')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><ClipboardList className="h-4 w-4 text-[#23CBFF]" /> Tarefa</button>
+                <button onClick={() => openCreate('prazo')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><Stamp className="h-4 w-4 text-[#CE0000]" /> Prazo</button>
                 <button onClick={() => openCreate('evento')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarDays className="h-4 w-4 text-[#02883C]" /> Evento</button>
                 <button onClick={() => openCreate('atendimento')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"><CalendarClock className="h-4 w-4 text-[#B7791F]" /> Atendimento</button>
               </div></>)}
@@ -868,6 +869,7 @@ export default function AgendaPage() {
           {chooser.date && <p className="mb-4 text-sm text-zinc-500">Para {chooser.date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</p>}
           <div className="grid grid-cols-2 gap-3">
             <button onClick={() => openCreate('tarefa', chooser.date)} className="flex flex-col items-center gap-2 rounded-lg border border-[#DEE2E6] p-5 hover:border-[#23CBFF] hover:bg-[#23CBFF]/5 dark:border-zinc-700"><ClipboardList className="h-7 w-7 text-[#23CBFF]" /><span className="text-sm font-medium">Tarefa</span></button>
+            <button onClick={() => openCreate('prazo', chooser.date)} className="flex flex-col items-center gap-2 rounded-lg border border-[#DEE2E6] p-5 hover:border-[#CE0000] hover:bg-[#CE0000]/5 dark:border-zinc-700"><Stamp className="h-7 w-7 text-[#CE0000]" /><span className="text-sm font-medium">Prazo</span></button>
             <button onClick={() => openCreate('evento', chooser.date)} className="flex flex-col items-center gap-2 rounded-lg border border-[#DEE2E6] p-5 hover:border-[#02883C] hover:bg-[#02883C]/5 dark:border-zinc-700"><CalendarDays className="h-7 w-7 text-[#02883C]" /><span className="text-sm font-medium">Evento</span></button>
             <button onClick={() => openCreate('atendimento', chooser.date)} className="flex flex-col items-center gap-2 rounded-lg border border-[#DEE2E6] p-5 hover:border-[#B7791F] hover:bg-[#B7791F]/5 dark:border-zinc-700"><CalendarClock className="h-7 w-7 text-[#B7791F]" /><span className="text-sm font-medium">Atendimento</span></button>
           </div>
@@ -876,6 +878,7 @@ export default function AgendaPage() {
       {dialog?.type === 'evento' && <CreateEventDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {dialog?.type === 'tarefa' && <CreateTaskDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {dialog?.type === 'atendimento' && <CreateAtendimentoDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
+      {dialog?.type === 'prazo' && <CreateDeadlineDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {detailLive && <ActivityDetailModal activity={detailLive} onClose={() => setDetail(null)} onRefetch={refetchAll} onOpenCase={(id) => window.open(`/processos/${id}`, '_blank', 'noopener')} onOpenConversation={(id) => router.push(`/inbox?conversationId=${id}`)} />}
       {dispOpen && <DisponibilidadeModal onClose={() => setDispOpen(false)} />}
     </div>
@@ -2447,12 +2450,14 @@ function RemindersField({ value, onChange }: { value: number[]; onChange: (v: nu
 }
 
 function CreateEventDialog({ date, onClose, onSaved }: { date?: Date; onClose: () => void; onSaved: () => void }) {
+  // Responsável, via de regra, é QUEM ESTÁ CRIANDO — vem preenchido e pode trocar.
+  const meId = useAuthStore((s) => s.user?.id) ?? '';
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<EventKind>('audiencia');
   const [startsAt, setStartsAt] = useState(date ? toDatetimeLocal(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0)) : '');
   const [location, setLocation] = useState('');
   const [caseId, setCaseId] = useState('');
-  const [assignedToId, setAssignedToId] = useState('');
+  const [assignedToId, setAssignedToId] = useState(meId);
   const [reminders, setReminders] = useState<number[]>([1440, 60]);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -2558,12 +2563,14 @@ function CreateAtendimentoDialog({ date, onClose, onSaved }: { date?: Date; onCl
 }
 
 function CreateTaskDialog({ date, onClose, onSaved }: { date?: Date; onClose: () => void; onSaved: () => void }) {
+  // Responsável, via de regra, é QUEM ESTÁ CRIANDO — vem preenchido e pode trocar.
+  const meId = useAuthStore((s) => s.user?.id) ?? '';
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [dueAt, setDueAt] = useState(date ? toDateInput(date) : toDateInput(new Date()));
   const [description, setDescription] = useState('');
   const [caseId, setCaseId] = useState('');
-  const [assigneeId, setAssigneeId] = useState('');
+  const [assigneeId, setAssigneeId] = useState(meId);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
@@ -2591,6 +2598,135 @@ function CreateTaskDialog({ date, onClose, onSaved }: { date?: Date; onClose: ()
         </div>        <Field label="Descrição"><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900" /></Field>
       </div>
       <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button></div>
+    </Modal>
+  );
+}
+
+// ── Novo PRAZO pela agenda ────────────────────────────────────────────────────
+// Dois modos, exatamente os que o backend aceita (CreateDeadlineDto):
+//  • CALCULAR — dias + base (disponibilização / publicação / início da contagem):
+//    o servidor conta em dias ÚTEIS (CPC 219/224/220), com dobro (CPC 183/186/229)
+//    e corridos quando for o caso, e devolve a data FATAL e o prazo de segurança.
+//  • INFORMAR AS DATAS — quando a fatal já é conhecida (veio do Projudi/cálculo).
+// A agenda mostra o prazo no dia do PRAZO DE SEGURANÇA; a fatal é a data legal e
+// fica na ficha. Prazo SEM processo não existe (a relação é obrigatória).
+function CreateDeadlineDialog({ date, onClose, onSaved }: { date?: Date; onClose: () => void; onSaved: () => void }) {
+  // Responsável, via de regra, é QUEM ESTÁ CRIANDO — vem preenchido e pode trocar.
+  const meId = useAuthStore((s) => s.user?.id) ?? '';
+  const [title, setTitle] = useState('');
+  const [caseId, setCaseId] = useState('');
+  const [assignedToId, setAssignedToId] = useState(meId);
+  const [type, setType] = useState<'FATAL' | 'ORDINARY' | 'INTERNAL'>('ORDINARY');
+  // Clicou num dia do calendário → já sabe a data: abre em "informar as datas".
+  const [modo, setModo] = useState<'calc' | 'datas'>(date ? 'datas' : 'calc');
+  // modo calcular
+  const [dias, setDias] = useState(15);
+  const [base, setBase] = useState<'disponibilizacao' | 'publicacao' | 'inicio'>('disponibilizacao');
+  const [baseDia, setBaseDia] = useState(toDateInput(new Date()));
+  const [dobro, setDobro] = useState(false);
+  const [corridos, setCorridos] = useState(false);
+  const [preview, setPreview] = useState<PrazoPreview | null>(null);
+  // modo datas
+  const [fatalDia, setFatalDia] = useState(date ? toDateInput(date) : '');
+  const [safeDia, setSafeDia] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
+  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
+
+  // Dia (YYYY-MM-DD) → ISO às 09:00 LOCAL (hora canônica dos itens "dia todo";
+  // meia-noite local virava 03:00Z e jogava o prazo pro dia anterior).
+  const dayToIso = (v: string) => new Date(`${v}T09:00:00`).toISOString();
+  // Base da contagem escolhida no select → o campo que o backend espera.
+  const basePayload = () => (base === 'publicacao' ? { publicacao: baseDia } : base === 'inicio' ? { inicio: baseDia } : { disponibilizacao: baseDia });
+  const fmtDia = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+
+  // Prévia do cálculo enquanto digita — mostra a fatal ANTES de salvar.
+  useEffect(() => {
+    if (modo !== 'calc' || !dias || !baseDia) { setPreview(null); return; }
+    let vivo = true;
+    const t = setTimeout(() => {
+      deadlinesService.preview({ dias, ...basePayload(), dobro, corridos })
+        .then((p) => { if (vivo) setPreview(p); })
+        .catch(() => { if (vivo) setPreview(null); });
+    }, 350);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [modo, dias, base, baseDia, dobro, corridos]);
+
+  const submit = async () => {
+    if (!title.trim()) return toast.error('Informe o título');
+    if (!caseId) return toast.error('Prazo precisa de um processo vinculado');
+    if (modo === 'datas' && !fatalDia) return toast.error('Informe o prazo fatal');
+    if (modo === 'calc' && (!dias || !baseDia)) return toast.error('Informe os dias e a data da intimação');
+    setSaving(true);
+    try {
+      const dl = await deadlinesService.create({
+        caseId,
+        title: title.trim(),
+        type,
+        assignedToId: assignedToId || undefined,
+        ...(modo === 'calc'
+          ? { dias, ...basePayload(), dobro, corridos }
+          : { dueDate: dayToIso(fatalDia), safeDate: dayToIso(safeDia || fatalDia) }),
+        // A descrição do prazo não tem coluna própria: mora em metadata.djen.descricao
+        // (mesmo lugar que a agenda e a ficha já leem/editam).
+        ...(descricao.trim() ? { metadata: { djen: { descricao: descricao.trim() } } } : {}),
+      });
+      if (tagIds.length) await Promise.all(tagIds.map((id) => activitiesService.attachTag(ENTITY_TYPE.prazo, dl.id, id).catch(() => {})));
+      toast.success('Prazo criado'); onSaved();
+    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao criar o prazo'); } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal title="Adicionar prazo" onClose={onClose} wide headerRight={<TagSelector selected={tagIds} onChange={setTagIds} />}>
+      <div className="space-y-4">
+        <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="Ex.: Apresentar contestação" autoFocus /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={<>Processo <span className="text-rose-500">*</span></>}><CaseSearch value={caseId} onChange={setCaseId} cases={cases.map((c) => ({ id: c.id, title: c.title, cnjNumber: c.cnjNumber ?? null }))} /></Field>
+          <Field label="Responsável"><select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} className={inputCls}><option value="">Ninguém</option>{members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}{m.user.id === meId ? ' (eu)' : ''}</option>)}</select></Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Tipo"><select value={type} onChange={(e) => setType(e.target.value as 'FATAL' | 'ORDINARY' | 'INTERNAL')} className={inputCls}><option value="ORDINARY">Comum</option><option value="FATAL">Fatal</option><option value="INTERNAL">Interno</option></select></Field>
+          <Field label="Como definir a data">
+            <div className="flex h-[38px] items-center gap-1 rounded-md border border-zinc-300 p-1 dark:border-zinc-700">
+              {([['calc', 'Calcular'], ['datas', 'Informar datas']] as const).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setModo(v)} className={`h-full flex-1 rounded text-xs font-semibold transition-colors ${modo === v ? 'bg-[#CE0000] text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{l}</button>
+              ))}
+            </div>
+          </Field>
+        </div>
+
+        {modo === 'calc' ? (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Prazo (dias)"><input type="number" min={1} max={365} value={dias} onChange={(e) => setDias(Number(e.target.value))} className={inputCls} /></Field>
+              <Field label="Contar a partir de"><select value={base} onChange={(e) => setBase(e.target.value as 'disponibilizacao' | 'publicacao' | 'inicio')} className={inputCls}><option value="disponibilizacao">Disponibilização</option><option value="publicacao">Publicação</option><option value="inicio">Início da contagem</option></select></Field>
+              <Field label="Data"><input type="date" value={baseDia} onChange={(e) => setBaseDia(e.target.value)} className={inputCls} /></Field>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"><input type="checkbox" checked={dobro} onChange={(e) => setDobro(e.target.checked)} className="accent-[#CE0000]" />Prazo em dobro (CPC 183/186/229)</label>
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"><input type="checkbox" checked={corridos} onChange={(e) => setCorridos(e.target.checked)} className="accent-[#CE0000]" />Dias corridos</label>
+            </div>
+            {preview && (
+              <div className="rounded-md border border-[#CE0000]/20 bg-[#CE0000]/5 p-3 text-sm">
+                <p className="font-semibold text-[#CE0000]">Data fatal: {fmtDia(preview.dataFatal)}</p>
+                <p className="text-zinc-600 dark:text-zinc-300">Prazo de segurança: {fmtDia(preview.prazoSeguranca)} — é neste dia que ele aparece na agenda.</p>
+                <p className="mt-1 text-xs text-zinc-500">{preview.modo}{preview.dobro ? ' · em dobro' : ''}</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={<>Prazo fatal <span className="text-rose-500">*</span></>}><input type="date" value={fatalDia} onChange={(e) => setFatalDia(e.target.value)} className={inputCls} /></Field>
+            <Field label="Prazo de segurança"><input type="date" value={safeDia} onChange={(e) => setSafeDia(e.target.value)} className={inputCls} /></Field>
+            <p className="col-span-2 -mt-1 text-xs text-zinc-400">Sem prazo de segurança, ele fica igual à data fatal. A agenda mostra o prazo no dia da segurança.</p>
+          </div>
+        )}
+
+        <Field label="Descrição"><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} className={`${inputCls} resize-y`} /></Field>
+      </div>
+      <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#CE0000] hover:bg-[#CE0000]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button></div>
     </Modal>
   );
 }
