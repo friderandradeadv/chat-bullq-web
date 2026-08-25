@@ -425,19 +425,26 @@ export function ArquivarPecaModal({
       if (lista) lista.push(f);
       else porCliente.set(dono, [f]);
     }
+    // De quem é ESTE protocolo. Vindo da agenda, o processo diz o cliente; pela
+    // ficha, não há esse nome aqui — e sem saber de quem é, nada se apaga.
+    const alvo = ctx.data?.cliente ? chave(ctx.data.cliente) : null;
+
     return [...porCliente.entries()]
       .map(([cliente, arquivos]) => ({
         cliente: cliente || null,
+        // Deste protocolo, ou sobra de outro cliente esperando a vez dele.
+        doCliente: alvo ? chave(cliente) === alvo : true,
         arquivos: arquivos.sort((a, b) =>
           a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }),
         ),
       }))
       .sort((a, b) => {
+        if (a.doCliente !== b.doCliente) return a.doCliente ? -1 : 1; // o do prazo em cima
         if (!a.cliente) return 1; // solto na raiz fecha a lista
         if (!b.cliente) return -1;
         return a.cliente.localeCompare(b.cliente, 'pt-BR');
       });
-  }, [listaMesa, itens]);
+  }, [listaMesa, itens, ctx.data?.cliente]);
   const quantosFora = grupos.reduce((n, g) => n + g.arquivos.length, 0);
   const estaNaMesa = (i: ItemProtocolo) => i.nome !== '' && (
     (i.kind === 'file' && i.daMesa) || nomesNaMesa.has(i.nome)
@@ -850,13 +857,39 @@ export function ArquivarPecaModal({
                 {!quantosFora ? null : (
                   <ul className="max-h-52 overflow-y-auto">
                     {grupos.map((g) => (
-                      <li key={g.cliente ?? '(raiz)'}>
+                      // Sobra de OUTRO cliente entra desfocada e apagada. A pasta
+                      // de trabalho acumula o dia inteiro, e quem abre o modal de
+                      // um prazo não tem nada que ler ali — mas também não pode
+                      // perder o acesso: passar o mouse (ou chegar pelo teclado)
+                      // devolve o foco e a cor, e o clique continua valendo.
+                      <li key={g.cliente ?? '(raiz)'} className="group">
                         {/* O cabeçalho do cliente gruda no topo: rolando uma
-                            pasta longa, ainda dá para saber de quem é a linha. */}
+                            pasta longa, ainda dá para saber de quem é a linha.
+                            Ele NUNCA desfoca — é por ele que se identifica a
+                            pilha sem passar o mouse em cima. E o desfoque não
+                            pode morar aqui no <li>: `filter` vale para a subárvore
+                            inteira (nenhum `blur-none` no filho desfaz) e ainda
+                            atrapalharia o `sticky`. Mora no <ul> das linhas. */}
                         <p className="sticky top-0 z-10 truncate border-b border-zinc-100 bg-zinc-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-400">
                           {g.cliente ?? `Solto em ${mesaNome} — sem pasta de cliente`}
+                          {!g.doCliente && (
+                            <span className="ml-1.5 font-normal normal-case tracking-normal text-zinc-400 dark:text-zinc-500">
+                              · {g.arquivos.length} arquivo{g.arquivos.length > 1 ? 's' : ''} de outro protocolo
+                            </span>
+                          )}
                         </p>
-                        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        {/* Sobra de OUTRO cliente entra desfocada: a pasta de
+                            trabalho acumula o dia inteiro, e quem abre o modal de
+                            um prazo não tem o que ler ali. Mas não pode perder o
+                            acesso — passar o mouse, ou chegar pelo teclado,
+                            devolve o foco e a cor, e o clique continua valendo. */}
+                        <ul
+                          className={`divide-y divide-zinc-100 dark:divide-zinc-800 ${
+                            g.doCliente
+                              ? ''
+                              : 'opacity-40 blur-[1.5px] transition duration-150 group-hover:opacity-100 group-hover:blur-none group-focus-within:opacity-100 group-focus-within:blur-none'
+                          }`}
+                        >
                           {g.arquivos.map((it) => (
                             // A chave leva a subpasta: dois clientes podem ter
                             // arquivo de mesmo nome, e só o nome repetiria a chave.
