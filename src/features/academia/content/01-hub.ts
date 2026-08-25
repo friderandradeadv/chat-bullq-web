@@ -79,6 +79,12 @@ export const HUB: Trilha = {
       titulo: 'Início: sua mesa de trabalho',
       resumo: 'Como começar o dia olhando uma tela só.',
       minutos: 5,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/inicio.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/inicio.vtt',
+        duracao: '3 min',
+      },
       manual: [
         '## O que o Início mostra',
         '',
