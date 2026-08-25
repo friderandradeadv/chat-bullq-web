@@ -115,7 +115,11 @@ export const driveBrowserService = {
   /** As fases que ESTE cliente tem — não a lista teórica das nove. */
   async fases(partyId: string): Promise<FaseNoDrive[]> {
     const { data } = await api.get(`/client-documents/drive/${partyId}/fases`, {
-      timeout: 60_000, // varre a árvore do cliente no Drive
+      // Varre a árvore do cliente no Drive. O servidor lê o nível inteiro de uma
+      // vez, mas o tempo de cada leitura é do Google: em 25/08/2026 o edge de
+      // São Paulo respondia entre 3s e 12s por pasta. 60s deixava a tela morrer
+      // num dia ruim do Drive; é melhor esperar do que perder o arquivamento.
+      timeout: 120_000,
     });
     return data.data ?? data;
   },
@@ -124,7 +128,7 @@ export const driveBrowserService = {
   async destino(partyId: string, caminho: string[], data?: string): Promise<DestinoDaPeca> {
     const r = await api.get(`/client-documents/drive/${partyId}/destino`, {
       params: { caminho: caminho.join('/'), ...(data ? { data } : {}) },
-      timeout: 45_000,
+      timeout: 90_000, // desce a trilha no Drive — ver a nota de tempo em `fases`
     });
     return r.data.data ?? r.data;
   },
@@ -139,7 +143,10 @@ export const driveBrowserService = {
     entityId: string,
   ): Promise<ArquivarPorAtividade> {
     const { data } = await api.get(`/client-documents/drive/atividade/${entityType}/${entityId}`, {
-      timeout: 60_000,
+      // Cliente + fases + destino numa chamada só: é a leitura mais pesada do
+      // Drive no hub inteiro. Ver a nota de tempo em `fases` — 60s era pouco e
+      // devolvia "timeout of 60000ms exceeded" no lugar do select de fase.
+      timeout: 120_000,
     });
     return data.data ?? data;
   },
