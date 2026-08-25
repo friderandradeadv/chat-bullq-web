@@ -421,6 +421,8 @@ export const HUB: Trilha = {
         '- **Cumprimento de sentença** — atualização da condenação para a execução.',
         '- **Provisionamento / perda esperada** — projeção da carteira.',
         '',
+        '![A calculadora de RMC/RCC: a fase do cálculo, a importação do HISCON e do HISCRE, a escolha entre RMC e RCC, e os campos do contrato](https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints/calculadora-rmc.png)',
+        '',
         '## Como o cálculo entra no processo',
         '',
         '1. Você calcula na calculadora.',
