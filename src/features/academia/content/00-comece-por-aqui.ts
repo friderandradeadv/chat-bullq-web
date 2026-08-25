@@ -91,6 +91,12 @@ export const COMECE_POR_AQUI: Trilha = {
     {
       id: 'quem-somos',
       videoPlanejado: true,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/quem-somos.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/quem-somos.vtt',
+        duracao: '3:06',
+      },
       titulo: 'Quem somos: missão, visão e valores',
       resumo: 'Para quem o escritório trabalha, o que ele persegue e o que ele não aceita.',
       minutos: 8,

@@ -38,7 +38,9 @@ const PROMPT = [
   // "Claude" e escreveu "Cloud" nas duas transcrições, mesmo com o vídeo
   // instruído a dizer Claude. Nome próprio do escritório vai listado.
   'GRAFIA OBRIGATÓRIA destes nomes, mesmo que o áudio soe diferente:',
-  'Claude (nunca "Cloud"), Kanban (nunca "Camba"), Frider Andrade, hub, DJEN, RMC, RCC,',
+  'Claude (nunca "Cloud"), Kanban (nunca "Camba"), card / cards (nunca "cartório" —',
+  'no hub, "card" é o cartão do kanban; "cartório" só se o áudio falar de tabelionato),',
+  'Frider Andrade, hub, DJEN, RMC, RCC,',
   'HISCON, HISCRE, PJe, e-SAJ, Projudi, eproc, ZapSign, Gemini, WhatsApp, OAB, CPC, CNJ,',
   'INSS, LGPD, alvará, astreinte, sucumbência, preclusão.',
 ].join('\n');
