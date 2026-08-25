@@ -10,6 +10,7 @@ export const HUB: Trilha = {
   aulas: [
     {
       id: 'visao-geral',
+      videoPlanejado: true,
       titulo: 'Visão geral: a lógica do hub',
       resumo: 'A lógica do sistema: uma conversa vira lead, vira cliente, vira processo, vira dinheiro.',
       minutos: 8,
@@ -57,7 +58,7 @@ export const HUB: Trilha = {
         'Configurei a barra lateral com o que eu uso.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos apresentando o Hub, o sistema interno do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos apresentando o Hub, o sistema interno do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: pessoa nova, que nunca abriu o sistema.',
         'TOM: tour guiado, entusiasmado mas objetivo. Português do Brasil.',
@@ -129,6 +130,7 @@ export const HUB: Trilha = {
 
     {
       id: 'conversas',
+      videoPlanejado: true,
       titulo: 'Conversas: WhatsApp, IA e quando você assume',
       resumo: 'Como a IA atende, quando ela para, e como não estragar o atendimento.',
       minutos: 12,
@@ -182,7 +184,7 @@ export const HUB: Trilha = {
         'Sei vincular cliente que apareceu com número novo.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre o módulo Conversas do Hub do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre o módulo Conversas do Hub do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado e back office que vão atender cliente por WhatsApp dentro do sistema.',
         'TOM: prático, com alerta claro nos pontos que costumam dar errado.',
@@ -246,7 +248,7 @@ export const HUB: Trilha = {
         'Não crio etiqueta nova.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre os kanbans do Hub do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre os kanbans do Hub do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado que vai conduzir carteira de processos.',
         'TOM: explicativo, com ênfase em desfazer o mal-entendido de que o kanban é movido na mão.',
@@ -307,7 +309,7 @@ export const HUB: Trilha = {
         'Cadastro na hora processo que apareceu e não está no hub.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre o módulo Processos do Hub do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre o módulo Processos do Hub do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado que vai gerir a carteira.',
         'TOM: prático e minucioso, sem virar lista de cliques.',
@@ -369,7 +371,7 @@ export const HUB: Trilha = {
         'Confiro a semana, não só o dia.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre Publicações, Agenda e Tarefas no Hub do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre Publicações, Agenda e Tarefas no Hub do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado responsável pela própria controladoria.',
         'TOM: sério, é o módulo em que erro custa prazo.',
@@ -429,7 +431,7 @@ export const HUB: Trilha = {
         'Sei que contratual incide sobre proveito econômico.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre as calculadoras do Hub do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre as calculadoras do Hub do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado que vai montar inicial e execução.',
         'TOM: técnico e cuidadoso com números.',
@@ -489,7 +491,7 @@ export const HUB: Trilha = {
         'Entendi por que o registro das tentativas de repasse existe.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre Financeiro, alvará e prestação de contas no Hub do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre Financeiro, alvará e prestação de contas no Hub do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado que conduz o caso até o repasse.',
         'TOM: sério, é dinheiro de cliente.',
@@ -540,7 +542,7 @@ export const HUB: Trilha = {
         'Sei a diferença entre Ajuda e Academia.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre Meu Espaço, Ajuda, Copiloto e Academia no Hub do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre Meu Espaço, Ajuda, Copiloto e Academia no Hub do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: qualquer pessoa da equipe, inclusive quem não é advogado.',
         'TOM: leve e prático, é a parte do sistema que fala da própria pessoa.',

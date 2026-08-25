@@ -10,6 +10,7 @@ export const PRAZOS: Trilha = {
   aulas: [
     {
       id: 'como-chega',
+      videoPlanejado: true,
       titulo: 'Como o prazo chega até você',
       resumo: 'DJEN, portal do tribunal, Projudi e as armadilhas de cada caminho.',
       minutos: 10,
@@ -53,7 +54,7 @@ export const PRAZOS: Trilha = {
         'Sei que intimação não aberta no portal se considera lida em 10 dias.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre como um prazo processual chega até o advogado no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre como um prazo processual chega até o advogado no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado que vai assumir a própria controladoria.',
         'TOM: sério e didático, é o tema em que erro custa mais caro.',
@@ -122,7 +123,7 @@ export const PRAZOS: Trilha = {
         'Trabalho com a meta do penúltimo dia útil.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos ensinando contagem de prazo processual, no padrão do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos ensinando contagem de prazo processual, no padrão do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado e estagiário. Alguns nunca contaram prazo sozinhos.',
         'TOM: professoral e paciente, com exemplo numérico.',
@@ -175,7 +176,7 @@ export const PRAZOS: Trilha = {
         'Aviso a coordenação quando a peça não existe no D-3.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre a régua de prazos do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre a régua de prazos do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado com carteira própria.',
         'TOM: de método, quase de coaching operacional, mas seco.',
@@ -235,7 +236,7 @@ export const PRAZOS: Trilha = {
         'Sei que prazo perdido se comunica na hora.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre o que fazer quando não se vai dar conta de um prazo, no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre o que fazer quando não se vai dar conta de um prazo, no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado sob pressão. O vídeo precisa reduzir o medo de avisar.',
         'TOM: adulto e acolhedor, sem passar a mão na cabeça.',
@@ -296,7 +297,7 @@ export const PRAZOS: Trilha = {
         'Registro o resultado no hub no mesmo dia.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre audiências no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre audiências no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado, incluindo quem vai fazer a primeira audiência virtual.',
         'TOM: prático e checklist, com cuidado especial com cliente idoso.',

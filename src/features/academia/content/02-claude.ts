@@ -10,6 +10,7 @@ export const CLAUDE: Trilha = {
   aulas: [
     {
       id: 'o-que-e',
+      videoPlanejado: true,
       titulo: 'O que o Claude é aqui — e o que ele não é',
       resumo: 'O papel da IA no escritório e o limite que não se atravessa.',
       minutos: 8,
@@ -57,7 +58,7 @@ export const CLAUDE: Trilha = {
         'Sei que "aplicado com sucesso" não é verificação.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos explicando o papel da inteligência artificial Claude no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos explicando o papel da inteligência artificial Claude no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado e estagiário que vão produzir peça com IA. Alguns vão chegar achando que a IA escreve a peça sozinha.',
         'TOM: firme e desmistificador, sem ser antitecnologia. Português do Brasil.',
@@ -121,7 +122,7 @@ export const CLAUDE: Trilha = {
         'Sei que existe skill de timbrado para peça avulsa.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos mapeando as skills do escritório Frider Andrade | Advogados no Claude.',
+        'Gere um vídeo de 3 a 5 minutos mapeando as skills do escritório Frider Andrade | Advogados no Claude.',
         '',
         'PÚBLICO: advogado que vai produzir peça e ainda não sabe o que existe pronto.',
         'TOM: de catálogo comentado, prático.',
@@ -197,7 +198,7 @@ export const CLAUDE: Trilha = {
         'Cadastro o processo no hub logo depois do protocolo.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos ensinando a montar uma petição inicial de RMC ou RCC no escritório Frider Andrade | Advogados usando a skill do Claude.',
+        'Gere um vídeo de 3 a 5 minutos ensinando a montar uma petição inicial de RMC ou RCC no escritório Frider Andrade | Advogados usando a skill do Claude.',
         '',
         'PÚBLICO: advogado associado que vai montar a primeira inicial.',
         'TOM: passo a passo, de bancada, com alertas nos pontos de erro.',
@@ -269,7 +270,7 @@ export const CLAUDE: Trilha = {
         'Confiro tempestividade e preparo antes de qualquer recurso.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre as peças de resposta no escritório Frider Andrade | Advogados: réplica, especificação de provas e recurso.',
+        'Gere um vídeo de 3 a 5 minutos sobre as peças de resposta no escritório Frider Andrade | Advogados: réplica, especificação de provas e recurso.',
         '',
         'PÚBLICO: advogado associado conduzindo processo em curso.',
         'TOM: técnico e decisório.',
@@ -326,7 +327,7 @@ export const CLAUDE: Trilha = {
         'Amarro cada ementa ao caso com uma frase.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre pesquisa de jurisprudência no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre pesquisa de jurisprudência no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado e estagiário que fundamentam peça.',
         'TOM: técnico, com um alerta forte no meio.',
@@ -388,7 +389,7 @@ export const CLAUDE: Trilha = {
         'Colo texto sem formatação e depois aplico o padrão.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre o timbrado e a formatação das peças do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre o timbrado e a formatação das peças do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: quem produz peça, inclusive estagiário.',
         'TOM: de padrão de qualidade, mostrando que forma aqui é procedimento.',
@@ -449,7 +450,7 @@ export const CLAUDE: Trilha = {
         'Abro cada julgado citado.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre a revisão obrigatória antes de protocolar uma peça no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre a revisão obrigatória antes de protocolar uma peça no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado que acabou de gerar uma peça com IA e está com o dedo no botão de protocolar.',
         'TOM: de checklist de segurança, como piloto antes de decolar.',
@@ -506,7 +507,7 @@ export const CLAUDE: Trilha = {
         'Sei que aviso a coordenação na hora se houver vazamento.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre uso de inteligência artificial com dados de cliente no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre uso de inteligência artificial com dados de cliente no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: todos que lidam com documento de cliente.',
         'TOM: sério e claro, sem juridiquês.',

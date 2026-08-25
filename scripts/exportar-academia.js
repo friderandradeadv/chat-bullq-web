@@ -50,6 +50,10 @@ p.push('Frider Andrade | Advogados — Academia interna');
 p.push('');
 p.push('## Como usar');
 p.push('');
+p.push('> **Só 10 das 46 aulas terão vídeo** — estão marcadas abaixo com ⭐. A produção de cada vídeo custa horas de fila');
+p.push('> no NotebookLM (um por vez: fila trava e come a cota) mais uma revisão humana do áudio, e o manual escrito já é o');
+p.push('> procedimento completo. Os outros 36 prompts continuam aqui, prontos, para o dia em que se quiser produzir mais.');
+p.push('');
 p.push('1. Abra o **NotebookLM** e crie um caderno novo **por trilha** (8 cadernos no total).');
 p.push('2. Em **Fontes**, suba o arquivo `.md` daquela trilha, que está na pasta `01. FONTES PARA O NOTEBOOKLM`.');
 p.push('   Suba também, no mesmo caderno, os documentos institucionais que fizerem sentido:');
@@ -78,9 +82,10 @@ TRILHAS.forEach((t, ti) => {
     if (!a.promptVideo) return;
     n++;
     p.push('');
-    p.push(`## Vídeo ${n} — ${a.titulo}`);
+    p.push(`## ${a.videoPlanejado ? '⭐ ' : ''}Vídeo ${n} — ${a.titulo}`);
     p.push('');
-    p.push(`Aula ${ti + 1}.${ai + 1} · duração alvo compatível com ${a.minutos} min de aula`);
+    p.push(`Aula ${ti + 1}.${ai + 1} · duração alvo compatível com ${a.minutos} min de aula` +
+      (a.videoPlanejado ? ' · **PRIORITÁRIO — este entra na produção**' : ' · aula escrita, vídeo não previsto'));
     p.push('');
     p.push('```');
     p.push(promptCompleto(a));
@@ -108,7 +113,14 @@ const leia = [
   '- `01. FONTES PARA O NOTEBOOKLM/` — um arquivo por trilha, com o manual completo de cada aula.',
   '  É o que se sobe no NotebookLM para gerar os vídeos. Serve também como apostila para imprimir.',
   '- `02. PROMPTS DOS VIDEOS (NotebookLM).md` — o prompt pronto de cada vídeo, com o que dizer,',
-  '  em que ordem, e o que nunca dizer.',
+  '  em que ordem, e o que nunca dizer. **Só 10 das 46 aulas entram na produção de vídeo** (marcadas com ⭐);',
+  '  as outras são aulas escritas, e o manual delas é o conteúdo completo.',
+  '',
+  '## Uma regra que custou um dia de cota',
+  '',
+  '**Gere UM vídeo por vez.** O NotebookLM aceita vários disparos ao mesmo tempo, mas eles não terminam:',
+  'ficam presos em "Gerando" indefinidamente E continuam ocupando a cota diária, que conta gerações em',
+  'andamento. Não há como cancelar. Dispare um, confirme que ficou pronto, só então dispare o próximo.',
   '',
   '## A regra da fonte única',
   '',

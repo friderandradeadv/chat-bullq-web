@@ -10,6 +10,7 @@ export const FASE_JUDICIAL: Trilha = {
   aulas: [
     {
       id: 'panorama',
+      videoPlanejado: true,
       titulo: 'Panorama: as etapas e o que se faz em cada uma',
       resumo: 'O mapa inteiro antes do detalhe.',
       minutos: 7,
@@ -57,7 +58,7 @@ export const FASE_JUDICIAL: Trilha = {
         'Sei que cada ato gera três obrigações.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos com o panorama da fase judicial no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos com o panorama da fase judicial no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado novo e estagiário que precisa enxergar o processo inteiro.',
         'TOM: de mapa, com sequência clara.',
@@ -117,7 +118,7 @@ export const FASE_JUDICIAL: Trilha = {
         'Aviso o cliente da distribuição.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre petição inicial e protocolo no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre petição inicial e protocolo no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado que vai distribuir a primeira ação pelo escritório.',
         'TOM: checklist operacional.',
@@ -181,7 +182,7 @@ export const FASE_JUDICIAL: Trilha = {
         'Explico ao cliente sem alarmá-lo.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre a fase de admissibilidade da inicial no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre a fase de admissibilidade da inicial no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado.',
         'TOM: técnico, com cuidado na parte de comunicação com cliente idoso.',
@@ -248,7 +249,7 @@ export const FASE_JUDICIAL: Trilha = {
         'Decido conscientemente sobre pedir perícia.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre contestação e réplica no escritório Frider Andrade | Advogados, com foco em ações bancárias.',
+        'Gere um vídeo de 3 a 5 minutos sobre contestação e réplica no escritório Frider Andrade | Advogados, com foco em ações bancárias.',
         '',
         'PÚBLICO: advogado associado que vai responder à defesa de um banco.',
         'TOM: técnico e estratégico.',
@@ -312,7 +313,7 @@ export const FASE_JUDICIAL: Trilha = {
         'Sei que laudo desfavorável se impugna.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre especificação de provas e perícias no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre especificação de provas e perícias no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado em processo bancário na fase de provas.',
         'TOM: técnico e decisório.',
@@ -383,7 +384,7 @@ export const FASE_JUDICIAL: Trilha = {
         'Comunico sentença no mesmo dia.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre como ler uma sentença e decidir o próximo passo, no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre como ler uma sentença e decidir o próximo passo, no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado.',
         'TOM: técnico, e muito cuidadoso na parte de comunicação com o cliente.',
@@ -450,7 +451,7 @@ export const FASE_JUDICIAL: Trilha = {
         'Sei que existe arquivamento provisório para executado sem bens.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre cumprimento de sentença e execução no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre cumprimento de sentença e execução no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado com sentença transitada em julgado.',
         'TOM: técnico e financeiro.',
@@ -520,7 +521,7 @@ export const FASE_JUDICIAL: Trilha = {
         'Documento cada tentativa de contato para repasse.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre alvará, prestação de contas e repasse no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre alvará, prestação de contas e repasse no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado associado que vai conduzir a ponta final do caso.',
         'TOM: muito sério, é dinheiro de cliente idoso.',

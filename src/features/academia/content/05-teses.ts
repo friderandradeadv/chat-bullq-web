@@ -10,6 +10,7 @@ export const TESES: Trilha = {
   aulas: [
     {
       id: 'rmc-rcc',
+      videoPlanejado: true,
       titulo: 'RMC e RCC: a tese principal',
       resumo: 'O que é a reserva de margem consignável, por que ela lesa o aposentado.',
       minutos: 14,
@@ -61,7 +62,7 @@ export const TESES: Trilha = {
         'Sei as cinco linhas de argumentação.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos explicando a tese de RMC e RCC do escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos explicando a tese de RMC e RCC do escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado, estagiário e equipe comercial. Precisa servir tanto para fundamentar peça quanto para explicar a um leigo.',
         'TOM: didático, com narrativa de caso real no começo.',
@@ -117,7 +118,7 @@ export const TESES: Trilha = {
         'Trato a senha gov.br do cliente como dado sensível.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre HISCON, HISCRE e leitura de extrato no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre HISCON, HISCRE e leitura de extrato no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado, estagiário e back office que montam a prova do caso.',
         'TOM: prático, de bancada.',
@@ -176,7 +177,7 @@ export const TESES: Trilha = {
         'Sei a pergunta que resume a tese.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos sobre análise de contrato digital em ações bancárias, no escritório Frider Andrade | Advogados.',
+        'Gere um vídeo de 3 a 5 minutos sobre análise de contrato digital em ações bancárias, no escritório Frider Andrade | Advogados.',
         '',
         'PÚBLICO: advogado que recebeu contestação com contrato eletrônico juntado.',
         'TOM: investigativo e técnico.',
@@ -244,7 +245,7 @@ export const TESES: Trilha = {
         'Conheço NTEP, concausa e actio nata de nome e de conceito.',
       ],
       promptVideo: [
-        'Gere um vídeo, de 3 a 5 minutos apresentando as verticais do escritório Frider Andrade | Advogados além de RMC e RCC.',
+        'Gere um vídeo de 3 a 5 minutos apresentando as verticais do escritório Frider Andrade | Advogados além de RMC e RCC.',
         '',
         'PÚBLICO: equipe inteira, para saber o que existe e para onde encaminhar.',
         'TOM: panorâmico, sem esgotar cada tema.',

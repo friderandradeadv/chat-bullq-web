@@ -25,16 +25,26 @@ function iconeDa(t: Trilha) {
 /** Embed do vídeo da aula — Drive (/preview) ou URL direta. */
 function VideoAula({ aula, cor }: { aula: Aula; cor: string }) {
   if (!aula.video) {
+    // Prometer vídeo que não vem é pior que assumir a aula como escrita.
+    const previsto = aula.videoPlanejado;
     return (
       <div
         className="flex items-center gap-3 rounded-2xl border border-dashed px-4 py-5 text-sm"
         style={{ borderColor: `${cor}66`, background: `${cor}0A` }}
       >
-        <Video className="h-5 w-5 shrink-0" style={{ color: cor }} />
+        {previsto ? (
+          <Video className="h-5 w-5 shrink-0" style={{ color: cor }} />
+        ) : (
+          <BookOpen className="h-5 w-5 shrink-0" style={{ color: cor }} />
+        )}
         <div>
-          <p className="font-semibold text-zinc-800 dark:text-zinc-100">Vídeo em produção</p>
+          <p className="font-semibold text-zinc-800 dark:text-zinc-100">
+            {previsto ? 'Vídeo em produção' : 'Aula escrita'}
+          </p>
           <p className="text-zinc-500 dark:text-zinc-400">
-            O manual escrito abaixo já é completo e vale sozinho.
+            {previsto
+              ? 'O manual escrito abaixo já é completo e vale sozinho.'
+              : 'Esta aula não terá vídeo: o manual abaixo é o conteúdo completo, e é a ele que você volta no meio de um caso.'}
           </p>
         </div>
       </div>

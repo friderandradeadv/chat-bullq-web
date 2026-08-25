@@ -35,6 +35,15 @@ export interface Aula {
   checklist?: string[];
   /** Prompt pronto para gerar o vídeo desta aula no NotebookLM (visível só para sócios). */
   promptVideo?: string;
+  /**
+   * Aula que TERÁ vídeo. Só 10 das 46 têm — a produção de cada vídeo custa
+   * horas de fila no NotebookLM e uma revisão humana do áudio, e o manual
+   * escrito já é o procedimento completo. Onde o vídeo não muda o aprendizado,
+   * a aula é escrita e ponto: melhor dizer isso do que prometer um vídeo que
+   * não vem. O prompt continua existindo em todas, para o dia em que se quiser
+   * produzir mais.
+   */
+  videoPlanejado?: boolean;
 }
 
 export interface Trilha {
