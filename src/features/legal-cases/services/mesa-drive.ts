@@ -196,12 +196,18 @@ export interface PlanoDeMovimento {
  * função procurava o arquivo só na raiz: dava `"...pdf" não está mais na Mesa`
  * com o arquivo ali, a um nível de distância. Quem lê a Mesa já carrega o `sub`
  * de cada arquivo; sem `subDe` o comportamento é o antigo, só a raiz.
+ *
+ * `subDe` recebe o ÍNDICE, não o nome. O plano vem do servidor na mesma ordem
+ * da lista da tela (a numeração é feita com um `map`, um para um), então o
+ * índice casa item a item. Pelo nome não casava: dois clientes podem ter
+ * `01. MANIFESTACAO.pdf` na pasta de trabalho, e a busca por nome devolvia
+ * sempre a primeira ocorrência — o arquivo do cliente errado.
  */
 export async function moverParaAPastaDoCliente(
   mesa: any,
   clientes: any,
   plano: PlanoDeMovimento,
-  subDe?: (nome: string) => string | null,
+  subDe?: (indice: number, nome: string) => string | null,
 ): Promise<{
   movidos: string[];
   ficaram: { nome: string; motivo: string }[];
@@ -220,9 +226,9 @@ export async function moverParaAPastaDoCliente(
 
   const subsMexidas = new Set<string>();
 
-  for (const item of plano.arquivos) {
+  for (const [indice, item] of plano.arquivos.entries()) {
     try {
-      const sub = subDe?.(item.de) ?? null;
+      const sub = subDe?.(indice, item.de) ?? null;
       const dono = sub ? await acharSubpasta(mesa, sub) : mesa;
       const fh = await acharArquivo(dono, item.de);
       if (typeof fh.move !== 'function')

@@ -66,7 +66,21 @@ type ArquivoDaMesa = { nome: string; file: File; mtime: number; sub: string | nu
  */
 type ItemProtocolo =
   | { kind: 'anexo'; id: string; nome: string }
-  | { kind: 'file'; file: File; nome: string; daMesa: boolean };
+  | {
+      kind: 'file';
+      file: File;
+      nome: string;
+      daMesa: boolean;
+      /**
+       * A subpasta da pasta de trabalho de onde ele veio (`null` = raiz).
+       *
+       * Vem junto com o item, e não se procura mais pelo nome. Dois clientes
+       * podem ter `01. MANIFESTACAO.pdf`, e a busca por nome devolvia a
+       * primeira ocorrência — dava para MOVER e para APAGAR o arquivo do
+       * cliente errado, sem erro nenhum no caminho.
+       */
+      sub: string | null;
+    };
 
 /** Normalização para casar nome de cliente com nome de pasta. */
 const chave = (s: string) =>
@@ -260,7 +274,13 @@ export function ArquivarPecaModal({
         ...atuais,
         ...entram
           .filter((f) => !atuais.some((i) => i.nome === f.nome))
-          .map((f) => ({ kind: 'file' as const, file: f.file, nome: f.nome, daMesa: true })),
+          .map((f) => ({
+            kind: 'file' as const,
+            file: f.file,
+            nome: f.nome,
+            daMesa: true,
+            sub: f.sub,
+          })),
       ].sort(porNome),
     );
     setSemeouPasta(true);
@@ -395,11 +415,37 @@ export function ArquivarPecaModal({
    * arquivo está na Mesa com aquele nome, é ele. Exigir que tivesse entrado
    * pela porta "certa" era a mesma armadilha de sempre — o hub sabendo a
    * resposta e fingindo que não.
+   *
+   * O nome, porém, só vale DENTRO DO PROTOCOLO: na pasta do cliente deste prazo
+   * ou solto na raiz. Nunca na pasta de OUTRO cliente — dois clientes podem ter
+   * `01. MANIFESTACAO.pdf`, e casar com o do vizinho é como o arquivamento
+   * movia e apagava arquivo alheio sem acusar nada.
    */
-  const nomesNaMesa = useMemo(
-    () => new Set((listaMesa ?? []).map((m) => m.nome)),
-    [listaMesa],
-  );
+  const acharNaMesa = (nome: string): string | null | undefined => {
+    const iguais = (listaMesa ?? []).filter((f) => f.nome === nome);
+    if (!iguais.length) return undefined;
+    const alvo = ctx.data?.cliente ? chave(ctx.data.cliente) : null;
+    // 1) na pasta do cliente deste prazo
+    const meu = iguais.find((f) => f.sub && alvo && chave(f.sub) === alvo);
+    if (meu) return meu.sub;
+    // 2) solto na raiz da pasta de trabalho
+    if (iguais.some((f) => f.sub === null)) return null;
+    // 3) só existe na pasta de OUTRO cliente. Não é este arquivo — e na dúvida
+    //    não se mexe: o passo seguinte é `removeEntry`, que não tem lixeira.
+    //    Falhar aqui custa uma pasta de trabalho por limpar, com aviso na tela;
+    //    acertar por chute custa o arquivo de outro cliente, em silêncio.
+    return undefined;
+  };
+
+  /**
+   * De onde, na pasta de trabalho, sai este item — `undefined` se não sai de lá.
+   *
+   * O item que veio da pasta já sabe a própria origem (`sub`); os outros (anexo
+   * da tarefa, arquivo arrastado) ainda dependem do nome, agora com a cerca
+   * acima.
+   */
+  const origemNaMesa = (i: ItemProtocolo): string | null | undefined =>
+    i.kind === 'file' && i.daMesa ? i.sub : acharNaMesa(i.nome);
 
   /**
    * O resto da pasta de trabalho, SEPARADO POR CLIENTE e em ordem alfabética.
@@ -417,7 +463,12 @@ export function ArquivarPecaModal({
   const grupos = useMemo(() => {
     // Só o que AINDA não está na lista de baixo: o resto já entrou sozinho, e
     // repetir na tela faria parecer que falta escolher alguma coisa.
-    const fora = (listaMesa ?? []).filter((f) => !itens.some((i) => i.nome === f.nome));
+    // Esconde o que JÁ está na lista de baixo — casando pasta E nome. Só pelo
+    // nome, o `01. MANIFESTACAO.pdf` do cliente deste prazo fazia sumir da tela
+    // o arquivo homônimo de outro cliente, que continuava lá para arquivar.
+    const fora = (listaMesa ?? []).filter(
+      (f) => !itens.some((i) => i.nome === f.nome && origemNaMesa(i) === f.sub),
+    );
     const porCliente = new Map<string, ArquivoDaMesa[]>();
     for (const f of fora) {
       const dono = f.sub ?? '';
@@ -446,9 +497,7 @@ export function ArquivarPecaModal({
       });
   }, [listaMesa, itens, ctx.data?.cliente]);
   const quantosFora = grupos.reduce((n, g) => n + g.arquivos.length, 0);
-  const estaNaMesa = (i: ItemProtocolo) => i.nome !== '' && (
-    (i.kind === 'file' && i.daMesa) || nomesNaMesa.has(i.nome)
-  );
+  const estaNaMesa = (i: ItemProtocolo) => i.nome !== '' && origemNaMesa(i) !== undefined;
 
   const todosNaMesa = itens.length > 0 && itens.every(estaNaMesa);
 
@@ -478,13 +527,29 @@ export function ArquivarPecaModal({
       ...a,
       ...novos
         .filter((f) => !a.some((i) => i.nome === f.name))
-        .map((f) => ({ kind: 'file' as const, file: f, nome: f.name, daMesa: false })),
+        .map((f) => ({ kind: 'file' as const, file: f, nome: f.name, daMesa: false, sub: null })),
     ]);
   };
 
   const pegarDaMesa = (it: ArquivoDaMesa) => {
-    if (itens.some((i) => i.nome === it.nome)) return;
-    setItens((a) => [...a, { kind: 'file', file: it.file, nome: it.nome, daMesa: true }]);
+    // Nome repetido não pode entrar duas vezes: a numeração e o pareamento no
+    // servidor são pelo nome, e o Drive aceitaria dois `01. MANIFESTACAO.pdf`
+    // na mesma pasta sem reclamar. Mas RECUSAR EM SILÊNCIO era pior — o botão
+    // não fazia nada e não dizia por quê. Agora diz de quem é o que já está lá.
+    const jaTem = itens.find((i) => i.nome === it.nome);
+    if (jaTem) {
+      const dono = origemNaMesa(jaTem);
+      toast.error(
+        dono && chave(dono) !== chave(it.sub ?? '')
+          ? `Já há um "${it.nome}" na lista, vindo de ${dono}. Tire-o antes de incluir o de ${it.sub ?? mesaNome}.`
+          : `"${it.nome}" já está na lista.`,
+      );
+      return;
+    }
+    setItens((a) => [
+      ...a,
+      { kind: 'file', file: it.file, nome: it.nome, daMesa: true, sub: it.sub },
+    ]);
   };
 
   // Espelha a regra do servidor: PDF entra numerado na ordem, editável sem
@@ -549,10 +614,15 @@ export function ArquivarPecaModal({
           itens.map((i) => i.nome),
           data,
         );
-        // O arquivo pode estar na subpasta do cliente (PROTOCOLO/<CLIENTE>/):
-        // quem sabe disso é a leitura da Mesa, que guarda o `sub` de cada um.
-        const r2 = await moverParaAPastaDoCliente(mesa, clientesDir, plano, (nome) =>
-          (listaMesa ?? []).find((f) => f.nome === nome)?.sub ?? null,
+        // O arquivo pode estar na subpasta do cliente (PROTOCOLO/<CLIENTE>/).
+        // O plano volta na MESMA ORDEM da lista (a numeração é um `map`), então
+        // casa item a item pelo índice — nunca pelo nome, que dois clientes
+        // podem ter igual.
+        const r2 = await moverParaAPastaDoCliente(
+          mesa,
+          clientesDir,
+          plano,
+          (indice) => (itens[indice] ? origemNaMesa(itens[indice]) ?? null : null),
         );
         if (!r2.movidos.length) {
           toast.error(
@@ -599,7 +669,7 @@ export function ArquivarPecaModal({
         let f: File | null = (i as any).file ?? null;
         if (mesa && (i as any).daMesa) {
           try {
-            const sub = (listaMesa ?? []).find((x) => x.nome === i.nome)?.sub ?? null;
+            const sub = (i as any).sub ?? null;
             const dono = sub ? await mesa.getDirectoryHandle(sub) : mesa;
             f = await (await dono.getFileHandle(i.nome)).getFile();
           } catch {
@@ -658,8 +728,16 @@ export function ArquivarPecaModal({
             ficou.push(i.nome);
             continue;
           }
+          // APAGAR é o passo sem volta: `removeEntry` não tem lixeira. Se não
+          // dá para dizer com certeza de qual pasta o arquivo saiu, não se
+          // apaga nada — antes ficava a busca por nome, que em caso de nome
+          // repetido apagava o arquivo do OUTRO cliente.
+          const sub = origemNaMesa(i);
+          if (sub === undefined) {
+            ficou.push(i.nome);
+            continue;
+          }
           try {
-            const sub = (listaMesa ?? []).find((f) => f.nome === i.nome)?.sub ?? null;
             const dono = sub ? await mesa.getDirectoryHandle(sub) : mesa;
             await dono.removeEntry(i.nome);
             saiu.push(i.nome);
