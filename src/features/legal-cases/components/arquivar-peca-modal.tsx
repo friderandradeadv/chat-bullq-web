@@ -75,6 +75,16 @@ const chave = (s: string) =>
 const suportaMesa = () =>
   typeof window !== 'undefined' && 'showDirectoryPicker' in window;
 
+/**
+ * A ordem em que a lista do protocolo NASCE: alfabética, com consciência de
+ * número — é o que mantém `01.` antes de `10.`, e não `01., 10., 02.`.
+ *
+ * Vale só na semeadura. Depois dela, a ordem é do advogado: as setas mandam, e
+ * é dessa ordem que sai a numeração dos PDFs.
+ */
+const porNome = (a: { nome: string }, b: { nome: string }) =>
+  a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true });
+
 /** Data de hoje no formato do escritório. */
 export function hojeDDMMAAAA() {
   const d = new Date();
@@ -193,12 +203,18 @@ export function ArquivarPecaModal({
     // SOMA, não substitui: os arquivos da pasta de trabalho podem ter entrado
     // antes (vêm do disco, que é mais rápido que a rede) e sobrescrever aqui
     // apagaria a lista deles.
-    setItens((atuais) => [
-      ...atuais,
-      ...anexosQ.data
-        .filter((a) => !atuais.some((i) => i.nome === a.name))
-        .map((a) => ({ kind: 'anexo' as const, id: a.id, nome: a.name })),
-    ]);
+    // Ordena a lista INTEIRA, não só o bloco que está entrando. As duas fontes
+    // — anexos do prazo (rede) e arquivos da pasta (disco) — chegam em corrida,
+    // e cada uma ordenando só entre si dava a lista embaralhada de 25/08/2026:
+    // `02. GUIA`, `01. MANIFESTACAO`, `03. COMPROVANTE`, o .docx, `04. …`.
+    setItens((atuais) =>
+      [
+        ...atuais,
+        ...anexosQ.data
+          .filter((a) => !atuais.some((i) => i.nome === a.name))
+          .map((a) => ({ kind: 'anexo' as const, id: a.id, nome: a.name })),
+      ].sort(porNome),
+    );
     setSemeou(true);
   }, [anexosQ.data, semeou]);
 
@@ -238,13 +254,15 @@ export function ArquivarPecaModal({
       setSemeouPasta(true);
       return;
     }
-    setItens((atuais) => [
-      ...atuais,
-      ...entram
-        .filter((f) => !atuais.some((i) => i.nome === f.nome))
-        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }))
-        .map((f) => ({ kind: 'file' as const, file: f.file, nome: f.nome, daMesa: true })),
-    ]);
+    // Ordena a lista INTEIRA — ver a nota na semeadura dos anexos.
+    setItens((atuais) =>
+      [
+        ...atuais,
+        ...entram
+          .filter((f) => !atuais.some((i) => i.nome === f.nome))
+          .map((f) => ({ kind: 'file' as const, file: f.file, nome: f.nome, daMesa: true })),
+      ].sort(porNome),
+    );
     setSemeouPasta(true);
   }, [listaMesa, semeouPasta, ctx.data?.cliente, ctx.isLoading, atividade]);
 
@@ -382,6 +400,45 @@ export function ArquivarPecaModal({
     () => new Set((listaMesa ?? []).map((m) => m.nome)),
     [listaMesa],
   );
+
+  /**
+   * O resto da pasta de trabalho, SEPARADO POR CLIENTE e em ordem alfabética.
+   *
+   * A pasta é `PROTOCOLO/<CLIENTE>/arquivos`, e a lista era plana e por data de
+   * modificação: três prazos protocolados na mesma tarde viravam uma dúzia de
+   * linhas embaralhadas, com o nome truncado e a etiqueta do cliente perdida no
+   * meio. Procurar o arquivo do Valter numa pilha assim é trabalho inventado.
+   *
+   * Cliente em ordem alfabética; dentro dele, arquivo em ordem alfabética com
+   * consciência de número (`numeric`), que é o que mantém `01.` antes de `10.`.
+   * O que estiver solto na raiz de PROTOCOLO — fora da convenção — vai para o
+   * fim, num grupo próprio, porque é exceção e é o que precisa de atenção.
+   */
+  const grupos = useMemo(() => {
+    // Só o que AINDA não está na lista de baixo: o resto já entrou sozinho, e
+    // repetir na tela faria parecer que falta escolher alguma coisa.
+    const fora = (listaMesa ?? []).filter((f) => !itens.some((i) => i.nome === f.nome));
+    const porCliente = new Map<string, ArquivoDaMesa[]>();
+    for (const f of fora) {
+      const dono = f.sub ?? '';
+      const lista = porCliente.get(dono);
+      if (lista) lista.push(f);
+      else porCliente.set(dono, [f]);
+    }
+    return [...porCliente.entries()]
+      .map(([cliente, arquivos]) => ({
+        cliente: cliente || null,
+        arquivos: arquivos.sort((a, b) =>
+          a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }),
+        ),
+      }))
+      .sort((a, b) => {
+        if (!a.cliente) return 1; // solto na raiz fecha a lista
+        if (!b.cliente) return -1;
+        return a.cliente.localeCompare(b.cliente, 'pt-BR');
+      });
+  }, [listaMesa, itens]);
+  const quantosFora = grupos.reduce((n, g) => n + g.arquivos.length, 0);
   const estaNaMesa = (i: ItemProtocolo) => i.nome !== '' && (
     (i.kind === 'file' && i.daMesa) || nomesNaMesa.has(i.nome)
   );
@@ -785,46 +842,50 @@ export function ArquivarPecaModal({
                 if (input.current) input.current.value = '';
               }}
             />
-            {(() => {
-              // Só o que AINDA não está na lista: o resto já entrou sozinho, e
-              // repetir na tela faria parecer que falta escolher alguma coisa.
-              const fora = (listaMesa ?? []).filter((f) => !itens.some((i) => i.nome === f.nome));
-              return !listaMesa ? null : (
-              <div className={fora.length ? 'mb-2 rounded-lg border border-zinc-200 dark:border-zinc-800' : 'hidden'}>
+            {!listaMesa ? null : (
+              <div className={quantosFora ? 'mb-2 rounded-lg border border-zinc-200 dark:border-zinc-800' : 'hidden'}>
                 <p className="border-b border-zinc-100 px-2.5 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
                   Também em {mesaNome} — clique para incluir
                 </p>
-                {!fora.length ? null : (
-                  <ul className="max-h-40 divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-800">
-                    {fora.map((it) => {
-                      return (
-                        <li key={it.nome}>
-                          <button
-                            type="button"
-                            onClick={() => pegarDaMesa(it)}
-                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                          >
-                            <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-                            <span className="min-w-0 flex-1 truncate text-xs text-zinc-600 dark:text-zinc-300">
-                              {it.nome}
-                            </span>
-                            {it.sub && (
-                              <span className="shrink-0 truncate rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                                {it.sub}
-                              </span>
-                            )}
-                            <span className="shrink-0 text-[10px] tabular-nums text-zinc-400">
-                              {new Date(it.mtime).toLocaleDateString('pt-BR')}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
+                {!quantosFora ? null : (
+                  <ul className="max-h-52 overflow-y-auto">
+                    {grupos.map((g) => (
+                      <li key={g.cliente ?? '(raiz)'}>
+                        {/* O cabeçalho do cliente gruda no topo: rolando uma
+                            pasta longa, ainda dá para saber de quem é a linha. */}
+                        <p className="sticky top-0 z-10 truncate border-b border-zinc-100 bg-zinc-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-400">
+                          {g.cliente ?? `Solto em ${mesaNome} — sem pasta de cliente`}
+                        </p>
+                        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                          {g.arquivos.map((it) => (
+                            // A chave leva a subpasta: dois clientes podem ter
+                            // arquivo de mesmo nome, e só o nome repetiria a chave.
+                            <li key={`${it.sub ?? ''}/${it.nome}`}>
+                              <button
+                                type="button"
+                                onClick={() => pegarDaMesa(it)}
+                                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                              >
+                                <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                                <span className="min-w-0 flex-1 truncate text-xs text-zinc-600 dark:text-zinc-300">
+                                  {it.nome}
+                                </span>
+                                {/* A etiqueta do cliente saiu da linha: agora
+                                    quem diz de quem é o arquivo é o cabeçalho
+                                    do grupo, e o nome ganhou o espaço dela. */}
+                                <span className="shrink-0 text-[10px] tabular-nums text-zinc-400">
+                                  {new Date(it.mtime).toLocaleDateString('pt-BR')}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </div>
-              );
-            })()}
+            )}
 
             {!itens.length ? (
               <button
