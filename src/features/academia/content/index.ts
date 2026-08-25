@@ -54,6 +54,8 @@ export const REGRAS_FIXAS = [
   '- Fale como um advogado experiente explicando a um colega novo: natural, com frases ligadas por conectivos, ritmo de conversa.',
   '- NÃO leia como quem lê tópicos de slide e NÃO enfileire frases curtas soltas. Isso soa robótico.',
   '- Economia é cortar o que não informa — não é falar truncado. Cada frase carrega informação nova; a ligação entre elas deve ser fluida.',
+  '- NÃO anuncie a numeração do roteiro em voz alta ("Seção 1", "item 2", "parte 3"). O roteiro é a sua ordem interna, não o texto falado: passe de um assunto ao outro com transição de fala.',
+  '- Ao contrapor duas coisas, diga "ou" ou "e", nunca "contra" — "Ajuda ou Academia", jamais "Ajuda contra Academia".',
   '',
   'ECONOMIA',
   '- Comece pelo conteúdo. Nada de saudação longa, acolhimento emocional nem preâmbulo sobre como é o primeiro dia. A primeira frase já deve ensinar alguma coisa.',

@@ -17,7 +17,7 @@ export const COMECE_POR_AQUI: Trilha = {
         fonte: 'url',
         url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/como-usar.mp4',
         legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/como-usar.vtt',
-        duracao: '2 min',
+        duracao: '3 min',
       },
       manual: [
         '## O que é a Academia',
