@@ -40,6 +40,10 @@ export const OBRIGATORIAS = ['comece', 'hub', 'teses', 'claude', 'prazos'];
  *    frase dentro da narração ("a fase judicial, onde o objetivo da ação é
  *    demonstrado"). Regra com exemplo de vocabulário vira vocabulário;
  *  - "Cloud": o vídeo chamou o Claude de Cloud, duas vezes;
+ *  - atribuição errada: o vídeo de Conversas disse que "o Claude faz a
+ *    recepção e a triagem" do WhatsApp. É falso — quem atende são os agentes
+ *    do hub. O modelo conflaciona porque "Claude" aparece muito na Academia,
+ *    então a fonte E a regra precisam separar as duas coisas;
  *  - voz e ritmo: a 1ª versao das regras de economia mandava "uma ideia por
  *    frase, frase curta" e o 3º vídeo saiu truncado, lendo como lista de
  *    tópicos. Economia é cortar o que não informa, não falar picado — e isso
@@ -70,6 +74,7 @@ export const REGRAS_FIXAS = [
   '- Não use inglês: nem na narração, nem em rótulo, título ou legenda que apareça na tela.',
   '- O escritório se chama "Frider Andrade - Advogados". Nunca "Advocacia".',
   '- "Claude" é nome próprio: diga e escreva Claude. Nunca "Cloud".',
+  '- NÃO atribua ao Claude o atendimento de cliente. Quem responde WhatsApp são os agentes de IA do hub; o Claude é a ferramenta de peça e pesquisa. Não troque um pelo outro.',
 ].join('\n');
 
 /** O prompt como ele deve ser colado no NotebookLM: o da aula + as regras fixas. */
