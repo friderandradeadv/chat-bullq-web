@@ -50,6 +50,8 @@ export const COMECE_POR_AQUI: Trilha = {
         '',
         '## Como cada aula funciona',
         '',
+        '![A Academia: as trilhas à esquerda, a aula aberta à direita, o progresso e a busca no topo](https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints/academia-visao-geral.png)',
+        '',
         '- **Vídeo** no topo, quando já existe. Aula sem vídeo tem o manual completo, que vale sozinho.',
         '- **Manual escrito** — é o procedimento. É ele que se consulta depois.',
         '- **Você consegue fazer sozinho** — a lista do que você tem que conseguir executar ao fim da aula. Se não conseguir um item, volte à aula ou pergunte.',
