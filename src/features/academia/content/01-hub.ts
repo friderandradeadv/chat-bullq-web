@@ -293,6 +293,8 @@ export const HUB: Trilha = {
         '- **Cálculo** salvo, que vira valor da causa e depois valor da execução.',
         '- **Apensos** — processos ligados (recurso registrado vira apenso automaticamente).',
         '',
+        '![A ficha do processo: as etiquetas, o juízo em formato curto, o valor da causa, as abas Resumo/Atividades/Recursos/Histórico e, à direita, a conversa do cliente e os prazos abertos](https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints/processo-ficha.png)',
+        '',
         '## Documentos do cliente',
         '',
         'Os documentos vivem na **pasta do cliente no Google Drive**. O hub guarda o ponteiro, não o arquivo. Duas consequências práticas:',
