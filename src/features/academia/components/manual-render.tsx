@@ -27,7 +27,8 @@ function Inline({ text }: { text: string }) {
 
 type Bloco =
   | { t: 'h2' | 'h3' | 'p' | 'quote'; texto: string }
-  | { t: 'ul' | 'ol'; itens: string[] };
+  | { t: 'ul' | 'ol'; itens: string[] }
+  | { t: 'img'; src: string; legenda: string };
 
 function parse(md: string): Bloco[] {
   const linhas = md.split('\n');
@@ -48,6 +49,13 @@ function parse(md: string): Bloco[] {
     }
     if (l.startsWith('## ')) {
       blocos.push({ t: 'h2', texto: l.slice(3) });
+      i++;
+      continue;
+    }
+    // ![legenda](url) — print do hub, numa linha só.
+    const img = l.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (img) {
+      blocos.push({ t: 'img', legenda: img[1], src: img[2] });
       i++;
       continue;
     }
@@ -130,6 +138,23 @@ export function ManualRender({ md, cor }: { md: string; cor: string }) {
                 </li>
               ))}
             </ol>
+          );
+        if (b.t === 'img')
+          return (
+            <figure key={i} className="my-4">
+              {/* Print de tela: largura total, sem corte, e clicável para ver grande. */}
+              <a href={b.src} target="_blank" rel="noreferrer" className="block">
+                <img
+                  src={b.src}
+                  alt={b.legenda}
+                  loading="lazy"
+                  className="w-full rounded-xl border border-zinc-200 shadow-sm transition hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700"
+                />
+              </a>
+              {b.legenda && (
+                <figcaption className="mt-1.5 text-center text-xs text-zinc-400">{b.legenda}</figcaption>
+              )}
+            </figure>
           );
         if (b.t === 'p')
           return (
