@@ -11,6 +11,12 @@ export const CLAUDE: Trilha = {
     {
       id: 'o-que-e',
       videoPlanejado: true,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/o-que-e.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/o-que-e.vtt',
+        duracao: '3:29',
+      },
       titulo: 'O que o Claude é aqui — e o que ele não é',
       resumo: 'O papel da IA no escritório e o limite que não se atravessa.',
       minutos: 8,
