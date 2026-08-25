@@ -11,6 +11,12 @@ export const HUB: Trilha = {
     {
       id: 'visao-geral',
       videoPlanejado: true,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/visao-geral.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/visao-geral.vtt',
+        duracao: '3:38',
+      },
       titulo: 'Visão geral: a lógica do hub',
       resumo: 'A lógica do sistema: uma conversa vira lead, vira cliente, vira processo, vira dinheiro.',
       minutos: 8,
