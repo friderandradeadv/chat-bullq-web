@@ -139,14 +139,18 @@ def slide_frase(dados):
     """Uma frase só, grande. Para os momentos em que a narração vira lema."""
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    f = fonte('playfair', dados.get('corpo', 68), 500)
-    y = (H - len(dados['linhas']) * 92 * ESC) / 2
+    corpo = dados.get('corpo', 68)
+    f = fonte('playfair', corpo, 500)
+    # o passo acompanha o corpo: com passo fixo, uma frase grande (os "10 dias"
+    # do vídeo de prazos, a 92pt) encavalava o rodape em cima dela.
+    passo = corpo * 1.35 * ESC
+    y = (H - len(dados['linhas']) * passo) / 2
     for linha in dados['linhas']:
         d.text(((W - largura(d, linha, f)) / 2, y), linha, font=f, fill=PAPEL)
-        y += 92 * ESC
+        y += passo
     if dados.get('rodape'):
         fr = fonte('inter', 24)
-        d.text(((W - largura(d, dados['rodape'], fr)) / 2, y + 24 * ESC),
+        d.text(((W - largura(d, dados['rodape'], fr)) / 2, y + 30 * ESC),
                dados['rodape'], font=fr, fill=CINZA)
     assinatura(d)
     return im
@@ -210,8 +214,37 @@ def slide_contraste(dados):
     return im
 
 
+def slide_lista(dados):
+    """Lista longa (as 8 trilhas, os 7 passos da linha da vida). Uma ou duas
+    colunas, com o item corrente aceso e os demais recuados — a tela acompanha
+    a narração em vez de despejar tudo de uma vez."""
+    im, d = novo()
+    moldura(im, d, dados.get('secao'))
+    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    itens = dados['itens']
+    aceso = dados.get('aceso')          # 1-based; None acende todos
+    duas = len(itens) > 6
+    por_col = (len(itens) + 1) // 2 if duas else len(itens)
+    fn = fonte('playfair', 30, 500)
+    ft = fonte('inter', 27 if duas else 31)
+    passo = 62 * ESC if duas else 76 * ESC
+    for i, item in enumerate(itens, 1):
+        col, lin = ((i - 1) // por_col, (i - 1) % por_col) if duas else (0, i - 1)
+        x = 96 * ESC + col * (W / 2 - 40 * ESC)
+        y = 220 * ESC + lin * passo
+        vivo = aceso is None or i == aceso
+        d.text((x, y), f'{i}', font=fn, fill=VERMELHO if (aceso and i == aceso) else FIO)
+        d.text((x + 46 * ESC, y + 4 * ESC), item, font=ft,
+               fill=PAPEL if vivo else '#5A6165')
+        y += passo
+    if dados.get('rodape'):
+        d.text((96 * ESC, H - 130 * ESC), dados['rodape'], font=fonte('inter', 23), fill=CINZA)
+    assinatura(d)
+    return im
+
+
 TIPOS = {'abertura': slide_abertura, 'frase': slide_frase, 'tela': slide_tela,
-         'passos': slide_passos, 'contraste': slide_contraste}
+         'passos': slide_passos, 'contraste': slide_contraste, 'lista': slide_lista}
 
 BASE_PRINTS = 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints'
 
