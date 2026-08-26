@@ -847,8 +847,20 @@ export function ArquivarPecaModal({
                 )}
                 {!!ctx.data && ctx.data.sugeridas.length > 1 && (
                   <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
-                    Este cliente tem {ctx.data.sugeridas.length} pastas dessa fase (produtos
-                    diferentes). Escolha a do réu certo.
+                    {(() => {
+                      // O backend ja descarta o que o processo contradiz (produto e
+                      // reu). Quando o que sobra mora TUDO na mesma pasta-mae, o que
+                      // falta e so a ultima camada — a especie do recurso, tipicamente —
+                      // e mandar "escolha a do reu certo" seria pedir de novo o que a
+                      // maquina ja resolveu. Cobrado em 25/08/2026 no agravo do NELIO.
+                      const caminhos = ctx.data!.sugeridas;
+                      const maes = new Set(caminhos.map((c) => c.slice(0, -1).join(' › ')));
+                      if (maes.size === 1) {
+                        const mae = [...maes][0];
+                        return `Falta só a espécie, dentro de ${mae}: escolha para qual recurso esta peça vai.`;
+                      }
+                      return `Este cliente tem ${caminhos.length} pastas dessa fase (produtos ou réus diferentes). Escolha a do réu certo.`;
+                    })()}
                   </p>
                 )}
               </>

@@ -1346,9 +1346,35 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // caminho do prazo de "Apelação" FANTASMA lançado num processo já extinto). Guarda
   // legada: cards novos já vêm com título "Ciência — desistência homologada" (sem
   // recurso); isto protege as tarefas antigas ainda rotuladas "Analisar sentença".
-  const isDesistenciaHomologada =
+  const mencionaDesistenciaHomologada =
     /homolog\w+[^.]{0,45}(?:desist|ren[úu]nci)/i.test(decisaoTxt) ||
     /(?:julgo\s+extint\w*|exting[o]\s+o\s+(?:processo|feito))[^.]{0,80}(?:desist|ren[úu]nci)/i.test(decisaoTxt);
+  // ⚠️ A homologação só encerra a discussão quando é ESTE o ato publicado. Três
+  // situações em que o texto CITA a homologação e mesmo assim há recurso e prazo
+  // correndo — se o aviso aparecer nelas, o associado deixa passar prazo fatal.
+  // Medido em 25/08/2026 no agravo interno do NELIO, cuja monocrática dizia
+  // "contra a r. sentença [...] que homologou o pedido de desistência" e no mesmo
+  // card trazia prazo fatal de recolhimento em 02/09.
+  //
+  //  1. Decisão de 2º GRAU: a monocrática ou o acórdão da apelação interposta
+  //     CONTRA a sentença homologatória apenas se refere a ela. Ali cabe agravo
+  //     interno e embargos, e o prazo é fatal.
+  //  2. Publicação que MANDA RECOLHER (preparo, custas) ou indefere gratuidade:
+  //     há ato a praticar, sob pena de deserção.
+  //  3. Texto que se diz interposto CONTRA a sentença: é a peça de recurso, não
+  //     a homologação.
+  const decisaoDeSegundoGrau = isAcordao || grade === '2º Grau';
+  const impoeAtoComPrazo =
+    /deser[çc][ãa]o/i.test(decisaoTxt) ||
+    /(?:recolh\w+|preparo|custas)[^.]{0,90}(?:sob\s+pena|pena\s+de)/i.test(decisaoTxt) ||
+    /indefiro[^.]{0,60}gratuidade|gratuidade[^.]{0,60}indefer\w+/i.test(decisaoTxt);
+  const recorreDaSentenca =
+    /(?:contra|em\s+face\s+d[ae])\s+(?:a\s+)?r?\.?\s*senten[çc]a/i.test(decisaoTxt);
+  const isDesistenciaHomologada =
+    mencionaDesistenciaHomologada &&
+    !decisaoDeSegundoGrau &&
+    !impoeAtoComPrazo &&
+    !recorreDaSentenca;
   const isDecisaoAnalise = isDecisaoBase && (isDecisaoTitulo || isAcordao) && !isDesistenciaHomologada;
   const ementaAcordao = isAcordao ? extractEmentaClient(activity.recorte ?? activity.dispositivo) : null;
 
@@ -1902,8 +1928,9 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             Sentença (1º grau): Apelação, Embargos de Declaração. */}
         {isDesistenciaHomologada && (
           <div className="mt-5 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
-            <p className="font-semibold">Desistência homologada — processo extinto</p>
-            <p className="mt-1">O desfecho é o que a parte autora requereu: <strong>não há recurso a interpor</strong>. Apenas dar ciência e acompanhar o trânsito/arquivamento. Não lance prazo de apelação/embargos.</p>
+            <p className="font-semibold">Desistência homologada — extinção a pedido da parte</p>
+            <p className="mt-1">Quanto ao <strong>mérito</strong> não há o que recorrer: o desfecho é o que a parte autora requereu.</p>
+            <p className="mt-1"><strong>Confira os capítulos acessórios antes de dispensar o recurso.</strong> Custas, honorários, multa e condenação do patrono são recorríveis por apelação, e o prazo corre normalmente. Só não lance prazo se a sentença se limitou a homologar a desistência.</p>
           </div>
         )}
         {isDecisaoAnalise && (
