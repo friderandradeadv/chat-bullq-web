@@ -220,7 +220,7 @@ export const FASE_JUDICIAL: Trilha = {
         '',
         '## Contrato digital: o que olhar',
         '',
-        '- Há **certificação ICP-Brasil**? Assinatura eletrônica simples não tem a mesma força.',
+        '- Há **certificação ICP-Brasil**? Assinatura eletrônica simples não tem a mesma força — mas atenção: isso é pergunta de investigação, não tese de peça. O STJ decidiu em março de 2026 que a falta de ICP-Brasil, sozinha, não anula o contrato digital.',
         '- Qual o **intervalo entre a abertura e a assinatura**? Assinatura "relâmpago" (segundos) é indício de que ninguém leu nada.',
         '- Há **geolocalização, IP e device** compatíveis com a cliente?',
         '- As **faturas mostram compras**? Cartão consignado sem nenhuma compra em anos é cartão que nunca foi usado como cartão.',

@@ -255,6 +255,8 @@ export const CLAUDE: Trilha = {
         'A regra do escritório: **lê-se a réplica já protocolada** para decidir.',
         '',
         '- A réplica **não** pediu perícia → alegações finais com **pedido de julgamento antecipado**, reforçando as teses (assinatura relâmpago, contrato sem certificação ICP-Brasil, faturas sem compras, ausência de uso, prova emprestada, laudo do assistente técnico).',
+        '',
+        '> ⚠️ Confira a ordem dos argumentos antes de protocolar: a ausência de ICP-Brasil deixou de ser pilar depois do julgado do STJ de março de 2026. Ela pode aparecer no conjunto, mas quem lidera são os indícios concretos de fraude.',
         '- A réplica **pediu** perícia → especificação pertinente ao tipo: contrato digital, contrato físico, perícia de áudio ou perícia contábil.',
         '',
         '## Recurso',
