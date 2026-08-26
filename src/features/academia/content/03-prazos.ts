@@ -15,7 +15,7 @@ export const PRAZOS: Trilha = {
         fonte: 'url',
         url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/como-chega.mp4',
         legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/como-chega.vtt',
-        duracao: '3:37',
+        duracao: '2:52',
       },
       titulo: 'Como o prazo chega até você',
       resumo: 'DJEN, portal do tribunal, Projudi e as armadilhas de cada caminho.',
