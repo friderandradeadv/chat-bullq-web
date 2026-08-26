@@ -26,6 +26,8 @@ export const HUB: Trilha = {
         'O hub (**hub.friderandrade.com.br**) é o sistema próprio do escritório. Ele reúne em um lugar só o atendimento por WhatsApp, o funil comercial, o kanban dos processos, os prazos, a agenda, o financeiro, o RH e as calculadoras.',
         '',
         '## A linha da vida de um caso',
+        '![O Funil, no bloco Comercial: cada lead é um card e caminha da Recepção até a assinatura no ZapSign. Os nomes estão borrados de propósito — o que importa aqui são as colunas.](https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints/funil-comercial.png)',
+        '',
         '',
         '1. **Conversa** — a pessoa chama no WhatsApp. A IA atende, qualifica e faz a triagem.',
         '2. **Lead** — vira card no kanban comercial. Documento, proposta, contrato pelo ZapSign.',
@@ -298,6 +300,8 @@ export const HUB: Trilha = {
       minutos: 10,
       manual: [
         '## O que a ficha guarda',
+        '',
+        '![A ficha de um processo: cabeçalho com as partes, número, juízo e valor da causa; à direita o cliente com atalho para a conversa, as próximas atividades e os prazos abertos.](https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints/ficha-processo.png)',
         '',
         '- **Número do CNJ**, comarca, vara e juízo — no formato curto (ex.: 2ª Vara Cível de Maringá/PR), sempre vindo do DataJud, nunca digitado de cabeça.',
         '- **Partes** — cliente e parte adversa, com CPF/CNPJ. É daqui que a peça puxa a qualificação.',
