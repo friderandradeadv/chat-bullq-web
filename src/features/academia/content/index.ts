@@ -68,7 +68,7 @@ export const REGRAS_FIXAS = [
   '- Não ultrapasse a duração pedida no início do prompt. Se não couber, CORTE CONTEÚDO — não acelere a fala nem encurte as pausas.',
   '',
   'PROIBIÇÕES',
-  '- Não prometa resultado processual, valor nem prazo de recebimento (art. 41 do Código de Ética da OAB).',
+  '- Não prometa resultado processual, valor nem prazo de recebimento (art. 6º do Provimento 205/2021 da OAB e art. 9º do Código de Ética).',
   '- Não cite nome de cliente, número de processo nem valor recebido.',
   '- Não mencione ferramenta que a fonte não descreva como em uso hoje.',
   '- Não use inglês: nem na narração, nem em rótulo, título ou legenda que apareça na tela.',
