@@ -442,6 +442,8 @@ export const HUB: Trilha = {
       manual: [
         '## As calculadoras do hub',
         '',
+        '![As calculadoras do escritório: cada card explica o que a ferramenta faz e sobre que base legal. É daqui que sai o número que vai na peça — nunca de conta feita à mão.](https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints/calculadoras.png)',
+        '',
         '- **RMC / RCC** — o cálculo da tese bancária: o que foi descontado, o que seria devido, a diferença e a repetição.',
         '- **Revisional** — recálculo de contrato de empréstimo.',
         '- **Trabalhista** — rescisão e verbas.',
@@ -563,6 +565,8 @@ export const HUB: Trilha = {
       minutos: 6,
       manual: [
         '## Meu Espaço',
+        '',
+        '![O Meu Espaço: aqui cada pessoa vê o próprio holerite, os próprios processos e os clientes que já lhe renderam honorários. O financeiro do escritório é outro módulo, e é restrito.](https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints/meu-espaco.png)',
         '',
         '- **Perfil** — sua foto, bio, OAB, frase. Você mesmo edita.',
         '- **Meu Contrato** — o contrato assinado, disponível para você consultar quando quiser.',
