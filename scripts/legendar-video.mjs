@@ -118,6 +118,56 @@ if (naoNormalizadas > 0) {
   process.exit(6);
 }
 
+// VALIDACAO SEMANTICA — formato valido nao basta.
+// Em 25/08 o Gemini emitiu "01:01:11.000" num video de 3:28: formato impecavel,
+// valor absurdo. A deixa anterior ficava eternamente na tela e as seguintes
+// nunca apareciam. O navegador nao reclama; a legenda simplesmente morre no meio.
+// Aconteceu em 2 dos 6 videos ja publicados, e passou batido pela checagem antiga.
+const emSegundos = (t) => {
+  const [h, m, r] = t.split(':');
+  const [s, ms] = r.split('.');
+  return +h * 3600 + +m * 60 + +s + +ms / 1000;
+};
+const linhas = vtt.split('\n');
+const idxDeixas = linhas.map((l, i) => (l.includes('-->') ? i : -1)).filter((i) => i >= 0);
+
+// Conserto do padrao conhecido: hora espuria. Se zerar a hora de TODAS as deixas
+// torna a sequencia coerente, o tempo real era esse. So aplico se resolver de fato.
+const problemas = (linhasDeixa) => {
+  const p = [];
+  let anterior = -1;
+  linhasDeixa.forEach((l, n) => {
+    const [a, b] = l.split('-->').map((x) => x.trim().split(/\s+/)[0]);
+    const ini = emSegundos(a);
+    const fim = emSegundos(b);
+    if (fim <= ini) p.push(`#${n + 1} termina antes de comecar (${a} -> ${b})`);
+    if (ini < anterior) p.push(`#${n + 1} volta no tempo (${a} depois de ${b})`);
+    if (fim - ini > 15) p.push(`#${n + 1} dura ${Math.round(fim - ini)}s (${a} -> ${b})`);
+    anterior = fim;
+  });
+  return p;
+};
+
+let deixas = idxDeixas.map((i) => linhas[i]);
+if (problemas(deixas).length > 0) {
+  const zeradas = deixas.map((l) => l.replace(/(^|> )\d\d:/g, '$100:'));
+  if (problemas(zeradas).length === 0) {
+    console.warn('⚠️  hora espuria nos timestamps do Gemini — zerei a hora e a sequencia fechou.');
+    idxDeixas.forEach((i, n) => { linhas[i] = zeradas[n]; });
+    deixas = zeradas;
+    vtt = linhas.join('\n');
+  }
+}
+
+const restantes = problemas(deixas);
+if (restantes.length > 0) {
+  console.error('Timestamps incoerentes — nao gravo legenda que morre no meio:');
+  restantes.slice(0, 8).forEach((p) => console.error('  ' + p));
+  if (restantes.length > 8) console.error(`  ... e mais ${restantes.length - 8}`);
+  process.exit(7);
+}
+console.log(`⏱️  ${deixas.length} deixas coerentes, termina em ${(emSegundos(deixas[deixas.length - 1].split('-->')[1].trim().split(/\s+/)[0]) / 60).toFixed(2)} min.`);
+
 if (!vtt.startsWith('WEBVTT')) {
   // Sem o cabeçalho o navegador ignora a faixa inteira, calado. Melhor falhar aqui.
   console.error('A resposta não começa com WEBVTT — não vou gravar um .vtt inválido.');
