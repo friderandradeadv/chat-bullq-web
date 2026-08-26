@@ -75,6 +75,15 @@ cat <<SNIPPET
         legendas: '$BASE/$SLUG.vtt',
       },
 SNIPPET
+# ARQUIVO LOCAL: o mp4 baixado do Gemini cai solto na Mesa. Depois de publicado
+# ele já cumpriu o papel aqui, mas o original vale guardar (regerar custa cota).
+# Vai para uma pasta única em vez de ficar espalhado pelo Desktop.
+ARQUIVO="$HOME/Desktop/VIDEOS ACADEMIA"
+mkdir -p "$ARQUIVO"
+if [ "$(cd "$(dirname "$MP4")" && pwd)" != "$ARQUIVO" ]; then
+  mv "$MP4" "$ARQUIVO/" && echo "📁 original arquivado em ~/Desktop/VIDEOS ACADEMIA/$(basename "$MP4")"
+fi
+
 echo
 echo "⚠️  Assista com a legenda ligada antes de considerar pronto: a marcação de"
 echo "    tempo do Gemini erra em fala rápida, e legenda dessincronizada é pior"

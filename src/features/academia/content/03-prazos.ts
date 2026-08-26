@@ -11,6 +11,12 @@ export const PRAZOS: Trilha = {
     {
       id: 'como-chega',
       videoPlanejado: true,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/como-chega.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/como-chega.vtt',
+        duracao: '3:37',
+      },
       titulo: 'Como o prazo chega até você',
       resumo: 'DJEN, portal do tribunal, Projudi e as armadilhas de cada caminho.',
       minutos: 10,
@@ -62,7 +68,7 @@ export const PRAZOS: Trilha = {
         'ROTEIRO:',
         '1. As fontes: DJEN como fonte principal, portal do tribunal, Projudi e as intimações por oficial ou carta.',
         '2. A armadilha do ponteiro: cerca de um quarto das publicações não traz o teor, e o card ganha selo de ato cego, que significa "houve algo aqui e ninguém sabe o quê". A instrução é abrir os autos hoje, não amanhã.',
-        '3. A armadilha dos 10 dias: intimação disponibilizada no portal e não aberta se considera realizada ao fim do prazo de consulta, então acumular faz o prazo já estar correndo quando a pessoa abrir.',
+        '3. A armadilha dos 10 dias. DIGA O NÚMERO EM VOZ ALTA: intimação disponibilizada no portal e não aberta se considera lida em 10 DIAS CORRIDOS. Quem acumula descobre o prazo já correndo há dias. O número é o conteúdo desta parte — não o substitua por "ao fim do prazo de consulta".',
         '4. O que o classificador faz: lê o teor, identifica o ato, calcula prazo, cria item na agenda e move o card.',
         '5. O que ele não faz: não abre autos, não conhece a estratégia, não resolve ambiguidade sobre de quem é o prazo.',
         '6. Feche com a rotina: todo dia, mesmo horário, tratar até zerar. Cite que o manual do associado exige tratamento diário sem exceções.',
