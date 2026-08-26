@@ -64,6 +64,20 @@ interface ChatInputProps {
     parameters: string[];
     previewText: string;
   }) => Promise<void>;
+  /**
+   * Agenda um template HSM para uma data futura. Existe separado de `onSchedule`
+   * porque quem está fora da janela de 24h não recebe texto puro: o disparo
+   * agendado falharia com 131047 na hora de sair.
+   */
+  onScheduleTemplate?: (
+    payload: {
+      name: string;
+      language: string;
+      parameters: string[];
+      previewText: string;
+    },
+    scheduledAtISO: string,
+  ) => Promise<void>;
   disabled?: boolean;
 }
 
@@ -74,12 +88,14 @@ interface PendingFile {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
-  { onSend, onSendAudio, onSendInternal, onSendMedia, onSendContact, onGenerateSummary, onSchedule, sendingFrom, signatureName, quickReplies, contactName, onSendRemoteAttachment, channelId, onSendTemplate, disabled },
+  { onSend, onSendAudio, onSendInternal, onSendMedia, onSendContact, onGenerateSummary, onSchedule, sendingFrom, signatureName, quickReplies, contactName, onSendRemoteAttachment, channelId, onSendTemplate, onScheduleTemplate, disabled },
   ref,
 ) {
   const [text, setText] = useState('');
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  /** Data escolhida no popover; !== null abre o seletor em modo AGENDAR. */
+  const [templateScheduleAt, setTemplateScheduleAt] = useState<Date | null>(null);
   const [internalMode, setInternalMode] = useState(false);
   const [signatureOn, setSignatureOn] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -548,6 +564,20 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           onSend={onSendTemplate}
         />
       )}
+      {templateScheduleAt && onScheduleTemplate && channelId && (
+        <TemplatePickerModal
+          channelId={channelId}
+          contactName={contactName}
+          confirmLabel="Agendar template"
+          contextNote={`Vai sair em ${formatScheduledPreview(templateScheduleAt)}`}
+          onClose={() => setTemplateScheduleAt(null)}
+          onSend={async (payload) => {
+            await onScheduleTemplate(payload, templateScheduleAt.toISOString());
+            setTemplateScheduleAt(null);
+            setScheduleOpen(false);
+          }}
+        />
+      )}
       {/* Top row — Nota interna toggle + Gerar resumo */}
       <div className="mb-2 flex items-center gap-3">
         {onSendInternal && (
@@ -787,6 +817,28 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 <p className={`mt-1.5 text-[11px] ${parsedSchedule ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
                   {parsedSchedule ? `→ ${formatScheduledPreview(parsedSchedule)}` : 'Não entendi a data — tente "amanhã às 7h"'}
                 </p>
+              )}
+
+              {/* Fora da janela de 24h, texto puro falha no disparo (131047):
+                  o único que atravessa é o template aprovado. */}
+              {onScheduleTemplate && channelId && (
+                <>
+                  <div className="my-2 border-t border-zinc-100 dark:border-zinc-800" />
+                  <button
+                    type="button"
+                    disabled={!parsedSchedule || isScheduling}
+                    onClick={() => parsedSchedule && setTemplateScheduleAt(parsedSchedule)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <MessageSquareText className="h-4 w-4 text-zinc-500" />
+                    <span className="flex-1">Agendar um template aprovado</span>
+                  </button>
+                  <p className="px-2.5 text-[11px] leading-snug text-zinc-400">
+                    {parsedSchedule
+                      ? 'Use quando o cliente estiver fora da janela de 24h — texto comum não sai.'
+                      : 'Escolha antes a data acima.'}
+                  </p>
+                </>
               )}
 
               <div className="mt-2 flex items-center justify-between">

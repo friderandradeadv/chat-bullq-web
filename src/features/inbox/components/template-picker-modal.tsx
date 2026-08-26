@@ -17,6 +17,13 @@ interface Props {
     parameters: string[];
     previewText: string;
   }) => Promise<void>;
+  /**
+   * Rótulo da ação de confirmar. O mesmo seletor serve para enviar agora e para
+   * agendar; só o verbo muda, e o usuário precisa ver qual dos dois vai fazer.
+   */
+  confirmLabel?: string;
+  /** Linha de contexto no topo (ex.: a data para a qual o template vai). */
+  contextNote?: string | null;
 }
 
 /** Substitui {{1}}, {{2}}, … pelos valores (ou mantém o placeholder se vazio). */
@@ -27,7 +34,14 @@ function fill(body: string, params: string[]): string {
   });
 }
 
-export function TemplatePickerModal({ channelId, contactName, onClose, onSend }: Props) {
+export function TemplatePickerModal({
+  channelId,
+  contactName,
+  onClose,
+  onSend,
+  confirmLabel = 'Enviar template',
+  contextNote,
+}: Props) {
   const [templates, setTemplates] = useState<WaTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<WaTemplate | null>(null);
@@ -111,7 +125,7 @@ export function TemplatePickerModal({ channelId, contactName, onClose, onSend }:
             ) : (
               <MessageSquareText className="h-4 w-4 text-primary" />
             )}
-            {selected ? selected.name : 'Enviar template'}
+            {selected ? selected.name : confirmLabel}
           </h3>
           <button
             onClick={onClose}
@@ -124,6 +138,11 @@ export function TemplatePickerModal({ channelId, contactName, onClose, onSend }:
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-3 py-3">
+          {contextNote && (
+            <p className="mb-2 rounded-lg bg-primary/5 px-3 py-2 text-[12px] font-medium text-primary">
+              {contextNote}
+            </p>
+          )}
           {loading ? (
             <div className="flex items-center justify-center py-10 text-zinc-400">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -233,7 +252,7 @@ export function TemplatePickerModal({ channelId, contactName, onClose, onSend }:
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Enviar template
+              {confirmLabel}
             </button>
           </div>
         )}

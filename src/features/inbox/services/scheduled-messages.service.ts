@@ -14,12 +14,25 @@ export interface ScheduledAnexo {
   url: string;
 }
 
+/**
+ * Template HSM agendado. Existe porque cliente FORA da janela de 24h só recebe
+ * template aprovado: agendar texto puro pra ele falha no disparo (131047).
+ * O backend já roteava `type: 'TEMPLATE'` pro `sendManualTemplate`; o que
+ * faltava era a web oferecer a opção.
+ */
+export interface ScheduledTemplate {
+  name: string;
+  language: string;
+  parameters: string[];
+  previewText: string;
+}
+
 export interface ScheduledMessage {
   id: string;
   conversationId: string;
   channelId: string;
   type: string;
-  content: { text?: string };
+  content: { text?: string; template?: ScheduledTemplate };
   /** Resolvido pelo backend: vazio = a mensagem vai sem anexo. */
   anexos?: ScheduledAnexo[];
   scheduledAt: string;
@@ -43,14 +56,24 @@ export const scheduledMessagesService = {
     return data.data;
   },
 
+  /**
+   * Agenda texto simples ou template aprovado. Passando `template`, sai como
+   * `type: 'TEMPLATE'` e o worker entrega pelo caminho do HSM, que é o único
+   * que atravessa a janela de 24h. O `previewText` também vai em `content.text`
+   * porque é dele que a barra de agendadas monta a prévia.
+   */
   async create(payload: {
     conversationId: string;
-    text: string;
+    text?: string;
     scheduledAt: string;
+    template?: ScheduledTemplate;
   }): Promise<ScheduledMessage> {
     const { data } = await api.post('/scheduled-messages', {
       conversationId: payload.conversationId,
-      content: { text: payload.text },
+      type: payload.template ? 'TEMPLATE' : 'TEXT',
+      content: payload.template
+        ? { text: payload.template.previewText, template: payload.template }
+        : { text: payload.text ?? '' },
       scheduledAt: payload.scheduledAt,
     });
     return data.data;

@@ -187,6 +187,12 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
   const [text, setText] = useState(item.content?.text ?? '');
   const [when, setWhen] = useState(toLocalInput(item.scheduledAt));
   const [busy, setBusy] = useState(false);
+  /**
+   * Template aprovado tem conteúdo fixo pela Meta: dá para remarcar a data, não
+   * para reescrever o texto. E mandar `text` no update sobrescreveria
+   * `content.template`, deixando a agendada sem HSM para disparar.
+   */
+  const isTemplate = item.type === 'TEMPLATE';
 
   const cancel = async () => {
     setBusy(true);
@@ -203,7 +209,7 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
 
   const save = async () => {
     const trimmed = text.trim();
-    if (!trimmed) {
+    if (!isTemplate && !trimmed) {
       toast.error('A mensagem não pode ficar vazia.');
       return;
     }
@@ -214,7 +220,10 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
     }
     setBusy(true);
     try {
-      await scheduledMessagesService.update(item.id, { text: trimmed, scheduledAt: d.toISOString() });
+      await scheduledMessagesService.update(
+        item.id,
+        isTemplate ? { scheduledAt: d.toISOString() } : { text: trimmed, scheduledAt: d.toISOString() },
+      );
       toast.success('Agendamento atualizado');
       setEditing(false);
       onChanged();
@@ -228,12 +237,26 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
   if (editing) {
     return (
       <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={3}
-          className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-        />
+        {isTemplate ? (
+          <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+              Template {item.content?.template?.name ?? ''}
+            </p>
+            <p className="whitespace-pre-wrap break-words text-sm text-zinc-600 dark:text-zinc-300">
+              {item.content?.text}
+            </p>
+            <p className="mt-1.5 text-[11px] text-zinc-400">
+              O texto vem do template aprovado e não pode ser editado aqui. Dá para remarcar a data.
+            </p>
+          </div>
+        ) : (
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+        )}
         <ScheduledAnexos anexos={item.anexos} tom="escuro" />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
@@ -268,6 +291,11 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="whitespace-pre-wrap break-words text-sm text-zinc-800 dark:text-zinc-100">
+            {item.type === 'TEMPLATE' && (
+              <span className="mr-1.5 inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-primary">
+                Template
+              </span>
+            )}
             {item.content?.text}
           </p>
           <ScheduledAnexos anexos={item.anexos} tom="escuro" />

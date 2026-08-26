@@ -1820,6 +1820,26 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                 ? handleSendTemplate
                 : undefined
             }
+            onScheduleTemplate={
+              conversation.channel.type.startsWith('WHATSAPP')
+                ? async (payload, scheduledAtISO) => {
+                    try {
+                      await scheduledMessagesService.create({
+                        conversationId: conversation.id,
+                        template: payload,
+                        scheduledAt: scheduledAtISO,
+                      });
+                      toast.success('Template agendado');
+                      queryClient.invalidateQueries({
+                        queryKey: ['scheduled-messages', conversation.id],
+                      });
+                    } catch (err: any) {
+                      toast.error(err?.response?.data?.message || 'Erro ao agendar template');
+                      throw err; // mantém o seletor aberto para corrigir
+                    }
+                  }
+                : undefined
+            }
             disabled={conversation.status === 'CLOSED'}
           />
         </>
