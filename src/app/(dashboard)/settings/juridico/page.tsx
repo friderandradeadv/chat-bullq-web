@@ -129,8 +129,12 @@ function AreaAssignmentSection() {
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Atribuição de novos clientes por área</h3>
       </div>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-        Escolha o advogado que recebe automaticamente os novos clientes de cada área
-        (ex.: contrato assinado entra já atribuído). Cards criados com responsável escolhido à mão não são afetados.
+        Escolha o advogado que recebe automaticamente os novos clientes de cada área. Vale
+        para os <strong className="font-semibold text-zinc-700 dark:text-zinc-300">dois lados do mesmo lead</strong>:
+        quem o robô entrega a <strong className="font-semibold text-zinc-700 dark:text-zinc-300">conversa no chat</strong> ao
+        terminar o atendimento, e quem fica <strong className="font-semibold text-zinc-700 dark:text-zinc-300">dono do card</strong> no
+        kanban quando o contrato é assinado. A troca vale já no próximo lead — não mexe em quem já entrou,
+        e cards com responsável escolhido à mão não são afetados.
       </p>
 
       <div className="mt-4 space-y-2">
