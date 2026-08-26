@@ -157,6 +157,8 @@ export const HUB: Trilha = {
       manual: [
         '## Como funciona',
         '',
+        '![A tela de Conversas: à esquerda a fila, no meio a conversa, à direita a ficha do contato. O balão verde com a etiqueta *Atendimento ao Cliente* é do agente de IA; abaixo dele, o ponto em que a pessoa assumiu. No rodapé, o número oficial de onde a mensagem sai.](https://api.friderandrade.com.br/api/v1/uploads/assets/academia/prints/conversas-chat.png)',
+        '',
         'Todo o WhatsApp do escritório entra em **Conversas**. Os **agentes de IA do próprio hub** fazem a recepção, a triagem e boa parte do atendimento; quando o caso exige gente, a conversa é transferida para uma pessoa.',
         '',
         '> Não confunda: quem atende cliente no WhatsApp são os agentes do hub. O **Claude** é a ferramenta de produção de peça e pesquisa, e não fala com cliente nenhum. São coisas diferentes, em trilhas diferentes.',
