@@ -141,6 +141,7 @@ export function ArquivarPecaModal({
 }) {
   const [faseSel, setFaseSel] = useState<string>('');
   const [tocou, setTocou] = useState(false); // o advogado já mexeu no select?
+  const [verTodasFases, setVerTodasFases] = useState(false);
   const [data, setData] = useState(hojeDDMMAAAA());
   const [itens, setItens] = useState<ItemProtocolo[]>([]);
   const [salvando, setSalvando] = useState(false);
@@ -306,6 +307,18 @@ export function ArquivarPecaModal({
   const sugerida =
     ctx.data?.sugeridas?.length === 1 ? ctx.data.sugeridas[0].join('/') : '';
   const escolhida = tocou || !sugerida ? faseSel : sugerida;
+  // A lista mostra o que a MÁQUINA já estreitou, não o acervo inteiro. Quando o
+  // backend reduziu (o processo diz o produto e o réu; o ato diz a espécie),
+  // despejar as 26 pastas do cliente devolve ao advogado a escolha que já foi
+  // feita, e ainda o obriga a caçar a certa no meio das do outro réu. Cobrado em
+  // 25/08/2026. O "ver todas" fica sempre a um clique, para o caso raro em que a
+  // sugestão errou.
+  const chavesSugeridas = new Set((ctx.data?.sugeridas ?? []).map((c) => c.join('/')));
+  const estreitou = chavesSugeridas.size > 0 && chavesSugeridas.size < fases.length;
+  const fasesListadas =
+    estreitou && !verTodasFases
+      ? fases.filter((f) => chavesSugeridas.has(f.caminho.join('/')))
+      : fases;
   const fase = fases.find((f) => f.caminho.join('/') === escolhida);
   const dataOk = /^\d{2}\.\d{2}\.\d{4}$/.test(data);
 
@@ -833,12 +846,23 @@ export function ArquivarPecaModal({
                   className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-700 outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                 >
                   <option value="">Escolha a fase…</option>
-                  {fases.map((f) => (
+                  {fasesListadas.map((f) => (
                     <option key={f.caminho.join('/')} value={f.caminho.join('/')}>
                       {f.caminho.join('  ›  ')}
                     </option>
                   ))}
                 </select>
+                {estreitou && (
+                  <button
+                    type="button"
+                    onClick={() => setVerTodasFases((v) => !v)}
+                    className="mt-1 text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600 dark:hover:text-zinc-300"
+                  >
+                    {verTodasFases
+                      ? `Mostrar só as ${chavesSugeridas.size} prováveis`
+                      : `Ver todas as ${fases.length} pastas do cliente`}
+                  </button>
+                )}
                 {!tocou && sugerida && (
                   <p className="mt-1 text-[11px] text-zinc-400">
                     Sugerida pelo ato{ctx.data?.acao ? ` (${ctx.data.acao})` : ''} — confira antes de
