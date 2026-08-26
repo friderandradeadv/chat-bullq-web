@@ -64,7 +64,7 @@ p.push('5. Gere, assista inteiro e confira: nome do escritório correto ("Frider
 p.push('   nenhuma promessa de resultado, e todo texto que aparece na tela em português — o modelo traduz a fala e esquece a arte.');
 p.push('6. Baixe o vídeo e envie ao responsável pelo hub para publicar na Academia.');
 p.push('');
-p.push('> Regra fixa de todos os vídeos: idioma português do Brasil, e nunca prometer resultado processual (art. 41 do Código de Ética da OAB).');
+p.push('> Regra fixa de todos os vídeos: idioma português do Brasil, e nunca prometer resultado processual (art. 6º do Provimento 205/2021 da OAB e art. 9º do Código de Ética).');
 p.push('');
 p.push('---');
 p.push('');
@@ -141,7 +141,7 @@ const leia = [
   '## Conferência obrigatória antes de publicar',
   '',
   '- [ ] O nome sai como **Frider Andrade - Advogados** (nunca "Advocacia").',
-  '- [ ] Nenhuma promessa de resultado processual (art. 41 do Código de Ética da OAB).',
+  '- [ ] Nenhuma promessa de resultado processual (art. 6º do Provimento 205/2021 da OAB e art. 9º do Código de Ética).',
   '- [ ] Todo texto que aparece na tela está em português — sem rótulo solto em inglês.',
   '- [ ] Nenhum dado real de cliente aparece ou é citado.',
   '- [ ] O áudio está em português do Brasil e o vídeo foi assistido inteiro por uma pessoa.',
