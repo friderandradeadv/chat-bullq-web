@@ -21,6 +21,7 @@ import {
   UserCircle,
   Scale,
   MessageSquareText,
+  Handshake,
 } from 'lucide-react';
 
 // Menu lateral agrupado POR SETOR — Conta / Geral (organização) / Comercial
@@ -41,6 +42,7 @@ const groups = [
     items: [
       { href: '/settings/general', label: 'Escritório', icon: Building2 },
       { href: '/settings/members', label: 'Membros e acessos', icon: Users },
+      { href: '/settings/parcerias', label: 'Parcerias', icon: Handshake },
       { href: '/settings/notifications', label: 'Notificações', icon: Bell },
     ],
   },

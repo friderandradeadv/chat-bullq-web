@@ -12,6 +12,7 @@ import { useNavMode } from '@/stores/nav-mode-store';
 import { LayoutList, PanelLeft } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { useAuthStore } from '@/stores/auth-store';
+import { usePartnerLock } from '@/features/partnerships/hooks/use-partnership';
 import { authService } from '@/features/auth/services/auth.service';
 import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sync';
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
@@ -24,6 +25,27 @@ import {
 
 // Bloquear o pai também bloqueia o filho (ex.: sem "Jurídico" → sem Análise/Cálculos).
 const MODULE_PARENT: Record<string, string> = { analise: 'juridico', calculos: 'juridico' };
+
+/**
+ * Rotas que um PARCEIRO travado (subhub) pode abrir. Lista de PERMISSÃO, igual
+ * à do servidor: rota nova nasce fechada. Espelho do `PARTNER_ALLOWED_PREFIXES`
+ * da API — aqui é só para não deixar a tela quebrar num 403; quem protege o
+ * dado é o servidor.
+ */
+const PARTNER_ROUTES = [
+  '/parceria',
+  '/inbox',
+  '/juridico/planejamento',
+  '/processos',
+  '/agenda',
+  '/prazos',
+  '/tarefas',
+  '/settings/perfil',
+];
+
+function partnerCanOpen(pathname: string): boolean {
+  return PARTNER_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+}
 
 /** Mapeia a rota atual para o módulo gateável (ou null = sempre liberado). Do mais específico p/ o geral. */
 function moduleForPath(p: string): string | null {
@@ -67,6 +89,16 @@ export default function DashboardLayout({
   // ── Trava por módulo: redireciona quem não tem acesso à área da rota atual.
   // OWNER/ADMIN têm restrictedModules vazio (vêm assim da API) → nunca barra.
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
+  const parceria = usePartnerLock();
+
+  // ── Subhub: parceiro travado navega só dentro do recorte. Vem ANTES da trava
+  // por módulo — os dois critérios são independentes e o da parceria é o mais
+  // restritivo.
+  useEffect(() => {
+    if (isLoading || !parceria) return;
+    if (!partnerCanOpen(pathname)) router.replace('/parceria');
+  }, [pathname, parceria, isLoading, router]);
+
   useEffect(() => {
     if (isLoading || !activeOrg) return;
     const isAdmin = activeOrg.role === 'OWNER' || activeOrg.role === 'ADMIN';

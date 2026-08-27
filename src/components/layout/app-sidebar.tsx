@@ -43,10 +43,13 @@ import {
   TrendingUp,
   Heart,
   GraduationCap,
+  Handshake,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
+import { usePartnerLock } from '@/features/partnerships/hooks/use-partnership';
+import type { PartnershipInfo } from '@/stores/auth-store';
 import { useUnreadConversations } from '@/features/notifications/use-unread-conversations';
 import { usePendingTasksCount } from '@/features/notifications/use-pending-tasks-count';
 import { usePayslipUnreadCount } from '@/features/notifications/use-payslip-notifications';
@@ -221,10 +224,97 @@ function NavItem({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+/**
+ * Sidebar do SUBHUB. O parceiro é externo: em vez de esconder item por item da
+ * navegação do escritório — que sempre deixa um passar — ele recebe uma
+ * navegação PRÓPRIA, curta, com só o que a parceria tem. Nada do escritório é
+ * renderizado aqui, nem desabilitado: simplesmente não existe nesta árvore.
+ */
+function PartnerSidebar({ parceria }: { parceria: PartnershipInfo }) {
+  const { user, logout } = useAuthStore();
+  const unreadConversations = useUnreadConversations();
+  const pendingTasks = usePendingTasksCount();
+
+  return (
+    <Sidebar>
+      <SidebarHeader className="py-4">
+        <Link href="/parceria" className="flex items-center gap-2.5 px-1">
+          <span
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-white"
+            style={{ background: parceria.color }}
+          >
+            <Handshake className="size-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-white">
+              {parceria.name}
+            </span>
+            <span className="block truncate text-[11px] text-zinc-500">Parceria</span>
+          </span>
+        </Link>
+      </SidebarHeader>
+
+      <SidebarBody>
+        <SidebarSection>
+          <NavItem href="/parceria" icon={LayoutDashboard} label="Início" />
+          <NavItem
+            href="/inbox"
+            icon={MessageSquare}
+            label="Conversas"
+            badge={unreadConversations}
+          />
+          <NavItem href="/juridico/planejamento" icon={Columns3} label="Kanban" />
+          <NavItem href="/processos" icon={Gavel} label="Processos" />
+          <NavItem href="/agenda" icon={CalendarCheck} label="Agenda" />
+          <NavItem href="/prazos" icon={Scale} label="Prazos" />
+          <NavItem href="/tarefas" icon={LayoutList} label="Tarefas" badge={pendingTasks} />
+          <NavItem href="/parceria/financeiro" icon={CircleDollarSign} label="Financeiro" />
+        </SidebarSection>
+      </SidebarBody>
+
+      <SidebarFooter>
+        <div className="mb-1">
+          <NavItem href="/settings/perfil" icon={UserCircle} label="Meu perfil" />
+        </div>
+        <Dropdown>
+          <DropdownButton className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-zinc-950/5 dark:hover:bg-white/5">
+            <Avatar
+              src={user?.avatarUrl}
+              initials={user?.name?.slice(0, 2).toUpperCase()}
+              className="size-8"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm/5 font-medium text-zinc-900 dark:text-white">
+                {user?.name}
+              </span>
+              <span className="block truncate text-xs/5 font-normal text-zinc-500">
+                {user?.email}
+              </span>
+            </span>
+            <ChevronUp className="ml-auto size-4 shrink-0 text-zinc-500" />
+          </DropdownButton>
+          <DropdownMenu anchor="top start" className="min-w-56">
+            <DropdownItem href="/settings/perfil">
+              <UserCircle />
+              <DropdownLabel>Meu perfil</DropdownLabel>
+            </DropdownItem>
+            <DropdownDivider />
+            <DropdownItem onClick={logout}>
+              <LogOut />
+              <DropdownLabel>Sair</DropdownLabel>
+            </DropdownItem>
+          </DropdownMenu>
+        </Dropdown>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
 export function AppSidebar() {
   const { user, organizations, activeOrgId, logout } = useAuthStore();
   const orgRole = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = orgRole === 'OWNER' || orgRole === 'ADMIN';
+  const parceria = usePartnerLock();
   const unreadConversations = useUnreadConversations();
   const pendingTasks = usePendingTasksCount();
   const payslipUnread = usePayslipUnreadCount();
@@ -232,6 +322,10 @@ export function AppSidebar() {
   const disconnectedChannels = useDisconnectedChannels();
   const { alert: creditAlert } = useAiCreditHealth();
   const repassesPend = useRepassesPendentesCount();
+
+  // Depois de TODOS os hooks: trocar a árvore antes deles mudaria a ordem de
+  // chamada entre renders e o React quebra.
+  if (parceria) return <PartnerSidebar parceria={parceria} />;
 
   return (
     <Sidebar>

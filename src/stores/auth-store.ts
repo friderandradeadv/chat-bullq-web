@@ -8,6 +8,24 @@ interface AuthUser {
   phone?: string | null;
 }
 
+/**
+ * Parceria (subhub) de que o usuário participa. `locked` = ele é PARCEIRO
+ * externo: o app inteiro passa a mostrar só o recorte. Isto aqui é APARÊNCIA —
+ * a trava de verdade é do servidor (OrgGuard + escopo em cada listagem). Nunca
+ * tratar a ausência do flag como permissão.
+ */
+export interface PartnershipInfo {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  areas: string[];
+  boards: string[];
+  partnerPct: number;
+  role: 'PARTNER' | 'INTERNAL';
+  locked: boolean;
+}
+
 interface OrgInfo {
   id: string;
   name: string;
@@ -17,6 +35,7 @@ interface OrgInfo {
   accessibleChannelIds: 'ALL' | string[];
   // Módulos que ESTE usuário não pode acessar (denylist). Vazio/ausente = tudo.
   restrictedModules?: string[];
+  partnerships?: PartnershipInfo[];
 }
 
 interface AuthState {
