@@ -2363,26 +2363,48 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     return { suc, condenacao, hon, honAuto, nosso, nossoTotal, cli, cliBruto, reembCli, reembEsc, deducoes, deducoesTotal, temVerbas, somaVerbas, verbasBatem, ajustado, igualarCliente, excedeCliente, excedente,
       valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 && verbasBatem };
   };
-  // TRAVA DO ART. 50 MEDIDA NO GRUPO. Quando o mesmo crédito entra em vários alvarás (o
-  // cartório separa por conta judicial), medir lançamento a lançamento acende alerta no
-  // alvará que é só de honorários — ali o cliente fica com pouco por definição. Pior: o
-  // botão "Igualar ao teto" fixaria um repasse manual e estragaria o rateio inteiro.
-  // O teto do art. 50 é do PROCESSO. Com o código do grupo preenchido em 2+ linhas,
-  // soma o que fica de cada lado antes de comparar. Somo os RESULTADOS (não recalculo
-  // sobre as verbas concatenadas) pra respeitar um repasse fixado à mão em qualquer linha.
-  const alvaraCalcGrupo = (i: number) => {
+  // GRUPO = o mesmo crédito entrando em mais de um alvará (o cartório separa por conta
+  // judicial e chega a nomear um deles ao escritório — sem que isso decida titularidade).
+  // Aqui o grupo vira UMA prestação: as verbas e os descontos são declarados UMA vez (em
+  // qualquer das linhas), a soma é conferida contra o bruto do GRUPO, e o resultado volta
+  // rateado para cada lançamento na proporção do que entrou em cada um — assim o razão
+  // segue espelhando o extrato linha a linha, e o repasse/caixa de cada linha fecha.
+  // A ÚLTIMA linha absorve o resíduo do arredondamento (a soma das fatias bate no centavo).
+  const grupoInfo = (i: number) => {
     const gid = (alvara[i]?.grupoId || '').trim();
     if (!gid || !conf) return null;
-    const idxs = Object.keys(alvara).map(Number).filter((k) => (alvara[k]?.grupoId || '').trim() === gid);
+    const idxs = Object.keys(alvara).map(Number).filter((k) => (alvara[k]?.grupoId || '').trim() === gid).sort((x, y) => x - y);
     if (idxs.length < 2) return null;
     const r2 = (n: number) => Math.round(n * 100) / 100;
-    let nosso = 0; let cli = 0; let bruto = 0;
-    for (const k of idxs) {
-      const b = Math.abs(conf.linhas[k]?.valor || 0);
-      const c = alvaraCalc(alvara[k], b);
-      nosso += c.nosso; cli += c.cli; bruto += b;
-    }
-    return { entradas: idxs.length, bruto: r2(bruto), nosso: r2(nosso), cli: r2(cli), excede: r2(nosso) > r2(cli) + 0.01 };
+    const brutoDe = (k: number) => Math.abs(conf.linhas[k]?.valor || 0);
+    const brutoG = r2(idxs.reduce((acc, k) => acc + brutoDe(k), 0));
+    const agregado = {
+      ...alvara[idxs[0]],
+      verbas: idxs.flatMap((k) => alvara[k]?.verbas ?? []),
+      deducoes: idxs.flatMap((k) => alvara[k]?.deducoes ?? []),
+    };
+    const calcG = alvaraCalc(agregado, brutoG);
+    const fatias: Record<number, { suc: number; hon: number; cli: number }> = {};
+    let accS = 0; let accH = 0; let accC = 0;
+    idxs.forEach((k, n) => {
+      const ultimo = n === idxs.length - 1;
+      const f = brutoG > 0 ? brutoDe(k) / brutoG : 0;
+      const suc = ultimo ? r2(calcG.suc - accS) : r2(calcG.suc * f);
+      const hon = ultimo ? r2(calcG.hon - accH) : r2(calcG.hon * f);
+      const cli = ultimo ? r2(calcG.cli - accC) : r2(calcG.cli * f);
+      accS = r2(accS + suc); accH = r2(accH + hon); accC = r2(accC + cli);
+      fatias[k] = { suc, hon, cli };
+    });
+    return { idxs, brutoG, calcG, fatias, entradas: idxs.length };
+  };
+  // Cálculo EFETIVO de uma linha: sozinha, é o dela; em grupo, é a fatia do consolidado.
+  // Render e payload de import usam este — nunca `alvaraCalc` cru — pra não divergirem.
+  const calcDaLinha = (i: number, bruto: number) => {
+    const g = grupoInfo(i);
+    const sozinho = alvaraCalc(alvara[i], bruto);
+    if (!g) return { calc: sozinho, grupo: null };
+    const f = g.fatias[i] ?? { suc: 0, hon: 0, cli: 0 };
+    return { calc: { ...g.calcG, ...f, nosso: Math.round((f.suc + f.hon) * 100) / 100 }, grupo: g };
   };
   // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
   const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
@@ -2480,7 +2502,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         if (areas[i] === '__alvara') {
           const a = alvara[i];
           const bruto = Math.abs(l.valor);
-          const { hon, suc, nosso, cli, condenacao } = alvaraCalc(a, bruto);
+          const { hon, suc, nosso, cli, condenacao } = calcDaLinha(i, bruto).calc;
           const splitAdv = (a?.split ?? []).map((s) => ({ s, pct: parseFloat(String(s.pct || '').replace(',', '.')) })).filter(({ pct }) => pct > 0)
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
@@ -2720,8 +2742,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       const a = alvara[i] ?? { cliente: '', sucumbencia: '', honorarios: '' };
                       const bruto = Math.abs(l.valor);
                       const set = (patch: Partial<NonNullable<typeof alvara[number]>>) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), ...patch } }));
-                      const calc = alvaraCalc(a, bruto);
-                      const grupoCalc = alvaraCalcGrupo(i);
+                      const { calc, grupo: grupoCalc } = calcDaLinha(i, bruto);
                       const rows = a.split ?? [];
                       const setRows = (fn: (r: { userId?: string; nome: string; pct: string }[]) => { userId?: string; nome: string; pct: string }[]) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), split: fn(s[i]?.split ?? []) } }));
                       const somaPct = rows.reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
@@ -2845,17 +2866,17 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               </div>
                               {/* BLINDAGEM OAB — art. 50 do Código de Ética (quota litis): contratual + sucumbência
                                   não podem superar a vantagem do cliente. Acende quando o nosso > cliente. */}
-                              {grupoCalc && !grupoCalc.excede && (
+                              {grupoCalc && !grupoCalc.calcG.excedeCliente && (
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50/50 px-2.5 py-1.5 text-[11px] text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/10 dark:text-emerald-300">
                                   <span>🛡️</span>
-                                  <span>Trava da OAB medida no <strong>processo</strong> ({grupoCalc.entradas} alvarás, bruto {brl2(grupoCalc.bruto)}): escritório <strong>{brl2(grupoCalc.nosso)}</strong> × cliente <strong>{brl2(grupoCalc.cli)}</strong> ✓</span>
+                                  <span>Trava da OAB medida no <strong>processo</strong> ({grupoCalc.entradas} alvarás, bruto {brl2(grupoCalc.brutoG)}): escritório <strong>{brl2(grupoCalc.calcG.nosso)}</strong> × cliente <strong>{brl2(grupoCalc.calcG.cli)}</strong> ✓</span>
                                 </div>
                               )}
-                              {grupoCalc && grupoCalc.excede && (
+                              {grupoCalc && grupoCalc.calcG.excedeCliente && (
                                 <div className="mt-1.5 flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
                                   <span className="mt-0.5 text-sm">🛡️</span>
                                   <span className="block">
-                                    <strong>Trava da OAB (art. 50 do Código de Ética)</strong>, somando os {grupoCalc.entradas} alvarás deste processo: o escritório fica com <strong>{brl2(grupoCalc.nosso)}</strong> e o cliente com <strong>{brl2(grupoCalc.cli)}</strong>.
+                                    <strong>Trava da OAB (art. 50 do Código de Ética)</strong>, somando os {grupoCalc.entradas} alvarás deste processo: o escritório fica com <strong>{brl2(grupoCalc.calcG.nosso)}</strong> e o cliente com <strong>{brl2(grupoCalc.calcG.cli)}</strong>.
                                     Reduza o <strong>honorário contratual</strong> (a sucumbência é do escritório por lei — art. 23 EAOAB — e não cede). Não há botão de teto aqui: com o crédito repartido em vários alvarás, igualar em uma linha só não resolve.
                                   </span>
                                 </div>
@@ -2895,11 +2916,18 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                     <button type="button" onClick={() => set({ verbas: (a.verbas ?? []).filter((_, kk) => kk !== k) })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                                   </div>
                                 ))}
-                                {calc.temVerbas && (
-                                  <p className={`mt-1 text-[10px] ${calc.verbasBatem ? 'text-zinc-400' : 'font-semibold text-rose-600'}`}>
-                                    {calc.verbasBatem ? `verbas somam ${brl2(calc.somaVerbas)} = alvará ✓` : `verbas somam ${brl2(calc.somaVerbas)}, alvará é ${brl2(bruto)} — faltam ${brl2(Math.round((bruto - calc.somaVerbas) * 100) / 100)}`}
+                                {grupoCalc && (
+                                  <p className="mt-1 text-[10px] text-sky-700/80 dark:text-sky-400/80">
+                                    Este crédito entrou em {grupoCalc.entradas} alvarás — <strong>declare as verbas uma única vez</strong> (aqui ou em qualquer linha do grupo). A soma é conferida contra o bruto do grupo, {brl2(grupoCalc.brutoG)}, e o resultado volta rateado para cada lançamento.
                                   </p>
                                 )}
+                                {calc.temVerbas && (() => { const alvo = grupoCalc ? grupoCalc.brutoG : bruto; return (
+                                  <p className={`mt-1 text-[10px] ${calc.verbasBatem ? 'text-zinc-400' : 'font-semibold text-rose-600'}`}>
+                                    {calc.verbasBatem
+                                      ? `verbas somam ${brl2(calc.somaVerbas)} = ${grupoCalc ? 'bruto do grupo' : 'alvará'} ✓`
+                                      : `verbas somam ${brl2(calc.somaVerbas)}, ${grupoCalc ? 'o grupo' : 'o alvará'} é ${brl2(alvo)} — faltam ${brl2(Math.round((alvo - calc.somaVerbas) * 100) / 100)}`}
+                                  </p>
+                                ); })()}
                               </div>
                               {/* DESCONTOS DA PARTE DO CLIENTE — dinheiro dele que já tem destino (sucumbência
                                   que ELE deve à parte contrária, guia adiantada por nós). Não são honorários:
