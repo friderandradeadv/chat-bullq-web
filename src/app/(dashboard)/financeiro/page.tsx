@@ -2363,6 +2363,27 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     return { suc, condenacao, hon, honAuto, nosso, nossoTotal, cli, cliBruto, reembCli, reembEsc, deducoes, deducoesTotal, temVerbas, somaVerbas, verbasBatem, ajustado, igualarCliente, excedeCliente, excedente,
       valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 && verbasBatem };
   };
+  // TRAVA DO ART. 50 MEDIDA NO GRUPO. Quando o mesmo crédito entra em vários alvarás (o
+  // cartório separa por conta judicial), medir lançamento a lançamento acende alerta no
+  // alvará que é só de honorários — ali o cliente fica com pouco por definição. Pior: o
+  // botão "Igualar ao teto" fixaria um repasse manual e estragaria o rateio inteiro.
+  // O teto do art. 50 é do PROCESSO. Com o código do grupo preenchido em 2+ linhas,
+  // soma o que fica de cada lado antes de comparar. Somo os RESULTADOS (não recalculo
+  // sobre as verbas concatenadas) pra respeitar um repasse fixado à mão em qualquer linha.
+  const alvaraCalcGrupo = (i: number) => {
+    const gid = (alvara[i]?.grupoId || '').trim();
+    if (!gid || !conf) return null;
+    const idxs = Object.keys(alvara).map(Number).filter((k) => (alvara[k]?.grupoId || '').trim() === gid);
+    if (idxs.length < 2) return null;
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    let nosso = 0; let cli = 0; let bruto = 0;
+    for (const k of idxs) {
+      const b = Math.abs(conf.linhas[k]?.valor || 0);
+      const c = alvaraCalc(alvara[k], b);
+      nosso += c.nosso; cli += c.cli; bruto += b;
+    }
+    return { entradas: idxs.length, bruto: r2(bruto), nosso: r2(nosso), cli: r2(cli), excede: r2(nosso) > r2(cli) + 0.01 };
+  };
   // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
   const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
     if (!caseId) return;
@@ -2700,6 +2721,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       const bruto = Math.abs(l.valor);
                       const set = (patch: Partial<NonNullable<typeof alvara[number]>>) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), ...patch } }));
                       const calc = alvaraCalc(a, bruto);
+                      const grupoCalc = alvaraCalcGrupo(i);
                       const rows = a.split ?? [];
                       const setRows = (fn: (r: { userId?: string; nome: string; pct: string }[]) => { userId?: string; nome: string; pct: string }[]) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), split: fn(s[i]?.split ?? []) } }));
                       const somaPct = rows.reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
@@ -2823,7 +2845,22 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               </div>
                               {/* BLINDAGEM OAB — art. 50 do Código de Ética (quota litis): contratual + sucumbência
                                   não podem superar a vantagem do cliente. Acende quando o nosso > cliente. */}
-                              {calc.excedeCliente && (
+                              {grupoCalc && !grupoCalc.excede && (
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50/50 px-2.5 py-1.5 text-[11px] text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/10 dark:text-emerald-300">
+                                  <span>🛡️</span>
+                                  <span>Trava da OAB medida no <strong>processo</strong> ({grupoCalc.entradas} alvarás, bruto {brl2(grupoCalc.bruto)}): escritório <strong>{brl2(grupoCalc.nosso)}</strong> × cliente <strong>{brl2(grupoCalc.cli)}</strong> ✓</span>
+                                </div>
+                              )}
+                              {grupoCalc && grupoCalc.excede && (
+                                <div className="mt-1.5 flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
+                                  <span className="mt-0.5 text-sm">🛡️</span>
+                                  <span className="block">
+                                    <strong>Trava da OAB (art. 50 do Código de Ética)</strong>, somando os {grupoCalc.entradas} alvarás deste processo: o escritório fica com <strong>{brl2(grupoCalc.nosso)}</strong> e o cliente com <strong>{brl2(grupoCalc.cli)}</strong>.
+                                    Reduza o <strong>honorário contratual</strong> (a sucumbência é do escritório por lei — art. 23 EAOAB — e não cede). Não há botão de teto aqui: com o crédito repartido em vários alvarás, igualar em uma linha só não resolve.
+                                  </span>
+                                </div>
+                              )}
+                              {!grupoCalc && calc.excedeCliente && (
                                 <div className="mt-1.5 flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
                                   <span className="mt-0.5 text-sm">🛡️</span>
                                   <div className="space-y-1.5">
