@@ -126,6 +126,20 @@ export const clientDocumentsService = {
     return data.data ?? data ?? null;
   },
 
+  /**
+   * Vincula o documento a um processo — ou desvincula, com `caseId: null`.
+   *
+   * É MANUAL de propósito. Uma varredura automática foi medida em 27/08/2026 e
+   * não existe regra segura: os documentos órfãos pertencem a gente que não é
+   * parte de nenhum processo vivo, e o CPF gravado está corrompido (o mesmo CPF
+   * em pessoas de nomes diferentes) — o casamento automático chegou a juntar o
+   * documento de uma pessoa ao processo de outra.
+   */
+  async vincularProcesso(id: string, caseId: string | null): Promise<{ ok: boolean; caseId: string | null; processo?: string }> {
+    const { data } = await api.patch(`/client-documents/${id}/processo`, { caseId });
+    return data.data ?? data;
+  },
+
   /** Tira da ficha. O arquivo continua no Drive. */
   async remover(id: string): Promise<{ ok: boolean; aviso: string }> {
     const { data } = await api.delete(`/client-documents/${id}`);

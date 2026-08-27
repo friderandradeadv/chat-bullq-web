@@ -25,6 +25,7 @@ import {
   KeyRound,
   IdCard,
   Loader2,
+  Link2Off,
   Paperclip,
   ReceiptText,
   FolderOpen,
@@ -535,6 +536,7 @@ export default function ClienteDetailPage() {
                 partyId={cliente.partyId}
                 contactId={contact?.id ?? null}
                 documento={docPrincipal}
+                casos={meusCasos}
               />
               <Card title="Pasta no Google Drive" icon={HardDrive}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1204,14 +1206,18 @@ function DocumentosCard({
   partyId,
   contactId,
   documento,
+  casos = [],
 }: {
   nome: string;
   partyId: string;
   contactId: string | null;
   documento: string | null;
+  /** Processos DESTE cliente — as únicas opções de vínculo oferecidas. */
+  casos?: { id: string; title: string; cnjNumber: string | null }[];
 }) {
   const qc = useQueryClient();
   const [abrindo, setAbrindo] = useState<string | null>(null);
+  const [vinculando, setVinculando] = useState<string | null>(null);
   const [importando, setImportando] = useState(false);
 
   const chave = ['client-documents', partyId, contactId, documento] as const;
@@ -1276,9 +1282,26 @@ function DocumentosCard({
     }
   };
 
+  // Vínculo do documento a um processo. MANUAL, uma decisão por vez: não há
+  // regra automática segura (o CPF gravado nos documentos está corrompido e o
+  // casamento por nome não acha ninguém — medido em 27/08/2026).
+  const vincular = async (d: ClientDocument, caseId: string | null) => {
+    setVinculando(d.id);
+    try {
+      await clientDocumentsService.vincularProcesso(d.id, caseId);
+      await qc.invalidateQueries({ queryKey: ['client-documents'] });
+      toast.success(caseId ? 'Documento vinculado ao processo.' : 'Vínculo desfeito.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Falha ao vincular.');
+    } finally {
+      setVinculando(null);
+    }
+  };
+
   const Linha = ({ d }: { d: ClientDocument }) => {
     const est = ESTILO_CATEGORIA[d.categoria] ?? ESTILO_CATEGORIA.OUTRO;
     const tam = tamanhoLegivel(d.tamanho);
+    const casoAtual = casos.find((c) => c.id === d.caseId) ?? null;
     return (
       <li className="flex items-start gap-2 px-3 py-2.5">
         <FileSignature className="mt-0.5 h-4 w-4 shrink-0" style={{ color: est.cor }} />
@@ -1310,6 +1333,54 @@ function DocumentosCard({
               cópia idêntica também em {d.tambemEm.join(', ')}
             </p>
           )}
+
+          {/* Vínculo com o processo. Documento SEM processo não aparece na ficha
+              do caso nem para quem só enxerga um recorte (parceiro, associado) —
+              por isso o estado fica visível, e não escondido num menu. */}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+            {casos.length === 0 ? (
+              <span className="text-zinc-400" title="Este cliente não tem processo cadastrado no hub.">
+                <Link2Off className="mr-1 inline h-3 w-3" />
+                sem processo cadastrado para vincular
+              </span>
+            ) : (
+              <>
+                <label className="sr-only" htmlFor={`vinc-${d.id}`}>
+                  Processo do documento
+                </label>
+                {vinculando === d.id ? (
+                  <span className="text-zinc-400">
+                    <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+                    salvando…
+                  </span>
+                ) : (
+                  <select
+                    id={`vinc-${d.id}`}
+                    value={d.caseId ?? ''}
+                    onChange={(e) => vincular(d, e.target.value || null)}
+                    title={
+                      casoAtual
+                        ? `Vinculado a: ${casoAtual.title}`
+                        : 'Escolha o processo a que este documento pertence'
+                    }
+                    className={`max-w-[22rem] truncate rounded border px-1.5 py-0.5 text-[11px] ${
+                      d.caseId
+                        ? 'border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300'
+                        : 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-400'
+                    }`}
+                  >
+                    <option value="">sem processo — vincular…</option>
+                    {casos.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.cnjNumber ? `${c.cnjNumber} — ` : ''}
+                        {c.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </>
+            )}
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <button
