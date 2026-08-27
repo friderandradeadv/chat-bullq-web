@@ -2251,7 +2251,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[] }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio' }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2301,51 +2301,67 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // proveito). A parte do cliente é sempre a sobra (bruto − nosso) — assim fecha sozinho.
   const parsePct = (s?: string) => { const n = parseFloat(String(s || '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
   // Modelo da PRESTAÇÃO DE CONTAS (padrão do escritório):
-  //   bruto (alvará) = sucumbência + condenação
-  //   • sucumbência = % sobre o VALOR ATUALIZADO DA CAUSA (art. 85 CPC), paga pelo banco ao
-  //     escritório — NÃO sai do cliente. (base própria, não é o bruto.)
-  //   • condenação = bruto − sucumbência (o que é do cliente)
-  //   • honorário contratual = % sobre a CONDENAÇÃO (não sobre o bruto)
-  //   • cliente (líquido) = condenação − contratual = bruto − sucumbência − contratual
-  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string; clienteAjustado?: string } | undefined, bruto: number) => {
+  //   bruto (alvará) = sucumbência nossa + reembolsos + condenação
+  //   • sucumbência = paga pela parte contrária ao escritório (art. 23 EAOAB) — não sai do cliente
+  //   • reembolso = devolução de custas adiantadas (pelo cliente ou por nós) — NÃO é proveito
+  //   • condenação = o proveito econômico, única base do honorário contratual
+  //   • cliente (líquido) = condenação − contratual + reembolso dele − deduções
+  //   • deduções = obrigações do cliente quitadas do alvará (sucumbência que ELE deve, guias)
+  type VerbaLinha = { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' };
+  type DeducaoLinha = { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string };
+  // ESPELHO de `calcExito` (api/src/modules/financeiro/financeiro.service.ts) — mudou aqui, mude lá.
+  // Com `verbas` declaradas o bruto deixa de ser tratado como bloco único: só o que é PROVEITO
+  // entra na base do contratual. Reembolso de custas que o cliente adiantou é devolução, não
+  // ganho — e a sucumbência já era nossa por lei (art. 23 EAOAB). Sem verbas, colapsa no modelo antigo.
+  const alvaraCalc = (a: { honorarios?: string; honMode?: 'valor' | 'pct'; honPct?: string; sucumbencia?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; parcial?: boolean; totalDevido?: string; clienteAjustado?: string; verbas?: VerbaLinha[]; deducoes?: DeducaoLinha[] } | undefined, bruto: number) => {
     const r2 = (n: number) => Math.round(n * 100) / 100;
-    // Pagamento PARCIAL: o banco depositou menos que o total devido. A sucumbência de base
-    // explícita (fixa) é rateada proporcional ao que entrou — senão o cliente absorveria toda
-    // a diferença e o escritório levaria a sucumbência cheia de um pagamento pela metade.
     const totalDev = a?.parcial ? parseValor(a?.totalDevido || '') : 0;
     const fracao = a?.parcial && totalDev > bruto && totalDev > 0 ? bruto / totalDev : 1;
+    const verbas = (a?.verbas ?? []).filter((v) => v && parseValor(v.valor) > 0);
+    const temVerbas = verbas.length > 0;
+    const somaNat = (n: VerbaLinha['natureza']) => r2(verbas.filter((v) => v.natureza === n).reduce((acc, v) => acc + parseValor(v.valor), 0));
     let suc: number;
-    if (a?.sucMode === 'pct') {
+    if (temVerbas) {
+      suc = somaNat('sucumbencia_nossa');
+    } else if (a?.sucMode === 'pct') {
       const pct = parsePct(a?.sucPct);
       if ((a?.sucBaseTipo || 'Condenação') === 'Condenação') {
-        // Sucumbência EMBUTIDA no alvará: bruto = condenação + sucumbência e sucumbência = pct% da
-        // condenação → condenação = bruto/(1+pct/100); sucumbência = bruto − condenação. (já é proporcional ao bruto)
         const cond = pct > 0 ? r2(bruto / (1 + pct / 100)) : bruto;
         suc = r2(bruto - cond);
       } else {
-        // Base explícita (valor da causa / proveito econômico): sucumbência = base × pct, rateada pela fração recebida.
         suc = r2(parseValor(a?.sucBase || '') * (pct / 100) * fracao);
       }
     } else {
-      suc = r2(parseValor(a?.sucumbencia || '') * fracao); // valor fixo arbitrado (rateado se parcial)
+      suc = r2(parseValor(a?.sucumbencia || '') * fracao);
     }
-    const condenacao = r2(bruto - suc);
+    const reembCli = temVerbas ? somaNat('reembolso_cliente') : 0;   // volta inteiro ao cliente
+    const reembEsc = temVerbas ? somaNat('reembolso_escritorio') : 0; // devolução de despesa nossa
+    const condenacao = temVerbas ? somaNat('proveito') : r2(bruto - suc);
     const honAuto = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
-    // AJUSTE DO REPASSE: o advogado pode FIXAR a parte do cliente (ex.: pra respeitar o art. 50).
-    // Quem cede é o CONTRATUAL — a sucumbência é do escritório e fica intacta (art. 23 EAOAB).
+    // DEDUÇÕES da parte do cliente: dinheiro dele que já tem destino (sucumbência que ele deve
+    // à parte contrária, guia adiantada pelo escritório). Não são honorários — ficam fora do art. 50.
+    const deducoes = (a?.deducoes ?? []).filter((d) => d && parseValor(d.valor) > 0);
+    const deducoesTotal = r2(deducoes.reduce((acc, d) => acc + parseValor(d.valor), 0));
+    // AJUSTE DO REPASSE: o advogado FIXA o líquido do cliente; quem cede é o CONTRATUAL
+    // (a sucumbência é do escritório e fica intacta — art. 23 EAOAB).
     const cliOverride = parseValor(a?.clienteAjustado || '');
-    const ajustado = cliOverride > 0 && cliOverride <= condenacao + 0.01;
-    const cli = ajustado ? r2(cliOverride) : r2(condenacao - honAuto);
-    const hon = ajustado ? r2(condenacao - cli) : honAuto;
-    const nosso = r2(suc + hon);
-    // BLINDAGEM OAB — art. 50 do Código de Ética e Disciplina (quota litis / êxito): os honorários
-    // contratuais somados aos de sucumbência NÃO podem superar a vantagem que fica com o cliente.
-    // `excedeCliente` acende o alerta vermelho na tela quando o escritório levaria mais que o cliente.
-    // `igualarCliente` = a parte do cliente que iguala os dois lados (cede só o contratual).
+    const tetoOverride = r2(condenacao + reembCli - deducoesTotal);
+    const ajustado = cliOverride > 0 && cliOverride <= tetoOverride + 0.01;
+    const cli = ajustado ? r2(cliOverride) : r2(condenacao - honAuto + reembCli - deducoesTotal);
+    const cliBruto = r2(cli + deducoesTotal);
+    const hon = ajustado ? r2(condenacao + reembCli - cliBruto) : honAuto;
+    const nosso = r2(suc + hon);              // HONORÁRIOS — é o que o art. 50 mede
+    const nossoTotal = r2(nosso + reembEsc);  // o que entra no caixa (inclui reembolso de despesa nossa)
+    // BLINDAGEM OAB — art. 50 do CED: contratual + sucumbência não podem superar a vantagem do
+    // cliente. Compara com o LÍQUIDO (o que ele de fato embolsa), não com o bruto da condenação.
     const excedeCliente = bruto > 0 && nosso > cli + 0.01;
-    const excedente = excedeCliente ? r2((nosso - cli) / 2) : 0; // devolver isso ao cliente iguala os dois lados
-    const igualarCliente = r2((suc + condenacao) / 2); // cli tal que nosso === cli (aparando o contratual)
-    return { suc, condenacao, hon, honAuto, nosso, cli, ajustado, igualarCliente, excedeCliente, excedente, valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 };
+    const excedente = excedeCliente ? r2((nosso - cli) / 2) : 0;
+    const igualarCliente = r2((suc + condenacao + reembCli - deducoesTotal) / 2);
+    // As verbas declaradas têm de somar o bruto — senão a decomposição está incompleta.
+    const somaVerbas = r2(suc + reembCli + reembEsc + condenacao);
+    const verbasBatem = !temVerbas || Math.abs(somaVerbas - bruto) <= 0.02;
+    return { suc, condenacao, hon, honAuto, nosso, nossoTotal, cli, cliBruto, reembCli, reembEsc, deducoes, deducoesTotal, temVerbas, somaVerbas, verbasBatem, ajustado, igualarCliente, excedeCliente, excedente,
+      valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 && verbasBatem };
   };
   // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
   const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
@@ -2382,6 +2398,21 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         if (hit?.cnjNumber || r.cnj) patch.cnj = hit?.cnjNumber || r.cnj || cur.cnj; // p/ puxar o valor da causa no DataJud
         // Honorário contratual em % → incide sobre o BRUTO do alvará.
         if (r.honorariosPct) { patch.honMode = 'pct'; patch.honPct = String(r.honorariosPct); }
+        // DECOMPOSIÇÃO lida do demonstrativo de cálculo: com ela, o contratual passa a incidir
+        // só sobre o proveito (reembolso de custas e sucumbência nossa ficam fora da base).
+        // A IA só devolve quando a soma das verbas FECHA com o bruto.
+        if (r.verbas?.length) {
+          patch.verbas = r.verbas.map((v) => ({ label: v.label, valor: fmtMoney(v.valor), natureza: v.natureza }));
+          const sucVerba = r.verbas.filter((v) => v.natureza === 'sucumbencia_nossa').reduce((acc, v) => acc + v.valor, 0);
+          // As verbas já dizem o valor da sucumbência — desliga o modo % pra não calcular duas vezes.
+          if (sucVerba > 0) { patch.sucMode = 'valor'; patch.sucumbencia = fmtMoney(sucVerba); }
+        }
+        // Sucumbência que o CLIENTE deve à parte contrária (acórdão que proveu o recurso de um
+        // dos réus): sai do repasse dele, mas não é honorário nosso.
+        if (r.deducoes?.length) {
+          patch.deducoes = r.deducoes.map((d) => ({ label: d.label, valor: fmtMoney(d.valor), tipo: 'sucumbencia_contraria' as const, cnjIncidente: d.cnjIncidente ?? undefined }));
+        }
+        if (r.beneficiarioAlvara) patch.beneficiarioAlvara = r.beneficiarioAlvara;
         // Sucumbência: % sobre a BASE própria (condenação/proveito) OU valor fixo arbitrado.
         if (r.sucumbencia === 'Sim') {
           if (r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) {
@@ -2433,7 +2464,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).filter((v) => v.label.trim() && parseValor(v.valor) > 0).map((v) => ({ label: v.label.trim(), valor: parseValor(v.valor), natureza: v.natureza })), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -2787,7 +2818,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 </Field>
                               </div>
                               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                                <span className="text-zinc-400">bruto {brl2(bruto)} − sucumbência {brl2(calc.suc)} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong></span>
+                                <span className="text-zinc-400">bruto {brl2(bruto)} − sucumbência {brl2(calc.suc)}{calc.reembCli > 0 ? ` − reembolso ao cliente ${brl2(calc.reembCli)}` : ''}{calc.reembEsc > 0 ? ` − reembolso ao escritório ${brl2(calc.reembEsc)}` : ''} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)}{calc.reembCli > 0 ? ` + reembolso ${brl2(calc.reembCli)}` : ''}{calc.deducoesTotal > 0 ? ` − descontos ${brl2(calc.deducoesTotal)}` : ''} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong>{calc.reembEsc > 0 ? ` + ${brl2(calc.reembEsc)} de reembolso` : ''}</span>
                                 <span className={calc.valido ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{calc.valido ? 'fecha com o bruto ✓' : 'sucumbência/contratual maior que o disponível — confira'}</span>
                               </div>
                               {/* BLINDAGEM OAB — art. 50 do Código de Ética (quota litis): contratual + sucumbência
@@ -2804,6 +2835,71 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   </div>
                                 </div>
                               )}
+                              {/* DECOMPOSIÇÃO DO CRÉDITO — um alvará raramente é só proveito: pode trazer
+                                  reembolso de custas que o CLIENTE adiantou (devolução, não ganho) e a
+                                  sucumbência que já é nossa por lei. Declarando cada verba, o contratual
+                                  passa a incidir só sobre o proveito. Os valores saem do demonstrativo de
+                                  cálculo que instruiu o cumprimento. Sem verbas, o cálculo é o de sempre. */}
+                              <div className="mt-1.5 rounded-md border border-sky-200 bg-sky-50/50 px-2 py-1.5 dark:border-sky-900/40 dark:bg-sky-900/10">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-[11px] font-medium text-sky-900 dark:text-sky-300" title="Só o que for 'proveito' entra na base do honorário contratual.">🧾 Decomposição do crédito <span className="font-normal text-sky-700/70 dark:text-sky-400/70">(verbas do demonstrativo de cálculo)</span></span>
+                                  <button type="button" onClick={() => set({ verbas: [...(a.verbas ?? []), { label: '', valor: '', natureza: 'proveito' }] })} className="rounded bg-sky-600/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-600/20 dark:text-sky-300">+ verba</button>
+                                </div>
+                                {(a.verbas ?? []).map((v, k) => (
+                                  <div key={k} className="mt-1 flex flex-wrap items-center gap-1">
+                                    <input value={v.label} onChange={(e) => set({ verbas: (a.verbas ?? []).map((x, kk) => kk === k ? { ...x, label: e.target.value } : x) })} placeholder="ex.: Dano moral" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900" />
+                                    <div className="w-28"><MoneyInput value={v.valor} onChange={(val) => set({ verbas: (a.verbas ?? []).map((x, kk) => kk === k ? { ...x, valor: val } : x) })} /></div>
+                                    <select value={v.natureza} onChange={(e) => set({ verbas: (a.verbas ?? []).map((x, kk) => kk === k ? { ...x, natureza: e.target.value as NonNullable<typeof a.verbas>[number]['natureza'] } : x) })} className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-[10px] dark:border-zinc-700 dark:bg-zinc-900">
+                                      <option value="proveito">proveito (base do contratual)</option>
+                                      <option value="reembolso_cliente">reembolso ao cliente</option>
+                                      <option value="reembolso_escritorio">reembolso ao escritório</option>
+                                      <option value="sucumbencia_nossa">sucumbência nossa</option>
+                                    </select>
+                                    <button type="button" onClick={() => set({ verbas: (a.verbas ?? []).filter((_, kk) => kk !== k) })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                                  </div>
+                                ))}
+                                {calc.temVerbas && (
+                                  <p className={`mt-1 text-[10px] ${calc.verbasBatem ? 'text-zinc-400' : 'font-semibold text-rose-600'}`}>
+                                    {calc.verbasBatem ? `verbas somam ${brl2(calc.somaVerbas)} = alvará ✓` : `verbas somam ${brl2(calc.somaVerbas)}, alvará é ${brl2(bruto)} — faltam ${brl2(Math.round((bruto - calc.somaVerbas) * 100) / 100)}`}
+                                  </p>
+                                )}
+                              </div>
+                              {/* DESCONTOS DA PARTE DO CLIENTE — dinheiro dele que já tem destino (sucumbência
+                                  que ELE deve à parte contrária, guia adiantada por nós). Não são honorários:
+                                  ficam fora do teste do art. 50 e saem como linha própria na prestação, com o
+                                  rastro dos autos — que fixar o repasse na mão apagava. */}
+                              <div className="mt-1.5 rounded-md border border-orange-200 bg-orange-50/50 px-2 py-1.5 dark:border-orange-900/40 dark:bg-orange-900/10">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-[11px] font-medium text-orange-900 dark:text-orange-300" title="Saem do repasse ao cliente, mas não são honorários do escritório.">✂️ Descontos da parte do cliente <span className="font-normal text-orange-700/70 dark:text-orange-400/70">(obrigações dele quitadas do alvará)</span></span>
+                                  <button type="button" onClick={() => set({ deducoes: [...(a.deducoes ?? []), { label: '', valor: '', tipo: 'sucumbencia_contraria' }] })} className="rounded bg-orange-600/10 px-2 py-0.5 text-[10px] font-semibold text-orange-700 hover:bg-orange-600/20 dark:text-orange-300">+ desconto</button>
+                                </div>
+                                {(a.deducoes ?? []).map((d, k) => (
+                                  <div key={k} className="mt-1 flex flex-wrap items-center gap-1">
+                                    <input value={d.label} onChange={(e) => set({ deducoes: (a.deducoes ?? []).map((x, kk) => kk === k ? { ...x, label: e.target.value } : x) })} placeholder="ex.: Sucumbência devida ao Banco X" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900" />
+                                    <div className="w-28"><MoneyInput value={d.valor} onChange={(val) => set({ deducoes: (a.deducoes ?? []).map((x, kk) => kk === k ? { ...x, valor: val } : x) })} /></div>
+                                    <select value={d.tipo} onChange={(e) => set({ deducoes: (a.deducoes ?? []).map((x, kk) => kk === k ? { ...x, tipo: e.target.value as NonNullable<typeof a.deducoes>[number]['tipo'] } : x) })} className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-[10px] dark:border-zinc-700 dark:bg-zinc-900">
+                                      <option value="sucumbencia_contraria">sucumbência à parte contrária</option>
+                                      <option value="despesa_reembolsavel">despesa adiantada por nós</option>
+                                      <option value="outro">outro</option>
+                                    </select>
+                                    <input value={d.cnjIncidente ?? ''} onChange={(e) => set({ deducoes: (a.deducoes ?? []).map((x, kk) => kk === k ? { ...x, cnjIncidente: e.target.value } : x) })} placeholder="autos (opcional)" className="w-40 rounded-md border border-zinc-300 bg-white px-2 py-1 text-[10px] dark:border-zinc-700 dark:bg-zinc-900" />
+                                    <button type="button" onClick={() => set({ deducoes: (a.deducoes ?? []).filter((_, kk) => kk !== k) })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                                  </div>
+                                ))}
+                                {calc.deducoesTotal > 0 && <p className="mt-1 text-[10px] text-orange-700/80 dark:text-orange-400/80">total descontado {brl2(calc.deducoesTotal)} · repasse ao cliente cai de {brl2(calc.cliBruto)} para <strong>{brl2(calc.cli)}</strong>. Lance cada um como saída própria vinculada ao processo.</p>}
+                              </div>
+                              {/* GRUPO: o mesmo crédito pode entrar em MAIS DE UM alvará (o cartório separa por
+                                  conta judicial). Com o mesmo código, os lançamentos viram UMA prestação — e a
+                                  trava do art. 50 passa a ser medida no processo, não em cada linha. */}
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-dashed border-zinc-300 px-2 py-1.5 dark:border-zinc-700">
+                                <span className="text-[11px] text-zinc-500 dark:text-zinc-400" title="Use o mesmo código nos dois lançamentos do mesmo crédito.">🔗 Mesmo crédito em vários alvarás</span>
+                                <input value={a.grupoId ?? ''} onChange={(e) => set({ grupoId: e.target.value })} placeholder="código do grupo (ex.: alceu-0018621)" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900" />
+                                <select value={a.beneficiarioAlvara ?? ''} onChange={(e) => set({ beneficiarioAlvara: (e.target.value || undefined) as 'cliente' | 'escritorio' | undefined })} className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-[10px] dark:border-zinc-700 dark:bg-zinc-900" title="O que o alvará eletrônico diz. É só auditoria — não divide verba.">
+                                  <option value="">beneficiário do alvará…</option>
+                                  <option value="cliente">em nome do cliente</option>
+                                  <option value="escritorio">em nome do escritório</option>
+                                </select>
+                              </div>
                               {/* Pagamento PARCIAL: banco depositou menos que o total devido → rateia a sucumbência
                                   proporcional, grava recebido/falta no processo e mantém o card no cumprimento (não move). */}
                               <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50/50 px-2 py-1.5 dark:border-amber-900/40 dark:bg-amber-900/10">

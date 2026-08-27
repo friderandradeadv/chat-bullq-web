@@ -161,6 +161,11 @@ export const calculadoraCsService = {
     totalExecutado: number | null;
     dataBaseCalculo: string | null;
     indiceCorrecao: string | null;
+    // Decomposição lida do demonstrativo de cálculo (só `proveito` entra na base do contratual).
+    verbas: { label: string; valor: number; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[] | null;
+    // Sucumbência que o NOSSO cliente deve à parte contrária (desconta do repasse dele).
+    deducoes: { label: string; valor: number; cnjIncidente: string | null }[] | null;
+    beneficiarioAlvara: 'cliente' | 'escritorio' | null;
     aviso?: string;
   }> {
     const fd = new FormData();
