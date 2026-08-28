@@ -21,7 +21,11 @@ function buildHtml(d: PrestacaoDados): string {
   const deducoes = (d.deducoes ?? []).filter((x) => Number(x.valor) > 0);
   const temExtras = reembCli > 0 || reembEsc > 0 || deducoes.length > 0;
   const honCheio = d.honPct && d.condenacao ? Math.round(d.condenacao * (d.honPct / 100) * 100) / 100 : null;
-  const reduziu = honCheio != null && d.hon < honCheio - 0.01;
+  // REDUÇÃO só quando foi DELIBERADA e material — o abatimento do art. 50, feito de propósito.
+  // Com tolerância de um centavo, qualquer arredondamento virava "reduzimos os honorários", e o
+  // documento anunciava ao cliente uma generosidade que não houve (28/08: a condenação saiu
+  // errada, o cheio deu R$ 2.870,57 contra R$ 2.475,56 pagos, e o PDF cantou redução).
+  const reduziu = honCheio != null && honCheio - d.hon > Math.max(1, honCheio * 0.01);
   const nosso = Math.round((d.suc + d.hon) * 100) / 100; // o que fica com o escritório (contratual + sucumbência)
   const respeitaTeto = nosso <= d.liquido + 0.01; // escritório não ficou com mais que o cliente
   const honCap = reduziu
