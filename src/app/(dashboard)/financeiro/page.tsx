@@ -2251,7 +2251,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio' }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio'; unificar?: boolean }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2395,7 +2395,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       accS = r2(accS + suc); accH = r2(accH + hon); accC = r2(accC + cli);
       fatias[k] = { suc, hon, cli };
     });
-    return { idxs, brutoG, calcG, fatias, entradas: idxs.length };
+    // Marcar em qualquer linha vale pro grupo todo — é uma decisão do crédito, não da linha.
+    const unificar = idxs.some((k) => alvara[k]?.unificar === true);
+    return { idxs, brutoG, calcG, fatias, entradas: idxs.length, unificar };
   };
   // Cálculo EFETIVO de uma linha: sozinha, é o dela; em grupo, é a fatia do consolidado.
   // Render e payload de import usam este — nunca `alvaraCalc` cru — pra não divergirem.
@@ -2403,6 +2405,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const g = grupoInfo(i);
     const sozinho = alvaraCalc(alvara[i], bruto);
     if (!g) return { calc: sozinho, grupo: null };
+    // Unificado: as linhas viram UM lançamento, então não há fatia a exibir — é o consolidado.
+    if (g.unificar) return { calc: g.calcG, grupo: g };
     const f = g.fatias[i] ?? { suc: 0, hon: 0, cli: 0 };
     return { calc: { ...g.calcG, ...f, nosso: Math.round((f.suc + f.hon) * 100) / 100 }, grupo: g };
   };
@@ -2507,7 +2511,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).filter((v) => v.label.trim() && parseValor(v.valor) > 0).map((v) => ({ label: v.label.trim(), valor: parseValor(v.valor), natureza: v.natureza })), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).filter((v) => v.label.trim() && parseValor(v.valor) > 0).map((v) => ({ label: v.label.trim(), valor: parseValor(v.valor), natureza: v.natureza })), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, unificar: a?.unificar === true }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -2964,6 +2968,27 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   <option value="cliente">em nome do cliente</option>
                                   <option value="escritorio">em nome do escritório</option>
                                 </select>
+                                {grupoCalc && (
+                                  <label className="flex w-full cursor-pointer items-start gap-1.5 border-t border-dashed border-zinc-300 pt-1.5 text-[11px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+                                    <input
+                                      type="checkbox"
+                                      checked={grupoCalc.unificar}
+                                      onChange={(e) => setAlvara((st) => {
+                                        // Vale pro grupo inteiro: é decisão do crédito, não da linha.
+                                        const next = { ...st };
+                                        for (const k of grupoCalc.idxs) next[k] = { ...(next[k] ?? { cliente: '', sucumbencia: '', honorarios: '' }), unificar: e.target.checked };
+                                        return next;
+                                      })}
+                                      className="mt-0.5 h-3 w-3 accent-violet-600"
+                                    />
+                                    <span>
+                                      <strong>Unificar num lançamento só</strong> — as {grupoCalc.entradas} linhas viram um único lançamento de <strong>{brl2(grupoCalc.brutoG)}</strong> no livro-razão.
+                                      {grupoCalc.unificar
+                                        ? <span className="text-violet-600 dark:text-violet-300"> Ativo: as duas linhas do extrato ficam registradas nele, então não voltam como “Novo” na próxima conferência.</span>
+                                        : <span className="text-zinc-400"> Sem marcar, ficam dois lançamentos (espelho fiel do extrato) e o resultado é rateado entre eles.</span>}
+                                    </span>
+                                  </label>
+                                )}
                               </div>
                               {/* Pagamento PARCIAL: banco depositou menos que o total devido → rateia a sucumbência
                                   proporcional, grava recebido/falta no processo e mantém o card no cumprimento (não move). */}
