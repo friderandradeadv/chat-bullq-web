@@ -2507,6 +2507,52 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         if (r.indiceCorrecao) patch.indiceCausa = r.indiceCorrecao;
         return { ...s, [idx]: patch };
       });
+      // ALVARÁS DO PROCESSO → LINHAS DO EXTRATO. A peça diz quantos alvarás foram expedidos e
+      // de quanto. Casando com os créditos que entraram, o hub junta sozinho o que é o mesmo
+      // crédito — o passo que sobrava manual. O valor creditado é um pouco MAIOR que o
+      // expedido (a conta judicial rende entre a expedição e a transferência: no caso Alceu,
+      // 1.726,96 virou 1.727,38), então a tolerância é por faixa, não exata.
+      if (r.alvaras && r.alvaras.length > 1 && conf) {
+        const tol = (v: number) => Math.max(5, v * 0.005);
+        const usados = new Set<number>();
+        const casadas: { linha: number; beneficiario: 'cliente' | 'escritorio' | null }[] = [];
+        for (const alv of r.alvaras) {
+          // Escolhe a linha de MENOR diferença dentro da tolerância — a primeira que "cabe"
+          // pode ser outro crédito de valor parecido no mesmo extrato.
+          let k = -1; let melhor = Infinity;
+          conf.linhas.forEach((ln, kk) => {
+            if (usados.has(kk) || ln.valor <= 0 || ln.duplicado) return;
+            const dif = Math.abs(Math.abs(ln.valor) - alv.valor);
+            if (dif <= tol(alv.valor) && dif < melhor) { melhor = dif; k = kk; }
+          });
+          if (k >= 0) { usados.add(k); casadas.push({ linha: k, beneficiario: alv.beneficiario }); }
+        }
+        // Só junta se a linha que o usuário está editando estiver entre as casadas — senão
+        // estaríamos mexendo em lançamentos que ele não pediu.
+        if (casadas.length > 1 && casadas.some((c) => c.linha === idx)) {
+          const codigo = `grupo-${idx}`;
+          setAlvara((st) => {
+            const next = { ...st };
+            const base = next[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' };
+            const brutoJunto = Math.round(casadas.reduce((acc, c) => acc + Math.abs(conf.linhas[c.linha]?.valor || 0), 0) * 100) / 100;
+            for (const c of casadas) {
+              const eh = c.linha === idx;
+              const cur = next[c.linha] ?? { cliente: '', sucumbencia: '', honorarios: '' };
+              next[c.linha] = {
+                ...cur,
+                ...(eh ? {} : { clienteNome: base.clienteNome, contactId: base.contactId, caseId: base.caseId, procLabel: base.procLabel, cnj: base.cnj, honMode: base.honMode, honPct: base.honPct }),
+                grupoId: codigo, unificar: true,
+                ...(c.beneficiario ? { beneficiarioAlvara: c.beneficiario } : {}),
+                // O default em R$ passa a valer o crédito inteiro (ver o mesmo ajuste ao juntar na mão).
+                ...(eh && cur.honMode !== 'pct' && Math.abs(parseValor(cur.honorarios || '') - Math.abs(conf.linhas[idx]?.valor || 0)) < 0.01 ? { honorarios: fmtMoney(brutoJunto) } : {}),
+              };
+            }
+            return next;
+          });
+          setAreas((ar) => { const n = { ...ar }; for (const c of casadas) n[c.linha] = '__alvara'; return n; });
+          toast.success(`${casadas.length} alvarás deste processo juntados automaticamente — vão entrar como um lançamento só.`);
+        }
+      }
       // Com o processo casado, puxa a vertical + o rateio entre advogados salvo.
       if (hit) puxarRateioAlvara(idx, hit.id);
       const temSuc = r.sucumbencia === 'Sim' && ((r.sucumbenciaModo === 'Percentual' && r.sucumbenciaPct) || (r.valorSucumbencia && r.valorSucumbencia > 0));

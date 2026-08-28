@@ -166,6 +166,8 @@ export const calculadoraCsService = {
     // Sucumbência que o NOSSO cliente deve à parte contrária (desconta do repasse dele).
     deducoes: { label: string; valor: number; cnjIncidente: string | null }[] | null;
     beneficiarioAlvara: 'cliente' | 'escritorio' | null;
+    /** Alvarás expedidos citados na peça — casados com as linhas do extrato para juntar sozinho. */
+    alvaras: { valor: number; beneficiario: 'cliente' | 'escritorio' | null }[] | null;
     aviso?: string;
   }> {
     const fd = new FormData();
