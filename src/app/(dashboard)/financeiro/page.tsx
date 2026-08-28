@@ -824,7 +824,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<Editor | null>(null);
   const [serieDel, setSerieDel] = useState<FinTransacao | null>(null);
-  const [celebra, setCelebra] = useState<'ka' | 'pago' | null>(null); // animação ao lançar (receita=ka-ching, despesa=✓)
+  const [celebra, setCelebra] = useState<'ka' | 'pago' | null>(null); // confirmação discreta ao lançar (receita | despesa)
   const [contaDoc, setContaDoc] = useState<File | null>(null); // boleto/DARF lido pela IA → anexado ao lançamento quando salvar
   const [lendoConta, setLendoConta] = useState(false); // IA lendo o documento
   const contaFileRef = useRef<HTMLInputElement | null>(null);
@@ -1194,18 +1194,12 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
     <>
     {celebra && (
       <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
-        {celebra === 'ka' ? (
-          <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
-            <div className="text-[80px] leading-none drop-shadow-lg">🧾</div>
-            <div className="mt-1 text-3xl" style={{ animation: 'caixaCoins 1.4s ease-out forwards' }}>💰💰💰</div>
-            <div className="mt-2 rounded-full bg-[#02883C] px-5 py-1.5 text-sm font-extrabold tracking-wide text-white shadow-xl">Lançado! ka-ching 🤑</div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#02883C] text-6xl text-white shadow-2xl">✓</div>
-            <div className="mt-3 rounded-full bg-[#02883C] px-5 py-1.5 text-sm font-extrabold tracking-wide text-white shadow-xl">Lançado! 🧾✅</div>
-          </div>
-        )}
+        <div className="flex items-center gap-3 rounded-xl border border-[#02883C]/25 bg-white px-5 py-3 shadow-lg dark:border-[#02883C]/40 dark:bg-zinc-900" style={{ animation: 'lancamentoOk 1.6s ease-out forwards' }}>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#02883C]/12 text-[#02883C] dark:bg-[#02883C]/25">
+            <Check className="h-5 w-5" strokeWidth={3} />
+          </span>
+          <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-100">{celebra === 'ka' ? 'Recebimento lançado' : 'Pagamento lançado'}</span>
+        </div>
       </div>
     )}
     <Card title={<>Lançamentos <span className="font-normal text-zinc-400">· livro-razão editável</span></>}
@@ -2111,7 +2105,7 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   const [dataPg, setDataPg] = useState<string>(toISOInput(hojeBR()));
   // Fatura selecionada para pagar (mês/ciclo).
   const [pgFatura, setPgFatura] = useState<{ key: string; label: string; venc: string; txIds: string[]; total: number } | null>(null);
-  const [pagaOk, setPagaOk] = useState(false); // animação "fatura paga" (✅, dinheiro saindo — não é o ka-ching)
+  const [pagaOk, setPagaOk] = useState(false); // animação "fatura paga" (saída de caixa, fluxo próprio)
   const qc = useQueryClient();
 
   const fechamento = cartao?.fechamento ?? 0;
@@ -2204,9 +2198,11 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
     <div>
       {pagaOk && (
         <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
-          <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#02883C] text-6xl text-white shadow-2xl">✓</div>
-            <div className="mt-3 rounded-full bg-[#02883C] px-5 py-1.5 text-sm font-extrabold tracking-wide text-white shadow-xl">Fatura paga! 🧾✅</div>
+          <div className="flex items-center gap-3 rounded-xl border border-[#02883C]/25 bg-white px-5 py-3 shadow-lg dark:border-[#02883C]/40 dark:bg-zinc-900" style={{ animation: 'lancamentoOk 1.6s ease-out forwards' }}>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#02883C]/12 text-[#02883C] dark:bg-[#02883C]/25">
+              <Check className="h-5 w-5" strokeWidth={3} />
+            </span>
+            <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-100">Fatura paga</span>
           </div>
         </div>
       )}
@@ -2759,10 +2755,11 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       {celebra && (
         <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
-          <div className="flex flex-col items-center" style={{ animation: 'caixaPop 1.4s ease-out forwards' }}>
-            <div className="text-[80px] leading-none drop-shadow-lg">🧾</div>
-            <div className="mt-1 text-3xl" style={{ animation: 'caixaCoins 1.4s ease-out forwards' }}>💰💰💰</div>
-            <div className="mt-2 rounded-full bg-[#02883C] px-5 py-1.5 text-sm font-extrabold tracking-wide text-white shadow-xl">Lançado! ka-ching 🤑</div>
+          <div className="flex items-center gap-3 rounded-xl border border-[#02883C]/25 bg-white px-5 py-3 shadow-lg dark:border-[#02883C]/40 dark:bg-zinc-900" style={{ animation: 'lancamentoOk 1.6s ease-out forwards' }}>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#02883C]/12 text-[#02883C] dark:bg-[#02883C]/25">
+              <Check className="h-5 w-5" strokeWidth={3} />
+            </span>
+            <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-100">Lançamentos importados</span>
           </div>
         </div>
       )}
