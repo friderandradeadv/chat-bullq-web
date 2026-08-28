@@ -2310,6 +2310,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio'; unificar?: boolean }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   // Despesas já lançadas no processo escolhido (guias, custas) — viram desconto com 1 clique.
+  // DOCUMENTOS LIDOS por linha — sem isso não dá para saber o que a IA já viu, e a
+  // tentação é subir tudo de novo "por garantia".
+  const [docsLidos, setDocsLidos] = useState<Record<number, { nome: string; via: 'texto' | 'imagem' | 'ignorado'; chars?: number }[]>>({});
   const [despesasCaso, setDespesasCaso] = useState<Record<number, { txId: string; data: string; descricao: string; categoria: string; valor: number; pago: boolean; jaUsada: boolean }[]>>({});
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
@@ -2517,9 +2520,21 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     }
     const grandesEscaneados = escaneados.filter((f) => f.size > LIMITE_MB * 1024 * 1024);
     const escaneadosOk = escaneados.filter((f) => f.size <= LIMITE_MB * 1024 * 1024);
+    const lidos: { nome: string; via: 'texto' | 'imagem' | 'ignorado'; chars?: number }[] = [];
+    for (const t of textos) {
+      const nome = (t.match(/^### DOCUMENTO: (.+)$/m) ?? [])[1] || 'documento.pdf';
+      lidos.push({ nome, via: 'texto', chars: t.length });
+    }
     if (grandesEscaneados.length) {
       toast(`${grandesEscaneados.map((f) => f.name).join(', ')}: digitalizado e acima de ${LIMITE_MB} MB — esse não dá para ler. Mande as páginas do cálculo/alvará em PDF menor.`, { icon: '⚠️', duration: 9000 });
     }
+    for (const f of grandesEscaneados) lidos.push({ nome: f.name, via: 'ignorado' });
+    if (!textos.length) for (const f of escaneadosOk) lidos.push({ nome: f.name, via: 'imagem' });
+    setDocsLidos((d) => {
+      const antes = d[idx] ?? [];
+      const novos = lidos.filter((l) => !antes.some((a) => a.nome === l.nome));
+      return { ...d, [idx]: [...antes, ...novos] };
+    });
     if (!textos.length && !escaneadosOk.length) {
       setAlvaraBusy((b) => ({ ...b, [idx]: false }));
       toast.error('Não consegui extrair texto dos arquivos.');
@@ -2943,6 +2958,20 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   <input type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={(e) => { lerDocsAlvara(i, e.target.files); e.currentTarget.value = ''; }} />
                                 </label>
                               </div>
+                              {(docsLidos[i] ?? []).length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-dashed border-[#228BE6]/40 bg-[#228BE6]/5 px-2 py-1.5">
+                                  <span className="text-[10px] font-medium text-[#228BE6]">Lidos pela IA:</span>
+                                  {(docsLidos[i] ?? []).map((d, k) => (
+                                    <span key={k} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${d.via === 'ignorado' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' : 'bg-[#228BE6]/12 text-[#228BE6] dark:text-sky-300'}`}
+                                      title={d.via === 'texto' ? `Texto extraído no navegador · ${Math.round((d.chars ?? 0) / 1000)} mil caracteres` : d.via === 'imagem' ? 'Lido por imagem (PDF digitalizado)' : 'Não lido — digitalizado e acima do limite'}>
+                                      {d.via === 'ignorado' ? '✕' : '✓'} {d.nome}
+                                      {d.via === 'texto' && d.chars ? <span className="opacity-60">{Math.round(d.chars / 1000)}k</span> : null}
+                                      {d.via === 'imagem' ? <span className="opacity-60">imagem</span> : null}
+                                    </span>
+                                  ))}
+                                  <button type="button" onClick={() => setDocsLidos((dd) => ({ ...dd, [i]: [] }))} className="ml-auto text-[10px] text-zinc-400 hover:text-rose-600">limpar</button>
+                                </div>
+                              )}
                               {/* ANEXOS DA PRESTAÇÃO — vão junto no PDF (transparência): alvará (sempre), e
                                   sentença/acórdão quando quiser mostrar a base dos valores. Guardados no êxito. */}
                               <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-emerald-300/70 bg-emerald-50/40 px-2.5 py-1.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
