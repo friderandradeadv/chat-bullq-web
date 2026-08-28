@@ -51,6 +51,7 @@ import {
   Eye,
   EyeOff,
   IdCard,
+  Square,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -75,7 +76,7 @@ import { aiAgentsService, type FeedRun } from '@/features/ai-agents/services/ai-
 import { AssignmentPopover } from './assignment-popover';
 import { departmentsService } from '@/features/settings/services/departments.service';
 import { membersService, type Member } from '@/features/settings/services/members.service';
-import { tasksService } from '@/features/tasks/services/tasks.service';
+import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { useComposerDraftStore } from '../stores/composer-draft-store';
 import { tagsService } from '@/features/settings/services/tags.service';
@@ -2065,24 +2066,351 @@ function MediaTab({ conversationId }: { conversationId: string }) {
 
 // ─── Tasks tab ────────────────────────────────────────────────────────────────
 
-function TasksTab() {
+/** Data curta (dd/mm) — o ano só aparece quando não é o ano corrente. */
+function fmtTaskDate(iso: string): string {
+  const d = new Date(iso);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+}
+
+/** Uma linha da lista: concluir/reabrir, renomear e excluir sem sair do chat. */
+function ChatTaskRow({ t, onChange }: { t: Task; onChange: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(t.title);
+  const [busy, setBusy] = useState(false);
+  const isDone = t.status === 'DONE';
+  // Atrasada = venceu antes de hoje e ainda está aberta (pinta o prazo de vermelho).
+  const atrasada =
+    !isDone && !!t.dueAt && new Date(t.dueAt) < new Date(new Date().toDateString());
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await tasksService.update(t.id, { status: isDone ? 'TODO' : 'DONE' });
+      toast.success(isDone ? 'Tarefa reaberta' : 'Tarefa concluída');
+      onChange();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao atualizar a tarefa');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rename = async () => {
+    const v = title.trim();
+    if (!v || v === t.title) { setEditing(false); setTitle(t.title); return; }
+    setBusy(true);
+    try {
+      await tasksService.update(t.id, { title: v });
+      setEditing(false);
+      onChange();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao renomear a tarefa');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remover = async () => {
+    if (!confirm(`Excluir a tarefa “${t.title}”?`)) return;
+    setBusy(true);
+    try {
+      await tasksService.remove(t.id);
+      toast.success('Tarefa excluída');
+      onChange();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao excluir a tarefa');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="group flex items-start gap-2.5 px-4 py-2.5">
+      <button
+        onClick={toggle}
+        disabled={busy}
+        title={isDone ? 'Reabrir' : 'Concluir'}
+        className="mt-0.5 shrink-0 text-zinc-400 transition-colors hover:text-emerald-500 disabled:opacity-50"
+      >
+        {isDone ? (
+          <CheckSquare className="h-4 w-4 text-emerald-500" />
+        ) : (
+          <Square className="h-4 w-4" />
+        )}
+      </button>
+      <div className="min-w-0 flex-1">
+        {editing ? (
+          <input
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={rename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') rename();
+              if (e.key === 'Escape') { setEditing(false); setTitle(t.title); }
+            }}
+            className="w-full rounded border border-zinc-300 px-1.5 py-1 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+        ) : (
+          <p
+            onDoubleClick={() => { setEditing(true); setTitle(t.title); }}
+            title="Clique duas vezes para renomear"
+            className={cn(
+              'break-words text-sm',
+              isDone
+                ? 'text-zinc-400 line-through dark:text-zinc-600'
+                : 'text-zinc-700 dark:text-zinc-200',
+            )}
+          >
+            {t.title}
+          </p>
+        )}
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-zinc-400">
+          <span className={cn(atrasada && 'font-semibold text-red-500')}>
+            {t.dueAt ? fmtTaskDate(t.dueAt) : 'Sem prazo'}
+          </span>
+          {t.case && (
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <Scale className="h-3 w-3 shrink-0" />
+              <span className="truncate">{t.case.cnjNumber || t.case.title}</span>
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={remover}
+        disabled={busy}
+        title="Excluir tarefa"
+        className="mt-0.5 shrink-0 text-zinc-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 dark:text-zinc-600"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </li>
+  );
+}
+
+/** Aba "Tarefas" do painel do chat: lista as tarefas do cliente (todas as
+ *  conversas dele) e cria uma nova sem sair do atendimento. A tarefa nasce com
+ *  dono (quem cria) e com prazo — senão não aparece na Agenda. */
+function TasksTab({ conversation }: { conversation: Conversation }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const contactId = conversation.contactId;
+
+  const { data: tasks = [], isLoading } = useQuery({
+    queryKey: ['chat-tasks', contactId],
+    queryFn: () => tasksService.list({ contactId }),
+    enabled: !!contactId,
+    staleTime: 15_000,
+  });
+
+  // Processos do cliente para amarrar a tarefa (ex.: "juntar documento no X").
+  const { data: casesData } = useQuery({
+    queryKey: ['cases-by-contact', contactId],
+    queryFn: () => legalCasesService.casesByContact(contactId),
+    enabled: !!contactId,
+    staleTime: 60_000,
+  });
+  const cases = casesData?.cases ?? [];
+
+  const [form, setForm] = useState(false);
+  const [title, setTitle] = useState('');
+  const [dueAt, setDueAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [caseId, setCaseId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['chat-tasks', contactId] });
+    // Prefixo ['tasks'] cobre a Agenda e a bolinha de pendências do topo.
+    qc.invalidateQueries({ queryKey: ['tasks'] });
+    if (caseId) qc.invalidateQueries({ queryKey: ['case-tasks', caseId] });
+  };
+
+  const abertas = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.status !== 'DONE')
+        // Sem prazo vai para o fim; o resto sobe pelo vencimento mais próximo.
+        .sort((a, b) => (a.dueAt || '9999').localeCompare(b.dueAt || '9999')),
+    [tasks],
+  );
+  const concluidas = useMemo(
+    () =>
+      tasks
+        .filter((t) => t.status === 'DONE')
+        .sort((a, b) => (b.completedAt || b.updatedAt).localeCompare(a.completedAt || a.updatedAt)),
+    [tasks],
+  );
+
+  const abrirForm = () => {
+    setTitle('');
+    setDueAt(new Date().toISOString().slice(0, 10));
+    setCaseId('');
+    setForm(true);
+  };
+
+  const criar = async () => {
+    const t = title.trim();
+    if (!t || saving) return;
+    setSaving(true);
+    try {
+      await tasksService.create({
+        title: t,
+        // 9h como na Agenda — evita a tarefa virar "dia todo".
+        dueAt: dueAt ? new Date(dueAt + 'T09:00:00').toISOString() : null,
+        // Sem dono a tarefa não aparece na "sua" agenda; reatribui depois se quiser.
+        assigneeId: currentUserId || undefined,
+        contactId,
+        conversationId: conversation.id,
+        caseId: caseId || undefined,
+      });
+      toast.success('Tarefa criada na agenda');
+      setForm(false);
+      setTitle('');
+      refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao criar tarefa');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const lista = showDone ? concluidas : abertas;
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
         <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Tarefas</span>
-        <button className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
-      <EmptyState
-        icon={CheckSquare}
-        text="Nenhuma tarefa vinculada a este chat."
-        subText={
-          <button className="mt-2 text-sm font-semibold text-primary hover:underline">
-            Criar primeira tarefa
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => router.push('/tarefas')}
+            title="Ver todas as tarefas"
+            className="rounded-md px-1.5 py-0.5 text-[11px] text-zinc-400 transition-colors hover:text-primary"
+          >
+            Ver todas
           </button>
-        }
-      />
+          <button
+            onClick={abrirForm}
+            title="Nova tarefa"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {form && (
+        <div className="space-y-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+          <input
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') criar();
+              if (e.key === 'Escape') setForm(false);
+            }}
+            placeholder="O que fazer? (ex.: juntar documento no processo)"
+            className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm outline-none focus:border-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-[11px] text-zinc-500">
+              Prazo
+              <input
+                type="date"
+                value={dueAt}
+                onChange={(e) => setDueAt(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+            </label>
+            <label className="block text-[11px] text-zinc-500">
+              Processo
+              <select
+                value={caseId}
+                onChange={(e) => setCaseId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              >
+                <option value="">— nenhum —</option>
+                {cases.map((c: ClientCaseRow) => (
+                  <option key={c.id} value={c.id}>
+                    {(c.produto || c.area || 'Processo')}{c.cnjNumber ? ` · ${c.cnjNumber}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={() => setForm(false)}
+              className="rounded-md px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={criar}
+              disabled={saving || !title.trim()}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {saving ? 'Criando…' : 'Criar tarefa'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tasks.length > 0 && (
+        <div className="flex items-center gap-4 border-b border-zinc-100 px-4 py-2 text-xs dark:border-zinc-800">
+          <button
+            onClick={() => setShowDone(false)}
+            className={cn('font-medium', !showDone ? 'text-primary' : 'text-zinc-400 hover:text-zinc-600')}
+          >
+            {abertas.length} aberta{abertas.length === 1 ? '' : 's'}
+          </button>
+          <button
+            onClick={() => setShowDone(true)}
+            className={cn('font-medium', showDone ? 'text-primary' : 'text-zinc-400 hover:text-zinc-600')}
+          >
+            {concluidas.length} concluída{concluidas.length === 1 ? '' : 's'}
+          </button>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-5 w-5 animate-spin text-zinc-300" />
+        </div>
+      ) : lista.length === 0 ? (
+        <EmptyState
+          icon={CheckSquare}
+          text={
+            showDone
+              ? 'Nenhuma tarefa concluída deste cliente.'
+              : 'Nenhuma tarefa vinculada a este chat.'
+          }
+          subText={
+            !showDone && !form ? (
+              <button
+                onClick={abrirForm}
+                className="mt-2 text-sm font-semibold text-primary hover:underline"
+              >
+                Criar primeira tarefa
+              </button>
+            ) : undefined
+          }
+        />
+      ) : (
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {lista.map((t) => (
+            <ChatTaskRow key={t.id} t={t} onChange={refresh} />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -2939,7 +3267,7 @@ export function ContactDetailsPanel({
         {activeTab === 'profile' && <ProfileTab conversation={conversation} />}
         {activeTab === 'favorites' && <FavoritesTab conversationId={conversation.id} />}
         {activeTab === 'media' && <MediaTab conversationId={conversation.id} />}
-        {activeTab === 'tasks' && <TasksTab />}
+        {activeTab === 'tasks' && <TasksTab conversation={conversation} />}
         {activeTab === 'documents' && (
           <DocumentsTab conversationId={conversation.id} contact={conversation.contact} />
         )}
