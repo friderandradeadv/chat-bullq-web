@@ -2435,9 +2435,19 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const lerDocsAlvara = async (idx: number, files: FileList | null) => {
     const arr = files ? Array.from(files) : [];
     if (!arr.length || !conf) return;
+    // O endpoint recusa acima de 32 MB — e a recusa é do multer, ANTES do handler, então
+    // subir 55 MB de autos completos só resultava no botão preso em "Lendo…". Barra aqui,
+    // dizendo o que mandar: os autos inteiros não servem nem por tamanho nem por contexto.
+    const LIMITE_MB = 32;
+    const grandes = arr.filter((f) => f.size > LIMITE_MB * 1024 * 1024);
+    const cabem = arr.filter((f) => f.size <= LIMITE_MB * 1024 * 1024);
+    if (grandes.length) {
+      toast.error(`${grandes.map((f) => `${f.name} (${(f.size / 1048576).toFixed(0)} MB)`).join(', ')} — acima de ${LIMITE_MB} MB. Mande as PEÇAS separadas (demonstrativo de cálculo, alvará, sentença/acórdão), não os autos completos.`, { duration: 10000 });
+    }
+    if (!cabem.length) return;
     setAlvaraBusy((b) => ({ ...b, [idx]: true }));
     try {
-      const r = await calculadoraCsService.extrairAlvara(arr);
+      const r = await calculadoraCsService.extrairAlvara(cabem);
       // Acha o PROCESSO pelo CNJ que a IA leu na peça de CS (Autos nº).
       let hit: import('@/features/legal-cases/services/legal-cases.service').CaseListItem | undefined;
       if (r.cnj) {
@@ -2761,6 +2771,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       const bruto = Math.abs(l.valor);
                       const set = (patch: Partial<NonNullable<typeof alvara[number]>>) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), ...patch } }));
                       const { calc, grupo: grupoCalc } = calcDaLinha(i, bruto);
+                      // Unificado, o painel é do crédito inteiro — mostrar o bruto de uma linha só
+                      // ao lado da condenação do grupo é o que fazia a conta parecer errada.
+                      const brutoRef = grupoCalc?.unificar ? grupoCalc.brutoG : bruto;
                       const rows = a.split ?? [];
                       const setRows = (fn: (r: { userId?: string; nome: string; pct: string }[]) => { userId?: string; nome: string; pct: string }[]) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), split: fn(s[i]?.split ?? []) } }));
                       const somaPct = rows.reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
@@ -2797,7 +2810,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               className={`space-y-2 rounded-lg border p-2.5 transition-colors ${dragIdx === i ? 'border-[#228BE6] border-dashed bg-[#228BE6]/10 ring-2 ring-[#228BE6]/30' : 'border-violet-200/70 dark:border-violet-900/40'}`}
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-[11px] text-zinc-400">{dragIdx === i ? <span className="font-semibold text-[#228BE6]">Solte o contrato / petição de CS aqui</span> : <>Alvará <strong>bruto {brl2(bruto)}</strong> → parte do <strong>cliente</strong> (repasse a pagar) e o <strong>nosso</strong> (sucumbência + honorário). <strong>Arraste</strong> ou suba o <strong>contrato</strong> e a <strong>petição de CS/alvará</strong> que a IA separa sozinha.</>}</p>
+                                <p className="text-[11px] text-zinc-400">{dragIdx === i ? <span className="font-semibold text-[#228BE6]">Solte o contrato / petição de CS aqui</span> : <>{grupoCalc?.unificar ? <>Crédito de <strong>{grupoCalc.entradas} alvarás — bruto {brl2(brutoRef)}</strong></> : <>Alvará <strong>bruto {brl2(brutoRef)}</strong></>} → parte do <strong>cliente</strong> (repasse a pagar) e o <strong>nosso</strong> (sucumbência + honorário). <strong>Arraste</strong> ou suba o <strong>contrato</strong> e a <strong>petição de CS/alvará</strong> que a IA separa sozinha.</>}</p>
                                 <label className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-[#228BE6]/40 bg-[#228BE6]/10 px-2 py-1 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/20 ${busy ? 'pointer-events-none opacity-60' : ''}`}>
                                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownCircle className="h-3.5 w-3.5" />} {busy ? 'Lendo…' : '📎 Ler documentos (IA)'}
                                   <input type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={(e) => { lerDocsAlvara(i, e.target.files); e.currentTarget.value = ''; }} />
@@ -2899,7 +2912,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 </Field>
                               </div>
                               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                                <span className="text-zinc-400">bruto {brl2(bruto)} − sucumbência {brl2(calc.suc)}{calc.reembCli > 0 ? ` − reembolso ao cliente ${brl2(calc.reembCli)}` : ''}{calc.reembEsc > 0 ? ` − reembolso ao escritório ${brl2(calc.reembEsc)}` : ''} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)}{calc.reembCli > 0 ? ` + reembolso ${brl2(calc.reembCli)}` : ''}{calc.deducoesTotal > 0 ? ` − descontos ${brl2(calc.deducoesTotal)}` : ''} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong>{calc.reembEsc > 0 ? ` + ${brl2(calc.reembEsc)} de reembolso` : ''}</span>
+                                <span className="text-zinc-400">bruto {brl2(brutoRef)} − sucumbência {brl2(calc.suc)}{calc.reembCli > 0 ? ` − reembolso ao cliente ${brl2(calc.reembCli)}` : ''}{calc.reembEsc > 0 ? ` − reembolso ao escritório ${brl2(calc.reembEsc)}` : ''} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)}{calc.reembCli > 0 ? ` + reembolso ${brl2(calc.reembCli)}` : ''}{calc.deducoesTotal > 0 ? ` − descontos ${brl2(calc.deducoesTotal)}` : ''} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong>{calc.reembEsc > 0 ? ` + ${brl2(calc.reembEsc)} de reembolso` : ''}</span>
                                 <span className={calc.valido ? 'text-zinc-400' : 'font-semibold text-rose-600'}>{calc.valido ? 'fecha com o bruto ✓' : 'sucumbência/contratual maior que o disponível — confira'}</span>
                               </div>
                               {/* BLINDAGEM OAB — art. 50 do Código de Ética (quota litis): contratual + sucumbência
@@ -3032,7 +3045,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                     const next = { ...st };
                                     const cur = next[i] ?? { cliente: '', sucumbencia: '', honorarios: '' };
                                     if (on) {
-                                      next[i] = { ...cur, grupoId: codigo, unificar: true };
+                                      // O default do campo em R$ nasce com o bruto DA LINHA. Juntando,
+                                      // ele passa a valer para o crédito inteiro — sem atualizar, a conta
+                                      // fica com contratual de uma linha sobre a condenação do grupo.
+                                      const brutoJunto = Math.round((Math.abs(conf.linhas[i]?.valor || 0) + Math.abs(conf.linhas[k]?.valor || 0)) * 100) / 100;
+                                      const honEraDefault = cur.honMode !== 'pct' && Math.abs(parseValor(cur.honorarios || '') - Math.abs(conf.linhas[i]?.valor || 0)) < 0.01;
+                                      next[i] = { ...cur, grupoId: codigo, unificar: true, ...(honEraDefault ? { honorarios: fmtMoney(brutoJunto) } : {}) };
                                       // A outra linha herda cliente/processo/contratual — é o mesmo crédito.
                                       next[k] = { ...(next[k] ?? { cliente: '', sucumbencia: '', honorarios: '' }),
                                         grupoId: codigo, unificar: true,
@@ -3100,14 +3118,14 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   const total = parseValor(a.totalDevido || '');
                                   // Com os alvarás juntos, o recebido é o do GRUPO — senão acusa
                                   // falta de um valor que já entrou pela outra linha.
-                                  const brutoRef = grupoCalc ? grupoCalc.brutoG : bruto;
-                                  const falta = total > brutoRef ? total - brutoRef : 0;
+                                  const recebido = grupoCalc ? grupoCalc.brutoG : bruto;
+                                  const falta = total > recebido ? total - recebido : 0;
                                   return (
                                     <div className="mt-1.5">
                                       <div className="flex flex-wrap items-center gap-2">
                                         <span className="text-[11px] text-zinc-500">Total devido (executado):</span>
                                         <div className="w-32"><MoneyInput value={a.totalDevido ?? ''} onChange={(v) => set({ totalDevido: v, totalFromIA: false })} placeholder="total" /></div>
-                                        {total > 0 && <span className="text-[11px] text-zinc-500">recebido {brl2(brutoRef)} · <span className="font-semibold text-amber-700 dark:text-amber-400">falta {brl2(falta)}</span> · card fica no cumprimento</span>}
+                                        {total > 0 && <span className="text-[11px] text-zinc-500">recebido {brl2(recebido)} · <span className="font-semibold text-amber-700 dark:text-amber-400">falta {brl2(falta)}</span> · card fica no cumprimento</span>}
                                       </div>
                                       {a.totalFromIA && <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">⚠️ Total lido da petição pela IA — confira se está atualizado até a data do depósito (pode faltar a correção do período).</p>}
                                     </div>
