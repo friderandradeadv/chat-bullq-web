@@ -12,6 +12,10 @@ import {
   X,
   Percent,
   AlertTriangle,
+  Eye,
+  ArrowUpRight,
+  Copy,
+  Link2,
 } from 'lucide-react';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
@@ -20,6 +24,8 @@ import {
   type Partnership,
 } from '@/features/partnerships/services/partnerships.service';
 import { LEGAL_AREAS } from '@/features/settings/services/area-assignment.service';
+import { usePartnerPreview } from '@/features/partnerships/hooks/use-partner-preview';
+import Link from 'next/link';
 
 /** Quadros do kanban jurídico que uma parceria pode abrir para o parceiro. */
 const BOARDS = [
@@ -234,6 +240,7 @@ function NovaParceria({
 
 function DetalheParceria({ parceria }: { parceria: Partnership }) {
   const qc = useQueryClient();
+  const { entrar: entrarPreview } = usePartnerPreview();
   const invalidar = () => {
     qc.invalidateQueries({ queryKey: ['parcerias'] });
     qc.invalidateQueries({ queryKey: ['parceria', parceria.id] });
@@ -279,6 +286,40 @@ function DetalheParceria({ parceria }: { parceria: Partnership }) {
 
   return (
     <div className="mt-6 space-y-8 rounded-xl border border-zinc-200 p-5 dark:border-zinc-800">
+      {/* Como chegar no subhub. Sem estes dois atalhos a tela existia mas não
+          tinha porta — só se chegava digitando a URL. */}
+      <section className="flex flex-wrap items-center gap-2">
+        <Link
+          href="/parceria"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+        >
+          <ArrowUpRight className="size-4" />
+          Abrir o subhub
+        </Link>
+        <button
+          type="button"
+          onClick={() =>
+            entrarPreview({
+              id: parceria.id,
+              name: parceria.name,
+              slug: parceria.slug,
+              color: parceria.color,
+              areas: parceria.areas,
+              boards: parceria.boards,
+              partnerPct: parceria.partnerPct,
+            })
+          }
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white"
+          style={{ background: parceria.color }}
+          title="Vê o hub exatamente como o parceiro vê — inbox, kanban e financeiro cortados pelo recorte."
+        >
+          <Eye className="size-4" />
+          Ver como parceiro
+        </button>
+        <span className="text-xs text-zinc-400">
+          A pré-visualização corta os dados de verdade, no servidor — não é maquiagem de tela.
+        </span>
+      </section>
       {/* Membros */}
       <section>
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Quem participa</h3>
@@ -318,6 +359,8 @@ function DetalheParceria({ parceria }: { parceria: Partnership }) {
             </div>
           ))}
         </div>
+
+        <ConvidarParceiro parceria={parceria} />
 
         {candidatos.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -392,6 +435,94 @@ function DetalheParceria({ parceria }: { parceria: Partnership }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Convite de PARCEIRO já amarrado à parceria.
+ *
+ * Existe porque o caminho antigo tinha uma janela real: convidar em Membros,
+ * o parceiro aceitava, e até alguém lembrar de incluí-lo aqui ele era um
+ * AGENT comum — e AGENT enxerga TODOS os canais ORG, ou seja, a inbox inteira
+ * do escritório. Convidando por aqui, ele já nasce travado no recorte.
+ */
+function ConvidarParceiro({ parceria }: { parceria: Partnership }) {
+  const qc = useQueryClient();
+  const [email, setEmail] = useState('');
+  const [link, setLink] = useState<string | null>(null);
+
+  const convidar = useMutation({
+    mutationFn: () =>
+      membersService.invite({
+        email: email.trim(),
+        role: 'AGENT',
+        partnershipId: parceria.id,
+      }),
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ['parcerias'] });
+      qc.invalidateQueries({ queryKey: ['members'] });
+      setEmail('');
+      if (r?.autoAccepted) {
+        setLink(null);
+        toast.success('Já era usuário do hub — entrou direto na parceria, travado no recorte.');
+      } else if (r?.token) {
+        setLink(`${window.location.origin}/register?invite=${r.token}`);
+        toast.success('Convite criado. Copie o link e mande para o parceiro.');
+      }
+    },
+    onError: (e: any) =>
+      toast.error(e?.response?.data?.message ?? 'Não deu para convidar.'),
+  });
+
+  return (
+    <div className="mt-3 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+        Convidar o parceiro (ele já entra travado nesta parceria)
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="email@doparceiro.com"
+          className="min-w-[16rem] flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        />
+        <button
+          type="button"
+          disabled={!email.trim() || convidar.isPending}
+          onClick={() => convidar.mutate()}
+          className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
+        >
+          {convidar.isPending ? 'Criando…' : 'Convidar'}
+        </button>
+      </div>
+
+      {link && (
+        <div className="mt-2.5">
+          {/* O hub NÃO manda e-mail: o convite é um link que você entrega. */}
+          <p className="text-[11px] text-amber-600 dark:text-amber-400">
+            O sistema não envia e-mail. Copie e mande você mesmo — o link vale 7 dias.
+          </p>
+          <div className="mt-1 flex items-center gap-1.5">
+            <Link2 className="size-3.5 shrink-0 text-zinc-400" />
+            <code className="min-w-0 flex-1 truncate rounded bg-zinc-100 px-2 py-1 text-[11px] dark:bg-zinc-800">
+              {link}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(link);
+                toast.success('Link copiado.');
+              }}
+              className="shrink-0 rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800"
+              title="Copiar"
+            >
+              <Copy className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function MarcarProcessos({
   parceria,

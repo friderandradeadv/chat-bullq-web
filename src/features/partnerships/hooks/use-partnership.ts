@@ -2,6 +2,7 @@
 
 import { useAuthStore } from '@/stores/auth-store';
 import type { PartnershipInfo } from '@/stores/auth-store';
+import { lerPreview } from './use-partner-preview';
 
 /**
  * A parceria (subhub) que TRAVA o usuário na organização ativa, ou `null`.
@@ -16,7 +17,14 @@ import type { PartnershipInfo } from '@/stores/auth-store';
 export function usePartnerLock(): PartnershipInfo | null {
   const { organizations, activeOrgId } = useAuthStore();
   const org = organizations.find((o) => o.id === activeOrgId);
-  return org?.partnerships?.find((p) => p.locked) ?? null;
+  const real = org?.partnerships?.find((p) => p.locked) ?? null;
+  if (real) return real;
+
+  // Sócio pré-visualizando ("ver como parceiro"). A casca vem daqui; o corte
+  // dos DADOS é do servidor, pelo cabeçalho `x-preview-partnership`.
+  const prev = lerPreview();
+  if (!prev) return null;
+  return { ...prev, role: 'PARTNER', locked: true, preview: true };
 }
 
 /** Todas as parcerias do usuário na org ativa (inclusive as sem trava). */

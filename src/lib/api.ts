@@ -16,6 +16,15 @@ api.interceptors.request.use((config) => {
     if (orgId) {
       config.headers['x-organization-id'] = orgId;
     }
+    // "Ver como parceiro": enquanto ligado, TODA requisição vai com o recorte,
+    // e o servidor devolve o que o parceiro receberia. Fica no interceptor de
+    // propósito — se dependesse de cada chamada lembrar de mandar o cabeçalho,
+    // a tela misturaria dados cortados com dados completos e a pré-visualização
+    // mentiria justamente onde precisa ser fiel.
+    const preview = localStorage.getItem('preview_partnership');
+    if (preview) {
+      config.headers['x-preview-partnership'] = preview;
+    }
   }
   return config;
 });

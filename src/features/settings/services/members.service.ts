@@ -25,7 +25,12 @@ export const membersService = {
     const { data } = await api.get('/organizations/members');
     return data.data;
   },
-  async invite(payload: { email: string; role?: string }): Promise<any> {
+  async invite(payload: {
+    email: string;
+    role?: string;
+    /** Convite de PARCEIRO: ao aceitar, já entra travado no recorte da parceria. */
+    partnershipId?: string;
+  }): Promise<any> {
     const { data } = await api.post('/organizations/members/invite', payload);
     return data.data;
   },

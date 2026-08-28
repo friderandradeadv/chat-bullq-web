@@ -13,6 +13,7 @@ import { LayoutList, PanelLeft } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { useAuthStore } from '@/stores/auth-store';
 import { usePartnerLock } from '@/features/partnerships/hooks/use-partnership';
+import { usePartnerPreview } from '@/features/partnerships/hooks/use-partner-preview';
 import { authService } from '@/features/auth/services/auth.service';
 import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sync';
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
@@ -90,6 +91,7 @@ export default function DashboardLayout({
   // OWNER/ADMIN têm restrictedModules vazio (vêm assim da API) → nunca barra.
   const activeOrg = organizations.find((o) => o.id === activeOrgId);
   const parceria = usePartnerLock();
+  const { sair: sairPreview } = usePartnerPreview();
 
   // ── Subhub: parceiro travado navega só dentro do recorte. Vem ANTES da trava
   // por módulo — os dois critérios são independentes e o da parceria é o mais
@@ -181,6 +183,27 @@ export default function DashboardLayout({
               conteúdo que já tinha respiro pra topbar). Agora a topbar é absolute
               DENTRO do container interno, que começa abaixo do banner. */}
           <div className="shrink-0">
+            {/* Pré-visualização: o sócio está vendo o hub com os olhos do
+                parceiro. A faixa é deliberadamente insistente — sem ela é fácil
+                estranhar "sumiu tudo" e achar que algo quebrou. */}
+            {parceria?.preview && (
+              <div
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm text-white"
+                style={{ background: parceria.color }}
+              >
+                <span className="min-w-0">
+                  Você está vendo o hub como <strong>{parceria.name}</strong> — só o
+                  recorte da parceria. Nada aqui é do escritório.
+                </span>
+                <button
+                  type="button"
+                  onClick={sairPreview}
+                  className="shrink-0 rounded bg-white/20 px-2.5 py-1 text-xs font-medium hover:bg-white/30"
+                >
+                  Sair da pré-visualização
+                </button>
+              </div>
+            )}
             <ToolFailureBanner />
           </div>
           {/* Container interno: novo contexto de posicionamento pra topbar glass. */}

@@ -24,6 +24,8 @@ export interface PartnershipInfo {
   partnerPct: number;
   role: 'PARTNER' | 'INTERNAL';
   locked: boolean;
+  /** `true` = sócio pré-visualizando, não parceiro de verdade. */
+  preview?: boolean;
 }
 
 interface OrgInfo {
