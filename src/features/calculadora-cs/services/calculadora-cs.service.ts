@@ -169,6 +169,13 @@ export const calculadoraCsService = {
 
   // Lê os documentos da Prestação de Contas (alvará + eventual sentença/contrato) e
   // sugere os valores da fase: valor bruto, % de honorários e sucumbência.
+  /** Lê SÓ a peça em que o cliente é quem deve (cumprimento de honorários contra ele,
+   *  acórdão que o condenou) e devolve os valores a descontar do repasse. */
+  async extrairDeducaoTexto(textos: string[]): Promise<{ deducoes: { label: string; valor: number; cnjIncidente: string | null }[]; aviso?: string }> {
+    const { data } = await api.post('/calculadora-cs/extrair-deducao-texto', { textos }, { timeout: 300000 });
+    return data.data ?? data;
+  },
+
   /** Mesma leitura, com o TEXTO já extraído no navegador (pdfjs). Autos de processo passam
    *  do limite de upload; o texto deles não — e ainda sobe muito mais rápido. */
   async extrairAlvaraTexto(textos: string[]): Promise<AlvaraExtraido> {

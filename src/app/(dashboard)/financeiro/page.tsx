@@ -2499,6 +2499,40 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       setAlvara((s) => ({ ...s, [idx]: { ...(s[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' }), vertical: s[idx]?.vertical || r.vertical || '', split: r.split.map((x) => ({ userId: x.userId, nome: x.nome, pct: String(x.pct) })) } }));
     } catch { /* sem rateio salvo → escritório fica com tudo */ }
   };
+  // LER A PEÇA DA DÍVIDA DO CLIENTE. No prompt geral do alvará essa sucumbência concorre com
+  // dezenas de campos e o modelo não a enxerga (o incidente do Inter chegou inteiro ao Gemini
+  // e voltou vazio). Aqui a peça é lida sozinha, com uma pergunta só: quanto ele tem a pagar.
+  const [deducaoBusy, setDeducaoBusy] = useState<Record<number, boolean>>({});
+  const lerDocsDeducao = async (idx: number, files: FileList | null) => {
+    const arr = files ? Array.from(files) : [];
+    if (!arr.length) return;
+    setDeducaoBusy((b) => ({ ...b, [idx]: true }));
+    try {
+      const textos: string[] = [];
+      for (const f of arr) {
+        try {
+          const t = await extractPdfText(await f.arrayBuffer());
+          if (t.trim().length >= 200) textos.push(`### DOCUMENTO: ${f.name}\n${t}`);
+        } catch { /* digitalizado/protegido */ }
+      }
+      if (!textos.length) { toast.error('Não consegui extrair texto — esse PDF parece digitalizado.'); return; }
+      const r = await calculadoraCsService.extrairDeducaoTexto(textos);
+      if (!r.deducoes.length) { toast(r.aviso || 'Nenhum valor a pagar encontrado.', { icon: '⚠️' }); return; }
+      setAlvara((st) => {
+        const cur = st[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' };
+        const jaTem = cur.deducoes ?? [];
+        // não duplica o que já está lá (mesmo valor)
+        const novos = r.deducoes
+          .filter((d) => !jaTem.some((x) => Math.abs(parseValor(x.valor) - d.valor) < 0.01))
+          .map((d) => ({ label: d.label, valor: fmtMoney(d.valor), tipo: 'sucumbencia_contraria' as const, cnjIncidente: d.cnjIncidente ?? undefined }));
+        // Substitui as linhas em branco que o usuário deixou abertas.
+        const semVazias = jaTem.filter((x) => x.label.trim() || parseValor(x.valor) > 0);
+        return { ...st, [idx]: { ...cur, deducoes: [...semVazias, ...novos] } };
+      });
+      toast.success(`${r.deducoes.length} valor(es) a descontar: ${r.deducoes.map((d) => brl2(d.valor)).join(', ')}`);
+    } catch (e: any) { toast.error(e?.message || 'Não consegui ler o documento'); }
+    finally { setDeducaoBusy((b) => ({ ...b, [idx]: false })); }
+  };
   // ALVARÁ: lê contrato de honorários + petição de CS/alvará (IA) e pré-preenche a prestação de contas.
   const lerDocsAlvara = async (idx: number, files: FileList | null) => {
     const arr = files ? Array.from(files) : [];
@@ -3151,7 +3185,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               <div className="mt-1.5 rounded-md border border-orange-200 bg-orange-50/50 px-2 py-1.5 dark:border-orange-900/40 dark:bg-orange-900/10">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span className="text-[11px] font-medium text-orange-900 dark:text-orange-300" title="Saem do repasse ao cliente, mas não são honorários do escritório.">✂️ Descontos da parte do cliente <span className="font-normal text-orange-700/70 dark:text-orange-400/70">(obrigações dele quitadas do alvará)</span></span>
-                                  <button type="button" onClick={() => set({ deducoes: [...(a.deducoes ?? []), { label: '', valor: '', tipo: 'sucumbencia_contraria' }] })} className="rounded bg-orange-600/10 px-2 py-0.5 text-[10px] font-semibold text-orange-700 hover:bg-orange-600/20 dark:text-orange-300">+ desconto</button>
+                                  <span className="flex items-center gap-1.5">
+                                    <label className={`inline-flex cursor-pointer items-center gap-1 rounded bg-orange-600/10 px-2 py-0.5 text-[10px] font-semibold text-orange-700 hover:bg-orange-600/20 dark:text-orange-300 ${deducaoBusy[i] ? 'pointer-events-none opacity-60' : ''}`} title="Suba a peça em que o CLIENTE é quem deve (cumprimento de honorários contra ele, acórdão que o condenou). A IA lê só isso e traz o valor.">
+                                      {deducaoBusy[i] ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />} {deducaoBusy[i] ? 'Lendo…' : 'Ler peça da dívida (IA)'}
+                                      <input type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={(e) => { lerDocsDeducao(i, e.target.files); e.currentTarget.value = ''; }} />
+                                    </label>
+                                    <button type="button" onClick={() => set({ deducoes: [...(a.deducoes ?? []), { label: '', valor: '', tipo: 'sucumbencia_contraria' }] })} className="rounded bg-orange-600/10 px-2 py-0.5 text-[10px] font-semibold text-orange-700 hover:bg-orange-600/20 dark:text-orange-300">+ desconto</button>
+                                  </span>
                                 </div>
                                 {(a.deducoes ?? []).map((d, k) => (
                                   <div key={k} className="mt-1 flex flex-wrap items-center gap-1">
