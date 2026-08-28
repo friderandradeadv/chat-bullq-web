@@ -2083,6 +2083,17 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
               }} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700 dark:text-zinc-300">
                 <ArrowDownCircle className="h-3.5 w-3.5" /> Baixar .txt
               </button>
+              <button onClick={async () => {
+                try {
+                  const { gerarGuiaContabilPdf } = await import('@/features/financeiro/lib/guia-contabil-pdf');
+                  const blob = await gerarGuiaContabilPdf(guia);
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, '_blank');
+                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                } catch (e: any) { toast.error(e?.message || 'Não consegui gerar o PDF'); }
+              }} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                <FileText className="h-3.5 w-3.5" /> Abrir PDF
+              </button>
               <span className="text-[11px] text-zinc-400">O bruto do alvará e o repasse ao cliente vão na guia como contexto — fora da base da nota.</span>
             </div>
           </div>

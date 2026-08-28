@@ -250,6 +250,15 @@ export interface RepassesPendentes {
   porPessoa: { userId: string; nome: string; total: number; count: number }[];
 }
 
+export interface GuiaContabil {
+    competencia: string; dataRecebimento: string;
+    prestador: { razaoSocial: string; cnpj: string; inscricaoMunicipal: string; municipioISS: string; itemServico: string; aliquotaISS: number | null };
+    tomador: { nome: string; documento: string; endereco: string; email: string; telefone: string };
+    processo: { autos: string; juizo: string; reu: string };
+    valores: { baseNota: number; contratual: number; sucumbencia: number; bruto: number; repasseCliente: number; reembolsoCustas: number; descontos: number };
+    faltando: string[]; texto: string;
+}
+
 export const financeiroService = {
   async dashboard(): Promise<FinDashboard> {
     const { data } = await api.get('/financeiro/dashboard');
@@ -537,14 +546,7 @@ export const financeiroService = {
   },
   /** Guia para o contador emitir a nota do êxito: tomador, processo e o valor a notar
    *  (contratual + sucumbência), com o bruto e o repasse marcados como fora da base. */
-  async guiaContabil(txId: string): Promise<{
-    competencia: string; dataRecebimento: string;
-    prestador: { razaoSocial: string; cnpj: string; inscricaoMunicipal: string; municipioISS: string; itemServico: string; aliquotaISS: number | null };
-    tomador: { nome: string; documento: string; endereco: string; email: string; telefone: string };
-    processo: { autos: string; juizo: string; reu: string };
-    valores: { baseNota: number; contratual: number; sucumbencia: number; bruto: number; repasseCliente: number; reembolsoCustas: number; descontos: number };
-    faltando: string[]; texto: string;
-  }> {
+  async guiaContabil(txId: string): Promise<GuiaContabil> {
     const { data } = await api.get('/financeiro/guia-contabil', { params: { txId } });
     return data.data ?? data;
   },
