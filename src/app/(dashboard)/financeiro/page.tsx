@@ -2957,39 +2957,78 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 ))}
                                 {calc.deducoesTotal > 0 && <p className="mt-1 text-[10px] text-orange-700/80 dark:text-orange-400/80">total descontado {brl2(calc.deducoesTotal)} · repasse ao cliente cai de {brl2(calc.cliBruto)} para <strong>{brl2(calc.cli)}</strong>. Lance cada um como saída própria vinculada ao processo.</p>}
                               </div>
-                              {/* GRUPO: o mesmo crédito pode entrar em MAIS DE UM alvará (o cartório separa por
-                                  conta judicial). Com o mesmo código, os lançamentos viram UMA prestação — e a
-                                  trava do art. 50 passa a ser medida no processo, não em cada linha. */}
-                              <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-dashed border-zinc-300 px-2 py-1.5 dark:border-zinc-700">
-                                <span className="text-[11px] text-zinc-500 dark:text-zinc-400" title="Use o mesmo código nos dois lançamentos do mesmo crédito.">🔗 Mesmo crédito em vários alvarás</span>
-                                <input value={a.grupoId ?? ''} onChange={(e) => set({ grupoId: e.target.value })} placeholder="código do grupo (ex.: alceu-0018621)" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900" />
-                                <select value={a.beneficiarioAlvara ?? ''} onChange={(e) => set({ beneficiarioAlvara: (e.target.value || undefined) as 'cliente' | 'escritorio' | undefined })} className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-[10px] dark:border-zinc-700 dark:bg-zinc-900" title="O que o alvará eletrônico diz. É só auditoria — não divide verba.">
-                                  <option value="">beneficiário do alvará…</option>
-                                  <option value="cliente">em nome do cliente</option>
-                                  <option value="escritorio">em nome do escritório</option>
-                                </select>
-                                {grupoCalc && (
-                                  <label className="flex w-full cursor-pointer items-start gap-1.5 border-t border-dashed border-zinc-300 pt-1.5 text-[11px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-                                    <input
-                                      type="checkbox"
-                                      checked={grupoCalc.unificar}
-                                      onChange={(e) => setAlvara((st) => {
-                                        // Vale pro grupo inteiro: é decisão do crédito, não da linha.
-                                        const next = { ...st };
-                                        for (const k of grupoCalc.idxs) next[k] = { ...(next[k] ?? { cliente: '', sucumbencia: '', honorarios: '' }), unificar: e.target.checked };
-                                        return next;
+                              {/* JUNTAR ALVARÁS DO MESMO CRÉDITO. O cartório reparte o depósito em
+                                  contas judiciais e expede um alvará por conta — mas é um crédito só.
+                                  Aqui se MARCA o outro recebimento na lista; o código que amarra os dois
+                                  é gerado por baixo (pedir pra digitar o mesmo texto nas duas linhas é
+                                  erro na certa). Marcar já liga a unificação; dá pra desligar embaixo. */}
+                              {(() => {
+                                const outros = conf.linhas.map((ln, k) => ({ ln, k })).filter((x) => x.k !== i && x.ln.valor > 0 && !x.ln.duplicado);
+                                if (!outros.length) return null;
+                                const gid = (a.grupoId || '').trim();
+                                const codigo = gid || `grupo-${i}`;
+                                const marcar = (k: number, on: boolean) => {
+                                  setAlvara((st) => {
+                                    const next = { ...st };
+                                    const cur = next[i] ?? { cliente: '', sucumbencia: '', honorarios: '' };
+                                    if (on) {
+                                      next[i] = { ...cur, grupoId: codigo, unificar: true };
+                                      // A outra linha herda cliente/processo/contratual — é o mesmo crédito.
+                                      next[k] = { ...(next[k] ?? { cliente: '', sucumbencia: '', honorarios: '' }),
+                                        grupoId: codigo, unificar: true,
+                                        clienteNome: cur.clienteNome, contactId: cur.contactId,
+                                        caseId: cur.caseId, procLabel: cur.procLabel, cnj: cur.cnj,
+                                        vertical: cur.vertical, honMode: cur.honMode, honPct: cur.honPct };
+                                    } else {
+                                      next[k] = { ...(next[k] ?? { cliente: '', sucumbencia: '', honorarios: '' }), grupoId: undefined, unificar: undefined };
+                                      const sobrou = Object.keys(next).map(Number).some((x) => x !== i && (next[x]?.grupoId || '') === codigo);
+                                      if (!sobrou) next[i] = { ...cur, grupoId: undefined, unificar: undefined };
+                                    }
+                                    return next;
+                                  });
+                                  // A outra linha precisa ser tratada como alvará pra entrar na prestação.
+                                  if (on) setAreas((ar) => ({ ...ar, [k]: '__alvara' }));
+                                };
+                                return (
+                                  <div className="mt-1.5 rounded-md border border-dashed border-zinc-300 px-2 py-1.5 dark:border-zinc-700">
+                                    <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300" title="O cartório separa o depósito por conta judicial e expede um alvará para cada — mas o crédito é um só.">🔗 Este crédito entrou em mais de um alvará?</p>
+                                    <p className="mt-0.5 text-[10px] text-zinc-400">Marque o outro recebimento. Os dois passam a ser uma prestação só.</p>
+                                    <div className="mt-1 space-y-0.5">
+                                      {outros.map(({ ln, k }) => {
+                                        const junto = !!gid && (alvara[k]?.grupoId || '') === gid;
+                                        return (
+                                          <label key={k} className="flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[11px] hover:bg-zinc-100 dark:hover:bg-zinc-800/60">
+                                            <input type="checkbox" checked={junto} onChange={(e) => marcar(k, e.target.checked)} className="h-3 w-3 accent-violet-600" />
+                                            <span className="text-zinc-500 dark:text-zinc-400">{ln.data}</span>
+                                            <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">{ln.descricao}</span>
+                                            <span className="shrink-0 font-medium text-emerald-600">{brl2(Math.abs(ln.valor))}</span>
+                                          </label>
+                                        );
                                       })}
-                                      className="mt-0.5 h-3 w-3 accent-violet-600"
-                                    />
-                                    <span>
-                                      <strong>Unificar num lançamento só</strong> — as {grupoCalc.entradas} linhas viram um único lançamento de <strong>{brl2(grupoCalc.brutoG)}</strong> no livro-razão.
-                                      {grupoCalc.unificar
-                                        ? <span className="text-violet-600 dark:text-violet-300"> Ativo: as duas linhas do extrato ficam registradas nele, então não voltam como “Novo” na próxima conferência.</span>
-                                        : <span className="text-zinc-400"> Sem marcar, ficam dois lançamentos (espelho fiel do extrato) e o resultado é rateado entre eles.</span>}
-                                    </span>
-                                  </label>
-                                )}
-                              </div>
+                                    </div>
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-2 border-t border-dashed border-zinc-200 pt-1.5 dark:border-zinc-800">
+                                      <select value={a.beneficiarioAlvara ?? ''} onChange={(e) => set({ beneficiarioAlvara: (e.target.value || undefined) as 'cliente' | 'escritorio' | undefined })} className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-[10px] dark:border-zinc-700 dark:bg-zinc-900" title="O que o alvará eletrônico diz. É só auditoria — não divide verba.">
+                                        <option value="">beneficiário do alvará…</option>
+                                        <option value="cliente">em nome do cliente</option>
+                                        <option value="escritorio">em nome do escritório</option>
+                                      </select>
+                                      {grupoCalc && (
+                                        <label className="flex flex-1 cursor-pointer items-start gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+                                          <input type="checkbox" checked={grupoCalc.unificar} onChange={(e) => setAlvara((st) => {
+                                            const next = { ...st };
+                                            for (const k of grupoCalc.idxs) next[k] = { ...(next[k] ?? { cliente: '', sucumbencia: '', honorarios: '' }), unificar: e.target.checked };
+                                            return next;
+                                          })} className="mt-0.5 h-3 w-3 accent-violet-600" />
+                                          <span>
+                                            <strong>Um lançamento só</strong> de {brl2(grupoCalc.brutoG)} no livro-razão.
+                                            {!grupoCalc.unificar && <span className="text-zinc-400"> Desmarcado: ficam {grupoCalc.entradas} lançamentos, com o resultado rateado entre eles.</span>}
+                                          </span>
+                                        </label>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                               {/* Pagamento PARCIAL: banco depositou menos que o total devido → rateia a sucumbência
                                   proporcional, grava recebido/falta no processo e mantém o card no cumprimento (não move). */}
                               <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50/50 px-2 py-1.5 dark:border-amber-900/40 dark:bg-amber-900/10">
