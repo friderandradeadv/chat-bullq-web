@@ -14,6 +14,12 @@ function buildHtml(d: PrestacaoDados): string {
   const sucCap = d.sucPct && baseVal ? `${d.sucPct}% sobre ${baseTxt} (${brl(baseVal)}) = ${brl(d.suc)}` : `Total: ${brl(d.suc)}`;
   // Se o contratual saiu ABAIXO do % do contrato, foi reduzido (art. 50 da OAB: o escritório não
   // pode ficar com mais que o cliente). Detecta comparando o honorário pago com o cheio do contrato.
+  // Decomposição: reembolsos e descontos só aparecem quando existem, então a prestação de um
+  // caso simples sai exatamente como sempre saiu.
+  const reembCli = Math.round((d.reembCli ?? 0) * 100) / 100;
+  const reembEsc = Math.round((d.reembEsc ?? 0) * 100) / 100;
+  const deducoes = (d.deducoes ?? []).filter((x) => Number(x.valor) > 0);
+  const temExtras = reembCli > 0 || reembEsc > 0 || deducoes.length > 0;
   const honCheio = d.honPct && d.condenacao ? Math.round(d.condenacao * (d.honPct / 100) * 100) / 100 : null;
   const reduziu = honCheio != null && d.hon < honCheio - 0.01;
   const nosso = Math.round((d.suc + d.hon) * 100) / 100; // o que fica com o escritório (contratual + sucumbência)
@@ -56,8 +62,13 @@ function buildHtml(d: PrestacaoDados): string {
         <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e3e6eb;border-radius:10px;overflow:hidden">
           <tr><td style="${cell}">Valor total depositado (alvará)</td><td style="${val}">(+) ${brl(d.bruto)}</td></tr>
           <tr><td style="${cell}">Honorários sucumbenciais <span style="color:#6b7480">(pagos pela parte contrária, por lei — não saem do seu bolso)</span></td><td style="${val}">(-) ${brl(d.suc)}</td></tr>
-          <tr style="background:#f5f8fc"><td style="${cell}">Valor da sua condenação</td><td style="${val}">(=) ${brl(d.condenacao)}</td></tr>
+          ${reembEsc > 0 ? `<tr><td style="${cell}">Despesas processuais adiantadas pelo escritório <span style="color:#6b7480">(devolução)</span></td><td style="${val}">(-) ${brl(reembEsc)}</td></tr>` : ''}
+          ${reembCli > 0 ? `<tr><td style="${cell}">Reembolso das custas que <b>você</b> adiantou <span style="color:#6b7480">(volta integral para você, sem desconto de honorários)</span></td><td style="${val}">(-) ${brl(reembCli)}</td></tr>` : ''}
+          <tr style="background:#f5f8fc"><td style="${cell}">${temExtras ? 'Valor da sua condenação <span style="color:#6b7480">(base dos honorários contratuais)</span>' : 'Valor da sua condenação'}</td><td style="${val}">(=) ${brl(d.condenacao)}</td></tr>
           <tr><td style="${cell}">Honorários contratuais do escritório${d.honPct ? ` <span style="color:#6b7480">(${d.honPct}% conforme contrato)</span>` : ''}</td><td style="${val}">(-) ${brl(d.hon)}</td></tr>
+          ${temExtras ? `<tr style="background:#f5f8fc"><td style="${cell}">Sua parte da condenação</td><td style="${val}">(=) ${brl(Math.round((d.condenacao - d.hon) * 100) / 100)}</td></tr>` : ''}
+          ${reembCli > 0 ? `<tr><td style="${cell}">Reembolso das custas que você adiantou</td><td style="${val}">(+) ${brl(reembCli)}</td></tr>` : ''}
+          ${deducoes.map((x) => `<tr><td style="${cell}">${esc(x.label)}${x.cnjIncidente ? ` <span style="color:#6b7480">(autos nº ${esc(x.cnjIncidente)})</span>` : ''}</td><td style="${val}">(-) ${brl(x.valor)}</td></tr>`).join('')}
           <tr style="background:#eef4fb"><td style="${cell};border-bottom:none;font-weight:800">Valor líquido a transferir para você</td><td style="${val};border-bottom:none;font-weight:800;color:#1f8a4c">(=) ${brl(d.liquido)}</td></tr>
         </table>
       </div>
@@ -79,7 +90,7 @@ function buildHtml(d: PrestacaoDados): string {
         </div>
         <div data-b style="margin-top:14px;background:#f7f9fc;border:1px solid #e3e6eb;border-left:4px solid #1f2126;border-radius:9px;padding:13px 16px">
           <div style="font-weight:800;font-size:12.5px;color:#1f2733;margin-bottom:5px">Por que este valor é seu</div>
-          <div style="font-size:12px;line-height:1.6;color:#4a515c">Este valor é seu por direito: corresponde à sua condenação (${brl(d.condenacao)}) menos os honorários contratuais que você aceitou em contrato. A sucumbência não entra nessa conta — a lei manda a parte contrária pagá-la diretamente ao escritório (art. 85 do CPC), e por isso ela nunca reduz o que é seu.${respeitaTeto ? ` Seguimos ainda o art. 50 do Código de Ética da OAB: os honorários do escritório (contratuais somados à sucumbência) <b>não superam</b> o que fica com você.` : ''}${reduziu ? ` Neste caso, para respeitar esse limite, <b>reduzimos os honorários contratuais</b> abaixo do previsto no contrato — de modo que você não recebesse menos que o escritório.` : ''}</div>
+          <div style="font-size:12px;line-height:1.6;color:#4a515c">Este valor é seu por direito: corresponde à sua condenação (${brl(d.condenacao)}) menos os honorários contratuais que você aceitou em contrato. A sucumbência não entra nessa conta — a lei manda a parte contrária pagá-la diretamente ao escritório (art. 85 do CPC), e por isso ela nunca reduz o que é seu.${deducoes.length ? ` Os valores descontados acima são obrigações suas que o escritório quita diretamente do alvará, com comprovante juntado à sua pasta — não são honorários.` : ''}${respeitaTeto ? ` Seguimos ainda o art. 50 do Código de Ética da OAB: os honorários do escritório (contratuais somados à sucumbência) <b>não superam</b> o que fica com você.` : ''}${reduziu ? ` Neste caso, para respeitar esse limite, <b>reduzimos os honorários contratuais</b> abaixo do previsto no contrato — de modo que você não recebesse menos que o escritório.` : ''}</div>
         </div>
       </div>
 

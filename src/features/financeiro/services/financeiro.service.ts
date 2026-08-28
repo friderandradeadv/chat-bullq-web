@@ -32,6 +32,13 @@ export interface PrestacaoDados {
   /** Execução PARCIAL: presente só quando o banco depositou menos que o executado e ainda
    *  falta receber. Vem de `case.metadata.execucao`, gravado no import do alvará. */
   execucao?: { totalExecutado: number; recebido: number; remanescente: number } | null;
+  /** Decomposição do crédito e o que sai da parte do cliente — para a prestação discriminar
+   *  em vez de mostrar só um líquido que o cliente não consegue conferir. */
+  verbas?: { label: string; valor: number; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[];
+  deducoes?: { label: string; valor: number; tipo: string; cnjIncidente?: string; txIdSaida?: string }[];
+  clienteBruto?: number; reembCli?: number; reembEsc?: number; totalDeducoes?: number;
+  honorariosEscritorio?: number; excedeCliente?: boolean;
+  grupo?: { id: string; entradas: number } | null;
   anexos: { key: string; url: string; mime: string; name: string }[];
 }
 
