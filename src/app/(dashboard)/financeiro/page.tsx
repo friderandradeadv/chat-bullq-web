@@ -2705,7 +2705,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // Alvará: só importa quando a soma (cliente + sucumbência + honorário) fecha com o bruto E há cliente.
   const alvaraIncompleto = [...sel].some((i) => areas[i] === '__alvara' && (() => {
     const a = alvara[i]; if (!a || !conf) return true;
-    const c = alvaraCalc(a, Math.abs(conf.linhas[i].valor));
+    const g = grupoInfo(i);
+    // LINHA SECUNDÁRIA de um grupo unificado não se valida sozinha: ela é uma tarja, não tem
+    // (nem deve ter) cliente e verbas próprios — quem responde pelo crédito é a âncora.
+    // Sem isso o botão Importar ficava travado com tudo preenchido, pedindo o cliente de uma
+    // linha que a própria tela manda deixar em branco.
+    if (g?.unificar && g.idxs[0] !== i) return false;
+    const { calc: c } = calcDaLinha(i, Math.abs(conf.linhas[i].valor));
     const somaPct = (a.split ?? []).reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
     const sucSemBase = a.sucMode === 'pct' && parsePct(a.sucPct) > 0 && (a.sucBaseTipo || 'Condenação') !== 'Condenação' && parseValor(a.sucBase || '') <= 0;
     return !c.valido || !(a.clienteNome || '').trim() || somaPct > 100.01 || sucSemBase;
