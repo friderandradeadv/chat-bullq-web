@@ -528,6 +528,20 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/extrato/importar', { conta, linhas, commit: false }, { timeout: 180000 });
     return data.data ?? data;
   },
+  /** Guia para o contador emitir a nota do êxito: tomador, processo e o valor a notar
+   *  (contratual + sucumbência), com o bruto e o repasse marcados como fora da base. */
+  async guiaContabil(txId: string): Promise<{
+    competencia: string; dataRecebimento: string;
+    prestador: { razaoSocial: string; cnpj: string; inscricaoMunicipal: string; municipioISS: string; itemServico: string; aliquotaISS: number | null };
+    tomador: { nome: string; documento: string; endereco: string; email: string; telefone: string };
+    processo: { autos: string; juizo: string; reu: string };
+    valores: { baseNota: number; contratual: number; sucumbencia: number; bruto: number; repasseCliente: number; reembolsoCustas: number; descontos: number };
+    faltando: string[]; texto: string;
+  }> {
+    const { data } = await api.get('/financeiro/guia-contabil', { params: { txId } });
+    return data.data ?? data;
+  },
+
   /** Despesas já lançadas neste processo (guias, custas, diligências) — para oferecer
    *  como desconto/reembolso na prestação de contas do alvará. */
   async despesasDoCaso(caseId: string): Promise<{ txId: string; data: string; descricao: string; categoria: string; valor: number; pago: boolean; jaUsada: boolean }[]> {

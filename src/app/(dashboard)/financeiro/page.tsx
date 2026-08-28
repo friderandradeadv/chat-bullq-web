@@ -13,6 +13,7 @@ import {
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip, ReceiptText, Send,
 } from 'lucide-react';
+import { extractPdfText } from '@/features/knowledge/lib/extract-text';
 import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
 import { DropZone } from '@/components/drop-zone';
 import { ASTREA_DESPESAS, APORTES } from '@/features/financeiro/data/astrea-despesas';
@@ -1115,6 +1116,15 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const pedirExcluir = (t: FinTransacao) => { if (t.serieId) setSerieDel(t); else if (confirm('Remover este lançamento?')) delM.mutate({ id: t.id!, escopo: 'uma' }); };
   // Gera e abre o PDF da prestação de contas (só nos lançamentos de êxito com rateio).
   const [pcLoad, setPcLoad] = useState<string | null>(null);
+  // GUIA DO CONTADOR — o que ele pede para emitir a nota do êxito, num texto só.
+  const [guia, setGuia] = useState<Awaited<ReturnType<typeof financeiroService.guiaContabil>> | null>(null);
+  const [guiaLoad, setGuiaLoad] = useState<string | null>(null);
+  const abrirGuiaContabil = async (t: FinTransacao) => {
+    setGuiaLoad(t.id!);
+    try { setGuia(await financeiroService.guiaContabil(t.id!)); }
+    catch (e: any) { toast.error(e?.message || 'Não consegui montar a guia'); }
+    finally { setGuiaLoad(null); }
+  };
   const abrirPrestacao = async (t: FinTransacao) => {
     setPcLoad(t.id!);
     try {
@@ -1496,6 +1506,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                             dançavam horizontalmente de linha pra linha. */}
                         <span className="flex w-40 shrink-0 items-center justify-end gap-0.5">
                           {!ehLiquidado(st) && <button onClick={() => quickReceber(t)} title={t.valor >= 0 ? 'Marcar como recebido' : 'Marcar como pago'} className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>}
+                          {t.subtipo === 'exito' && t.rateio && <button onClick={() => abrirGuiaContabil(t)} disabled={guiaLoad === t.id} title="Guia para o contador (emissão da nota)" className="rounded-md bg-sky-500/12 p-1 text-sky-600 ring-1 ring-inset ring-sky-500/25 transition hover:bg-sky-500/20 disabled:opacity-50 dark:bg-sky-500/20 dark:text-sky-300">{guiaLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}</button>}
                           {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
                           {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => enviarPrestacaoCliente(t)} disabled={pcSend === t.id} title="Abrir a prévia no chat do cliente (texto + PDF) pra revisar, editar e enviar — após 18h, agendar" className="rounded-md bg-[#02883C]/12 p-1 text-[#02883C] ring-1 ring-inset ring-[#02883C]/25 transition hover:bg-[#02883C]/20 disabled:opacity-50 dark:bg-[#02883C]/20">{pcSend === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}</button>}
                           <button onClick={() => toggleAnex(t.id!)} title={t.categoria === 'Repasse ao cliente' ? 'Anexar comprovante do Pix ao cliente (prova de pagamento)' : 'Anexar alvará / comprovante / boleto — vai junto na prestação'} className={`relative rounded p-1 transition ${(t.anexos?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" />{(t.anexos?.length ?? 0) > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#7048E8] px-0.5 text-[8px] font-bold leading-none text-white">{t.anexos!.length}</span>}</button>
@@ -2038,6 +2049,51 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
           </div>
         </div>
       )}
+      {/* GUIA DO CONTADOR — o que ele pede para emitir a nota, num texto só de copiar e mandar. */}
+      {guia && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setGuia(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl border border-[#DEE2E6] bg-white p-5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">Guia para o contador</h3>
+                <p className="mt-0.5 text-[12px] text-zinc-500 dark:text-zinc-400">Competência {guia.competencia}{guia.dataRecebimento ? ` · recebido em ${guia.dataRecebimento}` : ''}</p>
+              </div>
+              <button onClick={() => setGuia(null)} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50/60 px-3 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-900/15">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Valor a notar</p>
+              <p className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{brl2(guia.valores.baseNota)}</p>
+              <p className="mt-0.5 text-[11px] text-emerald-800/80 dark:text-emerald-300/80">contratual {brl2(guia.valores.contratual)} + sucumbência {brl2(guia.valores.sucumbencia)}</p>
+            </div>
+
+            {guia.faltando.length > 0 && (
+              <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/15 dark:text-amber-300">
+                ⚠️ Falta cadastrar: <strong>{guia.faltando.join(', ')}</strong>. A guia sai assim mesmo, mas o contador vai pedir esses dados.
+              </p>
+            )}
+
+            <pre className="mt-3 max-h-[40vh] overflow-auto whitespace-pre-wrap rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-mono text-[11px] leading-relaxed text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">{guia.texto}</pre>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button onClick={() => { navigator.clipboard.writeText(guia.texto); toast.success('Guia copiada — é só colar para o contador.'); }} className="inline-flex items-center gap-1.5 rounded-lg bg-[#7048E8] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                <Layers className="h-3.5 w-3.5" /> Copiar
+              </button>
+              <button onClick={() => {
+                const blob = new Blob([guia.texto], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `Guia contabil - ${guia.tomador.nome || 'cliente'}.txt`; a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 30_000);
+              }} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700 dark:text-zinc-300">
+                <ArrowDownCircle className="h-3.5 w-3.5" /> Baixar .txt
+              </button>
+              <span className="text-[11px] text-zinc-400">O bruto do alvará e o repasse ao cliente vão na guia como contexto — fora da base da nota.</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <FichaDrawerMount ficha={ficha} />
     </Card>
     </>
@@ -2435,19 +2491,35 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const lerDocsAlvara = async (idx: number, files: FileList | null) => {
     const arr = files ? Array.from(files) : [];
     if (!arr.length || !conf) return;
-    // O endpoint recusa acima de 32 MB — e a recusa é do multer, ANTES do handler, então
-    // subir 55 MB de autos completos só resultava no botão preso em "Lendo…". Barra aqui,
-    // dizendo o que mandar: os autos inteiros não servem nem por tamanho nem por contexto.
+    // AUTOS DE PROCESSO passam de 50 MB e não cabem no upload — mas o TEXTO deles tem
+    // algumas centenas de KB. Extraindo no navegador (pdfjs), o tamanho do PDF deixa de
+    // importar: sobe texto, não arquivo. Só PDF DIGITALIZADO (sem camada de texto) precisa
+    // subir de verdade, para a leitura por imagem — e aí o limite de 32 MB vale.
     const LIMITE_MB = 32;
-    const grandes = arr.filter((f) => f.size > LIMITE_MB * 1024 * 1024);
-    const cabem = arr.filter((f) => f.size <= LIMITE_MB * 1024 * 1024);
-    if (grandes.length) {
-      toast.error(`${grandes.map((f) => `${f.name} (${(f.size / 1048576).toFixed(0)} MB)`).join(', ')} — acima de ${LIMITE_MB} MB. Mande as PEÇAS separadas (demonstrativo de cálculo, alvará, sentença/acórdão), não os autos completos.`, { duration: 10000 });
-    }
-    if (!cabem.length) return;
     setAlvaraBusy((b) => ({ ...b, [idx]: true }));
+    const textos: string[] = [];
+    const escaneados: File[] = [];
+    for (const f of arr) {
+      try {
+        const t = await extractPdfText(await f.arrayBuffer());
+        if (t.trim().length >= 200) { textos.push(`### DOCUMENTO: ${f.name}\n${t}`); continue; }
+      } catch { /* protegido/corrompido → tenta como imagem */ }
+      escaneados.push(f);
+    }
+    const grandesEscaneados = escaneados.filter((f) => f.size > LIMITE_MB * 1024 * 1024);
+    const escaneadosOk = escaneados.filter((f) => f.size <= LIMITE_MB * 1024 * 1024);
+    if (grandesEscaneados.length) {
+      toast(`${grandesEscaneados.map((f) => f.name).join(', ')}: digitalizado e acima de ${LIMITE_MB} MB — esse não dá para ler. Mande as páginas do cálculo/alvará em PDF menor.`, { icon: '⚠️', duration: 9000 });
+    }
+    if (!textos.length && !escaneadosOk.length) {
+      setAlvaraBusy((b) => ({ ...b, [idx]: false }));
+      toast.error('Não consegui extrair texto dos arquivos.');
+      return;
+    }
     try {
-      const r = await calculadoraCsService.extrairAlvara(cabem);
+      const r = textos.length
+        ? await calculadoraCsService.extrairAlvaraTexto(textos)
+        : await calculadoraCsService.extrairAlvara(escaneadosOk);
       // Acha o PROCESSO pelo CNJ que a IA leu na peça de CS (Autos nº).
       let hit: import('@/features/legal-cases/services/legal-cases.service').CaseListItem | undefined;
       if (r.cnj) {

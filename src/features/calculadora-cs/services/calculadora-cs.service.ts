@@ -112,6 +112,30 @@ export interface ExtracaoSentenca {
   observacoes?: string;
 }
 
+export interface AlvaraExtraido {
+    valorAlvara: number | null;
+    honorariosPct: number | null;
+    sucumbencia: 'Sim' | 'Não' | null;
+    sucumbenciaModo: 'Valor fixo' | 'Percentual' | null;
+    sucumbenciaPct: number | null;
+    sucumbenciaBase: string | null;
+    sucumbenciaBaseValor: number | null;
+    valorSucumbencia: number | null;
+    cliente: string | null;
+    cnj: string | null;
+    totalExecutado: number | null;
+    dataBaseCalculo: string | null;
+    indiceCorrecao: string | null;
+    // Decomposição lida do demonstrativo de cálculo (só `proveito` entra na base do contratual).
+    verbas: { label: string; valor: number; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[] | null;
+    // Sucumbência que o NOSSO cliente deve à parte contrária (desconta do repasse dele).
+    deducoes: { label: string; valor: number; cnjIncidente: string | null }[] | null;
+    beneficiarioAlvara: 'cliente' | 'escritorio' | null;
+    /** Alvarás expedidos citados na peça — casados com as linhas do extrato para juntar sozinho. */
+    alvaras: { valor: number; beneficiario: 'cliente' | 'escritorio' | null }[] | null;
+    aviso?: string;
+}
+
 export const calculadoraCsService = {
   async calcular(input: CalcularCsInput): Promise<ResultadoCs> {
     const { data } = await api.post('/calculadora-cs/calcular', input);
@@ -145,31 +169,16 @@ export const calculadoraCsService = {
 
   // Lê os documentos da Prestação de Contas (alvará + eventual sentença/contrato) e
   // sugere os valores da fase: valor bruto, % de honorários e sucumbência.
+  /** Mesma leitura, com o TEXTO já extraído no navegador (pdfjs). Autos de processo passam
+   *  do limite de upload; o texto deles não — e ainda sobe muito mais rápido. */
+  async extrairAlvaraTexto(textos: string[]): Promise<AlvaraExtraido> {
+    const { data } = await api.post('/calculadora-cs/extrair-alvara-texto', { textos }, { timeout: 300000 });
+    return data.data ?? data;
+  },
+
   async extrairAlvara(
     files: File[],
-  ): Promise<{
-    valorAlvara: number | null;
-    honorariosPct: number | null;
-    sucumbencia: 'Sim' | 'Não' | null;
-    sucumbenciaModo: 'Valor fixo' | 'Percentual' | null;
-    sucumbenciaPct: number | null;
-    sucumbenciaBase: string | null;
-    sucumbenciaBaseValor: number | null;
-    valorSucumbencia: number | null;
-    cliente: string | null;
-    cnj: string | null;
-    totalExecutado: number | null;
-    dataBaseCalculo: string | null;
-    indiceCorrecao: string | null;
-    // Decomposição lida do demonstrativo de cálculo (só `proveito` entra na base do contratual).
-    verbas: { label: string; valor: number; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[] | null;
-    // Sucumbência que o NOSSO cliente deve à parte contrária (desconta do repasse dele).
-    deducoes: { label: string; valor: number; cnjIncidente: string | null }[] | null;
-    beneficiarioAlvara: 'cliente' | 'escritorio' | null;
-    /** Alvarás expedidos citados na peça — casados com as linhas do extrato para juntar sozinho. */
-    alvaras: { valor: number; beneficiario: 'cliente' | 'escritorio' | null }[] | null;
-    aviso?: string;
-  }> {
+  ): Promise<AlvaraExtraido> {
     const fd = new FormData();
     files.forEach((f) => fd.append('files', f));
     const { data } = await api.post('/calculadora-cs/extrair-alvara', fd, {
