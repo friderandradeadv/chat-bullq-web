@@ -2375,9 +2375,18 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const totalDev = a?.parcial ? parseValor(a?.totalDevido || '') : 0;
     const fracao = a?.parcial && totalDev > bruto && totalDev > 0 ? bruto / totalDev : 1;
-    const verbas = (a?.verbas ?? []).filter((v) => v && parseValor(v.valor) > 0);
-    const temVerbas = verbas.length > 0;
-    const somaNat = (n: VerbaLinha['natureza']) => r2(verbas.filter((v) => v.natureza === n).reduce((acc, v) => acc + parseValor(v.valor), 0));
+    const verbasDecl = (a?.verbas ?? []).filter((v) => v && parseValor(v.valor) > 0);
+    const temVerbas = verbasDecl.length > 0;
+    // ATUALIZAÇÃO ATÉ O CRÉDITO (espelho de calcExito na api): as verbas vêm do demonstrativo,
+    // que tem data-base; o dinheiro cai meses depois, corrigido. Diferença de até 2% é a
+    // correção do período — rateia proporcional, que é o que se faria à mão. Acima disso não
+    // mexe: aí é verba faltando, e tem de aparecer em vez de ser dissolvida no rateio.
+    const somaDecl = r2(verbasDecl.reduce((acc, v) => acc + parseValor(v.valor), 0));
+    const desvio = temVerbas && somaDecl > 0 ? Math.abs(bruto - somaDecl) / somaDecl : 0;
+    const atualizada = temVerbas && bruto > 0 && desvio > 0 && desvio <= 0.02;
+    const fatorAtual = atualizada ? bruto / somaDecl : 1;
+    const verbas = verbasDecl.map((v) => ({ ...v, _n: r2(parseValor(v.valor) * fatorAtual) }));
+    const somaNat = (n: VerbaLinha['natureza']) => r2(verbas.filter((v) => v.natureza === n).reduce((acc, v) => acc + v._n, 0));
     let suc: number;
     if (temVerbas) {
       suc = somaNat('sucumbencia_nossa');
@@ -2418,7 +2427,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     // As verbas declaradas têm de somar o bruto — senão a decomposição está incompleta.
     const somaVerbas = r2(suc + reembCli + reembEsc + condenacao);
     const verbasBatem = !temVerbas || Math.abs(somaVerbas - bruto) <= 0.02;
-    return { suc, condenacao, hon, honAuto, nosso, nossoTotal, cli, cliBruto, reembCli, reembEsc, deducoes, deducoesTotal, temVerbas, somaVerbas, verbasBatem, ajustado, igualarCliente, excedeCliente, excedente,
+    return { suc, condenacao, hon, honAuto, nosso, nossoTotal, cli, cliBruto, reembCli, reembEsc, deducoes, deducoesTotal, temVerbas, somaVerbas, verbasBatem, somaDecl, atualizada, fatorAtual, ajustado, igualarCliente, excedeCliente, excedente,
       valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 && verbasBatem };
   };
   // GRUPO = o mesmo crédito entrando em mais de um alvará (o cartório separa por conta
@@ -3093,8 +3102,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 {calc.temVerbas && (() => { const alvo = grupoCalc ? grupoCalc.brutoG : bruto; return (
                                   <p className={`mt-1 text-[10px] ${calc.verbasBatem ? 'text-zinc-400' : 'font-semibold text-rose-600'}`}>
                                     {calc.verbasBatem
-                                      ? `verbas somam ${brl2(calc.somaVerbas)} = ${grupoCalc ? 'bruto do grupo' : 'alvará'} ✓`
-                                      : `verbas somam ${brl2(calc.somaVerbas)}, ${grupoCalc ? 'o grupo' : 'o alvará'} é ${brl2(alvo)} — faltam ${brl2(Math.round((alvo - calc.somaVerbas) * 100) / 100)}`}
+                                      ? (calc.atualizada
+                                        ? `verbas do demonstrativo somam ${brl2(calc.somaDecl)} → atualizadas para ${brl2(alvo)}, o que entrou (+${((calc.fatorAtual - 1) * 100).toFixed(2)}% de correção do período) ✓`
+                                        : `verbas somam ${brl2(calc.somaVerbas)} = ${grupoCalc ? 'bruto do grupo' : 'alvará'} ✓`)
+                                      : `verbas somam ${brl2(calc.somaDecl)} e ${grupoCalc ? 'o grupo' : 'o alvará'} é ${brl2(alvo)} — diferença de ${brl2(Math.abs(Math.round((alvo - calc.somaDecl) * 100) / 100))}, grande demais para ser correção do período. Confira se alguma verba do demonstrativo ficou de fora.`}
                                   </p>
                                 ); })()}
                               </div>
