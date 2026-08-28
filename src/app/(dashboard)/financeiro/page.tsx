@@ -2251,8 +2251,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio'; unificar?: boolean }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio'; unificar?: boolean }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
+  // Despesas já lançadas no processo escolhido (guias, custas) — viram desconto com 1 clique.
+  const [despesasCaso, setDespesasCaso] = useState<Record<number, { txId: string; data: string; descricao: string; categoria: string; valor: number; pago: boolean; jaUsada: boolean }[]>>({});
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
@@ -2308,7 +2310,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   //   • cliente (líquido) = condenação − contratual + reembolso dele − deduções
   //   • deduções = obrigações do cliente quitadas do alvará (sucumbência que ELE deve, guias)
   type VerbaLinha = { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' };
-  type DeducaoLinha = { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string };
+  type DeducaoLinha = { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string };
   // ESPELHO de `calcExito` (api/src/modules/financeiro/financeiro.service.ts) — mudou aqui, mude lá.
   // Com `verbas` declaradas o bruto deixa de ser tratado como bloco único: só o que é PROVEITO
   // entra na base do contratual. Reembolso de custas que o cliente adiantou é devolução, não
@@ -2411,8 +2413,19 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     return { calc: { ...g.calcG, ...f, nosso: Math.round((f.suc + f.hon) * 100) / 100 }, grupo: g };
   };
   // ALVARÁ: puxa o rateio entre advogados salvo (socioSplit do responsável, por vertical) pra pré-preencher.
+  // DESPESAS DO PROCESSO: guias e custas que o escritório adiantou naquele caso. Puxadas
+  // ao escolher o processo, viram desconto da parte do cliente com um clique — amarradas ao
+  // lançamento de saída real, que é o rastro que antes dependia de alguém lembrar.
+  const puxarDespesasCaso = async (idx: number, caseId?: string) => {
+    if (!caseId) { setDespesasCaso((d) => ({ ...d, [idx]: [] })); return; }
+    try {
+      const r = await financeiroService.despesasDoCaso(caseId);
+      setDespesasCaso((d) => ({ ...d, [idx]: r }));
+    } catch { setDespesasCaso((d) => ({ ...d, [idx]: [] })); }
+  };
   const puxarRateioAlvara = async (idx: number, caseId?: string, vertical?: string) => {
     if (!caseId) return;
+    void puxarDespesasCaso(idx, caseId);
     try {
       const r = await financeiroService.rateioSugerido(caseId, vertical);
       setAlvara((s) => ({ ...s, [idx]: { ...(s[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' }), vertical: s[idx]?.vertical || r.vertical || '', split: r.split.map((x) => ({ userId: x.userId, nome: x.nome, pct: String(x.pct) })) } }));
@@ -2442,6 +2455,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         if (r.cliente || cliParty?.name) patch.clienteNome = cliParty?.name || r.cliente || cur.clienteNome;
         if (cliParty?.contactId) patch.contactId = cliParty.contactId;
         if (hit) { patch.caseId = hit.id; patch.procLabel = `${hit.title}${hit.cnjNumber ? ` · ${hit.cnjNumber}` : ''}`; }
+        if (hit) void puxarDespesasCaso(idx, hit.id);
         if (hit?.cnjNumber || r.cnj) patch.cnj = hit?.cnjNumber || r.cnj || cur.cnj; // p/ puxar o valor da causa no DataJud
         // Honorário contratual em % → incide sobre o BRUTO do alvará.
         if (r.honorariosPct) { patch.honMode = 'pct'; patch.honPct = String(r.honorariosPct); }
@@ -2511,7 +2525,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).filter((v) => v.label.trim() && parseValor(v.valor) > 0).map((v) => ({ label: v.label.trim(), valor: parseValor(v.valor), natureza: v.natureza })), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, unificar: a?.unificar === true }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).filter((v) => v.label.trim() && parseValor(v.valor) > 0).map((v) => ({ label: v.label.trim(), valor: parseValor(v.valor), natureza: v.natureza })), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, unificar: a?.unificar === true }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -2752,6 +2766,26 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       const somaPct = rows.reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
                       const escrPct = Math.max(0, 100 - somaPct);
                       const busy = !!alvaraBusy[i];
+                      // UNIFICADO: só a linha ÂNCORA (a primeira do grupo) mostra o painel. As outras
+                      // viram uma tarja — abrir o formulário inteiro nas duas convida a preencher o
+                      // mesmo crédito duas vezes, que é justamente o que a unificação evita.
+                      if (grupoCalc?.unificar && grupoCalc.idxs[0] !== i) {
+                        const ancora = conf.linhas[grupoCalc.idxs[0]];
+                        return (
+                          <tr className="border-t border-zinc-100 bg-violet-50/40 dark:border-zinc-800 dark:bg-violet-900/10">
+                            <td></td>
+                            <td colSpan={5} className="px-2 py-2">
+                              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-300/60 bg-violet-500/5 px-2.5 py-2 text-[11px] dark:border-violet-900/50">
+                                <span>🔗</span>
+                                <span className="min-w-0 flex-1 text-zinc-600 dark:text-zinc-300">
+                                  Mesmo crédito do recebimento de <strong>{ancora?.data}</strong> — total <strong>{brl2(grupoCalc.brutoG)}</strong>. Os dois entram como <strong>um lançamento só</strong>; preencha tudo na linha de cima.
+                                </span>
+                                <button type="button" onClick={() => setAlvara((st) => ({ ...st, [i]: { ...(st[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), grupoId: undefined, unificar: undefined } }))} className="shrink-0 rounded bg-zinc-500/10 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 hover:bg-zinc-500/20 dark:text-zinc-300">separar</button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
                       return (
                         <tr className="border-t border-zinc-100 bg-violet-50/40 dark:border-zinc-800 dark:bg-violet-900/10">
                           <td></td>
@@ -2955,6 +2989,32 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                     <button type="button" onClick={() => set({ deducoes: (a.deducoes ?? []).filter((_, kk) => kk !== k) })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                                   </div>
                                 ))}
+                                {/* DESPESAS JÁ LANÇADAS NO PROCESSO. Em vez de redigitar a guia, marca-se aqui —
+                                    e o desconto guarda o txId da saída real, então fica com lastro no extrato
+                                    em vez de depender de alguém lembrar de anexar o comprovante. */}
+                                {(despesasCaso[i] ?? []).length > 0 && (
+                                  <div className="mt-1.5 rounded border border-dashed border-orange-300/60 px-2 py-1.5 dark:border-orange-900/40">
+                                    <p className="text-[10px] font-medium text-orange-900/80 dark:text-orange-300/80">💸 Despesas já lançadas neste processo — marque as que saem deste alvará</p>
+                                    <div className="mt-1 space-y-0.5">
+                                      {(despesasCaso[i] ?? []).map((d) => {
+                                        const marcado = (a.deducoes ?? []).some((x) => x.txIdSaida === d.txId);
+                                        const travada = d.jaUsada && !marcado;
+                                        return (
+                                          <label key={d.txId} className={`flex items-center gap-1.5 rounded px-1 py-0.5 text-[11px] ${travada ? 'opacity-50' : 'cursor-pointer hover:bg-orange-100/40 dark:hover:bg-orange-900/20'}`} title={travada ? 'Já descontada em outra prestação deste processo' : undefined}>
+                                            <input type="checkbox" disabled={travada} checked={marcado} onChange={(e) => set({ deducoes: e.target.checked
+                                              ? [...(a.deducoes ?? []), { label: d.descricao, valor: fmtMoney(d.valor), tipo: 'despesa_reembolsavel' as const, txIdSaida: d.txId }]
+                                              : (a.deducoes ?? []).filter((x) => x.txIdSaida !== d.txId) })} className="h-3 w-3 accent-orange-600" />
+                                            <span className="shrink-0 text-zinc-500 dark:text-zinc-400">{d.data}</span>
+                                            <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">{d.descricao}</span>
+                                            {travada && <span className="shrink-0 text-[9px] text-zinc-400">já descontada</span>}
+                                            {!d.pago && <span className="shrink-0 rounded bg-amber-500/15 px-1 text-[9px] text-amber-700 dark:text-amber-400">a pagar</span>}
+                                            <span className="shrink-0 font-medium text-rose-600">{brl2(d.valor)}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
                                 {calc.deducoesTotal > 0 && <p className="mt-1 text-[10px] text-orange-700/80 dark:text-orange-400/80">total descontado {brl2(calc.deducoesTotal)} · repasse ao cliente cai de {brl2(calc.cliBruto)} para <strong>{brl2(calc.cli)}</strong>. Lance cada um como saída própria vinculada ao processo.</p>}
                               </div>
                               {/* JUNTAR ALVARÁS DO MESMO CRÉDITO. O cartório reparte o depósito em
@@ -3038,13 +3098,16 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 </label>
                                 {a.parcial && (() => {
                                   const total = parseValor(a.totalDevido || '');
-                                  const falta = total > bruto ? total - bruto : 0;
+                                  // Com os alvarás juntos, o recebido é o do GRUPO — senão acusa
+                                  // falta de um valor que já entrou pela outra linha.
+                                  const brutoRef = grupoCalc ? grupoCalc.brutoG : bruto;
+                                  const falta = total > brutoRef ? total - brutoRef : 0;
                                   return (
                                     <div className="mt-1.5">
                                       <div className="flex flex-wrap items-center gap-2">
                                         <span className="text-[11px] text-zinc-500">Total devido (executado):</span>
                                         <div className="w-32"><MoneyInput value={a.totalDevido ?? ''} onChange={(v) => set({ totalDevido: v, totalFromIA: false })} placeholder="total" /></div>
-                                        {total > 0 && <span className="text-[11px] text-zinc-500">recebido {brl2(bruto)} · <span className="font-semibold text-amber-700 dark:text-amber-400">falta {brl2(falta)}</span> · card fica no cumprimento</span>}
+                                        {total > 0 && <span className="text-[11px] text-zinc-500">recebido {brl2(brutoRef)} · <span className="font-semibold text-amber-700 dark:text-amber-400">falta {brl2(falta)}</span> · card fica no cumprimento</span>}
                                       </div>
                                       {a.totalFromIA && <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">⚠️ Total lido da petição pela IA — confira se está atualizado até a data do depósito (pode faltar a correção do período).</p>}
                                     </div>
