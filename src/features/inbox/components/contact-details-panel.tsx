@@ -1279,6 +1279,17 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           responsável da CONVERSA. É o que o robô usa pra transferir. */}
       <ClientResponsibleSection contactId={contact.id} />
 
+      {/* Acesso ao Meu INSS / gov.br. Fica AQUI, no alto: é o dado mais usado no
+          pós-venda (puxar extrato, conferir se o banco parou o desconto). Estava
+          lá embaixo, depois das Propriedades e das etiquetas — num contato com
+          muitas etiquetas caía abaixo da dobra e parecia não existir. */}
+      <ClientRegistrationSection
+        contactId={contact.id}
+        phone={contact.phone}
+        name={contact.name}
+        isCliente={isCliente}
+      />
+
       {/* Atendimento — clicar no card abre a troca de responsável */}
       <div className="mt-5 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
         <p className="mb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Atendimento</p>
@@ -1687,14 +1698,6 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
           </div>
         )}
       </div>
-
-      {/* Dados cadastrais (CPF/RG/endereço) + atalho pra ficha nos Contatos */}
-      <ClientRegistrationSection
-        contactId={contact.id}
-        phone={contact.phone}
-        name={contact.name}
-        isCliente={isCliente}
-      />
 
       {/* Processos do cliente — vínculo chat ↔ jurídico */}
       <ClientCasesSection contactId={contact.id} clienteNome={contact.name} />
