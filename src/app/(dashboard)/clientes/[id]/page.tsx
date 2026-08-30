@@ -513,14 +513,25 @@ export default function ClienteDetailPage() {
               {/* ACESSOS — credencial de terceiro (gov.br / Meu INSS). Separada de
                   propósito: é o dado mais sensível da ficha e não deve ficar
                   misturado com telefone e e-mail. */}
-              {(cadastro?.login || cadastro?.senha) && (
-                <Card title="Acessos gov.br / Meu INSS" icon={KeyRound}>
+              <Card title="Acessos gov.br / Meu INSS" icon={KeyRound}>
+                {cadastro?.login || cadastro?.senha ? (
                   <dl className="space-y-3 text-sm">
                     <DataRow icon={KeyRound} label="Login" value={cadastro.login} copyable />
                     <DataRow icon={KeyRound} label="Senha" value={cadastro.senha} copyable secret />
+                    {!cadastro?.senha && (
+                      <p className="text-xs text-amber-600 dark:text-amber-500">
+                        Senha ainda não enviada pelo cliente.
+                      </p>
+                    )}
                   </dl>
-                </Card>
-              )}
+                ) : (
+                  <p className="text-sm text-zinc-400">
+                    Sem acesso salvo. O login é o CPF do cliente e a senha é capturada
+                    sozinha quando ele a manda no chat — se já tiver em mãos, preencha em
+                    “Editar ficha”.
+                  </p>
+                )}
+              </Card>
             </div>
           </div>
             </div>

@@ -158,10 +158,14 @@ function ClientRegistrationSection({
   contactId,
   phone,
   name,
+  isCliente,
 }: {
   contactId: string;
   phone: string | null;
   name: string | null;
+  /** Contrato assinado = cliente. Pra CLIENTE a seção aparece SEMPRE, mesmo sem
+   *  credencial: o vazio é informação (falta pedir a senha). Pra lead, some. */
+  isCliente: boolean;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -208,8 +212,8 @@ function ClientRegistrationSection({
     router.push(`/contacts${q ? `?search=${encodeURIComponent(q)}` : ''}`);
   };
 
-  // Sem login/senha salvos → nada aqui (painel limpo pra leads).
-  if (!cad.login && !cad.senha) return null;
+  // Lead sem login/senha → nada aqui (painel limpo). Cliente sempre vê a seção.
+  if (!cad.login && !cad.senha && !isCliente) return null;
 
   return (
     <div className="mt-4 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
@@ -266,6 +270,17 @@ function ClientRegistrationSection({
               </button>
             </span>
           </div>
+        )}
+        {!cad.login && !cad.senha && (
+          <p className="text-[11px] leading-snug text-zinc-400">
+            Sem acesso salvo. O login é o CPF; a senha entra sozinha quando o cliente
+            a manda aqui no chat.
+          </p>
+        )}
+        {cad.login && !cad.senha && (
+          <p className="text-[11px] leading-snug text-amber-600 dark:text-amber-500">
+            Senha ainda não enviada pelo cliente.
+          </p>
         )}
       </div>
     </div>
@@ -1678,6 +1693,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
         contactId={contact.id}
         phone={contact.phone}
         name={contact.name}
+        isCliente={isCliente}
       />
 
       {/* Processos do cliente — vínculo chat ↔ jurídico */}
