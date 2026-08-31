@@ -134,6 +134,29 @@ function statusTooltip(status: string, failedReason?: string | null): string {
   }
 }
 
+/**
+ * Bloqueio de CONTA na Meta (WABA banida/restrita, número banido). Reenviar
+ * nunca vai funcionar — nem texto, nem template — então o botão some e fica só
+ * a explicação. Casa com os motivos que a API grava a partir do `health_status`.
+ */
+function isAccountBlocked(failedReason?: string | null): boolean {
+  if (!failedReason) return false;
+  return /banid|bloque|141014|131031|accountquality/i.test(failedReason);
+}
+
+/**
+ * Motivo da falha em uma linha, visível na conversa (antes só existia no
+ * tooltip — e uma bolha vermelha muda faz o atendente reenviar a mesma
+ * mensagem à toa).
+ */
+function failureText(failedReason?: string | null): string {
+  if (!failedReason) return 'Falhou ao enviar.';
+  if (/re-?engagement/i.test(failedReason)) {
+    return 'Não entregue: o cliente não escreve há mais de 24h. Use um template aprovado (menu ＋ → Enviar template) para reabrir a conversa.';
+  }
+  return failedReason;
+}
+
 const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
 const IG_CDN_HOSTS = /(lookaside\.fbsbx\.com|cdninstagram\.com|fbcdn\.net)/i;
 
@@ -1695,9 +1718,15 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                           </div>
                         </div>
                       )}
-                      {/* Falhou? Oferece reenviar (envio novo com o mesmo conteúdo). */}
+                      {/* Falhou? Mostra o MOTIVO na tela (não só no tooltip) e
+                          oferece reenviar — menos quando reenviar é inútil
+                          (conta bloqueada na Meta): aí só explica o que fazer. */}
                       {isOutbound && msg.status === 'FAILED' && !isRevoked && (
-                        <div className="mt-1 flex justify-end">
+                        <div className="mt-1 flex flex-col items-end gap-1">
+                          <span className="max-w-[min(28rem,100%)] text-right text-[11px] leading-snug text-red-600 dark:text-red-400">
+                            {failureText(msg.failedReason)}
+                          </span>
+                          {!isAccountBlocked(msg.failedReason) && (
                           <button
                             type="button"
                             onClick={() => handleResend(msg)}
@@ -1708,6 +1737,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                             <RotateCw className={`h-3 w-3 ${resendingId === msg.id ? 'animate-spin' : ''}`} />
                             {resendingId === msg.id ? 'Reenviando…' : 'Reenviar'}
                           </button>
+                          )}
                         </div>
                       )}
                       {reactions.length > 0 && (
