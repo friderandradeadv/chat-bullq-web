@@ -54,6 +54,7 @@ import {
 import { toast } from 'sonner';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
+import { contactsService } from '@/features/contacts/services/contacts.service';
 import {
   clientDocumentsService,
   CATEGORIA_LABEL,
@@ -229,17 +230,30 @@ export default function ClienteDetailPage() {
     queryFn: () => legalCasesService.get(repCaseId!),
     enabled: !!repCaseId,
   });
+  // A ficha lia o cadastro SÓ pela party de um processo judicial (`meusCasos`
+  // vem da lista com hasCnj). Cliente recém-assinado não tem processo — e a
+  // ficha abria vazia mesmo com CPF, endereço e senha do gov.br gravados no
+  // CONTATO, que é justamente onde o chat, a captura automática e o "Editar
+  // ficha" escrevem. O contato passa a ser a primeira fonte.
+  const { data: contactFull } = useQuery({
+    queryKey: ['contact-full', contact?.id],
+    queryFn: () => contactsService.getById(contact!.id),
+    enabled: !!contact?.id,
+    staleTime: 60_000,
+  });
   const cadastro: Cadastro | null = useMemo(() => {
+    const doContato = (contactFull?.metadata as any)?.cadastro as Cadastro | undefined;
+    if (doContato && Object.keys(doContato).length) return doContato;
     if (!caseDetail || !cliente) return null;
     const key = norm(cliente.name);
     const party = caseDetail.parties.find((p) => p.role === 'CLIENT' && norm(p.name) === key)
       ?? caseDetail.parties.find((p) => p.role === 'CLIENT');
-    // Contato tem prioridade; se não houver (cliente sem contato vinculado), lê do próprio party
-    // (é onde a varredura das procurações grava o cadastro, casado por CPF).
+    // Sem contato vinculado, lê do próprio party (é onde a varredura das
+    // procurações grava o cadastro, casado por CPF).
     return (party?.contact?.metadata?.cadastro as Cadastro | undefined)
       ?? ((party?.metadata as any)?.cadastro as Cadastro | undefined)
       ?? null;
-  }, [caseDetail, cliente]);
+  }, [contactFull, caseDetail, cliente]);
 
   // Badge da aba Documentos. Mesma chave do card, então o React Query serve a
   // resposta já em cache em vez de repetir a chamada.
