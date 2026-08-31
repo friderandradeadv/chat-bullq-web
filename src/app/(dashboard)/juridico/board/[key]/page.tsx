@@ -14,6 +14,42 @@ type Polo = 'exequente' | 'executado';
 const poloDoCard = (c: KanbanCard): Polo => (c.polo === 'executado' ? 'executado' : 'exequente');
 
 /**
+ * Tipo do título: processo de EXECUÇÃO autônomo (título extrajudicial,
+ * honorários, monitória) × processo em FASE de cumprimento de sentença. Ritos
+ * diferentes — muda a defesa do devedor e o que se cobra. Card sem o campo
+ * (ficha antiga) = cumprimento, que é a esmagadora maioria da carteira.
+ */
+type Tipo = 'cumprimento' | 'execucao';
+const tipoDoCard = (c: KanbanCard): Tipo => (c.tipo === 'execucao' ? 'execucao' : 'cumprimento');
+
+/** Um segmento do cabeçalho (Exequente×Executado, Cumprimento×Execução). */
+function Segmentado<T extends string>({ valor, onMuda, opcoes, cor }: {
+  valor: T;
+  onMuda: (v: T) => void;
+  opcoes: { v: T; label: string; n: number; dica: string }[];
+  cor: string;
+}) {
+  return (
+    <div className="flex items-center rounded-lg border border-[#cfe0ed] bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
+      {opcoes.map((o) => (
+        <button
+          key={o.v}
+          onClick={() => onMuda(o.v)}
+          title={o.dica}
+          className={`h-8 rounded-md px-3 text-sm font-medium transition-colors ${
+            valor === o.v ? 'text-white' : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+          }`}
+          style={valor === o.v ? { background: cor } : undefined}
+        >
+          {o.label}
+          <span className={`ml-1.5 text-xs ${valor === o.v ? 'text-white/80' : 'text-zinc-400'}`}>{o.n}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Quadro CUSTOM do jurídico (vertical criada pelo escritório sem deploy). Reusa o
  * AdminBoard: colunas = as fases do quadro (org.settings.kanbanPhases.custom com
  * `board` = esta chave), cards escopados no servidor por `lane` = a chave. Gestão
@@ -29,6 +65,11 @@ export default function CustomBoardPage() {
   // dativo) não é receita e embaralhava essa leitura — mas também não podia sumir.
   // Daí as duas visões: Exequente (padrão) × Executado.
   const [polo, setPolo] = useState<Polo>('exequente');
+  // 2º eixo: execução é PROCESSO autônomo, cumprimento de sentença é FASE do
+  // processo que já existe (CPC). Sem esta separação o sistema não tinha onde pôr
+  // uma execução e ela caía em qualquer coluna — duas estavam em "AGUARDANDO
+  // SENTENÇA", e execução não tem sentença.
+  const [tipo, setTipo] = useState<Tipo>('cumprimento');
 
   const { data: boards, isLoading } = useQuery({
     queryKey: ['legal-cases', 'boards'],
@@ -57,14 +98,23 @@ export default function CustomBoardPage() {
 
   // O toggle só existe no quadro da execução — nos demais, polo não quer dizer nada.
   const temPolo = key === 'execucao';
+  // Cada contador é medido DENTRO do recorte do outro eixo: com "Executado"
+  // selecionado, o número ao lado de "Execução" tem de ser o de execuções em que
+  // somos a defesa, não o da carteira toda — senão o usuário clica num número e
+  // cai numa coluna vazia.
   const porPolo = useMemo(() => {
     const n: Record<Polo, number> = { exequente: 0, executado: 0 };
-    for (const c of kb?.cards ?? []) n[poloDoCard(c)]++;
+    for (const c of kb?.cards ?? []) if (tipoDoCard(c) === tipo) n[poloDoCard(c)]++;
     return n;
-  }, [kb]);
+  }, [kb, tipo]);
+  const porTipo = useMemo(() => {
+    const n: Record<Tipo, number> = { cumprimento: 0, execucao: 0 };
+    for (const c of kb?.cards ?? []) if (poloDoCard(c) === polo) n[tipoDoCard(c)]++;
+    return n;
+  }, [kb, polo]);
   const filtrarPorPolo = useCallback(
-    (c: KanbanCard) => !temPolo || poloDoCard(c) === polo,
-    [temPolo, polo],
+    (c: KanbanCard) => !temPolo || (poloDoCard(c) === polo && tipoDoCard(c) === tipo),
+    [temPolo, polo, tipo],
   );
 
   if (isLoading) {
@@ -93,29 +143,29 @@ export default function CustomBoardPage() {
         filter={filtrarPorPolo}
         toolbar={
           temPolo ? (
-            <div className="flex items-center rounded-lg border border-[#cfe0ed] bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
-              {(['exequente', 'executado'] as Polo[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPolo(p)}
-                  title={
-                    p === 'exequente'
-                      ? 'Somos credores — é o que o escritório tem a receber'
-                      : 'Somos a defesa do executado — não entra no que temos a receber'
-                  }
-                  className={`h-8 rounded-md px-3 text-sm font-medium transition-colors ${
-                    polo === p
-                      ? 'text-white'
-                      : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
-                  }`}
-                  style={polo === p ? { background: board.color || '#2F9E44' } : undefined}
-                >
-                  {p === 'exequente' ? 'Exequente' : 'Executado'}
-                  <span className={`ml-1.5 text-xs ${polo === p ? 'text-white/80' : 'text-zinc-400'}`}>
-                    {porPolo[p]}
-                  </span>
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <Segmentado
+                valor={tipo}
+                onMuda={setTipo}
+                cor={board.color || '#2F9E44'}
+                opcoes={[
+                  { v: 'cumprimento', label: 'Cumprimento', n: porTipo.cumprimento,
+                    dica: 'FASE do processo que já existe — ganhamos e estamos executando a sentença (CPC 513-538)' },
+                  { v: 'execucao', label: 'Execução', n: porTipo.execucao,
+                    dica: 'PROCESSO autônomo — título extrajudicial, honorários, monitória (CPC 771 e ss.)' },
+                ]}
+              />
+              <Segmentado
+                valor={polo}
+                onMuda={setPolo}
+                cor={board.color || '#2F9E44'}
+                opcoes={[
+                  { v: 'exequente', label: 'Exequente', n: porPolo.exequente,
+                    dica: 'Somos credores — é o que o escritório tem a receber' },
+                  { v: 'executado', label: 'Executado', n: porPolo.executado,
+                    dica: 'Somos a defesa do executado — não entra no que temos a receber' },
+                ]}
+              />
             </div>
           ) : undefined
         }

@@ -196,6 +196,8 @@ export interface CreateCaseInput {
   instancia?: string;
   /** Lado do cliente na execução — separa as duas visões do quadro Execução & Repasse. */
   polo?: 'exequente' | 'executado';
+  /** Tipo do título — execução autônoma × fase de cumprimento de sentença. */
+  tipo?: 'cumprimento' | 'execucao';
   value?: number;
   responsibleId?: string;
   parties?: PartyInput[];
@@ -260,6 +262,9 @@ export interface KanbanCard {
   // Repasse ("o que temos a receber" × defesa). Sai de metadata.poloExecucao ou,
   // na falta dele, do "Papel do cliente" do Astrea.
   polo?: 'exequente' | 'executado';
+  // Processo de EXECUÇÃO autônomo (título extrajudicial/honorários/monitória) ×
+  // processo em FASE de cumprimento de sentença. Eixo do título, não do estágio.
+  tipo?: 'cumprimento' | 'execucao';
   // Processos APENSADOS fundidos neste card (o cumprimento de sentença autuado
   // em apartado). O card é um só; o número dos autos do apenso viaja aqui porque
   // é NELE que o advogado peticiona.
