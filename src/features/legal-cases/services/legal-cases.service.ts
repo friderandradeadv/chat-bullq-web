@@ -194,6 +194,8 @@ export interface CreateCaseInput {
   distributedAt?: string;
   /** "1º Grau" | "2º Grau" | "" para limpar. Palavra final do advogado sobre a instância. */
   instancia?: string;
+  /** Lado do cliente na execução — separa as duas visões do quadro Execução & Repasse. */
+  polo?: 'exequente' | 'executado';
   value?: number;
   responsibleId?: string;
   parties?: PartyInput[];
@@ -254,6 +256,15 @@ export interface KanbanCard {
   title: string;
   cnj: string | null;
   clientDocument: string | null; // CPF/CNPJ do cliente, só dígitos (busca do Kanban)
+  // Lado do cliente na execução — separa as duas visões do quadro Execução &
+  // Repasse ("o que temos a receber" × defesa). Sai de metadata.poloExecucao ou,
+  // na falta dele, do "Papel do cliente" do Astrea.
+  polo?: 'exequente' | 'executado';
+  // Processos APENSADOS fundidos neste card (o cumprimento de sentença autuado
+  // em apartado). O card é um só; o número dos autos do apenso viaja aqui porque
+  // é NELE que o advogado peticiona.
+  apensos?: { id: string; cnj: string | null; produto: string | null; phase: string; value: number | null }[];
+  parentCaseId?: string | null;
   produto: string | null; // 1ª etiqueta (RMC/BPC-LOAS…)
   areaJuridica: string | null; // 2ª etiqueta (Bancário/Previdenciário…)
   vencemos: string | null; // 'Sim' | 'Não' | 'Parcial' | resultado da sentença → badge

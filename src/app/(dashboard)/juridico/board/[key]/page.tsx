@@ -1,13 +1,17 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LayoutGrid, Loader2 } from 'lucide-react';
 import { AdminBoard } from '@/features/legal-cases/components/admin-board';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
-import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { legalCasesService, type KanbanCard } from '@/features/legal-cases/services/legal-cases.service';
 import { boardOfPhase } from '@/features/legal-cases/lib/phase-board';
+
+/** Lado do cliente na execução. Card sem o campo (ficha antiga) = exequente. */
+type Polo = 'exequente' | 'executado';
+const poloDoCard = (c: KanbanCard): Polo => (c.polo === 'executado' ? 'executado' : 'exequente');
 
 /**
  * Quadro CUSTOM do jurídico (vertical criada pelo escritório sem deploy). Reusa o
@@ -20,6 +24,11 @@ export default function CustomBoardPage() {
   const key = String(params?.key ?? '');
   const qc = useQueryClient();
   const [novo, setNovo] = useState(false);
+  // Execução & Repasse é o pipeline do DINHEIRO, e o quadro nasceu para responder
+  // "o que temos a receber". Um cumprimento em que o cliente é o EXECUTADO (defesa,
+  // dativo) não é receita e embaralhava essa leitura — mas também não podia sumir.
+  // Daí as duas visões: Exequente (padrão) × Executado.
+  const [polo, setPolo] = useState<Polo>('exequente');
 
   const { data: boards, isLoading } = useQuery({
     queryKey: ['legal-cases', 'boards'],
@@ -46,6 +55,18 @@ export default function CustomBoardPage() {
     [kb, key],
   );
 
+  // O toggle só existe no quadro da execução — nos demais, polo não quer dizer nada.
+  const temPolo = key === 'execucao';
+  const porPolo = useMemo(() => {
+    const n: Record<Polo, number> = { exequente: 0, executado: 0 };
+    for (const c of kb?.cards ?? []) n[poloDoCard(c)]++;
+    return n;
+  }, [kb]);
+  const filtrarPorPolo = useCallback(
+    (c: KanbanCard) => !temPolo || poloDoCard(c) === polo,
+    [temPolo, polo],
+  );
+
   if (isLoading) {
     return (
       <div className="flex h-40 items-center justify-center text-zinc-400">
@@ -69,7 +90,35 @@ export default function CustomBoardPage() {
         icon={LayoutGrid}
         accent={board.color || '#6741d9'}
         lane={key}
-        filter={() => true}
+        filter={filtrarPorPolo}
+        toolbar={
+          temPolo ? (
+            <div className="flex items-center rounded-lg border border-[#cfe0ed] bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
+              {(['exequente', 'executado'] as Polo[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPolo(p)}
+                  title={
+                    p === 'exequente'
+                      ? 'Somos credores — é o que o escritório tem a receber'
+                      : 'Somos a defesa do executado — não entra no que temos a receber'
+                  }
+                  className={`h-8 rounded-md px-3 text-sm font-medium transition-colors ${
+                    polo === p
+                      ? 'text-white'
+                      : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  }`}
+                  style={polo === p ? { background: board.color || '#2F9E44' } : undefined}
+                >
+                  {p === 'exequente' ? 'Exequente' : 'Executado'}
+                  <span className={`ml-1.5 text-xs ${polo === p ? 'text-white/80' : 'text-zinc-400'}`}>
+                    {porPolo[p]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : undefined
+        }
         columnsFromPhases={(p) => noQuadro(p)}
         manageBoard={key}
         drawerBoard={key}

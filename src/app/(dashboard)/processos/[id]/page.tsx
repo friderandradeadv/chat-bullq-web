@@ -103,6 +103,20 @@ const getInstancia = (c: CaseDetail): string | null => {
   return labelInstancia(a?.instanciaAtual ?? a?.raw?.['Instância Atual']);
 };
 
+/**
+ * Polo do CLIENTE na execução — o eixo do toggle "Exequente × Executado" do quadro
+ * Execução & Repasse. Espelha `poloExecucao` da API: a escolha do advogado
+ * (metadata.poloExecucao) manda sobre o "Papel do cliente" importado do Astrea.
+ * Papel RECURSAL (Agravado/Recorrido/Apelado) NÃO é polo passivo — o cliente é
+ * agravado porque o banco recorreu da vitória DELE.
+ */
+const PAPEL_EXECUTADO = /^(r[eé]u|requerid[oa]|executad[oa]|reclamad[oa]|embargad[oa]|impugnad[oa]|denunciad[oa]|suscitad[oa])$/i;
+const getPolo = (c: CaseDetail): 'exequente' | 'executado' => {
+  const m = (c.metadata as { poloExecucao?: string; astrea?: { raw?: Record<string, string> } } | null) ?? {};
+  if (m.poloExecucao === 'executado' || m.poloExecucao === 'exequente') return m.poloExecucao;
+  return PAPEL_EXECUTADO.test((m.astrea?.raw?.['Papel do cliente'] ?? '').trim()) ? 'executado' : 'exequente';
+};
+
 // Raia do card no kanban: fases pré-judiciais vivem no quadro Pré-Processual;
 // o resto no quadro Fase Judicial. Ambos abrem a ficha via ?case=<id>.
 const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
@@ -1558,6 +1572,9 @@ function EditCaseDialog({
   // Instância editável: a detecção pelo texto da publicação erra para MENOS de
   // propósito (ver detectInstancia), então quem sabe é o advogado.
   const [instancia, setInstancia] = useState(getInstancia(c) ?? '');
+  // Polo na execução: define de que lado do quadro Execução & Repasse o card cai.
+  // Só o advogado sabe quando o Astrea não trouxe o papel (ficha nascida do DJEN).
+  const [polo, setPolo] = useState<'exequente' | 'executado'>(getPolo(c));
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
   // Cliente: sai daqui porque é aqui que se procura por ele. Antes só existia
@@ -1582,6 +1599,7 @@ function EditCaseDialog({
     try {
       await legalCasesService.update(c.id, {
         instancia,
+        polo,
         title: form.title.trim(),
         cnjNumber: form.cnjNumber,
         internalCode: form.internalCode,
@@ -1694,6 +1712,12 @@ function EditCaseDialog({
             <option value="">Não definida</option>
             <option value="1º Grau">1º Grau</option>
             <option value="2º Grau">2º Grau</option>
+          </select>
+        </Field>
+        <Field label="Polo na execução">
+          <select value={polo} onChange={(e) => setPolo(e.target.value as 'exequente' | 'executado')} className={inputCls}>
+            <option value="exequente">Exequente — temos a receber</option>
+            <option value="executado">Executado — somos a defesa</option>
           </select>
         </Field>
         <Field label="Status">

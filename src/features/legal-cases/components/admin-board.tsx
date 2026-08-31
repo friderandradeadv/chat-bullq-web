@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock, Plus } from 'lucide-react';
+import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock, Plus, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
@@ -64,6 +64,9 @@ export interface AdminBoardProps {
   drawerBoard?: Board;
   /** botão "Novo caso" no cabeçalho (abre o dialog na página); ausente = sem botão. */
   onNewCard?: () => void;
+  /** controle extra no cabeçalho, à esquerda da busca (ex.: o toggle Exequente ×
+   *  Executado do quadro Execução & Repasse). O estado vive na página. */
+  toolbar?: React.ReactNode;
 }
 
 /**
@@ -71,7 +74,7 @@ export interface AdminBoardProps {
  * os cards do kanban jurídico, filtra pela trilha e agrupa por PRODUTO em colunas.
  * Cards clicáveis abrem a ficha (sem drag — a trilha não é uma fase movível).
  */
-export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases, lane, manageBoard, drawerBoard, onNewCard }: AdminBoardProps) {
+export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyHint, columns: colDefs, columnsFromPhases, lane, manageBoard, drawerBoard, onNewCard, toolbar }: AdminBoardProps) {
   // queryKey por lane (mesma convenção dos demais boards) — evita colisão de cache.
   const KEY = ['legal-cases', 'kanban', lane ?? 'all'];
   const qc = useQueryClient();
@@ -197,7 +200,8 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{filtered.length}</span>
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· {subtitle}</span>
-          <div className="relative ml-auto">
+          {toolbar && <div className="ml-auto flex items-center">{toolbar}</div>}
+          <div className={`relative ${toolbar ? '' : 'ml-auto'}`}>
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, banco, CPF…"
               className="h-9 w-60 rounded-lg border border-[#cfe0ed] bg-white pl-8 pr-3 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
@@ -304,6 +308,19 @@ function AdminCard({ c, terminal, bulk, colIds, accent, drag, dragStyle, onOpen 
           <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(c.cnj!); toast.success('Nº do processo copiado'); }} title="Copiar nº" className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"><Copy className="h-3 w-3" /></span>
         </p>
       )}
+      {/* APENSO fundido neste card (o cumprimento autuado em apartado): um processo,
+          um card — mas o número dos autos do apenso fica à vista, porque é NELE que
+          se peticiona, e o valor executado costuma estar lá, não no valor da causa. */}
+      {(c.apensos ?? []).map((ap) => (
+        <p key={ap.id} className="mt-1 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500" title="Processo apensado (mesmo processo, autos próprios)">
+          <Link2 className="h-3 w-3 shrink-0" />
+          <span className="truncate">{ap.cnj ?? 'apenso sem nº'}</span>
+          {ap.cnj && (
+            <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(ap.cnj!); toast.success('Nº dos autos apensados copiado'); }} title="Copiar nº" className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800"><Copy className="h-3 w-3" /></span>
+          )}
+          {ap.value != null && ap.value > 0 && <span className="shrink-0 font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(ap.value)}</span>}
+        </p>
+      ))}
       {c.value != null && c.value > 0 && <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(c.value)}</p>}
       {c.proximoPrazo && (
         <span className={`mt-2 inline-flex items-center gap-1 rounded px-1.5 text-[11px] ${overdue ? 'h-5 bg-[#c22e00] text-white' : 'text-[#48626f] dark:text-zinc-400'}`}>
