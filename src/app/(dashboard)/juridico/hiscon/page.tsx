@@ -98,6 +98,28 @@ export default function HisconPage() {
     staleTime: 2 * 60_000,
   });
 
+  const memoriaMut = useMutation({
+    mutationFn: async (grupo: string) => {
+      if (!arquivo && !doDrive) throw new Error('Envie o HISCON, ou escolha um da pasta do cliente.');
+      const blob = await calculadoraRmcService.memoriaCalculo(arquivo, {
+        grupo,
+        cliente: cliente?.name,
+        ...(doDrive ? { partyId: cliente?.partyId, driveFileId: doDrive.id } : {}),
+      });
+      return { blob, grupo };
+    },
+    onSuccess: ({ blob, grupo }) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `memoria de calculo - ${grupo}${cliente ? ` - ${cliente.name}` : ''}.pdf`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setErro(null);
+    },
+    onError: (e: unknown) =>
+      setErro(e instanceof Error ? e.message : 'Não foi possível gerar a memória de cálculo.'),
+  });
+
   const contaMut = useMutation({
     mutationFn: () => {
       if (!arquivo && !doDrive) throw new Error('Envie o HISCON, ou escolha um da pasta do cliente.');
@@ -559,6 +581,7 @@ export default function HisconPage() {
                       <th className="px-3 py-2 text-right font-medium">Prescritos</th>
                       <th className="px-3 py-2 text-right font-medium">Corrigido</th>
                       <th className="px-3 py-2 text-right font-medium">Em dobro</th>
+                      <th className="px-3 py-2 text-right font-medium">Memória</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -572,6 +595,19 @@ export default function HisconPage() {
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{brl(r.corrigido)}</td>
                         <td className="px-3 py-2 text-right font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{brl(r.dobro)}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            onClick={() => memoriaMut.mutate(r.grupo)}
+                            disabled={memoriaMut.isPending || !r.competencias}
+                            title={r.competencias ? 'Memória de cálculo em PDF' : 'Nada a restituir dentro do prazo'}
+                            className="inline-flex items-center gap-1 rounded border border-zinc-300 px-1.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                          >
+                            {memoriaMut.isPending && memoriaMut.variables === r.grupo
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <FileText className="h-3.5 w-3.5" />}
+                            PDF
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

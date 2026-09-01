@@ -429,6 +429,26 @@ export const calculadoraRmcService = {
     return data.data ?? data;
   },
 
+  /** Memória de cálculo de UM réu, em PDF. A conta é a do servidor; o Python
+   *  só desenha — não há uma segunda conta para divergir da tela. */
+  async memoriaCalculo(
+    file: File | null,
+    ctx: { grupo: string; partyId?: string; driveFileId?: string; cliente?: string; dataBase?: string },
+  ): Promise<Blob> {
+    const fd = new FormData();
+    if (file) fd.append('file', file);
+    const params = Object.fromEntries(
+      Object.entries(ctx).filter(([, v]) => v !== undefined && v !== ''),
+    );
+    const { data } = await api.post('/calculadora-rmc-rcc/hiscon/memoria-calculo', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+      responseType: 'blob',
+      timeout: 300000,
+    });
+    return data as Blob;
+  },
+
   async extrairCalculo(file: File): Promise<CalculoResultado> {
     const fd = new FormData();
     fd.append('file', file);
