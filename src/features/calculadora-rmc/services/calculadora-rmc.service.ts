@@ -234,6 +234,39 @@ export interface Indicio {
 }
 
 /** Contexto dos gates. Tudo opcional: sem o dado, o gate diz que não avaliou. */
+/** Restituição do consignado comum, corrigida pelo INPC. */
+export interface RestituicaoDoReu {
+  grupo: string;
+  contratos: number;
+  competencias: number;
+  prescritas: number;
+  nominal: number;
+  corrigido: number;
+  /** art. 42, parágrafo único, do CDC */
+  dobro: number;
+  linhas: {
+    contrato: string;
+    inclusao: string | null;
+    parcela: number;
+    registros: number;
+    competencias: number;
+    prescritas: number;
+    nominal: number;
+    corrigido: number;
+  }[];
+}
+
+export interface ResultadoRestituicao {
+  dataBase: string;
+  /** último mês com INPC publicado */
+  indiceAte: string | null;
+  corte: string;
+  reus: RestituicaoDoReu[];
+  totalCorrigido: number;
+  totalDobro: number;
+  avisos: string[];
+}
+
 /** HISCON já arquivado na pasta do cliente no Drive. */
 export interface HisconNaPasta {
   id: string;
@@ -371,6 +404,24 @@ export const calculadoraRmcService = {
       Object.entries(ctx).filter(([, v]) => v !== undefined && v !== ''),
     );
     const { data } = await api.post('/calculadora-rmc-rcc/hiscon/laudo-no-drive', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+      timeout: 300000,
+    });
+    return data.data ?? data;
+  },
+
+  /** Restituição do consignado comum, corrigida pelo INPC do BACEN. */
+  async restituicaoHiscon(
+    file: File | null,
+    ctx?: { partyId?: string; driveFileId?: string; dataBase?: string },
+  ): Promise<ResultadoRestituicao> {
+    const fd = new FormData();
+    if (file) fd.append('file', file);
+    const params = Object.fromEntries(
+      Object.entries(ctx ?? {}).filter(([, v]) => v !== undefined && v !== ''),
+    );
+    const { data } = await api.post('/calculadora-rmc-rcc/hiscon/restituicao', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       params,
       timeout: 300000,

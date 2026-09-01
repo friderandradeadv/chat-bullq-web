@@ -3,11 +3,12 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, CheckCircle2, Download, FileSearch, FileText, FolderOpen, FolderUp, Info, Loader2, Upload, XCircle,
+  AlertTriangle, Calculator, CheckCircle2, Download, FileSearch, FileText, FolderOpen, FolderUp, Info, Loader2, Upload, XCircle,
 } from 'lucide-react';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import {
   calculadoraRmcService,
+  type ResultadoRestituicao,
   type ContextoHiscon,
   type HisconResultado,
   type VereditoAcao,
@@ -37,6 +38,9 @@ const VEREDITO: Record<VereditoAcao, { rotulo: string; classe: string }> = {
   },
 };
 
+const brl = (v: number) =>
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 const NIVEL = {
   BLOQUEIO: { icon: XCircle, classe: 'border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/40', tinta: 'text-red-700 dark:text-red-300' },
   ALERTA: { icon: AlertTriangle, classe: 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40', tinta: 'text-amber-700 dark:text-amber-300' },
@@ -48,6 +52,7 @@ export default function HisconPage() {
   const [ctx, setCtx] = useState<ContextoHiscon>({});
   const [res, setRes] = useState<HisconResultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [conta, setConta] = useState<ResultadoRestituicao | null>(null);
   const [salvo, setSalvo] = useState<{ webViewLink: string; pasta: string; jaExistia: boolean } | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [doDrive, setDoDrive] = useState<{ id: string; nome: string; caminho: string[] } | null>(null);
@@ -91,6 +96,18 @@ export default function HisconPage() {
     queryFn: () => calculadoraRmcService.hisconsNaPasta(cliente!.partyId),
     enabled: !!cliente,
     staleTime: 2 * 60_000,
+  });
+
+  const contaMut = useMutation({
+    mutationFn: () => {
+      if (!arquivo && !doDrive) throw new Error('Envie o HISCON, ou escolha um da pasta do cliente.');
+      return calculadoraRmcService.restituicaoHiscon(arquivo, {
+        ...(doDrive ? { partyId: cliente?.partyId, driveFileId: doDrive.id } : {}),
+      });
+    },
+    onSuccess: (r) => { setConta(r); setErro(null); },
+    onError: (e: unknown) =>
+      setErro(e instanceof Error ? e.message : 'Não foi possível calcular a restituição.'),
   });
 
   const laudoMut = useMutation({
@@ -274,7 +291,7 @@ export default function HisconPage() {
             ref={ref} type="file" accept="application/pdf" className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) { setArquivo(f); setDoDrive(null); setSalvo(null); mut.mutate({ file: f }); }
+              if (f) { setArquivo(f); setDoDrive(null); setSalvo(null); setConta(null); mut.mutate({ file: f }); }
               e.target.value = '';
             }}
           />
@@ -312,6 +329,16 @@ export default function HisconPage() {
           )}
           {res && (arquivo || doDrive) && (
             <button
+              onClick={() => contaMut.mutate()}
+              disabled={contaMut.isPending}
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              {contaMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
+              {contaMut.isPending ? 'Calculando…' : 'Calcular restituição'}
+            </button>
+          )}
+          {res && (arquivo || doDrive) && (
+            <button
               onClick={() => driveMut.mutate()}
               disabled={driveMut.isPending}
               className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
@@ -340,7 +367,7 @@ export default function HisconPage() {
                   {naPasta.achados.map((h) => (
                     <li key={h.id}>
                       <button
-                        onClick={() => { setDoDrive(h); setArquivo(null); setSalvo(null); mut.mutate({ file: null, drive: h }); }}
+                        onClick={() => { setDoDrive(h); setArquivo(null); setSalvo(null); setConta(null); mut.mutate({ file: null, drive: h }); }}
                         disabled={mut.isPending}
                         className={`w-full rounded-md border px-2 py-1.5 text-left text-xs disabled:opacity-60 ${
                           doDrive?.id === h.id
@@ -497,6 +524,67 @@ export default function HisconPage() {
                   );
                 })}
               </div>
+            </section>
+          )}
+
+          {/* ------------------------------------------ restituição */}
+          {conta && (
+            <section className="space-y-2">
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Restituição do consignado comum
+                </h2>
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  {brl(conta.totalDobro)} em dobro · {brl(conta.totalCorrigido)} na forma simples
+                </span>
+              </div>
+
+              <p className="text-xs text-zinc-500 dark:text-zinc-500">
+                Descontos medidos do HISCON, corrigidos pelo INPC (BACEN/SGS 188) até{' '}
+                {conta.indiceAte ?? '—'}, com corte de prescrição em {conta.corte} (art. 27 do CDC,
+                em trato sucessivo). Dobro na forma do art. 42, parágrafo único, do CDC.{' '}
+                <span className="font-medium">
+                  Não entram juros de mora, que correm da citação, nem honorários ou danos morais.
+                </span>{' '}
+                Só empréstimo comum: cartão consignado tem conta própria, de conversão.
+              </p>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Réu</th>
+                      <th className="px-3 py-2 text-right font-medium">Contratos</th>
+                      <th className="px-3 py-2 text-right font-medium">Meses</th>
+                      <th className="px-3 py-2 text-right font-medium">Prescritos</th>
+                      <th className="px-3 py-2 text-right font-medium">Corrigido</th>
+                      <th className="px-3 py-2 text-right font-medium">Em dobro</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {conta.reus.map((r) => (
+                      <tr key={r.grupo} className="border-b border-zinc-100 last:border-0 dark:border-zinc-900">
+                        <td className="px-3 py-2 text-zinc-900 dark:text-zinc-100">{r.grupo}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{r.contratos}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{r.competencias}</td>
+                        <td className={`px-3 py-2 text-right tabular-nums ${r.prescritas ? 'text-amber-700 dark:text-amber-400' : 'text-zinc-400 dark:text-zinc-600'}`}>
+                          {r.prescritas || '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{brl(r.corrigido)}</td>
+                        <td className="px-3 py-2 text-right font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{brl(r.dobro)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {!!conta.avisos.length && (
+                <ul className="space-y-1">
+                  {conta.avisos.map((a) => (
+                    <li key={a} className="text-xs text-amber-700 dark:text-amber-400">⚠ {a}</li>
+                  ))}
+                </ul>
+              )}
             </section>
           )}
 
