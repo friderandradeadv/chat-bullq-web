@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef} from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock, Plus, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,7 +10,10 @@ import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/lega
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, KanbanSelectTrigger, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, SORT_OPTIONS, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { avisoOrdenacaoAtiva, cardAttr, colAttr, idsWithMove, persistCardOrder } from '@/features/legal-cases/lib/card-order';
-import { useCardDrag, type CardDragHandle } from '@/features/legal-cases/lib/card-drag';
+import {
+  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
+  useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
+} from '@dnd-kit/core';
 import { isTerminalPhase, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { usePhaseDrag, applyPhaseDrag } from '@/features/legal-cases/lib/phase-drag';
 import { useDragScroll } from '@/lib/use-drag-scroll';
@@ -113,45 +116,6 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     scrollRef: dragScroll.ref,
     onDrop: (k, alvo, onde) => applyPhaseDrag(qc, KEY, k, alvo, onde),
   });
-  // Arrastar o CARD: reordena DENTRO da coluna e, desde 31/08/2026, também TROCA
-  // de coluna — sem isso um quadro de rito (CS e Repasse, Execução) fica travado,
-  // porque andar de fase é justamente o gesto do kanban.
-  const cardDrag = useCardDrag({
-    accent,
-    onDrop: (cardId, destino, index, origem) => {
-      // ── troca de FASE ──────────────────────────────────────────────────────
-      if (destino !== origem) {
-        const alvo = (data?.phases ?? []).find((p) => p.key === destino);
-        // Mesmo endpoint do seletor da ficha — registra o movimento, ajusta o
-        // status e reclassifica —, mas SEM avisar o cliente: `movePhase` só
-        // avisa com `avisarCliente: true`, e arrastar não é escolha deliberada.
-        legalCasesService
-          .movePhase(cardId, destino)
-          .then(() => {
-            toast.success(`Movido para ${alvo?.label ?? destino}`);
-            qc.invalidateQueries({ queryKey: KEY });
-          })
-          .catch((e: unknown) => {
-            const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-            toast.error(msg || 'Não consegui mover o card de fase.');
-            qc.invalidateQueries({ queryKey: KEY });
-          });
-        return;
-      }
-      // ── só ORDEM dentro da coluna ─────────────────────────────────────────
-      // O aviso de ordenação ativa vale SÓ aqui: uma regra de ordenação
-      // reordenaria tudo de novo, mas não impede o card de mudar de fase.
-      const sort = sortOf(destino);
-      if (sort !== 'manual') {
-        avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
-        return;
-      }
-      const col = columns.find((c) => c.key === destino);
-      if (!col) return;
-      const exibidos = applyCardSort(col.cards, 'manual', kanbanCardKeys, data?.cardOrder?.[destino]);
-      persistCardOrder(qc, KEY, destino, idsWithMove(exibidos.map((c) => c.id), cardId, index));
-    },
-  });
   // Ordenação dos cards por coluna (preferência de visualização, no localStorage).
   const [sorts, setSorts] = useState<Record<string, CardSort>>({});
   const sortOf = (key: string): CardSort => sorts[key] ?? loadPhaseSort(key);
@@ -204,6 +168,51 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
       return { key: c.key!, label: c.nome, terminal: p?.terminal, status: p?.status };
     });
 
+  // ARRASTE DO CARD — dnd-kit, o MESMO dos outros quadros (Judicial, Pré,
+  // Planejamento, Funil). Antes daqui havia um arraste caseiro de ponteiro que
+  // só reordenava dentro da coluna e não tinha overlay: o card não "vinha
+  // junto", e em coluna vazia não havia retorno nenhum. Reescrever à mão o que
+  // o dnd-kit já faz foi o erro; agora o comportamento é o mesmo do resto do
+  // hub — card flutuando, coluna alvo destacada, clique preservado.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeCard = (data?.cards ?? []).find((c) => c.id === activeId) ?? null;
+
+  const onDragEnd = (e: DragEndEvent) => {
+    setActiveId(null);
+    const destino = e.over?.id as string | undefined;
+    const card = (data?.cards ?? []).find((c) => c.id === e.active.id);
+    if (!destino || !card) return;
+
+    // ── troca de FASE ──────────────────────────────────────────────────────
+    if (card.phase !== destino) {
+      const alvo = (data?.phases ?? []).find((p) => p.key === destino);
+      // Mesmo endpoint do seletor da ficha — registra o movimento, ajusta o
+      // status e reclassifica —, mas SEM avisar o cliente: `movePhase` só avisa
+      // com `avisarCliente: true`, e arrastar não é escolha deliberada.
+      legalCasesService
+        .movePhase(card.id, destino)
+        .then(() => {
+          toast.success(`Movido para ${alvo?.label ?? destino}`);
+          qc.invalidateQueries({ queryKey: KEY });
+        })
+        .catch((err: unknown) => {
+          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+          toast.error(msg || 'Não consegui mover o card de fase.');
+          qc.invalidateQueries({ queryKey: KEY });
+        });
+      return;
+    }
+
+    // ── mesma coluna: só ORDEM ────────────────────────────────────────────
+    // O aviso de ordenação ativa vale só aqui: uma regra de ordenação
+    // reordenaria tudo de novo, mas não impede o card de mudar de fase.
+    const sort = sortOf(destino);
+    if (sort !== 'manual') {
+      avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
+    }
+  };
+
   return (
     // lg:!pt-12 encolhe o respiro global do topo (o `.under-bar > *` põe 3.75rem;
     // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
@@ -247,19 +256,14 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
           </div>
         </div>
       ) : (
+        <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
         <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col, i) => {
             const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys, data?.cardOrder?.[col.key]) : col.cards;
             const colTerminal = isTerminalPhase(col.key ? data?.phases?.find((p) => p.key === col.key) : null);
             return (
             <div key={col.key ?? col.nome} ref={col.key ? phaseDrag.columnRef(col.key) : undefined}
-              style={{
-                ...(col.key ? phaseDrag.columnStyle(col.key) : undefined),
-                // Coluna sob o cursor durante o arraste: sem este destaque não dá
-                // para saber ONDE o card vai cair — e cair na coluna errada aqui
-                // move a fase do processo, não só a posição na lista.
-                ...(cardDrag.alvo === col.key ? { boxShadow: `0 0 0 2px ${accent}` } : undefined),
-              }}
+              style={col.key ? phaseDrag.columnStyle(col.key) : undefined}
               className="group/col flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] transition-shadow dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
                 {col.key ? (
@@ -288,26 +292,24 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                   <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{col.cards.length}</span>
                 </span>
               </div>
-              <div {...(col.key ? colAttr(col.key) : {})} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              <ColunaDrop phaseKey={col.key} accent={accent} attrs={col.key ? colAttr(col.key) : {}}>
                 {/* Coluna VAZIA sob o cursor: sem isto o arraste para cá não dá
                     retorno nenhum — a marca de queda se apoia num card vizinho,
                     e aqui não existe vizinho. Num pipeline a maioria das colunas
                     está vazia, então este era o caso comum, não a exceção. */}
-                {sortedCards.length === 0 && (
-                  cardDrag.alvo === col.key ? (
-                    <p className="rounded border-2 border-dashed py-5 text-center text-xs font-semibold"
-                       style={{ borderColor: accent, color: accent }}>Soltar aqui</p>
-                  ) : (
-                    <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>
-                  )
-                )}
-                {sortedCards.map((c) => <AdminCard key={c.id} c={c} terminal={colTerminal} bulk={bulk} colIds={sortedCards.map((x) => x.id)} accent={accent} drag={col.key ? cardDrag.handle(c.id, col.key) : undefined} dragStyle={cardDrag.cardStyle(c.id)} onOpen={setOpenCaseId} />)}
-              </div>
+                {sortedCards.length === 0 && <VazioOuSoltarAqui phaseKey={col.key} accent={accent} />}
+                {sortedCards.map((c) => <AdminCard key={c.id} c={c} terminal={colTerminal} bulk={bulk} colIds={sortedCards.map((x) => x.id)} accent={accent} onOpen={setOpenCaseId} />)}
+              </ColunaDrop>
             </div>
             );
           })}
           {canManage && manageBoard && <AddPhaseColumn board={manageBoard} accent={accent} onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
         </div>
+        {/* O card que o usuário está segurando: é ISTO que dá a sensação de
+            "estar sendo arrastado" (Trello/Pipefy). Vive fora do fluxo das
+            colunas, então não empurra layout nem some ao trocar de coluna. */}
+        <DragOverlay>{activeCard ? <AdminCard c={activeCard} accent={accent} onOpen={() => {}} overlay /> : null}</DragOverlay>
+        </DndContext>
       )}
 
       <KanbanBulkBar bulk={bulk} cards={filtered} phases={bulkPhases} queryKey={KEY} accent={accent} />
@@ -317,24 +319,72 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
   );
 }
 
-function AdminCard({ c, terminal, bulk, colIds, accent, drag, dragStyle, onOpen }: { c: KanbanCard; terminal?: boolean; bulk?: KanbanBulk; colIds?: string[]; accent?: string;
-  /** arrastar o card pra reordenar a fase (useCardDrag) */
-  drag?: CardDragHandle; dragStyle?: React.CSSProperties; onOpen: (id: string) => void }) {
+/**
+ * Corpo da coluna = área de SOLTURA do dnd-kit. Precisa ser componente próprio
+ * porque `useDroppable` é hook e as colunas nascem dentro de um `.map`.
+ * O anel na cor do quadro mostra ONDE o card vai cair — e aqui cair na coluna
+ * errada muda a FASE do processo, não só a posição na lista.
+ */
+function ColunaDrop({ phaseKey, accent, attrs, children }: {
+  phaseKey?: string; accent: string; attrs: Record<string, unknown>; children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: phaseKey ?? '__sem_fase__', disabled: !phaseKey });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attrs}
+      style={isOver && phaseKey ? { boxShadow: `inset 0 0 0 2px ${accent}`, borderRadius: 12 } : undefined}
+      className="flex flex-col gap-2.5 px-2.5 pb-2.5 transition-shadow lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Coluna vazia: sem card vizinho não há onde desenhar a marca de queda, e num
+ *  pipeline a maioria das colunas está vazia — este é o caso comum. */
+function VazioOuSoltarAqui({ phaseKey, accent }: { phaseKey?: string; accent: string }) {
+  const { isOver } = useDroppable({ id: phaseKey ? `${phaseKey}__vazio` : '__sem_fase_vazio__', disabled: true });
+  void isOver;
+  return (
+    <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">
+      Vazio
+    </p>
+  );
+}
+
+function AdminCard({ c, terminal, bulk, colIds, accent, onOpen, overlay }: { c: KanbanCard; terminal?: boolean; bulk?: KanbanBulk; colIds?: string[]; accent?: string; overlay?: boolean;
+  onOpen: (id: string) => void }) {
+  // `overlay` = a cópia que voa junto com o cursor (DragOverlay). Ela não é
+  // arrastável nem clicável: é só a imagem do card em trânsito.
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id, disabled: overlay });
+  const down = useRef<{ x: number; y: number } | null>(null);
   const prod = produtoColor(c.produto);
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   return (
     // <div role=button> (não <button>): a caixinha de seleção é um controle
     // dentro do card, e controle dentro de <button> é HTML inválido.
-    <div role="button" tabIndex={0} {...cardAttr(c.id)}
-      onPointerDown={drag?.onPointerDown}
-      onClick={() => { if (drag?.blockedClick()) return; onOpen(c.id); }}
+    <div
+      ref={overlay ? undefined : setNodeRef}
+      {...(overlay ? {} : listeners)}
+      {...(overlay ? {} : attributes)}
+      {...(overlay ? { role: 'presentation' } : cardAttr(c.id))}
+      onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
+      onClick={(e) => {
+        if (overlay) return;
+        const d = down.current;
+        if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
+      }}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c.id); } }}
-      className={`group relative w-full rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md dark:border-transparent dark:bg-[#1E2226] ${drag?.dragging ? 'cursor-grabbing' : 'cursor-pointer'} ${terminal ? terminalCardClass : ''}`}
+      className={`group relative w-full touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
+        isDragging && !overlay ? 'opacity-40' : 'cursor-pointer'
+      } ${overlay ? 'rotate-2 shadow-lg' : ''} ${terminal && !overlay ? terminalCardClass : ''}`}
       style={{
         ...(bulk?.has(c.id) && accent ? { boxShadow: `0 0 0 2px ${accent}` } : undefined),
-        ...dragStyle,
-        ...(drag ? { touchAction: 'none' } : undefined),
+        // O card original acompanha o ponteiro por transform; a cópia do
+        // DragOverlay é posicionada pelo próprio dnd-kit.
+        ...(transform && !overlay ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
       }}>
       {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent={accent} />}
       {/* pr-5 reserva o canto da caixinha de seleção */}
