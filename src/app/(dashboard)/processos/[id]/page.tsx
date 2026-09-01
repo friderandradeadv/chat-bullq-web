@@ -338,6 +338,12 @@ function DjenBadge({ monitorado }: { monitorado: boolean }) {
 
 // ─── Picker de etiquetas (🏷️ do header) ──────────────────────────────
 
+/** Cores oferecidas ao criar etiqueta — as mesmas famílias já usadas no hub. */
+const PALETA_ETIQUETA = [
+  '#228BE6', '#2F9E44', '#E03131', '#F08C00', '#7048E8',
+  '#0CA678', '#D6336C', '#495057', '#B77900', '#1098AD',
+];
+
 function HeaderTagPicker({
   caseId,
   attached,
@@ -349,11 +355,48 @@ function HeaderTagPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [nova, setNova] = useState('');
+  const [cor, setCor] = useState(PALETA_ETIQUETA[0]);
+  const qcTags = useQueryClient();
   const { data: tags = [] } = useQuery({
     queryKey: ['tags-available'],
     queryFn: () => activitiesService.listAvailableTags(),
   });
   const attachedIds = new Set(attached.map((a) => a.tagId));
+
+  /**
+   * Cria a etiqueta e JÁ APLICA no processo — criar sem aplicar deixaria o
+   * usuário com a sensação de que nada aconteceu.
+   *
+   * Antes de criar, procura uma existente com o mesmo nome (sem acento, sem
+   * caixa): a carteira já tem etiqueta demais, e duas iguais com grafia
+   * diferente ("Bancario" e "Bancário") é o começo de um filtro que não filtra.
+   * Achando, só aplica a que existe.
+   */
+  const criarEAplicar = async () => {
+    const nome = nova.trim();
+    if (!nome || busy) return;
+    const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    setBusy(true);
+    try {
+      const igual = tags.find((t) => norm(t.name) === norm(nome));
+      if (igual) {
+        if (!attachedIds.has(igual.id)) await activitiesService.attachTag('case', caseId, igual.id);
+        toast.success(`"${igual.name}" já existia — apliquei essa.`);
+      } else {
+        const criada = await activitiesService.createTag(nome, cor);
+        await activitiesService.attachTag('case', caseId, criada.id);
+        toast.success(`Etiqueta "${nome}" criada e aplicada.`);
+      }
+      setNova('');
+      await qcTags.invalidateQueries({ queryKey: ['tags-available'] });
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Não consegui criar a etiqueta.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const toggle = async (tagId: string) => {
     setBusy(true);
@@ -401,6 +444,42 @@ function HeaderTagPicker({
               );
             })}
             {tags.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta.</p>}
+
+            {/* Criar etiqueta sem sair do processo — antes era preciso ir até
+                Configurações › Etiquetas e voltar. */}
+            <div className="mt-1 border-t border-[#DEE2E6] px-3 pb-2 pt-2 dark:border-zinc-700">
+              <p className="pb-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Nova etiqueta</p>
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={nova}
+                  onChange={(e) => setNova(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); criarEAplicar(); } }}
+                  placeholder="Nome da etiqueta"
+                  maxLength={40}
+                  className="h-8 min-w-0 flex-1 rounded border border-[#cfe0ed] bg-white px-2 text-sm text-[#101820] placeholder:text-zinc-400 focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+                />
+                <button
+                  disabled={busy || !nova.trim()}
+                  onClick={criarEAplicar}
+                  className="h-8 shrink-0 rounded px-2 text-xs font-semibold text-white disabled:opacity-40"
+                  style={{ background: cor }}
+                >
+                  Criar
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1 pt-1.5">
+                {PALETA_ETIQUETA.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCor(c)}
+                    title={c}
+                    aria-label={`Cor ${c}`}
+                    className={`h-4 w-4 rounded-full transition-transform ${cor === c ? 'scale-125 ring-2 ring-offset-1 ring-zinc-400 dark:ring-offset-zinc-900' : ''}`}
+                    style={{ background: c }}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </>
       )}
