@@ -202,8 +202,21 @@ export default function ClienteDetailPage() {
     null;
   const contact = cliente?.contact ?? null;
 
+  // Os processos do cliente saem dos partyIds — o vínculo de verdade, o mesmo que
+  // o modal do processo mostra como "vinculado ao cadastro · CPF".
+  //
+  // Antes isto casava NOME normalizado (norm(cliente.name) === norm(p.name)), e
+  // norm() tolera acento e caixa, mas não uma palavra a mais: corrigir a grafia de
+  // "Leonilda Mario Silva" para "Leonilda Mário da Silva" fazia os 4 processos dela
+  // sumirem da ficha, porque as partes seguiam grafadas sem o "da". O dado nunca se
+  // perdia — só a lista deixava de achar. Vale para todo cliente com partícula no
+  // nome (da/de/dos/e), que é comum no acervo. Medido em 01/09/2026.
+  //
+  // O fallback por nome fica para o cliente que ainda não tem partyIds preenchido.
   const meusCasos = useMemo(() => {
     if (!cliente) return [];
+    const meus = new Set(cliente.partyIds ?? []);
+    if (meus.size) return cases.filter((c) => c.parties.some((p) => meus.has(p.id)));
     const key = norm(cliente.name);
     return cases.filter((c) => c.parties.some((p) => norm(p.name) === key));
   }, [cases, cliente]);
