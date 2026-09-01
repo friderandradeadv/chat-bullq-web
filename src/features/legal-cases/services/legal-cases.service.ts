@@ -232,6 +232,8 @@ export interface KanbanPhase {
   board?: string;         // quadro (base ou custom) a que a fase pertence
   color?: string | null;  // cor do cabeçalho da coluna (fases custom)
   count: number;
+  /** "cumprimento" | "execucao" — de que visão do quadro Execução esta coluna é. */
+  tipo?: 'cumprimento' | 'execucao';
 }
 
 /** Quadro CUSTOM criado pelo escritório (vertical nova sem deploy). */

@@ -21,8 +21,7 @@ const poloDoCard = (c: KanbanCard): Polo => (c.polo === 'executado' ? 'executado
  */
 type Tipo = 'cumprimento' | 'execucao';
 const tipoDoCard = (c: KanbanCard): Tipo => (c.tipo === 'execucao' ? 'execucao' : 'cumprimento');
-/** Colunas de cada visão — as de desfecho ficam na CS e Repasse (a padrão). */
-const FASES_EXECUCAO = new Set(['em_execucao']);
+
 
 /** Um segmento do cabeçalho (Exequente×Executado, Cumprimento×Execução). */
 function Segmentado<T extends string>({ valor, onMuda, opcoes, cor }: {
@@ -92,8 +91,8 @@ export default function CustomBoardPage() {
   // A visão escolhida também escolhe as COLUNAS: mostrar a coluna de execução
   // dentro de "CS e Repasse" (sempre vazia ali) só ocuparia espaço e faria o
   // usuário duvidar do filtro.
-  const naVisao = (p: { key: string; lane?: 'pre' | 'judicial'; board?: string | null }) =>
-    noQuadro(p) && (key !== 'execucao' || (tipo === 'execucao') === FASES_EXECUCAO.has(p.key));
+  const naVisao = (p: { key: string; lane?: 'pre' | 'judicial'; board?: string | null; tipo?: Tipo }) =>
+    noQuadro(p) && (key !== 'execucao' || (p.tipo ?? 'cumprimento') === tipo);
   const boardPhases = useMemo(
     () =>
       (kb?.phases ?? [])
