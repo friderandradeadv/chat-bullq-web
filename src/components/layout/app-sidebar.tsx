@@ -44,6 +44,7 @@ import {
   Heart,
   GraduationCap,
   Handshake,
+  FileSearch,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -418,6 +419,7 @@ export function AppSidebar() {
               {/* Análise — subaba (consulta / inteligência) */}
               <div className="mt-1.5 border-l border-zinc-200/70 pl-2 dark:border-zinc-800">
                 <NavSection label="Análise" variant="sub" defaultOpen={false}>
+                  <NavItem href="/juridico/hiscon" icon={FileSearch} label="Análise de HISCON" />
                   <NavItem href="/juridico/recursos" icon={Scale} label="Recursos" />
                   <NavItem href="/juridico/jurimetria" icon={BarChart3} label="Jurimetria" />
                 </NavSection>

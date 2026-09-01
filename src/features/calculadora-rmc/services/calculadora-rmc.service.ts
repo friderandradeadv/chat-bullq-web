@@ -160,8 +160,100 @@ export interface HisconContrato {
   situacao: string | null;
 }
 
+/** Entrada pronta de cálculo, montada a partir dos descontos do próprio HISCON. */
+export interface EntradaCalculadora {
+  tipo: 'RMC' | 'RCC';
+  banco: string;
+  contrato: string;
+  valorEmprestimo: number | null;
+  dataContratacao: string | null;
+  parcelas: { data: string; valor: number; fonte: string }[];
+  competencias: number;
+  totalDescontado: number;
+  pronta: boolean;
+  faltando: string[];
+  taxaConsultarEm: string | null;
+}
+
+export type VereditoAcao = 'AJUIZAR' | 'REPOSICIONAR_TESE' | 'NAO_AJUIZAR' | 'INDICIO_FRACO';
+
+export interface AcaoSugerida {
+  grupo: string;
+  instituicoes: string[];
+  averbacoes: number;
+  dentroDoPrazo: number;
+  decaidos: number;
+  cartoesAtivos: number;
+  indicios: { id: string; titulo: string; n: number }[];
+  teses: string[];
+  veredito: VereditoAcao;
+  porque: string;
+  proximoPasso: string;
+}
+
+export interface PlanoAcao {
+  acoes: AcaoSugerida[];
+  resumo: {
+    reus: number;
+    aAjuizar: number;
+    aReposicionar: number;
+    aDescartar: number;
+    indicioFraco: number;
+    contratosDentroDoPrazo: number;
+    contratosDecaidos: number;
+  };
+  diagnostico: string[];
+}
+
+
+/** Um réu, já agrupado por conglomerado. */
+export interface ReuGrupo {
+  grupoNome: string;
+  contratos: number;
+  instituicoes: { codigo: string | null; nome: string; contratos: number; cadastrado: boolean }[];
+}
+
+/** Trava do escritório: o que precisa ser decidido antes de ajuizar. */
+export interface Gate {
+  id: string;
+  nivel: 'BLOQUEIO' | 'ALERTA' | 'INFORMATIVO';
+  titulo: string;
+  fundamento?: string;
+  descricao?: string;
+  acao?: string;
+}
+
+/** Indício calculado por regra sobre os contratos. */
+export interface Indicio {
+  id: string;
+  titulo: string;
+  categoria: string;
+  contratos: string[];
+  bancos: string[];
+  evidencia: string;
+}
+
+/** Contexto dos gates. Tudo opcional: sem o dado, o gate diz que não avaliou. */
+export interface ContextoHiscon {
+  uf?: string;
+  fase?: 'conhecimento' | 'cumprimento';
+  valorPretendido?: number;
+  salarioMinimo?: number;
+  precisaGrafotecnica?: boolean;
+  comarcaTemJuizado?: boolean;
+}
+
 export interface HisconResultado {
   contratos: HisconContrato[];
+  /** Só quando a leitura foi pela geometria do PDF. */
+  entradasCalculadora?: EntradaCalculadora[];
+  planoAcao?: PlanoAcao;
+  reus?: { reus: ReuGrupo[]; totalGrupos: number; totalInstituicoes: number; avisos: string[] };
+  /** `avaliarGates` devolve o ENVELOPE, não a lista: `{ gates, bloqueios, alertas }`. */
+  gates?: { gates: Gate[]; bloqueios: number; alertas: number };
+  indicios?: { indicios: Indicio[]; consolidado?: Record<string, unknown> };
+  metodo?: 'coordenadas' | 'ia';
+  avisos?: string[];
   aviso?: string;
 }
 
@@ -211,11 +303,17 @@ export const calculadoraRmcService = {
     return d.data ?? d;
   },
 
-  async extrairHiscon(file: File): Promise<HisconResultado> {
+  async extrairHiscon(file: File, ctx?: ContextoHiscon): Promise<HisconResultado> {
     const fd = new FormData();
     fd.append('file', file);
+    // O contexto vai por query: são os dados dos gates do escritório, e sem eles
+    // o gate de foro responde "não avaliado" em vez de chutar.
+    const params = Object.fromEntries(
+      Object.entries(ctx ?? {}).filter(([, v]) => v !== undefined && v !== ''),
+    );
     const { data: d } = await api.post('/calculadora-rmc-rcc/hiscon/extrair', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      params,
       timeout: 300000,
     });
     return d.data ?? d;
