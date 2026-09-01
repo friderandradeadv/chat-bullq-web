@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, FileText, AlertTriangle, Loader2, ShieldCheck,
@@ -58,19 +59,6 @@ const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltante
 const INTAKE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes']);
 const MONTAR_PHASES = new Set(['montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo']);
 // Cor da etiqueta por produto (igual ao card do kanban).
-const produtoColor = (p: string | null): { bg: string; fg: string } => {
-  const s = (cleanArea(p) ?? '').toUpperCase();
-  if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
-  if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
-  if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
-  if (/TRABALH|RESCIS|FERIAS/.test(s)) return { bg: 'rgb(255,161,0)', fg: '#101820' };
-  if (/PORTABIL|REVISIONAL|CONSIGNAD|CONSUMID/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
-  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
-  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
-  if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
-  if (/SEGURO|TARIFA|MATERN/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
-  return { bg: 'rgb(209,209,209)', fg: '#101820' };
-};
 
 const LEFT_TABS = [
   { key: 'dados', label: 'Dados' },

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -54,19 +55,6 @@ function cleanProduto(s: string | null): string | null {
   const t = s.trim();
   if (t.startsWith('[')) { try { const a = JSON.parse(t); if (Array.isArray(a)) return a.join(' · '); } catch { /* */ } }
   return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim();
-}
-function produtoColor(p: string | null): { bg: string; fg: string } {
-  const s = (p ?? '').toUpperCase();
-  if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
-  if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
-  if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
-  if (/TRABALH|RESCIS|FERIAS/.test(s)) return { bg: 'rgb(255,161,0)', fg: '#101820' };
-  if (/PORTABIL|REVISIONAL|CONSIGNAD|CONSUMID/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
-  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
-  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
-  if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
-  if (/SEGURO|TARIFA/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
-  return { bg: 'rgb(209,209,209)', fg: '#101820' };
 }
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -350,7 +338,7 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
       {/* Etiquetas: produto (cor) + área (cinza) — pr-5 reserva o canto da caixinha de seleção */}
       <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
-        {c.areaJuridica && (cleanProduto(c.produto) ?? '').toLowerCase().trim() !== c.areaJuridica.toLowerCase().trim() && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
+        {c.areaJuridica && (cleanProduto(c.produto) ?? '').toLowerCase().trim() !== c.areaJuridica.toLowerCase().trim() && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: areaColor(c.areaJuridica).bg, color: areaColor(c.areaJuridica).fg }}>{c.areaJuridica}</span>}
       </div>
       {/* Cliente × parte adversa (banco) */}
       <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -32,15 +33,6 @@ function cleanProduto(s: string | null): string | null {
   const t = s.trim();
   if (t.startsWith('[')) { try { const a = JSON.parse(t); if (Array.isArray(a)) return a.join(' · '); } catch { /* */ } }
   return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim();
-}
-function produtoColor(p: string | null): { bg: string; fg: string } {
-  const s = (p ?? '').toUpperCase();
-  if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
-  if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
-  if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
-  if (/INVALID|ACIDENT/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
-  if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
-  return { bg: 'rgb(209,209,209)', fg: '#101820' };
 }
 
 // Situações do requerimento — colunas do kanban. `key` vazio = "Em análise"

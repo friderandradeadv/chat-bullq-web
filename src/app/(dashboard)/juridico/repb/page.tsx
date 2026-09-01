@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useRouter } from 'next/navigation';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -60,15 +61,6 @@ const parseBRL = (s: string | null | undefined) => { let t = String(s ?? '').rep
 const AREA_DOT: Record<string, string> = { 'Bancário': '#228BE6', 'Previdenciário': '#7048e8', 'Trabalhista': '#f08c00', 'Consumidor': '#e64980', 'Cível': '#868e96', REPB: '#B7791F' };
 const areaDot = (a: string | null) => AREA_DOT[a ?? 'Cível'] ?? '#B7791F';
 const cleanProduto = (s: string | null): string | null => { if (!s) return s; const t = s.trim(); if (t.startsWith('[')) { try { const a = JSON.parse(t); if (Array.isArray(a)) return a.join(' · '); } catch { /* */ } } return t.replace(/^\[|\]$/g, '').replace(/"/g, '').trim(); };
-function produtoColor(p: string | null): { bg: string; fg: string } {
-  const s = (p ?? '').toUpperCase();
-  if (/REPB|REESTRUT|PASSIVO/.test(s)) return { bg: 'rgb(183,121,31)', fg: '#fff' };
-  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
-  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
-  if (/REVISIONAL|CONSIGNAD|PORTABIL/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
-  if (/SEGURO|TARIFA/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
-  return { bg: 'rgb(209,209,209)', fg: '#101820' };
-}
 
 export default function RepbPage() {
   const qc = useQueryClient();
@@ -276,7 +268,7 @@ function Card({ c, terminal, onOpen }: { c: KanbanCard; terminal?: boolean; onOp
       <div className="-ml-1 flex flex-wrap items-center gap-1">
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{prodLabel}</span>
         {c.areaJuridica && prodLabel.toLowerCase().trim() !== c.areaJuridica.toLowerCase().trim() && (
-          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>
+          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: areaColor(c.areaJuridica).bg, color: areaColor(c.areaJuridica).fg }}>{c.areaJuridica}</span>
         )}
       </div>
       <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words pr-5 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>

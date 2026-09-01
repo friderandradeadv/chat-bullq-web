@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -48,21 +49,6 @@ function cleanProduto(s: string | null): string | null {
 }
 
 // Etiqueta de PRODUTO — hex exatos do Pipefy (com fallbacks coerentes).
-function produtoColor(p: string | null): { bg: string; fg: string } {
-  const s = (p ?? '').toUpperCase();
-  if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
-  if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
-  if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
-  if (/TRABALH|RESCIS|FERIAS|RECLAMA|VERBAS/.test(s)) return { bg: 'rgb(255,161,0)', fg: '#101820' };
-  if (/PORTABIL/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
-  if (/REVISIONAL|CONSIGNAD/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
-  if (/CONSUMID|DANO|INDENIZ|VOO|FRAUDE|NULID|OBRIGACAO|MONITORIA|ANULA/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
-  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
-  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
-  if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
-  if (/SEGURO|TARIFA/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
-  return { bg: 'rgb(209,209,209)', fg: '#101820' };
-}
 
 // Badge de resultado da ação (vencemos/perdemos/parcial) — vem do "Vencemos a
 // ação?" do trânsito em julgado ou do resultado da sentença.
@@ -650,7 +636,7 @@ const Card = memo(function Card({
           </span>
         )}
         {c.areaJuridica && (cleanProduto(c.produto) ?? '').toLowerCase().trim() !== c.areaJuridica.toLowerCase().trim() && (
-          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>
+          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: areaColor(c.areaJuridica).bg, color: areaColor(c.areaJuridica).fg }}>
             {c.areaJuridica}
           </span>
         )}

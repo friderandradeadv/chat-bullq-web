@@ -5,6 +5,7 @@
 // própria /juridico/repb-funil. Fases repbc_ (lane 'repbc').
 
 import { useEffect, useMemo, useState } from 'react';
+import { areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -284,7 +285,7 @@ function Card({ c, bulk, colIds, isNovos, terminal, onOpen, onFechou, onApresent
       {/* pr-5 reserva o canto da caixinha de seleção */}
       <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: ACCENT, color: '#fff' }}>REPB</span>
-        {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: 'rgb(209,209,209)', color: '#101820' }}>{c.areaJuridica}</span>}
+        {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: areaColor(c.areaJuridica).bg, color: areaColor(c.areaJuridica).fg }}>{c.areaJuridica}</span>}
       </div>
       <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
       {(c.leadBancos || c.leadValor) && (
