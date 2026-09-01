@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, Download, FileSearch, FileText, FolderUp, Info, Loader2, Upload, XCircle,
 } from 'lucide-react';
+import { clientsService } from '@/features/legal-cases/services/clients.service';
 import {
   calculadoraRmcService,
   type ContextoHiscon,
@@ -47,9 +48,11 @@ export default function HisconPage() {
   const [ctx, setCtx] = useState<ContextoHiscon>({});
   const [res, setRes] = useState<HisconResultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [salvo, setSalvo] = useState<{ webViewLink: string; pasta: string } | null>(null);
+  const [salvo, setSalvo] = useState<{ webViewLink: string; pasta: string; jaExistia: boolean } | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [cliente, setCliente] = useState('');
+  const [cliente, setCliente] = useState<{ partyId: string; name: string } | null>(null);
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [abertoCliente, setAbertoCliente] = useState(false);
 
   const mut = useMutation({
     mutationFn: (f: File) => calculadoraRmcService.extrairHiscon(f, ctx),
@@ -60,15 +63,31 @@ export default function HisconPage() {
     },
   });
 
+  // A lista inteira vem numa chamada só e o filtro é local: são poucas
+  // centenas de clientes, e teclar não pode disparar uma consulta por letra.
+  const { data: clientes = [], isLoading: carregandoClientes } = useQuery({
+    queryKey: ['clientes-para-laudo'],
+    queryFn: () => clientsService.list(),
+    staleTime: 5 * 60_000,
+  });
+
+  const sugestoes = useMemo(() => {
+    const t = buscaCliente.trim().toLowerCase();
+    if (!t) return clientes.slice(0, 8);
+    return clientes
+      .filter((c) => c.name.toLowerCase().includes(t) || (c.document ?? '').includes(t))
+      .slice(0, 8);
+  }, [clientes, buscaCliente]);
+
   const laudoMut = useMutation({
     mutationFn: async () => {
       if (!arquivo) throw new Error('Envie o HISCON antes de gerar o laudo.');
-      return calculadoraRmcService.gerarLaudoHiscon(arquivo, { ...ctx, cliente: cliente || undefined });
+      return calculadoraRmcService.gerarLaudoHiscon(arquivo, { ...ctx, cliente: cliente?.name });
     },
     onSuccess: (blob) => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `laudo-hiscon${cliente ? ` - ${cliente}` : ''}.pdf`;
+      a.download = `laudo-hiscon${cliente ? ` - ${cliente.name}` : ''}.pdf`;
       a.click();
       URL.revokeObjectURL(a.href);
       setErro(null);
@@ -82,8 +101,8 @@ export default function HisconPage() {
   const driveMut = useMutation({
     mutationFn: async () => {
       if (!arquivo) throw new Error('Envie o HISCON antes de gerar o laudo.');
-      if (!cliente.trim()) throw new Error('Escreva o nome do beneficiário: é por ele que acho a pasta no Drive.');
-      return calculadoraRmcService.salvarLaudoNoDrive(arquivo, { ...ctx, cliente: cliente.trim() });
+      if (!cliente) throw new Error('Escolha o cliente: é a pasta dele que recebe o laudo.');
+      return calculadoraRmcService.salvarLaudoNoDrive(arquivo, { ...ctx, partyId: cliente.partyId });
     },
     onSuccess: (r) => { setSalvo(r); setErro(null); },
     onError: (e: unknown) => {
@@ -179,13 +198,40 @@ export default function HisconPage() {
               className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-zinc-600 dark:text-zinc-400">Beneficiário (sai no laudo)</span>
+          <div className="relative text-sm">
+            <span className="mb-1 block text-zinc-600 dark:text-zinc-400">Cliente (do cadastro)</span>
             <input
-              value={cliente} onChange={(e) => setCliente(e.target.value)} placeholder="nome completo"
+              value={cliente ? cliente.name : buscaCliente}
+              onChange={(e) => { setCliente(null); setBuscaCliente(e.target.value); setAbertoCliente(true); }}
+              onFocus={() => setAbertoCliente(true)}
+              onBlur={() => setTimeout(() => setAbertoCliente(false), 150)}
+              placeholder={carregandoClientes ? 'carregando…' : 'nome ou CPF'}
               className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
-          </label>
+            {abertoCliente && sugestoes.length > 0 && (
+              <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                {sugestoes.map((c) => (
+                  <li key={c.partyId}>
+                    <button
+                      type="button"
+                      onMouseDown={() => { setCliente({ partyId: c.partyId, name: c.name }); setBuscaCliente(''); setAbertoCliente(false); }}
+                      className="w-full px-2 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    >
+                      <span className="block truncate text-zinc-900 dark:text-zinc-100">{c.name}</span>
+                      <span className="block text-xs text-zinc-500 dark:text-zinc-500">
+                        {c.document ?? 'sem CPF'} · {c.cases} processo(s)
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {abertoCliente && !carregandoClientes && buscaCliente.trim() && sugestoes.length === 0 && (
+              <p className="absolute z-20 mt-1 w-full rounded-md border border-zinc-200 bg-white p-2 text-xs text-zinc-500 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+                Nenhum cliente com esse nome ou CPF. O laudo grava só em cliente já cadastrado.
+              </p>
+            )}
+          </div>
           <label className="flex items-end gap-2 text-sm">
             <input
               type="checkbox"
@@ -251,7 +297,10 @@ export default function HisconPage() {
 
         {salvo && (
           <p className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 p-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-            Laudo salvo em <span className="font-medium">{salvo.pasta}</span>.{' '}
+            {salvo.jaExistia
+              ? 'Já havia um laudo com esse nome — não sobrescrevi.'
+              : 'Laudo salvo'}{' '}
+            em <span className="font-medium">{salvo.pasta}</span>.{' '}
             <a href={salvo.webViewLink} target="_blank" rel="noreferrer" className="underline">
               Abrir a pasta no Drive
             </a>

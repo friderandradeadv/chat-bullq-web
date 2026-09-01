@@ -336,12 +336,12 @@ export const calculadoraRmcService = {
     return data as Blob;
   },
 
-  /** Gera o laudo e grava na pasta do cliente no Drive. Não cria pasta: se o
-   *  nome não achar cliente, o servidor recusa com a explicação. */
+  /** Gera o laudo e grava na pasta do cliente no Drive. O cliente vai por
+   *  `partyId` — o nome da capa e a pasta saem do mesmo registro do cadastro. */
   async salvarLaudoNoDrive(
     file: File,
-    ctx: ContextoHiscon & { cliente: string },
-  ): Promise<{ webViewLink: string; pasta: string }> {
+    ctx: ContextoHiscon & { partyId: string },
+  ): Promise<{ webViewLink: string; pasta: string; cliente: string; jaExistia: boolean }> {
     const fd = new FormData();
     fd.append('file', file);
     const params = Object.fromEntries(
