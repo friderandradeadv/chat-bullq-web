@@ -49,20 +49,16 @@ export function produtoColor(p: string | null | undefined): CorEtiqueta {
 
 /**
  * Cor da ÁREA jurídica (2ª etiqueta: Cível, Bancário, Previdenciário…).
- * Era cinza fixo em todos os quadros — duas etiquetas cinzas lado a lado não
- * distinguem nada. Tons DESSATURADOS de propósito: a área é contexto, o produto
- * é o que se lê primeiro, e a cor não pode competir com ele.
+ *
+ * **É CINZA, sempre.** Cheguei a dar uma paleta dessaturada por área em
+ * 01/09/2026 e o escritório desfez na mesma hora: a área é CONTEXTO, não
+ * informação de leitura. Quem varre o quadro procura o PRODUTO (RMC, Execução,
+ * Contribuições) — dar cor à área põe duas manchas coloridas por card e o olho
+ * perde o que importa. Cinza aqui é decisão de projeto, não falta de cor.
+ *
+ * Continua sendo função (e não uma constante solta) para o cinza morar num
+ * lugar só: antes ele estava escrito à mão em cinco quadros diferentes.
  */
-export function areaColor(a: string | null | undefined): CorEtiqueta {
-  const s = (a ?? '').toUpperCase();
-  if (/BANC/.test(s)) return { bg: 'rgb(215,190,190)', fg: '#5c1a1a' };
-  if (/PREVID/.test(s)) return { bg: 'rgb(199,219,205)', fg: '#14452a' };
-  if (/TRABALH/.test(s)) return { bg: 'rgb(240,219,190)', fg: '#6b3f05' };
-  if (/C[ÍI]VEL|CIVIL/.test(s)) return { bg: 'rgb(198,213,232)', fg: '#1c3a5e' };
-  if (/CONSUMID/.test(s)) return { bg: 'rgb(198,213,232)', fg: '#1c3a5e' };
-  if (/TRIBUT|FISCAL/.test(s)) return { bg: 'rgb(214,205,229)', fg: '#3d2a63' };
-  if (/FAM[ÍI]LIA|SUCESS/.test(s)) return { bg: 'rgb(233,206,222)', fg: '#5e2547' };
-  if (/EMPRES|SOCIET/.test(s)) return { bg: 'rgb(206,222,222)', fg: '#12484a' };
-  if (/CRIMIN|PENAL/.test(s)) return { bg: 'rgb(219,214,209)', fg: '#3c3229' };
+export function areaColor(_a?: string | null): CorEtiqueta {
   return CINZA;
 }
