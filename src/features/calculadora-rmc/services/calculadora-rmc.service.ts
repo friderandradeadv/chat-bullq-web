@@ -287,6 +287,15 @@ export interface ConferenciaProtocolo {
   avisoDocx: string | null;
 }
 
+/** As cinco bases de inicial de consignado. A escolha é de tese, não de forma. */
+export const BASES_INICIAL = [
+  { id: 'churning', rotulo: 'Churning (refinanciamentos sucessivos)' },
+  { id: 'falta_de_prova', rotulo: 'Falta de prova da operação' },
+  { id: 'custos_embutidos', rotulo: 'Custos embutidos e CET' },
+  { id: 'dever_de_informacao', rotulo: 'Dever de informação' },
+  { id: 'exibicao', rotulo: 'Exibição de documentos' },
+] as const;
+
 export const FAMILIAS_PROTOCOLO = [
   '01. RMC',
   '02. RCC',
@@ -509,6 +518,32 @@ export const calculadoraRmcService = {
       timeout: 120000,
     });
     return data.data ?? data;
+  },
+
+  /**
+   * RASCUNHO da inicial no timbrado. Devolve o .docx e quantas lacunas
+   * sobraram — o hub monta, mas NÃO entrega: paginação e PDF são no Word.
+   */
+  async rascunhoInicial(
+    file: File | null,
+    ctx: { partyId: string; grupo: string; base?: string; driveFileId?: string; uf?: string; cidade?: string },
+  ): Promise<{ blob: Blob; lacunas: number; nome: string }> {
+    const fd = new FormData();
+    if (file) fd.append('file', file);
+    const params = Object.fromEntries(
+      Object.entries(ctx).filter(([, v]) => v !== undefined && v !== ''),
+    );
+    const r = await api.post('/calculadora-rmc-rcc/hiscon/inicial', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+      responseType: 'blob',
+      timeout: 300000,
+    });
+    return {
+      blob: r.data as Blob,
+      lacunas: Number(r.headers['x-lacunas-restantes'] ?? 0),
+      nome: decodeURIComponent(String(r.headers['x-nome-sugerido'] ?? 'rascunho-inicial.docx')),
+    };
   },
 
   async extrairCalculo(file: File): Promise<CalculoResultado> {

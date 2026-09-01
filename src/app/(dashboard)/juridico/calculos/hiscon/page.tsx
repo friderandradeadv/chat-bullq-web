@@ -8,6 +8,7 @@ import {
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import {
   calculadoraRmcService,
+  BASES_INICIAL,
   FAMILIAS_PROTOCOLO,
   type ConferenciaProtocolo,
   type PlanoDaPasta,
@@ -60,6 +61,8 @@ export default function HisconPage() {
   const [familia, setFamilia] = useState('04. EMPRÉSTIMOS CONSIGNADOS');
   const [plano, setPlano] = useState<PlanoDaPasta | null>(null);
   const [conferencia, setConferencia] = useState<ConferenciaProtocolo | null>(null);
+  const [baseInicial, setBaseInicial] = useState<string>('churning');
+  const [rascunho, setRascunho] = useState<{ nome: string; lacunas: number } | null>(null);
   const [salvo, setSalvo] = useState<{ webViewLink: string; pasta: string; jaExistia: boolean } | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [doDrive, setDoDrive] = useState<{ id: string; nome: string; caminho: string[] } | null>(null);
@@ -113,6 +116,34 @@ export default function HisconPage() {
     queryFn: () => calculadoraRmcService.hisconsNaPasta(cliente!.partyId),
     enabled: !!cliente,
     staleTime: 2 * 60_000,
+  });
+
+  const rascunhoMut = useMutation({
+    mutationFn: async () => {
+      if (!cliente) throw new Error('Escolha o cliente.');
+      if (!reuPasta) throw new Error('Escolha o réu.');
+      if (!arquivo && !doDrive) throw new Error('Envie o HISCON, ou escolha um da pasta do cliente.');
+      return calculadoraRmcService.rascunhoInicial(arquivo, {
+        partyId: cliente.partyId,
+        grupo: reuPasta,
+        base: baseInicial,
+        uf: ctx.uf,
+        ...(doDrive ? { driveFileId: doDrive.id } : {}),
+      });
+    },
+    onSuccess: ({ blob, lacunas, nome }) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = nome;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setRascunho({ nome, lacunas });
+      setErro(null);
+    },
+    onError: (e: unknown) => {
+      setRascunho(null);
+      setErro(e instanceof Error ? e.message : 'Não foi possível montar o rascunho.');
+    },
   });
 
   const pastaMut = useMutation({
@@ -621,6 +652,15 @@ export default function HisconPage() {
                       {FAMILIAS_PROTOCOLO.map((f) => <option key={f} value={f}>{f}</option>)}
                     </select>
                   </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-zinc-600 dark:text-zinc-400">Base da inicial</span>
+                    <select
+                      value={baseInicial} onChange={(e) => setBaseInicial(e.target.value)}
+                      className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                    >
+                      {BASES_INICIAL.map((b) => <option key={b.id} value={b.id}>{b.rotulo}</option>)}
+                    </select>
+                  </label>
                   <button
                     onClick={() => pastaMut.mutate()}
                     disabled={pastaMut.isPending || !reuPasta}
@@ -629,7 +669,27 @@ export default function HisconPage() {
                     {pastaMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
                     Conferir
                   </button>
+                  <button
+                    onClick={() => rascunhoMut.mutate()}
+                    disabled={rascunhoMut.isPending || !reuPasta || (!arquivo && !doDrive)}
+                    title="Monta a inicial no timbrado com o que o hub sabe. O .docx ainda precisa do Word: ajuste de página e PDF."
+                    className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  >
+                    {rascunhoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    {rascunhoMut.isPending ? 'Montando…' : 'Rascunho da inicial'}
+                  </button>
                 </div>
+
+                {rascunho && (
+                  <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    <span className="font-medium">{rascunho.nome}</span> baixado — e é RASCUNHO.
+                    Restam <span className="font-medium">{rascunho.lacunas} lacunas em amarelo</span>,
+                    entre elas o CNPJ do réu (que se confere no cartão da Receita) e as cinco frases de
+                    tese, que a máquina não escreve. Falta ainda o passo do Word:{' '}
+                    <span className="font-medium">ajustar a página e gerar o PDF</span> — o hub não faz
+                    nenhum dos dois, e sem eles a peça não vai a protocolo.
+                  </div>
+                )}
 
                 {plano && (
                   <div className="mt-3 space-y-2">
