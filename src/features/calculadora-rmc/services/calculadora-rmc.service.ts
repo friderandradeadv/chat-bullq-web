@@ -234,6 +234,13 @@ export interface Indicio {
 }
 
 /** Contexto dos gates. Tudo opcional: sem o dado, o gate diz que não avaliou. */
+/** HISCON já arquivado na pasta do cliente no Drive. */
+export interface HisconNaPasta {
+  id: string;
+  nome: string;
+  caminho: string[];
+}
+
 export interface ContextoHiscon {
   uf?: string;
   fase?: 'conhecimento' | 'cumprimento';
@@ -303,9 +310,22 @@ export const calculadoraRmcService = {
     return d.data ?? d;
   },
 
-  async extrairHiscon(file: File, ctx?: ContextoHiscon): Promise<HisconResultado> {
+  /** Os HISCON que já estão na pasta do cliente — para não exigir baixar do
+   *  Drive e subir de volta o mesmo arquivo. */
+  async hisconsNaPasta(partyId: string): Promise<{ cliente: string; achados: HisconNaPasta[] }> {
+    const { data } = await api.get('/calculadora-rmc-rcc/hiscon/na-pasta', {
+      params: { partyId },
+      timeout: 120000,
+    });
+    return data.data ?? data;
+  },
+
+  async extrairHiscon(
+    file: File | null,
+    ctx?: ContextoHiscon & { partyId?: string; driveFileId?: string },
+  ): Promise<HisconResultado> {
     const fd = new FormData();
-    fd.append('file', file);
+    if (file) fd.append('file', file);
     // O contexto vai por query: são os dados dos gates do escritório, e sem eles
     // o gate de foro responde "não avaliado" em vez de chutar.
     const params = Object.fromEntries(
@@ -321,9 +341,12 @@ export const calculadoraRmcService = {
 
   /** Laudo técnico em PDF. O servidor relê o HISCON: o payload não vai do
    *  navegador, para o documento não sair de dado que a tela pôde alterar. */
-  async gerarLaudoHiscon(file: File, ctx?: ContextoHiscon & { cliente?: string }): Promise<Blob> {
+  async gerarLaudoHiscon(
+    file: File | null,
+    ctx?: ContextoHiscon & { cliente?: string; partyId?: string; driveFileId?: string },
+  ): Promise<Blob> {
     const fd = new FormData();
-    fd.append('file', file);
+    if (file) fd.append('file', file);
     const params = Object.fromEntries(
       Object.entries(ctx ?? {}).filter(([, v]) => v !== undefined && v !== ''),
     );
@@ -339,11 +362,11 @@ export const calculadoraRmcService = {
   /** Gera o laudo e grava na pasta do cliente no Drive. O cliente vai por
    *  `partyId` — o nome da capa e a pasta saem do mesmo registro do cadastro. */
   async salvarLaudoNoDrive(
-    file: File,
-    ctx: ContextoHiscon & { partyId: string },
+    file: File | null,
+    ctx: ContextoHiscon & { partyId: string; driveFileId?: string },
   ): Promise<{ webViewLink: string; pasta: string; cliente: string; jaExistia: boolean }> {
     const fd = new FormData();
-    fd.append('file', file);
+    if (file) fd.append('file', file);
     const params = Object.fromEntries(
       Object.entries(ctx).filter(([, v]) => v !== undefined && v !== ''),
     );

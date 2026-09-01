@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, CheckCircle2, Download, FileSearch, FileText, FolderUp, Info, Loader2, Upload, XCircle,
+  AlertTriangle, CheckCircle2, Download, FileSearch, FileText, FolderOpen, FolderUp, Info, Loader2, Upload, XCircle,
 } from 'lucide-react';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import {
@@ -50,12 +50,17 @@ export default function HisconPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState<{ webViewLink: string; pasta: string; jaExistia: boolean } | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
+  const [doDrive, setDoDrive] = useState<{ id: string; nome: string; caminho: string[] } | null>(null);
   const [cliente, setCliente] = useState<{ partyId: string; name: string } | null>(null);
   const [buscaCliente, setBuscaCliente] = useState('');
   const [abertoCliente, setAbertoCliente] = useState(false);
 
   const mut = useMutation({
-    mutationFn: (f: File) => calculadoraRmcService.extrairHiscon(f, ctx),
+    mutationFn: (o: { file: File | null; drive?: { id: string } }) =>
+      calculadoraRmcService.extrairHiscon(o.file, {
+        ...ctx,
+        ...(o.drive ? { partyId: cliente?.partyId, driveFileId: o.drive.id } : {}),
+      }),
     onSuccess: (r) => { setRes(r); setErro(null); },
     onError: (e: unknown) => {
       setRes(null);
@@ -79,10 +84,23 @@ export default function HisconPage() {
       .slice(0, 8);
   }, [clientes, buscaCliente]);
 
+  // Só busca depois de escolher o cliente: a varredura da pasta custa uma
+  // volta ao Drive, e sem cliente não há pasta para varrer.
+  const { data: naPasta, isFetching: buscandoPasta } = useQuery({
+    queryKey: ['hiscon-na-pasta', cliente?.partyId],
+    queryFn: () => calculadoraRmcService.hisconsNaPasta(cliente!.partyId),
+    enabled: !!cliente,
+    staleTime: 2 * 60_000,
+  });
+
   const laudoMut = useMutation({
     mutationFn: async () => {
-      if (!arquivo) throw new Error('Envie o HISCON antes de gerar o laudo.');
-      return calculadoraRmcService.gerarLaudoHiscon(arquivo, { ...ctx, cliente: cliente?.name });
+      if (!arquivo && !doDrive) throw new Error('Envie o HISCON, ou escolha um da pasta do cliente.');
+      return calculadoraRmcService.gerarLaudoHiscon(arquivo, {
+        ...ctx,
+        cliente: cliente?.name,
+        ...(doDrive ? { partyId: cliente?.partyId, driveFileId: doDrive.id } : {}),
+      });
     },
     onSuccess: (blob) => {
       const a = document.createElement('a');
@@ -100,9 +118,13 @@ export default function HisconPage() {
 
   const driveMut = useMutation({
     mutationFn: async () => {
-      if (!arquivo) throw new Error('Envie o HISCON antes de gerar o laudo.');
+      if (!arquivo && !doDrive) throw new Error('Envie o HISCON, ou escolha um da pasta do cliente.');
       if (!cliente) throw new Error('Escolha o cliente: é a pasta dele que recebe o laudo.');
-      return calculadoraRmcService.salvarLaudoNoDrive(arquivo, { ...ctx, partyId: cliente.partyId });
+      return calculadoraRmcService.salvarLaudoNoDrive(arquivo, {
+        ...ctx,
+        partyId: cliente.partyId,
+        ...(doDrive ? { driveFileId: doDrive.id } : {}),
+      });
     },
     onSuccess: (r) => { setSalvo(r); setErro(null); },
     onError: (e: unknown) => {
@@ -252,7 +274,7 @@ export default function HisconPage() {
             ref={ref} type="file" accept="application/pdf" className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) { setArquivo(f); mut.mutate(f); }
+              if (f) { setArquivo(f); setDoDrive(null); setSalvo(null); mut.mutate({ file: f }); }
               e.target.value = '';
             }}
           />
@@ -265,6 +287,11 @@ export default function HisconPage() {
             {mut.isPending ? 'Lendo o HISCON…' : 'Enviar HISCON (PDF)'}
           </button>
           {arquivo && <span className="text-sm text-zinc-500 dark:text-zinc-400">{arquivo.name}</span>}
+          {doDrive && (
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              {doDrive.nome} <span className="text-xs">· da pasta ({doDrive.caminho.join(' › ') || 'raiz'})</span>
+            </span>
+          )}
           {res && (
             <button
               onClick={baixarJson}
@@ -273,7 +300,7 @@ export default function HisconPage() {
               <Download className="h-4 w-4" /> Baixar análise (JSON)
             </button>
           )}
-          {res && arquivo && (
+          {res && (arquivo || doDrive) && (
             <button
               onClick={() => laudoMut.mutate()}
               disabled={laudoMut.isPending}
@@ -283,7 +310,7 @@ export default function HisconPage() {
               {laudoMut.isPending ? 'Gerando laudo…' : 'Gerar laudo (PDF)'}
             </button>
           )}
-          {res && arquivo && (
+          {res && (arquivo || doDrive) && (
             <button
               onClick={() => driveMut.mutate()}
               disabled={driveMut.isPending}
@@ -294,6 +321,49 @@ export default function HisconPage() {
             </button>
           )}
         </div>
+
+        {cliente && (
+          <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+              <FolderOpen className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+              HISCON já arquivado na pasta de {cliente.name}
+              {buscandoPasta && <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
+            </div>
+            {!buscandoPasta && !naPasta?.achados.length && (
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                Nenhum HISCON na pasta deste cliente. Envie o PDF acima.
+              </p>
+            )}
+            {!!naPasta?.achados.length && (
+              <>
+                <ul className="mt-2 space-y-1">
+                  {naPasta.achados.map((h) => (
+                    <li key={h.id}>
+                      <button
+                        onClick={() => { setDoDrive(h); setArquivo(null); setSalvo(null); mut.mutate({ file: null, drive: h }); }}
+                        disabled={mut.isPending}
+                        className={`w-full rounded-md border px-2 py-1.5 text-left text-xs disabled:opacity-60 ${
+                          doDrive?.id === h.id
+                            ? 'border-zinc-400 bg-white dark:border-zinc-600 dark:bg-zinc-900'
+                            : 'border-transparent hover:bg-white dark:hover:bg-zinc-900'
+                        }`}
+                      >
+                        <span className="font-medium text-zinc-800 dark:text-zinc-100">{h.nome}</span>
+                        <span className="ml-1 text-zinc-500 dark:text-zinc-400">
+                          · {h.caminho.join(' › ') || 'raiz da pasta'}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
+                  O mesmo HISCON é copiado para a pasta de cada réu ao montar as iniciais — por isso
+                  a repetição. O primeiro é o do INSS, no nível do cliente.
+                </p>
+              </>
+            )}
+          </div>
+        )}
 
         {salvo && (
           <p className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 p-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
