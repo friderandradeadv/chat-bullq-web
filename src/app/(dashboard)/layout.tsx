@@ -50,7 +50,7 @@ function partnerCanOpen(pathname: string): boolean {
 
 /** Mapeia a rota atual para o módulo gateável (ou null = sempre liberado). Do mais específico p/ o geral. */
 function moduleForPath(p: string): string | null {
-  if (/^\/juridico\/(recursos|jurimetria|hiscon)/.test(p)) return 'analise';
+  if (/^\/juridico\/(recursos|jurimetria)/.test(p)) return 'analise';
   if (/^\/juridico\/calculos/.test(p)) return 'calculos';
   if (/^\/(juridico|processos|agenda|caixa-djen|clientes)/.test(p)) return 'juridico';
   if (/^\/(ai-agents|follow-ups|base-conhecimento|vozes|automations)/.test(p)) return 'automacoes';

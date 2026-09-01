@@ -6,6 +6,7 @@ import {
   Banknote,
   Briefcase,
   Calculator,
+  FileSearch,
   Gavel,
   Landmark,
   ListChecks,
@@ -25,6 +26,14 @@ type Calc = {
 };
 
 const CALCULADORAS: Calc[] = [
+  {
+    href: '/juridico/calculos/hiscon',
+    titulo: 'Análise de HISCON',
+    descricao:
+      'Lê o HISCON pela geometria do PDF e responde quantas ações o caso comporta, contra quem e quais não valem a pena: réus por grupo econômico, gates do escritório e restituição do consignado comum corrigida pelo INPC. Gera o laudo e a memória de cálculo.',
+    icon: FileSearch,
+    disponivel: true,
+  },
   {
     href: '/juridico/calculos/rmc-rcc',
     titulo: 'Revisão de RMC / RCC',
