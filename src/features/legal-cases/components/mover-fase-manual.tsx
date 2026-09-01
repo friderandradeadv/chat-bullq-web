@@ -31,7 +31,9 @@ export function MoverFaseManual({ caseId, onMoved }: { caseId: string; onMoved?:
     if (!key || key === atual) { setOpen(false); return; }
     setBusy(true);
     try {
-      await legalCasesService.movePhase(caseId, key);
+      // ÚNICO caminho que avisa o cliente: aqui a fase está à vista e a escolha
+      // é deliberada (ver a nota em movePhase).
+      await legalCasesService.movePhase(caseId, key, { avisarCliente: true });
       toast.success(`Card movido para "${opts.find((o) => o.key === key)?.label ?? key}"`);
       setOpen(false);
       onMoved?.();

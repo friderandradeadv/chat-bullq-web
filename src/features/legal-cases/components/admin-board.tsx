@@ -122,9 +122,9 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
       // ── troca de FASE ──────────────────────────────────────────────────────
       if (destino !== origem) {
         const alvo = (data?.phases ?? []).find((p) => p.key === destino);
-        // Passa pelo MESMO endpoint do seletor da ficha: ele registra o
-        // movimento, ajusta o status e roda a reclassificação. Nada de escrever
-        // a fase por fora.
+        // Mesmo endpoint do seletor da ficha — registra o movimento, ajusta o
+        // status e reclassifica —, mas SEM avisar o cliente: `movePhase` só
+        // avisa com `avisarCliente: true`, e arrastar não é escolha deliberada.
         legalCasesService
           .movePhase(cardId, destino)
           .then(() => {

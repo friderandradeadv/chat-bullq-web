@@ -491,8 +491,26 @@ export const legalCasesService = {
     const { data } = await api.get('/legal-cases/cumprimento-financeiro');
     return data.data ?? data;
   },
-  async movePhase(id: string, phase: string): Promise<{ ok: boolean; phase: string }> {
-    const { data } = await api.patch(`/legal-cases/${id}/phase`, { phase });
+  /**
+   * Move o card de fase. **NÃO avisa o cliente por padrão** — passe
+   * `{ avisarCliente: true }` para avisar.
+   *
+   * O default é o silêncio de propósito. Avisar cliente é ato deliberado, e o
+   * lugar dele é o SELETOR da ficha, onde a fase está à vista e a escolha é
+   * consciente. Todos os outros caminhos que chamam isto são gesto rápido —
+   * arraste nos quadros (REPB, Planejamento, Pré-Processual, Judicial, Admin) e
+   * mover em massa — em que errar a coluna é comum e não há desfazer. Com o
+   * default no silêncio, quem esquecer do parâmetro erra para o lado seguro.
+   */
+  async movePhase(
+    id: string,
+    phase: string,
+    opts?: { avisarCliente?: boolean },
+  ): Promise<{ ok: boolean; phase: string }> {
+    const { data } = await api.patch(`/legal-cases/${id}/phase`, {
+      phase,
+      avisarCliente: opts?.avisarCliente === true,
+    });
     return data.data ?? data;
   },
   // Registrar recurso a partir de um prazo: conclui o prazo, move o card p/ RECURSO
