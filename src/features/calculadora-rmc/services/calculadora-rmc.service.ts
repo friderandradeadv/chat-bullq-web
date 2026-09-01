@@ -267,6 +267,35 @@ export interface ResultadoRestituicao {
   avisos: string[];
 }
 
+/** Onde a inicial de um réu vai (ou já está) na pasta do cliente. */
+export interface PlanoDaPasta {
+  cliente: string;
+  familia: { nome: string; existe: boolean };
+  reu: { nome: string; existe: boolean; numero: number };
+  trilha: string[];
+  criaria: string[];
+  /** pastas que parecem ser o mesmo réu com outro nome */
+  parecidos: string[];
+}
+
+export interface ConferenciaProtocolo {
+  cliente: string;
+  trilha: string[];
+  existe: boolean;
+  itens: { nome: string; obrigatorio: boolean; presente: boolean; arquivo: string | null }[];
+  faltam: string[];
+  avisoDocx: string | null;
+}
+
+export const FAMILIAS_PROTOCOLO = [
+  '01. RMC',
+  '02. RCC',
+  '03. CONTRIBUIÇÕES',
+  '04. EMPRÉSTIMOS CONSIGNADOS',
+  '05. REVISIONAL',
+  '05. EXIBIÇÃO DE DOCUMENTOS',
+];
+
 /** HISCON já arquivado na pasta do cliente no Drive. */
 export interface HisconNaPasta {
   id: string;
@@ -447,6 +476,39 @@ export const calculadoraRmcService = {
       timeout: 300000,
     });
     return data as Blob;
+  },
+
+  /** Plano da pasta de protocolo do réu. Não cria nada. */
+  async planoDaPasta(partyId: string, reu: string, familia?: string): Promise<PlanoDaPasta> {
+    const { data } = await api.get('/calculadora-rmc-rcc/protocolo/pasta-do-reu', {
+      params: { partyId, reu, familia },
+      timeout: 120000,
+    });
+    return data.data ?? data;
+  },
+
+  /** Cria o que falta. Recusa quando há pasta parecida, salvo `confirmar`. */
+  async criarPastaDoReu(
+    partyId: string,
+    reu: string,
+    familia?: string,
+    confirmar?: boolean,
+  ): Promise<PlanoDaPasta> {
+    const { data } = await api.post(
+      '/calculadora-rmc-rcc/protocolo/pasta-do-reu',
+      {},
+      { params: { partyId, reu, familia, ...(confirmar ? { confirmar: 'true' } : {}) }, timeout: 120000 },
+    );
+    return data.data ?? data;
+  },
+
+  /** Confere a pasta contra a sequência de protocolo do escritório. */
+  async conferirProtocolo(partyId: string, reu: string, familia?: string): Promise<ConferenciaProtocolo> {
+    const { data } = await api.get('/calculadora-rmc-rcc/protocolo/conferir', {
+      params: { partyId, reu, familia },
+      timeout: 120000,
+    });
+    return data.data ?? data;
   },
 
   async extrairCalculo(file: File): Promise<CalculoResultado> {

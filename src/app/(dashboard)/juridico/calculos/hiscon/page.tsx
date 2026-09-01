@@ -3,11 +3,14 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, Calculator, CheckCircle2, Download, FileSearch, FileText, FolderOpen, FolderUp, Info, Loader2, Upload, XCircle,
+  AlertTriangle, Calculator, CheckCircle2, Download, FileSearch, FileText, FolderOpen, FolderPlus, FolderUp, Info, Loader2, Upload, XCircle,
 } from 'lucide-react';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import {
   calculadoraRmcService,
+  FAMILIAS_PROTOCOLO,
+  type ConferenciaProtocolo,
+  type PlanoDaPasta,
   type ResultadoRestituicao,
   type ContextoHiscon,
   type HisconResultado,
@@ -53,6 +56,10 @@ export default function HisconPage() {
   const [res, setRes] = useState<HisconResultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [conta, setConta] = useState<ResultadoRestituicao | null>(null);
+  const [reuPasta, setReuPasta] = useState('');
+  const [familia, setFamilia] = useState('04. EMPRÉSTIMOS CONSIGNADOS');
+  const [plano, setPlano] = useState<PlanoDaPasta | null>(null);
+  const [conferencia, setConferencia] = useState<ConferenciaProtocolo | null>(null);
   const [salvo, setSalvo] = useState<{ webViewLink: string; pasta: string; jaExistia: boolean } | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [doDrive, setDoDrive] = useState<{ id: string; nome: string; caminho: string[] } | null>(null);
@@ -96,6 +103,31 @@ export default function HisconPage() {
     queryFn: () => calculadoraRmcService.hisconsNaPasta(cliente!.partyId),
     enabled: !!cliente,
     staleTime: 2 * 60_000,
+  });
+
+  const pastaMut = useMutation({
+    mutationFn: async () => {
+      if (!cliente) throw new Error('Escolha o cliente.');
+      if (!reuPasta) throw new Error('Escolha o réu.');
+      const [p, c] = await Promise.all([
+        calculadoraRmcService.planoDaPasta(cliente.partyId, reuPasta, familia),
+        calculadoraRmcService.conferirProtocolo(cliente.partyId, reuPasta, familia),
+      ]);
+      return { p, c };
+    },
+    onSuccess: ({ p, c }) => { setPlano(p); setConferencia(c); setErro(null); },
+    onError: (e: unknown) => {
+      setPlano(null); setConferencia(null);
+      setErro(e instanceof Error ? e.message : 'Não foi possível ler a pasta.');
+    },
+  });
+
+  const criarPastaMut = useMutation({
+    mutationFn: (confirmar: boolean) =>
+      calculadoraRmcService.criarPastaDoReu(cliente!.partyId, reuPasta, familia, confirmar),
+    onSuccess: () => { setErro(null); pastaMut.mutate(); },
+    onError: (e: unknown) =>
+      setErro(e instanceof Error ? e.message : 'Não foi possível criar a pasta.'),
   });
 
   const memoriaMut = useMutation({
@@ -545,6 +577,110 @@ export default function HisconPage() {
                     </div>
                   );
                 })}
+              </div>
+            </section>
+          )}
+
+          {/* -------------------------------------- pasta de protocolo */}
+          {cliente && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Pasta de protocolo
+              </h2>
+              <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="text-sm">
+                    <span className="mb-1 block text-zinc-600 dark:text-zinc-400">Réu</span>
+                    <input
+                      list="reus-do-caso" value={reuPasta}
+                      onChange={(e) => { setReuPasta(e.target.value); setPlano(null); setConferencia(null); }}
+                      placeholder="como está no Drive"
+                      className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                    />
+                    <datalist id="reus-do-caso">
+                      {res?.planoAcao?.acoes.map((a) => <option key={a.grupo} value={a.grupo} />)}
+                    </datalist>
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-zinc-600 dark:text-zinc-400">Família</span>
+                    <select
+                      value={familia}
+                      onChange={(e) => { setFamilia(e.target.value); setPlano(null); setConferencia(null); }}
+                      className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                    >
+                      {FAMILIAS_PROTOCOLO.map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </label>
+                  <button
+                    onClick={() => pastaMut.mutate()}
+                    disabled={pastaMut.isPending || !reuPasta}
+                    className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  >
+                    {pastaMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
+                    Conferir
+                  </button>
+                </div>
+
+                {plano && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                      {plano.cliente} › <span className="font-medium">{plano.trilha.join(' › ')}</span>
+                    </p>
+
+                    {!!plano.parecidos.length && (
+                      <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                        Já existe <span className="font-medium">{plano.parecidos.join(', ')}</span> nesta
+                        família. Se for o mesmo réu, use a pasta que existe — duas pastas do mesmo réu
+                        partem o caso em dois lugares.
+                      </p>
+                    )}
+
+                    {!!plano.criaria.length && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Falta criar: {plano.criaria.join(' › ')}
+                        </span>
+                        <button
+                          onClick={() => criarPastaMut.mutate(plano.parecidos.length > 0)}
+                          disabled={criarPastaMut.isPending}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                        >
+                          {criarPastaMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderPlus className="h-3.5 w-3.5" />}
+                          {plano.parecidos.length ? 'Criar assim mesmo' : 'Criar pasta'}
+                        </button>
+                      </div>
+                    )}
+
+                    {conferencia?.existe && (
+                      <>
+                        <ul className="grid gap-x-6 gap-y-0.5 text-xs sm:grid-cols-2">
+                          {conferencia.itens.map((i) => (
+                            <li key={i.nome} className="flex items-baseline gap-1.5">
+                              <span className={
+                                i.presente ? 'text-emerald-600 dark:text-emerald-400'
+                                  : i.obrigatorio ? 'font-medium text-red-600 dark:text-red-400'
+                                    : 'text-zinc-400 dark:text-zinc-600'
+                              }>
+                                {i.presente ? 'ok' : i.obrigatorio ? 'falta' : '—'}
+                              </span>
+                              <span className={i.presente ? 'text-zinc-700 dark:text-zinc-300' : 'text-zinc-500 dark:text-zinc-500'}>
+                                {i.nome}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className={`text-xs ${conferencia.faltam.length ? 'font-medium text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                          {conferencia.faltam.length
+                            ? `${conferencia.faltam.length} documento(s) obrigatório(s) faltando.`
+                            : 'Sequência obrigatória completa.'}
+                        </p>
+                        {conferencia.avisoDocx && (
+                          <p className="text-xs text-amber-700 dark:text-amber-400">⚠ {conferencia.avisoDocx}</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
           )}
