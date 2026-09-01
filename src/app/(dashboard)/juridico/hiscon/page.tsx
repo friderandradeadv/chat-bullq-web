@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
-  AlertTriangle, CheckCircle2, Download, FileSearch, FileText, Info, Loader2, Upload, XCircle,
+  AlertTriangle, CheckCircle2, Download, FileSearch, FileText, FolderUp, Info, Loader2, Upload, XCircle,
 } from 'lucide-react';
 import {
   calculadoraRmcService,
@@ -47,6 +47,7 @@ export default function HisconPage() {
   const [ctx, setCtx] = useState<ContextoHiscon>({});
   const [res, setRes] = useState<HisconResultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [salvo, setSalvo] = useState<{ webViewLink: string; pasta: string } | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [cliente, setCliente] = useState('');
 
@@ -76,6 +77,19 @@ export default function HisconPage() {
     // de erro dos endpoints binários (src/lib/api.ts).
     onError: (e: unknown) =>
       setErro(e instanceof Error ? e.message : 'Não foi possível gerar o laudo.'),
+  });
+
+  const driveMut = useMutation({
+    mutationFn: async () => {
+      if (!arquivo) throw new Error('Envie o HISCON antes de gerar o laudo.');
+      if (!cliente.trim()) throw new Error('Escreva o nome do beneficiário: é por ele que acho a pasta no Drive.');
+      return calculadoraRmcService.salvarLaudoNoDrive(arquivo, { ...ctx, cliente: cliente.trim() });
+    },
+    onSuccess: (r) => { setSalvo(r); setErro(null); },
+    onError: (e: unknown) => {
+      setSalvo(null);
+      setErro(e instanceof Error ? e.message : 'Não foi possível salvar o laudo no Drive.');
+    },
   });
 
   // Averbação não é contrato: o HISCON registra a mesma operação duas vezes
@@ -223,7 +237,26 @@ export default function HisconPage() {
               {laudoMut.isPending ? 'Gerando laudo…' : 'Gerar laudo (PDF)'}
             </button>
           )}
+          {res && arquivo && (
+            <button
+              onClick={() => driveMut.mutate()}
+              disabled={driveMut.isPending}
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              {driveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderUp className="h-4 w-4" />}
+              {driveMut.isPending ? 'Salvando no Drive…' : 'Salvar na pasta do cliente'}
+            </button>
+          )}
         </div>
+
+        {salvo && (
+          <p className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 p-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+            Laudo salvo em <span className="font-medium">{salvo.pasta}</span>.{' '}
+            <a href={salvo.webViewLink} target="_blank" rel="noreferrer" className="underline">
+              Abrir a pasta no Drive
+            </a>
+          </p>
+        )}
 
         {erro && (
           <p className="mt-3 rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">

@@ -336,6 +336,25 @@ export const calculadoraRmcService = {
     return data as Blob;
   },
 
+  /** Gera o laudo e grava na pasta do cliente no Drive. Não cria pasta: se o
+   *  nome não achar cliente, o servidor recusa com a explicação. */
+  async salvarLaudoNoDrive(
+    file: File,
+    ctx: ContextoHiscon & { cliente: string },
+  ): Promise<{ webViewLink: string; pasta: string }> {
+    const fd = new FormData();
+    fd.append('file', file);
+    const params = Object.fromEntries(
+      Object.entries(ctx).filter(([, v]) => v !== undefined && v !== ''),
+    );
+    const { data } = await api.post('/calculadora-rmc-rcc/hiscon/laudo-no-drive', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+      timeout: 300000,
+    });
+    return data.data ?? data;
+  },
+
   async extrairCalculo(file: File): Promise<CalculoResultado> {
     const fd = new FormData();
     fd.append('file', file);
