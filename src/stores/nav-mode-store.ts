@@ -5,6 +5,7 @@ import {
   Menu, Sparkles, MessageSquare, CalendarCheck, Folder, Newspaper, Workflow,
   Landmark, Banknote, Columns3, Stethoscope, Calculator, Users, CircleDollarSign, UserCircle,
   Bot, HelpCircle, Settings, TrendingUp, Gavel, Heart, type LucideIcon,
+  HandCoins,
 } from 'lucide-react';
 
 // ── Modo da navegação (desktop) ────────────────────────────────────────────────
@@ -37,7 +38,7 @@ export const SIMPLE_BAR_CATALOG: SimpleBarItem[] = [
   { id: 'fase-bancaria', label: 'Fase Bancária', icon: Landmark, href: '/juridico/fase-bancaria' },
   { id: 'repb', label: 'REPB', icon: Banknote, href: '/juridico/repb' },
   { id: 'fase-judicial', label: 'Fase Judicial', icon: Columns3, href: '/juridico/kanban' },
-  { id: 'execucao', label: 'CS e Repasse', icon: Gavel, href: '/juridico/board/execucao' },
+  { id: 'execucao', label: 'CS e Repasse', icon: HandCoins, href: '/juridico/board/execucao' },
   { id: 'exec', label: 'Execução', icon: Gavel, href: '/juridico/board/exec' },
   { id: 'planejamento', label: 'Planejamento', icon: TrendingUp, href: '/juridico/planejamento' },
   { id: 'inss', label: 'INSS Adm.', icon: Stethoscope, href: '/juridico/inss-administrativo' },
