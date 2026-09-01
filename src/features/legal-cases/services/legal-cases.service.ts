@@ -232,8 +232,6 @@ export interface KanbanPhase {
   board?: string;         // quadro (base ou custom) a que a fase pertence
   color?: string | null;  // cor do cabeçalho da coluna (fases custom)
   count: number;
-  /** "cumprimento" | "execucao" — de que visão do quadro Execução esta coluna é. */
-  tipo?: 'cumprimento' | 'execucao';
 }
 
 /** Quadro CUSTOM criado pelo escritório (vertical nova sem deploy). */
@@ -262,9 +260,6 @@ export interface KanbanCard {
   // Repasse ("o que temos a receber" × defesa). Sai de metadata.poloExecucao ou,
   // na falta dele, do "Papel do cliente" do Astrea.
   polo?: 'exequente' | 'executado';
-  // "CS e Repasse" × "Execução", derivado da FASE no servidor (a coluna é a
-  // verdade — ver tipo-execucao.ts na API).
-  tipo?: 'cumprimento' | 'execucao';
   // Processos APENSADOS fundidos neste card (o cumprimento de sentença autuado
   // em apartado). O card é um só; o número dos autos do apenso viaja aqui porque
   // é NELE que o advogado peticiona.

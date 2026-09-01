@@ -14,21 +14,14 @@ type Polo = 'exequente' | 'executado';
 const poloDoCard = (c: KanbanCard): Polo => (c.polo === 'executado' ? 'executado' : 'exequente');
 
 /**
- * "CS e Repasse" × "Execução" — derivado da FASE, no servidor. A coluna é a
- * verdade: card em cumprimento é CS e Repasse, card em execução é processo de
- * execução. Sem campo a preencher, e por isso sem como o card contradizer a
- * própria coluna. Ver tipo-execucao.ts na API.
+ * Segmento do cabeçalho. A cor é de cada OPÇÃO, não do quadro: exequente azul
+ * (dinheiro a entrar) e executado vermelho (somos a defesa) — o par se lê pela
+ * cor antes de se ler pelo texto.
  */
-type Tipo = 'cumprimento' | 'execucao';
-const tipoDoCard = (c: KanbanCard): Tipo => (c.tipo === 'execucao' ? 'execucao' : 'cumprimento');
-
-
-/** Um segmento do cabeçalho (Exequente×Executado, Cumprimento×Execução). */
-function Segmentado<T extends string>({ valor, onMuda, opcoes, cor }: {
+function Segmentado<T extends string>({ valor, onMuda, opcoes }: {
   valor: T;
   onMuda: (v: T) => void;
-  opcoes: { v: T; label: string; n: number; dica: string }[];
-  cor: string;
+  opcoes: { v: T; label: string; n: number; dica: string; cor: string }[];
 }) {
   return (
     <div className="flex items-center rounded-lg border border-[#cfe0ed] bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
@@ -40,7 +33,7 @@ function Segmentado<T extends string>({ valor, onMuda, opcoes, cor }: {
           className={`h-8 rounded-md px-3 text-sm font-medium transition-colors ${
             valor === o.v ? 'text-white' : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
           }`}
-          style={valor === o.v ? { background: cor } : undefined}
+          style={valor === o.v ? { background: o.cor } : undefined}
         >
           {o.label}
           <span className={`ml-1.5 text-xs ${valor === o.v ? 'text-white/80' : 'text-zinc-400'}`}>{o.n}</span>
@@ -66,11 +59,6 @@ export default function CustomBoardPage() {
   // dativo) não é receita e embaralhava essa leitura — mas também não podia sumir.
   // Daí as duas visões: Exequente (padrão) × Executado.
   const [polo, setPolo] = useState<Polo>('exequente');
-  // 2º eixo: execução é PROCESSO autônomo, cumprimento de sentença é FASE do
-  // processo que já existe (CPC). Sem esta separação o sistema não tinha onde pôr
-  // uma execução e ela caía em qualquer coluna — duas estavam em "AGUARDANDO
-  // SENTENÇA", e execução não tem sentença.
-  const [tipo, setTipo] = useState<Tipo>('cumprimento');
 
   const { data: boards, isLoading } = useQuery({
     queryKey: ['legal-cases', 'boards'],
@@ -88,11 +76,6 @@ export default function CustomBoardPage() {
   // colunas do Fase Judicial, ao vivo — pra ver o que graduou/encerrou sem trocar de quadro.
   const noQuadro = (p: { key: string; lane?: 'pre' | 'judicial'; board?: string | null }) =>
     boardOfPhase(p.key, p.lane, p.board) === key || (key === 'execucao' && (p.key === 'acoes_vencidas' || p.key === 'acoes_perdidas'));
-  // A visão escolhida também escolhe as COLUNAS: mostrar a coluna de execução
-  // dentro de "CS e Repasse" (sempre vazia ali) só ocuparia espaço e faria o
-  // usuário duvidar do filtro.
-  const naVisao = (p: { key: string; lane?: 'pre' | 'judicial'; board?: string | null; tipo?: Tipo }) =>
-    noQuadro(p) && (key !== 'execucao' || (p.tipo ?? 'cumprimento') === tipo);
   const boardPhases = useMemo(
     () =>
       (kb?.phases ?? [])
@@ -102,25 +85,17 @@ export default function CustomBoardPage() {
     [kb, key],
   );
 
-  // O toggle só existe no quadro da execução — nos demais, polo não quer dizer nada.
-  const temPolo = key === 'execucao';
-  // Cada contador é medido DENTRO do recorte do outro eixo: com "Executado"
-  // selecionado, o número ao lado de "Execução" tem de ser o de execuções em que
-  // somos a defesa, não o da carteira toda — senão o usuário clica num número e
-  // cai numa coluna vazia.
+  // Polo vale nos DOIS quadros de execução: um cumprimento em que somos a defesa
+  // não é receita, e no quadro de Execução o Clodoaldo é justamente esse caso.
+  const temPolo = key === 'execucao' || key === 'exec';
   const porPolo = useMemo(() => {
     const n: Record<Polo, number> = { exequente: 0, executado: 0 };
-    for (const c of kb?.cards ?? []) if (tipoDoCard(c) === tipo) n[poloDoCard(c)]++;
+    for (const c of kb?.cards ?? []) n[poloDoCard(c)]++;
     return n;
-  }, [kb, tipo]);
-  const porTipo = useMemo(() => {
-    const n: Record<Tipo, number> = { cumprimento: 0, execucao: 0 };
-    for (const c of kb?.cards ?? []) if (poloDoCard(c) === polo) n[tipoDoCard(c)]++;
-    return n;
-  }, [kb, polo]);
+  }, [kb]);
   const filtrarPorPolo = useCallback(
-    (c: KanbanCard) => !temPolo || (poloDoCard(c) === polo && tipoDoCard(c) === tipo),
-    [temPolo, polo, tipo],
+    (c: KanbanCard) => !temPolo || poloDoCard(c) === polo,
+    [temPolo, polo],
   );
 
   if (isLoading) {
@@ -149,33 +124,19 @@ export default function CustomBoardPage() {
         filter={filtrarPorPolo}
         toolbar={
           temPolo ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Segmentado
-                valor={tipo}
-                onMuda={setTipo}
-                cor={board.color || '#2F9E44'}
-                opcoes={[
-                  { v: 'cumprimento', label: 'CS e Repasse', n: porTipo.cumprimento,
-                    dica: 'Cumprimento de sentença até a prestação de contas — e as prateleiras de desfecho' },
-                  { v: 'execucao', label: 'Execução', n: porTipo.execucao,
-                    dica: 'Processos na coluna EM EXECUÇÃO — a busca de bens (SISBAJUD/RENAJUD)' },
-                ]}
-              />
-              <Segmentado
-                valor={polo}
-                onMuda={setPolo}
-                cor={board.color || '#2F9E44'}
-                opcoes={[
-                  { v: 'exequente', label: 'Exequente', n: porPolo.exequente,
-                    dica: 'Somos credores — é o que o escritório tem a receber' },
-                  { v: 'executado', label: 'Executado', n: porPolo.executado,
-                    dica: 'Somos a defesa do executado — não entra no que temos a receber' },
-                ]}
-              />
-            </div>
+            <Segmentado
+              valor={polo}
+              onMuda={setPolo}
+              opcoes={[
+                { v: 'exequente', label: 'Exequente', n: porPolo.exequente, cor: '#228BE6',
+                  dica: 'Somos credores — é o que o escritório tem a receber' },
+                { v: 'executado', label: 'Executado', n: porPolo.executado, cor: '#c92a2a',
+                  dica: 'Somos a defesa do executado — não entra no que temos a receber' },
+              ]}
+            />
           ) : undefined
         }
-        columnsFromPhases={(p) => naVisao(p)}
+        columnsFromPhases={(p) => noQuadro(p)}
         manageBoard={key}
         drawerBoard={key}
         onNewCard={boardPhases.length ? () => setNovo(true) : undefined}

@@ -409,7 +409,8 @@ export function AppSidebar() {
                   <NavItem href="/juridico/fase-bancaria" icon={Landmark} label="Fase Bancária Investigativa" />
                   <NavItem href="/juridico/repb" icon={Banknote} label="REPB — Reestruturação de Passivo" />
                   <NavItem href="/juridico/kanban" icon={Columns3} label="Fase Judicial" />
-                  <NavItem href="/juridico/board/execucao" icon={Gavel} label="Execução & Repasse" />
+                  <NavItem href="/juridico/board/execucao" icon={Gavel} label="CS e Repasse" />
+                  <NavItem href="/juridico/board/exec" icon={Gavel} label="Execução" />
                   <NavItem href="/juridico/planejamento" icon={TrendingUp} label="Planejamento Previdenciário" />
                   <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
                   <NavItem href="/juridico/quadros" icon={LayoutGrid} label="Quadros personalizados" />
