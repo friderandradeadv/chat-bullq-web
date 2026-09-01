@@ -38,6 +38,8 @@ import {
   type CenarioId,
   type HiscreContrato,
   type HisconContrato,
+  type EntradaCalculadora,
+  type PlanoAcao,
   type IndiceCorrecao,
   type ParcelaInput,
   type ResultadoRmc,
@@ -495,6 +497,9 @@ export default function CalculadoraRmcPage() {
   const [hisconContratos, setHisconContratos] = useState<HisconContrato[] | null>(null);
   const [hisconSel, setHisconSel] = useState<HisconContrato | null>(null);
   const [hisconAviso, setHisconAviso] = useState<string | null>(null);
+  const [hisconEntradas, setHisconEntradas] = useState<EntradaCalculadora[] | null>(null);
+  const [hisconPlano, setHisconPlano] = useState<PlanoAcao | null>(null);
+  const [hisconAvisos, setHisconAvisos] = useState<string[]>([]);
 
   const aplicarHiscon = (c: HisconContrato) => {
     setHisconSel(c);
@@ -509,7 +514,22 @@ export default function CalculadoraRmcPage() {
       const nome = [c.tipo, c.banco].filter(Boolean).join(' - ');
       if (nome) set('nomeCalculo', nome);
     }
-    // Pré-carrega o gerador de parcelas com a margem reservada do HISCON.
+    // Quando a leitura foi pela geometria do PDF, o próprio HISCON traz os
+    // descontos mês a mês (tabela "Descontos de Cartão") — e aí o HISCRE não é
+    // mais necessário para montar as parcelas.
+    const entrada = hisconEntradas?.find((x) => x.contrato === c.contrato && x.tipo === c.tipo);
+    if (entrada && entrada.parcelas.length) {
+      setParcelasTexto(entrada.parcelas.map((p) => `${p.data}\t${p.valor.toFixed(2)}`).join('\n'));
+      const pend = entrada.faltando.filter((f) => !f.startsWith('taxa de conversão'));
+      setHisconAviso(
+        `Contrato carregado com ${entrada.competencias} competências do próprio HISCON ` +
+          `(${brl(entrada.totalDescontado)} descontados) — não precisa do HISCRE.` +
+          (entrada.taxaConsultarEm ? ` Buscar a taxa do consignado em ${entrada.taxaConsultarEm}.` : '') +
+          (pend.length ? ` Pendências: ${pend.join('; ')}.` : ''),
+      );
+      return;
+    }
+    // Sem os descontos: pré-carrega o gerador com a margem reservada.
     const inicio = c.dataInclusao ?? c.dataContratacao;
     if (inicio && c.valorReservado != null) {
       const n = c.parcelasQtd && c.parcelasQtd > 0 ? c.parcelasQtd : mesesEntre(inicio, form.dataBase);
@@ -523,6 +543,9 @@ export default function CalculadoraRmcPage() {
   const hisconMut = useMutation({
     mutationFn: (file: File) => calculadoraRmcService.extrairHiscon(file),
     onSuccess: (r) => {
+      setHisconEntradas(r.entradasCalculadora ?? null);
+      setHisconPlano(r.planoAcao ?? null);
+      setHisconAvisos(r.avisos ?? []);
       const cs = r.contratos ?? [];
       const rmcRcc = cs.filter((c) => c.tipo === 'RMC' || c.tipo === 'RCC');
       const lista = rmcRcc.length ? rmcRcc : cs;
@@ -537,6 +560,9 @@ export default function CalculadoraRmcPage() {
     },
     onError: (e) => {
       setHisconContratos(null);
+      setHisconEntradas(null);
+      setHisconPlano(null);
+      setHisconAvisos([]);
       setHisconAviso((e as Error)?.message ?? 'Erro ao processar o HISCON.');
     },
   });
@@ -1158,6 +1184,76 @@ export default function CalculadoraRmcPage() {
 
               {/* Avisos e escolhas (valem também para o envio pela área única) */}
               {hisconAviso && <p className="mb-2 mt-2 text-xs text-zinc-500 dark:text-zinc-400">{hisconAviso}</p>}
+
+              {/* Plano de ação: o que o HISCON permite fazer, antes do cálculo. */}
+              {hisconPlano && (
+                <div className="mb-3 rounded-lg border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-medium text-zinc-800 dark:text-zinc-100">Plano de ação</span>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                      {hisconPlano.resumo.aAjuizar} a ajuizar
+                    </span>
+                    {hisconPlano.resumo.aReposicionar > 0 && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                        {hisconPlano.resumo.aReposicionar} a reposicionar a tese
+                      </span>
+                    )}
+                    {hisconPlano.resumo.aDescartar > 0 && (
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 font-medium text-rose-800 dark:bg-rose-500/15 dark:text-rose-300">
+                        {hisconPlano.resumo.aDescartar} a não ajuizar
+                      </span>
+                    )}
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      de {hisconPlano.resumo.reus} réus · {hisconPlano.resumo.contratosDecaidos} averbações com mais de 4 anos
+                    </span>
+                  </div>
+                  <ul className="space-y-1 text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+                    {hisconPlano.diagnostico.slice(0, 3).map((d, i) => (
+                      <li key={i}>• {d}</li>
+                    ))}
+                  </ul>
+                  {hisconPlano.acoes.filter((a) => a.veredito !== 'INDICIO_FRACO').length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {hisconPlano.acoes
+                        .filter((a) => a.veredito !== 'INDICIO_FRACO')
+                        .slice(0, 8)
+                        .map((a) => (
+                          <span
+                            key={a.grupo}
+                            title={`${a.porque} → ${a.proximoPasso}`}
+                            className={`rounded border px-1.5 py-0.5 text-[10px] ${
+                              a.veredito === 'AJUIZAR'
+                                ? 'border-emerald-300 text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300'
+                                : a.veredito === 'NAO_AJUIZAR'
+                                  ? 'border-rose-300 text-rose-700 dark:border-rose-500/40 dark:text-rose-300'
+                                  : 'border-amber-300 text-amber-700 dark:border-amber-500/40 dark:text-amber-300'
+                            }`}
+                          >
+                            {a.grupo} · {a.dentroDoPrazo}/{a.averbacoes}
+                          </span>
+                        ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-[10px] text-zinc-400 dark:text-zinc-500">
+                    Indícios calculados a partir do documento. Não é parecer, e a decisão de ajuizar é do advogado.
+                  </p>
+                </div>
+              )}
+
+              {hisconAvisos.length > 0 && (
+                <ul className="mb-2 space-y-1 text-[11px] text-amber-700 dark:text-amber-300">
+                  {/* O parser emite um aviso por CONTRATO: o mesmo número duas vezes
+                      na mesma página são duas averbações, e é dado, não ruído.
+                      Agrupar com a contagem preserva isso; deduplicar apagaria uma
+                      das linhas ruins. */}
+                  {[...hisconAvisos.reduce(
+                    (m, a) => m.set(a, (m.get(a) ?? 0) + 1),
+                    new Map<string, number>(),
+                  )].slice(0, 4).map(([a, n]) => (
+                    <li key={a}>⚠ {a}{n > 1 && <span className="font-medium"> ({n}×)</span>}</li>
+                  ))}
+                </ul>
+              )}
               {hisconContratos && hisconContratos.length > 1 && (
                 <div className="mb-2 space-y-1.5">
                   {hisconContratos.map((c, i) => (
