@@ -395,7 +395,7 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
             <div className="rounded-xl border border-[#B7791F]/30 bg-[#B7791F]/5 p-5">
               <p className="font-serif text-lg font-semibold text-zinc-900 dark:text-zinc-100">Frider Andrade — Advogados</p>
               <p className="text-sm text-zinc-600 dark:text-zinc-300">Dr. Matheus Frider Andrade · OAB/PR 108.351 · Dra. Kauani Castro Macorim</p>
-              <p className="text-sm text-zinc-500">(44) 99174-7315 · Maringá/PR</p>
+              <p className="text-sm text-zinc-500">(44) 99157-4212 · Maringá/PR</p>
             </div>
             <div className="mt-4 flex items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/40">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
