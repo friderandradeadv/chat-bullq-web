@@ -52,7 +52,19 @@ api.interceptors.response.use(
         }
       }
     }
-    const message = error.response?.data?.message || error.message;
+    // Resposta de erro de um endpoint `responseType: 'blob'` (PDF, XLSX) chega
+    // como Blob: `data.message` é undefined e o usuário via "Request failed
+    // with status code 400" no lugar da explicação do servidor. Medido em
+    // 01/09/2026 no laudo de HISCON.
+    let corpo: unknown = error.response?.data;
+    if (corpo instanceof Blob) {
+      try {
+        corpo = JSON.parse(await corpo.text());
+      } catch {
+        corpo = undefined; // blob que não é JSON: cai na mensagem do axios
+      }
+    }
+    const message = (corpo as { message?: string | string[] })?.message || error.message;
     return Promise.reject(new Error(Array.isArray(message) ? message[0] : message));
   },
 );

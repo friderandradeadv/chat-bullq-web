@@ -319,6 +319,23 @@ export const calculadoraRmcService = {
     return d.data ?? d;
   },
 
+  /** Laudo técnico em PDF. O servidor relê o HISCON: o payload não vai do
+   *  navegador, para o documento não sair de dado que a tela pôde alterar. */
+  async gerarLaudoHiscon(file: File, ctx?: ContextoHiscon & { cliente?: string }): Promise<Blob> {
+    const fd = new FormData();
+    fd.append('file', file);
+    const params = Object.fromEntries(
+      Object.entries(ctx ?? {}).filter(([, v]) => v !== undefined && v !== ''),
+    );
+    const { data } = await api.post('/calculadora-rmc-rcc/hiscon/laudo', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params,
+      responseType: 'blob',
+      timeout: 300000,
+    });
+    return data as Blob;
+  },
+
   async extrairCalculo(file: File): Promise<CalculoResultado> {
     const fd = new FormData();
     fd.append('file', file);

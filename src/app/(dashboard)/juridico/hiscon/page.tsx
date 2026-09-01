@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
-  AlertTriangle, CheckCircle2, Download, FileSearch, Info, Loader2, Upload, XCircle,
+  AlertTriangle, CheckCircle2, Download, FileSearch, FileText, Info, Loader2, Upload, XCircle,
 } from 'lucide-react';
 import {
   calculadoraRmcService,
@@ -47,7 +47,8 @@ export default function HisconPage() {
   const [ctx, setCtx] = useState<ContextoHiscon>({});
   const [res, setRes] = useState<HisconResultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [arquivo, setArquivo] = useState<string | null>(null);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [cliente, setCliente] = useState('');
 
   const mut = useMutation({
     mutationFn: (f: File) => calculadoraRmcService.extrairHiscon(f, ctx),
@@ -56,6 +57,25 @@ export default function HisconPage() {
       setRes(null);
       setErro(e instanceof Error ? e.message : 'Não foi possível ler o HISCON.');
     },
+  });
+
+  const laudoMut = useMutation({
+    mutationFn: async () => {
+      if (!arquivo) throw new Error('Envie o HISCON antes de gerar o laudo.');
+      return calculadoraRmcService.gerarLaudoHiscon(arquivo, { ...ctx, cliente: cliente || undefined });
+    },
+    onSuccess: (blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `laudo-hiscon${cliente ? ` - ${cliente}` : ''}.pdf`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setErro(null);
+    },
+    // A mensagem do servidor já chega pronta: o interceptor do `api` lê o Blob
+    // de erro dos endpoints binários (src/lib/api.ts).
+    onError: (e: unknown) =>
+      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o laudo.'),
   });
 
   // Averbação não é contrato: o HISCON registra a mesma operação duas vezes
@@ -117,7 +137,7 @@ export default function HisconPage() {
 
       {/* -------------------------------------------------- entrada */}
       <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <label className="text-sm">
             <span className="mb-1 block text-zinc-600 dark:text-zinc-400">UF do foro</span>
             <select
@@ -145,6 +165,13 @@ export default function HisconPage() {
               className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
           </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-zinc-600 dark:text-zinc-400">Beneficiário (sai no laudo)</span>
+            <input
+              value={cliente} onChange={(e) => setCliente(e.target.value)} placeholder="nome completo"
+              className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+          </label>
           <label className="flex items-end gap-2 text-sm">
             <input
               type="checkbox"
@@ -165,7 +192,7 @@ export default function HisconPage() {
             ref={ref} type="file" accept="application/pdf" className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) { setArquivo(f.name); mut.mutate(f); }
+              if (f) { setArquivo(f); mut.mutate(f); }
               e.target.value = '';
             }}
           />
@@ -177,13 +204,23 @@ export default function HisconPage() {
             {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {mut.isPending ? 'Lendo o HISCON…' : 'Enviar HISCON (PDF)'}
           </button>
-          {arquivo && <span className="text-sm text-zinc-500 dark:text-zinc-400">{arquivo}</span>}
+          {arquivo && <span className="text-sm text-zinc-500 dark:text-zinc-400">{arquivo.name}</span>}
           {res && (
             <button
               onClick={baixarJson}
               className="ml-auto inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
             >
               <Download className="h-4 w-4" /> Baixar análise (JSON)
+            </button>
+          )}
+          {res && arquivo && (
+            <button
+              onClick={() => laudoMut.mutate()}
+              disabled={laudoMut.isPending}
+              className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              {laudoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              {laudoMut.isPending ? 'Gerando laudo…' : 'Gerar laudo (PDF)'}
             </button>
           )}
         </div>
