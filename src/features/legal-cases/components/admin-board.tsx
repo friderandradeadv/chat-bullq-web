@@ -113,19 +113,43 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     scrollRef: dragScroll.ref,
     onDrop: (k, alvo, onde) => applyPhaseDrag(qc, KEY, k, alvo, onde),
   });
-  // Arrastar o CARD dentro da fase (só ordem — aqui o card nunca troca de coluna).
+  // Arrastar o CARD: reordena DENTRO da coluna e, desde 31/08/2026, também TROCA
+  // de coluna — sem isso um quadro de rito (CS e Repasse, Execução) fica travado,
+  // porque andar de fase é justamente o gesto do kanban.
   const cardDrag = useCardDrag({
     accent,
-    onDrop: (cardId, phaseKey, index) => {
-      const sort = sortOf(phaseKey);
+    onDrop: (cardId, destino, index, origem) => {
+      // ── troca de FASE ──────────────────────────────────────────────────────
+      if (destino !== origem) {
+        const alvo = (data?.phases ?? []).find((p) => p.key === destino);
+        // Passa pelo MESMO endpoint do seletor da ficha: ele registra o
+        // movimento, ajusta o status e roda a reclassificação. Nada de escrever
+        // a fase por fora.
+        legalCasesService
+          .movePhase(cardId, destino)
+          .then(() => {
+            toast.success(`Movido para ${alvo?.label ?? destino}`);
+            qc.invalidateQueries({ queryKey: KEY });
+          })
+          .catch((e: unknown) => {
+            const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+            toast.error(msg || 'Não consegui mover o card de fase.');
+            qc.invalidateQueries({ queryKey: KEY });
+          });
+        return;
+      }
+      // ── só ORDEM dentro da coluna ─────────────────────────────────────────
+      // O aviso de ordenação ativa vale SÓ aqui: uma regra de ordenação
+      // reordenaria tudo de novo, mas não impede o card de mudar de fase.
+      const sort = sortOf(destino);
       if (sort !== 'manual') {
         avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
         return;
       }
-      const col = columns.find((c) => c.key === phaseKey);
+      const col = columns.find((c) => c.key === destino);
       if (!col) return;
-      const exibidos = applyCardSort(col.cards, 'manual', kanbanCardKeys, data?.cardOrder?.[phaseKey]);
-      persistCardOrder(qc, KEY, phaseKey, idsWithMove(exibidos.map((c) => c.id), cardId, index));
+      const exibidos = applyCardSort(col.cards, 'manual', kanbanCardKeys, data?.cardOrder?.[destino]);
+      persistCardOrder(qc, KEY, destino, idsWithMove(exibidos.map((c) => c.id), cardId, index));
     },
   });
   // Ordenação dos cards por coluna (preferência de visualização, no localStorage).

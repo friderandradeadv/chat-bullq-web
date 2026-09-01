@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { isRotaAtiva } from '@/lib/nav-active';
 import {
   LayoutDashboard,
   Settings,
@@ -197,7 +198,7 @@ function NavItem({
   badgeTone?: 'default' | 'danger';
 }) {
   const pathname = usePathname();
-  const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+  const isActive = href === '/' ? pathname === '/' : isRotaAtiva(pathname, href);
   return (
     <Link
       href={href}

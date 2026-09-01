@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { isRotaAtiva } from '@/lib/nav-active';
 import { usePathname } from 'next/navigation';
 import { Sparkles, MessageSquare, CalendarCheck, CircleDollarSign, Menu, UserCircle, Settings, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -69,7 +70,7 @@ export function MobileTabBar() {
       : <span className={`flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200 text-[8px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 ${active ? 'ring-2 ring-primary' : ''}`}>{iniciais}</span>;
 
   const isActive = (prefixes: string[]) =>
-    prefixes.some((p) => (p === '/inicio' ? pathname === p : pathname.startsWith(p)));
+    prefixes.some((p) => (p === '/inicio' ? pathname === p : isRotaAtiva(pathname, p)));
 
   const linkCls = (active: boolean) =>
     cn(

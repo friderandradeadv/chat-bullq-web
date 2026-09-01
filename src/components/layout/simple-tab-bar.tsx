@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { isRotaAtiva } from '@/lib/nav-active';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -71,7 +72,7 @@ export function SimpleTabBar() {
       ? <img src={user.avatarUrl} alt="" className={`h-5 w-5 rounded-full object-cover ${active ? 'ring-2 ring-primary' : ''}`} />
       : <span className={`flex h-5 w-5 items-center justify-center rounded-full bg-zinc-200 text-[8px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 ${active ? 'ring-2 ring-primary' : ''}`}>{iniciais}</span>;
 
-  const isActive = (href: string) => (href === '/inicio' ? pathname === href : pathname.startsWith(href));
+  const isActive = (href: string) => (href === '/inicio' ? pathname === href : isRotaAtiva(pathname, href));
   const linkCls = (active: boolean) =>
     cn(
       'relative flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors',

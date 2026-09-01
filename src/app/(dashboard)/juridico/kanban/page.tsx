@@ -102,6 +102,10 @@ export default function FaseJudicialKanbanPage() {
   // Recorte "só os processos deste cliente" (?cases=… vindo do chat).
   const casesFilter = useCasesFilter();
   const [search, setSearch] = useState('');
+  // AUTOR × RÉU — mesmo campo que separa Exequente/Executado nos quadros de
+  // execução (`card.polo`, do "Papel do cliente"). Aqui os nomes são os da fase
+  // de conhecimento, que é o que o quadro mostra.
+  const [polo, setPolo] = useState<'exequente' | 'executado'>('exequente');
   const [area, setArea] = useState('');
   const [produto, setProduto] = useState('');
   const [resp, setResp] = useState('');
@@ -169,9 +173,16 @@ export default function FaseJudicialKanbanPage() {
       if (tagSel.length && !(c.tags ?? []).some((t) => tagSel.includes(t.id))) return false;
       if (!matchesKanbanSearch(c, search, [c.title, c.cnj, c.client, c.opponent])) return false;
       if (!casesFilter.matchesCasesFilter(c.id)) return false;
+      if ((c.polo === 'executado' ? 'executado' : 'exequente') !== polo) return false;
       return true;
     });
-  }, [cards, search, area, produto, resp, tagSel, casesFilter.caseIds]);
+  }, [cards, search, area, produto, resp, tagSel, casesFilter.caseIds, polo]);
+
+  const porPolo = useMemo(() => {
+    const n = { exequente: 0, executado: 0 };
+    for (const c of cards) n[c.polo === 'executado' ? 'executado' : 'exequente']++;
+    return n;
+  }, [cards]);
 
   const byPhase = useMemo(() => {
     const map: Record<string, KanbanCard[]> = {};
@@ -354,6 +365,25 @@ export default function FaseJudicialKanbanPage() {
           {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
           {/* dica curta inline (só em telas bem largas, pra não empurrar a linha) */}
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· o quadro se move sozinho conforme as publicações do DJEN</span>
+          <div className="flex items-center rounded-lg border border-[#cfe0ed] bg-white p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
+            {([
+              { v: 'exequente' as const, label: 'Autor', n: porPolo.exequente, cor: '#228BE6', dica: 'Cliente no polo ATIVO — a ação é nossa' },
+              { v: 'executado' as const, label: 'Réu', n: porPolo.executado, cor: '#c92a2a', dica: 'Cliente no polo PASSIVO — estamos na defesa' },
+            ]).map((o) => (
+              <button
+                key={o.v}
+                onClick={() => setPolo(o.v)}
+                title={o.dica}
+                className={`h-8 rounded-md px-3 text-sm font-medium transition-colors ${
+                  polo === o.v ? 'text-white' : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+                }`}
+                style={polo === o.v ? { background: o.cor } : undefined}
+              >
+                {o.label}
+                <span className={`ml-1.5 text-xs ${polo === o.v ? 'text-white/80' : 'text-zinc-400'}`}>{o.n}</span>
+              </button>
+            ))}
+          </div>
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input
