@@ -111,21 +111,6 @@ const getInstancia = (c: CaseDetail): string | null => {
  * agravado porque o banco recorreu da vitória DELE.
  */
 const PAPEL_EXECUTADO = /^(r[eé]u|requerid[oa]|executad[oa]|reclamad[oa]|embargad[oa]|impugnad[oa]|denunciad[oa]|suscitad[oa])$/i;
-/**
- * Tipo do título: execução é PROCESSO autônomo (título extrajudicial,
- * honorários, monitória — CPC 771 e ss.); cumprimento de sentença é FASE do
- * processo que já existe (CPC 513-538). Espelha `tipoExecucao` da API: a escolha
- * do advogado manda sobre a dedução pela classe — que não acerta quando a classe
- * não nomeia o rito (ex.: "Dativo" numa execução de título extrajudicial).
- */
-const CLASSE_EXECUCAO = /(execu[çc][ãa]o\s+(de\s+)?(t[ií]tulo|honor[áa]rio|fiscal|extrajudicial)|t[ií]tulo\s+extrajudicial|monit[óo]ria)/i;
-const getTipo = (c: CaseDetail): 'cumprimento' | 'execucao' => {
-  const m = (c.metadata as { tipoExecucao?: string; astrea?: { raw?: Record<string, string> } } | null) ?? {};
-  if (m.tipoExecucao === 'execucao' || m.tipoExecucao === 'cumprimento') return m.tipoExecucao;
-  const classe = (m.astrea?.raw?.['Ação'] ?? c.area ?? '').trim();
-  return CLASSE_EXECUCAO.test(classe) ? 'execucao' : 'cumprimento';
-};
-
 const getPolo = (c: CaseDetail): 'exequente' | 'executado' => {
   const m = (c.metadata as { poloExecucao?: string; astrea?: { raw?: Record<string, string> } } | null) ?? {};
   if (m.poloExecucao === 'executado' || m.poloExecucao === 'exequente') return m.poloExecucao;
@@ -1590,7 +1575,6 @@ function EditCaseDialog({
   // Polo na execução: define de que lado do quadro Execução & Repasse o card cai.
   // Só o advogado sabe quando o Astrea não trouxe o papel (ficha nascida do DJEN).
   const [polo, setPolo] = useState<'exequente' | 'executado'>(getPolo(c));
-  const [tipo, setTipo] = useState<'cumprimento' | 'execucao'>(getTipo(c));
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
   // Cliente: sai daqui porque é aqui que se procura por ele. Antes só existia
@@ -1616,7 +1600,6 @@ function EditCaseDialog({
       await legalCasesService.update(c.id, {
         instancia,
         polo,
-        tipo,
         title: form.title.trim(),
         cnjNumber: form.cnjNumber,
         internalCode: form.internalCode,
@@ -1729,12 +1712,6 @@ function EditCaseDialog({
             <option value="">Não definida</option>
             <option value="1º Grau">1º Grau</option>
             <option value="2º Grau">2º Grau</option>
-          </select>
-        </Field>
-        <Field label="Tipo do título">
-          <select value={tipo} onChange={(e) => setTipo(e.target.value as 'cumprimento' | 'execucao')} className={inputCls}>
-            <option value="cumprimento">Cumprimento de sentença (fase)</option>
-            <option value="execucao">Execução (processo autônomo)</option>
           </select>
         </Field>
         <Field label="Polo na execução">

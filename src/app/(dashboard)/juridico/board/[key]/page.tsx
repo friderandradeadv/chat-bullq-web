@@ -14,13 +14,15 @@ type Polo = 'exequente' | 'executado';
 const poloDoCard = (c: KanbanCard): Polo => (c.polo === 'executado' ? 'executado' : 'exequente');
 
 /**
- * Tipo do título: processo de EXECUÇÃO autônomo (título extrajudicial,
- * honorários, monitória) × processo em FASE de cumprimento de sentença. Ritos
- * diferentes — muda a defesa do devedor e o que se cobra. Card sem o campo
- * (ficha antiga) = cumprimento, que é a esmagadora maioria da carteira.
+ * "CS e Repasse" × "Execução" — derivado da FASE, no servidor. A coluna é a
+ * verdade: card em cumprimento é CS e Repasse, card em execução é processo de
+ * execução. Sem campo a preencher, e por isso sem como o card contradizer a
+ * própria coluna. Ver tipo-execucao.ts na API.
  */
 type Tipo = 'cumprimento' | 'execucao';
 const tipoDoCard = (c: KanbanCard): Tipo => (c.tipo === 'execucao' ? 'execucao' : 'cumprimento');
+/** Colunas de cada visão — as de desfecho ficam na CS e Repasse (a padrão). */
+const FASES_EXECUCAO = new Set(['em_execucao']);
 
 /** Um segmento do cabeçalho (Exequente×Executado, Cumprimento×Execução). */
 function Segmentado<T extends string>({ valor, onMuda, opcoes, cor }: {
@@ -87,6 +89,11 @@ export default function CustomBoardPage() {
   // colunas do Fase Judicial, ao vivo — pra ver o que graduou/encerrou sem trocar de quadro.
   const noQuadro = (p: { key: string; lane?: 'pre' | 'judicial'; board?: string | null }) =>
     boardOfPhase(p.key, p.lane, p.board) === key || (key === 'execucao' && (p.key === 'acoes_vencidas' || p.key === 'acoes_perdidas'));
+  // A visão escolhida também escolhe as COLUNAS: mostrar a coluna de execução
+  // dentro de "CS e Repasse" (sempre vazia ali) só ocuparia espaço e faria o
+  // usuário duvidar do filtro.
+  const naVisao = (p: { key: string; lane?: 'pre' | 'judicial'; board?: string | null }) =>
+    noQuadro(p) && (key !== 'execucao' || (tipo === 'execucao') === FASES_EXECUCAO.has(p.key));
   const boardPhases = useMemo(
     () =>
       (kb?.phases ?? [])
@@ -149,10 +156,10 @@ export default function CustomBoardPage() {
                 onMuda={setTipo}
                 cor={board.color || '#2F9E44'}
                 opcoes={[
-                  { v: 'cumprimento', label: 'Cumprimento', n: porTipo.cumprimento,
-                    dica: 'FASE do processo que já existe — ganhamos e estamos executando a sentença (CPC 513-538)' },
+                  { v: 'cumprimento', label: 'CS e Repasse', n: porTipo.cumprimento,
+                    dica: 'Cumprimento de sentença até a prestação de contas — e as prateleiras de desfecho' },
                   { v: 'execucao', label: 'Execução', n: porTipo.execucao,
-                    dica: 'PROCESSO autônomo — título extrajudicial, honorários, monitória (CPC 771 e ss.)' },
+                    dica: 'Processos na coluna EM EXECUÇÃO — a busca de bens (SISBAJUD/RENAJUD)' },
                 ]}
               />
               <Segmentado
@@ -169,7 +176,7 @@ export default function CustomBoardPage() {
             </div>
           ) : undefined
         }
-        columnsFromPhases={(p) => noQuadro(p)}
+        columnsFromPhases={(p) => naVisao(p)}
         manageBoard={key}
         drawerBoard={key}
         onNewCard={boardPhases.length ? () => setNovo(true) : undefined}
