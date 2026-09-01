@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle, Calculator, CheckCircle2, Download, FileSearch, FileText, FolderOpen, FolderPlus, FolderUp, Info, Loader2, Upload, XCircle,
@@ -87,6 +87,16 @@ export default function HisconPage() {
     queryFn: () => clientsService.list(),
     staleTime: 5 * 60_000,
   });
+
+  // Chegou do card do pré-processual com o cliente já decidido. Lê da URL em vez
+  // de `useSearchParams` para não tirar a rota do prerender estático.
+  useEffect(() => {
+    if (cliente || !clientes.length) return;
+    const alvo = new URLSearchParams(window.location.search).get('partyId');
+    if (!alvo) return;
+    const c = clientes.find((x) => x.partyId === alvo || x.partyIds?.includes(alvo));
+    if (c) setCliente({ partyId: c.partyId, name: c.name });
+  }, [clientes, cliente]);
 
   const sugestoes = useMemo(() => {
     const t = buscaCliente.trim().toLowerCase();

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
+import { FileSearch,
   X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, FileText, AlertTriangle, Loader2, ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -339,6 +339,25 @@ export function CaseDetailDrawer({
                 {/* REPB: modelos de malote copiáveis + gerar peças por IA. */}
                 {phaseKey?.startsWith('repb_') && <div className="mt-3"><RepbModelosMalote /></div>}
                 {phaseKey?.startsWith('repb_') && <div className="mt-3"><GerarPecaRepb caseId={c.id} /></div>}
+
+                {/* Análise de HISCON: o leitor por geometria do PDF, com gates,
+                    plano de ação réu a réu e restituição corrigida pelo INPC.
+                    Vive na sua própria tela porque a pergunta dela é anterior à
+                    do card — quantas ações o caso comporta e contra quem. Só
+                    aparece na raia pré-judicial de RMC/RCC, e só com cliente
+                    identificado: sem `partyId` a tela não acha a pasta no Drive. */}
+                {inPre && isRmc && cliente?.id && (
+                  <a
+                    href={`/juridico/calculos/hiscon?partyId=${encodeURIComponent(cliente.id)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Lê o HISCON pela geometria do PDF: réus por grupo econômico, gates do escritório, restituição pelo INPC, laudo e memória de cálculo."
+                    className="mb-2 inline-flex items-center gap-2 rounded-lg border border-[#cfe0ed] px-3 py-2 text-sm text-[#101820] hover:bg-[#f5f9fc] dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <FileSearch className="h-4 w-4" />
+                    Análise de HISCON
+                  </a>
+                )}
 
                 {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
                     doc. faltantes) mostra o desmembramento em cards por banco réu; nas
