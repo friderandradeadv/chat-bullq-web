@@ -252,7 +252,15 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
             const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys, data?.cardOrder?.[col.key]) : col.cards;
             const colTerminal = isTerminalPhase(col.key ? data?.phases?.find((p) => p.key === col.key) : null);
             return (
-            <div key={col.key ?? col.nome} ref={col.key ? phaseDrag.columnRef(col.key) : undefined} style={col.key ? phaseDrag.columnStyle(col.key) : undefined} className="group/col flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55">
+            <div key={col.key ?? col.nome} ref={col.key ? phaseDrag.columnRef(col.key) : undefined}
+              style={{
+                ...(col.key ? phaseDrag.columnStyle(col.key) : undefined),
+                // Coluna sob o cursor durante o arraste: sem este destaque não dá
+                // para saber ONDE o card vai cair — e cair na coluna errada aqui
+                // move a fase do processo, não só a posição na lista.
+                ...(cardDrag.alvo === col.key ? { boxShadow: `0 0 0 2px ${accent}` } : undefined),
+              }}
+              className="group/col flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] transition-shadow dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
                 {col.key ? (
                   <PhaseHeader
@@ -281,7 +289,18 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
                 </span>
               </div>
               <div {...(col.key ? colAttr(col.key) : {})} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-                {sortedCards.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
+                {/* Coluna VAZIA sob o cursor: sem isto o arraste para cá não dá
+                    retorno nenhum — a marca de queda se apoia num card vizinho,
+                    e aqui não existe vizinho. Num pipeline a maioria das colunas
+                    está vazia, então este era o caso comum, não a exceção. */}
+                {sortedCards.length === 0 && (
+                  cardDrag.alvo === col.key ? (
+                    <p className="rounded border-2 border-dashed py-5 text-center text-xs font-semibold"
+                       style={{ borderColor: accent, color: accent }}>Soltar aqui</p>
+                  ) : (
+                    <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>
+                  )
+                )}
                 {sortedCards.map((c) => <AdminCard key={c.id} c={c} terminal={colTerminal} bulk={bulk} colIds={sortedCards.map((x) => x.id)} accent={accent} drag={col.key ? cardDrag.handle(c.id, col.key) : undefined} dragStyle={cardDrag.cardStyle(c.id)} onOpen={setOpenCaseId} />)}
               </div>
             </div>

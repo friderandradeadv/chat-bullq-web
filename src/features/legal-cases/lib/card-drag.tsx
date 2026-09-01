@@ -31,6 +31,8 @@ export interface CardDragHandle {
 
 export interface CardDrag {
   dragId: string | null;
+  /** coluna sob o ponteiro durante o arraste (para destacá-la) */
+  alvo: string | null;
   handle: (cardId: string, phaseKey: string) => CardDragHandle | undefined;
   /** visual do card: esmaecido se é o arrastado; linha se marca onde vai cair */
   cardStyle: (cardId: string) => React.CSSProperties | undefined;
@@ -48,6 +50,7 @@ export function useCardDrag({
 }): CardDrag {
   const [dragId, setDragId] = useState<string | null>(null);
   const [slot, setSlot] = useState<{ cardId: string | null; side: 'top' | 'bottom' } | null>(null);
+  const [alvo, setAlvo] = useState<string | null>(null);
   const st = useRef({
     id: null as string | null,
     phase: '',          // coluna de ORIGEM (onde o arraste começou)
@@ -62,6 +65,10 @@ export function useCardDrag({
     ponteiroY: 0,
     bloqueiaClique: 0,
     raf: 0,
+    fantasma: null as HTMLElement | null, // clone que acompanha o cursor
+    pegX: 0,  // onde no card o usuário pegou — o clone segue por esse ponto,
+    pegY: 0,  // senão o card "pula" para o canto no primeiro movimento
+
   });
 
   // Rolagem da COLUNA quando o card chega perto do topo/rodapé dela.
@@ -82,6 +89,8 @@ export function useCardDrag({
     clearTimeout(s.timer);
     if (s.raf) cancelAnimationFrame(s.raf);
     s.raf = 0;
+    s.fantasma?.remove();
+    s.fantasma = null;
     if (s.started) {
       s.bloqueiaClique = Date.now() + 400;
       document.body.classList.remove('select-none');
@@ -91,6 +100,7 @@ export function useCardDrag({
     s.id = null; s.started = false; s.armed = false; s.index = -1; s.faseAlvo = '';
     setDragId(null);
     setSlot(null);
+    setAlvo(null);
   }, [onDrop]);
 
   /** Coluna sob o ponteiro. Fora de qualquer uma, mantém a última mirada — o
@@ -110,20 +120,48 @@ export function useCardDrag({
     const s = st.current;
     if (!s.id) return;
     s.faseAlvo = colunaSob(s.ponteiroX, s.ponteiroY);
+    setAlvo((p) => (p === s.faseAlvo ? p : s.faseAlvo));
     const alvo = dropSlotAt(s.faseAlvo, s.ponteiroY, s.id);
     s.index = alvo.index;
     setSlot((p) => (p?.cardId === alvo.cardId && p?.side === alvo.side ? p : { cardId: alvo.cardId, side: alvo.side }));
   }, [colunaSob]);
 
+  /**
+   * Clone do card que acompanha o cursor. Sem ele o arraste "não acontece" na
+   * tela: o original só esmaecia e, em coluna VAZIA, não havia marca nenhuma —
+   * a maioria das colunas de um pipeline está vazia. É nó de DOM (não estado
+   * React) porque a posição muda a cada pointermove: re-render a 120Hz travaria
+   * o quadro inteiro.
+   */
+  const criarFantasma = useCallback((cardId: string) => {
+    const s = st.current;
+    const el = document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(cardId)}"]`);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const g = el.cloneNode(true) as HTMLElement;
+    g.removeAttribute('data-card-id'); // não pode ser alvo de mira nem de clique
+    g.style.cssText = `position:fixed;left:0;top:0;width:${r.width}px;margin:0;pointer-events:none;z-index:9999;opacity:.97;transform:translate(${r.left}px,${r.top}px) rotate(2deg);box-shadow:0 14px 32px rgba(0,0,0,.30);transition:none`;
+    document.body.appendChild(g);
+    s.fantasma = g;
+    s.pegX = s.x - r.left;
+    s.pegY = s.y - r.top;
+  }, []);
+
+  const moverFantasma = useCallback((x: number, y: number) => {
+    const g = st.current.fantasma;
+    if (g) g.style.transform = `translate(${x - st.current.pegX}px,${y - st.current.pegY}px) rotate(2deg)`;
+  }, []);
+
   const iniciar = useCallback(() => {
     const s = st.current;
     if (s.started || !s.id) return;
     s.started = true;
+    criarFantasma(s.id);
     document.body.classList.add('select-none');
     document.body.style.cursor = 'grabbing';
     setDragId(s.id);
     if (!s.raf) s.raf = requestAnimationFrame(autoScroll);
-  }, [autoScroll]);
+  }, [autoScroll, criarFantasma]);
 
   useEffect(() => {
     const move = (e: PointerEvent) => {
@@ -138,6 +176,7 @@ export function useCardDrag({
         iniciar();
       }
       e.preventDefault();
+      moverFantasma(e.clientX, e.clientY);
       mirar();
     };
     const up = () => encerrar(true);
@@ -156,8 +195,10 @@ export function useCardDrag({
       if (st.current.raf) cancelAnimationFrame(st.current.raf);
       document.body.classList.remove('select-none');
       document.body.style.cursor = '';
+      st.current.fantasma?.remove();
+      st.current.fantasma = null;
     };
-  }, [encerrar, iniciar, mirar]);
+  }, [encerrar, iniciar, mirar, moverFantasma]);
 
   const handle = useCallback(
     (cardId: string, phaseKey: string): CardDragHandle | undefined => {
@@ -170,7 +211,8 @@ export function useCardDrag({
           // Controle dentro do card (caixinha de seleção, copiar CNJ…) manda mais.
           if ((e.target as HTMLElement).closest('button, input, a, select, textarea, [role="button"]:not([data-card-id])')) return;
           const s = st.current;
-          s.id = cardId; s.phase = phaseKey; s.x = e.clientX; s.y = e.clientY; s.ponteiroY = e.clientY;
+          s.id = cardId; s.phase = phaseKey; s.x = e.clientX; s.y = e.clientY;
+          s.ponteiroX = e.clientX; s.ponteiroY = e.clientY;
           s.started = false; s.index = -1;
           if (e.pointerType === 'touch') {
             s.armed = false;
@@ -195,5 +237,5 @@ export function useCardDrag({
     [dragId, slot, accent],
   );
 
-  return { dragId, handle, cardStyle };
+  return { dragId, alvo, handle, cardStyle };
 }
