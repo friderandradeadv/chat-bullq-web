@@ -637,10 +637,16 @@ function ContactRow({
         )}
       </div>
 
-      {/* Abrir conversa */}
-      {contact.phone && (
+      {/* Abrir conversa — direto na conversa quando o contato tem uma; a busca
+          pelo telefone fica de reserva (mesmo número com 2 cadastros abria a
+          lista, não a conversa). */}
+      {(contact.conversations?.[0]?.id || contact.phone) && (
         <Link
-          href={`/inbox?search=${encodeURIComponent(contact.phone)}`}
+          href={
+            contact.conversations?.[0]?.id
+              ? `/inbox?conversationId=${contact.conversations[0].id}`
+              : `/inbox?search=${encodeURIComponent(contact.phone!)}`
+          }
           title="Abrir conversa"
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-zinc-400 opacity-0 transition hover:bg-[#25D366]/10 hover:text-[#25D366] group-hover:opacity-100"
         >

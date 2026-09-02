@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { titleCaseName } from '@/lib/names';
+import { AbrirConversa, ConversaDoClienteBloco } from '@/components/ui/abrir-conversa';
 import {
   legalCasesService,
   type ApensoRef,
@@ -249,12 +250,23 @@ export default function ProcessoDetailPage() {
           )}
           <MetaRow label="Cliente">
             {clientParty ? (
-              <Link
-                href={`/clientes/${clientParty.id}`}
-                className="font-medium text-[#202124] hover:text-[#228BE6] hover:underline dark:text-zinc-100"
-              >
-                {titleCaseName(clientParty.name)}
-              </Link>
+              // Nome leva à ficha; o ícone verde leva à CONVERSA. O atalho fica
+              // aqui porque é aqui que se procura o cliente — antes só existia
+              // no cartão da aba Resumo, e só quando a party tinha contactId.
+              <span className="inline-flex items-center gap-1.5">
+                <Link
+                  href={`/clientes/${clientParty.id}`}
+                  className="font-medium text-[#202124] hover:text-[#228BE6] hover:underline dark:text-zinc-100"
+                >
+                  {titleCaseName(clientParty.name)}
+                </Link>
+                <AbrirConversa
+                  conversationId={c.clienteConversa?.conversationId}
+                  phone={c.clienteConversa?.phone}
+                  vinculo={c.clienteConversa?.vinculo}
+                  variant="icone"
+                />
+              </span>
             ) : (
               '—'
             )}
@@ -925,24 +937,31 @@ function ResumoTab({ c }: { c: CaseDetail }) {
                 <p className="text-xs text-zinc-500">{clientParty.contact.phone}</p>
               )}
               {clientConv ? (
-                <Link
-                  href={`/inbox?conversationId=${clientConv.id}`}
-                  className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  Abrir conversa
-                </Link>
+                <AbrirConversa
+                  conversationId={clientConv.id}
+                  phone={clientParty.contact.phone}
+                  vinculo="contato"
+                />
               ) : (
-                <p className="text-xs text-zinc-400">Sem conversa vinculada.</p>
+                <ConversaDoClienteBloco conversa={c.clienteConversa} />
               )}
             </div>
           ) : clientParty ? (
-            <Link
-              href={`/clientes/${clientParty.id}`}
-              className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-100"
-            >
-              {titleCaseName(clientParty.name)}
-            </Link>
+            // Party sem contato AMARRADO ainda pode ter conversa: o servidor
+            // resolve por CPF, ou por nome quando é único. Homônimo cai no
+            // bloco de escolha em vez de virar link para a pessoa errada.
+            <div className="space-y-2">
+              <Link
+                href={`/clientes/${clientParty.id}`}
+                className="text-sm font-medium text-zinc-800 hover:text-[#228BE6] hover:underline dark:text-zinc-100"
+              >
+                {titleCaseName(clientParty.name)}
+              </Link>
+              {c.clienteConversa?.phone && (
+                <p className="text-xs text-zinc-500">{c.clienteConversa.phone}</p>
+              )}
+              <ConversaDoClienteBloco conversa={c.clienteConversa} />
+            </div>
           ) : (
             <EmptyState>Nenhum cliente vinculado.</EmptyState>
           )}
@@ -1947,13 +1966,23 @@ function PartiesCard({
                   {ROLE_LABEL[p.role]}
                 </span>
               </span>
-              <button
-                onClick={() => remove(p.id)}
-                className="opacity-0 transition-opacity hover:text-rose-500 group-hover:opacity-100"
-                aria-label="Remover"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <span className="flex shrink-0 items-center gap-1">
+                {/* Qualquer parte com contato vinculado (não só o cliente) abre
+                    a conversa daqui — vínculo forte, sem dúvida de quem é. */}
+                <AbrirConversa
+                  conversationId={p.contact?.conversations?.[0]?.id}
+                  phone={p.contact?.phone}
+                  vinculo="contato"
+                  variant="icone"
+                />
+                <button
+                  onClick={() => remove(p.id)}
+                  className="opacity-0 transition-opacity hover:text-rose-500 group-hover:opacity-100"
+                  aria-label="Remover"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </span>
             </li>
           ))}
         </ul>

@@ -10,6 +10,8 @@ export interface ClientContact {
   status: { id: string; name: string; color: string } | null;
   tags: { id: string; name: string; color: string }[];
   conversationId: string | null;
+  /** 'contato' = Party.contactId (confirmado); 'nome' = só o nome bateu (frágil). */
+  vinculo?: 'contato' | 'nome';
 }
 
 export interface ClientRow {

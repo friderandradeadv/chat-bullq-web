@@ -24,6 +24,7 @@ import { ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 import { DropZone } from '@/components/drop-zone';
+import { AbrirConversa, ConversaDoClienteBloco } from '@/components/ui/abrir-conversa';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
@@ -291,6 +292,20 @@ export function CaseDetailDrawer({
                           {cpf && !cadastroOpen && <span className="shrink-0 text-[11px] text-[#48626f] dark:text-zinc-400">{cad.cnpj ? 'CNPJ' : 'CPF'} {cad.cnpj || cpf}</span>}
                           <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${cadastroOpen ? '' : '-rotate-90'}`} />
                         </button>
+                        {/* Atalho pra conversa FORA do expansível: estava
+                            escondido no fim do cadastro, e com o parâmetro
+                            errado (?conversation=) — não abria conversa nenhuma. */}
+                        <div className="border-t border-[#eef2f8] px-3 py-2 dark:border-zinc-800">
+                          {cliente.contact?.conversations?.[0] ? (
+                            <AbrirConversa
+                              conversationId={cliente.contact.conversations[0].id}
+                              phone={cliente.contact.phone}
+                              vinculo="contato"
+                            />
+                          ) : (
+                            <ConversaDoClienteBloco conversa={c.clienteConversa} />
+                          )}
+                        </div>
                         {cadastroOpen && (
                           <ul className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-[#eef2f8] p-3 dark:border-zinc-800">
                             {cpf && <DbField label={cad.cnpj ? 'CNPJ' : 'CPF'} value={cad.cnpj || cpf!} />}
@@ -312,14 +327,6 @@ export function CaseDetailDrawer({
                             {cad.representadoNome && <DbField label="Representado" value={cad.representadoNome} />}
                             {cad.representadoCpf && <DbField label="CPF do representado" value={cad.representadoCpf} />}
                             {cad.endereco && <li className="col-span-2 flex flex-col"><span className="text-[10px] font-semibold uppercase text-[#48626f]">Endereço</span><span className="text-xs text-black dark:text-zinc-200">{cad.endereco}</span></li>}
-                            {cliente.contact?.conversations?.[0] && (
-                              <li className="col-span-2 flex flex-col">
-                                <span className="text-[10px] font-semibold uppercase text-[#48626f]">Conversa</span>
-                                <a href={`/inbox?conversation=${cliente.contact.conversations[0].id}`} className="inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
-                                  Abrir conversa <ArrowRight className="h-3 w-3" />
-                                </a>
-                              </li>
-                            )}
                           </ul>
                         )}
                       </article>

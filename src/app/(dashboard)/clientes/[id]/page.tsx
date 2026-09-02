@@ -78,6 +78,7 @@ import { clienteFinanceiro, STATUS_FIN } from '@/features/financeiro/lib/cliente
 import { formatPhone } from '@/lib/brazil-states';
 import { titleCaseName } from '@/lib/names';
 import { StateFlag } from '@/components/ui/state-flag';
+import { AbrirConversa } from '@/components/ui/abrir-conversa';
 import { CnjNumber, ASTREA_BLUE, LegalTagChip } from '../../processos/page';
 
 const brlc = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -342,9 +343,20 @@ export default function ClienteDetailPage() {
               {/* No CADASTRO o nome do cliente é "Primeira Letra Maiúscula".
                   Título de processo continua em caixa alta — é a praxe forense,
                   e são coisas diferentes que não devem se contaminar. */}
-              <h1 className="truncate text-2xl font-medium text-[#202124] dark:text-zinc-100">
-                {titleCaseName(cliente.name)}
-              </h1>
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate text-2xl font-medium text-[#202124] dark:text-zinc-100">
+                  {titleCaseName(cliente.name)}
+                </h1>
+                {/* Falar com o cliente é o que mais se faz a partir da ficha —
+                    o atalho fica colado no nome, não escondido num cartão. */}
+                <AbrirConversa
+                  conversationId={contact?.conversationId}
+                  phone={contact?.phone}
+                  vinculo={contact?.vinculo}
+                  variant="icone"
+                  className="h-8 w-8"
+                />
+              </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500">
                 {/* Quem é, em uma linha: idade, de onde e há quanto tempo é do
                     escritório. CPF e telefone saíram daqui — estão logo abaixo,
@@ -527,6 +539,23 @@ export default function ClienteDetailPage() {
                         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: contact.status.color }} />
                         <span className="text-zinc-600 dark:text-zinc-300">{contact.status.name}</span>
                       </div>
+                    )}
+                    {contact.conversationId ? (
+                      <div className="space-y-1 pt-1">
+                        <AbrirConversa
+                          conversationId={contact.conversationId}
+                          phone={contact.phone}
+                          vinculo={contact.vinculo}
+                        />
+                        {contact.vinculo === 'nome' && (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                            Contato casado pelo NOME (o processo não aponta para ele) — confira o
+                            número antes de escrever.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="pt-1 text-xs text-zinc-400">Sem conversa aberta no WhatsApp.</p>
                     )}
                   </dl>
                 ) : (

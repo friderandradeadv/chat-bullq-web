@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Users, Search, MessageSquare, Scale, Phone, Tag as TagIcon, Check, Plus, X, ChevronDown, CircleDot, Trash2,
+  Users, Search, Scale, Phone, Tag as TagIcon, Check, Plus, X, ChevronDown, CircleDot, Trash2,
   FolderOpen, Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import { clientDocumentsService } from '@/features/legal-cases/services/client-d
 import { tagsService } from '@/features/settings/services/tags.service';
 import { contactStatusesService } from '@/features/settings/services/contact-statuses.service';
 import { formatPhone } from '@/lib/brazil-states';
+import { AbrirConversa } from '@/components/ui/abrir-conversa';
 import { titleCaseName } from '@/lib/names';
 import { PageSizeSelect } from '@/components/ui/page-size-select';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -306,7 +307,13 @@ function ClienteRow({ c, statuses, allTags, onChanged, selected, onToggle }: {
           <div className="flex flex-col gap-1">
             {c.contact.phone && <span className="inline-flex items-center gap-1 text-xs text-zinc-500"><Phone className="h-3 w-3" /> {formatPhone(c.contact.phone)}</span>}
             {c.contact.conversationId ? (
-              <Link href={`/inbox?conversationId=${c.contact.conversationId}`} className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400"><MessageSquare className="h-3 w-3" /> Abrir conversa</Link>
+              <AbrirConversa
+                conversationId={c.contact.conversationId}
+                phone={c.contact.phone}
+                vinculo={c.contact.vinculo}
+                variant="botao"
+                className="w-fit"
+              />
             ) : (
               <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[#228BE6]/10 px-2 py-0.5 text-xs font-medium text-[#228BE6]">Ficha vinculada</span>
             )}

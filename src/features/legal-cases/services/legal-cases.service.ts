@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { ConversaDoCliente } from '@/components/ui/abrir-conversa';
 
 export interface ViabilidadeAnalise {
   veredito: 'viavel' | 'inviavel' | 'depende';
@@ -181,6 +182,12 @@ export interface CaseDetail extends Omit<CaseListItem, 'parties' | '_count'> {
   events: EventRef[];
   publications: PublicationRef[];
   documents: DocumentRef[];
+  /**
+   * Conversa de WhatsApp do cliente, já resolvida pelo servidor (contactId/CPF
+   * = vínculo forte; nome só quando é único; homônimo vem como 'ambiguo' com os
+   * candidatos). O web NÃO deduz identidade de cliente — ver AbrirConversa.
+   */
+  clienteConversa?: ConversaDoCliente | null;
 }
 
 export interface CreateCaseInput {
