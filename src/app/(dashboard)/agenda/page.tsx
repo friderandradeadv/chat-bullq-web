@@ -287,7 +287,10 @@ function renderEventStrip(el: HTMLElement, a: Activity, isNew = false) {
     strip.appendChild(sp);
   }
   el.prepend(strip);
-  if (isNew) {
+  // Cumprido/cancelado nunca leva a bolinha de "novo": o item já foi resolvido,
+  // e ter sido CRIADO hoje (ex.: recriado por varredura do DJEN) não é novidade
+  // que peça olhar. Gate aqui, e não no chamador, porque são dois call sites.
+  if (isNew && !a.done && !a.cancelled) {
     const dot = document.createElement('span');
     dot.className = 'ag-newdot';
     dot.title = 'Adicionado hoje';
@@ -661,7 +664,7 @@ export default function AgendaPage() {
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
   // Abrir a atividade = visualizá-la → tira a bolinha de "novo".
   const openDetail = (a: Activity) => { markSeen(a.id); setDetail(a); };
-  const isUnseenNew = (a: Activity) => isCreatedToday(a) && !seenNew.has(a.id);
+  const isUnseenNew = (a: Activity) => isCreatedToday(a) && !a.done && !a.cancelled && !seenNew.has(a.id);
   const onEventClick = (arg: EventClickArg) => { const a = byId.get(arg.event.id); if (a) openDetail(a); };
   // Arrastar tarefa/evento/prazo para outra data (ou horário, na semana/dia) →
   // reagenda. No PRAZO movemos a data de EXECUÇÃO (safeDate); a data FATAL é
