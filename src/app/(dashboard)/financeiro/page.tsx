@@ -2306,6 +2306,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [parsing, setParsing] = useState(false);
   const [dragMain, setDragMain] = useState(false); // arrastando o extrato sobre o seletor de arquivo
   const [saldoFinal, setSaldoFinal] = useState(''); // saldo final do extrato → âncora do saldo real (OFX preenche sozinho)
+  const [saldoFinalEm, setSaldoFinalEm] = useState<string | null>(null); // <DTASOF> do OFX: até quando esse saldo vale
   const [recon, setRecon] = useState<import('@/features/financeiro/services/financeiro.service').ReconConta | null>(null);
   const [celebra, setCelebra] = useState(false); // animação de "caixa registradora" ao importar
   const [conf, setConf] = useState<import('@/features/financeiro/services/financeiro.service').ExtratoConferencia | null>(null);
@@ -2348,6 +2349,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       else texto = await f.text();
       const sf = ofxSaldoFinal(texto) ?? (isPdf ? pdfSaldoFinal(texto) : null); // OFX e PDF trazem o saldo do dia → preenche a âncora
       if (sf != null) setSaldoFinal(brl2(sf).replace(/[^\d.,-]/g, '').trim());
+      setSaldoFinalEm(ofxSaldoFinalEm(texto)); // só o OFX diz a data do saldo; no PDF/CSV cai no fim do período
       let linhas = lerExtrato(texto);
       if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
       // Detecta se é FATURA DE CARTÃO só com sinais ESTRUTURAIS de cartão (compras parceladas,
@@ -2727,7 +2729,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         return { data: l.data, valor: l.valor, descricao: l.descricao, area: rv.length ? undefined : (areas[i] || '').trim() || undefined, rateioVerticais: rv.length ? rv : undefined, contribuintes: cb.length ? cb : undefined };
       });
       const sf = saldoFinal.trim() && !contas.find((c) => c.id === conta)?.cartao ? parseValor(saldoFinal) : null;
-      return financeiroService.importarExtratoLinhas(conta || null, linhas, sf);
+      return financeiroService.importarExtratoLinhas(conta || null, linhas, sf, sf != null ? saldoFinalEm : null);
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
@@ -4495,6 +4497,21 @@ function ofxSaldoFinal(text: string): number | null {
   if (!m) return null;
   const v = Number(String(m[1]).replace(/[^\d.-]/g, ''));
   return Number.isFinite(v) ? v : null;
+}
+// ATÉ QUANDO o saldo do LEDGERBAL vale (<DTASOF>), em ISO. O saldo do OFX é o saldo do
+// INSTANTE em que o banco gerou o arquivo — não o da última linha do extrato. Sem isso, um
+// extrato "até 02/09" com saldo de hoje vira âncora datada de 02/09 e o caixa desconta DE NOVO
+// tudo que foi liquidado depois (foi o que zerou R$ 2.470,12 do "Total em conta" em 04/09/2026).
+function ofxSaldoFinalEm(text: string): string | null {
+  const bloco = text.match(/<LEDGERBAL>[\s\S]*?<\/LEDGERBAL>/i)?.[0] ?? text.match(/<LEDGERBAL>[\s\S]{0,400}/i)?.[0]
+    ?? text.match(/<AVAILBAL>[\s\S]*?<\/AVAILBAL>/i)?.[0] ?? text.match(/<AVAILBAL>[\s\S]{0,400}/i)?.[0];
+  const m = bloco?.match(/<DTASOF>\s*(\d{8})(\d{6})?/i);
+  if (!m) return null;
+  const [, d, hms] = m;
+  // OFX é AAAAMMDDHHMMSS no fuso do banco (BRT). Sem hora, vale o FIM daquele dia.
+  const iso = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T${hms ? `${hms.slice(0, 2)}:${hms.slice(2, 4)}:${hms.slice(4, 6)}` : '23:59:59'}-03:00`;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
 }
 // Divide UMA linha de CSV respeitando aspas (RFC4180: "" = aspas escapada;
 // vírgulas dentro de aspas não separam). Sem isso, "IOF de ""X""","18,22" quebra.
