@@ -3,6 +3,8 @@ import { api } from '@/lib/api';
 export interface FinMes {
   key: string;
   label: string;
+  /** Base do Simples: só honorário nosso (sem alvará do cliente/transferência/estorno). */
+  receitaTributavel?: number;
   receita: number;
   despesas: Record<string, number>;
   despesaTotal: number;
