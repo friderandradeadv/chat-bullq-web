@@ -11,11 +11,12 @@ import { toast } from 'sonner';
 import {
   Calculator, LayoutDashboard, Receipt, Users, CalendarClock, FolderOpen, FileText,
   Info, Landmark, TrendingUp, AlertTriangle, CheckCircle2, Clock, Download, Loader2, Upload, X, Trash2, Plus,
-  ChevronLeft, ChevronRight, Calendar, Wallet,
+  ChevronLeft, ChevronRight, Calendar, Wallet, MessageSquare,
 } from 'lucide-react';
 import { apurar, calcularInssProlabore, type AnexoId } from '@/features/contabilidade/lib/simples';
 import {
   contabilidadeService, derivarPainelLocal, type PainelContabil, type CompetenciaApurada, type GuiaStatus, type DocumentoContabil,
+  type InboxContabil,
 } from '@/features/contabilidade/services/contabilidade.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import {
@@ -690,6 +691,119 @@ function DocRow({ d, onRemove, removing }: { d: DocumentoContabil; onRemove: () 
   );
 }
 
+/**
+ * Recebedor contábil: a guia que a contabilidade manda no WhatsApp vira despesa
+ * a pagar e cai no cofre sozinha. O card existe para o sócio VER que está ligado
+ * e trocar o número da contabilidade sem depender de deploy — e para conferir,
+ * pelo histórico, o que entrou sem ninguém digitar.
+ */
+/** O que cada papel vira — a mesma tabela do backend (contabil-inbox REGRAS). */
+const DESTINOS: { doc: string; vai: string }[] = [
+  { doc: 'Guia do DAS', vai: 'contas a pagar (Impostos e Taxas) + cofre' },
+  { doc: 'DARF/GPS do INSS', vai: 'contas a pagar (GPS - INSS) + cofre' },
+  { doc: 'Boleto dos honorários', vai: 'contas a pagar (Contador) + cofre' },
+  { doc: 'Relatório do PGDAS', vai: 'só cofre' },
+  { doc: 'Nota fiscal, DCTFWeb, DEFIS', vai: 'só cofre' },
+  { doc: 'Recibo de pró-labore, folha', vai: 'só cofre' },
+];
+
+function Recebedor() {
+  const qc = useQueryClient();
+  const { data: cfg } = useQuery({ queryKey: ['contabilidade', 'inbox'], queryFn: () => contabilidadeService.getInbox(), retry: false });
+  const { data: recebidos = [] } = useQuery({ queryKey: ['contabilidade', 'recebidos'], queryFn: () => contabilidadeService.listRecebidos(), retry: false });
+
+  const [numeros, setNumeros] = useState<string | null>(null);
+  const valorAtual = (cfg?.remetentes ?? []).join(', ');
+  const editado = numeros !== null && numeros !== valorAtual;
+
+  const salvar = useMutation({
+    mutationFn: (dto: Partial<InboxContabil>) => contabilidadeService.setInbox(dto),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['contabilidade', 'inbox'] }); setNumeros(null); toast.success('Recebedor atualizado.'); },
+    onError: () => toast.error('Não consegui salvar (backend indisponível?).'),
+  });
+
+  if (!cfg) return null;
+  const fone = (v: string) => {
+    const d = v.replace(/\D/g, '');
+    const s = d.startsWith('55') ? d.slice(2) : d;
+    return s.length >= 10 ? `(${s.slice(0, 2)}) ${s.slice(2, -4)}-${s.slice(-4)}` : v;
+  };
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            <MessageSquare className="h-4 w-4 text-indigo-500" /> Recebimento automático
+            <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${cfg.ativo
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+              : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'}`}>
+              {cfg.ativo ? 'ligado' : 'pausado'}
+            </span>
+          </h3>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+            O que a contabilidade mandar no WhatsApp {(cfg.remetentes ?? []).map(fone).join(' ou ') || '(sem número)'} entra
+            sozinho, na competência certa. Documento de outro CNPJ, PDF sem valor legível e valor que não bate com a
+            linha digitável são <b>arquivados mas não lançados</b> — nesses o hub avisa para você lançar à mão.
+          </p>
+          <ul className="mt-2 grid gap-x-4 gap-y-0.5 text-[11px] text-zinc-500 sm:grid-cols-2 dark:text-zinc-400">
+            {DESTINOS.map((d) => (
+              <li key={d.doc} className="flex items-baseline gap-1.5">
+                <span className="text-zinc-400">·</span>
+                <span><b className="font-medium text-zinc-600 dark:text-zinc-300">{d.doc}</b> → {d.vai}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <button
+          onClick={() => salvar.mutate({ ativo: !cfg.ativo })}
+          disabled={salvar.isPending}
+          className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${cfg.ativo
+            ? 'border border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'
+            : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>
+          {cfg.ativo ? 'Pausar' : 'Ligar'}
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <Field label="Número(s) da contabilidade (com DDI, separados por vírgula)">
+          <div className="flex gap-2">
+            <input
+              value={numeros ?? valorAtual}
+              onChange={(e) => setNumeros(e.target.value)}
+              placeholder="5544988327879"
+              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800" />
+            {editado && (
+              <button
+                onClick={() => salvar.mutate({ remetentes: (numeros ?? '').split(',').map((x) => x.trim()).filter(Boolean) })}
+                disabled={salvar.isPending}
+                className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+                Salvar
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field label="Últimos documentos que entraram sozinhos">
+          {recebidos.length ? (
+            <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+              {recebidos.slice(0, 3).map((r) => (
+                <li key={r.hash} className="flex items-center justify-between gap-2">
+                  <span className="truncate">{r.tipo} · {compLabel(r.comp)}</span>
+                  <span className="shrink-0 tabular-nums text-zinc-400">
+                    {r.valor != null ? brl(r.valor) : '—'} · {r.txId ? 'lançada' : 'arquivado'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-zinc-400">Nada ainda — a próxima guia que a contabilidade mandar aparece aqui.</p>
+          )}
+        </Field>
+      </div>
+    </Card>
+  );
+}
+
 function Documentos() {
   const qc = useQueryClient();
   const { data: docs = [], isLoading } = useQuery({
@@ -750,6 +864,8 @@ function Documentos() {
 
   return (
     <div className="space-y-4">
+      <Recebedor />
+
       <Card>
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
           <Upload className="h-4 w-4 text-indigo-500" /> Arquivar guia / recibo

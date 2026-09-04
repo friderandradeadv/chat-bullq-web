@@ -38,6 +38,20 @@ export interface DocumentoContabil {
   valor?: number | null; pagoEm?: string | null;
 }
 
+// Recebedor contábil: a guia chega no WhatsApp da contabilidade e o hub lança
+// a despesa + arquiva o PDF sozinho (backend: contabil-inbox.service.ts).
+export interface InboxContabil {
+  ativo: boolean;
+  remetentes: string[];   // só dígitos, com DDI
+  categoria: string;      // categoria da despesa lançada
+  conta?: string | null;
+}
+
+export interface RecebidoContabil {
+  hash: string; messageId: string; tipo: string; comp: string;
+  valor: number | null; txId?: string | null; docId?: string | null; em: string;
+}
+
 export interface PainelContabil {
   empresa: EmpresaContabil;
   competencias: CompetenciaApurada[];
@@ -72,6 +86,18 @@ export const contabilidadeService = {
   },
   async addDocumento(dto: { comp: string; tipo: string; nome: string; mime: string; base64: string; valor?: number | null; pagoEm?: string | null }): Promise<DocumentoContabil> {
     const { data } = await api.post('/contabilidade/documentos', dto);
+    return data.data ?? data;
+  },
+  async getInbox(): Promise<InboxContabil> {
+    const { data } = await api.get('/contabilidade/inbox');
+    return data.data ?? data;
+  },
+  async setInbox(dto: Partial<InboxContabil>): Promise<InboxContabil> {
+    const { data } = await api.patch('/contabilidade/inbox', dto);
+    return data.data ?? data;
+  },
+  async listRecebidos(): Promise<RecebidoContabil[]> {
+    const { data } = await api.get('/contabilidade/inbox/recebidos');
     return data.data ?? data;
   },
   async removeDocumento(id: string): Promise<DocumentoContabil[]> {
