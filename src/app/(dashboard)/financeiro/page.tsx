@@ -4833,6 +4833,35 @@ function ContasTab({ data }: { data: FinDashboard }) {
     setSepRun(false);
   };
 
+  // ── Órfão de fatura: gasto de cartão PAGO que ficou na conta do cartão ──────
+  // `pagarFatura` só varre gasto 'a_pagar'. Um gasto de cartão que já esteja 'pago' fica para
+  // trás: não migra para a conta que pagou, não entra em fatura nenhuma, e como `caixaConta`
+  // devolve 0 para cartão, ele não existe em NÚMERO ALGUM — mas o dinheiro saiu do banco na
+  // fatura. É o buraco silencioso: em 04/09/2026 foram R$ 23,51 (dois IOF e uma Hostgator) que
+  // viraram a diferença entre o razão do Nubank e o extrato, sem nada na tela apontando.
+  const cardIds = useMemo(() => new Set(contas.filter((c) => c.cartao).map((c) => c.id)), [contas]);
+  const orfaosFatura = useMemo(
+    () => data.transacoes.filter((t) => !!t.id && !!t.conta && cardIds.has(t.conta) && txStatus(t) === 'pago' && !t.faturaDe),
+    [data.transacoes, cardIds],
+  );
+  const orfaosTotal = orfaosFatura.reduce((s, t) => s + Math.abs(t.valor), 0);
+  const [orfRun, setOrfRun] = useState(false);
+  // Conserto pelo caminho oficial: devolve para 'a_pagar' (reabrirFatura) e o usuário paga a
+  // fatura na aba Cartão — aí o `pagarFatura` migra os gastos para a conta certa, itemizados.
+  const devolverAFatura = async () => {
+    const porCartao = new Map<string, string[]>();
+    for (const t of orfaosFatura) porCartao.set(t.conta!, [...(porCartao.get(t.conta!) ?? []), t.id!]);
+    if (!confirm(`Devolver ${orfaosFatura.length} gasto(s) (${brl(orfaosTotal)}) para a fatura em aberto?\n\nEles voltam para "a pagar" no cartão. Depois, na aba Cartão de crédito, é só pagar a fatura na conta e na data certas — aí entram no razão.`)) return;
+    setOrfRun(true);
+    let ok = 0, fail = 0;
+    for (const [cartaoId, txIds] of porCartao) {
+      try { const r = await financeiroService.reabrirFatura({ cartaoId, txIds }); ok += r.reabertos; } catch { fail += txIds.length; }
+    }
+    qc.invalidateQueries({ queryKey: ['financeiro'] });
+    setRetroMsg(fail ? `⚠️ ${ok} devolvido(s) à fatura, ${fail} falharam.` : `✅ ${ok} gasto(s) voltaram para a fatura. Agora vá em Cartão de crédito → Pagar fatura (conta e data em que ela foi paga de verdade).`);
+    setOrfRun(false);
+  };
+
   // ── Desfazer: extrato de cartão que caiu no caixa (liquidado) por engano ──
   const [limpaRun, setLimpaRun] = useState(false);
   const gastosCartaoNoCaixa = data.transacoes.filter((t) => t.fonteImport === 'extrato' && (txStatus(t) === 'pago' || txStatus(t) === 'recebido'));
@@ -4978,6 +5007,18 @@ function ContasTab({ data }: { data: FinDashboard }) {
             </div>
             <button onClick={separarNubank} disabled={sepRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
               {sepRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Separando…</> : <><CreditCard className="h-3.5 w-3.5" /> Separar conta e cartão</>}
+            </button>
+          </div>
+        )}
+        {orfaosFatura.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+            <div>
+              <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><AlertTriangle className="h-4 w-4 text-amber-600" /> Gasto de cartão fora de todo caixa</h4>
+              <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">Há <strong>{orfaosFatura.length} gasto(s)</strong> de cartão marcados como <strong>pagos</strong> que ficaram na própria conta do cartão (soma {brl(orfaosTotal)}). Eles <strong>não estão em fatura nenhuma</strong> (só o que está "a pagar" entra) e <strong>não estão no razão de conta alguma</strong> — mas o dinheiro saiu do banco quando a fatura foi paga. É exatamente esse buraco que faz o razão ficar acima do extrato. Devolver à fatura e pagá-la coloca cada um na conta certa.</p>
+              <p className="mt-1 text-[11px] text-zinc-400">{orfaosFatura.slice(0, 4).map((t) => `${t.data} ${brl2(t.valor)}${t.party || t.recebedor ? ` · ${t.party || t.recebedor}` : ''}`).join(' · ')}{orfaosFatura.length > 4 ? ` · +${orfaosFatura.length - 4}` : ''}</p>
+            </div>
+            <button onClick={devolverAFatura} disabled={orfRun} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
+              {orfRun ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Devolvendo…</> : <><RefreshCw className="h-3.5 w-3.5" /> Devolver à fatura</>}
             </button>
           </div>
         )}
