@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -60,6 +60,23 @@ type ColKey = 'defaultStatus' | 'department' | 'responsible';
 export default function ConexoesPage() {
   const orgId = useOrgId();
   const queryClient = useQueryClient();
+
+  // "Eu vi." Abrir esta tela é o que apaga a bolinha vermelha de Configurações
+  // e de Conexões. Antes ela sumia sozinha quando a conexão voltava — então uma
+  // queda de madrugada que se resolvia sozinha não deixava rastro nenhum, e a
+  // única pista eram notificações repetidas no sino, no meio de outras 99.
+  // Canal que SEGUE caído continua com bolinha: visto não é resolvido.
+  useEffect(() => {
+    if (!orgId) return;
+    channelsService
+      .ackConnectionHealth()
+      .then(() =>
+        queryClient.invalidateQueries({ queryKey: ['channels', 'connection-health'] }),
+      )
+      .catch(() => {
+        /* silencioso: não vale estragar a tela por causa do "eu vi" */
+      });
+  }, [orgId, queryClient]);
   const { data: channels = [], isLoading } = useQuery({
     queryKey: ['channels', orgId],
     queryFn: () => channelsService.list(),

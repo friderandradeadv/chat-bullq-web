@@ -97,6 +97,18 @@ export interface BusinessProfile {
 }
 
 export const channelsService = {
+  /**
+   * "Eu vi as quedas de conexão." Apaga a bolinha vermelha de Configurações e
+   * Conexões. Chamado ao abrir a tela de Conexões — a bolinha NÃO some sozinha
+   * quando a conexão volta, de propósito.
+   */
+  async ackConnectionHealth(): Promise<{ acknowledged: number }> {
+    const { data } = await api.post<{ data: { acknowledged: number } }>(
+      '/channels/connection-health/ack',
+    );
+    return data.data ?? { acknowledged: 0 };
+  },
+
   async list(): Promise<Channel[]> {
     const { data } = await api.get<{ data: Channel[] }>('/channels');
     return data.data;
