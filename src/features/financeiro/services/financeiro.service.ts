@@ -24,7 +24,18 @@ export interface ReconConta { saldoReal: number | null; saldoCalculado: number; 
 export type CadastroTipo = 'escritorio' | 'fornecedor' | 'socio' | 'cliente' | 'outro';
 export interface FinCadastro { id: string; nome: string; tipo: CadastroTipo; doc?: string | null }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
-export interface RateioExito { bruto: number; cliente: number; sucumbencia: number; honorarios: number }
+// Espelha o RateioExito da api. Os quatro números são o resumo; a DECOMPOSIÇÃO é o que
+// permite a prestação discriminar verba por verba — e, desde 09/09/2026, também trafega na
+// edição do lançamento (antes o editor mandava só os 4 e o service apagava o resto).
+export type VerbaNatureza = 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa';
+export interface RateioExito {
+  bruto: number; cliente: number; sucumbencia: number; honorarios: number;
+  valorCausa?: number; sucumbenciaPct?: number; honorariosPct?: number; sucumbenciaBase?: string;
+  parcial?: boolean; totalExecutado?: number;
+  verbas?: { label: string; valor: number; natureza: VerbaNatureza }[];
+  deducoesCliente?: { label: string; valor: number; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }[];
+  grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio';
+}
 export interface FinAnexo { id: string; name: string; mime: string; size: number; key: string; url: string; uploadedById?: string | null; uploadedAt: string }
 export interface PrestacaoDados {
   cliente: string; autos: string; reu: string;

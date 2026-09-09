@@ -392,11 +392,11 @@ const ST_FILTROS = [{ key: 'liquidado', label: 'Liquidados (caixa)' }, { key: 'a
 const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
 const toBR = (iso: string) => { const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };
 const toISOInput = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
-const parseValor = (s: string) => Number(String(s).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0;
+const parseValor = (s: string | undefined | null) => Number(String(s).replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0;
 // Percentual OU fração — aceita "50" (%), "50%", "1/2", "1/3" no mesmo campo. Usado na
 // contribuição pessoal (Kauani contribui "1/2 do REPB" é mais natural que calcular 216,67 de cabeça).
-const parsePct = (s: string): number => {
-  const t = String(s).trim();
+const parsePct = (s: string | undefined | null): number => {
+  const t = String(s ?? '').trim();
   const fr = t.match(/^(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)$/);
   if (fr) { const num = Number(fr[1].replace(',', '.')); const den = Number(fr[2].replace(',', '.')); return den > 0 ? (num / den) * 100 : 0; }
   return parseValor(t.replace('%', ''));
@@ -501,7 +501,53 @@ function DotPendencia({ atrasadas, hoje, className = '' }: { atrasadas: number; 
 }
 
 interface SplitRow { tipo: 'socio' | 'associado'; userId: string; valor: string; modo: 'valor' | 'pct'; pct: string }
-interface RateioForm { bruto: string; cliente: string; sucumbencia: string; honorarios: string }
+// 'abatimento' é natureza SÓ do formulário: valor positivo na tela, `proveito` negativo no
+// envio (a api só conhece 4 naturezas, e o MoneyInput não aceita sinal). Mesma convenção do
+// editor de alvará no import.
+type VerbaNatForm = 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' | 'abatimento';
+interface VerbaForm { label: string; valor: string; natureza: VerbaNatForm }
+interface DeducaoForm { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }
+interface RateioForm {
+  bruto: string; cliente: string; sucumbencia: string; honorarios: string;
+  // DECOMPOSIÇÃO — até 09/09/2026 o editor não a carregava, e como o service substituía o
+  // rateio inteiro, abrir e salvar um lançamento de êxito APAGAVA verbas, percentuais e
+  // deduções em silêncio. Agora vai e volta por aqui.
+  honorariosPct?: string; sucumbenciaPct?: string; sucumbenciaBase?: string; valorCausa?: string;
+  verbas?: VerbaForm[]; deducoes?: DeducaoForm[];
+  parcial?: boolean; totalExecutado?: string; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio';
+}
+/** Espelho do trecho de verbas do `calcExito` (api). Mudou lá, mude aqui. */
+function decomporVerbas(verbas: VerbaForm[] | undefined, bruto: number, honPct: number, honDeclarado: number, deducoes: DeducaoForm[] | undefined) {
+  const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const decl = (verbas ?? [])
+    .map((v) => ({ ...v, _v: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor) }))
+    .filter((v) => v.label.trim() && Number.isFinite(v._v) && v._v !== 0 && (v._v > 0 || v.natureza === 'proveito' || v.natureza === 'abatimento'));
+  const somaDecl = r2(decl.reduce((a2, v) => a2 + v._v, 0));
+  if (!decl.length) return null;
+  const desvio = somaDecl !== 0 ? Math.abs(bruto - somaDecl) / Math.abs(somaDecl) : 0;
+  const f = bruto > 0 && desvio > 0 && desvio <= 0.02 ? bruto / somaDecl : 1;
+  const v = decl.map((x) => ({ ...x, _n: r2(x._v * f) }));
+  // RESÍDUO: o rateio proporcional + arredondar por verba não soma o bruto no centavo. O
+  // `calcExito` joga o resto na maior verba POSITIVA; sem espelhar isso aqui, o preview
+  // mostrava um centavo a mais que o valor gravado e o aviso de divergência acendia sozinho.
+  if (f !== 1 && v.length) {
+    const resto = r2(bruto - v.reduce((a2, x) => a2 + x._n, 0));
+    const positivas = v.filter((x) => x._n > 0);
+    if (resto !== 0 && positivas.length) {
+      const maior = positivas.reduce((a2, b2) => (b2._n > a2._n ? b2 : a2));
+      maior._n = r2(maior._n + resto);
+    }
+  }
+  const nat = (n: string) => r2(v.filter((x) => (x.natureza === 'abatimento' ? 'proveito' : x.natureza) === n).reduce((a2, x) => a2 + x._n, 0));
+  const suc = nat('sucumbencia_nossa');
+  const reembCli = nat('reembolso_cliente');
+  const base = Math.max(0, nat('proveito'));
+  const cheio = r2(base * (honPct / 100));
+  const hon = honPct > 0 ? (honDeclarado > 0 && honDeclarado < cheio - 0.01 ? honDeclarado : cheio) : honDeclarado;
+  const totalDed = r2((deducoes ?? []).reduce((a2, d) => a2 + parseValor(d.valor), 0));
+  const cliente = r2(base - hon + reembCli - totalDed);
+  return { somaDecl, base, suc, hon, cheio, reduzido: honPct > 0 && hon < cheio - 0.01, cliente, nosso: r2(suc + hon), fecha: bruto <= 0 || Math.abs(somaDecl - bruto) <= Math.max(0.02, bruto * 0.02) };
+}
 interface Editor {
   id: string | null; serieId: string | null; tipo: 'receita' | 'despesa';
   dataISO: string; vencISO: string; pagtoISO: string; competencia: string; // YYYY-MM mês de referência (padrão = mês da data)
@@ -1058,7 +1104,17 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       if (contaFileRef.current) contaFileRef.current.value = '';
     }
   };
-  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), competencia: /^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '') ? (t.mes as string) : toISOInput(t.data).slice(0, 7), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? (t.valor < 0 ? escritorioNome : (t.party ?? '')), recebedor: t.recebedor ?? (t.valor < 0 ? (t.party ?? '') : ''), valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? { bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios) } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })), contribuintes: (t.contribuintes ?? []).map((x) => ({ userId: x.userId ?? undefined, nome: x.nome, modo: 'valor' as const, valor: fmtMoney(x.valor), pct: '' })) });
+  const openEdit = (t: FinTransacao) => setEditor({ id: t.id!, serieId: t.serieId ?? null, tipo: t.valor >= 0 ? 'receita' : 'despesa', dataISO: toISOInput(t.data), vencISO: t.vencimento ? toISOInput(t.vencimento) : '', pagtoISO: t.dataPagamento ? toISOInput(t.dataPagamento) : toISOInput(t.data), competencia: /^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '') ? (t.mes as string) : toISOInput(t.data).slice(0, 7), categoria: t.categoria, subtipo: t.subtipo === 'exito' ? 'exito' : 'inicial', pagador: t.pagador ?? (t.valor < 0 ? escritorioNome : (t.party ?? '')), recebedor: t.recebedor ?? (t.valor < 0 ? (t.party ?? '') : ''), valor: fmtMoney(Math.abs(t.valor)), status: txStatus(t), parcelas: '1', repetir: 'nao', escopo: 'uma', responsavelId: t.responsavelId ?? '', conta: t.conta ?? '', split: (t.split ?? []).filter((s) => s.tipo !== 'escritorio').map((s) => ({ tipo: s.tipo === 'associado' ? 'associado' : 'socio', userId: s.userId ?? '', valor: fmtMoney(s.valor), modo: 'valor' as const, pct: '' })), rateio: t.rateio ? {
+    bruto: fmtMoney(t.rateio.bruto), cliente: fmtMoney(t.rateio.cliente), sucumbencia: fmtMoney(t.rateio.sucumbencia), honorarios: fmtMoney(t.rateio.honorarios),
+    honorariosPct: t.rateio.honorariosPct != null ? String(t.rateio.honorariosPct) : '',
+    sucumbenciaPct: t.rateio.sucumbenciaPct != null ? String(t.rateio.sucumbenciaPct) : '',
+    sucumbenciaBase: t.rateio.sucumbenciaBase ?? '', valorCausa: t.rateio.valorCausa != null ? fmtMoney(t.rateio.valorCausa) : '',
+    // negativo volta como 'abatimento' com valor positivo — `fmtMoney` é absoluto
+    verbas: (t.rateio.verbas ?? []).map((v) => ({ label: v.label, valor: fmtMoney(v.valor), natureza: (v.valor < 0 ? 'abatimento' : v.natureza) as VerbaNatForm })),
+    deducoes: (t.rateio.deducoesCliente ?? []).map((d) => ({ label: d.label, valor: fmtMoney(d.valor), tipo: d.tipo as DeducaoForm['tipo'], cnjIncidente: d.cnjIncidente, txIdSaida: d.txIdSaida })),
+    parcial: t.rateio.parcial === true, totalExecutado: t.rateio.totalExecutado != null ? fmtMoney(t.rateio.totalExecutado) : '',
+    grupoId: t.rateio.grupoId, beneficiarioAlvara: t.rateio.beneficiarioAlvara,
+  } : { ...RATEIO_VAZIO }, area: t.area ?? '', rateioVerticais: (t.rateioVerticais ?? []).map((x) => ({ area: x.area, valor: fmtMoney(x.valor), label: x.label ?? '' })), contribuintes: (t.contribuintes ?? []).map((x) => ({ userId: x.userId ?? undefined, nome: x.nome, modo: 'valor' as const, valor: fmtMoney(x.valor), pct: '' })) });
   // ao trocar o pagador (cliente), sugere o responsável se ainda não houver
   const onPagador = (val: string) => setEditor((ed) => ed ? { ...ed, pagador: val, responsavelId: ed.responsavelId || (ed.tipo === 'receita' ? sugereResp(val) : '') } : ed);
 
@@ -1070,7 +1126,42 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // rateio (prestação de contas) só faz sentido em honorário de êxito com bruto preenchido
   const ehExito = (ed: Editor) => /honor/i.test(ed.categoria) && ed.subtipo === 'exito';
   const rateioNosso = (r: RateioForm) => parseValor(r.honorarios) + parseValor(r.sucumbencia);
-  const buildRateio = (ed: Editor) => (ehExito(ed) && parseValor(ed.rateio.bruto) > 0) ? { bruto: parseValor(ed.rateio.bruto), cliente: parseValor(ed.rateio.cliente), sucumbencia: parseValor(ed.rateio.sucumbencia), honorarios: parseValor(ed.rateio.honorarios) } : null;
+  // Manda a DECOMPOSIÇÃO junto. Enquanto isto só levava os quatro números, o service —
+  // que substitui o rateio inteiro — apagava verbas, percentuais e deduções a cada salvamento
+  // (09/09/2026). 'abatimento' vira `proveito` negativo aqui; a api só conhece 4 naturezas.
+  const buildRateio = (ed: Editor) => {
+    if (!(ehExito(ed) && parseValor(ed.rateio.bruto) > 0)) return null;
+    const r = ed.rateio;
+    const verbas = (r.verbas ?? [])
+      .map((v) => ({
+        label: (v.label || '').trim(),
+        valor: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor),
+        natureza: (v.natureza === 'abatimento' ? 'proveito' : v.natureza) as 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa',
+      }))
+      .filter((v) => v.label && v.valor !== 0 && (v.valor > 0 || v.natureza === 'proveito'));
+    const deducoes = (r.deducoes ?? [])
+      .filter((d) => (d.label || '').trim() && parseValor(d.valor) > 0)
+      .map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, ...(d.cnjIncidente ? { cnjIncidente: d.cnjIncidente } : {}), ...(d.txIdSaida ? { txIdSaida: d.txIdSaida } : {}) }));
+    const pctHon = parsePct(r.honorariosPct); const pctSuc = parsePct(r.sucumbenciaPct);
+    return {
+      bruto: parseValor(r.bruto), cliente: parseValor(r.cliente), sucumbencia: parseValor(r.sucumbencia), honorarios: parseValor(r.honorarios),
+      ...(pctHon > 0 ? { honorariosPct: pctHon } : {}),
+      ...(pctSuc > 0 ? { sucumbenciaPct: pctSuc } : {}),
+      ...(r.sucumbenciaBase ? { sucumbenciaBase: r.sucumbenciaBase } : {}),
+      ...(parseValor(r.valorCausa || '') > 0 ? { valorCausa: parseValor(r.valorCausa || '') } : {}),
+      ...(r.parcial ? { parcial: true } : {}),
+      ...(parseValor(r.totalExecutado || '') > 0 ? { totalExecutado: parseValor(r.totalExecutado || '') } : {}),
+      ...(r.grupoId ? { grupoId: r.grupoId } : {}),
+      ...(r.beneficiarioAlvara ? { beneficiarioAlvara: r.beneficiarioAlvara } : {}),
+      // Sempre presentes (mesmo vazios): `[]` limpa de propósito, ausente preservaria.
+      verbas, deducoesCliente: deducoes,
+    };
+  };
+  // Com verbas declaradas, o caixa segue a decomposição — os campos soltos são só o resumo.
+  const rateioNossoEfetivo = (ed: Editor) => {
+    const d = decomporVerbas(ed.rateio.verbas, parseValor(ed.rateio.bruto), parsePct(ed.rateio.honorariosPct), parseValor(ed.rateio.honorarios), ed.rateio.deducoes);
+    return d ? d.nosso : rateioNosso(ed.rateio);
+  };
 
   // Checa duplicata ANTES de criar um lançamento NOVO — mesma essência do dedup da importação
   // de extrato (mesmo sinal + valor ±1 centavo + data ±3 dias), só que aqui é um AVISO com
@@ -1091,7 +1182,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
     if (!editor) return;
     const rateio = buildRateio(editor);
     // com rateio de êxito, o que entra no caixa é a parte do escritório (honorário + sucumbência)
-    const v = rateio ? rateioNosso(editor.rateio) : parseValor(editor.valor);
+    const v = rateio ? rateioNossoEfetivo(editor) : parseValor(editor.valor);
     if (!(v > 0)) { toast.error(rateio ? 'Preencha honorário e/ou sucumbência do escritório' : 'Informe um valor maior que zero'); return; }
     // Só para lançamento NOVO e ÚNICO (não série repetida — recorrência é intencional e geraria
     // aviso falso todo mês).
@@ -1681,10 +1772,61 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                       <Field label="Honorário (escritório)"><MoneyInput value={editor.rateio.honorarios} onChange={(v) => setEditor({ ...editor, rateio: { ...editor.rateio, honorarios: v } })} /></Field>
                       <Field label="Sucumbência (escritório)"><MoneyInput value={editor.rateio.sucumbencia} onChange={(v) => setEditor({ ...editor, rateio: { ...editor.rateio, sucumbencia: v } })} /></Field>
                     </div>
+                    {/* ── DECOMPOSIÇÃO: verba por verba do título ──────────────────────
+                        Sem isto, corrigir a decomposição de um lançamento antigo exigia SQL
+                        (o DTO não aceitava `verbas`), e abrir/salvar o lançamento APAGAVA a
+                        que existisse. As verbas mandam: com elas declaradas, sucumbência e
+                        líquido do cliente saem daqui, não dos campos acima. */}
+                    {(() => {
+                      const vs = editor.rateio.verbas ?? [];
+                      const setR = (patch: Partial<RateioForm>) => setEditor({ ...editor, rateio: { ...editor.rateio, ...patch } });
+                      const dec = decomporVerbas(vs, parseValor(editor.rateio.bruto), parsePct(editor.rateio.honorariosPct), parseValor(editor.rateio.honorarios), editor.rateio.deducoes);
+                      return (
+                        <div className="rounded-md border border-sky-200 bg-sky-50/50 px-2 py-1.5 dark:border-sky-900/40 dark:bg-sky-900/10">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-[11px] font-medium text-sky-900 dark:text-sky-300" title="Só o que for proveito entra na base do honorário contratual.">🧾 Decomposição do crédito <span className="font-normal text-sky-700/70 dark:text-sky-400/70">(verbas do título)</span></span>
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-1 text-[10px] text-sky-800 dark:text-sky-300">contratual
+                                <input value={editor.rateio.honorariosPct ?? ''} onChange={(e) => setR({ honorariosPct: e.target.value })} placeholder="30" className="w-10 rounded border border-zinc-300 bg-white px-1 py-0.5 text-[10px] dark:border-zinc-700 dark:bg-zinc-900" />%
+                              </label>
+                              <button type="button" onClick={() => setR({ verbas: [...vs, { label: '', valor: '', natureza: 'proveito' }] })} className="rounded bg-sky-600/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-600/20 dark:text-sky-300">+ verba</button>
+                            </div>
+                          </div>
+                          {vs.map((v, k) => (
+                            <div key={k} className="mt-1 flex flex-wrap items-center gap-1">
+                              <input value={v.label} onChange={(e) => setR({ verbas: vs.map((x, kk) => kk === k ? { ...x, label: e.target.value } : x) })} placeholder="ex.: Dano moral" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900" />
+                              <div className="w-28"><MoneyInput value={v.valor} onChange={(val) => setR({ verbas: vs.map((x, kk) => kk === k ? { ...x, valor: val } : x) })} /></div>
+                              <select value={v.natureza} onChange={(e) => setR({ verbas: vs.map((x, kk) => kk === k ? { ...x, natureza: e.target.value as VerbaNatForm } : x) })} className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-[10px] dark:border-zinc-700 dark:bg-zinc-900">
+                                <option value="proveito">proveito (base do contratual)</option>
+                                <option value="reembolso_cliente">reembolso ao cliente</option>
+                                <option value="reembolso_escritorio">reembolso ao escritório</option>
+                                <option value="sucumbencia_nossa">sucumbência nossa</option>
+                                <option value="abatimento">abatimento (reduz o proveito)</option>
+                              </select>
+                              <button type="button" onClick={() => setR({ verbas: vs.filter((_, kk) => kk !== k) })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
+                            </div>
+                          ))}
+                          {dec && (
+                            <div className="mt-1.5 border-t border-sky-200/60 pt-1.5 text-[10px] dark:border-sky-900/40">
+                              <div className="text-sky-900 dark:text-sky-300">
+                                proveito <strong>{brl2(dec.base)}</strong> · sucumbência <strong>{brl2(dec.suc)}</strong> · contratual <strong>{brl2(dec.hon)}</strong>
+                                {dec.reduzido && <span className="text-violet-600 dark:text-violet-300"> (reduzido — {editor.rateio.honorariosPct}% dariam {brl2(dec.cheio)})</span>}
+                                {' '}· cliente <strong>{brl2(dec.cliente)}</strong>
+                              </div>
+                              {!dec.fecha && <div className="mt-1 text-amber-600 dark:text-amber-400">⚠️ as verbas somam {brl2(dec.somaDecl)} e o bruto é {brl2(parseValor(editor.rateio.bruto))} — falta linha, ou um abatimento foi lançado como positivo. A API recusa assim.</div>}
+                              {dec.fecha && Math.abs(dec.nosso - parseValor(editor.valor)) > 0.01 && (
+                                <div className="mt-1 text-amber-600 dark:text-amber-400">⚠️ o escritório fica com {brl2(dec.nosso)} e o lançamento vale {brl2(parseValor(editor.valor))}. Para manter o lançado, o contratual precisa ser {brl2(Math.round((parseValor(editor.valor) - dec.suc) * 100) / 100)} — preencha em &quot;Honorário (escritório)&quot;.</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {(() => {
                       const bruto = parseValor(editor.rateio.bruto);
-                      const cliente = parseValor(editor.rateio.cliente);
-                      const nosso = parseValor(editor.rateio.honorarios) + parseValor(editor.rateio.sucumbencia);
+                      const dv = decomporVerbas(editor.rateio.verbas, bruto, parsePct(editor.rateio.honorariosPct), parseValor(editor.rateio.honorarios), editor.rateio.deducoes);
+                      const cliente = dv ? dv.cliente : parseValor(editor.rateio.cliente);
+                      const nosso = dv ? dv.nosso : parseValor(editor.rateio.honorarios) + parseValor(editor.rateio.sucumbencia);
                       const conferir = bruto - cliente - nosso;
                       // Trava OAB (art. 50 CED): em êxito, o nosso não pode superar o cliente.
                       const excedeCliente = bruto > 0 && nosso > cliente + 0.01;
