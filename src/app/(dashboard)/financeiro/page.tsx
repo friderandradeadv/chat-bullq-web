@@ -414,6 +414,9 @@ const contribValorCalc = (row: ContribRow, totalDespesa: number, rateioRows: { a
 };
 // Moeda: máscara enquanto digita (só dígitos → centavos → "1.234,56") + número → texto.
 const maskBRL = (raw: string) => { const d = String(raw).replace(/\D/g, ''); if (!d) return ''; return (Number(d) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+// PDF/foto → base64 (sem o prefixo data:). No escopo do módulo porque o editor de alvará
+// também anexa arquivo, e o spread de bytes em btoa() estoura a pilha em arquivo de MB.
+const fileToB64 = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f); });
 const fmtMoney = (n: number) => (Math.abs(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Input de dinheiro: mostra "R$" fixo e formata em moeda conforme o usuário digita.
 function MoneyInput({ value, onChange, placeholder = '0,00', readOnly = false, autoFocus = false }: { value: string; onChange?: (v: string) => void; placeholder?: string; readOnly?: boolean; autoFocus?: boolean }) {
@@ -1035,7 +1038,6 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const openNew = () => { setContaDoc(null); setEditor({ id: null, serieId: null, tipo: 'receita', dataISO: toISOInput(hojeBR()), vencISO: '', pagtoISO: toISOInput(hojeBR()), competencia: toISOInput(hojeBR()).slice(0, 7), categoria: 'Honorários', subtipo: 'inicial', pagador: '', recebedor: escritorioNome, valor: '', status: 'recebido', parcelas: '1', repetir: 'nao', escopo: 'uma', split: [], rateio: { ...RATEIO_VAZIO }, responsavelId: '', conta: contas[0]?.id ?? '', area: '', rateioVerticais: [], contribuintes: [], contactId: '', caseId: '', procLabel: '' }); };
   // IA lê boleto/DARF/guia (PDF ou foto) → abre o editor já preenchido como despesa "a pagar"
   // com vencimento, e guarda o arquivo pra anexar ao lançamento quando salvar.
-  const fileToB64 = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(f); });
   const lerContaDoc = async (file: File | null | undefined) => {
     if (!file) return;
     setLendoConta(true);
@@ -1131,7 +1133,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       // Renderiza o PDF no navegador (HTML/CSS real) + anexa o alvará — visual idêntico ao layout.
       const dados = await financeiroService.prestacaoDados(t.id!);
       const { gerarPrestacaoPdf } = await import('@/features/financeiro/lib/prestacao-pdf');
-      const blob = await gerarPrestacaoPdf(dados);
+      const blob = await gerarPrestacaoPdf(dados, (nomes) => toast(`Não consegui anexar ao PDF: ${nomes.join(', ')}. A prestação saiu SEM o comprovante.`, { icon: '⚠️', duration: 9000 }));
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -1161,7 +1163,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
     setPcSend(t.id!);
     try {
       const { gerarPrestacaoPdf } = await import('@/features/financeiro/lib/prestacao-pdf');
-      const blob = await gerarPrestacaoPdf(dados);
+      const blob = await gerarPrestacaoPdf(dados, (nomes) => toast(`Não consegui anexar ao PDF: ${nomes.join(', ')}. A prestação saiu SEM o comprovante.`, { icon: '⚠️', duration: 9000 }));
       const pdfBase64 = await new Promise<string>((res, rej) => {
         const fr = new FileReader();
         fr.onload = () => res(String(fr.result).replace(/^data:[^,]+,/, ''));
@@ -2316,7 +2318,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
-  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio'; unificar?: boolean }>>({});
+  const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' | 'abatimento' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio'; unificar?: boolean }>>({});
   const [alvaraBusy, setAlvaraBusy] = useState<Record<number, boolean>>({}); // extração de documentos (IA) por linha
   // Despesas já lançadas no processo escolhido (guias, custas) — viram desconto com 1 clique.
   // DOCUMENTOS LIDOS por linha — sem isso não dá para saber o que a IA já viu, e a
@@ -2349,7 +2351,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       else texto = await f.text();
       const sf = ofxSaldoFinal(texto) ?? (isPdf ? pdfSaldoFinal(texto) : null); // OFX e PDF trazem o saldo do dia → preenche a âncora
       if (sf != null) setSaldoFinal(brl2(sf).replace(/[^\d.,-]/g, '').trim());
-      setSaldoFinalEm(ofxSaldoFinalEm(texto)); // só o OFX diz a data do saldo; no PDF/CSV cai no fim do período
+      // OFX diz por <DTASOF>; o PDF do Nubank diz por extenso no rodapé. Sem nenhum dos dois,
+      // o back cai no fim do período — e é aí que nasce a dupla contagem (ver abaixo).
+      setSaldoFinalEm(ofxSaldoFinalEm(texto) ?? extratoGeradoEm(texto));
       let linhas = lerExtrato(texto);
       if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(texto);
       // Detecta se é FATURA DE CARTÃO só com sinais ESTRUTURAIS de cartão (compras parceladas,
@@ -2378,7 +2382,11 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   //   • condenação = o proveito econômico, única base do honorário contratual
   //   • cliente (líquido) = condenação − contratual + reembolso dele − deduções
   //   • deduções = obrigações do cliente quitadas do alvará (sucumbência que ELE deve, guias)
-  type VerbaLinha = { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' };
+  // 'abatimento' existe SÓ no editor: o usuário digita valor positivo e escolhe a natureza,
+  // e o envio o converte em `proveito` NEGATIVO (a api só conhece as 4 naturezas). Assim o
+  // MoneyInput não precisa aceitar sinal de menos — que é onde isso quebraria em todo o resto.
+  type VerbaNat = 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' | 'abatimento';
+  type VerbaLinha = { label: string; valor: string; natureza: VerbaNat };
   type DeducaoLinha = { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string };
   // ESPELHO de `calcExito` (api/src/modules/financeiro/financeiro.service.ts) — mudou aqui, mude lá.
   // Com `verbas` declaradas o bruto deixa de ser tratado como bloco único: só o que é PROVEITO
@@ -2388,18 +2396,29 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const totalDev = a?.parcial ? parseValor(a?.totalDevido || '') : 0;
     const fracao = a?.parcial && totalDev > bruto && totalDev > 0 ? bruto / totalDev : 1;
-    const verbasDecl = (a?.verbas ?? []).filter((v) => v && parseValor(v.valor) > 0);
+    // Verba NEGATIVA = abatimento determinado no título (a compensação do valor que o banco
+    // já creditou ao cliente). Reduz o proveito, e por isso a base do contratual — não é
+    // dedução da parte dele. Só `proveito` aceita sinal negativo. Espelha `verbaValida` na api.
+    // Normaliza para o contrato da api: abatimento vira `proveito` com sinal negativo.
+    const verbasDecl = (a?.verbas ?? [])
+      .map((v) => {
+        const n = parseValor(v?.valor);
+        return v?.natureza === 'abatimento'
+          ? { ...v, natureza: 'proveito' as const, _v: -Math.abs(n) }
+          : { ...v, _v: n };
+      })
+      .filter((v) => Number.isFinite(v._v) && v._v !== 0 && (v._v > 0 || v.natureza === 'proveito'));
     const temVerbas = verbasDecl.length > 0;
     // ATUALIZAÇÃO ATÉ O CRÉDITO (espelho de calcExito na api): as verbas vêm do demonstrativo,
     // que tem data-base; o dinheiro cai meses depois, corrigido. Diferença de até 2% é a
     // correção do período — rateia proporcional, que é o que se faria à mão. Acima disso não
     // mexe: aí é verba faltando, e tem de aparecer em vez de ser dissolvida no rateio.
-    const somaDecl = r2(verbasDecl.reduce((acc, v) => acc + parseValor(v.valor), 0));
+    const somaDecl = r2(verbasDecl.reduce((acc, v) => acc + v._v, 0));
     const desvio = temVerbas && somaDecl > 0 ? Math.abs(bruto - somaDecl) / somaDecl : 0;
     const atualizada = temVerbas && bruto > 0 && desvio > 0 && desvio <= 0.02;
     const fatorAtual = atualizada ? bruto / somaDecl : 1;
-    const verbas = verbasDecl.map((v) => ({ ...v, _n: r2(parseValor(v.valor) * fatorAtual) }));
-    const somaNat = (n: VerbaLinha['natureza']) => r2(verbas.filter((v) => v.natureza === n).reduce((acc, v) => acc + v._n, 0));
+    const verbas = verbasDecl.map((v) => ({ ...v, _n: r2(v._v * fatorAtual) }));
+    const somaNat = (n: VerbaNat) => r2(verbas.filter((v) => v.natureza === n).reduce((acc, v) => acc + v._n, 0));
     let suc: number;
     if (temVerbas) {
       suc = somaNat('sucumbencia_nossa');
@@ -2416,7 +2435,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     }
     const reembCli = temVerbas ? somaNat('reembolso_cliente') : 0;   // volta inteiro ao cliente
     const reembEsc = temVerbas ? somaNat('reembolso_escritorio') : 0; // devolução de despesa nossa
-    const condenacao = temVerbas ? somaNat('proveito') : r2(bruto - suc);
+    const condenacao = temVerbas ? Math.max(0, somaNat('proveito')) : r2(bruto - suc);
     const honAuto = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
     // DEDUÇÕES da parte do cliente: dinheiro dele que já tem destino (sucumbência que ele deve
     // à parte contrária, guia adiantada pelo escritório). Não são honorários — ficam fora do art. 50.
@@ -2613,7 +2632,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         // só sobre o proveito (reembolso de custas e sucumbência nossa ficam fora da base).
         // A IA só devolve quando a soma das verbas FECHA com o bruto.
         if (r.verbas?.length) {
-          patch.verbas = r.verbas.map((v) => ({ label: v.label, valor: fmtMoney(v.valor), natureza: v.natureza }));
+          // `fmtMoney` é absoluto: sem virar 'abatimento', a compensação lida como negativa
+          // apareceria SOMANDO no editor. O sinal vive na natureza, não no campo.
+          patch.verbas = r.verbas.map((v) => ({ label: v.label, valor: fmtMoney(v.valor), natureza: (v.valor < 0 ? 'abatimento' : v.natureza) as VerbaNat }));
           const sucVerba = r.verbas.filter((v) => v.natureza === 'sucumbencia_nossa').reduce((acc, v) => acc + v.valor, 0);
           // As verbas já dizem o valor da sucumbência — desliga o modo % pra não calcular duas vezes.
           if (sucVerba > 0) { patch.sucMode = 'valor'; patch.sucumbencia = fmtMoney(sucVerba); }
@@ -2647,6 +2668,31 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
         if (r.indiceCorrecao) patch.indiceCausa = r.indiceCorrecao;
         return { ...s, [idx]: patch };
       });
+      // ANEXO ≠ LEITURA. Os arquivos que sobem aqui só alimentam a IA: quem vira anexo da
+      // prestação é o campo "anexar PDF", separado. Quem manda os autos inteiros para extrair
+      // sai com os valores preenchidos e a prestação SEM comprovante nenhum, sem nada avisar —
+      // foi o que aconteceu no caso Jorge (09/09/2026). Um PDF pequeno que seja o próprio
+      // alvará/comprovante é anexado sozinho; o resto vira aviso.
+      const ALVARA_ANEXO_MB = 4;
+      const pareceAlvara = (nome: string) => /alvar|levantament|comprovant|dep[óo]sit|transfer/i.test(nome);
+      const candidatos = arr.filter((f) => pareceAlvara(f.name) && f.size <= ALVARA_ANEXO_MB * 1024 * 1024);
+      if (candidatos.length) {
+        // FileReader, não btoa(String.fromCharCode(...)) — o spread de alguns MB de bytes
+        // estoura a pilha de argumentos. `fileToB64` já é o caminho usado no resto da página.
+        const b64 = (await Promise.all(candidatos.map(async (f) => ({
+          name: f.name, mime: f.type || 'application/pdf', base64: await fileToB64(f),
+        })))).filter((x) => x.base64);
+        setAlvara((st) => {
+          const cur = st[idx] ?? { cliente: '', sucumbencia: '', honorarios: '' };
+          const ja = cur.anexoAlvara ?? [];
+          const novos = b64.filter((n) => !ja.some((x) => x.name === n.name));
+          if (!novos.length) return st;
+          return { ...st, [idx]: { ...cur, anexoAlvara: [...ja, ...novos].slice(0, 6) } };
+        });
+        toast.success(`Anexado à prestação: ${candidatos.map((f) => f.name).join(', ')}`);
+      } else if (r.valorAlvara) {
+        toast('Li os valores, mas NÃO anexei comprovante nenhum. A prestação sai sem o alvará — use "anexar PDF" com a página do alvará.', { icon: '📎', duration: 10000 });
+      }
       // ALVARÁS DO PROCESSO → LINHAS DO EXTRATO. A peça diz quantos alvarás foram expedidos e
       // de quanto. Casando com os créditos que entraram, o hub junta sozinho o que é o mesmo
       // crédito — o passo que sobrava manual. O valor creditado é um pouco MAIOR que o
@@ -2721,7 +2767,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).filter((v) => v.label.trim() && parseValor(v.valor) > 0).map((v) => ({ label: v.label.trim(), valor: parseValor(v.valor), natureza: v.natureza })), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, unificar: a?.unificar === true }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).map((v) => ({ label: (v.label || '').trim(), valor: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor), natureza: (v.natureza === 'abatimento' ? 'proveito' : v.natureza) as 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' })).filter((v) => v.label && v.valor !== 0 && (v.valor > 0 || v.natureza === 'proveito')), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, unificar: a?.unificar === true }, split };
         }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
@@ -3170,6 +3216,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                       <option value="reembolso_cliente">reembolso ao cliente</option>
                                       <option value="reembolso_escritorio">reembolso ao escritório</option>
                                       <option value="sucumbencia_nossa">sucumbência nossa</option>
+                                      <option value="abatimento">abatimento (reduz o proveito)</option>
                                     </select>
                                     <button type="button" onClick={() => set({ verbas: (a.verbas ?? []).filter((_, kk) => kk !== k) })} className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                                   </div>
@@ -4512,6 +4559,28 @@ function ofxSaldoFinalEm(text: string): string | null {
   const iso = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T${hms ? `${hms.slice(0, 2)}:${hms.slice(2, 4)}:${hms.slice(4, 6)}` : '23:59:59'}-03:00`;
   const t = Date.parse(iso);
   return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+// QUANDO o extrato foi GERADO — o rodapé do PDF do Nubank imprime "Extrato gerado dia 09 de
+// setembro de 2026 às 14:43". É o equivalente ao <DTASOF> do OFX: o saldo impresso é o daquele
+// instante, não o da última linha de movimento.
+//
+// Sem isto, um extrato de 26/08 a 09/09 cujo último MOVIMENTO é de 08/09 ancorava em
+// 08/09T23:59:59.999Z com o saldo de agora — e `caixaConta` somava DE NOVO, por cima da âncora,
+// tudo que fosse lançado depois com data de 08/09. Em 09/09/2026 isso inflou o "Total em conta"
+// em R$ 9.313,51 (os dois lançamentos do alvará do Jorge e a guia do TJPR).
+function extratoGeradoEm(text: string): string | null {
+  const m = text.match(/extrato\s+gerado\s+(?:dia\s+)?(\d{1,2})\s+de\s+([a-zç]+)\s+de\s+(\d{4})(?:\s+[àa]s\s+(\d{1,2})[:h](\d{2}))?/i);
+  if (!m) return null;
+  // MESES_PT vem de features/financeiro/lib/clientes (capitalizado) — compara em minúsculas.
+  const mes = MESES_PT.findIndex((x) => x.toLowerCase() === m[2].toLowerCase());
+  if (mes < 0) return null;
+  const p = (n: string) => String(n).padStart(2, '0');
+  // Horário do banco é BRT. Sem hora, vale o fim daquele dia.
+  const iso = `${m[3]}-${p(String(mes + 1))}-${p(m[1])}T${m[4] ? `${p(m[4])}:${m[5]}:00` : '23:59:59'}-03:00`;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  // Data no futuro é erro de leitura — não pode virar âncora que engole lançamento novo.
+  return t > Date.now() ? null : new Date(t).toISOString();
 }
 // Divide UMA linha de CSV respeitando aspas (RFC4180: "" = aspas escapada;
 // vírgulas dentro de aspas não separam). Sem isso, "IOF de ""X""","18,22" quebra.

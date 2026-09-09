@@ -11,7 +11,11 @@ const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, 
 function buildHtml(d: PrestacaoDados): string {
   const baseTxt = d.sucBaseTipo === 'Valor da causa' ? 'o valor atualizado da causa' : d.sucBaseTipo === 'Proveito econômico' ? 'o proveito econômico' : 'o valor da condenação';
   const baseVal = (d.sucBaseTipo === 'Valor da causa' || d.sucBaseTipo === 'Proveito econômico') ? d.valorCausa : d.condenacao;
-  const sucCap = d.sucPct && baseVal ? `${d.sucPct}% sobre ${baseTxt} (${brl(baseVal)}) = ${brl(d.suc)}` : `Total: ${brl(d.suc)}`;
+  // Só imprime a equação quando ela FECHA. A base do título quase nunca é a condenação
+  // líquida de abatimentos, e "10% sobre R$ 9.743,44 = R$ 1.197,33" é aritmética falsa num
+  // documento que o cliente pode conferir contra os autos (09/09/2026).
+  const sucCap = d.sucPct && baseVal && Math.abs(Math.round(baseVal * (d.sucPct / 100) * 100) / 100 - d.suc) <= 0.02
+    ? `${d.sucPct}% sobre ${baseTxt} (${brl(baseVal)}) = ${brl(d.suc)}` : `Total: ${brl(d.suc)}`;
   // Se o contratual saiu ABAIXO do % do contrato, foi reduzido (art. 50 da OAB: o escritório não
   // pode ficar com mais que o cliente). Detecta comparando o honorário pago com o cheio do contrato.
   // Decomposição: reembolsos e descontos só aparecem quando existem, então a prestação de um
@@ -44,6 +48,36 @@ function buildHtml(d: PrestacaoDados): string {
   const secNum = `color:#C1272D;font-weight:800;font-size:15px;margin-right:8px`;
   const secTit = `color:#1f2733;font-weight:800;font-size:15px`;
   const secSub = `color:#7b8798;font-style:italic;font-size:12.5px;margin:3px 0 12px`;
+  // As seções passaram a ser numeradas em runtime: "verba por verba" só existe quando o
+  // demonstrativo foi declarado, e sem isso o documento voltava a numerar 01, 02, 03.
+  let sec = 0;
+  const nSec = () => String(++sec).padStart(2, '0');
+  // ── VERBA POR VERBA — o que a seção "Entendendo as verbas" prometia e nunca mostrou.
+  // `prestacaoDados` já devolvia `d.verbas`; nenhum dos dois geradores as imprimia, então o
+  // cliente via um bruto sem saber que dentro dele havia dano moral, repetição em dobro e,
+  // às vezes, um abatimento determinado pelo próprio título (09/09/2026).
+  const verbas = (d.verbas ?? []).filter((x) => Number(x.valor) !== 0);
+  const glosaNat: Record<string, string> = {
+    proveito: '',
+    reembolso_cliente: ' <span style="color:#6b7480">(devolução de custas que você adiantou — não entra na base dos honorários)</span>',
+    reembolso_escritorio: ' <span style="color:#6b7480">(devolução de despesa adiantada pelo escritório)</span>',
+    sucumbencia_nossa: ' <span style="color:#6b7480">(verba do escritório, paga pela parte contrária — art. 85 do CPC)</span>',
+  };
+  const verbasHtml = verbas.length ? `
+      <div data-b style="margin-top:28px">
+        <div><span style="${secNum}">${nSec()}</span><span style="${secTit}">O que a parte contrária pagou, verba por verba</span></div>
+        <div style="${secSub}">A condenação não é um valor só: cada parcela tem origem própria na decisão.</div>
+        <div style="font-size:12.5px;margin-bottom:12px">O total depositado corresponde às verbas fixadas no seu título judicial:</div>
+        <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e3e6eb;border-radius:10px;overflow:hidden">
+          ${verbas.map((x) => {
+            const n = Math.round(Number(x.valor) * 100) / 100;
+            const abate = n < 0;
+            const glosa = abate ? ' <span style="color:#6b7480">(abatimento determinado no título)</span>' : (glosaNat[String(x.natureza)] ?? '');
+            return `<tr><td style="${cell}">${esc(x.label)}${glosa}</td><td style="${val}">(${abate ? '−' : '+'}) ${brl(Math.abs(n))}</td></tr>`;
+          }).join('')}
+          <tr style="background:#eef4fb"><td style="${cell};border-bottom:none;font-weight:800">Total depositado e levantado</td><td style="${val};border-bottom:none;font-weight:800">(=) ${brl(d.bruto)}</td></tr>
+        </table>
+      </div>` : '';
   return `
   <div style="width:794px;background:#fff;font-family:${F};color:#20262f;box-sizing:border-box">
     <div data-b style="background:#1f2126;padding:26px 34px 22px;border-radius:12px">
@@ -59,8 +93,10 @@ function buildHtml(d: PrestacaoDados): string {
         ${ex ? `<div style="color:#2f7d4f;font-size:11.5px;margin-top:6px">Este é um <b>pagamento parcial</b>. O processo continua, e ainda cobramos ${brl(ex.remanescente)} do banco.</div>` : ''}
       </div>
 
+      ${verbasHtml}
+
       <div data-b style="margin-top:28px">
-        <div><span style="${secNum}">01</span><span style="${secTit}">Como chegamos a esse valor</span></div>
+        <div><span style="${secNum}">${nSec()}</span><span style="${secTit}">Como chegamos a esse valor</span></div>
         <div style="${secSub}">Do valor depositado no alvará até o que é efetivamente seu.</div>
         <div style="font-size:12.5px;margin-bottom:12px">A parte contrária depositou <b>${brl(d.bruto)}</b> no alvará judicial. Veja como esse valor se divide:</div>
         <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e3e6eb;border-radius:10px;overflow:hidden">
@@ -78,7 +114,7 @@ function buildHtml(d: PrestacaoDados): string {
       </div>
 
       <div data-b style="margin-top:26px">
-        <div><span style="${secNum}">02</span><span style="${secTit}">Entendendo as verbas</span></div>
+        <div><span style="${secNum}">${nSec()}</span><span style="${secTit}">Entendendo as verbas</span></div>
         <div style="${secSub}">Por que o depósito é maior do que você recebe. São duas partes distintas.</div>
         <div style="display:flex;gap:14px">
           <div style="flex:1;border:1px solid #e3e6eb;border-radius:10px;padding:14px 16px">
@@ -100,7 +136,7 @@ function buildHtml(d: PrestacaoDados): string {
 
       ${ex ? `
       <div data-b style="margin-top:26px">
-        <div><span style="${secNum}">03</span><span style="${secTit}">O que ainda vamos buscar</span></div>
+        <div><span style="${secNum}">${nSec()}</span><span style="${secTit}">O que ainda vamos buscar</span></div>
         <div style="${secSub}">Este pagamento é parcial. A diferença segue em cobrança na Justiça.</div>
         <div style="font-size:12.5px;line-height:1.6;margin-bottom:12px">Executamos no processo um crédito de <b>${brl(ex.totalExecutado)}</b>. O banco depositou <b>${brl(ex.recebido)}</b>, que é o que estamos repassando agora. Falta <b>${brl(ex.remanescente)}</b>, ${pctFalta}% do total, e é isso que continuamos cobrando.</div>
         <div style="display:flex;height:20px;border-radius:5px;overflow:hidden;border:1px solid #e3e6eb">
@@ -119,7 +155,7 @@ function buildHtml(d: PrestacaoDados): string {
       </div>` : ''}
 
       <div data-b style="margin-top:26px">
-        <div><span style="${secNum}">${ex ? '04' : '03'}</span><span style="${secTit}">Considerações finais</span></div>
+        <div><span style="${secNum}">${nSec()}</span><span style="${secTit}">Considerações finais</span></div>
         <div style="font-size:12.5px;line-height:1.6;margin-top:10px">O valor de <b>${brl(d.liquido)}</b> será transferido para a sua conta. Qualquer dúvida sobre esses números ou sobre o andamento do caso, estamos à disposição para explicar com calma.</div>
         <div style="font-size:12.5px;line-height:1.6;margin-top:8px">${ex ? 'Seguimos com o processo até o pagamento integral. Obrigado pela confiança!' : 'Foi um prazer lutar pelos seus direitos. Obrigado pela confiança!'}</div>
         <div style="margin-top:18px;font-size:12px;color:#7b8798">Atenciosamente,</div>
@@ -131,7 +167,7 @@ function buildHtml(d: PrestacaoDados): string {
 }
 
 /** Renderiza o HTML offscreen, vira imagem e monta o PDF (paginado A4) + anexa o alvará. Retorna Blob. */
-export async function gerarPrestacaoPdf(d: PrestacaoDados): Promise<Blob> {
+export async function gerarPrestacaoPdf(d: PrestacaoDados, onAnexoFalhou?: (nomes: string[]) => void): Promise<Blob> {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1;pointer-events:none';
   host.innerHTML = buildHtml(d);
@@ -179,6 +215,10 @@ export async function gerarPrestacaoPdf(d: PrestacaoDados): Promise<Blob> {
   }
 
   // Anexa o alvará/comprovante (PDF → páginas; imagem → página cheia)
+  // Falha de anexo NÃO pode passar em silêncio: o PDF sai com cara de completo e o cliente
+  // recebe a prestação sem o comprovante (09/09/2026 — caso Jorge). Quem chama decide o que
+  // fazer, mas fica sabendo.
+  const falhas: string[] = [];
   for (const a of d.anexos) {
     try {
       const bytes = await (await fetch(anexoHref(a as any))).arrayBuffer();
@@ -193,10 +233,12 @@ export async function gerarPrestacaoPdf(d: PrestacaoDados): Promise<Blob> {
         const s = Math.min(A4W / aimg.width, (A4H - 60) / aimg.height, 1);
         p.drawImage(aimg, { x: (A4W - aimg.width * s) / 2, y: A4H - 30 - aimg.height * s, width: aimg.width * s, height: aimg.height * s });
       }
-    } catch {
-      /* anexo com problema — ignora e segue */
+    } catch (e) {
+      falhas.push(a.name || 'anexo');
+      console.error('[prestacao] anexo não entrou no PDF:', a.name, e);
     }
   }
+  if (falhas.length) onAnexoFalhou?.(falhas);
 
   const out = await pdf.save();
   return new Blob([out as BlobPart], { type: 'application/pdf' });

@@ -737,7 +737,7 @@ function ClienteFinanceiroCard({ nome, cases = [] }: { nome: string; cases?: { i
     try {
       const dados = await financeiroService.prestacaoDados(txId);
       const { gerarPrestacaoPdf } = await import('@/features/financeiro/lib/prestacao-pdf');
-      const blob = await gerarPrestacaoPdf(dados);
+      const blob = await gerarPrestacaoPdf(dados, (nomes) => toast(`Não consegui anexar ao PDF: ${nomes.join(', ')}. A prestação saiu SEM o comprovante.`, { icon: '⚠️', duration: 9000 }));
       window.open(URL.createObjectURL(blob), '_blank');
     } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao gerar a prestação de contas'); }
     finally { setPrestBusy(null); }
