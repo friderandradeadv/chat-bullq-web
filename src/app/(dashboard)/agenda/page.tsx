@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { calendarService, type CalendarEvent, type EventKind } from '@/features/calendar/services/calendar.service';
-import { deadlinesService, type Deadline, type PrazoPreview } from '@/features/deadlines/services/deadlines.service';
+import { deadlinesService, type Deadline } from '@/features/deadlines/services/deadlines.service';
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
@@ -34,6 +34,10 @@ import { preferencesService } from '@/features/inbox/services/preferences.servic
 import { useAuthStore } from '@/stores/auth-store';
 import { usePermissions } from '@/hooks/use-permissions';
 import { inputCls, Field, ASTREA_BLUE, CnjNumber } from '../processos/page';
+import { Modal } from '@/components/ui/modal';
+import { TagSelector, TAG_PALETTE } from '@/features/activities/components/tag-selector';
+import { CaseSearch } from '@/features/legal-cases/components/case-search';
+import { CreateDeadlineDialog } from '@/features/deadlines/components/create-deadline-dialog';
 
 const EV_PENDING = { bg: '#DAF3FF', text: '#1D6BB7' };
 const EV_TIMED = { bg: '#D3F8E5', text: '#1D6BB7' };
@@ -896,7 +900,6 @@ function FilterBtn({ children, onClick, active }: { children: React.ReactNode; o
   );
 }
 
-const TAG_PALETTE = ['#E03131', '#F76707', '#F59F00', '#2F9E44', '#228BE6', '#7048E8', '#868E96', '#CE0000', '#23CBFF', '#02883C'];
 
 // Menu de etiquetas da barra superior: FILTRA a agenda pelas etiquetas escolhidas
 // e permite AJUSTAR A COR de cada etiqueta globalmente (clique no pingo de cor) —
@@ -1068,23 +1071,6 @@ function SidePanel({ activities, mode, onOpen, isUnseenNew }: { activities: Acti
   );
 }
 
-function Modal({ title, children, onClose, wide, headerRight }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean; headerRight?: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className={`relative z-50 w-full ${wide ? 'max-w-xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900`}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
-          <div className="flex items-center gap-1">
-            {headerRight}
-            <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700"><X className="h-5 w-5" /></button>
-          </div>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 // ── Edição COMPLETA da atividade (o lápis "Editar" do card) ──────────────────
 // Antes só dava pra trocar o título. Aqui edita tudo o que a atividade tem, por
@@ -2303,112 +2289,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (<div className="flex gap-2"><dt className="shrink-0 font-medium text-[#6C757D]">{label}{label ? ':' : ''}</dt><dd className="font-normal text-[#202124] dark:text-zinc-200">{children}</dd></div>);
 }
 
-// Seletor de etiquetas jurídicas (multi) — ícone de etiqueta no canto superior direito da modal (estilo Astrea).
-// O pingo de cor de cada etiqueta abre a paleta e AJUSTA A COR globalmente (mesma
-// regra do menu da barra superior): a cor nova reflete em todas as atividades.
-function TagSelector({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
-  const qc = useQueryClient();
-  const availQ = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
-  const [open, setOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState('#E03131');
-  const [paletteFor, setPaletteFor] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const tags = availQ.data ?? [];
-  const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
-  const recolor = async (id: string, color: string) => {
-    setBusy(true);
-    try {
-      await activitiesService.updateTag(id, { color });
-      setPaletteFor(null);
-      await qc.invalidateQueries({ queryKey: ['tags-available'] });
-      await qc.invalidateQueries({ queryKey: ['activity-tags-index'] });
-      await qc.invalidateQueries({ queryKey: ['activity-tags'] });
-      toast.success('Cor da etiqueta atualizada');
-    } catch (e: any) { toast.error(e?.message || 'Erro ao atualizar cor'); } finally { setBusy(false); }
-  };
-  const createNew = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    try { const t = await activitiesService.createTag(name, newColor); setNewName(''); availQ.refetch(); onChange([...selected, t.id]); }
-    catch (e: any) { toast.error(e?.message || 'Erro'); }
-  };
-  return (
-    <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} title="Etiquetas" className="relative rounded p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-[#228BE6] dark:hover:bg-zinc-800">
-        <Tag className="h-5 w-5" />
-        {selected.length > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#228BE6] px-1 text-[9px] font-bold text-white">{selected.length}</span>}
-      </button>
-      {open && (<><div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setPaletteFor(null); }} />
-        <div className="absolute right-0 top-9 z-20 w-64 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Etiquetas</p>
-          <div className="max-h-40 overflow-y-auto">
-            {tags.map((t) => { const on = selected.includes(t.id); return (
-              <div key={t.id}>
-                <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setPaletteFor(paletteFor === t.id ? null : t.id); }} title="Alterar cor" className="h-3 w-3 shrink-0 rounded-full ring-offset-1 transition hover:ring-2 hover:ring-zinc-300 dark:ring-offset-zinc-900" style={{ backgroundColor: t.color }} />
-                  <button type="button" onClick={() => toggle(t.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm">
-                    <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                    {on && <Check className="h-4 w-4 shrink-0 text-[#228BE6]" />}
-                  </button>
-                </div>
-                {paletteFor === t.id && (
-                  <div className="flex flex-wrap gap-1.5 bg-zinc-50 px-3 py-2 dark:bg-zinc-800/50">
-                    {TAG_PALETTE.map((c) => (
-                      <button key={c} type="button" disabled={busy} onClick={() => recolor(t.id, c)} className={`h-5 w-5 rounded-full transition disabled:opacity-40 ${t.color.toLowerCase() === c.toLowerCase() ? 'ring-2 ring-zinc-400 ring-offset-1 dark:ring-offset-zinc-800' : 'hover:scale-110'}`} style={{ backgroundColor: c }} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ); })}
-            {tags.length === 0 && <p className="px-3 py-2 text-xs text-zinc-400">Nenhuma etiqueta jurídica.</p>}
-          </div>
-          <div className="mt-1 border-t border-[#DEE2E6] px-3 py-2 dark:border-zinc-700">
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Nova etiqueta</p>
-            <div className="mb-2 flex flex-wrap gap-1.5">{TAG_PALETTE.map((c) => (<button key={c} type="button" onClick={() => setNewColor(c)} className={`h-4 w-4 rounded-full ${newColor === c ? 'ring-2 ring-zinc-400 ring-offset-1 dark:ring-offset-zinc-900' : ''}`} style={{ backgroundColor: c }} />))}</div>
-            <div className="flex items-center gap-1.5"><input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createNew(); } }} placeholder="Nome da etiqueta" className="min-w-0 flex-1 rounded border border-[#DEE2E6] px-2 py-1 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" /><button type="button" disabled={!newName.trim()} onClick={createNew} className="shrink-0 rounded px-2 py-1 text-xs font-bold uppercase text-white disabled:opacity-40" style={{ backgroundColor: ASTREA_BLUE }}>Criar</button></div>
-          </div>
-        </div></>)}
-    </div>
-  );
-}
 
-// Busca de processo (combobox): digita número CNJ ou nome e escolhe — substitui o <select> gigante.
-function CaseSearch({ value, onChange, cases }: { value: string; onChange: (id: string) => void; cases: { id: string; title: string; cnjNumber: string | null }[] }) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-  const selected = cases.find((c) => c.id === value);
-  const q = query.trim().toLowerCase();
-  const digits = q.replace(/\D/g, '');
-  const results = (q
-    ? cases.filter((c) => c.title.toLowerCase().includes(q) || (digits.length >= 2 && (c.cnjNumber ?? '').replace(/\D/g, '').includes(digits)))
-    : cases
-  ).slice(0, 8);
-  if (selected) {
-    return (
-      <div className="flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-        <span className="min-w-0 flex-1 truncate text-zinc-800 dark:text-zinc-200">{selected.title}{selected.cnjNumber && <span className="ml-2 font-mono text-xs text-zinc-400">{selected.cnjNumber}</span>}</span>
-        <button type="button" onClick={() => { onChange(''); setQuery(''); }} title="Trocar processo" className="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"><X className="h-4 w-4" /></button>
-      </div>
-    );
-  }
-  return (
-    <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-      <input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Encontre pelo número ou nome…" className={`${inputCls} pl-9`} />
-      {open && (<><div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-        <div className="absolute left-0 right-0 top-11 z-20 max-h-60 overflow-y-auto rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-          {results.map((c) => (
-            <button key={c.id} type="button" onClick={() => { onChange(c.id); setOpen(false); setQuery(''); }} className="block w-full px-3 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800">
-              <span className="block truncate text-sm text-zinc-800 dark:text-zinc-200">{c.title}</span>
-              {c.cnjNumber && <span className="block font-mono text-xs text-zinc-400">{c.cnjNumber}</span>}
-            </button>
-          ))}
-          {results.length === 0 && <p className="px-3 py-2 text-sm text-zinc-400">Nenhum processo encontrado.</p>}
-        </div></>)}
-    </div>
-  );
-}
 
 // Antecedência (minutos) → rótulo legível. 0 = na hora; múltiplos de dia/hora
 // viram "X dia(s)/hora(s) antes"; senão "X min antes".
@@ -2632,131 +2513,3 @@ function CreateTaskDialog({ date, onClose, onSaved }: { date?: Date; onClose: ()
   );
 }
 
-// ── Novo PRAZO pela agenda ────────────────────────────────────────────────────
-// Dois modos, exatamente os que o backend aceita (CreateDeadlineDto):
-//  • CALCULAR — dias + base (disponibilização / publicação / início da contagem):
-//    o servidor conta em dias ÚTEIS (CPC 219/224/220), com dobro (CPC 183/186/229)
-//    e corridos quando for o caso, e devolve a data FATAL e o prazo de segurança.
-//  • INFORMAR AS DATAS — quando a fatal já é conhecida (veio do Projudi/cálculo).
-// A agenda mostra o prazo no dia do PRAZO DE SEGURANÇA; a fatal é a data legal e
-// fica na ficha. Prazo SEM processo não existe (a relação é obrigatória).
-function CreateDeadlineDialog({ date, onClose, onSaved }: { date?: Date; onClose: () => void; onSaved: () => void }) {
-  // Responsável, via de regra, é QUEM ESTÁ CRIANDO — vem preenchido e pode trocar.
-  const meId = useAuthStore((s) => s.user?.id) ?? '';
-  const [title, setTitle] = useState('');
-  const [caseId, setCaseId] = useState('');
-  const [assignedToId, setAssignedToId] = useState(meId);
-  const [type, setType] = useState<'FATAL' | 'ORDINARY' | 'INTERNAL'>('ORDINARY');
-  // Clicou num dia do calendário → já sabe a data: abre em "informar as datas".
-  const [modo, setModo] = useState<'calc' | 'datas'>(date ? 'datas' : 'calc');
-  // modo calcular
-  const [dias, setDias] = useState(15);
-  const [base, setBase] = useState<'disponibilizacao' | 'publicacao' | 'inicio'>('disponibilizacao');
-  const [baseDia, setBaseDia] = useState(toDateInput(new Date()));
-  const [dobro, setDobro] = useState(false);
-  const [corridos, setCorridos] = useState(false);
-  const [preview, setPreview] = useState<PrazoPreview | null>(null);
-  // modo datas
-  const [fatalDia, setFatalDia] = useState(date ? toDateInput(date) : '');
-  const [safeDia, setSafeDia] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [tagIds, setTagIds] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
-  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
-
-  // Dia (YYYY-MM-DD) → ISO às 09:00 LOCAL (hora canônica dos itens "dia todo";
-  // meia-noite local virava 03:00Z e jogava o prazo pro dia anterior).
-  const dayToIso = (v: string) => new Date(`${v}T09:00:00`).toISOString();
-  // Base da contagem escolhida no select → o campo que o backend espera.
-  const basePayload = () => (base === 'publicacao' ? { publicacao: baseDia } : base === 'inicio' ? { inicio: baseDia } : { disponibilizacao: baseDia });
-  const fmtDia = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-
-  // Prévia do cálculo enquanto digita — mostra a fatal ANTES de salvar.
-  useEffect(() => {
-    if (modo !== 'calc' || !dias || !baseDia) { setPreview(null); return; }
-    let vivo = true;
-    const t = setTimeout(() => {
-      deadlinesService.preview({ dias, ...basePayload(), dobro, corridos })
-        .then((p) => { if (vivo) setPreview(p); })
-        .catch(() => { if (vivo) setPreview(null); });
-    }, 350);
-    return () => { vivo = false; clearTimeout(t); };
-  }, [modo, dias, base, baseDia, dobro, corridos]);
-
-  const submit = async () => {
-    if (!title.trim()) return toast.error('Informe o título');
-    if (!caseId) return toast.error('Prazo precisa de um processo vinculado');
-    if (modo === 'datas' && !fatalDia) return toast.error('Informe o prazo fatal');
-    if (modo === 'calc' && (!dias || !baseDia)) return toast.error('Informe os dias e a data da intimação');
-    setSaving(true);
-    try {
-      const dl = await deadlinesService.create({
-        caseId,
-        title: title.trim(),
-        type,
-        assignedToId: assignedToId || undefined,
-        ...(modo === 'calc'
-          ? { dias, ...basePayload(), dobro, corridos }
-          : { dueDate: dayToIso(fatalDia), safeDate: dayToIso(safeDia || fatalDia) }),
-        // A descrição do prazo não tem coluna própria: mora em metadata.djen.descricao
-        // (mesmo lugar que a agenda e a ficha já leem/editam).
-        ...(descricao.trim() ? { metadata: { djen: { descricao: descricao.trim() } } } : {}),
-      });
-      if (tagIds.length) await Promise.all(tagIds.map((id) => activitiesService.attachTag(ENTITY_TYPE.prazo, dl.id, id).catch(() => {})));
-      toast.success('Prazo criado'); onSaved();
-    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao criar o prazo'); } finally { setSaving(false); }
-  };
-
-  return (
-    <Modal title="Adicionar prazo" onClose={onClose} wide headerRight={<TagSelector selected={tagIds} onChange={setTagIds} />}>
-      <div className="space-y-4">
-        <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="Ex.: Apresentar contestação" autoFocus /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={<>Processo <span className="text-rose-500">*</span></>}><CaseSearch value={caseId} onChange={setCaseId} cases={cases.map((c) => ({ id: c.id, title: c.title, cnjNumber: c.cnjNumber ?? null }))} /></Field>
-          <Field label="Responsável"><select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} className={inputCls}><option value="">Ninguém</option>{members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}{m.user.id === meId ? ' (eu)' : ''}</option>)}</select></Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Tipo"><select value={type} onChange={(e) => setType(e.target.value as 'FATAL' | 'ORDINARY' | 'INTERNAL')} className={inputCls}><option value="ORDINARY">Comum</option><option value="FATAL">Fatal</option><option value="INTERNAL">Interno</option></select></Field>
-          <Field label="Como definir a data">
-            <div className="flex h-[38px] items-center gap-1 rounded-md border border-zinc-300 p-1 dark:border-zinc-700">
-              {([['calc', 'Calcular'], ['datas', 'Informar datas']] as const).map(([v, l]) => (
-                <button key={v} type="button" onClick={() => setModo(v)} className={`h-full flex-1 rounded text-xs font-semibold transition-colors ${modo === v ? 'bg-[#CE0000] text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>{l}</button>
-              ))}
-            </div>
-          </Field>
-        </div>
-
-        {modo === 'calc' ? (
-          <>
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Prazo (dias)"><input type="number" min={1} max={365} value={dias} onChange={(e) => setDias(Number(e.target.value))} className={inputCls} /></Field>
-              <Field label="Contar a partir de"><select value={base} onChange={(e) => setBase(e.target.value as 'disponibilizacao' | 'publicacao' | 'inicio')} className={inputCls}><option value="disponibilizacao">Disponibilização</option><option value="publicacao">Publicação</option><option value="inicio">Início da contagem</option></select></Field>
-              <Field label="Data"><input type="date" value={baseDia} onChange={(e) => setBaseDia(e.target.value)} className={inputCls} /></Field>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"><input type="checkbox" checked={dobro} onChange={(e) => setDobro(e.target.checked)} className="accent-[#CE0000]" />Prazo em dobro (CPC 183/186/229)</label>
-              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"><input type="checkbox" checked={corridos} onChange={(e) => setCorridos(e.target.checked)} className="accent-[#CE0000]" />Dias corridos</label>
-            </div>
-            {preview && (
-              <div className="rounded-md border border-[#CE0000]/20 bg-[#CE0000]/5 p-3 text-sm">
-                <p className="font-semibold text-[#CE0000]">Data fatal: {fmtDia(preview.dataFatal)}</p>
-                <p className="text-zinc-600 dark:text-zinc-300">Prazo de segurança: {fmtDia(preview.prazoSeguranca)} — é neste dia que ele aparece na agenda.</p>
-                <p className="mt-1 text-xs text-zinc-500">{preview.modo}{preview.dobro ? ' · em dobro' : ''}</p>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={<>Prazo fatal <span className="text-rose-500">*</span></>}><input type="date" value={fatalDia} onChange={(e) => setFatalDia(e.target.value)} className={inputCls} /></Field>
-            <Field label="Prazo de segurança"><input type="date" value={safeDia} onChange={(e) => setSafeDia(e.target.value)} className={inputCls} /></Field>
-            <p className="col-span-2 -mt-1 text-xs text-zinc-400">Sem prazo de segurança, ele fica igual à data fatal. A agenda mostra o prazo no dia da segurança.</p>
-          </div>
-        )}
-
-        <Field label="Descrição"><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={3} className={`${inputCls} resize-y`} /></Field>
-      </div>
-      <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#CE0000] hover:bg-[#CE0000]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button></div>
-    </Modal>
-  );
-}

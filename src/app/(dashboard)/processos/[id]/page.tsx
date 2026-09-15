@@ -56,6 +56,7 @@ import {
   JULGAMENTO_LABEL,
   PARTE_RECORRENTE_LABEL,
 } from '@/features/recursos/services/recursos.service';
+import { CreateDeadlineDialog } from '@/features/deadlines/components/create-deadline-dialog';
 import { inputCls, Field, ASTREA_BLUE, LegalTagChip, CnjNumber } from '../page';
 
 const ROLE_LABEL: Record<PartyRole, string> = {
@@ -311,7 +312,7 @@ export default function ProcessoDetailPage() {
       {/* Conteúdo das abas */}
       <div className="flex-1 px-4 py-5 lg:px-6">
         {tab === 'resumo' && <ResumoTab c={c} />}
-        {tab === 'atividades' && <AtividadesTab caseId={id} events={c.events} onChange={refetch} />}
+        {tab === 'atividades' && <AtividadesTab caseId={id} caseTitle={c.title} cnjNumber={c.cnjNumber} events={c.events} onChange={refetch} />}
         {tab === 'recursos' && <RecursosTab caseId={id} />}
         {tab === 'historico' && (
           <HistoricoTab caseId={id} movements={c.movements} events={c.events} onAdd={() => setAddingHistory(true)} />
@@ -1058,10 +1059,14 @@ function ApensosCard({ c }: { c: CaseDetail }) {
 
 function AtividadesTab({
   caseId,
+  caseTitle,
+  cnjNumber,
   events,
   onChange,
 }: {
   caseId: string;
+  caseTitle: string;
+  cnjNumber: string | null;
   events: CaseDetail['events'];
   onChange: () => void;
 }) {
@@ -1103,7 +1108,7 @@ function AtividadesTab({
         icon={Clock}
         action={
           <button
-            onClick={() => setAdding((v) => !v)}
+            onClick={() => setAdding(true)}
             className="inline-flex items-center gap-1 text-xs font-medium"
             style={{ color: ASTREA_BLUE }}
           >
@@ -1128,7 +1133,11 @@ function AtividadesTab({
         </div>
 
         {adding && (
-          <AddDeadlineInline caseId={caseId} onClose={() => setAdding(false)} onCreated={refresh} />
+          <CreateDeadlineDialog
+            fixedCase={{ id: caseId, title: caseTitle, cnjNumber }}
+            onClose={() => setAdding(false)}
+            onSaved={() => { setAdding(false); refresh(); }}
+          />
         )}
 
         {isLoading ? (
@@ -1343,90 +1352,6 @@ function TaskRow({ t, onChange }: { t: Task; onChange: () => void }) {
         </div>
       </div>
     </li>
-  );
-}
-
-// Criação rápida de prazo (modo calculado, igual ao /prazos).
-function AddDeadlineInline({
-  caseId,
-  onClose,
-  onCreated,
-}: {
-  caseId: string;
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const [title, setTitle] = useState('');
-  const [type, setType] = useState<'ORDINARY' | 'FATAL' | 'INTERNAL'>('ORDINARY');
-  const [dias, setDias] = useState(15);
-  const [disponibilizacao, setDisp] = useState(new Date().toISOString().slice(0, 10));
-  const [dobro, setDobro] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    if (!title.trim()) return toast.error('Informe o título');
-    setSaving(true);
-    try {
-      await deadlinesService.create({ caseId, title: title.trim(), type, dias, disponibilizacao, dobro });
-      toast.success('Prazo criado');
-      setTitle('');
-      onClose();
-      onCreated();
-    } catch (e: any) {
-      toast.error(e?.message || 'Erro ao criar');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="mb-4 space-y-3 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/40">
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Ex.: Contestação"
-        className={inputCls}
-      />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <select value={type} onChange={(e) => setType(e.target.value as any)} className={inputCls}>
-          <option value="ORDINARY">Comum</option>
-          <option value="FATAL">Fatal</option>
-          <option value="INTERNAL">Interno</option>
-        </select>
-        <input
-          type="number"
-          min={1}
-          value={dias}
-          onChange={(e) => setDias(Number(e.target.value))}
-          className={inputCls}
-          title="Dias úteis"
-        />
-        <input
-          type="date"
-          value={disponibilizacao}
-          onChange={(e) => setDisp(e.target.value)}
-          className={inputCls}
-          title="Disponibilização"
-        />
-      </div>
-      <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-        <input type="checkbox" checked={dobro} onChange={(e) => setDobro(e.target.checked)} />
-        Prazo em dobro (CPC 183/186/229)
-      </label>
-      <div className="flex justify-end gap-2">
-        <button onClick={onClose} className="text-xs text-zinc-500">
-          Cancelar
-        </button>
-        <button
-          onClick={submit}
-          disabled={saving}
-          className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-60"
-          style={{ backgroundColor: ASTREA_BLUE }}
-        >
-          {saving ? 'Salvando…' : 'Adicionar'}
-        </button>
-      </div>
-    </div>
   );
 }
 
