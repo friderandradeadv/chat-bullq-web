@@ -3,8 +3,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { FileSearch,
-  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, FileText, AlertTriangle, Loader2, ShieldCheck,
+  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, FileText, AlertTriangle, Loader2, ShieldCheck, Gavel,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -216,9 +217,22 @@ export function CaseDetailDrawer({
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ fontFamily: INTER }}>
       <div className="absolute inset-0 bg-black/10" onClick={onClose} />
       <div className="relative flex h-[90vh] max-h-[90vh] w-[944px] max-w-[96vw] flex-col overflow-y-auto rounded-xl bg-white shadow-2xl lg:h-[608px] lg:flex-row lg:overflow-hidden dark:bg-zinc-950">
-        <button onClick={onClose} className="absolute right-4 top-4 z-10 rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
-          <X className="h-5 w-5" />
-        </button>
+        {/* Do card do kanban para a FICHA do processo (aba Processos): abas de
+            atividades, prazos, recursos e histórico, que não cabem aqui. */}
+        <div className="absolute right-4 top-4 z-10 flex items-center gap-1">
+          {c && (
+            <Link
+              href={`/processos/${c.id}`}
+              title="Abrir este processo na aba Processos"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-[#228BE6] hover:bg-[#228BE6]/10"
+            >
+              <Gavel className="h-3.5 w-3.5" /> Abrir processo
+            </Link>
+          )}
+          <button onClick={onClose} className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
         {/* ── PAINEL ESQUERDO ── */}
         <div className="flex min-w-0 flex-1 flex-col border-b border-[#cfe0ed] lg:border-b-0 lg:border-r dark:border-zinc-800">
@@ -226,7 +240,7 @@ export function CaseDetailDrawer({
             {c ? (
               <EditableName caseId={c.id} cliente={cliente} title={c.title} onSaved={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
             ) : (
-              <h2 className="truncate pr-12 text-[20px] font-bold uppercase leading-6 text-black dark:text-zinc-100">…</h2>
+              <h2 className="truncate pr-44 text-[20px] font-bold uppercase leading-6 text-black dark:text-zinc-100">…</h2>
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-[#cfe0ed] pb-3 dark:border-zinc-800">
               {c?.responsible && (c.responsible.avatarUrl
@@ -830,13 +844,13 @@ function EditableName({ caseId, cliente, title, onSaved }: { caseId: string; cli
         onChange={(e) => setText(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void save(); } else if (e.key === 'Escape') { setEditing(false); setText(shown); } }}
-        className="w-full rounded border border-[#4a90e2] bg-white px-1 py-0.5 pr-12 text-[20px] font-bold uppercase leading-6 text-black outline-none dark:bg-zinc-900 dark:text-zinc-100"
+        className="w-full rounded border border-[#4a90e2] bg-white px-1 py-0.5 pr-44 text-[20px] font-bold uppercase leading-6 text-black outline-none dark:bg-zinc-900 dark:text-zinc-100"
       />
     );
   }
   return (
     <h2 onClick={() => setEditing(true)} title="Clique pra renomear"
-      className="cursor-text truncate pr-12 text-[20px] font-bold uppercase leading-6 text-black hover:underline dark:text-zinc-100">
+      className="cursor-text truncate pr-44 text-[20px] font-bold uppercase leading-6 text-black hover:underline dark:text-zinc-100">
       {shown.toUpperCase()}
     </h2>
   );
