@@ -67,8 +67,25 @@ while read -r arq seg; do
     -vf "zoompan=z='min(zoom+0.00025,1.03)':d=\$quadros:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=30,format=yuv420p" \
     -c:v libx264 -preset veryfast -crf 21 -r 30 -threads 2 "\$out"
   echo "file '\$out'" >> trechos.txt
+  ultimo="\$arq"
   i=\$((i+1))
 done < cenas.tsv
+
+# 🚨 A SOMA DAS CENAS PODE SER MENOR QUE O AUDIO.
+# A duracao do roteiro e escrita a mao a partir do .vtt, e o .vtt termina na
+# ultima fala — o mp4 do Gemini costuma ter 3 a 4 segundos de sobra depois
+# disso. Com o concat antigo isso nao aparecia (o ultimo quadro repetido
+# preenchia); com uma cena por vez, o video simplesmente acabava antes e a
+# narracao seguia sobre nada. Aqui a ultima imagem se estende ate cobrir.
+SOMA=\$(awk '{s+=\$2} END{printf "%.3f", s}' cenas.tsv)
+FALTA=\$(awk "BEGIN{d=\$DUR-\$SOMA; if(d<0)d=0; printf \"%.3f\", d+1.0}")
+if awk "BEGIN{exit !(\$FALTA > 0.2)}"; then
+  echo "   estendendo a ultima cena em \${FALTA}s para cobrir o audio"
+  ffmpeg -nostdin -y -loglevel error -loop 1 -i "\$ultimo" -t "\$FALTA" \
+    -vf "scale=1920:1080,format=yuv420p" \
+    -c:v libx264 -preset veryfast -crf 21 -r 30 -threads 2 cena_fim.mp4
+  echo "file 'cena_fim.mp4'" >> trechos.txt
+fi
 
 # emenda os trechos e casa com o audio original, cortando pela duracao dele
 ffmpeg -nostdin -y -loglevel error \
