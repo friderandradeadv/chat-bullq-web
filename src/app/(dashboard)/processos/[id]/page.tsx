@@ -143,6 +143,9 @@ export default function ProcessoDetailPage() {
   const [tab, setTab] = useState<Tab>('resumo');
   const [editing, setEditing] = useState(false);
   const [addingHistory, setAddingHistory] = useState(false);
+  // "Atividade / prazo" no + do cabeçalho: leva para a aba e JÁ abre o diálogo
+  // de prazo (antes só trocava de aba e o prazo ficava a mais um clique).
+  const [addingDeadline, setAddingDeadline] = useState(false);
 
   const { data: c, isLoading } = useQuery({
     queryKey: ['legal-case', id],
@@ -228,7 +231,7 @@ export default function ProcessoDetailPage() {
             />
             <AddMenu
               onAddHistory={() => setAddingHistory(true)}
-              onAddActivity={() => setTab('atividades')}
+              onAddActivity={() => { setTab('atividades'); setAddingDeadline(true); }}
             />
           </div>
         </div>
@@ -312,7 +315,17 @@ export default function ProcessoDetailPage() {
       {/* Conteúdo das abas */}
       <div className="flex-1 px-4 py-5 lg:px-6">
         {tab === 'resumo' && <ResumoTab c={c} />}
-        {tab === 'atividades' && <AtividadesTab caseId={id} caseTitle={c.title} cnjNumber={c.cnjNumber} events={c.events} onChange={refetch} />}
+        {tab === 'atividades' && (
+          <AtividadesTab
+            caseId={id}
+            caseTitle={c.title}
+            cnjNumber={c.cnjNumber}
+            events={c.events}
+            adding={addingDeadline}
+            setAdding={setAddingDeadline}
+            onChange={refetch}
+          />
+        )}
         {tab === 'recursos' && <RecursosTab caseId={id} />}
         {tab === 'historico' && (
           <HistoricoTab caseId={id} movements={c.movements} events={c.events} onAdd={() => setAddingHistory(true)} />
@@ -1062,17 +1075,20 @@ function AtividadesTab({
   caseTitle,
   cnjNumber,
   events,
+  adding,
+  setAdding,
   onChange,
 }: {
   caseId: string;
   caseTitle: string;
   cnjNumber: string | null;
   events: CaseDetail['events'];
+  adding: boolean;
+  setAdding: (v: boolean) => void;
   onChange: () => void;
 }) {
   const qc = useQueryClient();
   const [showDone, setShowDone] = useState(false);
-  const [adding, setAdding] = useState(false);
 
   const { data: deadlines = [], isLoading } = useQuery({
     queryKey: ['case-deadlines', caseId],
