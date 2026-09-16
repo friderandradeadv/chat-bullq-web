@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stamp, Upload, FileText, ArrowUp, ArrowDown, X, Loader2, Monitor } from 'lucide-react';
+import { Stamp, Upload, FileText, ArrowUp, ArrowDown, X, Loader2, Monitor, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   driveBrowserService,
@@ -99,6 +99,44 @@ const suportaMesa = () =>
 const porNome = (a: { nome: string }, b: { nome: string }) =>
   a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true });
 
+/**
+ * O que a tela DIZ quando a leitura do Drive falha.
+ *
+ * Em 15/09/2026 o campo Fase mostrou `timeout of 120000ms exceeded`, o texto
+ * cru do axios, e foi lido como "o hub não acha o processo no Drive". Não era:
+ * a rota vinha respondendo em 2 a 5 segundos, e naquele minuto a VPS estava sem
+ * memória (um `next build` do Coolify tomou 1,9 GB dos 3,9 GB da máquina, o
+ * swap encheu, o load foi a 78 e a API do hub foi morta e reiniciada). A
+ * requisição morreu junto com o processo que a atendia.
+ *
+ * Erro de ESPERA tem de dizer que é espera. Mensagem de biblioteca no lugar do
+ * select manda procurar o defeito no Drive, que é onde ele não está.
+ */
+function recadoDoErro(e: unknown): { titulo: string; dica: string } {
+  const err = e as { code?: string; message?: string; response?: { status?: number; data?: { message?: string } } };
+  const msg = err?.response?.data?.message || err?.message || '';
+  const status = err?.response?.status;
+  // Sem `status` não houve resposta: ou o tempo acabou, ou a API não estava lá.
+  if (err?.code === 'ECONNABORTED' || /timeout/i.test(msg))
+    return {
+      titulo: 'O Drive demorou demais para responder.',
+      dica: 'Isso é espera, não erro: nada foi arquivado e nada se perdeu. Tente de novo em alguns segundos.',
+    };
+  if (!status)
+    return {
+      titulo: 'Não consegui falar com o servidor.',
+      dica: 'Pode ser a conexão ou a API reiniciando. Nada foi arquivado; tente de novo.',
+    };
+  if (status >= 500)
+    return {
+      titulo: 'O servidor falhou ao ler o Drive.',
+      dica: 'Tente de novo. Se repetir, é problema do Drive ou da API, não da sua pasta.',
+    };
+  // 4xx é recado do próprio hub (sem processo, sem cliente, pasta sumida) e já
+  // vem escrito para o advogado: mostra como está.
+  return { titulo: msg || 'Não consegui ler as fases no Drive.', dica: '' };
+}
+
 /** Data de hoje no formato do escritório. */
 export function hojeDDMMAAAA() {
   const d = new Date();
@@ -192,6 +230,10 @@ export function ArquivarPecaModal({
     // fez uma pasta criada às 01:16 não aparecer às 01:17.
     staleTime: 0,
     gcTime: 0,
+    // O `retry: 1` global vale para chamada barata. Aqui o timeout é de 120s,
+    // então uma tentativa a mais é o advogado olhando a tela por QUATRO MINUTOS
+    // antes de ver qualquer recado. Quem decide repetir é ele, no botão.
+    retry: false,
   });
 
   /**
@@ -294,12 +336,15 @@ export function ArquivarPecaModal({
     enabled: !!partyId && !atividade,
     staleTime: 0,
     gcTime: 0,
+    retry: false, // ver a nota em `ctx`
   });
 
   const alvoPartyId = atividade ? ctx.data?.partyId : partyId;
   const fases: FaseNoDrive[] = (atividade ? ctx.data?.fases : fasesQ.data) ?? [];
   const carregando = atividade ? ctx.isLoading : fasesQ.isLoading;
   const erro = (atividade ? ctx.error : fasesQ.error) as any;
+  /** Refaz só a leitura do Drive, preservando a lista de arquivos já montada. */
+  const recarregarFases = () => (atividade ? ctx.refetch() : fasesQ.refetch());
 
   // A sugestão preenche o select, mas não decide: só vale enquanto o advogado
   // não mexeu, e só quando UMA fase casa com o ato (cliente com RMC e RCC tem
@@ -827,9 +872,27 @@ export function ArquivarPecaModal({
             {carregando ? (
               <p className="text-sm text-zinc-400">Lendo as fases no Drive…</p>
             ) : erro ? (
-              <p className="text-sm text-rose-500">
-                {erro?.response?.data?.message || (erro as Error)?.message}
-              </p>
+              (() => {
+                const { titulo, dica } = recadoDoErro(erro);
+                return (
+                  <div className="rounded-md border border-rose-200 bg-rose-50/60 px-3 py-2 dark:border-rose-900/50 dark:bg-rose-950/30">
+                    <p className="text-sm text-rose-600 dark:text-rose-400">{titulo}</p>
+                    {dica && (
+                      <p className="mt-0.5 text-[11px] text-rose-500/80 dark:text-rose-400/70">{dica}</p>
+                    )}
+                    {/* Fechar e reabrir o modal perdia a lista de arquivos já
+                        montada e a ordem do protocolo. Aqui refaz só a leitura
+                        que falhou. */}
+                    <button
+                      type="button"
+                      onClick={() => void recarregarFases()}
+                      className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 underline underline-offset-2 hover:text-rose-800 dark:text-rose-300 dark:hover:text-rose-200"
+                    >
+                      <RotateCw className="h-3 w-3" /> Tentar de novo
+                    </button>
+                  </div>
+                );
+              })()
             ) : !fases.length ? (
               <p className="text-sm text-amber-600 dark:text-amber-400">
                 Este cliente não tem pasta de fase no Drive. Crie a fase (ou rode a padronização)
