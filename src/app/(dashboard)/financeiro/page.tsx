@@ -441,23 +441,30 @@ const ehLiquidado = (s: TxStatus) => s === 'recebido' || s === 'pago';
  * Contas a pagar que JÁ VENCERAM (atrasadas) ou vencem HOJE — fonte única dos
  * marcadores internos do Financeiro (bolinha da aba "Lançamentos", da subaba
  * "Contas a pagar" e do resumo do topo da lista).
- * Mesma regra do endpoint /financeiro/vencimentos-hoje, que alimenta a bolinha da
- * barra de baixo: saída com status 'a_pagar', e gasto de CARTÃO fora (quita na
- * fatura). Vencimento cai em `t.data` quando o lançamento não tem vencimento —
- * é a mesma data que a subaba usa para ordenar e pintar a linha.
+ * Conta as MESMAS DUAS linhas que a subaba "Contas a pagar" lista, e nenhuma
+ * outra: a saída avulsa com status 'a_pagar' (boleto, DARF, repasse) e a FATURA
+ * de cartão em aberto (uma por ciclo, vencendo no dia do cartão). A COMPRA solta
+ * do cartão continua fora — quem vence é a fatura, não a compra.
+ * Vencimento cai em `t.data` quando o lançamento não tem vencimento — é a mesma
+ * data que a subaba usa para ordenar e pintar a linha.
+ * A fatura ficava de fora inteira, e a tela mostrava a fatura vencida em vermelho
+ * enquanto as bolinhas diziam que não havia nada a pagar.
  */
 function contasEmAberto(data: FinDashboard) {
   const hojeISO = toISOInput(hojeBR());
   const cardIds = new Set((data.contas ?? []).filter((c) => c.cartao).map((c) => c.id));
   let atrasadas = 0, hoje = 0, totalAtrasadas = 0, totalHoje = 0;
+  const conta = (vencISO: string, valor: number) => {
+    if (!vencISO || vencISO > hojeISO) return;
+    if (vencISO < hojeISO) { atrasadas++; totalAtrasadas += Math.abs(valor); }
+    else { hoje++; totalHoje += Math.abs(valor); }
+  };
   for (const t of data.transacoes ?? []) {
     if (txStatus(t) !== 'a_pagar' || !(t.valor < 0)) continue;
-    if (t.conta && cardIds.has(t.conta)) continue;
-    const vencISO = toISOInput(t.vencimento || t.data);
-    if (!vencISO || vencISO > hojeISO) continue;
-    if (vencISO < hojeISO) { atrasadas++; totalAtrasadas += Math.abs(t.valor); }
-    else { hoje++; totalHoje += Math.abs(t.valor); }
+    if (t.conta && cardIds.has(t.conta)) continue; // compra de cartão: quem vence é a fatura
+    conta(toISOInput(t.vencimento || t.data), t.valor);
   }
+  for (const f of cardBillsDe(data)) conta(toISOInput(f.vencimento || ''), f.valor);
   return { atrasadas, hoje, count: atrasadas + hoje, totalAtrasadas, totalHoje };
 }
 
@@ -477,6 +484,38 @@ function faturaCiclo(dataBR: string, fechamento: number, vencDia: number): { key
   let vm = mes + 1, va = ano; if (vm > 12) { vm = 1; va += 1; }
   const venc = vencDia > 0 ? `${String(vencDia).padStart(2, '0')}/${String(vm).padStart(2, '0')}/${va}` : '';
   return { key, venc };
+}
+
+/**
+ * Faturas de cartão AINDA EM ABERTO — uma linha sintética por CICLO, com o saldo
+ * ao vivo dos gastos que ninguém pagou e o vencimento do cartão (id
+ * `__card:<cartao>:<ciclo>`; não é lançamento de verdade). Atualiza sozinha
+ * conforme novos gastos entram.
+ * Fonte única: alimenta tanto a subaba "Contas a pagar" quanto `contasEmAberto`,
+ * que conta as bolinhas. Enquanto eram duas listas, a subaba mostrava a fatura
+ * vencida e as bolinhas a ignoravam.
+ * Cartão SEM dia de vencimento cadastrado fica de fora: sem esse dia a fatura não
+ * tem data pra vencer, e a linha nasceria com a data de hoje — bolinha acesa todo
+ * dia sem nada ter vencido.
+ */
+function cardBillsDe(data: FinDashboard): FinTransacao[] {
+  const out: FinTransacao[] = [];
+  for (const card of (data.contas ?? []).filter((c) => c.cartao)) {
+    const fech = card.fechamento ?? 0; const vd = card.vencimento ?? 0;
+    const gastos = (data.transacoes ?? []).filter((t) => t.conta === card.id && txStatus(t) === 'a_pagar' && (t.valor < 0 || (t.valor > 0 && t.fonteImport === 'extrato')));
+    const byCycle = new Map<string, { venc: string; total: number }>();
+    for (const t of gastos) {
+      const ci = faturaCiclo(t.data, fech, vd);
+      const cur = byCycle.get(ci.key) ?? { venc: ci.venc, total: 0 };
+      cur.total += -t.valor; // despesa soma; estorno (positivo) abate
+      byCycle.set(ci.key, cur);
+    }
+    for (const [key, c] of byCycle) {
+      if (c.total <= 0.005) continue;
+      out.push({ id: `__card:${card.id}:${key}`, data: c.venc || hojeBR(), vencimento: c.venc || undefined, mes: key, tipo: 'despesa', categoria: `Fatura ${card.nome}`, valor: -(Math.round(c.total * 100) / 100), party: card.nome, recebedor: card.nome, pagador: null, status: 'a_pagar', conta: card.id } as FinTransacao);
+    }
+  }
+  return out;
 }
 
 /**
@@ -887,28 +926,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // extrato do cartão (fonteImport) OU ainda está em aberto (a_pagar). Uma despesa
   // LANÇADA À MÃO numa conta-cartão (ex.: repasse) NÃO é fatura — fica no livro-razão.
   const isFaturaCartao = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta) && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar');
-  // Saldo do cartão como conta a pagar (ao vivo): agrega os gastos em ABERTO de cada cartão por
-  // CICLO de fatura → 1 linha sintética por fatura em aberto, com vencimento dia `venc` (ex.: 03).
-  // Atualiza sozinho conforme novos gastos entram. id `__card:<cartao>:<ciclo>` (não é tx real).
-  const cardBills = useMemo(() => {
-    const out: FinTransacao[] = [];
-    for (const card of contas.filter((c) => c.cartao)) {
-      const fech = card.fechamento ?? 0; const vd = card.vencimento ?? 0;
-      const gastos = data.transacoes.filter((t) => t.conta === card.id && txStatus(t) === 'a_pagar' && (t.valor < 0 || (t.valor > 0 && t.fonteImport === 'extrato')));
-      const byCycle = new Map<string, { venc: string; total: number }>();
-      for (const t of gastos) {
-        const ci = faturaCiclo(t.data, fech, vd);
-        const cur = byCycle.get(ci.key) ?? { venc: ci.venc, total: 0 };
-        cur.total += -t.valor; // despesa soma; estorno (positivo) abate
-        byCycle.set(ci.key, cur);
-      }
-      for (const [key, c] of byCycle) {
-        if (c.total <= 0.005) continue;
-        out.push({ id: `__card:${card.id}:${key}`, data: c.venc || hojeBR(), vencimento: c.venc || undefined, mes: key, tipo: 'despesa', categoria: `Fatura ${card.nome}`, valor: -(Math.round(c.total * 100) / 100), party: card.nome, recebedor: card.nome, pagador: null, status: 'a_pagar', conta: card.id } as FinTransacao);
-      }
-    }
-    return out;
-  }, [contas, data.transacoes]);
+  // Saldo do cartão como conta a pagar (ao vivo) — mesma fonte que as bolinhas contam.
+  const cardBills = useMemo(() => cardBillsDe(data), [data]);
   // Atrasadas × vencendo hoje — alimenta as bolinhas da subaba e do topo da lista.
   const emAberto = useMemo(() => contasEmAberto(data), [data]);
   const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>('ledger');
