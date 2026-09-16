@@ -105,7 +105,7 @@ export const PRAZOS: Trilha = {
         '- Apelação e contrarrazões: 15 dias úteis.',
         '- Agravo de instrumento: 15 dias úteis.',
         '- Recurso inominado no juizado: 10 dias.',
-        '- Cumprimento de sentença — pagamento voluntário: 15 dias.',
+        '- Cumprimento de sentença — pagamento voluntário: 15 dias úteis. O prazo do art. 523 é processual: conta pela regra do art. 219 (STJ, REsp 1.708.348/RJ, e Enunciado 89 da I Jornada de Direito Processual Civil do CJF).',
         '',
         '> Prazo de juizado especial tem regra própria e nem sempre é em dias úteis. Confira a lei do juizado antes de aplicar a contagem do CPC.',
         '',
