@@ -10,8 +10,12 @@ export const CLIENTE: Trilha = {
   aulas: [
     {
       id: 'voce-e-o-escritorio',
-      videoPlanejado: true,
       titulo: 'Você é o escritório para o cliente',
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/voce-e-o-escritorio.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/voce-e-o-escritorio.vtt',
+      },
       resumo: 'Quem é o nosso cliente e o que ele espera de cada contato.',
       minutos: 8,
       manual: [

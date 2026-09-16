@@ -191,6 +191,12 @@ if (restantes.length > 0) {
   console.error('Timestamps incoerentes — nao gravo legenda que morre no meio:');
   restantes.slice(0, 8).forEach((p) => console.error('  ' + p));
   if (restantes.length > 8) console.error(`  ... e mais ${restantes.length - 8}`);
+  // GUARDA O BRUTO. Sem isto, cada reprovacao obrigava a transcrever de novo so
+  // para poder OLHAR o que veio — e a segunda resposta do Gemini nunca e igual a
+  // primeira, entao o defeito que se queria diagnosticar some. Aqui fica o texto
+  // exato que reprovou, para conserto a mao das poucas deixas quebradas.
+  writeFileSync(vttPath + '.bruto', vtt + '\n');
+  console.error(`\nO texto que reprovou ficou em ${vttPath}.bruto — as demais deixas costumam estar boas.`);
   process.exit(7);
 }
 console.log(`⏱️  ${deixas.length} deixas coerentes, termina em ${(emSegundos(deixas[deixas.length - 1].split('-->')[1].trim().split(/\s+/)[0]) / 60).toFixed(2)} min.`);
