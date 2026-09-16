@@ -35,6 +35,7 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/use-permissions';
 import { titleCaseName } from '@/lib/names';
 import { AbrirConversa, ConversaDoClienteBloco } from '@/components/ui/abrir-conversa';
 import {
@@ -556,6 +557,9 @@ function OptionsMenu({
   onChange: () => void;
 }) {
   const router = useRouter();
+  // Excluir processo é de sócio (OWNER/ADMIN), como no backend. Associado que
+  // criou o card errado pede a exclusão — não apaga sozinho.
+  const { canDeleteCases } = usePermissions();
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState<null | 'encerrar' | 'desvincular' | 'desapensar' | 'apagar'>(null);
   // 'other-to-this' = escolher um processo pra apensar A ESTE;
@@ -709,16 +713,18 @@ function OptionsMenu({
             >
               Encerrar
             </MenuItem>
-            <MenuItem
-              icon={Trash2}
-              danger
-              onClick={() => {
-                close();
-                setConfirm('apagar');
-              }}
-            >
-              Excluir processo
-            </MenuItem>
+            {canDeleteCases && (
+              <MenuItem
+                icon={Trash2}
+                danger
+                onClick={() => {
+                  close();
+                  setConfirm('apagar');
+                }}
+              >
+                Excluir processo
+              </MenuItem>
+            )}
           </div>
         </>
       )}

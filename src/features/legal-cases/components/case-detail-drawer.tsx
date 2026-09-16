@@ -446,11 +446,13 @@ export function CaseDetailDrawer({
                     Ver no Pipefy <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
-                <div className="mt-6 border-t border-[#eef2f8] pt-3 dark:border-zinc-800">
-                  <button onClick={onRemove} className="inline-flex items-center gap-1 text-xs font-medium text-rose-500 hover:text-rose-600 hover:underline">
-                    <Trash2 className="h-3.5 w-3.5" /> Excluir processo
-                  </button>
-                </div>
+                {isSocio && (
+                  <div className="mt-6 border-t border-[#eef2f8] pt-3 dark:border-zinc-800">
+                    <button onClick={onRemove} className="inline-flex items-center gap-1 text-xs font-medium text-rose-500 hover:text-rose-600 hover:underline">
+                      <Trash2 className="h-3.5 w-3.5" /> Excluir processo
+                    </button>
+                  </div>
+                )}
               </>
             )}
             {c && tab === 'atividades' && <Atividades movements={c.movements} />}
