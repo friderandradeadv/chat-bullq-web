@@ -30,6 +30,9 @@ import {
   Gavel,
   Columns3,
   ChevronDown,
+  ClipboardList,
+  Stamp,
+  CalendarDays,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { titleCaseName } from '@/lib/names';
@@ -57,6 +60,9 @@ import {
   PARTE_RECORRENTE_LABEL,
 } from '@/features/recursos/services/recursos.service';
 import { CreateDeadlineDialog } from '@/features/deadlines/components/create-deadline-dialog';
+import { CreateTaskDialog } from '@/features/tasks/components/create-task-dialog';
+import { CreateEventDialog } from '@/features/calendar/components/create-event-dialog';
+import { CreateAtendimentoDialog } from '@/features/calendar/components/create-atendimento-dialog';
 import { inputCls, Field, ASTREA_BLUE, LegalTagChip, CnjNumber } from '../page';
 
 const ROLE_LABEL: Record<PartyRole, string> = {
@@ -134,6 +140,7 @@ const kanbanHref = (c: CaseDetail): string => {
 };
 
 type Tab = 'resumo' | 'atividades' | 'recursos' | 'historico';
+type NovoItem = 'tarefa' | 'prazo' | 'evento' | 'atendimento';
 
 export default function ProcessoDetailPage() {
   const params = useParams<{ id: string }>();
@@ -143,9 +150,9 @@ export default function ProcessoDetailPage() {
   const [tab, setTab] = useState<Tab>('resumo');
   const [editing, setEditing] = useState(false);
   const [addingHistory, setAddingHistory] = useState(false);
-  // "Atividade / prazo" no + do cabeçalho: leva para a aba e JÁ abre o diálogo
-  // de prazo (antes só trocava de aba e o prazo ficava a mais um clique).
-  const [addingDeadline, setAddingDeadline] = useState(false);
+  // Item novo em criação. São os MESMOS diálogos da agenda (tarefa, prazo,
+  // evento, atendimento); aqui o processo já vem travado neste caso.
+  const [novo, setNovo] = useState<NovoItem | null>(null);
 
   const { data: c, isLoading } = useQuery({
     queryKey: ['legal-case', id],
@@ -157,6 +164,12 @@ export default function ProcessoDetailPage() {
     qc.invalidateQueries({ queryKey: ['legal-cases'] });
     qc.invalidateQueries({ queryKey: ['case-deadlines', id] });
   };
+  const fecharNovo = () => setNovo(null);
+  const salvouNovo = () => {
+    setNovo(null);
+    qc.invalidateQueries({ queryKey: ['case-tasks', id] });
+    refetch();
+  };
 
   if (!id) return null;
   if (isLoading)
@@ -166,6 +179,9 @@ export default function ProcessoDetailPage() {
 
   const clientParty = c.parties.find((p) => p.role === 'CLIENT');
   const monitorado = !!c.cnjNumber;
+  // Processo deste formulário: os diálogos compartilhados o mostram travado.
+  const fixedCase = { id: c.id, title: c.title, cnjNumber: c.cnjNumber };
+  const clienteDoCaso = clientParty;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
@@ -231,7 +247,7 @@ export default function ProcessoDetailPage() {
             />
             <AddMenu
               onAddHistory={() => setAddingHistory(true)}
-              onAddActivity={() => { setTab('atividades'); setAddingDeadline(true); }}
+              onNovo={(t) => { if (t !== 'atendimento') setTab('atividades'); setNovo(t); }}
             />
           </div>
         </div>
@@ -316,15 +332,7 @@ export default function ProcessoDetailPage() {
       <div className="flex-1 px-4 py-5 lg:px-6">
         {tab === 'resumo' && <ResumoTab c={c} />}
         {tab === 'atividades' && (
-          <AtividadesTab
-            caseId={id}
-            caseTitle={c.title}
-            cnjNumber={c.cnjNumber}
-            events={c.events}
-            adding={addingDeadline}
-            setAdding={setAddingDeadline}
-            onChange={refetch}
-          />
+          <AtividadesTab caseId={id} events={c.events} onNovo={setNovo} onChange={refetch} />
         )}
         {tab === 'recursos' && <RecursosTab caseId={id} />}
         {tab === 'historico' && (
@@ -335,6 +343,27 @@ export default function ProcessoDetailPage() {
       {editing && <EditCaseDialog c={c} onClose={() => setEditing(false)} onSaved={refetch} />}
       {addingHistory && (
         <ManualHistoryModal caseId={id} onClose={() => setAddingHistory(false)} onSaved={refetch} />
+      )}
+
+      {/* Tarefa, prazo, evento e atendimento: os MESMOS diálogos da agenda.
+          Ficam aqui, no nível da página, para abrirem de qualquer aba. */}
+      {novo === 'tarefa' && (
+        <CreateTaskDialog fixedCase={fixedCase} onClose={fecharNovo} onSaved={salvouNovo} />
+      )}
+      {novo === 'prazo' && (
+        <CreateDeadlineDialog fixedCase={fixedCase} onClose={fecharNovo} onSaved={salvouNovo} />
+      )}
+      {novo === 'evento' && (
+        <CreateEventDialog fixedCase={fixedCase} onClose={fecharNovo} onSaved={salvouNovo} />
+      )}
+      {/* Atendimento é hora na agenda do advogado e não guarda processo — o que
+          dá para aproveitar da ficha é o cliente, que já vai preenchido. */}
+      {novo === 'atendimento' && (
+        <CreateAtendimentoDialog
+          cliente={clienteDoCaso ? { nome: clienteDoCaso.name, telefone: clienteDoCaso.contact?.phone ?? null } : undefined}
+          onClose={fecharNovo}
+          onSaved={salvouNovo}
+        />
       )}
     </div>
   );
@@ -826,10 +855,10 @@ function ApensarModal({
 
 function AddMenu({
   onAddHistory,
-  onAddActivity,
+  onNovo,
 }: {
   onAddHistory: () => void;
-  onAddActivity: () => void;
+  onNovo: (t: NovoItem) => void;
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -847,15 +876,19 @@ function AddMenu({
         <>
           <div className="fixed inset-0 z-10" onClick={close} />
           <div className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 text-left shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-            <MenuItem
-              icon={CalendarClock}
-              onClick={() => {
-                close();
-                onAddActivity();
-              }}
-            >
-              Atividade / prazo
+            <MenuItem icon={ClipboardList} iconColor="#23CBFF" onClick={() => { close(); onNovo('tarefa'); }}>
+              Tarefa
             </MenuItem>
+            <MenuItem icon={Stamp} iconColor="#CE0000" onClick={() => { close(); onNovo('prazo'); }}>
+              Prazo
+            </MenuItem>
+            <MenuItem icon={CalendarDays} iconColor="#02883C" onClick={() => { close(); onNovo('evento'); }}>
+              Evento
+            </MenuItem>
+            <MenuItem icon={CalendarClock} iconColor="#B7791F" onClick={() => { close(); onNovo('atendimento'); }}>
+              Atendimento
+            </MenuItem>
+            <Divider />
             <MenuItem
               icon={FilePlus2}
               onClick={() => {
@@ -879,6 +912,7 @@ function MenuItem({
   danger,
   muted,
   disabled,
+  iconColor,
 }: {
   icon: React.ElementType;
   children: React.ReactNode;
@@ -886,6 +920,7 @@ function MenuItem({
   danger?: boolean;
   muted?: boolean;
   disabled?: boolean;
+  iconColor?: string;
 }) {
   return (
     <button
@@ -899,8 +934,17 @@ function MenuItem({
             : 'text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800'
       }`}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className="h-4 w-4 shrink-0" style={iconColor ? { color: iconColor } : undefined} />
       <span className="flex flex-1 items-center gap-2">{children}</span>
+    </button>
+  );
+}
+
+/** Botão "+ Adicionar X" no canto do card. */
+function AddCardBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: ASTREA_BLUE }}>
+      <Plus className="h-3.5 w-3.5" /> {label}
     </button>
   );
 }
@@ -1072,19 +1116,13 @@ function ApensosCard({ c }: { c: CaseDetail }) {
 
 function AtividadesTab({
   caseId,
-  caseTitle,
-  cnjNumber,
   events,
-  adding,
-  setAdding,
+  onNovo,
   onChange,
 }: {
   caseId: string;
-  caseTitle: string;
-  cnjNumber: string | null;
   events: CaseDetail['events'];
-  adding: boolean;
-  setAdding: (v: boolean) => void;
+  onNovo: (t: NovoItem) => void;
   onChange: () => void;
 }) {
   const qc = useQueryClient();
@@ -1117,20 +1155,12 @@ function AtividadesTab({
 
   return (
     <div className="space-y-5">
-      <TarefasCard caseId={caseId} onChange={onChange} />
+      <TarefasCard caseId={caseId} onNovo={onNovo} onChange={onChange} />
 
       <Card
         title="Prazos"
         icon={Clock}
-        action={
-          <button
-            onClick={() => setAdding(true)}
-            className="inline-flex items-center gap-1 text-xs font-medium"
-            style={{ color: ASTREA_BLUE }}
-          >
-            <Plus className="h-3.5 w-3.5" /> Adicionar prazo
-          </button>
-        }
+        action={<AddCardBtn label="Adicionar prazo" onClick={() => onNovo('prazo')} />}
       >
         {/* Filtro aberta / concluída */}
         <div className="mb-4 flex items-center gap-4 text-sm">
@@ -1147,14 +1177,6 @@ function AtividadesTab({
             {done.length} concluída{done.length === 1 ? '' : 's'}
           </button>
         </div>
-
-        {adding && (
-          <CreateDeadlineDialog
-            fixedCase={{ id: caseId, title: caseTitle, cnjNumber }}
-            onClose={() => setAdding(false)}
-            onSaved={() => { setAdding(false); refresh(); }}
-          />
-        )}
 
         {isLoading ? (
           <EmptyState>Carregando…</EmptyState>
@@ -1202,8 +1224,10 @@ function AtividadesTab({
         )}
       </Card>
 
-      {events.length > 0 && (
-        <Card title="Eventos e audiências" icon={CalendarClock}>
+      <Card title="Eventos e audiências" icon={CalendarClock} action={<AddCardBtn label="Adicionar evento" onClick={() => onNovo('evento')} />}>
+        {events.length === 0 ? (
+          <EmptyState>Nenhum evento ou audiência marcada.</EmptyState>
+        ) : (
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {events.map((e) => (
               <li key={e.id} className="flex items-center justify-between py-2.5 text-sm">
@@ -1220,15 +1244,15 @@ function AtividadesTab({
               </li>
             ))}
           </ul>
-        </Card>
-      )}
+        )}
+      </Card>
     </div>
   );
 }
 
 // ─── Tarefas do processo (DJEN + manuais) ────────────────────────────
 
-function TarefasCard({ caseId, onChange }: { caseId: string; onChange: () => void }) {
+function TarefasCard({ caseId, onNovo, onChange }: { caseId: string; onNovo: (t: NovoItem) => void; onChange: () => void }) {
   const qc = useQueryClient();
   const [showDone, setShowDone] = useState(false);
   const { data: tasks = [], isLoading } = useQuery({
@@ -1244,7 +1268,7 @@ function TarefasCard({ caseId, onChange }: { caseId: string; onChange: () => voi
   };
 
   return (
-    <Card title="Tarefas" icon={CheckSquare}>
+    <Card title="Tarefas" icon={CheckSquare} action={<AddCardBtn label="Adicionar tarefa" onClick={() => onNovo('tarefa')} />}>
       <div className="mb-4 flex items-center gap-4 text-sm">
         <button
           onClick={() => setShowDone(false)}

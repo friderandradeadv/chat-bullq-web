@@ -7,14 +7,12 @@ import { activitiesService, ENTITY_TYPE } from '@/features/activities/services/a
 import { deadlinesService, type PrazoPreview } from '@/features/deadlines/services/deadlines.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
-import { CaseSearch } from '@/features/legal-cases/components/case-search';
+import { CaseField } from '@/features/legal-cases/components/case-search';
 import { TagSelector } from '@/features/activities/components/tag-selector';
 import { Modal } from '@/components/ui/modal';
 import { useAuthStore } from '@/stores/auth-store';
 import { inputCls, Field } from '@/app/(dashboard)/processos/page';
-
-const pad = (n: number) => String(n).padStart(2, '0');
-const toDateInput = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+import { toDateInput } from '@/lib/datas-form';
 
 // ── Novo PRAZO ────────────────────────────────────────────────────────────────
 // ESTE é o diálogo de prazo do hub: o mesmo na agenda e na ficha do processo.
@@ -110,15 +108,7 @@ export function CreateDeadlineDialog({
       <div className="space-y-4">
         <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} placeholder="Ex.: Apresentar contestação" autoFocus /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label={<>Processo <span className="text-rose-500">*</span></>}>
-            {fixedCase ? (
-              <div className="flex h-10 items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-sm dark:border-zinc-800 dark:bg-zinc-800/40" title="O prazo é deste processo">
-                <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">{fixedCase.title}{fixedCase.cnjNumber && <span className="ml-2 font-mono text-xs text-zinc-400">{fixedCase.cnjNumber}</span>}</span>
-              </div>
-            ) : (
-              <CaseSearch value={caseId} onChange={setCaseId} cases={cases.map((c) => ({ id: c.id, title: c.title, cnjNumber: c.cnjNumber ?? null }))} />
-            )}
-          </Field>
+          <Field label={<>Processo <span className="text-rose-500">*</span></>}><CaseField value={caseId} onChange={setCaseId} fixedCase={fixedCase} cases={cases.map((c) => ({ id: c.id, title: c.title, cnjNumber: c.cnjNumber ?? null }))} /></Field>
           <Field label="Responsável"><select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} className={inputCls}><option value="">Ninguém</option>{members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}{m.user.id === meId ? ' (eu)' : ''}</option>)}</select></Field>
         </div>
         <div className="grid grid-cols-2 gap-3">

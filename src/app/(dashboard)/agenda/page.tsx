@@ -38,6 +38,10 @@ import { Modal } from '@/components/ui/modal';
 import { TagSelector, TAG_PALETTE } from '@/features/activities/components/tag-selector';
 import { CaseSearch } from '@/features/legal-cases/components/case-search';
 import { CreateDeadlineDialog } from '@/features/deadlines/components/create-deadline-dialog';
+import { CreateTaskDialog } from '@/features/tasks/components/create-task-dialog';
+import { CreateEventDialog } from '@/features/calendar/components/create-event-dialog';
+import { CreateAtendimentoDialog } from '@/features/calendar/components/create-atendimento-dialog';
+import { KIND_LABEL, RemindersField, reminderLabel } from '@/features/calendar/components/reminders-field';
 
 const EV_PENDING = { bg: '#DAF3FF', text: '#1D6BB7' };
 const EV_TIMED = { bg: '#D3F8E5', text: '#1D6BB7' };
@@ -49,7 +53,6 @@ const TYPE_TAG: Record<Src, { label: string; bg: string }> = {
   tarefa: { label: 'Tarefa', bg: '#23CBFF' },
   evento: { label: 'Evento', bg: '#02883C' },
 };
-const KIND_LABEL: Record<EventKind, string> = { audiencia: 'Audiência', reuniao: 'Reunião', pericia: 'Perícia', tarefa: 'Tarefa', atendimento: 'Atendimento', outro: 'Outro' };
 const PRIORITY_LABEL: Record<string, string> = { LOW: 'Baixa', MEDIUM: 'Média', HIGH: 'Alta' };
 
 type ViewMode = 'list' | 'timeGridDay' | 'timeGridWeek' | 'dayGridMonth';
@@ -2291,225 +2294,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 
 
-// Antecedência (minutos) → rótulo legível. 0 = na hora; múltiplos de dia/hora
-// viram "X dia(s)/hora(s) antes"; senão "X min antes".
-function reminderLabel(min: number): string {
-  if (min <= 0) return 'Na hora';
-  if (min % 1440 === 0) { const d = min / 1440; return `${d} dia${d > 1 ? 's' : ''} antes`; }
-  if (min % 60 === 0) { const h = min / 60; return `${h} hora${h > 1 ? 's' : ''} antes`; }
-  return `${min} min antes`;
-}
 
-const REMINDER_PRESETS: { label: string; minutes: number }[] = [
-  { label: '15 min', minutes: 15 },
-  { label: '30 min', minutes: 30 },
-  { label: '1 hora', minutes: 60 },
-  { label: '2 horas', minutes: 120 },
-  { label: '1 dia', minutes: 1440 },
-  { label: '2 dias', minutes: 2880 },
-  { label: '1 semana', minutes: 10080 },
-];
 
-/**
- * Editor de lembretes do compromisso: chips com as antecedências + adicionar
- * "X minutos/horas/dias antes" (número + unidade) e atalhos rápidos. Padrão
- * inicial = 1 dia + 1 hora antes. Lista vazia = sem aviso.
- */
-function RemindersField({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
-  const [num, setNum] = useState('30');
-  const [unit, setUnit] = useState<'min' | 'hora' | 'dia'>('min');
-  const add = (minutes: number) => {
-    if (!Number.isFinite(minutes) || minutes < 0 || value.includes(minutes)) return;
-    onChange([...value, minutes].sort((a, b) => b - a));
-  };
-  const addCustom = () => {
-    const n = Math.round(Number(num));
-    if (!Number.isFinite(n) || n < 0) return;
-    add(n * (unit === 'dia' ? 1440 : unit === 'hora' ? 60 : 1));
-  };
-  return (
-    <div className="space-y-2">
-      {value.length === 0
-        ? <p className="text-xs text-zinc-400">Sem lembrete — você não será avisado deste evento.</p>
-        : (
-          <div className="flex flex-wrap gap-1.5">
-            {value.map((m) => (
-              <span key={m} className="inline-flex items-center gap-1 rounded-full bg-[#228BE6]/10 px-2.5 py-1 text-xs font-medium text-[#228BE6]">
-                <CalendarClock className="h-3 w-3" />{reminderLabel(m)}
-                <button type="button" onClick={() => onChange(value.filter((x) => x !== m))} className="ml-0.5 rounded-full p-0.5 hover:bg-[#228BE6]/20"><X className="h-3 w-3" /></button>
-              </span>
-            ))}
-          </div>
-        )}
-      <div className="flex items-center gap-1.5">
-        <input type="number" min={0} value={num} onChange={(e) => setNum(e.target.value)} className={`${inputCls} w-16`} />
-        <select value={unit} onChange={(e) => setUnit(e.target.value as 'min' | 'hora' | 'dia')} className={`${inputCls} w-28`}>
-          <option value="min">minutos</option>
-          <option value="hora">horas</option>
-          <option value="dia">dias</option>
-        </select>
-        <span className="text-xs text-zinc-400">antes</span>
-        <button type="button" onClick={addCustom} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10"><Plus className="h-3.5 w-3.5" />Adicionar</button>
-      </div>
-      <div className="flex flex-wrap gap-1">
-        {REMINDER_PRESETS.filter((p) => !value.includes(p.minutes)).map((p) => (
-          <button key={p.minutes} type="button" onClick={() => add(p.minutes)} className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-500 hover:border-[#228BE6] hover:text-[#228BE6] dark:border-zinc-700 dark:text-zinc-400">+ {p.label}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function CreateEventDialog({ date, onClose, onSaved }: { date?: Date; onClose: () => void; onSaved: () => void }) {
-  // Responsável, via de regra, é QUEM ESTÁ CRIANDO — vem preenchido e pode trocar.
-  const meId = useAuthStore((s) => s.user?.id) ?? '';
-  const [title, setTitle] = useState('');
-  const [kind, setKind] = useState<EventKind>('audiencia');
-  const [startsAt, setStartsAt] = useState(date ? toDatetimeLocal(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0)) : '');
-  const [location, setLocation] = useState('');
-  const [caseId, setCaseId] = useState('');
-  const [assignedToId, setAssignedToId] = useState(meId);
-  const [reminders, setReminders] = useState<number[]>([1440, 60]);
-  const [tagIds, setTagIds] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
-  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
-  const submit = async () => {
-    if (!title.trim()) return toast.error('Informe o título');
-    if (!startsAt) return toast.error('Informe a data/hora');
-    setSaving(true);
-    try {
-      const ev = await calendarService.create({ title: title.trim(), kind, startsAt: new Date(startsAt).toISOString(), location: location || undefined, caseId: caseId || undefined, assignedToId: assignedToId || undefined, reminders });
-      if (tagIds.length) await Promise.all(tagIds.map((id) => activitiesService.attachTag(ENTITY_TYPE.evento, ev.id, id).catch(() => {})));
-      toast.success('Evento criado'); onSaved();
-    } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setSaving(false); }
-  };
-  return (
-    <Modal title="Adicionar evento" onClose={onClose} wide headerRight={<TagSelector selected={tagIds} onChange={setTagIds} />}>
-      <div className="space-y-4">
-        <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} autoFocus /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Tipo"><select value={kind} onChange={(e) => setKind(e.target.value as EventKind)} className={inputCls}>{(Object.keys(KIND_LABEL) as EventKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></Field>
-          <Field label={<>Data e hora <span className="text-rose-500">*</span></>}><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={inputCls} /></Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Processo"><CaseSearch value={caseId} onChange={setCaseId} cases={cases} /></Field>
-          <Field label="Responsável"><select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)} className={inputCls}><option value="">Ninguém</option>{members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}</option>)}</select></Field>
-        </div>
-        <Field label="Local"><div className="relative"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><input value={location} onChange={(e) => setLocation(e.target.value)} className={`${inputCls} pl-9`} placeholder="Fórum, sala, link…" /></div></Field>
-        <Field label="Lembretes"><RemindersField value={reminders} onChange={setReminders} /></Field>
-      </div>
-      <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button></div>
-    </Modal>
-  );
-}
 
-function CreateAtendimentoDialog({ date, onClose, onSaved }: { date?: Date; onClose: () => void; onSaved: () => void }) {
-  const meId = useAuthStore((s) => s.user?.id) ?? '';
-  const [userId, setUserId] = useState(meId);
-  const [startsAt, setStartsAt] = useState(date ? toDatetimeLocal(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0)) : '');
-  const [durationMin, setDurationMin] = useState(30);
-  const [nome, setNome] = useState('');
-  const [telefone, setTelefone] = useState('');
-  const [obs, setObs] = useState('');
-  const [saving, setSaving] = useState(false);
-  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
-  // Horários livres do advogado escolhido (disponibilidade − eventos), p/ escolha rápida.
-  const { data: slots = [] } = useQuery({
-    queryKey: ['atendimento', 'slots', userId, durationMin],
-    queryFn: () => calendarService.slots({ userId, durationMin }),
-    enabled: !!userId,
-    staleTime: 30_000,
-  });
 
-  const submit = async () => {
-    if (!userId) return toast.error('Escolha o advogado responsável');
-    if (!startsAt) return toast.error('Escolha o horário');
-    if (!nome.trim()) return toast.error('Informe o nome do cliente');
-    setSaving(true);
-    try {
-      await calendarService.agendarAtendimento({ userId, startsAt: new Date(startsAt).toISOString(), durationMin, nome: nome.trim(), telefone: telefone.trim() || undefined, obs: obs.trim() || undefined });
-      toast.success('Atendimento agendado — o responsável foi notificado'); onSaved();
-    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro'); } finally { setSaving(false); }
-  };
-
-  const fmtSlot = (iso: string) => new Date(iso).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-
-  return (
-    <Modal title="Agendar atendimento" onClose={onClose} wide>
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={<>Advogado <span className="text-rose-500">*</span></>}>
-            <select value={userId} onChange={(e) => setUserId(e.target.value)} className={inputCls}>
-              <option value="">Selecione</option>
-              {members.filter((m) => m.user.isActive).map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}{m.user.id === meId ? ' (eu)' : ''}</option>)}
-            </select>
-          </Field>
-          <Field label="Duração"><select value={durationMin} onChange={(e) => setDurationMin(Number(e.target.value))} className={inputCls}>{[15, 30, 45, 60, 90].map((m) => <option key={m} value={m}>{m} min</option>)}</select></Field>
-        </div>
-
-        {userId && slots.length > 0 && (
-          <Field label="Horários livres (clique para escolher)">
-            <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
-              {slots.slice(0, 16).map((s) => {
-                const val = toDatetimeLocal(new Date(s.start));
-                const sel = startsAt === val;
-                return <button key={s.start} type="button" onClick={() => setStartsAt(val)} className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${sel ? 'border-[#B7791F] bg-[#B7791F] text-white' : 'border-[#DEE2E6] text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'}`}>{fmtSlot(s.start)}</button>;
-              })}
-            </div>
-          </Field>
-        )}
-        {userId && slots.length === 0 && <p className="text-xs text-amber-600">Sem horários livres configurados para este advogado — defina a disponibilidade ou escolha a data/hora manualmente abaixo.</p>}
-
-        <Field label={<>Data e hora <span className="text-rose-500">*</span></>}><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={inputCls} /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={<>Cliente <span className="text-rose-500">*</span></>}><input value={nome} onChange={(e) => setNome(e.target.value)} className={inputCls} placeholder="Nome do cliente" /></Field>
-          <Field label="Telefone"><input value={telefone} onChange={(e) => setTelefone(e.target.value)} className={inputCls} placeholder="(00) 00000-0000" /></Field>
-        </div>
-        <Field label="Observação"><textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} className={inputCls} placeholder="Resumo do caso / assunto" /></Field>
-      </div>
-      <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-40">{saving ? 'Agendando…' : 'Agendar'}</button></div>
-    </Modal>
-  );
-}
-
-function CreateTaskDialog({ date, onClose, onSaved }: { date?: Date; onClose: () => void; onSaved: () => void }) {
-  // Responsável, via de regra, é QUEM ESTÁ CRIANDO — vem preenchido e pode trocar.
-  const meId = useAuthStore((s) => s.user?.id) ?? '';
-  const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
-  const [dueAt, setDueAt] = useState(date ? toDateInput(date) : toDateInput(new Date()));
-  const [description, setDescription] = useState('');
-  const [caseId, setCaseId] = useState('');
-  const [assigneeId, setAssigneeId] = useState(meId);
-  const [tagIds, setTagIds] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }) });
-  const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list() });
-  const submit = async () => {
-    if (!title.trim()) return toast.error('Informe o título');
-    setSaving(true);
-    try {
-      const task = await tasksService.create({ title: title.trim(), priority, dueAt: dueAt ? new Date(dueAt + 'T09:00:00').toISOString() : null, description: description || undefined, caseId: caseId || undefined, assigneeId: assigneeId || undefined });
-      if (tagIds.length) await Promise.all(tagIds.map((id) => activitiesService.attachTag(ENTITY_TYPE.tarefa, task.id, id).catch(() => {})));
-      toast.success('Tarefa criada'); onSaved();
-    } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setSaving(false); }
-  };
-  return (
-    <Modal title="Adicionar tarefa" onClose={onClose} wide headerRight={<TagSelector selected={tagIds} onChange={setTagIds} />}>
-      <div className="space-y-4">
-        <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} autoFocus /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Processo"><CaseSearch value={caseId} onChange={setCaseId} cases={cases} /></Field>
-          <Field label="Responsável"><select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={inputCls}><option value="">Ninguém</option>{members.map((m) => <option key={m.user.id} value={m.user.id}>{m.user.name}</option>)}</select></Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Prioridade"><select value={priority} onChange={(e) => setPriority(e.target.value as any)} className={inputCls}><option value="LOW">Baixa</option><option value="MEDIUM">Média</option><option value="HIGH">Alta</option></select></Field>
-          <Field label="Data"><input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className={inputCls} /></Field>
-        </div>        <Field label="Descrição"><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#228BE6] dark:border-zinc-700 dark:bg-zinc-900" /></Field>
-      </div>
-      <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button></div>
-    </Modal>
-  );
-}
 

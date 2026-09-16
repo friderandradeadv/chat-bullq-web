@@ -40,3 +40,28 @@ export function CaseSearch({ value, onChange, cases }: { value: string; onChange
     </div>
   );
 }
+/** Processo do formulário. Aberto de DENTRO de um processo (`fixedCase`), o
+ *  campo mostra qual é e não deixa trocar — o item é daquele processo. */
+export function CaseField({
+  value,
+  onChange,
+  cases,
+  fixedCase,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  cases: { id: string; title: string; cnjNumber: string | null }[];
+  fixedCase?: { id: string; title: string; cnjNumber: string | null };
+}) {
+  if (fixedCase) {
+    return (
+      <div className="flex h-10 items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-sm dark:border-zinc-800 dark:bg-zinc-800/40" title="É deste processo">
+        <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-300">
+          {fixedCase.title}
+          {fixedCase.cnjNumber && <span className="ml-2 font-mono text-xs text-zinc-400">{fixedCase.cnjNumber}</span>}
+        </span>
+      </div>
+    );
+  }
+  return <CaseSearch value={value} onChange={onChange} cases={cases} />;
+}
