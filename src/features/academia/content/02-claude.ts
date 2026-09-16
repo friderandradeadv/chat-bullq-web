@@ -10,7 +10,6 @@ export const CLAUDE: Trilha = {
   aulas: [
     {
       id: 'o-que-e',
-      videoPlanejado: true,
       video: {
         fonte: 'url',
         url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/o-que-e.mp4',

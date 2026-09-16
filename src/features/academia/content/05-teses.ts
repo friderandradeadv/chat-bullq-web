@@ -10,7 +10,6 @@ export const TESES: Trilha = {
   aulas: [
     {
       id: 'rmc-rcc',
-      videoPlanejado: true,
       video: {
         fonte: 'url',
         url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/rmc-rcc.mp4',

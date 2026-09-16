@@ -10,7 +10,6 @@ export const FASE_JUDICIAL: Trilha = {
   aulas: [
     {
       id: 'panorama',
-      videoPlanejado: true,
       video: {
         fonte: 'url',
         url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/panorama.mp4',

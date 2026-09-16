@@ -10,7 +10,6 @@ export const HUB: Trilha = {
   aulas: [
     {
       id: 'visao-geral',
-      videoPlanejado: true,
       video: {
         fonte: 'url',
         url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/visao-geral.mp4',
@@ -146,7 +145,6 @@ export const HUB: Trilha = {
 
     {
       id: 'conversas',
-      videoPlanejado: true,
       titulo: 'Conversas: WhatsApp, IA e quando você assume',
       resumo: 'Como a IA atende, quando ela para, e como não estragar o atendimento.',
       minutos: 12,

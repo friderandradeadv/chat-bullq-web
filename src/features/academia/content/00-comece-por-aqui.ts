@@ -10,7 +10,6 @@ export const COMECE_POR_AQUI: Trilha = {
   aulas: [
     {
       id: 'como-usar',
-      videoPlanejado: true,
       titulo: 'Comece por aqui: como usar esta Academia',
       resumo: 'O mapa da biblioteca, o que é obrigatório e em que ordem fazer.',
       minutos: 5,
@@ -90,7 +89,6 @@ export const COMECE_POR_AQUI: Trilha = {
     },
     {
       id: 'quem-somos',
-      videoPlanejado: true,
       video: {
         fonte: 'url',
         url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/quem-somos.mp4',

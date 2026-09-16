@@ -37,3 +37,4 @@ coverage/
 tmp/
 temp/
 .fontes-academia/
+scripts/__pycache__/

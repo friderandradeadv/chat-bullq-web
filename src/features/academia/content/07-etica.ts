@@ -10,7 +10,11 @@ export const ETICA: Trilha = {
   aulas: [
     {
       id: 'oab',
-      videoPlanejado: true,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/oab.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/oab.vtt',
+      },
       titulo: 'Estatuto e Código de Ética no dia a dia',
       resumo: 'As regras da OAB que aparecem na sua semana, não no seu exame.',
       minutos: 9,

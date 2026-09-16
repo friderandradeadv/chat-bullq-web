@@ -383,11 +383,19 @@ def slide_linha_tempo(dados):
         f = fonte('playfair', 30, 500)
         fs = fonte('inter', 19)
         ty = y - 92 * ESC if acima else y + 46 * ESC
-        w = largura(d, m['titulo'], f)
-        d.text((cx_ - w / 2, ty), m['titulo'], font=f, fill=PAPEL if on else '#5A6165')
+        # O rótulo é centrado no marco, mas com poucos marcos o primeiro fica
+        # perto da borda e o texto sangrava para fora da tela — em 16/09 o
+        # "conflito verificado antes de aceitar" saiu cortado no "c". Prender
+        # dentro da margem desloca o rótulo alguns pixels; deixá-lo sair da
+        # tela perde a palavra inteira.
+        def centrado(txt, fonte_, yy, tinta):
+            w_ = largura(d, txt, fonte_)
+            x_ = min(max(cx_ - w_ / 2, 92 * ESC), W - 92 * ESC - w_)
+            d.text((x_, yy), txt, font=fonte_, fill=tinta)
+
+        centrado(m['titulo'], f, ty, PAPEL if on else '#5A6165')
         if m.get('sub'):
-            ws = largura(d, m['sub'], fs)
-            d.text((cx_ - ws / 2, ty + 40 * ESC), m['sub'], font=fs, fill=CINZA)
+            centrado(m['sub'], fs, ty + 40 * ESC, CINZA)
     if dados.get('rodape'):
         fr = fonte('inter', 23)
         d.text(((W - largura(d, dados['rodape'], fr)) / 2, H - 150 * ESC),
