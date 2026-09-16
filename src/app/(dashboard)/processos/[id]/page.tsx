@@ -555,8 +555,9 @@ function OptionsMenu({
   onAddHistory: () => void;
   onChange: () => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [confirm, setConfirm] = useState<null | 'encerrar' | 'desvincular' | 'desapensar'>(null);
+  const [confirm, setConfirm] = useState<null | 'encerrar' | 'desvincular' | 'desapensar' | 'apagar'>(null);
   // 'other-to-this' = escolher um processo pra apensar A ESTE;
   // 'this-to-other' = escolher o principal ao qual ESTE será apensado.
   const [apensar, setApensar] = useState<null | 'other-to-this' | 'this-to-other'>(null);
@@ -593,6 +594,20 @@ function OptionsMenu({
     } catch (e: any) {
       toast.error(e?.message || 'Erro');
     } finally {
+      setConfirm(null);
+    }
+  };
+
+  // Exclusão = soft-delete no backend (deletedAt + status ARCHIVED): some das
+  // listas mas preserva andamentos e prazos, por obrigação documental. Como a
+  // ficha aberta deixa de existir, volta para a lista em vez de dar refetch.
+  const doApagar = async () => {
+    try {
+      await legalCasesService.remove(c.id);
+      toast.success('Processo excluído');
+      router.push('/processos');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao excluir');
       setConfirm(null);
     }
   };
@@ -694,6 +709,16 @@ function OptionsMenu({
             >
               Encerrar
             </MenuItem>
+            <MenuItem
+              icon={Trash2}
+              danger
+              onClick={() => {
+                close();
+                setConfirm('apagar');
+              }}
+            >
+              Excluir processo
+            </MenuItem>
           </div>
         </>
       )}
@@ -715,6 +740,16 @@ function OptionsMenu({
           confirmLabel="Desvincular"
           danger
           onConfirm={doDesvincular}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'apagar' && (
+        <ConfirmDialog
+          title="Excluir processo?"
+          message="O processo sai das listas e do Kanban, mas é arquivado: andamentos, prazos e publicações ficam preservados. Só os sócios e o responsável pelo processo podem excluir."
+          confirmLabel="Excluir"
+          danger
+          onConfirm={doApagar}
           onClose={() => setConfirm(null)}
         />
       )}
