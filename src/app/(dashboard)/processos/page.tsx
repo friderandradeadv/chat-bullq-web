@@ -924,9 +924,9 @@ function CreateCaseDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-50 w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 text-zinc-800 shadow-2xl dark:bg-zinc-900 dark:text-zinc-100">
+      <div className="relative z-50 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 text-zinc-800 shadow-2xl scrollbar-thin dark:bg-zinc-900 dark:text-zinc-100">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium text-zinc-700">Novo processo</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700">
