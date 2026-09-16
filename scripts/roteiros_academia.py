@@ -12,6 +12,118 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 1.3 — Como o escritório funciona por dentro (3:18). Segunda geração: a
+    # primeira narrou uma meta de 48h para cadastro que NÃO existe no material,
+    # e traduziu Back Office e Marketing por causa da regra que proíbe inglês.
+    # As duas coisas viraram correção de prompt e de regra fixa.
+    #
+    # O contraste das assembleias aparece duas vezes, trocando o lado aceso:
+    # sem isso os dois lados ficam cinza ao mesmo tempo, porque é o 'manda' que
+    # acende a coluna — e aqui nenhum lado "vence" o outro, eles se alternam
+    # conforme a narração fala de um e depois do outro.
+    'como-funciona': {
+        'duracao': 198.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 1 · Aula 3',
+             'titulo': 'Como o escritório funciona por dentro',
+             'sub': ['Quem faz o quê, quem decide o quê', 'e o que se espera de você.']},
+
+            {'t': 16.8, 'tipo': 'lista', 'secao': 'Os cargos',
+             'titulo': 'Cinco níveis', 'itens': ['Estagiário: formação prática, sempre supervisionada',
+                       'Back Office: cadastro, documentos e organização',
+                       'Associado: conduz o processo de ponta a ponta',
+                       'Sócio: carteira de clientes e gestão',
+                       'Sócio nominal: capital, estatuto e entrada de sócios'], 'aceso': None},
+            {'t': 29.5, 'tipo': 'lista', 'secao': 'Os cargos',
+             'titulo': 'Cinco níveis', 'itens': ['Estagiário: formação prática, sempre supervisionada',
+                       'Back Office: cadastro, documentos e organização',
+                       'Associado: conduz o processo de ponta a ponta',
+                       'Sócio: carteira de clientes e gestão',
+                       'Sócio nominal: capital, estatuto e entrada de sócios'], 'aceso': 3,
+             'rodape': 'Se você entrou como advogado, é aqui que você está.'},
+            {'t': 40.0, 'tipo': 'lista', 'secao': 'Os cargos',
+             'titulo': 'Cinco níveis', 'itens': ['Estagiário: formação prática, sempre supervisionada',
+                       'Back Office: cadastro, documentos e organização',
+                       'Associado: conduz o processo de ponta a ponta',
+                       'Sócio: carteira de clientes e gestão',
+                       'Sócio nominal: capital, estatuto e entrada de sócios'], 'aceso': 5},
+
+            {'t': 47.0, 'tipo': 'lista', 'secao': 'Os setores',
+             'titulo': 'Sete áreas', 'itens': ['Controladoria Jurídica', 'Back Office', 'Diretoria Estratégica',
+                       'Diretoria de RH', 'Diretoria de Marketing',
+                       'Diretoria Operacional', 'Diretoria Financeira'], 'aceso': None},
+            {'t': 65.8, 'tipo': 'lista', 'secao': 'Os setores',
+             'titulo': 'Sete áreas', 'itens': ['Controladoria Jurídica', 'Back Office', 'Diretoria Estratégica',
+                       'Diretoria de RH', 'Diretoria de Marketing',
+                       'Diretoria Operacional', 'Diretoria Financeira'], 'aceso': 1,
+             'rodape': 'É o setor que impede prazo de morrer e documento de sumir.'},
+
+            {'t': 81.8, 'tipo': 'contraste', 'secao': 'Quem decide o quê',
+             'esquerda': dict({'rotulo': 'Assembleia de Sócios Nominais', 'titulo': 'Estrutura',
+                          'linhas': ['Capital social e estatuto.', 'Entrada e saída de sócios.',
+                                     'Alienação de cotas.']}, manda=True),
+             'direita': {'rotulo': 'Assembleia de Sócios', 'titulo': 'Operação',
+                         'linhas': ['Rotina e gestão.', 'Metas e remuneração.',
+                                    'Punições e desligamentos.']}},
+            {'t': 94.5, 'tipo': 'contraste', 'secao': 'Quem decide o quê',
+             'esquerda': {'rotulo': 'Assembleia de Sócios Nominais', 'titulo': 'Estrutura',
+                          'linhas': ['Capital social e estatuto.', 'Entrada e saída de sócios.',
+                                     'Alienação de cotas.']},
+             'direita': dict({'rotulo': 'Assembleia de Sócios', 'titulo': 'Operação',
+                         'linhas': ['Rotina e gestão.', 'Metas e remuneração.',
+                                    'Punições e desligamentos.']}, manda=True)},
+
+            {'t': 107.5, 'tipo': 'frase', 'secao': 'A regra prática', 'corpo': 46,
+             'linhas': ['Se muda a estrutura', 'ou o dinheiro do escritório,', 'não é decisão sua.'],
+             'rodape': 'As diretorias executam; não deliberam sobre isso. Leve à coordenação.'},
+
+            {'t': 122.8, 'tipo': 'frase', 'secao': 'Plano de carreira', 'corpo': 44,
+             'linhas': ['Associado pode virar sócio.', 'Não é automático', 'nem é de curto prazo.']},
+
+            {'t': 134.0, 'tipo': 'cartoes', 'secao': 'Plano de carreira',
+             'titulo': 'O que pesa na avaliação', 'cartoes': [
+               {'icone': 'dinheiro',  'titulo': 'Resultado', 'sub': 'o que a carteira entrega'},
+               {'icone': 'relogio',   'titulo': 'Prazo',     'sub': 'cumprimento, sem exceção'},
+               {'icone': 'documento', 'titulo': 'Técnica',   'sub': 'qualidade da peça'},
+               {'icone': 'pessoa',    'titulo': 'Postura',   'sub': 'com cliente e com a equipe'}], 'aceso': None},
+
+            {'t': 142.5, 'tipo': 'lista', 'secao': 'O que se espera de você',
+             'titulo': 'No cargo de associado', 'itens': ['Conduzir o caso do cadastro ao repasse',
+                       '100% de prazos e zero audiência perdida',
+                       'Resposta ao cliente no mesmo dia',
+                       'Hub sempre atualizado',
+                       '5 dias úteis para montar as ações do cliente novo'], 'aceso': None},
+            {'t': 153.5, 'tipo': 'lista', 'secao': 'O que se espera de você',
+             'titulo': 'No cargo de associado', 'itens': ['Conduzir o caso do cadastro ao repasse',
+                       '100% de prazos e zero audiência perdida',
+                       'Resposta ao cliente no mesmo dia',
+                       'Hub sempre atualizado',
+                       '5 dias úteis para montar as ações do cliente novo'], 'aceso': 3},
+            {'t': 159.0, 'tipo': 'lista', 'secao': 'O que se espera de você',
+             'titulo': 'No cargo de associado', 'itens': ['Conduzir o caso do cadastro ao repasse',
+                       '100% de prazos e zero audiência perdida',
+                       'Resposta ao cliente no mesmo dia',
+                       'Hub sempre atualizado',
+                       '5 dias úteis para montar as ações do cliente novo'], 'aceso': 4,
+             'rodape': 'O que não está no hub não existe.'},
+            {'t': 165.5, 'tipo': 'lista', 'secao': 'O que se espera de você',
+             'titulo': 'No cargo de associado', 'itens': ['Conduzir o caso do cadastro ao repasse',
+                       '100% de prazos e zero audiência perdida',
+                       'Resposta ao cliente no mesmo dia',
+                       'Hub sempre atualizado',
+                       '5 dias úteis para montar as ações do cliente novo'], 'aceso': 5},
+
+            {'t': 172.5, 'tipo': 'fluxo', 'secao': 'Quando atrasa',
+             'titulo': 'O que acontece com o caso',
+             'etapas': ['Montagem atrasa', 'Caso é redistribuído', 'Cliente segue atendido'],
+             'aceso': 3,
+             'rodape': 'A medida protege o cliente, que não pode esperar. Não é punição.'},
+
+            {'t': 187.0, 'tipo': 'frase', 'corpo': 42,
+             'linhas': ['A estrutura existe', 'para quem confia no escritório', 'não depender de sorte.']},
+        ],
+    },
+
     # 8.1 — Estatuto e Código de Ética no dia a dia (4:44). A narração anuncia
     # o título de cada bloco em voz alta, o que entrega os cortes prontos: cada
     # anúncio é o começo de uma seção. A tela do meio, linguagem certa ou

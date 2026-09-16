@@ -72,6 +72,7 @@ export const REGRAS_FIXAS = [
   '- Não cite nome de cliente, número de processo nem valor recebido.',
   '- Não mencione ferramenta que a fonte não descreva como em uso hoje.',
   '- Não use inglês: nem na narração, nem em rótulo, título ou legenda que apareça na tela.',
+  '- EXCEÇÃO: nome próprio de setor, cargo ou ferramenta do escritório NÃO é inglês para esta regra. Diga e escreva exatamente como a fonte traz: Back Office, Marketing, hub, Claude. Nunca traduza ("retaguarda operacional" e "diretoria de comunicação" estão errados).',
   '- O escritório se chama "Frider Andrade - Advogados". Nunca "Advocacia".',
   '- "Claude" é nome próprio: diga e escreva Claude. Nunca "Cloud".',
   '- NÃO atribua ao Claude o atendimento de cliente. Quem responde WhatsApp são os agentes de IA do hub; o Claude é a ferramenta de peça e pesquisa. Não troque um pelo outro.',

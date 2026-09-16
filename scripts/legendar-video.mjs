@@ -124,7 +124,18 @@ function normalizarTempo(t) {
     m = p[0]; [s, ms] = p[1].split('.');
   } else return null;
   if ([h, m, s, ms].some((x) => x === undefined || !/^\d+$/.test(x))) return null;
-  return `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${s.padStart(2, '0')}.${ms.padEnd(3, '0').slice(0, 3)}`;
+  // padStart NAO trunca: quando o Gemini escreve a hora com tres digitos
+  // ("000:00:11.500", visto em 16/09), o campo continua com 3 caracteres e a
+  // trava final reprova o arquivo inteiro por UMA deixa. Aqui cada campo passa
+  // por numero e volta com exatamente dois digitos; o que nao couber em dois
+  // e tempo absurdo, e melhor recusar do que gravar legenda que morre no meio.
+  const dd = (x) => {
+    const n = Number(x);
+    return n >= 0 && n <= 99 ? String(n).padStart(2, '0') : null;
+  };
+  const [hh, mm, ss] = [dd(h), dd(m), dd(s)];
+  if (hh === null || mm === null || ss === null) return null;
+  return `${hh}:${mm}:${ss}.${ms.padEnd(3, '0').slice(0, 3)}`;
 }
 
 let naoNormalizadas = 0;
