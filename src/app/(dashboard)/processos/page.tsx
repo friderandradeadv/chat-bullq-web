@@ -24,8 +24,10 @@ import {
   CheckCircle2,
   PauseCircle,
   Scale,
+  ScanLine,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CadastroPorDocumento } from '@/features/legal-cases/components/cadastro-por-documento';
 import {
   legalCasesService,
   type CaseListItem,
@@ -190,6 +192,8 @@ export default function ProcessosPage() {
   const [view, setView] = useState<'ativos' | 'baixados' | 'todos'>('ativos');
   const [grauFilter, setGrauFilter] = useState<'' | '1' | '2'>('');
   const [creating, setCreating] = useState(false);
+  // Cadastro lendo a inicial / o comprovante de protocolo / o print do tribunal.
+  const [lendoDoc, setLendoDoc] = useState(false);
   // Pré-preenchimento do cadastro (ex.: veio da notificação "processo fora do hub").
   const [createInitial, setCreateInitial] = useState<{ cnjNumber?: string; parte?: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -317,6 +321,9 @@ export default function ProcessosPage() {
           </IconBtn>
           <IconBtn title="Atualizar" onClick={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}>
             <RefreshCw className="h-4 w-4" />
+          </IconBtn>
+          <IconBtn title="Cadastrar por documento (inicial, comprovante de protocolo, print do tribunal)" onClick={() => setLendoDoc(true)}>
+            <ScanLine className="h-4 w-4" />
           </IconBtn>
           <button
             onClick={() => { setCreateInitial(null); setCreating(true); }}
@@ -454,6 +461,16 @@ export default function ProcessosPage() {
           )}
         </div>
       </div>
+
+      {lendoDoc && (
+        <CadastroPorDocumento
+          onClose={() => setLendoDoc(false)}
+          onDone={() => {
+            qc.invalidateQueries({ queryKey: ['legal-cases'] });
+            setLendoDoc(false);
+          }}
+        />
+      )}
 
       {creating && (
         <CreateCaseDialog

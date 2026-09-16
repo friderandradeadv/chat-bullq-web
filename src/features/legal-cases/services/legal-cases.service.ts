@@ -713,6 +713,28 @@ export const legalCasesService = {
   async remove(id: string): Promise<void> {
     await api.delete(`/legal-cases/${id}`);
   },
+  /**
+   * Cadastro por documento: a IA lê a inicial / o comprovante de protocolo / o
+   * print da tela do tribunal e devolve a ficha para conferência. NÃO grava.
+   */
+  async lerCadastroDoc(
+    arquivos: { nome: string; mime: string; base64: string }[],
+  ): Promise<CadastroDocLeitura> {
+    const { data } = await api.post('/legal-cases/cadastro-doc/ler', { arquivos });
+    return data.data ?? data;
+  },
+  /** Grava a ficha já conferida pelo advogado. */
+  async confirmarCadastroDoc(payload: {
+    ficha: FichaCadastroDoc;
+    contactId?: string | null;
+    caseIdExistente?: string | null;
+    apensarAoCaseId?: string | null;
+    responsibleId?: string | null;
+    arquivos?: string[];
+  }): Promise<{ ok: boolean; id: string; criado: boolean; completou: string[] }> {
+    const { data } = await api.post('/legal-cases/cadastro-doc/confirmar', payload);
+    return data.data ?? data;
+  },
   /** Ações em massa na aba Processos (seleção). 'delete' = arquivar (lixeira). */
   async bulk(payload: {
     ids: string[];
@@ -917,3 +939,48 @@ export const legalCasesService = {
     return data.data ?? data;
   },
 };
+
+// ─── Cadastro por documento ──────────────────────────────────────────
+
+export interface ParteCadastroDoc {
+  nome: string;
+  documento: string | null;
+  papel: 'AUTOR' | 'REU' | 'OUTRO';
+}
+
+export interface FichaCadastroDoc {
+  title: string | null;
+  cnjNumber: string | null;
+  court: string | null;
+  jurisdiction: string | null;
+  area: string | null;
+  value: number | null;
+  distributedAt: string | null;
+  partes: ParteCadastroDoc[];
+}
+
+export interface DocCadastroLido {
+  arquivo: string;
+  tipoDoc: 'inicial' | 'comprovante_protocolo' | 'print_tribunal' | 'decisao' | 'outro';
+  cnj: string | null;
+  classe: string | null;
+  valorCausa: number | null;
+  dataProtocolo: string | null;
+  tribunal: string | null;
+  comarca: string | null;
+  vara: string | null;
+  apensoDe: string | null;
+  partes: ParteCadastroDoc[];
+}
+
+export interface CadastroDocLeitura {
+  ficha: FichaCadastroDoc;
+  /** Campo → de onde veio o valor ('datajud' é dado oficial; 'documento' é leitura). */
+  origem: Record<string, 'datajud' | 'documento' | null>;
+  lidos: DocCadastroLido[];
+  avisos: string[];
+  existente: { id: string; title: string; cnjNumber: string | null; legalPhase: string | null; status: string } | null;
+  apensoSugerido: { id: string; title: string; cnjNumber: string | null } | null;
+  apensoCnj: string | null;
+  clienteSugerido: { contactId: string; name: string; por: 'cpf' | 'nome' } | null;
+}
