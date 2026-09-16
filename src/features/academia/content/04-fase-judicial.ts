@@ -11,6 +11,12 @@ export const FASE_JUDICIAL: Trilha = {
     {
       id: 'panorama',
       videoPlanejado: true,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/panorama.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/panorama.vtt',
+        duracao: '4:06',
+      },
       titulo: 'Panorama: as etapas e o que se faz em cada uma',
       resumo: 'O mapa inteiro antes do detalhe.',
       minutos: 7,

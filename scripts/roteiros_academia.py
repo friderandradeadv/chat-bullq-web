@@ -12,6 +12,84 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 5.1 — Panorama da fase judicial (4:03). Primeiro roteiro escrito já com
+    # os tipos gráficos: linha do tempo, fluxo, cartões e contraste.
+    'panorama': {
+        'duracao': 243.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 5 · Aula 1',
+             'titulo': 'Panorama da fase judicial',
+             'sub': ['Do protocolo da inicial ao dinheiro', 'na conta do cliente.']},
+
+            # 34.0s: "cada ato processual gera exatamente três obrigações"
+            {'t': 34.0, 'tipo': 'cartoes', 'secao': 'O princípio que atravessa tudo',
+             'titulo': 'Cada ato gera três obrigações',
+             'cartoes': [
+               {'icone': 'balanca',   'titulo': 'Cumprir',   'sub': 'o ato processual em si'},
+               {'icone': 'pasta',     'titulo': 'Registrar', 'sub': 'o andamento no hub'},
+               {'icone': 'chat',      'titulo': 'Comunicar', 'sub': 'o cliente, quando for relevante'}],
+             'aceso': None},
+
+            # 54.6s: "fazer só a primeira é entregar um terço do trabalho"
+            {'t': 54.6, 'tipo': 'proporcao', 'secao': 'O nível de exigência',
+             'titulo': 'Peça protocolada, sem registro e sem aviso',
+             'total': 3, 'marcados': 1, 'numero': 'Um terço do trabalho',
+             'rodape': 'A peça impecável sozinha não fecha o ato.'},
+
+            # 72.5s: as quatro grandes etapas
+            {'t': 72.5, 'tipo': 'linha_tempo', 'secao': 'As grandes etapas',
+             'titulo': 'Quatro estágios, sempre nesta ordem',
+             'marcos': [{'titulo': 'Início', 'sub': 'protocolo e admissibilidade'},
+                        {'titulo': 'Conhecimento', 'sub': 'defesa e provas'},
+                        {'titulo': 'Sentença', 'sub': 'a decisão do juiz'},
+                        {'titulo': 'Encerramento', 'sub': 'recurso, cumprimento, repasse'}],
+             'aceso': None},
+
+            # 90.7s: "descendo para o nível tático, a linha do tempo do fluxo diário"
+            {'t': 90.7, 'tipo': 'fluxo', 'secao': 'O ciclo, ato por ato',
+             'titulo': 'Do protocolo ao arquivamento',
+             'etapas': ['Protocolo da inicial', 'Admissibilidade e emenda', 'Citação do réu', 'Contestação e réplica', 'Provas ou julgamento antecipado', 'Sentença', 'Recurso e trânsito', 'Cumprimento, alvará e repasse'], 'aceso': 1,
+             'rodape': 'Conferir os documentos antes de protocolar é o primeiro ato — e o mais barato.'},
+            {'t': 107.7, 'tipo': 'fluxo', 'secao': 'O ciclo, ato por ato',
+             'titulo': 'Do protocolo ao arquivamento', 'etapas': ['Protocolo da inicial', 'Admissibilidade e emenda', 'Citação do réu', 'Contestação e réplica', 'Provas ou julgamento antecipado', 'Sentença', 'Recurso e trânsito', 'Cumprimento, alvará e repasse'], 'aceso': 2,
+             'rodape': 'Emenda, gratuidade, custas: despacho de admissibilidade pede resposta imediata.'},
+            {'t': 125.3, 'tipo': 'fluxo', 'secao': 'O ciclo, ato por ato',
+             'titulo': 'Do protocolo ao arquivamento', 'etapas': ['Protocolo da inicial', 'Admissibilidade e emenda', 'Citação do réu', 'Contestação e réplica', 'Provas ou julgamento antecipado', 'Sentença', 'Recurso e trânsito', 'Cumprimento, alvará e repasse'], 'aceso': 4,
+             'rodape': 'A contestação mapeia a estratégia da defesa. A réplica responde ponto a ponto.'},
+            {'t': 144.8, 'tipo': 'fluxo', 'secao': 'O ciclo, ato por ato',
+             'titulo': 'Do protocolo ao arquivamento', 'etapas': ['Protocolo da inicial', 'Admissibilidade e emenda', 'Citação do réu', 'Contestação e réplica', 'Provas ou julgamento antecipado', 'Sentença', 'Recurso e trânsito', 'Cumprimento, alvará e repasse'], 'aceso': 6,
+             'rodape': 'Na sentença: ler o dispositivo primeiro, conferir pedido por pedido.'},
+            {'t': 161.7, 'tipo': 'fluxo', 'secao': 'O ciclo, ato por ato',
+             'titulo': 'Do protocolo ao arquivamento', 'etapas': ['Protocolo da inicial', 'Admissibilidade e emenda', 'Citação do réu', 'Contestação e réplica', 'Provas ou julgamento antecipado', 'Sentença', 'Recurso e trânsito', 'Cumprimento, alvará e repasse'], 'aceso': 8,
+             'rodape': 'Trânsito em julgado: cumprimento, alvará e o dinheiro de volta ao cliente.'},
+
+            # 180.0s: "a lógica muda completamente na ponta final"
+            {'t': 180.0, 'tipo': 'contraste', 'secao': 'Os dois quadros',
+             'esquerda': {'rotulo': 'Kanban Fase Judicial', 'titulo': 'Prazo',
+                          'manda': True,
+                          'linhas': ['Uma coluna por etapa.', 'O DJEN move o card sozinho,',
+                                     'conforme as publicações.']},
+             'direita': {'rotulo': 'Execução & Repasse', 'titulo': 'Dinheiro',
+                         'linhas': ['Outra lógica na ponta final:', 'liberar valores e encerrar',
+                                    'o caso de verdade.']}},
+
+            {'t': 197.5, 'tipo': 'tela', 'secao': 'Onde isso vive',
+             'titulo': 'O quadro se move com o DJEN', 'print': 'kanban-fase-judicial'},
+
+            # 215.9s: Claude × agentes
+            {'t': 215.9, 'tipo': 'cartoes', 'secao': 'Cada ferramenta no seu lugar',
+             'titulo': 'Quem faz o quê',
+             'cartoes': [
+               {'icone': 'documento',  'titulo': 'Claude',  'sub': 'peça jurídica e pesquisa'},
+               {'icone': 'chat',       'titulo': 'Agentes do hub', 'sub': 'todo o WhatsApp com o cliente'}],
+             'aceso': None,
+             'rodape': 'São esteiras separadas. O Claude não fala com cliente em hipótese nenhuma.'},
+
+            # 235.9s: a pergunta final
+            {'t': 235.9, 'tipo': 'frase', 'secao': 'Fecho', 'corpo': 44,
+             'linhas': ['Cumpri, registrei', 'e comuniquei?'],
+             'rodape': 'Academia Frider · Trilha 5, aula 1'},
+        ]},
     # 2.2 — O foco do Início (2:34). Sete blocos, medidos no vtt de 59 deixas.
     'inicio': {
         'duracao': 154.0,

@@ -25,6 +25,7 @@ echo "📤 enviando $(ls "$FRAMES"/*.png | wc -l | tr -d ' ') quadros…"
 # o concat guarda caminho absoluto; reescrevo para o diretório da VPS
 sed "s|$FRAMES|/tmp/frames-$SLUG|g" "$FRAMES/lista.txt" > /tmp/lista-$SLUG.txt
 "${SCP[@]}" -q "/tmp/lista-$SLUG.txt" "$VPS:/tmp/frames-$SLUG/lista.txt"
+"${SCP[@]}" -q "$FRAMES/cenas.tsv" "$VPS:/tmp/frames-$SLUG/cenas.tsv"
 
 echo "🎬 montando na VPS (áudio do original, vídeo nosso)…"
 "${SSH[@]}" bash -s <<EOF
@@ -39,12 +40,42 @@ ORIG="$DEST/$SLUG.mp4"
 # duracao medida do audio, que e a fonte da verdade — a narracao manda.
 DUR=\$(ffprobe -v error -select_streams a:0 -show_entries stream=duration -of csv=p=0 "$DEST/$SLUG.gemini.mp4")
 echo "   audio do original: \${DUR}s"
+# MOVIMENTO: o concat puro dá corte seco entre slides, que num vídeo de
+# 3 minutos parece apresentacao de PowerPoint. O filtro abaixo faz cada
+# quadro entrar com um leve zoom continuo (efeito Ken Burns discreto) e
+# dissolve de um para o outro. E sutil de proposito: chamar atencao para a
+# transicao tiraria a atencao do que esta sendo dito.
+# 🚨 O MOVIMENTO SE FAZ CENA A CENA, NUNCA NO CONCAT INTEIRO.
+# Duas tentativas morreram antes desta: zoompan aplicado sobre o concat
+# demuxer bufferiza o filme todo e o kernel da VPS matou o ffmpeg por falta
+# de memoria (2,1 GB de 3,9 GB — confirmado em dmesg). Primeiro com upscale
+# para 4K, depois sem ele: morreu igual, porque o problema e o buffer do
+# concat, nao a resolucao.
+#
+# Aqui cada PNG vira um mp4 curto, com seu proprio zoom lento, e so entao os
+# trechos sao emendados. Cada processo dura segundos e ocupa pouca memoria.
+# Mais lento no total, mas cabe numa VPS que roda o hub ao lado.
+cd /tmp/frames-$SLUG
+: > trechos.txt
+i=0
+while read -r arq seg; do
+  [ -f "\$arq" ] || continue
+  out=\$(printf 'cena%03d.mp4' "\$i")
+  quadros=\$(awk "BEGIN{printf \"%d\", \$seg * 30}")
+  [ "\$quadros" -lt 2 ] && quadros=2
+  ffmpeg -nostdin -y -loglevel error -loop 1 -i "\$arq" -t "\$seg" \
+    -vf "zoompan=z='min(zoom+0.00025,1.03)':d=\$quadros:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=30,format=yuv420p" \
+    -c:v libx264 -preset veryfast -crf 21 -r 30 -threads 2 "\$out"
+  echo "file '\$out'" >> trechos.txt
+  i=\$((i+1))
+done < cenas.tsv
+
+# emenda os trechos e casa com o audio original, cortando pela duracao dele
 ffmpeg -nostdin -y -loglevel error \
-  -f concat -safe 0 -i lista.txt \
+  -f concat -safe 0 -i trechos.txt \
   -i "$DEST/$SLUG.gemini.mp4" \
   -map 0:v -map 1:a \
-  -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -r 30 \
-  -c:a aac -b:a 128k -t "\$DUR" \
+  -c:v copy -c:a aac -b:a 128k -t "\$DUR" \
   /tmp/frames-$SLUG/saida.mp4
 mv /tmp/frames-$SLUG/saida.mp4 "\$ORIG"
 chmod 644 "\$ORIG"
