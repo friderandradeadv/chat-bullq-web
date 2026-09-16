@@ -27,6 +27,14 @@ export interface Aula {
   minutos: number;
   /** Vídeo da aula. Ausente = "vídeo em produção" (o manual escrito já vale sozinho). */
   video?: Video;
+  /**
+   * Versão curta do MESMO conteúdo, quando existe. O player oferece as duas e a
+   * pessoa escolhe: a completa para estudar, a curta para relembrar antes de um
+   * atendimento. Nasceu em 16/09/2026 na aula de RMC, onde a aula completa tem
+   * 14 minutos e a síntese de 1min30 cobria a tese inteira sem perder nada
+   * essencial — jogar fora a curta seria desperdiçar uma boa porta de entrada.
+   */
+  videoResumo?: Video;
   /** Pasta do acervo antigo no Drive, quando existe gravação legada sobre o tema. */
   acervo?: { titulo: string; url: string };
   /** Manual escrito da aula, em markdown leve (ver ManualRender). */

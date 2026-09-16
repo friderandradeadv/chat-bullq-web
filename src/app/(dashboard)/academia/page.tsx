@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { TRILHAS, OBRIGATORIAS, TOTAL_AULAS, TOTAL_MINUTOS, promptCompleto } from '@/features/academia/content';
 import { ManualRender } from '@/features/academia/components/manual-render';
-import type { Aula, Trilha } from '@/features/academia/types';
+import type { Aula, Video as VideoAula_, Trilha } from '@/features/academia/types';
 import { useAuthStore } from '@/stores/auth-store';
 
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
@@ -24,6 +24,9 @@ function iconeDa(t: Trilha) {
 
 /** Embed do vídeo da aula — Drive (/preview) ou URL direta. */
 function VideoAula({ aula, cor }: { aula: Aula; cor: string }) {
+  // qual versão está tocando: false = completa, true = resumo
+  const [curto, setCurto] = useState(false);
+
   if (!aula.video) {
     // Prometer vídeo que não vem é pior que assumir a aula como escrita.
     const previsto = aula.videoPlanejado;
@@ -68,9 +71,38 @@ function VideoAula({ aula, cor }: { aula: Aula; cor: string }) {
   }
 
   // mp4 nosso: player nativo, que aceita legenda e funciona bem no celular.
-  const { url, legendas } = aula.video;
+  // Quando a aula tem versão curta, as duas ficam disponíveis e a pessoa escolhe:
+  // a completa para estudar, a curta para relembrar antes de um atendimento.
+  const temResumo = aula.videoResumo?.fonte === 'url';
+  const escolhido = curto && temResumo ? aula.videoResumo : aula.video;
+  const { url, legendas } = escolhido as Extract<VideoAula_, { fonte: 'url' }>;
   return (
     <div>
+      {temResumo && (
+        <div className="mb-2 flex items-center gap-1.5">
+          {[
+            { curta: false, rotulo: 'Aula completa', dur: aula.video.duracao },
+            { curta: true, rotulo: 'Resumo', dur: aula.videoResumo?.duracao },
+          ].map((op) => {
+            const ativo = op.curta === curto;
+            return (
+              <button
+                key={op.rotulo}
+                onClick={() => setCurto(op.curta)}
+                className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+                style={
+                  ativo
+                    ? { borderColor: cor, background: `${cor}1A`, color: cor }
+                    : { borderColor: 'transparent', color: '#8A9095' }
+                }
+              >
+                {op.rotulo}
+                {op.dur && <span className="ml-1.5 opacity-60">{op.dur}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-black dark:border-zinc-800">
         <video
           key={url}

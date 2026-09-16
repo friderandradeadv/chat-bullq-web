@@ -12,6 +12,207 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 6.1 — Tese de RMC e RCC, versão completa (14:26). O roteiro mais longo:
+    # 25 cenas, nenhuma passando de ~40s, porque tela parada cansa mais que
+    # texto. Tempos medidos no vtt de 303 deixas.
+    'rmc-rcc': {
+        'duracao': 865.7,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 6 · Aula 1',
+             'titulo': 'RMC e RCC: a tese principal',
+             'sub': ['A mecânica da lesão, as bases legais', 'e o estado atual da carteira.']},
+
+            {'t': 34.6, 'tipo': 'frase', 'secao': 'O que a cliente achou que fez', 'corpo': 46,
+             'linhas': ['Ela pediu um empréstimo.', 'Saiu com um cartão de crédito.'],
+             'rodape': 'O dinheiro veio de saque no cartão. O desconto é pagamento mínimo de fatura.'},
+
+            {'t': 70.5, 'tipo': 'contraste', 'secao': 'O que o banco registrou',
+             'esquerda': {'rotulo': 'O que ela contratou', 'titulo': 'Consignado', 'manda': True,
+                          'linhas': ['Parcela fixa.', 'Prazo com fim.', 'Saldo que diminui.']},
+             'direita': {'rotulo': 'O que o banco lançou', 'titulo': 'Cartão',
+                         'linhas': ['Pagamento mínimo de fatura.', 'Sem prazo para acabar.',
+                                    'Saldo que rola com rotativo.']}},
+
+            {'t': 107.5, 'tipo': 'cartoes', 'secao': 'Por que é ruinoso',
+             'titulo': 'Quatro danos que se somam',
+             'cartoes': [
+               {'icone': 'relogio',  'titulo': 'Dívida eterna', 'sub': 'juros rotativos sobre o que sobra'},
+               {'icone': 'cartao',   'titulo': 'Nunca usado',   'sub': 'cartão que não comprou nada'},
+               {'icone': 'cadeado',  'titulo': 'Margem presa',  'sub': 'impede consignado mais barato'},
+               {'icone': 'alerta',   'titulo': 'Sem plástico',  'sub': 'muitas vezes nem chegou'}],
+             'aceso': None},
+            {'t': 142.5, 'tipo': 'cartoes', 'secao': 'Por que é ruinoso',
+             'titulo': 'Quatro danos que se somam',
+             'cartoes': [
+               {'icone': 'relogio',  'titulo': 'Dívida eterna', 'sub': 'juros rotativos sobre o que sobra'},
+               {'icone': 'cartao',   'titulo': 'Nunca usado',   'sub': 'cartão que não comprou nada'},
+               {'icone': 'cadeado',  'titulo': 'Margem presa',  'sub': 'impede consignado mais barato'},
+               {'icone': 'alerta',   'titulo': 'Sem plástico',  'sub': 'muitas vezes nem chegou'}],
+             'aceso': 4},
+
+            {'t': 178.5, 'tipo': 'contraste', 'secao': 'As duas situações',
+             'esquerda': {'rotulo': 'Contrato quitado', 'titulo': 'Repetição', 'manda': True,
+                          'linhas': ['Devolução do que foi descontado', 'a mais, com danos morais.']},
+             'direita': {'rotulo': 'Contrato em aberto', 'titulo': 'Conversão',
+                         'linhas': ['Vira consignado comum:', 'recálculo, compensação,',
+                                    'margem liberada e danos morais.']}},
+
+            {'t': 213.5, 'tipo': 'cartoes', 'secao': 'A fundação probatória',
+             'titulo': 'Três pilares inegociáveis',
+             'cartoes': [
+               {'icone': 'documento', 'titulo': 'Extrato',  'sub': 'do benefício, com os descontos'},
+               {'icone': 'dinheiro',  'titulo': 'Cálculo',  'sub': 'estimativa genérica não condena'},
+               {'icone': 'cartao',    'titulo': 'Faturas',  'sub': 'provam que o cartão não foi usado'}],
+             'aceso': 1},
+            {'t': 247.5, 'tipo': 'cartoes', 'secao': 'A fundação probatória',
+             'titulo': 'Três pilares inegociáveis',
+             'cartoes': [
+               {'icone': 'documento', 'titulo': 'Extrato',  'sub': 'do benefício, com os descontos'},
+               {'icone': 'dinheiro',  'titulo': 'Cálculo',  'sub': 'estimativa genérica não condena'},
+               {'icone': 'cartao',    'titulo': 'Faturas',  'sub': 'provam que o cartão não foi usado'}],
+             'aceso': 3},
+
+            {'t': 282.5, 'tipo': 'lista', 'secao': 'A linha de argumentação',
+             'titulo': 'Cinco frentes, nesta ordem',
+             'itens': ['Vício de consentimento e falha de informação',
+                       'Ausência de uso, provada pelas faturas',
+                       'Onerosidade comparada ao consignado comum',
+                       'Vulnerabilidade agravada da consumidora idosa',
+                       'Indícios concretos de fraude no contrato digital'],
+             'aceso': None},
+
+            {'t': 316.6, 'tipo': 'cartoes', 'secao': 'O quinto argumento, por dentro',
+             'titulo': 'O que se examina no contrato digital',
+             'cartoes': [
+               {'icone': 'relogio',    'titulo': 'Tempo',      'sub': 'assinatura em segundos não se lê'},
+               {'icone': 'engrenagem', 'titulo': 'Dispositivo','sub': 'aparelho compatível com a cliente?'},
+               {'icone': 'pessoa',     'titulo': 'Biometria',  'sub': 'a selfie é dela mesma?'},
+               {'icone': 'documento',  'titulo': 'Trilha',     'sub': 'ou só o PDF final?'}],
+             'aceso': None},
+            {'t': 353.3, 'tipo': 'cartoes', 'secao': 'O quinto argumento, por dentro',
+             'titulo': 'O que se examina no contrato digital',
+             'cartoes': [
+               {'icone': 'relogio',    'titulo': 'Tempo',      'sub': 'assinatura em segundos não se lê'},
+               {'icone': 'engrenagem', 'titulo': 'Dispositivo','sub': 'aparelho compatível com a cliente?'},
+               {'icone': 'pessoa',     'titulo': 'Biometria',  'sub': 'a selfie é dela mesma?'},
+               {'icone': 'documento',  'titulo': 'Trilha',     'sub': 'ou só o PDF final?'}],
+             'aceso': 2},
+
+            # 388.6s: o STJ de março de 2026 — o ICP deixou de ser pilar
+            {'t': 388.6, 'tipo': 'contraste', 'secao': 'Março de 2026: o que mudou',
+             'esquerda': {'rotulo': 'Não basta mais', 'titulo': 'Faltar ICP',
+                          'linhas': ['O STJ decidiu que a ausência', 'de certificação, sozinha,',
+                                     'não anula o contrato digital.']},
+             'direita': {'rotulo': 'É isto que sustenta', 'titulo': 'Indício de fraude',
+                         'manda': True,
+                         'linhas': ['Assinatura relâmpago, laudo do', 'assistente — e o que o banco',
+                                    'NÃO juntou: IP, geolocalização,', 'carimbo de tempo, trilha.']}},
+
+            {'t': 423.5, 'tipo': 'frase', 'secao': 'O eixo da peça', 'corpo': 44,
+             'linhas': ['O consentimento livre e informado', 'simplesmente nunca existiu.'],
+             'rodape': 'É isso que a peça precisa demonstrar — não a falta de um certificado.'},
+
+            # 460.5s: A SUSPENSÃO NACIONAL
+            {'t': 460.5, 'tipo': 'frase', 'secao': 'O estado da carteira', 'corpo': 78,
+             'linhas': ['O RMC está suspenso', 'no país inteiro.'],
+             'rodape': 'Desde 08/04/2026, por decisão do STJ. 1º e 2º graus e Juizados.'},
+
+            {'t': 497.5, 'tipo': 'cartoes', 'secao': 'Os dois temas repetitivos',
+             'titulo': 'O que o STJ vai decidir',
+             'cartoes': [
+               {'icone': 'balanca', 'titulo': 'Tema 1.328', 'sub': 'há dano moral in re ipsa na invalidação?'},
+               {'icone': 'documento','titulo': 'Tema 1.414', 'sub': 'parâmetros de validade e a consequência'}],
+             'aceso': None,
+             'rodape': 'Ambos da 2ª Seção, rel. Min. Raul Araújo. Exceção à suspensão: cumprimento de sentença.'},
+
+            {'t': 531.5, 'tipo': 'contraste', 'secao': 'O que fazer enquanto isso',
+             'esquerda': {'rotulo': 'Ajuizar', 'titulo': 'Continua valendo', 'manda': True,
+                          'linhas': ['Interrompe a prescrição', 'e trava o caso esperando a tese,',
+                                     'em vez de deixar envelhecer.']},
+             'direita': {'rotulo': 'O que não se faz', 'titulo': 'Prometer prazo',
+                         'linhas': ['Ninguém sabe quando o STJ julga.', 'Dizer data ao cliente é prometer',
+                                    'o que não se controla.']}},
+
+            # 566.0s: a decadência de MG
+            {'t': 566.0, 'tipo': 'calendario', 'secao': 'O filtro de Minas Gerais',
+             'titulo': 'Quatro anos da assinatura',
+             'total': 4, 'corridos': 4, 'numero': 'E o caso decai',
+             'rodape': 'O TJMG reconhece de ofício. Descontos sucessivos NÃO reabrem o prazo.'},
+
+            {'t': 600.0, 'tipo': 'frase', 'secao': 'Por que isso é grave', 'corpo': 42,
+             'linhas': ['Cai a anulação — e caem junto', 'a repetição e o dano moral.'],
+             'rodape': 'São acessórios do pedido principal (art. 487, II, do CPC).'},
+
+            {'t': 634.8, 'tipo': 'cartoes', 'secao': 'Além do bancário',
+             'titulo': 'As outras frentes do escritório',
+             'cartoes': [
+               {'icone': 'balanca',   'titulo': 'Previdenciário', 'sub': 'planejamento e concessão'},
+               {'icone': 'pessoa',    'titulo': 'Acidentário',    'sub': 'acidente e doença do trabalho'},
+               {'icone': 'dinheiro',  'titulo': 'Superendividado','sub': 'repactuação e mínimo existencial'}],
+             'aceso': None},
+            {'t': 672.5, 'tipo': 'cartoes', 'secao': 'Além do bancário',
+             'titulo': 'As outras frentes do escritório',
+             'cartoes': [
+               {'icone': 'balanca',   'titulo': 'Previdenciário', 'sub': 'planejamento e concessão'},
+               {'icone': 'pessoa',    'titulo': 'Acidentário',    'sub': 'acidente e doença do trabalho'},
+               {'icone': 'dinheiro',  'titulo': 'Superendividado','sub': 'repactuação e mínimo existencial'}],
+             'aceso': 2},
+
+            {'t': 707.8, 'tipo': 'cartoes', 'secao': 'Quem faz o quê',
+             'titulo': 'A divisão de tarefas',
+             'cartoes': [
+               {'icone': 'chat',      'titulo': 'Agentes do hub', 'sub': 'o primeiro contato e o WhatsApp'},
+               {'icone': 'documento', 'titulo': 'Claude',         'sub': 'peça e pesquisa, sobre os autos'},
+               {'icone': 'balanca',   'titulo': 'Você',           'sub': 'a estratégia e a assinatura'}],
+             'aceso': None},
+
+            {'t': 744.8, 'tipo': 'frase', 'secao': 'O princípio que subordina tudo', 'corpo': 46,
+             'linhas': ['Toda a tecnologia serve', 'à ética — nunca o contrário.'],
+             'rodape': 'Art. 6º do Provimento 205/2021 e art. 9º do Código de Ética.'},
+
+            {'t': 780.0, 'tipo': 'contraste', 'secao': 'Como se fala com o cliente',
+             'esquerda': {'rotulo': 'Linguagem certa', 'titulo': 'Objetivo', 'manda': True,
+                          'linhas': ['“O que buscamos é a conversão', 'e a devolução do que foi pago',
+                                     'a mais.”']},
+             'direita': {'rotulo': 'Linguagem proibida', 'titulo': 'Promessa',
+                         'linhas': ['“A senhora vai receber.”', '“É certo que ganhamos.”',
+                                    '“Garantimos o dobro.”']}},
+
+            {'t': 814.0, 'tipo': 'frase', 'secao': 'A pergunta da réplica', 'corpo': 44,
+             'linhas': ['O banco provou que houve', 'consentimento informado?'],
+             'rodape': 'O ônus é dele. E é justamente isso que ele costuma não juntar.'},
+
+            {'t': 849.8, 'tipo': 'frase', 'secao': 'Fecho', 'corpo': 50,
+             'linhas': ['Expor, combater', 'e punir a falta de transparência.'],
+             'rodape': 'Academia Frider · Trilha 6, aula 1'},
+        ]},
+
+    # 6.1 — versão curta (1:30), o mesmo conteúdo em síntese. Serve para
+    # relembrar a tese antes de um atendimento.
+    'rmc-rcc-curto': {
+        'duracao': 86.5,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 6 · Aula 1 · Resumo',
+             'titulo': 'RMC e RCC em um minuto',
+             'sub': ['A tese principal do escritório,', 'em síntese.']},
+            {'t': 9.0, 'tipo': 'contraste', 'secao': 'A troca',
+             'esquerda': {'rotulo': 'Ela pediu', 'titulo': 'Empréstimo', 'manda': True,
+                          'linhas': ['Parcela fixa, prazo com fim.']},
+             'direita': {'rotulo': 'Recebeu', 'titulo': 'Cartão',
+                         'linhas': ['Pagamento mínimo, rotativo,', 'sem fim.']}},
+            {'t': 27.0, 'tipo': 'contraste', 'secao': 'As duas bases',
+             'esquerda': {'rotulo': 'Quitado', 'titulo': 'Repetição',
+                          'linhas': ['Devolução do que se pagou a mais.']},
+             'direita': {'rotulo': 'Em aberto', 'titulo': 'Conversão', 'manda': True,
+                         'linhas': ['Vira consignado comum,', 'com a margem liberada.']}},
+            {'t': 50.0, 'tipo': 'frase', 'secao': 'O estado da carteira', 'corpo': 66,
+             'linhas': ['Suspenso no país', 'desde 08/04/2026.'],
+             'rodape': 'Temas 1.328 e 1.414 do STJ. Ajuizar interrompe a prescrição; o caso espera a tese.'},
+            {'t': 66.0, 'tipo': 'calendario', 'secao': 'O filtro de Minas',
+             'titulo': 'Quatro anos da assinatura',
+             'total': 4, 'corridos': 4, 'numero': 'E o caso decai',
+             'rodape': 'Academia Frider · Trilha 6, aula 1 — resumo'},
+        ]},
     # 5.1 — Panorama da fase judicial (4:03). Primeiro roteiro escrito já com
     # os tipos gráficos: linha do tempo, fluxo, cartões e contraste.
     'panorama': {

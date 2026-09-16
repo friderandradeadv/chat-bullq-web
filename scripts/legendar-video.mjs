@@ -62,10 +62,37 @@ const url =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' +
   apiKey;
 
-const res = await fetch(url, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(body),
+// 🚨 O FETCH NAO SERVE PARA AUDIO LONGO E O UNDICI NAO E IMPORTAVEL.
+// O 6.1 saiu com 14,5 min (2,5 MB de audio) e o fetch abortou com
+// UND_ERR_HEADERS_TIMEOUT: o padrao espera 5 min pelos headers, e transcrever
+// 15 min de fala passa disso. Tentei configurar o dispatcher do undici, mas ele
+// e interno do Node e `import('undici')` falha na VPS. Solucao: https nativo,
+// onde o timeout e explicito e acompanha o tamanho do audio.
+const https = await import('node:https');
+const minutosAudio = Math.max(1, readFileSync(audioPath).length / (170 * 1024));
+const esperaMs = Math.min(30, Math.max(10, Math.ceil(minutosAudio * 2))) * 60_000;
+console.log(`   transcrevendo (espero ate ${Math.round(esperaMs / 60000)} min)…`);
+
+const corpo = JSON.stringify(body);
+const res = await new Promise((ok, falha) => {
+  const req = https.request(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(corpo) },
+    timeout: esperaMs,
+  }, (r) => {
+    let dados = '';
+    r.setEncoding('utf8');
+    r.on('data', (c) => { dados += c; });
+    r.on('end', () => ok({
+      ok: r.statusCode >= 200 && r.statusCode < 300,
+      status: r.statusCode,
+      text: async () => dados,
+      json: async () => JSON.parse(dados),
+    }));
+  });
+  req.on('timeout', () => { req.destroy(new Error(`sem resposta em ${esperaMs / 60000} min`)); });
+  req.on('error', falha);
+  req.end(corpo);
 });
 
 if (!res.ok) {

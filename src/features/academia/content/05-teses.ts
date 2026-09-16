@@ -11,6 +11,20 @@ export const TESES: Trilha = {
     {
       id: 'rmc-rcc',
       videoPlanejado: true,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/rmc-rcc.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/rmc-rcc.vtt',
+        duracao: '14:26',
+      },
+      // A síntese cobre a tese inteira e serve para relembrar antes de
+      // um atendimento; a completa é para estudar.
+      videoResumo: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/rmc-rcc-curto.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/rmc-rcc-curto.vtt',
+        duracao: '1:30',
+      },
       titulo: 'RMC e RCC: a tese principal',
       resumo: 'O que é a reserva de margem consignável, por que ela lesa o aposentado.',
       minutos: 14,
