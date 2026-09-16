@@ -51,13 +51,26 @@ const lerBase64 = (file: File) =>
  * A conferência não é cerimônia: a leitura vem de pixel, e processo errado no
  * hub só sócio apaga. Cada campo mostra de onde veio o valor.
  */
-export function CadastroPorDocumento({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+export function CadastroPorDocumento({
+  onClose,
+  onDone,
+  pendente,
+}: {
+  onClose: () => void;
+  onDone: () => void;
+  /**
+   * Pendência do recebedor de WhatsApp: a leitura JÁ foi feita quando o
+   * documento chegou, então o modal abre direto na conferência — o advogado
+   * não reenvia arquivo nenhum, só confere e confirma.
+   */
+  pendente?: { messageId: string; arquivo: string | null; remetente: string | null; leitura: CadastroDocLeitura };
+}) {
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
   const [lendo, setLendo] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [leitura, setLeitura] = useState<CadastroDocLeitura | null>(null);
-  const [ficha, setFicha] = useState<FichaCadastroDoc | null>(null);
+  const [leitura, setLeitura] = useState<CadastroDocLeitura | null>(pendente?.leitura ?? null);
+  const [ficha, setFicha] = useState<FichaCadastroDoc | null>(pendente?.leitura.ficha ?? null);
   const [vincularCliente, setVincularCliente] = useState(true);
   const [apensar, setApensar] = useState(true);
   const [completarExistente, setCompletarExistente] = useState(true);
@@ -100,7 +113,8 @@ export function CadastroPorDocumento({ onClose, onDone }: { onClose: () => void;
         contactId: vincularCliente ? leitura.clienteSugerido?.contactId ?? null : null,
         caseIdExistente: usarExistente ? leitura.existente!.id : null,
         apensarAoCaseId: apensar ? leitura.apensoSugerido?.id ?? null : null,
-        arquivos: files.map((f) => f.name),
+        arquivos: pendente ? [pendente.arquivo ?? 'documento'] : files.map((f) => f.name),
+        messageId: pendente?.messageId ?? null,
       });
       toast.success(
         r.criado
@@ -130,7 +144,9 @@ export function CadastroPorDocumento({ onClose, onDone }: { onClose: () => void;
               <ScanLine className="h-4 w-4 text-[#228BE6]" /> Cadastrar por documento
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500">
-              A inicial, o comprovante de protocolo ou o print da tela do tribunal. Pode mandar os três de uma vez.
+              {pendente
+                ? `Chegou no WhatsApp${pendente.remetente ? ` de ${pendente.remetente}` : ''} e já foi lido — confira e confirme.`
+                : 'A inicial, o comprovante de protocolo ou o print da tela do tribunal. Pode mandar os três de uma vez.'}
             </p>
           </div>
           <button onClick={onClose} className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">

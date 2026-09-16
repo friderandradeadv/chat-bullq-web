@@ -723,6 +723,16 @@ export const legalCasesService = {
     const { data } = await api.post('/legal-cases/cadastro-doc/ler', { arquivos });
     return data.data ?? data;
   },
+  /** Protocolos que chegaram pelo WhatsApp e esperam conferência. */
+  async pendentesCadastroDoc(): Promise<PendenteCadastroDoc[]> {
+    const { data } = await api.get('/legal-cases/cadastro-doc/pendentes');
+    return data.data ?? data;
+  },
+  /** Descarta a pendência (o documento não era papel de processo). */
+  async descartarCadastroDoc(messageId: string): Promise<{ ok: boolean }> {
+    const { data } = await api.post(`/legal-cases/cadastro-doc/pendentes/${messageId}/descartar`);
+    return data.data ?? data;
+  },
   /** Grava a ficha já conferida pelo advogado. */
   async confirmarCadastroDoc(payload: {
     ficha: FichaCadastroDoc;
@@ -731,6 +741,7 @@ export const legalCasesService = {
     apensarAoCaseId?: string | null;
     responsibleId?: string | null;
     arquivos?: string[];
+    messageId?: string | null;
   }): Promise<{ ok: boolean; id: string; criado: boolean; completou: string[] }> {
     const { data } = await api.post('/legal-cases/cadastro-doc/confirmar', payload);
     return data.data ?? data;
@@ -983,4 +994,13 @@ export interface CadastroDocLeitura {
   apensoSugerido: { id: string; title: string; cnjNumber: string | null } | null;
   apensoCnj: string | null;
   clienteSugerido: { contactId: string; name: string; por: 'cpf' | 'nome' } | null;
+}
+
+export interface PendenteCadastroDoc {
+  messageId: string;
+  conversationId: string;
+  arquivo: string | null;
+  remetente: string | null;
+  recebidoEm: string;
+  leitura: CadastroDocLeitura | null;
 }

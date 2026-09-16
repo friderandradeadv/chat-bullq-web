@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CadastroPorDocumento } from '@/features/legal-cases/components/cadastro-por-documento';
+import { PendentesCadastroDoc } from '@/features/legal-cases/components/pendentes-cadastro-doc';
 import {
   legalCasesService,
   type CaseListItem,
@@ -369,6 +370,9 @@ export default function ProcessosPage() {
           <option value="todos">Todos</option>
         </select>
       </div>
+
+      {/* Protocolo que chegou pelo WhatsApp e ainda não foi conferido. */}
+      <PendentesCadastroDoc onChange={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
 
       <div className="flex items-center gap-3 px-4 pt-3 text-sm lg:px-8">
         {canDeleteCases && selected.size > 0 ? (
