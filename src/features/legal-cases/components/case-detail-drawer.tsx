@@ -951,7 +951,7 @@ function SugerirDadosIA({ caseId, temAdversa, onApplied }: { caseId: string; tem
 // Contratos a impugnar (intake pré-judicial bancário): cada linha = banco × produto
 // × valor. "Sugerir com IA" lê a conversa; "Gerar iniciais" desmembra em 1 card por
 // linha (na fase Montar inicial) e arquiva o intake.
-type CRow = { id: string; reu: string; produto: string; valor: string };
+type CRow = { id: string; reu: string; produto: string; valor: string; beneficio?: string };
 const PRODUTOS_IMPUGNAR = ['RMC', 'RCC', 'Empréstimo consignado', 'Portabilidade', 'Revisional'];
 // Chave de deduplicação banco × produto (sem acento/caixa) — evita o card repetido
 // quando o mesmo contrato vem do HISCON e do HISCRE.
@@ -967,7 +967,7 @@ const parseValorBR = (s: string): number | null => {
 
 function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, onChanged, onDesmembrado }: { caseId: string; phaseKey: string | undefined; initial: any[]; docs?: { hiscon?: string; hiscre?: string; jg?: string }; showDesmembrar?: boolean; onChanged: () => void; onDesmembrado?: () => void }) {
   const [rows, setRows] = useState<CRow[]>(() =>
-    (initial ?? []).map((c: any) => ({ id: c.id || rowId(), reu: c.reu ?? '', produto: c.produto ?? 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })),
+    (initial ?? []).map((c: any) => ({ id: c.id || rowId(), reu: c.reu ?? '', produto: c.produto ?? 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '', beneficio: c.beneficio ?? '' })),
   );
   const [sug, setSug] = useState(false);
   const [sav, setSav] = useState(false);
@@ -978,7 +978,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
   const setRow = (id: string, patch: Partial<CRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const addRow = () => setRows((r) => [...r, { id: rowId(), reu: '', produto: 'RMC', valor: '' }]);
   const rmRow = (id: string) => setRows((r) => r.filter((x) => x.id !== id));
-  const payload = () => rows.filter((r) => r.reu.trim()).map((r) => ({ id: r.id, reu: r.reu.trim(), produto: r.produto.trim() || 'RMC', valor: parseValorBR(r.valor) }));
+  const payload = () => rows.filter((r) => r.reu.trim()).map((r) => ({ id: r.id, reu: r.reu.trim(), produto: r.produto.trim() || 'RMC', valor: parseValorBR(r.valor), beneficio: r.beneficio?.trim() || null }));
   // Adiciona contratos (HISCON/HISCRE) deduplicando por banco×produto contra o que
   // já está na lista — só popula pra você revisar (NÃO cria card-filhote).
   const mergeContratos = (contratos: { id?: string; reu: string; produto?: string | null; valor?: number | null }[]): number => {
@@ -1021,7 +1021,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
     setSug(true);
     try {
       const { contratos } = await legalCasesService.sugerirContratos(caseId);
-      setRows((contratos ?? []).map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '' })));
+      setRows((contratos ?? []).map((c) => ({ id: c.id || rowId(), reu: c.reu, produto: c.produto || 'RMC', valor: c.valor != null ? fmtValorBR(Number(c.valor)) : '', beneficio: (c as any).beneficio ?? '' })));
       toast.success(contratos?.length ? `${contratos.length} sugestão(ões) da IA — confira e salve` : 'A IA não achou bancos/produtos claros na conversa');
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao sugerir'); } finally { setSug(false); }
   };
@@ -1092,7 +1092,10 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
               {PRODUTOS_IMPUGNAR.map((p) => <option key={p} value={p}>{p}</option>)}
               {r.produto && !PRODUTOS_IMPUGNAR.includes(r.produto) && <option value={r.produto}>{r.produto}</option>}
             </select>
-            <input value={r.valor} onChange={(e) => setRow(r.id, { valor: maskCurrencyBR(e.target.value) })} placeholder="Valor" inputMode="decimal" className={INPUT_BASE + ' w-[5.5rem] shrink-0'} />
+            <input value={r.beneficio ?? ''} onChange={(e) => setRow(r.id, { beneficio: e.target.value.toUpperCase().slice(0, 4) })}
+              placeholder="AP/PM" title="Benefício de onde sai o desconto — separa cards iguais contra o mesmo banco"
+              className={INPUT_BASE + ' w-[4rem] shrink-0 uppercase'} />
+            <input value={r.valor} onChange={(e) => setRow(r.id, { valor: maskCurrencyBR(e.target.value) })} placeholder="Valor" inputMode="decimal" className={INPUT_BASE + ' w-[5rem] shrink-0'} />
             <button onClick={() => rmRow(r.id)} title="Remover" className="shrink-0 rounded p-1 text-zinc-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
         ))}

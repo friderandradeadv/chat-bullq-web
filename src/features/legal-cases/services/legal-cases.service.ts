@@ -150,6 +150,9 @@ export interface ContratoImpugnar {
   doc: string | null;
   produto: string;
   valor: number | null;
+  /** Benefício de onde sai o desconto (AP, PM, ou o NB). Cliente com mais de um
+   *  benefício gera cards iguais contra o mesmo banco — isto é o que os separa. */
+  beneficio?: string | null;
 }
 
 /** Processo relacionado por apensamento (principal ou apenso). */
