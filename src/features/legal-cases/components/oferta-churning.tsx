@@ -103,6 +103,15 @@ function textoDaOferta(nome: string | null, a: Achado): string {
       'Não posso garantir resultado, isso ninguém honesto garante, mas posso dizer que o caso tem do que tratar.',
   );
   linhas.push('');
+  // Honorários no padrão do escritório: quota litis meio a meio. Dito em uma
+  // linha e sem percentual escondido — é a parte que o cliente mais releva e a
+  // que mais gera briga depois.
+  linhas.push(
+    'Os honorários são os mesmos do seu contrato: meio a meio. Do que a senhora ' +
+      'receber, 50% fica com a senhora e 50% com o escritório. Se não houver ' +
+      'recebimento, a senhora não paga nada.',
+  );
+  linhas.push('');
   linhas.push('Quer que eu inclua essa parte? Responda SIM ou NÃO que eu sigo daqui.');
   return linhas.join('\n');
 }
@@ -228,9 +237,38 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     }
   };
 
+  /**
+   * Aceitou: a ação entra na lista de "contratos a impugnar" do card, marcada
+   * como CHURNING, e o card sobe para "Montar inicial".
+   *
+   * 🚨 Não cria o card do réu aqui de propósito. Quem cria é o "Gerar iniciais",
+   * o mesmo caminho de sempre — assim existe UM lugar só que faz nascer card, e
+   * você vê a linha na tela e confere o réu antes de o card existir. Criar por
+   * fora seria um segundo caminho, invisível e sem revisão.
+   */
   const responder = async (status: 'aceita' | 'recusada') => {
     setRegistrando(true);
     try {
+      if (status === 'aceita' && achado?.instituicoes?.length) {
+        // A lista vive no metadata do caso, é de onde o próprio drawer a lê.
+        const atuais: any[] = ((caso.metadata as any)?.contratos ?? []) as any[];
+        const jaTem = (reu: string) =>
+          atuais.some((c: any) => String(c?.reu ?? '').toUpperCase().trim() === reu.toUpperCase().trim());
+        const novas = achado.instituicoes
+          .filter((reu) => !jaTem(reu))
+          .map((reu, i) => ({
+            id: `churn${Date.now().toString(36)}${i}`,
+            reu,
+            doc: null,
+            produto: 'CHURNING',
+            valor: null,
+            beneficio: /^(AP|PM)\b/.exec(caso.title ?? '')?.[1] ?? null,
+          }));
+        if (novas.length) {
+          await legalCasesService.saveContratos(caso.id, [...atuais, ...novas] as any);
+          toast.success(`${novas.length} réu(s) do churning entraram em "Contratos a impugnar"`);
+        }
+      }
       const r = await legalCasesService.registrarOfertaChurning(caso.id, { status });
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
@@ -267,7 +305,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       {respondida ? (
         <p className="mt-2 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
           {oferta?.status === 'aceita'
-            ? 'O cliente aceitou. O card foi para "Montar inicial" — a cadeia entra na mesma ação, em litisconsórcio, e não fatiada por contrato.'
+            ? 'O cliente aceitou. Os réus entraram em "Contratos a impugnar" e o card foi para "Montar inicial" — confira as linhas e clique em "Gerar iniciais" para os cards nascerem.'
             : 'O cliente recusou. Fica registrado no card; a ação do cartão segue normalmente.'}
         </p>
       ) : (

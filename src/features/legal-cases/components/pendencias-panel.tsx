@@ -3,9 +3,11 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DropZone } from '@/components/drop-zone';
-import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, Upload, User, Building2 } from 'lucide-react';
+import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, Upload, User, Building2, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { inboxService } from '@/features/inbox/services/inbox.service';
+import type { ConversaDoCliente } from '@/components/ui/abrir-conversa';
 
 /**
  * Pendência do caso — o que falta para a fase andar.
@@ -28,6 +30,8 @@ export type Pendencia = {
   /** O que é preciso ter em mãos (CPF, nascimento, protocolo) — cada um copiável. */
   dados?: { rotulo: string; valor: string }[];
   status: 'pendente' | 'resolvido';
+  /** Quando o pedido foi enviado ao cliente — base para cobrar de novo. */
+  pedidoEm?: string;
 };
 
 const novoId = () => `p${Date.now().toString(36)}`;
@@ -59,6 +63,7 @@ function normalizar(bruta: unknown): Pendencia[] {
             .map((d: any) => ({ rotulo: String(d.rotulo).trim(), valor: String(d.valor ?? '') }))
         : undefined,
       status: p.status === 'resolvido' ? ('resolvido' as const) : ('pendente' as const),
+      pedidoEm: String(p.pedidoEm ?? '').trim() || undefined,
     }))
     .filter((p) => p.titulo !== '');
 }
@@ -79,12 +84,15 @@ function Chip({ rotulo, valor }: { rotulo: string; valor: string }) {
 }
 
 export function PendenciasPanel({
-  caseId, onIrParaAnexos, onAnexado,
+  caseId, onIrParaAnexos, onAnexado, conversa, clienteNome,
 }: {
   caseId: string;
   onIrParaAnexos?: () => void;
   /** Avisa o card para recarregar a lista de anexos depois do upload. */
   onAnexado?: () => void;
+  /** Conversa do cliente no WhatsApp — sem ela não há para onde enviar o pedido. */
+  conversa?: ConversaDoCliente | null;
+  clienteNome?: string | null;
 }) {
   const qc = useQueryClient();
   // A lista mora no CLIENTE, não no caso: o mesmo cliente tem um card por réu, e
@@ -142,6 +150,57 @@ export function PendenciasPanel({
     } finally {
       setSubindo(null);
     }
+  };
+
+  const [pedindo, setPedindo] = useState(false);
+
+  /**
+   * O pedido dos documentos que dependem do CLIENTE, em uma mensagem só.
+   *
+   * Mandar um pedido por item vira enxurrada e ninguém responde; mandar sem
+   * dizer por que precisa também não. Aqui vai a lista com o motivo de cada um,
+   * na ordem em que estão no card.
+   *
+   * 🚨 Só o advogado dispara, por clique. O texto é montado aqui, mas quem
+   * manda é quem leu — e a mensagem sai da conversa que já existe.
+   */
+  const textoDoPedido = (itens: Pendencia[]): string => {
+    const primeiro = (clienteNome ?? '').trim().split(/\s+/)[0] || 'Senhor(a)';
+    const l: string[] = [];
+    l.push(`${primeiro}, para eu entrar com a sua ação ainda falta o seguinte:`);
+    l.push('');
+    itens.forEach((p, i) => {
+      l.push(`${i + 1}. ${p.titulo}`);
+      if (p.motivo) l.push(`   ${p.motivo}`);
+    });
+    l.push('');
+    l.push('Pode mandar por aqui mesmo, foto serve. Assim que chegar, eu sigo com o seu caso.');
+    return l.join('\n');
+  };
+
+  const pedirAoCliente = async () => {
+    const doCliente = lista.filter((p) => p.status !== 'resolvido' && p.responsavel === 'cliente');
+    if (!doCliente.length) { toast.error('Nenhuma pendência do cliente em aberto.'); return; }
+    if (!conversa?.conversationId) {
+      toast.error('Sem conversa vinculada a este cliente — vincule o WhatsApp dele antes.');
+      return;
+    }
+    setPedindo(true);
+    try {
+      await inboxService.sendMessage({
+        conversationId: conversa.conversationId,
+        type: 'text',
+        content: { text: textoDoPedido(doCliente) },
+        oneOff: true,
+      });
+      // Fica no card QUANDO se pediu: é o que diz se já é hora de cobrar de novo.
+      await persistir(lista.map((p) => (
+        doCliente.some((d) => d.id === p.id) ? { ...p, pedidoEm: new Date().toISOString() } : p
+      )));
+      toast.success(`Pedido enviado — ${doCliente.length} documento(s)`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui enviar o pedido.');
+    } finally { setPedindo(false); }
   };
 
   const pendentes = lista.filter((p) => p.status !== 'resolvido');
@@ -272,6 +331,36 @@ export function PendenciasPanel({
           );
         })}
       </ul>
+
+      {(() => {
+        const doCliente = lista.filter((p) => p.status !== 'resolvido' && p.responsavel === 'cliente');
+        if (!doCliente.length) return null;
+        // Há quantos dias o pedido foi feito: é o que diz se já passou da hora
+        // de cobrar. Sem isso, "mandar de novo" vira chute — ou insistência.
+        const carimbos = doCliente.map((p) => p.pedidoEm).filter(Boolean) as string[];
+        const ultimo = carimbos.sort().slice(-1)[0];
+        const dias = ultimo
+          ? Math.floor((Date.now() - new Date(ultimo).getTime()) / 86_400_000)
+          : null;
+        return (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-[#cfe0ed] bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+            <span className="text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
+              {dias == null
+                ? `${doCliente.length} documento(s) dependem do cliente — ainda não pedidos.`
+                : dias === 0
+                  ? `Pedido hoje. Aguarde antes de cobrar de novo.`
+                  : `Pedido há ${dias} dia(s)${dias >= 3 ? ' — já cabe cobrar.' : '.'}`}
+            </span>
+            <button type="button" onClick={pedirAoCliente} disabled={pedindo || !conversa?.conversationId}
+              title={conversa?.conversationId ? 'Monta a lista e envia ao cliente no WhatsApp' : 'Sem conversa vinculada a este cliente'}
+              className={`ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-40 ${
+                dias != null && dias >= 3 ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#228BE6] hover:bg-[#1c7ed6]'}`}>
+              {pedindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+              {pedindo ? 'Enviando…' : dias == null ? 'Pedir ao cliente' : 'Cobrar de novo'}
+            </button>
+          </div>
+        );
+      })()}
 
       <div className="mt-2 flex items-center gap-1.5">
         <input

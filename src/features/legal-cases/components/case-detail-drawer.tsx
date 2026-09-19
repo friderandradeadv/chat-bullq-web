@@ -519,6 +519,8 @@ export function CaseDetailDrawer({
             {c && (
               <PendenciasPanel
                 caseId={c.id}
+                conversa={c.clienteConversa}
+                clienteNome={cliente?.name}
                 onIrParaAnexos={() => setTab('anexos')}
                 onAnexado={() => qc.invalidateQueries({ queryKey: ['legal-case', caseId] })}
               />
