@@ -28,6 +28,7 @@ import { GerarPecaRepb } from './gerar-inicial-superendiv';
 import { RepbModelosMalote } from './repb-modelos-malote';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
+import { OfertaChurning } from './oferta-churning';
 import { BeneficioTag, ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
@@ -522,6 +523,8 @@ export function CaseDetailDrawer({
                 onAnexado={() => qc.invalidateQueries({ queryKey: ['legal-case', caseId] })}
               />
             )}
+
+            {c && <OfertaChurning caso={c} onMudou={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
 
             {/* REPB: provisionamento, acordo e malotes agora vivem POR BANCO no dossiê
                 BancosReusEditor (acima) — sem seções globais soltas. */}

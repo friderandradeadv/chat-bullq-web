@@ -1,6 +1,17 @@
 import { api } from '@/lib/api';
 import type { ConversaDoCliente } from '@/components/ui/abrir-conversa';
 
+/** Oferta da ação de churning (reciclagem de contratos), guardada no processo. */
+export interface OfertaChurning {
+  status: 'analisada' | 'enviada' | 'aceita' | 'recusada';
+  resumo: string | null;
+  indicios: string[];
+  mensagem: string | null;
+  analisadaEm?: string;
+  enviadaEm?: string;
+  respondidaEm?: string;
+}
+
 export interface ViabilidadeAnalise {
   veredito: 'viavel' | 'inviavel' | 'depende';
   confianca: 'alta' | 'media' | 'baixa';
@@ -842,6 +853,19 @@ export const legalCasesService = {
   },
   /** Upload do JG (PDF base64) → IA extrai líquido/anual para a justiça gratuita. */
   /** Pendências do CLIENTE do processo — valem para todos os casos dele. */
+  /** Estado da oferta da ação de churning neste processo. */
+  async lerOfertaChurning(id: string): Promise<{ ok: boolean; oferta: OfertaChurning | null; fase: string | null }> {
+    const { data } = await api.get(`/legal-cases/${id}/oferta-churning`);
+    return data.data ?? data;
+  },
+  /** Registra o andamento; status 'aceita' move o card para "montar inicial". */
+  async registrarOfertaChurning(
+    id: string,
+    dto: { status: 'analisada' | 'enviada' | 'aceita' | 'recusada'; resumo?: string; indicios?: string[]; mensagem?: string },
+  ): Promise<{ ok: boolean; oferta: OfertaChurning; moveu: boolean; fase: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/oferta-churning`, dto);
+    return data.data ?? data;
+  },
   async lerPendencias(id: string): Promise<{ ok: boolean; cliente: string | null; lista: unknown[] }> {
     const { data } = await api.get(`/legal-cases/${id}/pendencias`);
     return data.data ?? data;
