@@ -42,7 +42,11 @@ const PROMPT = [
   'no hub, "card" é o cartão do kanban; "cartório" só se o áudio falar de tabelionato),',
   'Frider Andrade, hub, DJEN, RMC, RCC,',
   'HISCON, HISCRE, PJe, e-SAJ, Projudi, eproc, ZapSign, Gemini, WhatsApp, OAB, CPC, CNJ,',
-  'INSS, LGPD, alvará, astreinte, sucumbência, preclusão.',
+  'INSS, LGPD, alvará, astreinte, sucumbência, preclusão,',
+  // ASAAS se pronuncia "azás" e saiu grafado "AZAS" em 19/09; Cowork saiu
+  // "co-work". Mesmo padrão do Claude/Cloud: o áudio está certo, a grafia não.
+  'ASAAS (nunca "AZAS" nem "Azaz"), Cowork (uma palavra, nunca "co-work"),',
+  'Cálculo Jurídico (nome da ferramenta, em maiúsculas).',
 ].join('\n');
 
 const body = {

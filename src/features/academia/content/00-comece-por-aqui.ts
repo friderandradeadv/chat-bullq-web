@@ -323,6 +323,11 @@ export const COMECE_POR_AQUI: Trilha = {
       titulo: 'Suas ferramentas e seus acessos',
       resumo: 'O que cada sistema faz, quais acessos você precisa e a regra de login.',
       minutos: 8,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/ferramentas.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/ferramentas.vtt',
+      },
       manual: [
         '## O que você usa hoje',
         '',

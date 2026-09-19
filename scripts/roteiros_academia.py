@@ -12,6 +12,109 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 1.5 — Suas ferramentas e seus acessos (2:52). Saiu abaixo dos 3 minutos
+    # pedidos, e tudo bem: o roteiro inteiro foi coberto. A aula é uma lista de
+    # ferramentas, não tem o que esticar sem encher linguiça.
+    #
+    # A transcrição trouxe "AZAS" por ASAAS e "co-work" por Cowork — o áudio
+    # está certo, a grafia não. Mesmo padrão do Claude/Cloud. Corrigido na
+    # legenda e os dois nomes entraram no glossário do legendador.
+    'ferramentas': {
+        'duracao': 172.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 1 · Aula 5',
+             'titulo': 'Suas ferramentas e seus acessos',
+             'sub': ['O que você usa, onde cada coisa vive', 'e o que pedir ao RH.']},
+
+            {'t': 11.0, 'tipo': 'frase', 'secao': 'O centro de tudo', 'corpo': 52,
+             'linhas': ['O hub.'],
+             'rodape': 'O fluxo de trabalho inteiro, do primeiro contato ao repasse, acontece dentro dele.'},
+
+            {'t': 17.0, 'tipo': 'cartoes', 'secao': 'O que o hub faz',
+             'titulo': 'Quatro frentes numa tela só', 'cartoes': [
+               {'icone': 'chat',       'titulo': 'Atendimento', 'sub': 'WhatsApp, pelos agentes de IA'},
+               {'icone': 'pasta',      'titulo': 'Kanban',      'sub': 'onde cada processo mora'},
+               {'icone': 'relogio',    'titulo': 'Prazos',      'sub': 'agenda e controladoria'},
+               {'icone': 'dinheiro',   'titulo': 'Financeiro',  'sub': 'RH, calculadoras e peças'}], 'aceso': None},
+
+            {'t': 35.0, 'tipo': 'contraste', 'secao': 'Duas ferramentas, dois papéis',
+             'esquerda': {'rotulo': 'Agentes de IA do hub', 'titulo': 'Falam com o cliente',
+                          'linhas': ['Recebem, triam e respondem', 'no WhatsApp.']},
+             'direita': {'rotulo': 'Claude, no Cowork', 'titulo': 'Monta a peça', 'manda': True,
+                         'linhas': ['Peça, pesquisa e revisão,', 'com as skills do escritório.',
+                                    'Não fala com cliente.']}},
+
+            {'t': 59.0, 'tipo': 'lista', 'secao': 'As outras ferramentas',
+             'titulo': 'Cada uma com um trabalho', 'itens': ['Google Drive: a pasta de cada cliente e os modelos',
+                       'ZapSign: assinatura de contrato e procuração',
+                       'Cálculo Jurídico: execução que a calculadora do hub não cobre',
+                       'ASAAS: cobrança por boleto, PIX e cartão',
+                       'PJe, e-SAJ, Projudi e eproc: onde se protocola'], 'aceso': None},
+            {'t': 66.0, 'tipo': 'lista', 'secao': 'As outras ferramentas',
+             'titulo': 'Cada uma com um trabalho', 'itens': ['Google Drive: a pasta de cada cliente e os modelos',
+                       'ZapSign: assinatura de contrato e procuração',
+                       'Cálculo Jurídico: execução que a calculadora do hub não cobre',
+                       'ASAAS: cobrança por boleto, PIX e cartão',
+                       'PJe, e-SAJ, Projudi e eproc: onde se protocola'], 'aceso': 1},
+            {'t': 74.0, 'tipo': 'lista', 'secao': 'As outras ferramentas',
+             'titulo': 'Cada uma com um trabalho', 'itens': ['Google Drive: a pasta de cada cliente e os modelos',
+                       'ZapSign: assinatura de contrato e procuração',
+                       'Cálculo Jurídico: execução que a calculadora do hub não cobre',
+                       'ASAAS: cobrança por boleto, PIX e cartão',
+                       'PJe, e-SAJ, Projudi e eproc: onde se protocola'], 'aceso': 3},
+            {'t': 85.0, 'tipo': 'lista', 'secao': 'As outras ferramentas',
+             'titulo': 'Cada uma com um trabalho', 'itens': ['Google Drive: a pasta de cada cliente e os modelos',
+                       'ZapSign: assinatura de contrato e procuração',
+                       'Cálculo Jurídico: execução que a calculadora do hub não cobre',
+                       'ASAAS: cobrança por boleto, PIX e cartão',
+                       'PJe, e-SAJ, Projudi e eproc: onde se protocola'], 'aceso': 5},
+
+            {'t': 93.0, 'tipo': 'lista', 'secao': 'Seus acessos',
+             'titulo': 'Seis, e nenhum a menos', 'itens': ['E-mail do escritório',
+                       'Login no hub',
+                       'Google Drive do escritório',
+                       'Claude no Cowork, com as skills instaladas',
+                       'Certificado digital e cadastro nos tribunais',
+                       'WhatsApp do escritório configurado no hub'], 'aceso': None},
+            {'t': 108.0, 'tipo': 'lista', 'secao': 'Seus acessos',
+             'titulo': 'Seis, e nenhum a menos', 'itens': ['E-mail do escritório',
+                       'Login no hub',
+                       'Google Drive do escritório',
+                       'Claude no Cowork, com as skills instaladas',
+                       'Certificado digital e cadastro nos tribunais',
+                       'WhatsApp do escritório configurado no hub'], 'aceso': 5},
+            {'t': 112.0, 'tipo': 'lista', 'secao': 'Seus acessos',
+             'titulo': 'Seis, e nenhum a menos', 'itens': ['E-mail do escritório',
+                       'Login no hub',
+                       'Google Drive do escritório',
+                       'Claude no Cowork, com as skills instaladas',
+                       'Certificado digital e cadastro nos tribunais',
+                       'WhatsApp do escritório configurado no hub'], 'aceso': 6,
+             'rodape': 'Seu número pessoal nunca entra no atendimento.'},
+
+            {'t': 119.0, 'tipo': 'frase', 'secao': 'Quanto tempo leva', 'corpo': 50,
+             'linhas': ['Até 48 horas', 'depois do ingresso.'],
+             'rodape': 'Passou disso e falta alguma coisa? O que faltar se pede ao RH.'},
+
+            {'t': 133.0, 'tipo': 'lista', 'secao': 'A regra de ouro',
+             'titulo': 'Três linhas que não se cruzam',
+             'itens': ['Senha do escritório não circula por WhatsApp',
+                       'Senha não fica anotada em papel na mesa',
+                       'Cada pessoa usa o próprio login'],
+             'aceso': None},
+            {'t': 149.0, 'tipo': 'lista', 'secao': 'A regra de ouro',
+             'titulo': 'Três linhas que não se cruzam',
+             'itens': ['Senha do escritório não circula por WhatsApp',
+                       'Senha não fica anotada em papel na mesa',
+                       'Cada pessoa usa o próprio login'],
+             'aceso': 3},
+
+            {'t': 153.0, 'tipo': 'frase', 'corpo': 44,
+             'linhas': ['Trabalho feito no login de outro', 'não tem dono.',
+                        'E prazo sem dono é prazo perdido.']},
+        ],
+    },
+
     # 1.4 — As regras do jogo: regimento interno na prática (3:58).
     #
     # O quadro das sanções é o miolo: dois vínculos, três graus cada, seis
