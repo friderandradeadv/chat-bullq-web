@@ -838,6 +838,15 @@ export const legalCasesService = {
     return data.data ?? data;
   },
   /** Upload do JG (PDF base64) → IA extrai líquido/anual para a justiça gratuita. */
+  /** Pendências do CLIENTE do processo — valem para todos os casos dele. */
+  async lerPendencias(id: string): Promise<{ ok: boolean; cliente: string | null; lista: unknown[] }> {
+    const { data } = await api.get(`/legal-cases/${id}/pendencias`);
+    return data.data ?? data;
+  },
+  async salvarPendencias(id: string, lista: unknown[]): Promise<{ ok: boolean; total: number }> {
+    const { data } = await api.put(`/legal-cases/${id}/pendencias`, { lista });
+    return data.data ?? data;
+  },
   /** Anexa arquivo qualquer ao processo (print, comprovante) — não extrai nada. */
   async uploadDocumento(id: string, input: { nome: string; base64: string; mime?: string; categoria?: string }): Promise<{ ok: boolean; documento: { id: string; name: string } }> {
     const { data } = await api.post(`/legal-cases/${id}/documentos`, input, { timeout: 120000 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DropZone } from '@/components/drop-zone';
 import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, Upload, User, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -47,28 +48,38 @@ function Chip({ rotulo, valor }: { rotulo: string; valor: string }) {
 }
 
 export function PendenciasPanel({
-  caseId, lista, onChanged, onIrParaAnexos, onAnexado,
+  caseId, onIrParaAnexos, onAnexado,
 }: {
   caseId: string;
-  lista: Pendencia[];
-  onChanged: (nova: Pendencia[]) => void;
   onIrParaAnexos?: () => void;
   /** Avisa o card para recarregar a lista de anexos depois do upload. */
   onAnexado?: () => void;
 }) {
+  const qc = useQueryClient();
+  // A lista mora no CLIENTE, não no caso: o mesmo cliente tem um card por réu, e
+  // "falta o print do IR" é dele, não de cada processo. Resolveu, some de todos.
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['pendencias-cliente', caseId],
+    queryFn: () => legalCasesService.lerPendencias(caseId),
+    enabled: !!caseId,
+    retry: false,
+  });
+  const lista = ((data?.lista ?? []) as Pendencia[]);
   const [novo, setNovo] = useState('');
   const [editando, setEditando] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [subindo, setSubindo] = useState<string | null>(null);
 
   const persistir = async (nova: Pendencia[]) => {
-    onChanged(nova);
+    qc.setQueryData(['pendencias-cliente', caseId], (old: any) => ({ ...(old ?? {}), lista: nova }));
     setSalvando(true);
-    // Guardado em metadata.faseData._pendencias.lista: vale para o caso inteiro,
-    // não para uma fase — por isso a chave não é o nome de nenhuma fase.
-    try { await legalCasesService.saveFaseField(caseId, '_pendencias', 'lista', nova); }
-    catch { toast.error('Não consegui salvar a pendência'); }
-    finally { setSalvando(false); }
+    try {
+      await legalCasesService.salvarPendencias(caseId, nova);
+      // Outros cards do mesmo cliente mostram a mesma lista — invalida todos.
+      qc.invalidateQueries({ queryKey: ['pendencias-cliente'] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui salvar a pendência');
+    } finally { setSalvando(false); }
   };
 
   /**
@@ -119,14 +130,22 @@ export function PendenciasPanel({
   return (
     <div className="mt-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-[#101820] dark:text-zinc-200">Pendências</p>
+        <p className="text-sm font-medium text-[#101820] dark:text-zinc-200" title="Valem para todos os processos deste cliente">
+          Pendências <span className="font-normal text-[#48626f] dark:text-zinc-400">do cliente</span>
+        </p>
         <span className="text-[11px] text-[#48626f] dark:text-zinc-400">
-          {pendentes.length === 0
+          {isLoading ? 'carregando…' : pendentes.length === 0
             ? 'nada pendente'
             : `${pendentes.length} pendente${pendentes.length > 1 ? 's' : ''}${doEscritorio ? ` · ${doEscritorio} do escritório` : ''}`}
           {salvando && ' · salvando…'}
         </span>
       </div>
+
+      {error ? (
+        <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11px] leading-4 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+          {(error as any)?.response?.data?.message || 'Não consegui ler as pendências deste cliente.'}
+        </p>
+      ) : null}
 
       <ul className="mt-2 space-y-2">
         {lista.map((p) => {
