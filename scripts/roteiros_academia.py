@@ -12,6 +12,109 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 1.4 — As regras do jogo: regimento interno na prática (3:58).
+    #
+    # O quadro das sanções é o miolo: dois vínculos, três graus cada, seis
+    # números que TÊM de bater com o manual. Conferidos um a um na transcrição
+    # antes de montar — é o tipo de tela em que um número errado vira promessa
+    # falsa sobre o emprego de quem assiste.
+    'regras-do-jogo': {
+        'duracao': 238.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 1 · Aula 4',
+             'titulo': 'As regras do jogo',
+             'sub': ['O regimento interno traduzido', 'para o que você faz hoje.']},
+
+            {'t': 10.5, 'tipo': 'frase', 'secao': 'A obrigação número um', 'corpo': 46,
+             'linhas': ['Cumprir e fazer cumprir', 'prazos judiciais.'],
+             'rodape': 'Abre a lista porque é a linha de defesa do cliente. Falha aqui compromete o resto.'},
+
+            {'t': 24.2, 'tipo': 'lista', 'secao': 'Suas obrigações',
+             'titulo': 'As que mais pesam', 'itens': ['Registrar toda movimentação no hub',
+                       'Sigilo sobre tudo que souber pela função',
+                       'OAB e obrigações profissionais em dia',
+                       'Urbanidade com todo mundo',
+                       'Estatuto e Código de Ética acima da regra interna'], 'aceso': None},
+            {'t': 33.9, 'tipo': 'lista', 'secao': 'Suas obrigações',
+             'titulo': 'As que mais pesam', 'itens': ['Registrar toda movimentação no hub',
+                       'Sigilo sobre tudo que souber pela função',
+                       'OAB e obrigações profissionais em dia',
+                       'Urbanidade com todo mundo',
+                       'Estatuto e Código de Ética acima da regra interna'], 'aceso': 1,
+             'rodape': 'Sem registro não há controle de prazo nem prova do que foi feito.'},
+            {'t': 41.3, 'tipo': 'lista', 'secao': 'Suas obrigações',
+             'titulo': 'As que mais pesam', 'itens': ['Registrar toda movimentação no hub',
+                       'Sigilo sobre tudo que souber pela função',
+                       'OAB e obrigações profissionais em dia',
+                       'Urbanidade com todo mundo',
+                       'Estatuto e Código de Ética acima da regra interna'], 'aceso': 3},
+
+            {'t': 48.8, 'tipo': 'lista', 'secao': 'Proibições',
+             'titulo': 'Os limites', 'itens': ['Falar em nome do escritório sem o Marketing',
+                       'Usar recurso material ou humano em atividade particular',
+                       'Cuidar de assunto pessoal no expediente',
+                       'Retirar documento do escritório sem autorização',
+                       'Usar a razão social para fim estranho à sociedade'], 'aceso': None},
+            {'t': 61.8, 'tipo': 'lista', 'secao': 'Proibições',
+             'titulo': 'Os limites', 'itens': ['Falar em nome do escritório sem o Marketing',
+                       'Usar recurso material ou humano em atividade particular',
+                       'Cuidar de assunto pessoal no expediente',
+                       'Retirar documento do escritório sem autorização',
+                       'Usar a razão social para fim estranho à sociedade'], 'aceso': 1,
+             'rodape': 'Por qualquer meio: post, áudio, grupo, entrevista. Sem o Marketing, não sai.'},
+            {'t': 83.9, 'tipo': 'lista', 'secao': 'Proibições',
+             'titulo': 'Os limites', 'itens': ['Falar em nome do escritório sem o Marketing',
+                       'Usar recurso material ou humano em atividade particular',
+                       'Cuidar de assunto pessoal no expediente',
+                       'Retirar documento do escritório sem autorização',
+                       'Usar a razão social para fim estranho à sociedade'], 'aceso': 2},
+
+            {'t': 101.7, 'tipo': 'fluxo', 'secao': 'Quando se descumpre',
+             'titulo': 'Três graus', 'etapas': ['Leve', 'Média', 'Grave'], 'aceso': None,
+             'rodape': 'Leve e média: Diretoria de RH. Grave: vai à Assembleia Geral.'},
+            {'t': 115.5, 'tipo': 'fluxo', 'secao': 'Quando se descumpre',
+             'titulo': 'Três graus', 'etapas': ['Leve', 'Média', 'Grave'], 'aceso': 3,
+             'rodape': 'Leve e média: Diretoria de RH. Grave: vai à Assembleia Geral.'},
+
+            # Os seis números abaixo são do manual, conferidos na transcrição.
+            {'t': 124.5, 'tipo': 'contraste', 'secao': 'A sanção por vínculo',
+             'esquerda': {'rotulo': 'Empregados', 'titulo': 'Suspensão', 'manda': True,
+                          'linhas': ['Leve: advertência até 6 dias.', 'Média: 7 a 15 dias.',
+                                     'Grave: 16 dias até a demissão.']},
+             'direita': {'rotulo': 'Sócios e associados', 'titulo': 'Sem processos',
+                         'linhas': ['Leve: advertência até 1 semana.', 'Média: 1 a 3 semanas.',
+                                    'Grave: 3 a 4 semanas ou rescisão.']}},
+            {'t': 135.8, 'tipo': 'contraste', 'secao': 'A sanção por vínculo',
+             'esquerda': {'rotulo': 'Empregados', 'titulo': 'Suspensão',
+                          'linhas': ['Leve: advertência até 6 dias.', 'Média: 7 a 15 dias.',
+                                     'Grave: 16 dias até a demissão.']},
+             'direita': {'rotulo': 'Sócios e associados', 'titulo': 'Sem processos', 'manda': True,
+                         'linhas': ['Leve: advertência até 1 semana.', 'Média: 1 a 3 semanas.',
+                                    'Grave: 3 a 4 semanas ou rescisão.']}},
+
+            {'t': 150.3, 'tipo': 'frase', 'secao': 'Por que dói', 'corpo': 44,
+             'linhas': ['Parar de receber processo', 'atinge a remuneração por êxito.'],
+             'rodape': 'É de propósito.'},
+
+            {'t': 169.2, 'tipo': 'frase', 'secao': 'A regra que salva', 'corpo': 44,
+             'linhas': ['Doença, audiência sobreposta,', 'sistema do tribunal fora do ar:', 'isso a equipe resolve.'],
+             'rodape': 'O que a equipe não resolve é o que ela não sabe.'},
+
+            {'t': 194.0, 'tipo': 'frase', 'secao': 'Está no regimento', 'corpo': 40,
+             'linhas': ['A ausência de comunicação', 'transforma um problema contornável',
+                        'em falha irreversível.']},
+
+            {'t': 209.2, 'tipo': 'contraste', 'secao': 'A diferença',
+             'esquerda': {'rotulo': 'Avisou cedo', 'titulo': 'Sem punição', 'manda': True,
+                          'linhas': ['Ninguém aqui é punido', 'por avisar a tempo.']},
+             'direita': {'rotulo': 'Avisou depois', 'titulo': 'Cobrança',
+                         'linhas': ['A cobrança recai sobre quem', 'conta quando já era.']}},
+
+            {'t': 227.3, 'tipo': 'frase', 'corpo': 42,
+             'linhas': ['Se a antecipação resolve', 'quase toda crise,', 'por que deixar o silêncio decidir?']},
+        ],
+    },
+
     # 1.3 — Como o escritório funciona por dentro (3:18). Segunda geração: a
     # primeira narrou uma meta de 48h para cadastro que NÃO existe no material,
     # e traduziu Back Office e Marketing por causa da regra que proíbe inglês.

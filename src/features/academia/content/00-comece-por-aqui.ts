@@ -245,6 +245,11 @@ export const COMECE_POR_AQUI: Trilha = {
       titulo: 'As regras do jogo: regimento interno na prática',
       resumo: 'O que é obrigação, o que é proibição e o que acontece quando se descumpre.',
       minutos: 9,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/regras-do-jogo.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/regras-do-jogo.vtt',
+      },
       manual: [
         '## Suas obrigações (as que mais pesam)',
         '',
