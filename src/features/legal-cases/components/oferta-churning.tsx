@@ -41,12 +41,24 @@ const IDS_CHURNING = new Set([
 const brl = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
 
+/**
+ * O achado é de UM GRUPO ECONÔMICO, nunca do HISCON inteiro.
+ *
+ * 🚨 Medido na primeira cliente real: o HISCON trouxe 84 indícios, 37 contratos
+ * e 11 bancos. Somar tudo numa frase só produzia uma mentira — "o mesmo
+ * empréstimo no Facta foi refinanciado 37 vezes" — porque os 37 estavam
+ * espalhados por 11 instituições, e os valores em dinheiro eram de um grupo só.
+ * Cada grupo é um réu e uma ação; é por grupo que se fala com o cliente.
+ */
 type Achado = {
+  grupo: string;
+  instituicoes: string[];
   indicios: { id: string; titulo: string; evidencia: string }[];
   /** O caso em dinheiro, direto do plano de ação — nada aqui é estimativa de condenação. */
   dinheiro: { recebido: number; parcelaMensal: number; jaDescontado: number; aindaFalta: number } | null;
-  bancos: string[];
   contratos: number;
+  /** Outros grupos com indício de reciclagem — cada um é uma conversa própria. */
+  outrosGrupos: number;
 };
 
 /**
@@ -59,16 +71,21 @@ type Achado = {
  */
 function textoDaOferta(nome: string | null, a: Achado): string {
   const primeiro = (nome ?? '').trim().split(/\s+/)[0] || 'Senhor(a)';
-  const banco = a.bancos[0] ? ` no ${a.bancos[0]}` : '';
+  // Uma instituição: diz o nome. Várias do mesmo grupo: diz o grupo e quantas,
+  // porque despejar onze nomes numa mensagem de WhatsApp não informa ninguém.
+  const banco =
+    a.instituicoes.length === 1 ? ` no ${a.instituicoes[0]}`
+    : a.instituicoes.length > 1 ? ` no ${a.grupo} (${a.instituicoes.length} instituições do mesmo grupo)`
+    : '';
   const d = a.dinheiro;
   const linhas: string[] = [];
 
   linhas.push(`${primeiro}, terminei de analisar o histórico dos seus empréstimos no INSS.`);
   linhas.push('');
   linhas.push(
-    `Além do cartão que já vamos discutir, apareceu outra coisa: o mesmo empréstimo${banco} ` +
-      `foi refinanciado ${a.contratos} vezes. A cada troca entrou pouco dinheiro na sua conta ` +
-      `e a dívida foi esticada de novo.`,
+    `Além do cartão que já vamos discutir, apareceu outra coisa: ${a.contratos} empréstimos${banco} ` +
+      `foram trocados uns pelos outros, um refinanciando o anterior. A cada troca entrou pouco ` +
+      `dinheiro na sua conta e a dívida foi esticada de novo.`,
   );
 
   if (d) {
@@ -131,31 +148,52 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       const todos: any[] = r?.indicios?.indicios ?? [];
       const doChurning = todos.filter((i) => IDS_CHURNING.has(i.id));
       const acoes: any[] = r?.planoAcao?.acoes ?? [];
-      // A ação com mais indícios de churning é a que sustenta a oferta.
-      const alvo = [...acoes].sort(
-        (a, b) =>
-          (b.indicios ?? []).filter((x: any) => IDS_CHURNING.has(x.id)).length -
-          (a.indicios ?? []).filter((x: any) => IDS_CHURNING.has(x.id)).length,
-      )[0];
 
-      if (!doChurning.length) {
-        setAchado({ indicios: [], dinheiro: null, bancos: [], contratos: 0 });
+      if (!doChurning.length || !acoes.length) {
+        setAchado({ grupo: '', instituicoes: [], indicios: [], dinheiro: null, contratos: 0, outrosGrupos: 0 });
         toast.message('Sem indício de reciclagem de contratos neste HISCON.');
         return;
       }
 
-      const contratos = new Set(doChurning.flatMap((i: any) => i.contratos ?? [])).size;
+      // Quantos indícios de churning cada ação (= grupo econômico = réu) carrega.
+      const peso = (ac: any) => (ac.indicios ?? []).filter((x: any) => IDS_CHURNING.has(x.id)).length;
+      const comChurning = acoes.filter((ac) => peso(ac) > 0);
+      // Ordena por AJUIZAR primeiro: não se oferta ao cliente o grupo que o
+      // próprio plano manda descartar por decadência ou indício fraco.
+      const ordenadas = [...comChurning].sort(
+        (a, b) =>
+          Number(b.veredito === 'AJUIZAR') - Number(a.veredito === 'AJUIZAR') || peso(b) - peso(a),
+      );
+      const alvo = ordenadas[0];
+      if (!alvo) {
+        setAchado({ grupo: '', instituicoes: [], indicios: [], dinheiro: null, contratos: 0, outrosGrupos: 0 });
+        toast.message('Sem indício de reciclagem de contratos neste HISCON.');
+        return;
+      }
+
+      // Só os indícios DESTE grupo: o motor marca cada indício com o banco, e as
+      // instituições do grupo estão na ação. Sem esse recorte, os 84 indícios do
+      // HISCON inteiro entrariam numa oferta sobre um réu só.
+      const instituicoes: string[] = alvo.instituicoes ?? [];
+      const doGrupo = doChurning.filter((i: any) =>
+        (i.bancos ?? []).some((b: string) => instituicoes.includes(b)),
+      );
+      const usados = doGrupo.length ? doGrupo : doChurning;
+      const contratos = new Set(usados.flatMap((i: any) => i.contratos ?? [])).size;
+
       const a: Achado = {
-        indicios: doChurning.map((i: any) => ({ id: i.id, titulo: i.titulo, evidencia: i.evidencia })),
+        grupo: alvo.grupo ?? instituicoes[0] ?? '',
+        instituicoes,
+        indicios: usados.map((i: any) => ({ id: i.id, titulo: i.titulo, evidencia: i.evidencia })),
         dinheiro: alvo?.dinheiro ?? null,
-        bancos: [...new Set(doChurning.flatMap((i: any) => i.bancos ?? []))] as string[],
         contratos,
+        outrosGrupos: Math.max(0, comChurning.length - 1),
       };
       setAchado(a);
       setTexto(textoDaOferta(cliente.name, a));
       await legalCasesService.registrarOfertaChurning(caso.id, {
         status: 'analisada',
-        resumo: `${a.indicios.length} indício(s) de reciclagem em ${contratos} contrato(s)`,
+        resumo: `${a.grupo || 'grupo'}: ${a.indicios.length} indício(s) em ${contratos} contrato(s)`,
         indicios: a.indicios.map((i) => i.id),
       });
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
@@ -270,15 +308,30 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
             <div className="mt-2 space-y-1.5">
               <div className="rounded-lg border border-[#cfe0ed] bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
                 <p className="text-[11px] font-semibold text-[#101820] dark:text-zinc-200">
-                  {achado.indicios.length} indício(s) · {achado.contratos} contrato(s)
-                  {achado.bancos.length ? ` · ${achado.bancos.join(', ')}` : ''}
+                  {achado.grupo || 'Grupo'} · {achado.indicios.length} indício(s) · {achado.contratos} contrato(s)
                 </p>
+                {achado.instituicoes.length > 0 && (
+                  <p className="text-[10px] leading-4 text-[#48626f] dark:text-zinc-500">
+                    {achado.instituicoes.join(' · ')}
+                  </p>
+                )}
+                {achado.outrosGrupos > 0 && (
+                  <p className="text-[10px] leading-4 text-amber-700 dark:text-amber-400">
+                    Outros {achado.outrosGrupos} grupo(s) também têm indício de reciclagem — cada um é
+                    uma ação e uma conversa própria.
+                  </p>
+                )}
                 <ul className="mt-1 space-y-0.5">
-                  {achado.indicios.map((i) => (
+                  {achado.indicios.slice(0, 6).map((i) => (
                     <li key={i.id} className="text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
                       <span className="font-medium text-[#101820] dark:text-zinc-300">{i.titulo}:</span> {i.evidencia}
                     </li>
                   ))}
+                  {achado.indicios.length > 6 && (
+                    <li className="text-[10px] text-[#48626f] dark:text-zinc-500">
+                      e mais {achado.indicios.length - 6} — o laudo do HISCON traz todos.
+                    </li>
+                  )}
                 </ul>
                 {achado.dinheiro && (
                   <p className="mt-1 text-[11px] leading-4 text-[#1b6ec2] dark:text-[#74c0fc]">
