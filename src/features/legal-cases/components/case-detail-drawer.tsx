@@ -29,6 +29,7 @@ import { RepbModelosMalote } from './repb-modelos-malote';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
 import { OfertaChurning } from './oferta-churning';
+import { RevisaoInicial } from './revisao-inicial';
 import { BeneficioTag, ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
@@ -527,6 +528,12 @@ export function CaseDetailDrawer({
             )}
 
             {c && <OfertaChurning caso={c} onMudou={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
+
+            {/* Conferência antes do protocolo: da montagem em diante, é o que o
+                advogado olha para decidir se a peça sobe. */}
+            {c && ['montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final'].includes(c.legalPhase ?? '') && (
+              <RevisaoInicial caso={c} />
+            )}
 
             {/* REPB: provisionamento, acordo e malotes agora vivem POR BANCO no dossiê
                 BancosReusEditor (acima) — sem seções globais soltas. */}

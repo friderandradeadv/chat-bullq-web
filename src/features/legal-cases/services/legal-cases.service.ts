@@ -853,6 +853,11 @@ export const legalCasesService = {
   },
   /** Upload do JG (PDF base64) → IA extrai líquido/anual para a justiça gratuita. */
   /** Pendências do CLIENTE do processo — valem para todos os casos dele. */
+  /** Observações da revisão antes do protocolo — ficam no card. */
+  async salvarRevisaoInicial(id: string, observacoes: string): Promise<{ ok: boolean; observacoes: string }> {
+    const { data } = await api.put(`/legal-cases/${id}/revisao-inicial`, { observacoes });
+    return data.data ?? data;
+  },
   /** Mídias que o cliente mandou desde o pedido — para conferir e arquivar. */
   async respostasDoCliente(id: string, desde?: string): Promise<{
     ok: boolean;
