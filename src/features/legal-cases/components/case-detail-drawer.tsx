@@ -22,6 +22,7 @@ import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
 import { PendenciasPanel } from './pendencias-panel';
+import { ColetaInss } from './coleta-inss';
 import { BancosReusEditor, RepbFasePorBanco, ResumoClienteRepb } from './bancos-reus-editor';
 import { GerarPecaRepb } from './gerar-inicial-superendiv';
 import { RepbModelosMalote } from './repb-modelos-malote';
@@ -507,6 +508,8 @@ export function CaseDetailDrawer({
                   : <FaseFields caseId={c.id} phase={phaseKey} data={faseData} />}
               </div>
             )}
+
+            {c && <ColetaInss parties={c.parties} />}
 
             {c && (
               <PendenciasPanel
