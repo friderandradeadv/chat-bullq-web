@@ -34,6 +34,7 @@ import {
 } from '@/features/settings/services/quick-replies.service';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { useOrgId } from '@/hooks/use-org-query-key';
+import { DropZone } from '@/components/drop-zone';
 
 const ATT_META: Record<
   QuickReplyAttachment['type'],
@@ -176,6 +177,10 @@ export default function SettingsQuickRepliesPage() {
   const handleAttFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
+    await attachFile(file);
+  };
+
+  const attachFile = async (file?: File | null) => {
     if (!file) return;
     setUploadingAtt(true);
     try {
@@ -243,6 +248,10 @@ export default function SettingsQuickRepliesPage() {
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
+    await importFile(file);
+  };
+
+  const importFile = async (file?: File | null) => {
     if (!file) return;
     setImporting(true);
     try {
@@ -287,19 +296,27 @@ export default function SettingsQuickRepliesPage() {
             className="hidden"
             onChange={handleImportFile}
           />
-          <button
-            onClick={() => importInputRef.current?.click()}
+          <DropZone
+            accept="application/json,.json"
+            multiple={false}
             disabled={importing}
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-            title="Importa JSON (formato nativo ou export do LíderHub) — idempotente por atalho"
+            overlayLabel="Solte o JSON aqui"
+            onFiles={(fs) => importFile(fs[0])}
           >
-            {importing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4" />
-            )}
-            Importar JSON
-          </button>
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              title="Importa JSON (formato nativo ou export do LíderHub) — idempotente por atalho"
+            >
+              {importing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Importar ou arrastar JSON
+            </button>
+          </DropZone>
         </div>
       </div>
 
@@ -551,15 +568,24 @@ export default function SettingsQuickRepliesPage() {
                   className="hidden"
                   onChange={handleAttFile}
                 />
-                <button
-                  type="button"
-                  onClick={() => attFileRef.current?.click()}
+                <DropZone
+                  accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                  multiple={false}
                   disabled={uploadingAtt}
-                  className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-400 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="mb-2"
+                  overlayLabel="Solte o arquivo aqui"
+                  onFiles={(fs) => attachFile(fs[0])}
                 >
-                  {uploadingAtt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  {uploadingAtt ? 'Enviando…' : 'Procurar arquivo no computador'}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => attFileRef.current?.click()}
+                    disabled={uploadingAtt}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-400 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    {uploadingAtt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {uploadingAtt ? 'Enviando…' : 'Procurar ou arrastar arquivo do computador'}
+                  </button>
+                </DropZone>
 
                 <p className="mb-1.5 text-[11px] text-zinc-400">ou cole uma URL pública:</p>
                 <div className="flex items-center gap-2">

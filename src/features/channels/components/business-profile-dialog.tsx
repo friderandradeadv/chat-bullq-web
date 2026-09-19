@@ -8,6 +8,7 @@ import {
   type BusinessProfile,
   type Channel,
 } from '../services/channels.service';
+import { DropZone } from '@/components/drop-zone';
 
 interface Props {
   channel: Channel | null;
@@ -142,19 +143,27 @@ export function BusinessProfileDialog({ channel, onClose }: Props) {
                 )}
               </div>
               <div>
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
+                <DropZone
+                  accept="image/*"
+                  multiple={false}
                   disabled={uploading}
-                  className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  overlayLabel="Solte a foto aqui"
+                  onFiles={(fs) => { if (fs[0]) handlePhoto(fs[0]); }}
                 >
-                  {uploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Camera className="h-4 w-4" />
-                  )}
-                  Trocar foto
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    className="inline-flex items-center gap-2 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    {uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
+                    Trocar ou arrastar foto
+                  </button>
+                </DropZone>
                 <p className="mt-1 text-xs text-zinc-400">
                   JPG/PNG, quadrada, até 5MB
                 </p>

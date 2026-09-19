@@ -79,6 +79,7 @@ import { formatPhone } from '@/lib/brazil-states';
 import { titleCaseName } from '@/lib/names';
 import { StateFlag } from '@/components/ui/state-flag';
 import { AbrirConversa } from '@/components/ui/abrir-conversa';
+import { DropZone } from '@/components/drop-zone';
 import { CnjNumber, ASTREA_BLUE, LegalTagChip } from '../../processos/page';
 
 const brlc = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1921,7 +1922,7 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
     }
   };
 
-  const enviarArquivos = async (lista: FileList | null) => {
+  const enviarArquivos = async (lista: FileList | File[] | null) => {
     const arquivos = Array.from(lista ?? []);
     if (!arquivos.length) return;
     setOcupado('enviar');
@@ -2043,19 +2044,25 @@ function PastaNoDrive({ partyId, onFechar }: { partyId: string; onFechar: () => 
         >
           <Stamp className="h-3.5 w-3.5" /> Arquivar peça
         </button>
-        <button
-          type="button"
-          onClick={() => inputArquivos.current?.click()}
+        <DropZone
           disabled={ocupado === 'enviar'}
-          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+          overlayLabel="Solte os arquivos aqui"
+          onFiles={(fs) => enviarArquivos(fs)}
         >
-          {ocupado === 'enviar' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Upload className="h-3.5 w-3.5" />
-          )}
-          Enviar arquivos
-        </button>
+          <button
+            type="button"
+            onClick={() => inputArquivos.current?.click()}
+            disabled={ocupado === 'enviar'}
+            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-[#228BE6] hover:text-[#228BE6] disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+          >
+            {ocupado === 'enviar' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="h-3.5 w-3.5" />
+            )}
+            Enviar ou arrastar arquivos
+          </button>
+        </DropZone>
         <button
           type="button"
           onClick={() => setNovaPasta('')}

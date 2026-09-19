@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { profileService } from '@/features/settings/services/profile.service';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { SimpleBarSettings } from '@/features/settings/components/simple-bar-settings';
+import { DropZone } from '@/components/drop-zone';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -33,7 +34,11 @@ export default function PerfilPage() {
     email.trim().toLowerCase() !== (user?.email ?? '').toLowerCase();
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    await uploadPhoto(e.target.files?.[0]);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const uploadPhoto = async (file?: File | null) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Selecione uma imagem.'); return; }
     if (file.size > 8 * 1024 * 1024) { toast.error('Imagem muito grande (máx. 8MB).'); return; }
@@ -115,22 +120,31 @@ export default function PerfilPage() {
         {/* Foto + dados */}
         <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
+            <DropZone
+              accept="image/*"
+              multiple={false}
               disabled={uploading}
-              className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"
-              title="Trocar foto"
+              className="shrink-0 rounded-full"
+              overlayLabel="Solte a foto aqui"
+              onFiles={(fs) => uploadPhoto(fs[0])}
             >
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center text-xl font-semibold text-zinc-500">{initials}</span>
-              )}
-              <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                {uploading ? <Loader2 className="h-5 w-5 animate-spin text-white" /> : <Camera className="h-5 w-5 text-white" />}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"
+                title="Trocar foto"
+              >
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-xl font-semibold text-zinc-500">{initials}</span>
+                )}
+                <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                  {uploading ? <Loader2 className="h-5 w-5 animate-spin text-white" /> : <Camera className="h-5 w-5 text-white" />}
+                </span>
+              </button>
+            </DropZone>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
             <div className="min-w-0">
               <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{user?.name}</p>

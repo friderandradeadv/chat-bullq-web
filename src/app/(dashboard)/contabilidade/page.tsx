@@ -32,6 +32,7 @@ import {
   contabilidadeService, type PainelContabil, type DocumentoContabil, type InboxContabil,
 } from '@/features/contabilidade/services/contabilidade.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
+import { DropZone } from '@/components/drop-zone';
 
 const brl = (n: number) => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n: number) => (n * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + '%';
@@ -625,7 +626,10 @@ function Documentos() {
   const periodo = cursor ?? periodos[0] ?? compAtual();
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+    await receberArquivo(e.target.files?.[0]);
+  }
+
+  async function receberArquivo(f?: File | null) {
     if (!f) return;
     if (f.size > 20 * 1024 * 1024) { toast.error('Arquivo muito grande (máx 20MB).'); return; }
     const base64 = await new Promise<string>((res, rej) => {
@@ -684,11 +688,18 @@ function Documentos() {
           </Field>
           <Field label="Quanto paguei (opcional)"><MoneyInput value={valor} onChange={setValor} /></Field>
           <Field label="Arquivo (PDF/imagem/XML)">
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/50">
-              <FileText className="h-4 w-4 shrink-0" />
-              <span className="truncate">{arquivo ? arquivo.nome : 'escolher arquivo…'}</span>
-              <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xml,application/pdf,image/*,application/xml" className="hidden" onChange={onPick} />
-            </label>
+            <DropZone
+              accept=".pdf,.png,.jpg,.jpeg,.xml,application/pdf,image/*,application/xml"
+              multiple={false}
+              overlayLabel="Solte o arquivo aqui"
+              onFiles={(fs) => receberArquivo(fs[0])}
+            >
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700/50">
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="truncate">{arquivo ? arquivo.nome : 'escolher ou arrastar arquivo…'}</span>
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xml,application/pdf,image/*,application/xml" className="hidden" onChange={onPick} />
+              </label>
+            </DropZone>
           </Field>
         </div>
         <div className="mt-3 flex justify-end">

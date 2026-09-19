@@ -5,6 +5,7 @@ import { X, ImagePlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Channel, LiveStatus } from '../services/channels.service';
 import { channelsService } from '../services/channels.service';
+import { DropZone } from '@/components/drop-zone';
 
 /** Lado do quadro de recorte na tela e do arquivo final gerado. */
 const CROP = 260;
@@ -226,13 +227,21 @@ export function ProfilePictureDialog({ channel, currentPicUrl, onClose, onSaved 
               e.target.value = '';
             }}
           />
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          <DropZone
+            accept="image/*"
+            multiple={false}
+            className="mt-4"
+            overlayLabel="Solte a imagem aqui"
+            onFiles={(fs) => { if (fs[0]) pickFile(fs[0]); }}
           >
-            <ImagePlus className="h-4 w-4" />
-            {src ? 'Trocar imagem' : 'Escolher imagem'}
-          </button>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              <ImagePlus className="h-4 w-4" />
+              {src ? 'Trocar ou arrastar imagem' : 'Escolher ou arrastar imagem'}
+            </button>
+          </DropZone>
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
