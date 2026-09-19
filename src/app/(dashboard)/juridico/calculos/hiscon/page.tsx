@@ -5,6 +5,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle, Calculator, CheckCircle2, Download, FileSearch, FileText, FolderOpen, FolderPlus, FolderUp, Info, Loader2, Upload, XCircle,
 } from 'lucide-react';
+import { DropZone } from '@/components/drop-zone';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 import {
   calculadoraRmcService,
@@ -214,13 +215,31 @@ export default function HisconPage() {
         ...(doDrive ? { partyId: cliente?.partyId, driveFileId: doDrive.id } : {}),
       });
     },
+    /**
+     * Abre o laudo em OUTRA GUIA em vez de baixar direto.
+     *
+     * Baixar de cara enche a pasta de Downloads de laudo que era só para
+     * conferir — e conferir é o uso mais comum. Na guia, o visualizador do
+     * navegador já dá imprimir e salvar a um clique, e a decisão fica com quem
+     * olhou o documento.
+     *
+     * A URL não é revogada na hora: o blob precisa continuar vivo enquanto a
+     * guia estiver aberta. Um minuto é folga suficiente para o PDF carregar.
+     */
     onSuccess: (blob) => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `laudo-hiscon${cliente ? ` - ${cliente.name}` : ''}.pdf`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-      setErro(null);
+      const url = URL.createObjectURL(blob);
+      const guia = window.open(url, '_blank');
+      if (!guia) {
+        // Bloqueador de pop-up: cai para o download, que nunca é bloqueado.
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `laudo-hiscon${cliente ? ` - ${cliente.name}` : ''}.pdf`;
+        a.click();
+        setErro('O navegador bloqueou a nova guia, então o laudo foi baixado.');
+      } else {
+        setErro(null);
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     },
     // A mensagem do servidor já chega pronta: o interceptor do `api` lê o Blob
     // de erro dos endpoints binários (src/lib/api.ts).
@@ -288,7 +307,12 @@ export default function HisconPage() {
   const pa = res?.planoAcao;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
+    // 🚨 O wrapper com `h-full overflow-y-auto` é o que faz a página ROLAR: o
+    // layout do dashboard entrega aos filhos um container `min-h-0 flex-1`, de
+    // altura limitada, e sem scroll próprio o conteúdo abaixo da dobra ficava
+    // simplesmente inalcançável. É o mesmo padrão das outras telas de Cálculos.
+    <div className="h-full overflow-y-auto bg-[#f5f6f8] dark:bg-zinc-950">
+      <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
       <header className="flex items-start gap-3">
         <div className="rounded-lg bg-zinc-100 p-2 dark:bg-zinc-800">
           <FileSearch className="h-5 w-5 text-zinc-700 dark:text-zinc-300" />
@@ -390,14 +414,25 @@ export default function HisconPage() {
               e.target.value = '';
             }}
           />
-          <button
-            onClick={() => ref.current?.click()}
+          <DropZone
+            accept="application/pdf,.pdf"
+            multiple={false}
             disabled={mut.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            overlayLabel="Solte o HISCON (PDF) aqui"
+            onFiles={(fs) => {
+              const f = fs[0];
+              if (f) { setArquivo(f); setDoDrive(null); setSalvo(null); setConta(null); mut.mutate({ file: f }); }
+            }}
           >
-            {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            {mut.isPending ? 'Lendo o HISCON…' : 'Enviar HISCON (PDF)'}
-          </button>
+            <button
+              onClick={() => ref.current?.click()}
+              disabled={mut.isPending}
+              className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            >
+              {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {mut.isPending ? 'Lendo o HISCON…' : 'Enviar ou arrastar HISCON (PDF)'}
+            </button>
+          </DropZone>
           {arquivo && <span className="text-sm text-zinc-500 dark:text-zinc-400">{arquivo.name}</span>}
           {doDrive && (
             <span className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -854,6 +889,7 @@ export default function HisconPage() {
           </p>
         </>
       )}
+      </div>
     </div>
   );
 }
