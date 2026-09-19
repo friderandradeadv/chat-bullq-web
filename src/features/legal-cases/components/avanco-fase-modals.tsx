@@ -312,8 +312,17 @@ export function AvancoFaseModal({
         ) : phase === 'cumprimento' ? (
           <>
             <input ref={fileRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => subirPeticaoCs(e.target.files)} />
-            <button onClick={() => fileRef.current?.click()} disabled={extraindo} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#7048e8]/50 bg-[#7048e8]/5 px-3 py-2.5 text-sm font-medium text-[#7048e8] hover:bg-[#7048e8]/10 disabled:opacity-60">
-              {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo a petição com IA…</> : <><Paperclip className="h-4 w-4" /> Subir petição de CS (extrai o valor com IA)</>}
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={extraindo}
+              onDragOver={(e) => { e.preventDefault(); if (!extraindo) setArrastando(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setArrastando(false); }}
+              onDrop={(e) => { e.preventDefault(); setArrastando(false); if (!extraindo) subirPeticaoCs(e.dataTransfer.files); }}
+              className={`mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-3 text-sm font-medium text-[#7048e8] transition-colors disabled:opacity-60 ${arrastando ? 'border-[#7048e8] bg-[#7048e8]/15 ring-2 ring-[#7048e8]/30' : 'border-[#7048e8]/50 bg-[#7048e8]/5 hover:bg-[#7048e8]/10'}`}
+            >
+              {extraindo ? <><RefreshCw className="h-4 w-4 animate-spin" /> lendo a petição com IA…</>
+                : arrastando ? <><Paperclip className="h-4 w-4" /> solte a petição aqui…</>
+                : <><Paperclip className="h-4 w-4" /> Subir ou arrastar petição de CS (extrai o valor com IA)</>}
             </button>
             <label className={lbl}>Valor do cálculo (execução) <span className="font-normal normal-case text-zinc-400">— do cálculo salvo / da petição</span></label>
             <MoneyBRLInput value={valorCalculo} onChange={setValorCalculo} />

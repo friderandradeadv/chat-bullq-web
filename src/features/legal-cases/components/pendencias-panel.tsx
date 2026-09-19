@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, User, Building2 } from 'lucide-react';
+import { DropZone } from '@/components/drop-zone';
+import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, Upload, User, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -46,16 +47,19 @@ function Chip({ rotulo, valor }: { rotulo: string; valor: string }) {
 }
 
 export function PendenciasPanel({
-  caseId, lista, onChanged, onIrParaAnexos,
+  caseId, lista, onChanged, onIrParaAnexos, onAnexado,
 }: {
   caseId: string;
   lista: Pendencia[];
   onChanged: (nova: Pendencia[]) => void;
   onIrParaAnexos?: () => void;
+  /** Avisa o card para recarregar a lista de anexos depois do upload. */
+  onAnexado?: () => void;
 }) {
   const [novo, setNovo] = useState('');
   const [editando, setEditando] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [subindo, setSubindo] = useState<string | null>(null);
 
   const persistir = async (nova: Pendencia[]) => {
     onChanged(nova);
@@ -65,6 +69,34 @@ export function PendenciasPanel({
     try { await legalCasesService.saveFaseField(caseId, '_pendencias', 'lista', nova); }
     catch { toast.error('Não consegui salvar a pendência'); }
     finally { setSalvando(false); }
+  };
+
+  /**
+   * Sobe os arquivos soltos no item e marca a pendência como resolvida — quem
+   * arrastou o print já fez o que faltava, e ter de clicar de novo no quadradinho
+   * é o tipo de passo que se esquece.
+   */
+  const subirArquivos = async (p: Pendencia, files: File[]) => {
+    if (!files.length) return;
+    setSubindo(p.id);
+    try {
+      for (const f of files) {
+        const base64 = await new Promise<string>((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = () => res(String(fr.result));
+          fr.onerror = () => rej(new Error('falha ao ler o arquivo'));
+          fr.readAsDataURL(f);
+        });
+        await legalCasesService.uploadDocumento(caseId, { nome: f.name, base64, mime: f.type, categoria: 'pendencia' });
+      }
+      toast.success(files.length > 1 ? `${files.length} arquivos anexados` : 'Arquivo anexado');
+      onAnexado?.();
+      await persistir(lista.map((x) => (x.id === p.id ? { ...x, status: 'resolvido' as const } : x)));
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui anexar o arquivo');
+    } finally {
+      setSubindo(null);
+    }
   };
 
   const pendentes = lista.filter((p) => p.status !== 'resolvido');
@@ -126,7 +158,7 @@ export function PendenciasPanel({
                     <p className="mt-0.5 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">{p.motivo}</p>
                   )}
 
-                  {!ok && (p.url || p.dados?.length || onIrParaAnexos) && (
+                  {!ok && (
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       {p.url && (
                         <a href={p.url} target="_blank" rel="noreferrer"
@@ -135,10 +167,20 @@ export function PendenciasPanel({
                         </a>
                       )}
                       {p.dados?.map((d) => <Chip key={d.rotulo} rotulo={d.rotulo} valor={d.valor} />)}
+                      <DropZone multiple disabled={subindo === p.id} onFiles={(fs) => void subirArquivos(p, fs)}
+                        className="inline-block" overlayLabel="Soltar aqui">
+                        <label className={`inline-flex items-center gap-1 rounded-md border border-dashed border-[#9dc3e6] px-2 py-1 text-[11px] font-medium ${subindo === p.id ? 'opacity-50' : 'cursor-pointer text-[#1b6ec2] hover:border-[#4a90e2] hover:bg-[#eef4fa]'} dark:border-zinc-600 dark:text-[#7db2e8]`}
+                          title="Arraste os arquivos aqui ou clique para escolher. Ao soltar, a pendência é marcada como resolvida.">
+                          <Upload className="h-3 w-3" />
+                          {subindo === p.id ? 'Enviando…' : 'Arraste os arquivos aqui'}
+                          <input type="file" multiple className="hidden" disabled={subindo === p.id}
+                            onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; void subirArquivos(p, fs); }} />
+                        </label>
+                      </DropZone>
                       {onIrParaAnexos && (
-                        <button type="button" onClick={onIrParaAnexos}
+                        <button type="button" onClick={onIrParaAnexos} title="Ver os anexos do card"
                           className="inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-medium text-[#4b5863] hover:border-[#4a90e2] hover:text-[#1b6ec2] dark:border-zinc-700 dark:text-zinc-300">
-                          <Paperclip className="h-3 w-3" /> Anexar arquivo
+                          <Paperclip className="h-3 w-3" /> Ver anexos
                         </button>
                       )}
                     </div>

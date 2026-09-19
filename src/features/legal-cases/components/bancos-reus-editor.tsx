@@ -12,6 +12,7 @@ import { calculadoraRevisionalService, type ResultadoRevisional } from '@/featur
 import { calcularPE } from '@/features/calculadora-perda-esperada/perda-esperada';
 import { calcularPlano, type Credor } from '@/features/calculadora-superendividamento/plano-repactuacao';
 import { api } from '@/lib/api';
+import { DropZone } from '@/components/drop-zone';
 
 // DOSSIÊ POR BANCO do caso REPB. Cada banco RÉU (Party OPPONENT) é a unidade: dados
 // → provisionamento → negociação → acordo → etiquetas → malotes daquele banco.
@@ -1094,9 +1095,11 @@ function AnaliseContratoIA({ caseId, partyId, driveUrl, onChanged }: { caseId: s
       <p className="mt-1 text-[11px] text-zinc-400">Sobe o contrato (PDF) e a IA aponta tudo que cabe: revisional (juros), capitalização, tarifas, seguro/venda casada, IOF, comissão — com fundamento e valor estimado.</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <input ref={inputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-        <button onClick={() => inputRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md bg-[#B7791F] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
-          <Plus className="h-3.5 w-3.5" /> {busy ? 'Analisando… (1–2 min)' : 'Subir contrato + analisar (IA)'}
-        </button>
+        <DropZone accept="application/pdf" multiple={false} disabled={busy} overlayLabel="Solte o contrato (PDF) aqui" onFiles={(fs) => onFile(fs[0])}>
+          <button onClick={() => inputRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-md bg-[#B7791F] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+            <Plus className="h-3.5 w-3.5" /> {busy ? 'Analisando… (1–2 min)' : 'Subir ou arrastar contrato + analisar (IA)'}
+          </button>
+        </DropZone>
         {parecer && <button onClick={baixar} className="inline-flex items-center gap-1 rounded-md border border-[#B7791F]/40 px-2 py-1.5 text-[12px] font-semibold text-[#B7791F] hover:bg-[#B7791F]/10"><FileText className="h-3.5 w-3.5" /> Baixar parecer</button>}
         {driveUrl && <a href={driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-[#e3e8ef] px-2 py-1.5 text-[12px] font-medium text-[#48626f] hover:border-[#B7791F]/40 hover:text-[#B7791F] dark:border-zinc-700 dark:text-zinc-400"><FolderOpen className="h-3.5 w-3.5" /> Drive</a>}
       </div>

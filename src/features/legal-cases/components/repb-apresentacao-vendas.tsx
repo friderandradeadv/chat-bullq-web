@@ -11,6 +11,7 @@ import { useMemo, useRef, useState } from 'react';
 import { X, Printer, Sliders, ShieldCheck, Upload, Loader2, Check, Landmark, Clock, Scale, TrendingDown, Award, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard } from '../services/legal-cases.service';
+import { DropZone } from '@/components/drop-zone';
 
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
   const r = new FileReader();
@@ -190,7 +191,9 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) extrairDePdf(f); }} />
-          <button onClick={() => fileRef.current?.click()} disabled={extraindo} className="inline-flex items-center gap-1.5 rounded-lg border border-[#B7791F]/40 bg-[#B7791F]/5 px-3 py-1.5 text-sm font-semibold text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-60">{extraindo ? <><Loader2 className="h-4 w-4 animate-spin" /> Extraindo…</> : <><Upload className="h-4 w-4" /> Extrair de um PDF (contrato/extrato)</>}</button>
+          <DropZone accept="application/pdf" multiple={false} disabled={extraindo} overlayLabel="Solte o PDF (contrato/extrato) aqui" onFiles={(fs) => { if (fs[0]) extrairDePdf(fs[0]); }}>
+            <button onClick={() => fileRef.current?.click()} disabled={extraindo} className="inline-flex items-center gap-1.5 rounded-lg border border-[#B7791F]/40 bg-[#B7791F]/5 px-3 py-1.5 text-sm font-semibold text-[#B7791F] hover:bg-[#B7791F]/10 disabled:opacity-60">{extraindo ? <><Loader2 className="h-4 w-4 animate-spin" /> Extraindo…</> : <><Upload className="h-4 w-4" /> Extrair ou arrastar um PDF (contrato/extrato)</>}</button>
+          </DropZone>
           <p className="text-xs text-zinc-400">Ajuste os números do caso. Tudo é <b>estimativa para negociação</b> — a apresentação deixa isso explícito e não promete resultado.</p>
         </div>
       </div>

@@ -838,6 +838,11 @@ export const legalCasesService = {
     return data.data ?? data;
   },
   /** Upload do JG (PDF base64) → IA extrai líquido/anual para a justiça gratuita. */
+  /** Anexa arquivo qualquer ao processo (print, comprovante) — não extrai nada. */
+  async uploadDocumento(id: string, input: { nome: string; base64: string; mime?: string; categoria?: string }): Promise<{ ok: boolean; documento: { id: string; name: string } }> {
+    const { data } = await api.post(`/legal-cases/${id}/documentos`, input, { timeout: 120000 });
+    return data.data ?? data;
+  },
   async uploadJg(id: string, pdfBase64: string): Promise<{ ok: boolean; jg: { liquido: number | null; anual: number | null; media: number | null } }> {
     const { data } = await api.post(`/legal-cases/${id}/jg`, { pdfBase64 });
     return data.data ?? data;

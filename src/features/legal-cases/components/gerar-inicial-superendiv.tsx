@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FileText, Loader2, Paperclip, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { DropZone } from '@/components/drop-zone';
 
 // Gera peças de REPB por IA (POST /legal-cases/:id/peca/gerar), no timbrado, e baixa
 // o .docx + anexa nos Anexos do card. Dois tipos:
@@ -61,18 +62,23 @@ export function GerarPecaRepb({ caseId }: { caseId: string }) {
         {loading === 'superendividamento' ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Redigindo (1–2 min)…</> : 'Inicial de superendividamento'}
       </button>
 
-      <div className="mt-2 rounded-md border border-[#e3e8ef] p-2 dark:border-zinc-800">
+      <DropZone
+        accept="application/pdf"
+        className="mt-2 rounded-md border border-[#e3e8ef] p-2 dark:border-zinc-800"
+        overlayLabel="Solte o(s) contrato(s) aqui"
+        onFiles={(fs) => setFiles((prev) => [...prev, ...fs])}
+      >
         <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-zinc-400">Parecer técnico (auditoria)</p>
         <input ref={fileRef} type="file" accept="application/pdf" multiple className="hidden" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
         <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
-          <Paperclip className="h-3 w-3" /> {files.length ? `${files.length} contrato(s)` : 'Anexar contrato (PDF)'}
+          <Paperclip className="h-3 w-3" /> {files.length ? `${files.length} contrato(s)` : 'Anexar ou arrastar contrato (PDF)'}
         </button>
         {files.length > 0 && <button onClick={() => setFiles([])} className="ml-1 rounded p-1 text-zinc-400 hover:text-red-600"><X className="h-3 w-3" /></button>}
         <button onClick={() => gerar('parecer')} disabled={!!loading} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#7C3AED]/40 px-3 py-2 text-xs font-semibold disabled:opacity-50" style={{ color: '#7C3AED' }}>
           {loading === 'parecer' ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Auditando (1–2 min)…</> : 'Gerar parecer técnico'}
         </button>
         <p className="mt-1 text-[10px] text-zinc-400">Sem o contrato anexado, o parecer sai como roteiro com lacunas "[ • ]".</p>
-      </div>
+      </DropZone>
     </div>
   );
 }

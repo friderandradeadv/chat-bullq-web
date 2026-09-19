@@ -514,6 +514,7 @@ export function CaseDetailDrawer({
                 lista={pendencias}
                 onChanged={setPendLocal}
                 onIrParaAnexos={() => setTab('anexos')}
+                onAnexado={() => qc.invalidateQueries({ queryKey: ['legal-case', caseId] })}
               />
             )}
 
