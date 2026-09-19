@@ -28,7 +28,7 @@ import { GerarPecaRepb } from './gerar-inicial-superendiv';
 import { RepbModelosMalote } from './repb-modelos-malote';
 import { AvancoFaseModal } from './avanco-fase-modals';
 import { usePermissions } from '@/hooks/use-permissions';
-import { ProdutoTags } from './kanban-card-bits';
+import { BeneficioTag, ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 import { DropZone } from '@/components/drop-zone';
@@ -255,6 +255,10 @@ export function CaseDetailDrawer({
                 ? // eslint-disable-next-line @next/next/no-img-element
                   <img src={c.responsible.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
                 : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#4a90e2] text-[9px] font-bold text-white">{(c.responsible.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>)}
+              {/* O cabeçalho mostra o NOME DO CLIENTE, não o título do processo, então
+                  sem esta etiqueta o card aberto de quem tem dois benefícios não diz
+                  qual deles é — dois cards contra o mesmo banco ficam idênticos. */}
+              <BeneficioTag title={c?.title} />
               {/* Produto/Área como etiquetas editáveis (✕ remove, + adiciona) — grava
                   em Case.area; a área jurídica (2º badge do card) deriva disso. */}
               {c && <ProdutoTags caseId={c.id} area={c.area} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}

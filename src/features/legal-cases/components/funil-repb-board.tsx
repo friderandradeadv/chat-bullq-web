@@ -22,7 +22,7 @@ import { AgendarReuniaoRepb } from '@/features/legal-cases/components/repb-agend
 import { RepescagemFollowupModal } from '@/features/legal-cases/components/repb-repescagem-followup';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
-import { PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
+import { BeneficioTag, PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, SORT_OPTIONS, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { avisoOrdenacaoAtiva, cardAttr, colAttr, dropIndexAt, idsWithMove, persistCardOrder } from '@/features/legal-cases/lib/card-order';
@@ -284,6 +284,7 @@ function Card({ c, bulk, colIds, isNovos, terminal, onOpen, onFechou, onApresent
       {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent={ACCENT} />}
       {/* pr-5 reserva o canto da caixinha de seleção */}
       <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
+        <BeneficioTag title={c.title} />
         <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: ACCENT, color: '#fff' }}>REPB</span>
         {c.areaJuridica && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: areaColor(c.areaJuridica).bg, color: areaColor(c.areaJuridica).fg }}>{c.areaJuridica}</span>}
       </div>
