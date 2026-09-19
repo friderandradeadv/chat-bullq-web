@@ -853,6 +853,23 @@ export const legalCasesService = {
   },
   /** Upload do JG (PDF base64) → IA extrai líquido/anual para a justiça gratuita. */
   /** Pendências do CLIENTE do processo — valem para todos os casos dele. */
+  /** Mídias que o cliente mandou desde o pedido — para conferir e arquivar. */
+  async respostasDoCliente(id: string, desde?: string): Promise<{
+    ok: boolean;
+    itens: { messageId: string; tipo: string; em: string; nome: string | null; jaAnexado: boolean }[];
+    motivo?: string;
+  }> {
+    const { data } = await api.get(`/legal-cases/${id}/respostas-cliente`, { params: desde ? { desde } : {} });
+    return data.data ?? data;
+  },
+  /** Arquiva uma resposta no processo; resolve a pendência e pode mover a fase. */
+  async anexarResposta(
+    id: string,
+    dto: { messageId: string; pendenciaId?: string; nome?: string },
+  ): Promise<{ ok: boolean; pendenciasRestantes: number | null; moveu: boolean }> {
+    const { data } = await api.post(`/legal-cases/${id}/respostas-cliente/anexar`, dto, { timeout: 120000 });
+    return data.data ?? data;
+  },
   /** Estado da oferta da ação de churning neste processo. */
   async lerOfertaChurning(id: string): Promise<{ ok: boolean; oferta: OfertaChurning | null; fase: string | null }> {
     const { data } = await api.get(`/legal-cases/${id}/oferta-churning`);

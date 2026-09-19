@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DropZone } from '@/components/drop-zone';
-import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, Upload, User, Building2, Send, Loader2 } from 'lucide-react';
+import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, Upload, User, Building2, Send, Loader2, Inbox, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { inboxService } from '@/features/inbox/services/inbox.service';
@@ -203,6 +203,64 @@ export function PendenciasPanel({
     } finally { setPedindo(false); }
   };
 
+  const [respostas, setRespostas] = useState<
+    { messageId: string; tipo: string; em: string; nome: string | null; jaAnexado: boolean }[] | null
+  >(null);
+  const [conferindo, setConferindo] = useState(false);
+  const [anexando, setAnexando] = useState<string | null>(null);
+  const [destino, setDestino] = useState<Record<string, string>>({});
+
+  /**
+   * Lê o que o cliente mandou depois do pedido.
+   *
+   * Sem isso, o ciclo ficava pela metade: pedia-se pelo hub e a resposta
+   * chegava no WhatsApp, onde alguém tinha que abrir, baixar uma a uma e
+   * arquivar à mão — que é exatamente o trabalho que o card existe para evitar.
+   */
+  const conferirRespostas = async () => {
+    setConferindo(true);
+    try {
+      const carimbos = lista.map((p) => p.pedidoEm).filter(Boolean) as string[];
+      const desde = carimbos.sort()[0];
+      const r = await legalCasesService.respostasDoCliente(caseId, desde);
+      setRespostas(r.itens);
+      if (!r.itens.length) toast.message(r.motivo || 'Nada novo desde o pedido.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui ler as respostas.');
+    } finally { setConferindo(false); }
+  };
+
+  const arquivar = async (messageId: string, nomeSugerido: string | null) => {
+    const pendenciaId = destino[messageId];
+    if (!pendenciaId) { toast.error('Escolha a que pendência este arquivo corresponde.'); return; }
+    const alvo = lista.find((p) => p.id === pendenciaId);
+    setAnexando(messageId);
+    try {
+      const r = await legalCasesService.anexarResposta(caseId, {
+        messageId,
+        pendenciaId,
+        nome: nomeSugerido || alvo?.titulo,
+      });
+      setRespostas((atual) =>
+        (atual ?? []).map((x) => (x.messageId === messageId ? { ...x, jaAnexado: true } : x)),
+      );
+      qc.invalidateQueries({ queryKey: ['pendencias-cliente'] });
+      onAnexado?.();
+      if (r.moveu) {
+        qc.invalidateQueries({ queryKey: ['legal-cases'] });
+        toast.success('Arquivado. Nada mais falta do cliente — card movido para Montar inicial.');
+      } else {
+        toast.success(
+          r.pendenciasRestantes != null
+            ? `Arquivado. Ainda faltam ${r.pendenciasRestantes} do cliente.`
+            : 'Arquivado no processo.',
+        );
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui arquivar este arquivo.');
+    } finally { setAnexando(null); }
+  };
+
   const pendentes = lista.filter((p) => p.status !== 'resolvido');
   const doEscritorio = pendentes.filter((p) => p.responsavel === 'escritorio').length;
 
@@ -351,9 +409,15 @@ export function PendenciasPanel({
                   ? `Pedido hoje. Aguarde antes de cobrar de novo.`
                   : `Pedido há ${dias} dia(s)${dias >= 3 ? ' — já cabe cobrar.' : '.'}`}
             </span>
+            <button type="button" onClick={conferirRespostas} disabled={conferindo}
+              title="Lê o que o cliente mandou no WhatsApp desde o pedido"
+              className="ml-auto inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-medium text-[#4b5863] hover:border-[#4a90e2] hover:text-[#1b6ec2] disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300">
+              {conferindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Inbox className="h-3 w-3" />}
+              {conferindo ? 'Lendo…' : 'Conferir respostas'}
+            </button>
             <button type="button" onClick={pedirAoCliente} disabled={pedindo || !conversa?.conversationId}
               title={conversa?.conversationId ? 'Monta a lista e envia ao cliente no WhatsApp' : 'Sem conversa vinculada a este cliente'}
-              className={`ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-40 ${
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-40 ${
                 dias != null && dias >= 3 ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#228BE6] hover:bg-[#1c7ed6]'}`}>
               {pedindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
               {pedindo ? 'Enviando…' : dias == null ? 'Pedir ao cliente' : 'Cobrar de novo'}
@@ -361,6 +425,62 @@ export function PendenciasPanel({
           </div>
         );
       })()}
+
+      {/* O que chegou do cliente, para conferir e arquivar com um clique cada. */}
+      {respostas !== null && (
+        <div className="mt-2 rounded-lg border border-[#cfe0ed] bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="flex items-center gap-1.5">
+            <Inbox className="h-3.5 w-3.5 shrink-0 text-[#48626f] dark:text-zinc-400" />
+            <p className="flex-1 text-[11px] font-medium text-[#101820] dark:text-zinc-200">
+              Respostas do cliente
+            </p>
+            <button type="button" onClick={conferirRespostas} disabled={conferindo} title="Reler"
+              className="text-zinc-400 hover:text-[#1b6ec2] disabled:opacity-40">
+              <RefreshCw className={`h-3 w-3 ${conferindo ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {respostas.length === 0 ? (
+            <p className="mt-1 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
+              Nada desde o pedido. Se ela respondeu por áudio ou texto, a resposta está na conversa.
+            </p>
+          ) : (
+            <ul className="mt-1.5 space-y-1.5">
+              {respostas.map((r) => (
+                <li key={r.messageId} className="flex flex-wrap items-center gap-1.5 border-t border-dashed border-[#cfe0ed] pt-1.5 first:border-0 first:pt-0 dark:border-zinc-700">
+                  <span className="text-[11px] text-[#101820] dark:text-zinc-300">
+                    {r.nome || r.tipo.toLowerCase()} · {new Date(r.em).toLocaleDateString('pt-BR')}
+                  </span>
+                  {r.jaAnexado ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+                      <Check className="h-2.5 w-2.5" /> arquivado
+                    </span>
+                  ) : (
+                    <>
+                      <select
+                        value={destino[r.messageId] ?? ''}
+                        onChange={(e) => setDestino((d) => ({ ...d, [r.messageId]: e.target.value }))}
+                        className="h-6 max-w-[190px] rounded border border-[#cfe0ed] bg-transparent px-1 text-[11px] text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200"
+                      >
+                        <option value="">é qual pendência?</option>
+                        {lista.filter((p) => p.status !== 'resolvido').map((p) => (
+                          <option key={p.id} value={p.id}>{p.titulo.slice(0, 48)}</option>
+                        ))}
+                      </select>
+                      <button type="button" onClick={() => arquivar(r.messageId, r.nome)}
+                        disabled={anexando === r.messageId || !destino[r.messageId]}
+                        className="ml-auto inline-flex items-center gap-1 rounded-md bg-[#228BE6] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[#1c7ed6] disabled:opacity-40">
+                        {anexando === r.messageId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
+                        Arquivar
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex items-center gap-1.5">
         <input
