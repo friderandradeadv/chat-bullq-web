@@ -65,7 +65,20 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
     } finally { setSalvando(false); }
   };
 
-  if (!cliente || !adversa) return null;
+  // Card sem parte adversa não tem pasta de réu nem conferência possível — e
+  // sumir em silêncio faria o bloco parecer quebrado. Diz o que falta fazer.
+  if (!cliente || !adversa) {
+    return (
+      <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-[11px] leading-4 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+        <p className="font-medium">Revisão antes do protocolo</p>
+        <p className="mt-1">
+          {!cliente
+            ? 'Este processo não tem cliente vinculado.'
+            : 'Este card ainda não tem banco réu. Desmembre por banco (ou preencha a parte adversa) — é o réu que define a pasta da inicial.'}
+        </p>
+      </div>
+    );
+  }
 
   const faltam = data?.faltam ?? [];
   const pronta = !isLoading && !error && faltam.length === 0;
