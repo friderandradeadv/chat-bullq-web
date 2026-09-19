@@ -16,6 +16,7 @@ const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 tex
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
+import { PendenciasPanel, type Pendencia } from './pendencias-panel';
 import { BancosReusEditor, RepbFasePorBanco, ResumoClienteRepb } from './bancos-reus-editor';
 import { GerarPecaRepb } from './gerar-inicial-superendiv';
 import { RepbModelosMalote } from './repb-modelos-malote';
@@ -184,6 +185,12 @@ export function CaseDetailDrawer({
   // Fases de sentença (favorável/desfavorável) leem do bucket compartilhado 'sentenca'.
   const faseBucket = (phaseKey ?? '').startsWith('sentenca_') ? 'sentenca' : (phaseKey ?? '');
   const faseData = (c?.metadata as any)?.faseData?.[faseBucket] ?? {};
+  // Pendências valem para o caso inteiro (qualquer fase), por isso não saem de
+  // faseData[fase] e sim de um bucket próprio. O estado local existe só para a
+  // lista reagir na hora do clique; a fonte continua sendo o metadata.
+  const pendSalvas = (((c?.metadata as any)?.faseData?._pendencias?.lista ?? []) as Pendencia[]);
+  const [pendLocal, setPendLocal] = useState<Pendencia[] | null>(null);
+  const pendencias = pendLocal ?? pendSalvas;
   const isFilhote = !!(c?.metadata as any)?.desmembradoDe;
   const inIntake = phaseKey ? INTAKE_PHASES.has(phaseKey) : false;
   const inMontar = phaseKey ? MONTAR_PHASES.has(phaseKey) : false;
@@ -499,6 +506,15 @@ export function CaseDetailDrawer({
                   ? <RepbFasePorBanco parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} focusId={focusBankId} />
                   : <FaseFields caseId={c.id} phase={phaseKey} data={faseData} />}
               </div>
+            )}
+
+            {c && (
+              <PendenciasPanel
+                caseId={c.id}
+                lista={pendencias}
+                onChanged={setPendLocal}
+                onIrParaAnexos={() => setTab('anexos')}
+              />
             )}
 
             {/* REPB: provisionamento, acordo e malotes agora vivem POR BANCO no dossiê
