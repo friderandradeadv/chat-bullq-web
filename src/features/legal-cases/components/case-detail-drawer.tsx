@@ -12,7 +12,12 @@ import {
   legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef, type PartyDetail, type CaseDetail, type ViabilidadeAnalise,
 } from '@/features/legal-cases/services/legal-cases.service';
 
-const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
+// Base SEM largura: quem usa decide. O `INPUT` (com w-full) continua para campo
+// que ocupa a linha inteira; em linha com vários campos, use INPUT_BASE e diga a
+// largura, senão o w-full daqui briga com o w-28/w-24 do irmão — e quem perde é
+// o campo que sobrou com flex-1, que some espremido.
+const INPUT_BASE = 'h-9 rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
+const INPUT = INPUT_BASE + ' w-full';
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
@@ -1005,7 +1010,9 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
     const banks = payload();
     if (!banks.length) { toast.error('Liste ao menos um banco réu (ou upe o HISCON) antes de criar os cards.'); return; }
     const destLabel = destino === 'info_faltantes' ? 'Documentos faltantes' : 'Montar inicial';
-    if (!confirm(`Criar ${banks.length} card(s) — 1 por banco réu — na fase "${destLabel}"?\nEste card de intake será arquivado.`)) return;
+    // Sem confirm(): o diálogo nativo do Chrome trava a página inteira (e nenhuma
+    // automação alcança ele), e a ação já é explícita — o botão diz o que faz e
+    // quantos cards vai criar. O que a pessoa precisa saber vem depois, no toast.
     setDesm(destino);
     try {
       await legalCasesService.saveContratos(caseId, banks); // garante a lista persistida
@@ -1084,12 +1091,12 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
         {rows.length === 0 && <p className="text-xs italic text-zinc-400">Liste cada banco × produto (RMC/RCC), ou upe o HISCON/HISCRE. Esses contratos alimentam o cálculo e a petição inicial.</p>}
         {rows.map((r) => (
           <div key={r.id} className="flex items-center gap-1.5">
-            <input value={r.reu} onChange={(e) => setRow(r.id, { reu: e.target.value })} placeholder="Banco (réu)" className={INPUT + ' flex-1'} />
-            <select value={r.produto} onChange={(e) => setRow(r.id, { produto: e.target.value })} className={INPUT + ' w-28 shrink-0'}>
+            <input value={r.reu} onChange={(e) => setRow(r.id, { reu: e.target.value })} placeholder="Banco (réu)" title={r.reu || 'Banco (réu)'} className={INPUT_BASE + ' min-w-0 flex-1'} />
+            <select value={r.produto} onChange={(e) => setRow(r.id, { produto: e.target.value })} className={INPUT_BASE + ' w-[7.5rem] shrink-0'}>
               {PRODUTOS_IMPUGNAR.map((p) => <option key={p} value={p}>{p}</option>)}
               {r.produto && !PRODUTOS_IMPUGNAR.includes(r.produto) && <option value={r.produto}>{r.produto}</option>}
             </select>
-            <input value={r.valor} onChange={(e) => setRow(r.id, { valor: maskCurrencyBR(e.target.value) })} placeholder="Valor" inputMode="decimal" className={INPUT + ' w-24 shrink-0'} />
+            <input value={r.valor} onChange={(e) => setRow(r.id, { valor: maskCurrencyBR(e.target.value) })} placeholder="Valor" inputMode="decimal" className={INPUT_BASE + ' w-[5.5rem] shrink-0'} />
             <button onClick={() => rmRow(r.id)} title="Remover" className="shrink-0 rounded p-1 text-zinc-400 hover:text-rose-500"><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
         ))}
@@ -1105,7 +1112,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
       {showDesmembrar && (
         <div className="mt-3 rounded-lg border border-dashed border-[#cfe0ed] bg-[#f8fbff] p-3 dark:border-zinc-700 dark:bg-zinc-900/40">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Criar cards dos bancos réus →</p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Desmembra a lista acima em 1 card por banco. Escolha para onde vão os filhotes:</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Cria <strong>{rows.length || 0} card(s)</strong>, 1 por banco réu, e arquiva este card de intake. Escolha para onde vão os filhotes:</p>
           <div className="mt-2 flex gap-1.5">
             <button onClick={() => desmembrar('info_faltantes')} disabled={!!desm}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-400 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-400 dark:hover:bg-amber-900/20">
