@@ -63,10 +63,13 @@ export function PendenciasPanel({
     queryFn: () => legalCasesService.lerPendencias(caseId),
     enabled: !!caseId,
     retry: false,
+    refetchOnWindowFocus: false,
   });
   const lista = ((data?.lista ?? []) as Pendencia[]);
   const [novo, setNovo] = useState('');
-  const [editando, setEditando] = useState<string | null>(null);
+  // O rascunho vive AQUI, não dentro do <Editor>: componente filho some numa
+  // remontagem e leva o que foi digitado junto — foi o que aconteceu.
+  const [rascunho, setRascunho] = useState<Pendencia | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [subindo, setSubindo] = useState<string | null>(null);
 
@@ -120,6 +123,19 @@ export function PendenciasPanel({
     p.id === id ? { ...p, responsavel: p.responsavel === 'cliente' ? 'escritorio' : 'cliente' } : p
   )));
   const remover = (id: string) => persistir(lista.filter((p) => p.id !== id));
+  const salvarRascunho = async () => {
+    const r = rascunho;
+    if (!r) return;
+    if (!r.titulo.trim()) { toast.error('A pendência precisa de um título.'); return; }
+    // Se o item sumiu da lista (refetch no meio da edição, id trocado), ele entra
+    // de novo em vez de o texto se perder em silêncio.
+    const nova = lista.some((x) => x.id === r.id)
+      ? lista.map((x) => (x.id === r.id ? r : x))
+      : [...lista, r];
+    setRascunho(null);
+    await persistir(nova);
+    toast.success('Pendência salva');
+  };
   const adicionar = () => {
     const t = novo.trim();
     if (!t) return;
@@ -207,7 +223,7 @@ export function PendenciasPanel({
                 </div>
 
                 <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
-                  <button type="button" onClick={() => setEditando(editando === p.id ? null : p.id)} title="Editar pendência"
+                  <button type="button" onClick={() => setRascunho(rascunho?.id === p.id ? null : { ...p })} title="Editar pendência"
                     className="text-zinc-300 hover:text-[#1b6ec2] dark:text-zinc-600">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -218,7 +234,9 @@ export function PendenciasPanel({
                 </div>
               </div>
 
-              {editando === p.id && <Editor p={p} onSalvar={(np) => { setEditando(null); persistir(lista.map((x) => (x.id === np.id ? np : x))); }} />}
+              {rascunho?.id === p.id && (
+                <Editor valor={rascunho} onChange={setRascunho} onSalvar={salvarRascunho} />
+              )}
             </li>
           );
         })}
@@ -246,30 +264,46 @@ export function PendenciasPanel({
  * um por linha — é o formato que se digita sem pensar, e evita um formulário de
  * pares que ninguém quer preencher no meio do atendimento.
  */
-function Editor({ p, onSalvar }: { p: Pendencia; onSalvar: (p: Pendencia) => void }) {
-  const [titulo, setTitulo] = useState(p.titulo);
-  const [motivo, setMotivo] = useState(p.motivo ?? '');
-  const [url, setUrl] = useState(p.url ?? '');
-  const [dados, setDados] = useState((p.dados ?? []).map((d) => `${d.rotulo}: ${d.valor}`).join('\n'));
+/**
+ * Edição de uma pendência — totalmente controlada pelo painel.
+ *
+ * A versão anterior guardava o texto em useState aqui dentro e perdia tudo se o
+ * componente remontasse: a tela mostrava os campos preenchidos e o Salvar gravava
+ * o item vazio, sem erro nenhum. Agora não há estado local: o que se digita vai
+ * direto para o rascunho do pai.
+ *
+ * Os dados a copiar entram como "rótulo: valor", um por linha, que é como se
+ * digita sem pensar.
+ */
+function Editor({
+  valor, onChange, onSalvar,
+}: {
+  valor: Pendencia;
+  onChange: (p: Pendencia) => void;
+  onSalvar: () => void;
+}) {
   const campo = 'w-full rounded-md border border-[#cfe0ed] bg-transparent px-2 py-1 text-[12px] text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
+  const dadosTexto = (valor.dados ?? []).map((d) => `${d.rotulo}: ${d.valor}`).join('\n');
+  const setDados = (txt: string) => onChange({
+    ...valor,
+    dados: txt.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+      const i = l.indexOf(':');
+      return i > 0 ? { rotulo: l.slice(0, i).trim(), valor: l.slice(i + 1).trim() } : { rotulo: 'dado', valor: l };
+    }),
+  });
   return (
     <div className="mt-2 space-y-1.5 border-t border-dashed border-[#cfe0ed] pt-2 dark:border-zinc-700">
-      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título" className={campo} />
-      <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Por que travou (captcha, senha, 2FA…)" className={campo} />
-      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://portal…" className={campo} />
-      <textarea value={dados} onChange={(e) => setDados(e.target.value)} rows={2}
+      <input value={valor.titulo} onChange={(e) => onChange({ ...valor, titulo: e.target.value })}
+        placeholder="Título" className={campo} autoFocus />
+      <input value={valor.motivo ?? ''} onChange={(e) => onChange({ ...valor, motivo: e.target.value })}
+        placeholder="Por que travou (captcha, senha, 2FA…)" className={campo} />
+      <input value={valor.url ?? ''} onChange={(e) => onChange({ ...valor, url: e.target.value })}
+        placeholder="https://portal…" className={campo} />
+      <textarea value={dadosTexto} onChange={(e) => setDados(e.target.value)} rows={2}
         placeholder={'Dados a copiar, um por linha:\nCPF: 000.000.000-00'} className={campo} />
       <div className="flex justify-end gap-1.5">
-        <button type="button" onClick={() => onSalvar({
-          ...p,
-          titulo: titulo.trim() || p.titulo,
-          motivo: motivo.trim() || undefined,
-          url: url.trim() || undefined,
-          dados: dados.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
-            const i = l.indexOf(':');
-            return i > 0 ? { rotulo: l.slice(0, i).trim(), valor: l.slice(i + 1).trim() } : { rotulo: 'dado', valor: l };
-          }),
-        })} className="rounded-md bg-[#228BE6] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#1c7ed6]">Salvar</button>
+        <button type="button" onClick={onSalvar}
+          className="rounded-md bg-[#228BE6] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#1c7ed6]">Salvar</button>
       </div>
     </div>
   );
