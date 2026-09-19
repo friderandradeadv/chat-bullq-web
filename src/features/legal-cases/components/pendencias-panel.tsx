@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Copy, ExternalLink, Paperclip, Plus, Trash2, User, Building2 } from 'lucide-react';
+import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, User, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -54,6 +54,7 @@ export function PendenciasPanel({
   onIrParaAnexos?: () => void;
 }) {
   const [novo, setNovo] = useState('');
+  const [editando, setEditando] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const persistir = async (nova: Pendencia[]) => {
@@ -144,11 +145,19 @@ export function PendenciasPanel({
                   )}
                 </div>
 
-                <button type="button" onClick={() => remover(p.id)} title="Remover pendência"
-                  className="mt-0.5 shrink-0 text-zinc-300 hover:text-red-500 dark:text-zinc-600">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
+                  <button type="button" onClick={() => setEditando(editando === p.id ? null : p.id)} title="Editar pendência"
+                    className="text-zinc-300 hover:text-[#1b6ec2] dark:text-zinc-600">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => remover(p.id)} title="Remover pendência"
+                    className="text-zinc-300 hover:text-red-500 dark:text-zinc-600">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
+
+              {editando === p.id && <Editor p={p} onSalvar={(np) => { setEditando(null); persistir(lista.map((x) => (x.id === np.id ? np : x))); }} />}
             </li>
           );
         })}
@@ -166,6 +175,40 @@ export function PendenciasPanel({
           className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#cfe0ed] text-[#4b5863] hover:border-[#4a90e2] hover:text-[#1b6ec2] disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300">
           <Plus className="h-4 w-4" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Edição inline de uma pendência. Os dados a copiar entram como "rótulo: valor",
+ * um por linha — é o formato que se digita sem pensar, e evita um formulário de
+ * pares que ninguém quer preencher no meio do atendimento.
+ */
+function Editor({ p, onSalvar }: { p: Pendencia; onSalvar: (p: Pendencia) => void }) {
+  const [titulo, setTitulo] = useState(p.titulo);
+  const [motivo, setMotivo] = useState(p.motivo ?? '');
+  const [url, setUrl] = useState(p.url ?? '');
+  const [dados, setDados] = useState((p.dados ?? []).map((d) => `${d.rotulo}: ${d.valor}`).join('\n'));
+  const campo = 'w-full rounded-md border border-[#cfe0ed] bg-transparent px-2 py-1 text-[12px] text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
+  return (
+    <div className="mt-2 space-y-1.5 border-t border-dashed border-[#cfe0ed] pt-2 dark:border-zinc-700">
+      <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título" className={campo} />
+      <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Por que travou (captcha, senha, 2FA…)" className={campo} />
+      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://portal…" className={campo} />
+      <textarea value={dados} onChange={(e) => setDados(e.target.value)} rows={2}
+        placeholder={'Dados a copiar, um por linha:\nCPF: 000.000.000-00'} className={campo} />
+      <div className="flex justify-end gap-1.5">
+        <button type="button" onClick={() => onSalvar({
+          ...p,
+          titulo: titulo.trim() || p.titulo,
+          motivo: motivo.trim() || undefined,
+          url: url.trim() || undefined,
+          dados: dados.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+            const i = l.indexOf(':');
+            return i > 0 ? { rotulo: l.slice(0, i).trim(), valor: l.slice(i + 1).trim() } : { rotulo: 'dado', valor: l };
+          }),
+        })} className="rounded-md bg-[#228BE6] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#1c7ed6]">Salvar</button>
       </div>
     </div>
   );
