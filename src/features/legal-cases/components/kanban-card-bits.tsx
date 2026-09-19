@@ -679,3 +679,28 @@ export function LegalTags({
     </div>
   );
 }
+
+/**
+ * Etiqueta AP/PM no card — qual benefício aquela ação ataca.
+ *
+ * Cliente com dois benefícios (aposentadoria e pensão por morte) gera cards
+ * quase idênticos: mesmo nome, às vezes o mesmo banco, mudando só o produto.
+ *
+ * 🚨 O card desenha o nome do CLIENTE, não o título do processo
+ * (`c.client ?? c.title`), então renomear o título sozinho não aparece na tela —
+ * a distinção continuava invisível justamente no kanban, que é onde se trabalha.
+ * O benefício vai como PREFIXO do título ("AP Fulano × Banco"), no mesmo padrão
+ * das pastas do Drive, e é dele que esta etiqueta sai.
+ */
+export function BeneficioTag({ title }: { title?: string | null }) {
+  const b = /^(AP|PM)\b/.exec(title ?? '')?.[1];
+  if (!b) return null;
+  return (
+    <span
+      title={b === 'AP' ? 'Aposentadoria' : 'Pensão por morte'}
+      className="rounded-full bg-[#101820] px-1.5 py-0.5 text-[10px] font-semibold leading-3 text-white dark:bg-zinc-200 dark:text-zinc-900"
+    >
+      {b}
+    </span>
+  );
+}

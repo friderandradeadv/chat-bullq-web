@@ -7,7 +7,7 @@ import { Search, RefreshCw, Scale, Copy, CalendarClock, Clock, Plus, Link2 } fro
 import { toast } from 'sonner';
 import { legalCasesService, type KanbanCard, type KanbanPhase } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
-import { PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/legal-cases/components/kanban-card-bits';
+import { BeneficioTag, PhaseHeader, AddPhaseColumn, type KanbanBoardId } from '@/features/legal-cases/components/kanban-card-bits';
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, KanbanSelectTrigger, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, SORT_OPTIONS, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
 import { avisoOrdenacaoAtiva, cardAttr, colAttr, idsWithMove, persistCardOrder } from '@/features/legal-cases/lib/card-order';
@@ -378,22 +378,7 @@ function AdminCard({ c, terminal, bulk, colIds, accent, onOpen, overlay }: { c: 
       {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent={accent} />}
       {/* pr-5 reserva o canto da caixinha de seleção */}
       <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
-        {/*
-          Cliente com dois benefícios gera cards quase idênticos: mesmo nome,
-          mesmo banco, só muda o produto. O prefixo AP/PM do título é o que diz
-          qual é qual — mas o card mostra o nome do CLIENTE, não o título, então
-          sem esta etiqueta a distinção ficava invisível justamente no kanban.
-        */}
-        {(() => {
-          const b = /^(AP|PM)\b/.exec(c.title ?? '')?.[1];
-          if (!b) return null;
-          return (
-            <span title={b === 'AP' ? 'Aposentadoria' : 'Pensão por morte'}
-              className="rounded-full bg-[#101820] px-1.5 py-0.5 text-[10px] font-semibold leading-3 text-white dark:bg-zinc-200 dark:text-zinc-900">
-              {b}
-            </span>
-          );
-        })()}
+        <BeneficioTag title={c.title} />
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && (() => { const a = areaColor(c.areaJuridica); return (
           <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: a.bg, color: a.fg }}>{c.areaJuridica}</span>
