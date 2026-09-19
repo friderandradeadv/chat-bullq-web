@@ -80,8 +80,41 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
     );
   }
 
-  const faltam = data?.faltam ?? [];
-  const pronta = !isLoading && !error && faltam.length === 0;
+  /**
+   * Casa cada item da sequência com os arquivos que REALMENTE estão na pasta.
+   *
+   * 🚨 O conferidor procura numa trilha fixa ("04. EMPRÉSTIMOS CONSIGNADOS › …"),
+   * que é a da árvore ANTIGA. A pasta-modelo do escritório ("01. PASTAS PADRÃO")
+   * é por ÁREA — BANCÁRIO, CONSUMIDOR, FAMÍLIA… — e é nela que o organizador
+   * escreve. Resultado: a tela dizia "faltam 7" com a pasta montada e completa.
+   *
+   * Enquanto as duas árvores convivem no acervo, quem manda é o que está lá
+   * dentro. Casa pelo miolo do nome, porque o arquivo real vem como
+   * "PM - HISCON.pdf" e o item da sequência é "06. HISCON".
+   */
+  const miolo = (t: string) =>
+    t.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase().replace(/^\d{1,2}(\.\d)?\s*[.)\-]?\s*/, '')
+      .replace(/\.[A-Z0-9]+$/, '').replace(/[^A-Z0-9]/g, '');
+
+  const naPasta = pasta.data?.arquivos ?? [];
+  const achaNaPasta = (nomeItem: string) => {
+    const alvo = miolo(nomeItem);
+    // "DOCUMENTO DE IDENTIDADE" casa com RG/CNH; o resto casa por conter.
+    const sinonimos = /DOCUMENTODEIDENTIDADE/.test(alvo) ? ['RG', 'CNH', 'IDENTIDADE'] : [];
+    return naPasta.find((f) => {
+      const m = miolo(f.nome);
+      if (m.includes(alvo) || alvo.includes(m)) return true;
+      return sinonimos.some((sin) => m.includes(sin));
+    }) ?? null;
+  };
+
+  const itens = (data?.itens ?? []).map((i) => {
+    const real = achaNaPasta(i.nome);
+    return { ...i, presente: i.presente || !!real, arquivo: real?.nome ?? i.arquivo, url: real?.url ?? null };
+  });
+  const faltam = itens.filter((i) => i.obrigatorio && !i.presente);
+  const pronta = !isLoading && !error && !pasta.isLoading && faltam.length === 0;
 
   return (
     <div className="mt-5 rounded-lg border border-[#cfe0ed] bg-[#f7fafc] p-2.5 dark:border-zinc-700 dark:bg-zinc-800/40">
@@ -117,19 +150,26 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
 
           {/* A ordem é a do protocolo: é assim que os anexos sobem. */}
           <ol className="mt-2 space-y-0.5">
-            {(data?.itens ?? []).map((i) => (
+            {itens.map((i) => (
               <li key={i.nome} className="flex items-start gap-1.5 text-[11px] leading-4">
                 <span className={`mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center rounded-sm border ${
                   i.presente ? 'border-emerald-500 bg-emerald-500'
                   : i.obrigatorio ? 'border-red-400' : 'border-zinc-300 dark:border-zinc-600'}`}>
                   {i.presente && <Check className="h-2 w-2 text-white" />}
                 </span>
-                <span className={i.presente
-                  ? 'text-[#101820] dark:text-zinc-300'
-                  : i.obrigatorio ? 'font-medium text-red-600 dark:text-red-400' : 'text-[#48626f] dark:text-zinc-500'}>
-                  {i.arquivo || i.nome}
-                  {!i.presente && !i.obrigatorio && ' · opcional'}
-                </span>
+                {i.url ? (
+                  <a href={i.url} target="_blank" rel="noreferrer"
+                    className="text-[#1b6ec2] hover:underline dark:text-[#74c0fc]">
+                    {i.arquivo || i.nome}
+                  </a>
+                ) : (
+                  <span className={i.presente
+                    ? 'text-[#101820] dark:text-zinc-300'
+                    : i.obrigatorio ? 'font-medium text-red-600 dark:text-red-400' : 'text-[#48626f] dark:text-zinc-500'}>
+                    {i.arquivo || i.nome}
+                    {!i.presente && !i.obrigatorio && ' · opcional'}
+                  </span>
+                )}
               </li>
             ))}
           </ol>
