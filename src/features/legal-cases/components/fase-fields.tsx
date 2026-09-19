@@ -2,13 +2,56 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { maskCurrencyBR, currencyToInput } from '@/lib/masks';
 
 type FieldType = 'checklist' | 'radio' | 'text' | 'textarea' | 'date' | 'datetime' | 'currency' | 'select';
 interface Field { key: string; label: string; type: FieldType; options?: string[] }
+
+/** Reconhece o que vale clicar ou copiar dentro de um texto de campo. */
+const URL_RE = /https?:\/\/[^\s<>"')\]]+/;
+const CPF_RE = /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/;
+const TOKEN_RE = new RegExp(`(${URL_RE.source}|${CPF_RE.source})`, 'g');
+
+function CpfCopiavel({ cpf }: { cpf: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => { navigator.clipboard.writeText(cpf); toast.success('CPF copiado'); }}
+      title="Copiar CPF"
+      className="inline-flex items-center gap-1 rounded bg-[#eef4fa] px-1 font-medium text-[#1b6ec2] hover:bg-[#dce9f6] dark:bg-zinc-800 dark:text-[#7db2e8]"
+    >
+      {cpf}
+      <Copy className="h-3 w-3" />
+    </button>
+  );
+}
+
+/**
+ * Texto de campo em modo leitura: URL vira link clicável e CPF ganha botão de
+ * copiar. Existe porque campo de pendência costuma trazer o passo a passo de uma
+ * etapa manual (portal + login), e copiar da caixa de edição custa caro no dia a dia.
+ */
+function TextoRico({ texto }: { texto: string }) {
+  return (
+    <p className="whitespace-pre-wrap text-sm leading-5 text-[#101820] dark:text-zinc-200">
+      {texto.split(TOKEN_RE).filter(Boolean).map((parte, i) => {
+        if (new RegExp(`^${URL_RE.source}$`).test(parte)) {
+          return (
+            <a key={i} href={parte} target="_blank" rel="noreferrer"
+              className="font-medium text-[#1b6ec2] underline decoration-[#1b6ec2]/40 underline-offset-2 hover:decoration-[#1b6ec2] dark:text-[#7db2e8]">
+              {parte}
+            </a>
+          );
+        }
+        if (new RegExp(`^${CPF_RE.source}$`).test(parte)) return <CpfCopiavel key={i} cpf={parte} />;
+        return <span key={i}>{parte}</span>;
+      })}
+    </p>
+  );
+}
 
 /** Campos do painel "Fase atual" por fase — espelha os campos de cada fase do Pipefy. */
 export const FASE_FORMS: Record<string, Field[]> = {
@@ -339,6 +382,17 @@ function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave
     // textarea editável. Os demais textareas seguem como campo simples.
     const isDispositivo = field.key === 'julgamento';
     const conteudo = (local ?? '').trim();
+    // Campo com portal e CPF no meio do texto (pendência que exige etapa manual)
+    // abre em leitura, com link clicável e CPF copiável; "editar" devolve a caixa.
+    const temAtalho = !isDispositivo && (URL_RE.test(conteudo) || CPF_RE.test(conteudo));
+    if (temAtalho && !expanded) {
+      return (
+        <div className="rounded-lg border border-[#cfe0ed] bg-[#f7fafc] px-2.5 py-2 dark:border-zinc-700 dark:bg-zinc-800/40">
+          <TextoRico texto={conteudo} />
+          <button onClick={() => setExpanded(true)} className="mt-1 text-xs font-semibold text-[#4a90e2] hover:underline">editar</button>
+        </div>
+      );
+    }
     if (isDispositivo && conteudo && !expanded) {
       return (
         <div className="rounded-lg border border-[#cfe0ed] bg-[#f7fafc] px-2.5 py-2 dark:border-zinc-700 dark:bg-zinc-800/40">
@@ -360,8 +414,8 @@ function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave
           rows={isDispositivo ? 6 : 2}
           className="w-full rounded-lg border border-[#cfe0ed] bg-transparent px-2.5 py-1.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200"
         />
-        {isDispositivo && conteudo && (
-          <button onClick={() => setExpanded(false)} className="mt-1 text-xs font-semibold text-[#4a90e2] hover:underline">exibir menos</button>
+        {(isDispositivo || temAtalho) && conteudo && (
+          <button onClick={() => setExpanded(false)} className="mt-1 text-xs font-semibold text-[#4a90e2] hover:underline">{isDispositivo ? 'exibir menos' : 'concluir edição'}</button>
         )}
       </div>
     );
