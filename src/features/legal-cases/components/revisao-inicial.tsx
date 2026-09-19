@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save } from 'lucide-react';
+import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
 import { calculadoraRmcService } from '@/features/calculadora-rmc/services/calculadora-rmc.service';
@@ -34,6 +34,16 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
     queryKey: ['conferencia-protocolo', caso.id, adversa?.name],
     queryFn: () => calculadoraRmcService.conferirProtocolo(cliente!.id, adversa!.name),
     enabled: !!cliente?.id && !!adversa?.name,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Os arquivos DE VERDADE que estão na pasta, com link para abrir. A checagem
+  // por nome diz o que falta; esta lista é o que dá para conferir.
+  const pasta = useQuery({
+    queryKey: ['pasta-inicial', caso.id],
+    queryFn: () => legalCasesService.pastaDaInicial(caso.id),
+    enabled: !!caso.id,
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -127,6 +137,39 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
           )}
         </>
       )}
+
+      {/* Os documentos como estão na pasta — clicáveis, para conferir de fato. */}
+      <div className="mt-2 rounded-lg border border-[#cfe0ed] bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="flex items-center gap-1.5">
+          <FileText className="h-3.5 w-3.5 shrink-0 text-[#48626f] dark:text-zinc-400" />
+          <p className="flex-1 text-[11px] font-medium text-[#101820] dark:text-zinc-200">
+            Na pasta {pasta.data?.pasta ? <span className="font-normal text-[#48626f] dark:text-zinc-400">· {pasta.data.pasta}</span> : null}
+          </p>
+          {pasta.isFetching && <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />}
+        </div>
+
+        {pasta.isLoading ? (
+          <p className="mt-1 text-[11px] text-[#48626f] dark:text-zinc-400">Abrindo a pasta no Drive…</p>
+        ) : pasta.data?.motivo ? (
+          <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400">{pasta.data.motivo}</p>
+        ) : (pasta.data?.arquivos?.length ?? 0) === 0 ? (
+          <p className="mt-1 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
+            A pasta existe, mas está vazia.
+          </p>
+        ) : (
+          <ul className="mt-1 space-y-0.5">
+            {pasta.data!.arquivos.map((f) => (
+              <li key={f.id}>
+                <a href={f.url} target="_blank" rel="noreferrer"
+                  className="inline-flex items-start gap-1 text-[11px] leading-4 text-[#1b6ec2] hover:underline dark:text-[#74c0fc]">
+                  <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span className="break-all">{f.nome}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {/* O que precisa mudar. Fica no card, não na conversa. */}
       <div className="mt-2">
