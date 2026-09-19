@@ -451,7 +451,7 @@ export function CaseDetailDrawer({
                         </div>
                       );
                     })()}
-                    <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                    <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} area={c.area} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                   </div>
                 )}
 
@@ -1147,7 +1147,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
 // Ações da inicial: upar o JG (justiça gratuita → renda) e GERAR a petição inicial
 // (base no timbrado preenchida com cliente/réu/contrato/cálculo/JG; baixa o .docx).
 // A base (QUITADO/EM ABERTO) é escolhida pelo cálculo.
-function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: any; docs?: { jg?: string }; onChanged: () => void }) {
+function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string; jg: any; docs?: { jg?: string }; area?: string | null; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [jgBusy, setJgBusy] = useState(false);
   const fmtBRL = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -1189,6 +1189,45 @@ function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: a
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao organizar a pasta no Drive');
     } finally { setOrgBusy(false); }
+  };
+
+  /**
+   * Faz os três passos numa tacada: gera a inicial, organiza a pasta no Drive e
+   * manda o card para Revisão inicial.
+   *
+   * Os passos já existiam soltos, e era preciso lembrar da ordem — gerar antes
+   * de organizar, porque a pasta leva a peça junto. Aqui a ordem é a do botão.
+   *
+   * 🚨 O que sai é RASCUNHO no timbrado: a peça ainda tem as lacunas "[ • ]" e o
+   * PDF continua saindo do Word, à mão. Mandar para revisão é dizer "está pronta
+   * para ser LIDA", não "está pronta para protocolar" — por isso o card para em
+   * Revisão inicial, e quem move para Protocolo é o advogado.
+   */
+  const [tudoBusy, setTudoBusy] = useState<string | null>(null);
+  const montarTudo = async () => {
+    const produto = (area || '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
+    try {
+      setTudoBusy('Gerando a inicial…');
+      await legalCasesService.gerarInicial(caseId, produto);
+
+      setTudoBusy('Organizando a pasta…');
+      const org = await legalCasesService.organizarPastaInicial(caseId).catch((e) => {
+        // A pasta falhar não desfaz a peça: ela já está anexada ao card.
+        toast.error(e?.response?.data?.message || 'A inicial foi gerada, mas a pasta do Drive não.');
+        return null;
+      });
+
+      setTudoBusy('Movendo para revisão…');
+      await legalCasesService.movePhase(caseId, 'revisao_inicial');
+
+      onChanged();
+      toast.success(
+        `Inicial de ${produto} gerada${org ? ` e pasta "${org.pastaBanco}" montada` : ''} — card em Revisão inicial. ` +
+        'Confira as lacunas "[ • ]" antes de protocolar.',
+      );
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui completar a montagem.');
+    } finally { setTudoBusy(null); }
   };
 
   const [cadBusy, setCadBusy] = useState(false);
@@ -1245,6 +1284,14 @@ function InicialActions({ caseId, jg, docs, onChanged }: { caseId: string; jg: a
         className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#7048e8] px-3 py-2 text-xs font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-50"
       >
         <Upload className="h-3.5 w-3.5" /> {orgBusy ? 'Organizando no Drive…' : 'Organizar pasta da inicial (Drive)'}
+      </button>
+      <button
+        onClick={() => montarTudo()}
+        disabled={!!tudoBusy}
+        title="Gera a inicial do produto do card, organiza a pasta no Drive e manda o card para Revisão inicial."
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
+      >
+        <Sparkles className="h-3.5 w-3.5" /> {tudoBusy || 'Montar tudo e mandar para revisão'}
       </button>
     </div>
   );
