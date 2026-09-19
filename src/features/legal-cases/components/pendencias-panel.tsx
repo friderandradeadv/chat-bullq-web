@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DropZone } from '@/components/drop-zone';
 import { Check, Copy, ExternalLink, Paperclip, Pencil, Plus, Trash2, Upload, User, Building2 } from 'lucide-react';
@@ -31,6 +31,37 @@ export type Pendencia = {
 };
 
 const novoId = () => `p${Date.now().toString(36)}`;
+
+/**
+ * A lista vem do metadata do contato, que é campo livre — e já entrou lixo ali:
+ * um item sem id e sem título, resíduo do editor que salvava em branco.
+ *
+ * 🚨 Item sem id não era só feio: fazia `rascunho?.id === p.id` comparar
+ * undefined com undefined, o que é VERDADEIRO. O editor abria com rascunho nulo,
+ * lia `null.dados` e derrubava a página inteira ao abrir o card.
+ *
+ * Por isso o saneamento é na porta de entrada, não no render: id sempre existe, e
+ * pendência sem título não diz o que falta — não entra.
+ */
+function normalizar(bruta: unknown): Pendencia[] {
+  if (!Array.isArray(bruta)) return [];
+  return bruta
+    .filter((p): p is Record<string, any> => !!p && typeof p === 'object')
+    .map((p) => ({
+      id: String(p.id ?? '').trim() || novoId(),
+      titulo: String(p.titulo ?? '').trim(),
+      responsavel: p.responsavel === 'cliente' ? ('cliente' as const) : ('escritorio' as const),
+      motivo: String(p.motivo ?? '').trim() || undefined,
+      url: String(p.url ?? '').trim() || undefined,
+      dados: Array.isArray(p.dados)
+        ? p.dados
+            .filter((d: any) => d && String(d.rotulo ?? '').trim())
+            .map((d: any) => ({ rotulo: String(d.rotulo).trim(), valor: String(d.valor ?? '') }))
+        : undefined,
+      status: p.status === 'resolvido' ? ('resolvido' as const) : ('pendente' as const),
+    }))
+    .filter((p) => p.titulo !== '');
+}
 
 function Chip({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
@@ -65,7 +96,7 @@ export function PendenciasPanel({
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const lista = ((data?.lista ?? []) as Pendencia[]);
+  const lista = useMemo(() => normalizar(data?.lista), [data]);
   const [novo, setNovo] = useState('');
   // O rascunho vive AQUI, não dentro do <Editor>: componente filho some numa
   // remontagem e leva o que foi digitado junto — foi o que aconteceu.
@@ -223,7 +254,7 @@ export function PendenciasPanel({
                 </div>
 
                 <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
-                  <button type="button" onClick={() => setRascunho(rascunho?.id === p.id ? null : { ...p })} title="Editar pendência"
+                  <button type="button" onClick={() => setRascunho(rascunho !== null && rascunho.id === p.id ? null : { ...p })} title="Editar pendência"
                     className="text-zinc-300 hover:text-[#1b6ec2] dark:text-zinc-600">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -234,7 +265,7 @@ export function PendenciasPanel({
                 </div>
               </div>
 
-              {rascunho?.id === p.id && (
+              {rascunho !== null && rascunho.id === p.id && (
                 <Editor valor={rascunho} onChange={setRascunho} onSalvar={salvarRascunho} />
               )}
             </li>
@@ -278,11 +309,13 @@ export function PendenciasPanel({
 function Editor({
   valor, onChange, onSalvar,
 }: {
-  valor: Pendencia;
+  /** Nullable de propósito: quem renderiza já guarda, mas o editor não confia. */
+  valor: Pendencia | null;
   onChange: (p: Pendencia) => void;
   onSalvar: () => void;
 }) {
   const campo = 'w-full rounded-md border border-[#cfe0ed] bg-transparent px-2 py-1 text-[12px] text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200';
+  if (!valor) return null;
   const dadosTexto = (valor.dados ?? []).map((d) => `${d.rotulo}: ${d.valor}`).join('\n');
   const setDados = (txt: string) => onChange({
     ...valor,
