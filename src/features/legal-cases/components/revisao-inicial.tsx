@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save, FileText } from 'lucide-react';
+import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save, FileText, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
 import { calculadoraRmcService } from '@/features/calculadora-rmc/services/calculadora-rmc.service';
@@ -26,6 +26,7 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [tocado, setTocado] = useState(false);
+  const [editandoObs, setEditandoObs] = useState(false);
 
   const cliente = caso.parties?.find((p) => p.role === 'CLIENT') ?? null;
   const adversa = caso.parties?.find((p) => p.role !== 'CLIENT') ?? null;
@@ -59,6 +60,7 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
       await legalCasesService.salvarRevisaoInicial(caso.id, obs);
       qc.invalidateQueries({ queryKey: ['legal-case', caso.id] });
       setTocado(false);
+      setEditandoObs(false);
       toast.success(obs.trim() ? 'Observações salvas no card' : 'Observações limpas');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui salvar as observações.');
@@ -224,15 +226,44 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
         )}
       </div>
 
-      {/* O que precisa mudar. Fica no card, não na conversa. */}
+      {/* O que precisa mudar. Fica no card, não na conversa.
+          Quando há observação salva, ela é LIDA antes de ser editada: um alerta
+          de "não protocolar" dentro de uma caixinha de três linhas é um alerta
+          que ninguém lê. Por isso o texto aparece formatado, e o campo de edição
+          só abre a pedido. */}
       <div className="mt-2">
-        <textarea
-          value={obs}
-          onChange={(e) => { setTocado(true); setObs(e.target.value); }}
-          rows={3}
-          placeholder="O que precisa mudar antes de protocolar? (fica salvo no card)"
-          className="w-full rounded-md border border-[#cfe0ed] bg-white px-2 py-1.5 text-[12px] leading-5 text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-        />
+        {salvas && !editandoObs ? (
+          <div className="rounded-lg border-l-4 border-amber-500 bg-amber-50 px-3 py-2.5 dark:bg-amber-500/10">
+            <div className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words text-[12.5px] leading-[1.55] text-[#101820] dark:text-zinc-200">
+              {salvas.split('\n').map((linha, i) => {
+                const forte = /^(⛔|⚠️|🚨)/.test(linha.trim());
+                const titulo = /^[A-ZÀ-Ú0-9][A-ZÀ-Ú0-9 ,.:()\/-]{6,}$/.test(linha.trim());
+                if (!linha.trim()) return <div key={i} className="h-2" />;
+                return (
+                  <p key={i} className={
+                    forte ? 'font-semibold text-amber-900 dark:text-amber-300'
+                    : titulo ? 'mt-1 font-semibold text-[#101820] dark:text-zinc-100'
+                    : ''}>
+                    {linha}
+                  </p>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => { setEditandoObs(true); setTocado(false); }}
+              className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-[#1b6ec2] hover:underline dark:text-[#74c0fc]">
+              <Pencil className="h-3 w-3" /> Editar observações
+            </button>
+          </div>
+        ) : (
+          <textarea
+            value={obs}
+            onChange={(e) => { setTocado(true); setObs(e.target.value); }}
+            rows={12}
+            autoFocus={editandoObs}
+            placeholder="O que precisa mudar antes de protocolar? (fica salvo no card)"
+            className="w-full rounded-md border border-[#cfe0ed] bg-white px-2.5 py-2 text-[12.5px] leading-[1.55] text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+          />
+        )}
         <div className="mt-1 flex items-center justify-between gap-2">
           <span className="text-[10px] text-[#48626f] dark:text-zinc-500">
             {salvas && !tocado ? 'observações salvas' : tocado ? 'não salvo' : 'sem observações'}
