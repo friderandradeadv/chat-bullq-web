@@ -382,6 +382,11 @@ export const COMECE_POR_AQUI: Trilha = {
       titulo: 'Sua primeira semana, dia a dia',
       resumo: 'O roteiro exato dos 5 primeiros dias e dos 30 primeiros.',
       minutos: 7,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/primeira-semana.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/primeira-semana.vtt',
+      },
       manual: [
         '## Dia 1 — entender onde você está',
         '',
@@ -447,6 +452,8 @@ export const COMECE_POR_AQUI: Trilha = {
         'Feche com as 5 expectativas dos primeiros 30 dias.',
         '',
         'NÃO FAÇA: prometer que a primeira semana é leve, omitir que a responsabilidade pelo prazo é transferida.',
+        '',
+        'Dizer "Dia 1", "Dia 2" em voz alta é permitido e desejado: são os dias reais da semana de trabalho. Mas NÃO anuncie a estrutura do vídeo — nada de "primeira parte", "segunda parte", "terceira parte". Passe de um bloco ao outro com transição de fala.',
       ].join('\n'),
     },
   ],

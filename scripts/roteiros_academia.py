@@ -12,6 +12,115 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 1.6 — Sua primeira semana, dia a dia (3:37). Fecha a trilha do Dia 1.
+    #
+    # A linha do tempo abre os cinco dias de uma vez; depois cada dia ganha a
+    # sua própria lista de tarefas, porque é a tarefa que a pessoa vai executar
+    # amanhã — a linha do tempo sozinha mostraria só o tema.
+    'primeira-semana': {
+        'duracao': 217.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 1 · Aula 6',
+             'titulo': 'Sua primeira semana, dia a dia',
+             'sub': ['O que fazer em cada um dos cinco dias', 'e quando o prazo passa a ser seu.']},
+
+            {'t': 17.0, 'tipo': 'linha_tempo', 'secao': 'A semana inteira',
+             'titulo': 'Cinco dias, cinco objetivos', 'marcos': [{'titulo': 'Dia 1', 'sub': 'onde você está'},
+                        {'titulo': 'Dia 2', 'sub': 'o hub'},
+                        {'titulo': 'Dia 3', 'sub': 'a tese'},
+                        {'titulo': 'Dia 4', 'sub': 'a ferramenta'},
+                        {'titulo': 'Dia 5', 'sub': 'prazo'}], 'aceso': None},
+
+            {'t': 24.5, 'tipo': 'lista', 'secao': 'Dia 1 · Entender onde você está',
+             'titulo': 'O terreno', 'itens': ['Assistir "Quem somos" e "Como o escritório funciona"',
+                       'Ler o Regimento Interno e o Missão, Visão e Valores inteiros',
+                       'Receber e testar os acessos que já saíram',
+                       'Ver quem é quem no organograma, em Meu Espaço',
+                       'Assinar contrato, procuração e termo de sigilo com o RH'], 'aceso': None},
+            {'t': 41.5, 'tipo': 'lista', 'secao': 'Dia 1 · Entender onde você está',
+             'titulo': 'O terreno', 'itens': ['Assistir "Quem somos" e "Como o escritório funciona"',
+                       'Ler o Regimento Interno e o Missão, Visão e Valores inteiros',
+                       'Receber e testar os acessos que já saíram',
+                       'Ver quem é quem no organograma, em Meu Espaço',
+                       'Assinar contrato, procuração e termo de sigilo com o RH'], 'aceso': 5},
+
+            {'t': 49.0, 'tipo': 'lista', 'secao': 'Dia 2 · O hub',
+             'titulo': 'O sistema central', 'itens': ['Fazer a trilha "O Hub por dentro" inteira',
+                       'Abrir uma conversa, um card e uma ficha só para navegar',
+                       'Configurar as notificações e conferir a Agenda'], 'aceso': None,
+             'rodape': 'Navegar sem medo de quebrar: nada do que você abrir só para olhar estraga alguma coisa.'},
+
+            {'t': 71.0, 'tipo': 'lista', 'secao': 'Dia 3 · A tese',
+             'titulo': 'O que o escritório defende', 'itens': ['Fazer a trilha das teses: no mínimo RMC e RCC',
+                       'Ler uma inicial de RMC e uma sentença de procedência, inteiras',
+                       'Entender de onde vem o dinheiro: indébito e dano moral'], 'aceso': None},
+            {'t': 88.0, 'tipo': 'lista', 'secao': 'Dia 3 · A tese',
+             'titulo': 'O que o escritório defende', 'itens': ['Fazer a trilha das teses: no mínimo RMC e RCC',
+                       'Ler uma inicial de RMC e uma sentença de procedência, inteiras',
+                       'Entender de onde vem o dinheiro: indébito e dano moral'], 'aceso': 3},
+
+            {'t': 97.0, 'tipo': 'lista', 'secao': 'Dia 4 · A ferramenta de produção',
+             'titulo': 'Produzir com o Claude', 'itens': ['Fazer a trilha do Claude',
+                       'Montar uma peça de treino com a skill, do zero ao timbrado',
+                       'Levar para revisão de quem acompanha você'], 'aceso': None},
+            {'t': 109.0, 'tipo': 'lista', 'secao': 'Dia 4 · A ferramenta de produção',
+             'titulo': 'Produzir com o Claude', 'itens': ['Fazer a trilha do Claude',
+                       'Montar uma peça de treino com a skill, do zero ao timbrado',
+                       'Levar para revisão de quem acompanha você'], 'aceso': 2,
+             'rodape': 'Peça de treino não se protocola. Em hipótese alguma.'},
+
+            {'t': 119.0, 'tipo': 'lista', 'secao': 'Dia 5 · Prazo',
+             'titulo': 'A obrigação número um', 'itens': ['Fazer a trilha de prazos',
+                       'Acompanhar a controladoria tratando as publicações do dia',
+                       'Definir o horário fixo em que você trata publicação'], 'aceso': None},
+
+            {'t': 141.0, 'tipo': 'frase', 'secao': 'A rede de proteção', 'corpo': 46,
+             'linhas': ['Nos primeiros 15 dias,', 'a controladoria agenda', 'os seus prazos.']},
+
+            {'t': 150.5, 'tipo': 'contraste', 'secao': 'Onde a rede termina',
+             'esquerda': {'rotulo': 'Dias 1 a 15', 'titulo': 'A rede', 'manda': True,
+                          'linhas': ['A controladoria do escritório', 'agenda os seus prazos.']},
+             'direita': {'rotulo': 'Do dia 16 em diante', 'titulo': 'Você',
+                         'linhas': ['A controladoria de cada caso', 'passa a ser integralmente sua.']}},
+
+            {'t': 166.0, 'tipo': 'frase', 'secao': 'O alerta', 'corpo': 44,
+             'linhas': ['Quem só começa a olhar', 'no dia 16', 'perde prazo no dia 17.'],
+             'rodape': 'Os 15 dias são para aprender a agendar, não para deixar de olhar.'},
+
+            {'t': 173.0, 'tipo': 'lista', 'secao': 'Primeiros 30 dias',
+             'titulo': 'Cinco entregas', 'itens': ['Carteira própria, com o kanban atualizado por você',
+                       'Nenhuma publicação sua acumulada',
+                       'Cliente respondido no mesmo dia',
+                       'Uma inicial e uma peça de resposta protocoladas por você',
+                       'Uma conversa com a coordenação sobre o que travou'], 'aceso': None},
+            {'t': 186.0, 'tipo': 'lista', 'secao': 'Primeiros 30 dias',
+             'titulo': 'Cinco entregas', 'itens': ['Carteira própria, com o kanban atualizado por você',
+                       'Nenhuma publicação sua acumulada',
+                       'Cliente respondido no mesmo dia',
+                       'Uma inicial e uma peça de resposta protocoladas por você',
+                       'Uma conversa com a coordenação sobre o que travou'], 'aceso': 1},
+            {'t': 194.0, 'tipo': 'lista', 'secao': 'Primeiros 30 dias',
+             'titulo': 'Cinco entregas', 'itens': ['Carteira própria, com o kanban atualizado por você',
+                       'Nenhuma publicação sua acumulada',
+                       'Cliente respondido no mesmo dia',
+                       'Uma inicial e uma peça de resposta protocoladas por você',
+                       'Uma conversa com a coordenação sobre o que travou'], 'aceso': 3},
+            {'t': 199.0, 'tipo': 'lista', 'secao': 'Primeiros 30 dias',
+             'titulo': 'Cinco entregas', 'itens': ['Carteira própria, com o kanban atualizado por você',
+                       'Nenhuma publicação sua acumulada',
+                       'Cliente respondido no mesmo dia',
+                       'Uma inicial e uma peça de resposta protocoladas por você',
+                       'Uma conversa com a coordenação sobre o que travou'], 'aceso': 4},
+            {'t': 207.0, 'tipo': 'lista', 'secao': 'Primeiros 30 dias',
+             'titulo': 'Cinco entregas', 'itens': ['Carteira própria, com o kanban atualizado por você',
+                       'Nenhuma publicação sua acumulada',
+                       'Cliente respondido no mesmo dia',
+                       'Uma inicial e uma peça de resposta protocoladas por você',
+                       'Uma conversa com a coordenação sobre o que travou'], 'aceso': 5,
+             'rodape': 'A última não é cobrança: é onde você diz o que travou.'},
+        ],
+    },
+
     # 1.5 — Suas ferramentas e seus acessos (2:52). Saiu abaixo dos 3 minutos
     # pedidos, e tudo bem: o roteiro inteiro foi coberto. A aula é uma lista de
     # ferramentas, não tem o que esticar sem encher linguiça.
