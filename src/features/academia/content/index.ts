@@ -75,7 +75,8 @@ export const REGRAS_FIXAS = [
   '- EXCEÇÃO: nome próprio de setor, cargo ou ferramenta do escritório NÃO é inglês para esta regra. Diga e escreva exatamente como a fonte traz: Back Office, Marketing, hub, Claude. Nunca traduza ("retaguarda operacional" e "diretoria de comunicação" estão errados).',
   '- O escritório se chama "Frider Andrade - Advogados". Nunca "Advocacia".',
   '- "Claude" é nome próprio: diga e escreva Claude. Nunca "Cloud".',
-  '- NÃO atribua ao Claude o atendimento de cliente. Quem responde WhatsApp são os agentes de IA do hub; o Claude é a ferramenta de peça e pesquisa. Não troque um pelo outro.',
+  '- NÃO atribua ao Claude o atendimento de cliente. Quem responde WhatsApp são os agentes de IA do hub.',
+  '- O Claude é a ferramenta de peça e pesquisa NO COWORK, fora do hub. A geração de peça que acontece DENTRO do hub (pela ficha do processo) é feita pela IA do próprio hub — diga "a IA do hub", nunca "o Claude". São duas esteiras separadas e trocá-las manda a pessoa procurar no hub uma ferramenta que não está lá.',
 ].join('\n');
 
 /** O prompt como ele deve ser colado no NotebookLM: o da aula + as regras fixas. */

@@ -204,6 +204,52 @@ if (problemas(deixas).length > 0) {
   }
 }
 
+// Segundo conserto: CAMPOS DESLOCADOS numa deixa isolada. Em 19/09 o Gemini
+// escreveu "00:06:00.000" quando queria dizer 6 SEGUNDOS, e "01:16:00.000"
+// para 1min16s — o formato MM:SS:mmm com os milissegundos escritos como
+// "SS.mmm" e indistinguivel de HH:MM:SS.mmm, entao o normalizador le 6
+// minutos e 1h16. Nao da para decidir pelo formato; da para decidir pelo
+// CONTEXTO: se deslocar os campos uma casa a direita faz a deixa caber entre
+// a anterior e a proxima, era isso mesmo.
+//
+// 🚨 CADA LADO SE CONSERTA SOZINHO. Na primeira versao eu deslocava os dois
+// de uma vez e nao resolvia nada: o defeito costuma estar SO no inicio
+// ("00:06:00.000 --> 00:00:08.800"), e deslocar o fim tambem transformava
+// 8,8s em 8 milissegundos. Aqui as quatro combinacoes sao testadas e vence a
+// que couber entre os vizinhos.
+const deslocar = (t) => {
+  const [h, m, r] = t.split(':');
+  return `00:${h}:${m}.${r.split('.')[1] ?? '000'}`;
+};
+if (problemas(deixas).length > 0) {
+  const lado = (l, i) => l.split('-->')[i].trim().split(/\s+/)[0];
+  let consertadas = 0;
+  for (let n = 0; n < deixas.length; n++) {
+    const a = lado(deixas[n], 0);
+    const b = lado(deixas[n], 1);
+    const antes = n > 0 ? emSegundos(lado(deixas[n - 1], 1)) : 0;
+    const depois = n + 1 < deixas.length ? emSegundos(lado(deixas[n + 1], 0)) : Infinity;
+    const cabe = (x, y) => {
+      const i = emSegundos(x);
+      const f = emSegundos(y);
+      return f > i && f - i <= 15 && i >= antes - 0.001 && f <= depois + 0.001;
+    };
+    if (cabe(a, b)) continue;
+    const candidato = [[a, b], [deslocar(a), b], [a, deslocar(b)], [deslocar(a), deslocar(b)]]
+      .find(([x, y]) => cabe(x, y));
+    if (candidato) {
+      const linha = `${candidato[0]} --> ${candidato[1]}`;
+      deixas[n] = linha;
+      linhas[idxDeixas[n]] = linha;
+      consertadas++;
+    }
+  }
+  if (consertadas > 0) {
+    console.warn(`⚠️  ${consertadas} deixa(s) com campos deslocados (MM:SS:mmm lido como hora) — reinterpretadas pelo contexto.`);
+    vtt = linhas.join('\n');
+  }
+}
+
 const restantes = problemas(deixas);
 if (restantes.length > 0) {
   console.error('Timestamps incoerentes — nao gravo legenda que morre no meio:');

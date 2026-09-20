@@ -305,6 +305,11 @@ export const HUB: Trilha = {
       titulo: 'Processos: a ficha do caso',
       resumo: 'Onde vive o número do processo, as partes, os documentos e o cálculo.',
       minutos: 10,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/processos.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/processos.vtt',
+      },
       manual: [
         '## O que a ficha guarda',
         '',
@@ -357,7 +362,7 @@ export const HUB: Trilha = {
         '1. O que a ficha guarda: CNJ, comarca e juízo em formato curto vindo do DataJud, partes com CPF, documentos, movimentações, etiquetas, fase, cálculo salvo e apensos.',
         '2. Documentos do cliente: ficam no Google Drive, o hub guarda o ponteiro. Explique as duas consequências: excluir no hub não apaga no Drive, e mover ou renomear no Drive quebra o link.',
         '3. O fechamento do ciclo: depois de protocolar, a peça e o comprovante voltam numerados para a pasta do cliente e a tarefa é encerrada com Concluir e arquivar.',
-        '4. Geração de peça por IA a partir da ficha, com aviso de que leva 1 a 2 minutos e que o resultado é rascunho.',
+        '4. Geração de peça a partir da ficha, pela IA DO PRÓPRIO HUB (nunca diga que é o Claude — o Claude roda no Cowork, fora do hub). Sobe-se o documento-base, escolhe-se o produto e recebe-se um RASCUNHO no timbrado, anexado ao processo. Avise que leva 1 a 2 minutos com vários PDFs e que o resultado passa por revisão humana.',
         '5. Publicação de processo não cadastrado: cadastrar na hora, com opção de apensar ao principal. Explique que processo fora do hub é prazo que ninguém conta.',
         '',
         'NÃO FAÇA: dizer que a peça gerada está pronta para protocolo.',

@@ -12,6 +12,98 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 2.5 — Processos: a ficha do caso (3:51). SEGUNDA geração.
+    #
+    # A primeira dizia que a peça gerada pela ficha sai "acionando o Claude".
+    # O hub roda Gemini; o Claude e a ferramenta do Cowork, FORA do hub. Quem
+    # ouvisse iria procurar no hub uma ferramenta que nao esta la. A culpa era
+    # da regra fixa, que afirmava "o Claude e a ferramenta de peca e pesquisa"
+    # sem dizer ONDE — corrigida na origem, e a regeracao diz "a IA do hub".
+    'processos': {
+        'duracao': 231.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 2 · Aula 5',
+             'titulo': 'Processos: a ficha do caso',
+             'sub': ['O que está na ficha é a verdade do processo.', 'O que está só na sua cabeça, não.']},
+
+            {'t': 24.5, 'tipo': 'frase', 'secao': 'Por que a ficha manda', 'corpo': 44,
+             'linhas': ['Sem anotação paralela.'],
+             'rodape': 'O que consta na ficha é a fonte da verdade para o andamento da ação.'},
+
+            {'t': 37.8, 'tipo': 'cartoes', 'secao': 'O que a ficha guarda',
+             'titulo': 'Os dados que a peça usa', 'cartoes': [
+               {'icone': 'balanca',   'titulo': 'CNJ e juízo',  'sub': 'do DataJud, nunca de cabeça'},
+               {'icone': 'pessoa',    'titulo': 'Partes',       'sub': 'CPF ou CNPJ: a qualificação sai daqui'},
+               {'icone': 'pasta',     'titulo': 'Documentos',   'sub': 'e todas as movimentações'},
+               {'icone': 'dinheiro',  'titulo': 'Cálculo',      'sub': 'vira valor da causa e da execução'}], 'aceso': None},
+            {'t': 41.0, 'tipo': 'cartoes', 'secao': 'O que a ficha guarda',
+             'titulo': 'Os dados que a peça usa', 'cartoes': [
+               {'icone': 'balanca',   'titulo': 'CNJ e juízo',  'sub': 'do DataJud, nunca de cabeça'},
+               {'icone': 'pessoa',    'titulo': 'Partes',       'sub': 'CPF ou CNPJ: a qualificação sai daqui'},
+               {'icone': 'pasta',     'titulo': 'Documentos',   'sub': 'e todas as movimentações'},
+               {'icone': 'dinheiro',  'titulo': 'Cálculo',      'sub': 'vira valor da causa e da execução'}], 'aceso': 1,
+             'rodape': 'Juízo em formato curto: 2ª Vara Cível de Maringá/PR.'},
+            {'t': 52.4, 'tipo': 'cartoes', 'secao': 'O que a ficha guarda',
+             'titulo': 'Os dados que a peça usa', 'cartoes': [
+               {'icone': 'balanca',   'titulo': 'CNJ e juízo',  'sub': 'do DataJud, nunca de cabeça'},
+               {'icone': 'pessoa',    'titulo': 'Partes',       'sub': 'CPF ou CNPJ: a qualificação sai daqui'},
+               {'icone': 'pasta',     'titulo': 'Documentos',   'sub': 'e todas as movimentações'},
+               {'icone': 'dinheiro',  'titulo': 'Cálculo',      'sub': 'vira valor da causa e da execução'}], 'aceso': 2},
+            {'t': 62.6, 'tipo': 'cartoes', 'secao': 'O que a ficha guarda',
+             'titulo': 'Os dados que a peça usa', 'cartoes': [
+               {'icone': 'balanca',   'titulo': 'CNJ e juízo',  'sub': 'do DataJud, nunca de cabeça'},
+               {'icone': 'pessoa',    'titulo': 'Partes',       'sub': 'CPF ou CNPJ: a qualificação sai daqui'},
+               {'icone': 'pasta',     'titulo': 'Documentos',   'sub': 'e todas as movimentações'},
+               {'icone': 'dinheiro',  'titulo': 'Cálculo',      'sub': 'vira valor da causa e da execução'}], 'aceso': 4,
+             'rodape': 'Recurso registrado vira apenso automaticamente.'},
+
+            {'t': 74.0, 'tipo': 'contraste', 'secao': 'Onde o documento mora',
+             'esquerda': {'rotulo': 'Google Drive', 'titulo': 'O arquivo', 'manda': True,
+                          'linhas': ['A pasta do cliente guarda', 'o documento de verdade.']},
+             'direita': {'rotulo': 'O hub', 'titulo': 'O ponteiro',
+                         'linhas': ['Guarda só o link', 'que aponta para lá.']}},
+
+            {'t': 88.4, 'tipo': 'lista', 'secao': 'As duas consequências',
+             'titulo': 'O que isso muda na prática',
+             'itens': ['Excluir no hub NÃO apaga o arquivo no Drive',
+                       'Mover ou renomear no Drive quebra o link do hub'],
+             'aceso': None},
+            {'t': 96.2, 'tipo': 'lista', 'secao': 'As duas consequências',
+             'titulo': 'O que isso muda na prática',
+             'itens': ['Excluir no hub NÃO apaga o arquivo no Drive',
+                       'Mover ou renomear no Drive quebra o link do hub'],
+             'aceso': 2,
+             'rodape': 'Por isso a pasta se organiza pelo padrão do escritório, não pelo gosto.'},
+
+            {'t': 108.0, 'tipo': 'fluxo', 'secao': 'O que fecha o ciclo',
+             'titulo': 'Protocolar não é terminar',
+             'etapas': ['Protocola no tribunal', 'Peça e comprovante voltam numerados',
+                        'Concluir e arquivar'],
+             'aceso': 1},
+            {'t': 118.2, 'tipo': 'fluxo', 'secao': 'O que fecha o ciclo',
+             'titulo': 'Protocolar não é terminar',
+             'etapas': ['Protocola no tribunal', 'Peça e comprovante voltam numerados',
+                        'Concluir e arquivar'],
+             'aceso': 3,
+             'rodape': 'O protocolo cumpre a obrigação com o juízo. O arquivamento fecha a esteira interna.'},
+
+            {'t': 137.5, 'tipo': 'fluxo', 'secao': 'Gerar peça pela ficha',
+             'titulo': 'Do documento-base ao rascunho',
+             'etapas': ['Sobe contestação, réplica ou sentença', 'Escolhe o produto',
+                        'Recebe rascunho no timbrado'],
+             'aceso': None,
+             'rodape': 'Quem redige é a IA do hub. Leva 1 a 2 minutos com vários PDFs: não feche a tela.'},
+
+            {'t': 169.0, 'tipo': 'frase', 'secao': 'O limite', 'corpo': 46,
+             'linhas': ['É rascunho.', 'Não está pronto para protocolo.'],
+             'rodape': 'A tecnologia monta a base. O crivo técnico continua sendo do advogado.'},
+
+            {'t': 187.3, 'tipo': 'frase', 'secao': 'Processo fora do hub', 'corpo': 44,
+             'linhas': ['Publicação de processo', 'não cadastrado é prazo', 'que ninguém está contando.'],
+             'rodape': 'O aviso leva ao cadastro pelo CNJ, com a opção de apensar ao principal. Faça na hora.'},
+        ],
+    },
+
     # 2.4 — Os kanbans: onde cada caso mora (3:26). Primeiro vídeo da trilha
     # do Hub depois da virada.
     #
