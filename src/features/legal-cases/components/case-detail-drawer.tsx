@@ -1427,18 +1427,38 @@ function AnaliseViabilidade({ caseId, analise, onDone }: { caseId: string; anali
 // (risco de litispendência/duplicidade). Mostra o resultado já gravado em
 // metadata.acoesExistentes e permite re-verificar sob demanda.
 function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; metadata: unknown; onDone: () => void }) {
-  const salvo = ((metadata as any)?.acoesExistentes ?? null) as
-    | { verificadoEm?: string; fonte?: string; confianca?: 'alta' | 'media' | 'nenhuma'; total?: number; acoes?: Array<{ numeroProcesso: string; tribunal: string; tipo: string; data: string; temCpf?: boolean }> }
-    | null;
+  type Snapshot = {
+    verificadoEm?: string;
+    fonte?: string;
+    confianca?: 'alta' | 'media' | 'nenhuma';
+    total?: number;
+    // Quantos CPFs DIFERENTES carregam esse mesmo nome no Brasil (só o Escavador
+    // sabe responder). É o que troca o "pode ser homônimo" genérico por um número.
+    cpfsComEsseNome?: number | null;
+    totalNaFonte?: number | null;
+    falhou?: boolean;
+    acoes?: Array<{ numeroProcesso: string; tribunal: string; tipo: string; data: string; temCpf?: boolean; matchPor?: string | null }>;
+  };
+  const salvo = ((metadata as any)?.acoesExistentes ?? null) as Snapshot | null;
   const [busy, setBusy] = useState(false);
-  const [resultado, setResultado] = useState(salvo);
+  const [resultado, setResultado] = useState<Snapshot | null>(salvo);
 
   const verificar = async () => {
     setBusy(true);
     try {
       const r = await legalCasesService.verificarAcoesExistentes(caseId);
-      setResultado({ verificadoEm: new Date().toISOString(), fonte: r.fonte, confianca: r.confianca, total: r.acoes.length, acoes: r.acoes });
-      if (r.encontrou) toast.warning(`Encontrei ${r.acoes.length} processo(s) em nome desta pessoa — confira antes de montar a inicial.`);
+      setResultado({
+        verificadoEm: new Date().toISOString(),
+        fonte: r.fonte,
+        confianca: r.confianca,
+        total: r.acoes.length,
+        cpfsComEsseNome: r.cpfsComEsseNome ?? null,
+        totalNaFonte: r.totalNaFonte ?? null,
+        falhou: r.falhou,
+        acoes: r.acoes,
+      });
+      if (r.falhou) toast.error(`A fonte (${r.fonte}) não respondeu — NÃO é "sem processos". Tente de novo antes de protocolar.`);
+      else if (r.encontrou) toast.warning(`Encontrei ${r.acoes.length} processo(s) em nome desta pessoa — confira antes de montar a inicial.`);
       else toast.success('Nenhum processo encontrado por nome/CPF.');
       onDone();
     } catch (e: any) {
@@ -1448,8 +1468,26 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
     }
   };
 
+  const falhou = resultado?.falhou === true;
   const tem = (resultado?.total ?? 0) > 0;
   const alta = resultado?.confianca === 'alta';
+  const cpfs = resultado?.cpfsComEsseNome ?? null;
+  const nomeUnico = cpfs === 1;
+  const temHomonimos = cpfs !== null && cpfs > 1;
+  const listadas = (resultado?.acoes ?? []).slice(0, 8);
+  // Dois números diferentes, e misturar os dois mente: `total` é o que sobrou
+  // depois de tirar os processos DA CASA; `totalNaFonte` é o bruto do Escavador,
+  // que ainda inclui os nossos e conta páginas que não carregamos.
+  const naFonte = resultado?.totalNaFonte ?? null;
+  const fonteTemMais = naFonte !== null && naFonte > (resultado?.total ?? 0);
+
+  const rotuloConfianca = alta
+    ? 'CPF confirmado na fonte'
+    : nomeUnico
+      ? 'nome ÚNICO no Brasil (1 CPF com esse nome) — é a mesma pessoa'
+      : temHomonimos
+        ? `match só por NOME, e ${cpfs} pessoas diferentes têm esse nome no Brasil — CONFIRA uma a uma`
+        : 'só por nome (pode ser homônimo)';
 
   return (
     <div className="mt-4">
@@ -1465,28 +1503,76 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
         <p className="mt-1.5 text-xs italic text-zinc-400">Clique em “Verificar” pra pesquisar (por nome/CPF) se o cliente já entrou com ação — nova, arquivada ou em curso —, evitando litispendência/duplicidade antes de montar a inicial.</p>
       )}
 
-      {resultado && !tem && (
+      {/* Falha da fonte NUNCA pode parecer "cliente limpo": é aqui que nasceria
+          o protocolo em cima de ação já existente. */}
+      {resultado && falhou && (
+        <article className="mt-1.5 rounded border border-red-300 bg-red-50 p-3 dark:border-red-700/60 dark:bg-red-950/30">
+          <p className="flex items-start gap-1.5 text-xs font-medium text-red-800 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Não deu para verificar: a fonte ({resultado.fonte}) não respondeu.
+              <br />
+              <span className="font-normal">Isso <b>não</b> quer dizer “sem processos”. Tente de novo antes de protocolar.</span>
+            </span>
+          </p>
+        </article>
+      )}
+
+      {resultado && !falhou && !tem && (
         <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">✓ Nenhum processo encontrado por nome/CPF ({resultado.fonte}{resultado.verificadoEm ? `, ${new Date(resultado.verificadoEm).toLocaleDateString('pt-BR')}` : ''}). <span className="text-zinc-400">Cobre publicações dos últimos ~2 anos; ações antigas sem movimentação podem não aparecer.</span></p>
       )}
 
-      {resultado && tem && (
+      {resultado && !falhou && tem && (
         <article className="mt-1.5 rounded border border-amber-300 bg-amber-50 p-3 dark:border-amber-700/60 dark:bg-amber-950/30">
           <p className="flex items-start gap-1.5 text-xs font-medium text-amber-800 dark:text-amber-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               Encontrei <b>{resultado.total}</b> processo(s) em nome do cliente — CONFIRA antes de montar a inicial.
               <br />
-              <span className="font-normal">Confiança: {alta ? 'CPF confirmado no texto' : 'só por nome (pode ser homônimo)'} · Fonte: {resultado.fonte}.</span>
+              <span className="font-normal">Confiança: {rotuloConfianca} · Fonte: {resultado.fonte}.</span>
             </span>
           </p>
+
+          {/* O selo do homônimo: 1 CPF = achou a pessoa; N CPFs = o nome não vale como prova. */}
+          {cpfs !== null && (
+            <p className="mt-1.5">
+              <span
+                className={
+                  nomeUnico
+                    ? 'inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
+                    : 'inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                }
+              >
+                {nomeUnico ? '1 CPF com esse nome no Brasil — nome único' : `${cpfs} CPFs com esse nome no Brasil`}
+              </span>
+              {temHomonimos && (
+                <span className="ml-1.5 text-[10px] text-amber-700 dark:text-amber-300">
+                  filtre pelo tribunal do estado do cliente antes de conferir um a um.
+                </span>
+              )}
+            </p>
+          )}
+
           <ul className="mt-2 space-y-1 border-t border-amber-200 pt-2 dark:border-amber-800/50">
-            {(resultado.acoes ?? []).slice(0, 8).map((a, i) => (
+            {listadas.map((a, i) => (
               <li key={i} className="text-[11px] text-amber-900 dark:text-amber-200">
                 <span className="font-mono">{a.numeroProcesso}</span>{a.tribunal ? ` · ${a.tribunal}` : ''}{a.tipo ? ` · ${a.tipo}` : ''}{a.data ? ` · ${a.data}` : ''}
+                {a.temCpf && <span className="ml-1 font-semibold text-emerald-700 dark:text-emerald-400">· CPF confere</span>}
+                {!a.temCpf && a.matchPor && <span className="ml-1 italic text-amber-700 dark:text-amber-300">· match por {a.matchPor}</span>}
               </li>
             ))}
-            {(resultado.total ?? 0) > 8 && <li className="text-[11px] italic text-amber-700 dark:text-amber-300">… e mais {(resultado.total ?? 0) - 8}.</li>}
+            {(resultado.total ?? 0) > listadas.length && (
+              <li className="text-[11px] italic text-amber-700 dark:text-amber-300">… e mais {(resultado.total ?? 0) - listadas.length}.</li>
+            )}
           </ul>
+
+          {/* Não seguimos o cursor da fonte (cada página custa crédito). Dizer
+              isso é obrigatório: senão a lista curta parece a lista completa. */}
+          {fonteTemMais && (
+            <p className="mt-2 text-[10px] italic text-amber-700 dark:text-amber-300">
+              A fonte atribui {naFonte} processo(s) a esta pessoa e carregamos só a primeira página — o que não está na lista acima não foi conferido.
+            </p>
+          )}
         </article>
       )}
     </div>

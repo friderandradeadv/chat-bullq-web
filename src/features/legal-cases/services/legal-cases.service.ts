@@ -553,8 +553,15 @@ export const legalCasesService = {
     encontrou: boolean;
     confianca: 'alta' | 'media' | 'nenhuma';
     fonte: string;
-    acoes: Array<{ numeroProcesso: string; tribunal: string; orgao: string; tipo: string; data: string; temCpf: boolean }>;
+    acoes: Array<{ numeroProcesso: string; tribunal: string; orgao: string; tipo: string; data: string; temCpf: boolean; matchPor?: string | null }>;
     totalBruto: number;
+    // Quantos CPFs DIFERENTES têm esse mesmo nome no Brasil (Escavador).
+    // 1 = é a pessoa; N = homônimos, o nome sozinho não prova. null = o DJEN não sabe contar.
+    cpfsComEsseNome: number | null;
+    // Total que a fonte atribui à pessoa — pode ser maior que acoes.length (não paginamos).
+    totalNaFonte: number | null;
+    // A fonte caiu. NÃO é "não achei nada": a tela precisa avisar, não dar ✓ verde.
+    falhou: boolean;
   }> {
     const { data } = await api.post(`/legal-cases/${id}/verificar-acoes`);
     return data.data ?? data;
