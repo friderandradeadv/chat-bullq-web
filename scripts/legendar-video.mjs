@@ -46,6 +46,9 @@ const PROMPT = [
   // ASAAS se pronuncia "azás" e saiu grafado "AZAS" em 19/09; Cowork saiu
   // "co-work". Mesmo padrão do Claude/Cloud: o áudio está certo, a grafia não.
   'ASAAS (nunca "AZAS" nem "Azaz"), Cowork (uma palavra, nunca "co-work"),',
+  // REPB saiu "Rebe" em 19/09. Sigla lida em voz alta vira palavra no
+  // transcritor; listar cada uma pelo nome é o unico jeito de segurar.
+  'REPB (nunca "Rebe"), SISBAJUD, RENAJUD, DJE, CDA, TJMG, TJSP,',
   'Cálculo Jurídico (nome da ferramenta, em maiúsculas).',
 ].join('\n');
 

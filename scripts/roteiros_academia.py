@@ -12,6 +12,111 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 2.4 — Os kanbans: onde cada caso mora (3:26). Primeiro vídeo da trilha
+    # do Hub depois da virada.
+    #
+    # O prompt dizia "os sete quadros" e eu tirei o número antes de disparar: a
+    # fonte tem sete BULLETS, mas um junta dois quadros e outro é categoria. O
+    # vídeo saiu sem contagem nenhuma, que é o certo.
+    #
+    # "REPB" saiu "Rebe" na transcrição — sigla lida em voz alta vira palavra no
+    # transcritor. Corrigido na legenda e no glossário.
+    'kanbans': {
+        'duracao': 206.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 2 · Aula 4',
+             'titulo': 'Os kanbans: onde cada caso mora',
+             'sub': ['Cada tipo de demanda tem o seu quadro.', 'E quase nenhum se move na mão.']},
+
+            {'t': 15.0, 'tipo': 'lista', 'secao': 'Os quadros',
+             'titulo': 'Cada um responde a uma pergunta', 'itens': ['Pré-Processual: o caso antes de existir processo',
+                       'Fase Bancária Investigativa: montar a prova antes da inicial',
+                       'REPB: a esteira da reestruturação de passivo',
+                       'Fase Judicial: o processo em curso, da inicial ao trânsito',
+                       'Execução & Repasse: cálculo, alvará, dinheiro no cliente',
+                       'Planejamento Previdenciário e INSS Administrativo',
+                       'Quadros personalizados, criados sem programação'], 'aceso': None},
+            {'t': 29.0, 'tipo': 'lista', 'secao': 'Os quadros',
+             'titulo': 'Cada um responde a uma pergunta', 'itens': ['Pré-Processual: o caso antes de existir processo',
+                       'Fase Bancária Investigativa: montar a prova antes da inicial',
+                       'REPB: a esteira da reestruturação de passivo',
+                       'Fase Judicial: o processo em curso, da inicial ao trânsito',
+                       'Execução & Repasse: cálculo, alvará, dinheiro no cliente',
+                       'Planejamento Previdenciário e INSS Administrativo',
+                       'Quadros personalizados, criados sem programação'], 'aceso': 6},
+            {'t': 34.5, 'tipo': 'lista', 'secao': 'Os quadros',
+             'titulo': 'Cada um responde a uma pergunta', 'itens': ['Pré-Processual: o caso antes de existir processo',
+                       'Fase Bancária Investigativa: montar a prova antes da inicial',
+                       'REPB: a esteira da reestruturação de passivo',
+                       'Fase Judicial: o processo em curso, da inicial ao trânsito',
+                       'Execução & Repasse: cálculo, alvará, dinheiro no cliente',
+                       'Planejamento Previdenciário e INSS Administrativo',
+                       'Quadros personalizados, criados sem programação'], 'aceso': 7},
+
+            {'t': 42.3, 'tipo': 'frase', 'secao': 'O mal-entendido', 'corpo': 46,
+             'linhas': ['Ninguém passa o dia', 'arrastando card na mão.'],
+             'rodape': 'Na Fase Judicial, quem move o card é o DJEN.'},
+
+            {'t': 53.8, 'tipo': 'fluxo', 'secao': 'Como o card anda sozinho',
+             'titulo': 'Da publicação à fase certa',
+             'etapas': ['Publicação chega', 'Classificador lê o teor', 'Entende o ato',
+                        'Empurra o card'],
+             'aceso': 2},
+            {'t': 61.8, 'tipo': 'fluxo', 'secao': 'Como o card anda sozinho',
+             'titulo': 'Da publicação à fase certa',
+             'etapas': ['Publicação chega', 'Classificador lê o teor', 'Entende o ato',
+                        'Empurra o card'],
+             'aceso': 4},
+
+            {'t': 68.3, 'tipo': 'frase', 'secao': 'Quando o sistema hesita', 'corpo': 46,
+             'linhas': ['Selo de revisar fase.'],
+             'rodape': 'Não é falha do sistema: é pedido para uma pessoa olhar.'},
+
+            {'t': 86.6, 'tipo': 'contraste', 'secao': 'Card parado em fase estranha',
+             'esquerda': {'rotulo': 'O que parece', 'titulo': 'Erro de arrastar',
+                          'linhas': ['"Alguém moveu errado."', '"É bug do quadro."']},
+             'direita': {'rotulo': 'O que quase sempre é', 'titulo': 'A publicação', 'manda': True,
+                         'linhas': ['Chegou sem teor — ponteiro do Projudi.',
+                                    'Ou o ato não foi reconhecido.']}},
+
+            {'t': 100.5, 'tipo': 'frase', 'secao': 'A instrução', 'corpo': 48,
+             'linhas': ['Trate a publicação,', 'não o card.'],
+             'rodape': 'Arrastar na marra conserta a tela e deixa a intimação pendente, com o prazo correndo.'},
+
+            {'t': 112.6, 'tipo': 'lista', 'secao': 'O que é manual',
+             'titulo': 'O que a pessoa faz no quadro', 'itens': ['Arrastar card e arrastar a própria coluna',
+                       'Seleção e ações em massa',
+                       'Criar fase nova direto no quadro, sem código',
+                       'Atribuir responsável'], 'aceso': None},
+            {'t': 131.7, 'tipo': 'lista', 'secao': 'O que é manual',
+             'titulo': 'O que a pessoa faz no quadro', 'itens': ['Arrastar card e arrastar a própria coluna',
+                       'Seleção e ações em massa',
+                       'Criar fase nova direto no quadro, sem código',
+                       'Atribuir responsável'], 'aceso': 4,
+             'rodape': 'Card sem dono é trabalho que ninguém faz.'},
+
+            {'t': 145.0, 'tipo': 'lista', 'secao': 'Etiquetas',
+             'titulo': 'A regra que protege a busca',
+             'itens': ['Usar as etiquetas que já existem',
+                       'Nunca criar etiqueta nova por conta própria',
+                       'Processo em CAIXA ALTA',
+                       'Cliente em Maiúsculas Normais'],
+             'aceso': None,
+             'rodape': 'Etiqueta duplicada quebra filtro, busca e relatório do setor inteiro.'},
+            {'t': 164.0, 'tipo': 'lista', 'secao': 'Etiquetas',
+             'titulo': 'A regra que protege a busca',
+             'itens': ['Usar as etiquetas que já existem',
+                       'Nunca criar etiqueta nova por conta própria',
+                       'Processo em CAIXA ALTA',
+                       'Cliente em Maiúsculas Normais'],
+             'aceso': 3},
+
+            {'t': 174.5, 'tipo': 'frase', 'secao': 'Card terminal', 'corpo': 44,
+             'linhas': ['O hub comemora', 'porque não sobrou', 'nenhuma providência.'],
+             'rodape': 'Não é enfeite. É o atestado de que o trabalho acabou de verdade.'},
+        ],
+    },
+
     # 1.6 — Sua primeira semana, dia a dia (3:37). Fecha a trilha do Dia 1.
     #
     # A linha do tempo abre os cinco dias de uma vez; depois cada dia ganha a

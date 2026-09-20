@@ -231,6 +231,11 @@ export const HUB: Trilha = {
       titulo: 'Os kanbans: onde cada caso mora',
       resumo: 'Sete quadros, cada um com uma pergunta diferente. Como o card anda.',
       minutos: 10,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/kanbans.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/kanbans.vtt',
+      },
       manual: [
         '## Os quadros',
         '',
@@ -284,7 +289,7 @@ export const HUB: Trilha = {
         'TOM: explicativo, com ênfase em desfazer o mal-entendido de que o kanban é movido na mão.',
         '',
         'ROTEIRO:',
-        '1. Apresente os sete quadros e a pergunta que cada um responde.',
+        '1. Apresente os quadros e a pergunta que cada um responde, nomeando-os como a fonte os nomeia: Pré-Processual, Fase Bancária Investigativa, REPB (Reestruturação de Passivo), Fase Judicial, Execução & Repasse, Planejamento Previdenciário e INSS Administrativo. Diga também que o escritório cria quadros personalizados sem precisar de programação. NÃO diga um número total de quadros.',
         '2. Explique que na Fase Judicial quem move o card é o DJEN: a publicação chega, o classificador lê o teor e empurra o card. Explique o selo de revisar fase para quando o sistema não tem certeza.',
         '3. Dê o diagnóstico do card parado em fase estranha: quase sempre é publicação sem teor, como ponteiro do Projudi, ou ato não reconhecido. A instrução é tratar a publicação, não arrastar o card.',
         '4. Mostre o que é manual: arrastar card e coluna, seleção em massa, criar fase, atribuir responsável. Diga que card sem dono é trabalho que ninguém faz.',
