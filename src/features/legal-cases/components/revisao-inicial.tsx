@@ -100,22 +100,36 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
       .replace(/\.[A-Z0-9]+$/, '').replace(/[^A-Z0-9]/g, '');
 
   const naPasta = pasta.data?.arquivos ?? [];
-  const achaNaPasta = (nomeItem: string) => {
+  /**
+   * 🚨 20/09/2026: "inclui" sozinho confunde documentos aninhados. Quando o
+   * pacote ganhou "07. JG LIQUIDO" ao lado de "06. JG", o teste
+   * `alvo.includes(m)` casava os dois nos dois sentidos, e o painel podia
+   * mostrar o JG no lugar do JG LÍQUIDO e vice-versa. Agora tenta o nome
+   * EXATO primeiro, e cada arquivo é consumido uma única vez.
+   */
+  const achaNaPasta = (nomeItem: string, usados: Set<string>) => {
     const alvo = miolo(nomeItem);
     // O documento pessoal casa com RG/CNH e com os dois nomes que circulam nas
     // pastas: "DOC PESSOAL" (o da skill, e o que o organizador grava) e
-    // "DOCUMENTO DE IDENTIDADE" (o antigo). O resto casa por conter.
+    // "DOCUMENTO DE IDENTIDADE" (o antigo).
     const sinonimos = /DOCPESSOAL|DOCUMENTODEIDENTIDADE/.test(alvo)
       ? ['RG', 'CNH', 'IDENTIDADE', 'DOCPESSOAL'] : [];
-    return naPasta.find((f) => {
-      const m = miolo(f.nome);
-      if (m.includes(alvo) || alvo.includes(m)) return true;
-      return sinonimos.some((sin) => m.includes(sin));
-    }) ?? null;
+    const livres = naPasta.filter((f) => !usados.has(f.nome));
+    return (
+      livres.find((f) => miolo(f.nome) === alvo) ??
+      livres.find((f) => {
+        const m = miolo(f.nome);
+        return m.includes(alvo) || alvo.includes(m);
+      }) ??
+      livres.find((f) => sinonimos.some((sin) => miolo(f.nome).includes(sin))) ??
+      null
+    );
   };
 
+  const usados = new Set<string>();
   const itens = (data?.itens ?? []).map((i) => {
-    const real = achaNaPasta(i.nome);
+    const real = achaNaPasta(i.nome, usados);
+    if (real) usados.add(real.nome);
     return { ...i, presente: i.presente || !!real, arquivo: real?.nome ?? i.arquivo, url: real?.url ?? null };
   });
   const faltam = itens.filter((i) => i.obrigatorio && !i.presente);

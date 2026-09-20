@@ -23,6 +23,7 @@ import { financeiroService } from '@/features/financeiro/services/financeiro.ser
 import { FaseFields } from './fase-fields';
 import { PendenciasPanel } from './pendencias-panel';
 import { ColetaInss } from './coleta-inss';
+import { IntakeDocumentos } from './intake-documentos';
 import { BancosReusEditor, RepbFasePorBanco, ResumoClienteRepb } from './bancos-reus-editor';
 import { GerarPecaRepb } from './gerar-inicial-superendiv';
 import { RepbModelosMalote } from './repb-modelos-malote';
@@ -516,6 +517,16 @@ export function CaseDetailDrawer({
             )}
 
             {c && <ColetaInss parties={c.parties} />}
+
+            {/* Só onde faltar documento é o assunto: em "montar inicial" para
+                diante, a pasta já está fechada e o painel viraria ruído. */}
+            {c && (phaseKey === 'novos_clientes' || phaseKey === 'reuniao_agendada'
+                   || phaseKey === 'info_faltantes') && (
+              <IntakeDocumentos
+                caseId={c.id}
+                onMovido={() => qc.invalidateQueries({ queryKey: ['legal-case', caseId] })}
+              />
+            )}
 
             {c && (
               <PendenciasPanel

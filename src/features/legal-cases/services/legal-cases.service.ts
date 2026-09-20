@@ -868,6 +868,28 @@ export const legalCasesService = {
     const { data } = await api.get(`/legal-cases/${id}/pasta-inicial`, { timeout: 120000 });
     return data.data ?? data;
   },
+  /**
+   * Arrasta os documentos do INSS de uma vez. O servidor reconhece cada um pelo
+   * CONTEÚDO (o nome vem cru do portal e muda a cada download), renomeia no
+   * padrão do escritório, arquiva na pasta do benefício e diz o que falta.
+   */
+  async arquivarDocumentosEmLote(id: string, files: File[]): Promise<{
+    beneficio: 'AP' | 'PM' | null;
+    arquivados: { nome: string; de: string; pasta: string }[];
+    repetidos: { nome: string; pasta: string }[];
+    naoReconhecidos: { nome: string; motivo: string }[];
+    faltam: string[];
+    prontoParaMontar: boolean;
+  }> {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    const { data } = await api.post(`/legal-cases/${id}/documentos/arquivar-lote`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // ler 80 páginas de HISCRE e subir ao Drive passa de um minuto com folga
+      timeout: 300000,
+    });
+    return data.data ?? data;
+  },
   /** Observações da revisão antes do protocolo — ficam no card. */
   async salvarRevisaoInicial(id: string, observacoes: string): Promise<{ ok: boolean; observacoes: string }> {
     const { data } = await api.put(`/legal-cases/${id}/revisao-inicial`, { observacoes });
