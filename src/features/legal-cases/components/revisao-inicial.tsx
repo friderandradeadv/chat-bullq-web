@@ -149,8 +149,13 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
         </p>
       ) : (
         <>
+          {/* 🚨 O caminho exibido é o REAL, lido do Drive — não a `trilha` que o
+              conferidor planeja. A trilha assume a família "04. EMPRÉSTIMOS
+              CONSIGNADOS" quando ninguém informa outra, e mostrava esse caminho
+              para um contrato de RCC cuja pasta está em "02. RCC": um endereço
+              que não existe, logo acima da lista dos arquivos que existem. */}
           <p className="mt-1.5 text-[10px] leading-4 text-[#48626f] dark:text-zinc-500">
-            {data?.trilha?.join(' › ')}
+            {(pasta.data?.caminho?.length ? pasta.data.caminho : data?.trilha)?.join(' › ')}
           </p>
 
           {/* A ordem é a do protocolo: é assim que os anexos sobem. */}
