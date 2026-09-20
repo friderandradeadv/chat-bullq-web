@@ -102,8 +102,11 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
   const naPasta = pasta.data?.arquivos ?? [];
   const achaNaPasta = (nomeItem: string) => {
     const alvo = miolo(nomeItem);
-    // "DOCUMENTO DE IDENTIDADE" casa com RG/CNH; o resto casa por conter.
-    const sinonimos = /DOCUMENTODEIDENTIDADE/.test(alvo) ? ['RG', 'CNH', 'IDENTIDADE'] : [];
+    // O documento pessoal casa com RG/CNH e com os dois nomes que circulam nas
+    // pastas: "DOC PESSOAL" (o da skill, e o que o organizador grava) e
+    // "DOCUMENTO DE IDENTIDADE" (o antigo). O resto casa por conter.
+    const sinonimos = /DOCPESSOAL|DOCUMENTODEIDENTIDADE/.test(alvo)
+      ? ['RG', 'CNH', 'IDENTIDADE', 'DOCPESSOAL'] : [];
     return naPasta.find((f) => {
       const m = miolo(f.nome);
       if (m.includes(alvo) || alvo.includes(m)) return true;
