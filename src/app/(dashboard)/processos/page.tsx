@@ -213,12 +213,18 @@ export default function ProcessosPage() {
       }),
   });
   // Filtros client-side (status/etiqueta/grau) sobre o resultado já carregado.
-  // Ao buscar, varre TODOS os status (o processo aparece mesmo baixado, com o
-  // rótulo "Baixado"); sem busca, respeita a aba Ativos/Baixados/Todos.
-  const filtered = cases
-    .filter((c) => (search || view === 'todos' ? true : view === 'baixados' ? isBaixado(c.status) : !isBaixado(c.status)))
-    .filter((c) => (tagFilter ? c.legalTags.some((lt) => lt.tagId === tagFilter) : true))
-    .filter((c) => (grauFilter ? grauOf(c) === grauFilter : true));
+  // A aba Ativos/Baixados/Todos manda SEMPRE, inclusive durante a busca: "Ativos"
+  // não pode listar processo baixado. Quando a busca casa com um processo que a
+  // aba esconde, a lista avisa e oferece o atalho pra Todos — assim o baixado
+  // continua achável, mas nunca aparece misturado com os ativos.
+  const matchStatus = (c: CaseListItem) =>
+    view === 'todos' ? true : view === 'baixados' ? isBaixado(c.status) : !isBaixado(c.status);
+  const matchTagGrau = (c: CaseListItem) =>
+    (tagFilter ? c.legalTags.some((lt) => lt.tagId === tagFilter) : true) &&
+    (grauFilter ? grauOf(c) === grauFilter : true);
+  const filtered = cases.filter((c) => matchStatus(c) && matchTagGrau(c));
+  // Quantos passariam nos demais filtros mas a aba de status escondeu.
+  const ocultosPorStatus = cases.filter((c) => !matchStatus(c) && matchTagGrau(c)).length;
 
   // Paginação client-side (pageSize=0 → todos).
   const pageCount = pageSize > 0 ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
@@ -389,7 +395,21 @@ export default function ProcessosPage() {
           />
         ) : (
           <div className="flex w-full items-center justify-between">
-            <span className="text-zinc-500">{filtered.length} processo(s) e caso(s)</span>
+            <span className="text-zinc-500">
+              {filtered.length} processo(s) e caso(s)
+              {ocultosPorStatus > 0 && (
+                <>
+                  {' · '}
+                  <button
+                    onClick={() => setView('todos')}
+                    className="underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300"
+                    title="A aba de status está escondendo estes; clique para ver em Todos"
+                  >
+                    +{ocultosPorStatus} {view === 'ativos' ? 'baixado(s)' : 'ativo(s)'} fora desta aba
+                  </button>
+                </>
+              )}
+            </span>
             <label className="flex items-center gap-1.5 text-xs text-zinc-500">
               Exibir
               <select
@@ -434,6 +454,14 @@ export default function ProcessosPage() {
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-sm text-zinc-400">
                     Nenhum processo encontrado
+                    {ocultosPorStatus > 0 && (
+                      <>
+                        {' em '}{view === 'ativos' ? 'Ativos' : 'Baixados'}.{' '}
+                        <button onClick={() => setView('todos')} className="underline underline-offset-2">
+                          Ver em Todos ({ocultosPorStatus})
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               )}
