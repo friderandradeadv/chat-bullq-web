@@ -432,7 +432,7 @@ export const HUB: Trilha = {
         '1. Publicações como caixa de entrada do DJEN: o classificador lê o ato, calcula o prazo, cria o item na agenda e move o card.',
         '2. As quatro conferências humanas obrigatórias: o ato foi lido certo, o prazo bate, o prazo é nosso, e a publicação tem teor.',
         '3. Explique o problema das publicações sem teor, comuns no Projudi, que recebem selo de ato cego e exigem abrir os autos. Diga que é cerca de um quarto das publicações.',
-        '4. A Agenda: recorte da publicação, dispositivo da decisão, criar prazo de recurso com contagem automática em dias úteis, gerar peça por IA, editar a atividade inteira, anexos e comentários com menção.',
+        '4. A Agenda: recorte da publicação, dispositivo da decisão, criar prazo de recurso com contagem automática em dias úteis (com feriados e recesso considerados), gerar peça pela IA DO PRÓPRIO HUB — o mesmo gerador da ficha do processo, e nunca o Claude, que roda no Cowork, fora do hub —, editar a atividade inteira, anexos, e comentários com menção a pessoa, para combinar dentro do item e não por fora.',
         '5. Tarefas: trabalho sem prazo processual, sempre com dono.',
         '6. Feche com a regra de ouro: prazo se confere na Agenda, todo dia, olhando a semana inteira. Notificação é lembrete, não controle.',
         '',
