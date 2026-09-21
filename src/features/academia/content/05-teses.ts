@@ -121,6 +121,11 @@ export const TESES: Trilha = {
       titulo: 'HISCON, HISCRE e a leitura do extrato',
       resumo: 'Como provar o que está sendo descontado e desde quando.',
       minutos: 10,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/hiscon.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/hiscon.vtt',
+      },
       manual: [
         '## Os documentos',
         '',

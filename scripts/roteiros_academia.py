@@ -12,6 +12,101 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 6.2 — HISCON, HISCRE e a leitura do extrato (2:53). Primeiro vídeo do
+    # Dia 3, a trilha das teses.
+    #
+    # O risco desta aula era o transcritor comer as siglas, como fez com REPB
+    # virando "Rebe". Pedi no prompt que fossem lidas como sigla e conferi uma
+    # a uma na transcrição: HISCON, HISCRE, RMC, Meu INSS e gov.br saíram todas
+    # certas.
+    'hiscon': {
+        'duracao': 173.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 6 · Aula 2',
+             'titulo': 'HISCON, HISCRE e a leitura do extrato',
+             'sub': ['A prova da tese sai destes documentos.', 'E o cálculo nasce deles.']},
+
+            {'t': 9.8, 'tipo': 'cartoes', 'secao': 'O trio que prova',
+             'titulo': 'Cada um mostra uma coisa', 'cartoes': [
+               {'icone': 'documento', 'titulo': 'HISCON',  'sub': 'os contratos averbados no benefício'},
+               {'icone': 'dinheiro',  'titulo': 'HISCRE',  'sub': 'quanto foi descontado, mês a mês'},
+               {'icone': 'pasta',     'titulo': 'Extrato', 'sub': 'a visão consolidada dos contratos'}], 'aceso': None},
+            {'t': 21.0, 'tipo': 'cartoes', 'secao': 'O trio que prova',
+             'titulo': 'Cada um mostra uma coisa', 'cartoes': [
+               {'icone': 'documento', 'titulo': 'HISCON',  'sub': 'os contratos averbados no benefício'},
+               {'icone': 'dinheiro',  'titulo': 'HISCRE',  'sub': 'quanto foi descontado, mês a mês'},
+               {'icone': 'pasta',     'titulo': 'Extrato', 'sub': 'a visão consolidada dos contratos'}], 'aceso': 1,
+             'rodape': 'Banco, tipo, valor, prazo — e é onde a RMC aparece.'},
+            {'t': 31.8, 'tipo': 'cartoes', 'secao': 'O trio que prova',
+             'titulo': 'Cada um mostra uma coisa', 'cartoes': [
+               {'icone': 'documento', 'titulo': 'HISCON',  'sub': 'os contratos averbados no benefício'},
+               {'icone': 'dinheiro',  'titulo': 'HISCRE',  'sub': 'quanto foi descontado, mês a mês'},
+               {'icone': 'pasta',     'titulo': 'Extrato', 'sub': 'a visão consolidada dos contratos'}], 'aceso': 2,
+             'rodape': 'Quanto foi retirado do benefício e por quantos meses.'},
+
+            {'t': 44.0, 'tipo': 'lista', 'secao': 'O que você procura',
+             'titulo': 'Cinco informações', 'itens': ['A rubrica: RMC ou cartão consignado, nunca "empréstimo"',
+                       'A data de início: o marco zero do desconto',
+                       'O valor mensal e a soma do período',
+                       'Há consignado comum do mesmo banco?',
+                       'Quantos contratos — cada RMC pode ser uma ação'], 'aceso': None},
+            {'t': 52.0, 'tipo': 'lista', 'secao': 'O que você procura',
+             'titulo': 'Cinco informações', 'itens': ['A rubrica: RMC ou cartão consignado, nunca "empréstimo"',
+                       'A data de início: o marco zero do desconto',
+                       'O valor mensal e a soma do período',
+                       'Há consignado comum do mesmo banco?',
+                       'Quantos contratos — cada RMC pode ser uma ação'], 'aceso': 1},
+            {'t': 60.5, 'tipo': 'lista', 'secao': 'O que você procura',
+             'titulo': 'Cinco informações', 'itens': ['A rubrica: RMC ou cartão consignado, nunca "empréstimo"',
+                       'A data de início: o marco zero do desconto',
+                       'O valor mensal e a soma do período',
+                       'Há consignado comum do mesmo banco?',
+                       'Quantos contratos — cada RMC pode ser uma ação'], 'aceso': 2},
+            {'t': 72.5, 'tipo': 'lista', 'secao': 'O que você procura',
+             'titulo': 'Cinco informações', 'itens': ['A rubrica: RMC ou cartão consignado, nunca "empréstimo"',
+                       'A data de início: o marco zero do desconto',
+                       'O valor mensal e a soma do período',
+                       'Há consignado comum do mesmo banco?',
+                       'Quantos contratos — cada RMC pode ser uma ação'], 'aceso': 4,
+             'rodape': 'Ela sabia contratar consignado. O cartão foi outra coisa.'},
+            {'t': 83.0, 'tipo': 'lista', 'secao': 'O que você procura',
+             'titulo': 'Cinco informações', 'itens': ['A rubrica: RMC ou cartão consignado, nunca "empréstimo"',
+                       'A data de início: o marco zero do desconto',
+                       'O valor mensal e a soma do período',
+                       'Há consignado comum do mesmo banco?',
+                       'Quantos contratos — cada RMC pode ser uma ação'], 'aceso': 5},
+
+            {'t': 104.0, 'tipo': 'frase', 'secao': 'A regra do cálculo', 'corpo': 44,
+             'linhas': ['Cálculo sem HISCRE', 'é cálculo por estimativa.', 'E estimativa não sustenta pedido.'],
+             'rodape': 'As calculadoras do hub se alimentam desses dados. Sem eles, é chute com aparência de conta.'},
+
+            {'t': 112.0, 'tipo': 'lista', 'secao': 'A senha do gov.br',
+             'titulo': 'Dado pessoal sensível',
+             'itens': ['A credencial é da cliente, não sua',
+                       'Guardar só onde o escritório determina',
+                       'Usar só para o que ela autorizou',
+                       'Compartilhar fora da estrutura: proibido'],
+             'aceso': None},
+            {'t': 132.0, 'tipo': 'lista', 'secao': 'A senha do gov.br',
+             'titulo': 'Dado pessoal sensível',
+             'itens': ['A credencial é da cliente, não sua',
+                       'Guardar só onde o escritório determina',
+                       'Usar só para o que ela autorizou',
+                       'Compartilhar fora da estrutura: proibido'],
+             'aceso': 4},
+
+            {'t': 139.5, 'tipo': 'proporcao', 'secao': 'As faturas do cartão',
+             'titulo': 'O número que decide', 'total': 1, 'marcados': 0,
+             'numero': 'ZERO',
+             'rodape': 'Compras registradas nas faturas, ao longo de todo o período.'},
+
+            {'t': 156.0, 'tipo': 'frase', 'corpo': 42,
+             'linhas': ['Um cartão que em cinco anos', 'não registrou uma compra',
+                        'nunca foi um cartão de crédito.'],
+             'rodape': 'Funcionou como empréstimo desde a emissão.'},
+        ],
+    },
+
     # 2.8 — Financeiro, alvará e prestação de contas (3:43). Fecha a trilha do
     # Hub, e é a aula mais sensível dela: o Matheus definiu que o módulo
     # Financeiro do escritório é restrito a sócios, então o prompt cercou o
