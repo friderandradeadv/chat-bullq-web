@@ -5,7 +5,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save, FileText, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
-import { calculadoraRmcService } from '@/features/calculadora-rmc/services/calculadora-rmc.service';
 
 /**
  * Conferência antes do protocolo.
@@ -31,9 +30,15 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
   const cliente = caso.parties?.find((p) => p.role === 'CLIENT') ?? null;
   const adversa = caso.parties?.find((p) => p.role !== 'CLIENT') ?? null;
 
+  // 🚨 A conferência passa pelo CARD, não direto pelo cliente: é o card que
+  // sabe o produto, e é o produto que diz se a pasta é `01. RMC` ou `02. RCC`.
+  // Pedindo pelo cliente, a rota caía na família padrão
+  // ("04. EMPRÉSTIMOS CONSIGNADOS") para todo mundo e procurava numa pasta que
+  // ninguém montou — a tela acusava o pacote inteiro em falta com a pasta
+  // pronta do lado. Medido na LINDOMAR × PAN.
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['conferencia-protocolo', caso.id, adversa?.name],
-    queryFn: () => calculadoraRmcService.conferirProtocolo(cliente!.id, adversa!.name),
+    queryFn: () => legalCasesService.conferirPastaInicial(caso.id),
     enabled: !!cliente?.id && !!adversa?.name,
     retry: false,
     refetchOnWindowFocus: false,

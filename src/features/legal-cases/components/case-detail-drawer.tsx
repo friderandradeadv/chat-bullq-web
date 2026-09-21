@@ -1202,8 +1202,12 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
     setOrgBusy(true);
     try {
       const r = await legalCasesService.organizarPastaInicial(caseId);
-      toast.success(`Pasta "${r.pastaBanco}" pronta: ${r.copiados.length} doc(s) assinados + ${r.enviados.length} do caso${r.incluirRenuncia ? ' (com renúncia — hipossuficiente)' : ''}.`);
-      if (r.webViewLink) window.open(r.webViewLink, '_blank', 'noopener');
+      // Card de "RMC | RCC" monta DUAS pastas: os produtos não se misturam, e
+      // dizer só uma esconderia metade do trabalho de quem vai protocolar.
+      const quais = (r.pastas ?? []).map((p) => `${p.familia} › ${p.pastaBanco}`).join(' e ');
+      toast.success(`Pasta ${quais ? `"${quais}"` : `"${r.pastaBanco}"`} pronta: ${r.copiados.length} doc(s) assinados + ${r.enviados.length} do caso${r.incluirRenuncia ? ' (com renúncia — hipossuficiente)' : ''}.`);
+      for (const p of r.pastas ?? []) window.open(p.webViewLink, '_blank', 'noopener');
+      if (!r.pastas?.length && r.webViewLink) window.open(r.webViewLink, '_blank', 'noopener');
       onChanged();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Erro ao organizar a pasta no Drive');

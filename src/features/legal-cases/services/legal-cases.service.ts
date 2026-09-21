@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import type { ConversaDoCliente } from '@/components/ui/abrir-conversa';
+import type { ConferenciaProtocolo } from '@/features/calculadora-rmc/services/calculadora-rmc.service';
 
 /** Oferta da ação de churning (reciclagem de contratos), guardada no processo. */
 export interface OfertaChurning {
@@ -1058,13 +1059,38 @@ export const legalCasesService = {
   },
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
+    /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */
+    pastas: {
+      familia: string;
+      pastaBanco: string;
+      webViewLink: string;
+      copiados: string[];
+      enviados: string[];
+    }[];
     pastaBanco: string;
     webViewLink: string;
     copiados: string[];
     enviados: string[];
     incluirRenuncia: boolean;
   }> {
-    const { data } = await api.post(`/legal-cases/${id}/drive/organizar-inicial`);
+    const { data } = await api.post(`/legal-cases/${id}/drive/organizar-inicial`, undefined, {
+      // Rebaixar o kit da ZapSign e copiar o pacote inteiro passa fácil dos 30s
+      // padrão do axios, e o timeout cortava a chamada com a pasta meio montada.
+      timeout: 180000,
+    });
+    return data.data ?? data;
+  },
+
+  /**
+   * Confere o pacote de protocolo DESTE card contra a sequência do escritório.
+   *
+   * Passa pelo card, e não direto pelo cliente, porque é o card que sabe o
+   * PRODUTO — e é o produto que diz se a pasta é `01. RMC` ou `02. RCC`.
+   */
+  async conferirPastaInicial(id: string): Promise<ConferenciaProtocolo> {
+    const { data } = await api.get(`/legal-cases/${id}/drive/conferir-inicial`, {
+      timeout: 120000,
+    });
     return data.data ?? data;
   },
   async sugerirCadastroCliente(id: string): Promise<{
