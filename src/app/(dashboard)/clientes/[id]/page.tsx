@@ -684,7 +684,7 @@ export default function ClienteDetailPage() {
             />
             {/* Pipefy: Fase 3 — falta o valor da causa por processo */}
             <div className="rounded-lg border border-dashed border-[#DEE2E6] bg-white p-4 text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
-              Valor da causa por processo (cruzamento com o <strong className="font-medium text-zinc-500">Pipefy</strong>) — em breve.
+              Valor da causa por processo — em breve.
             </div>
           </div>
         )}

@@ -16,7 +16,7 @@ import {
 import { extractPdfText } from '@/features/knowledge/lib/extract-text';
 import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
 import { DropZone } from '@/components/drop-zone';
-import { ASTREA_DESPESAS, APORTES } from '@/features/financeiro/data/astrea-despesas';
+import { APORTES } from '@/features/financeiro/data/astrea-despesas';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { membersService } from '@/features/settings/services/members.service';
@@ -4993,7 +4993,6 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const [upLoading, setUpLoading] = useState(false);
   const [upNome, setUpNome] = useState('');
   const [concSaldoFinal, setConcSaldoFinal] = useState(''); // saldo final do extrato → âncora do saldo real
-  const [retro, setRetro] = useState<{ done: number; total: number; pulados: number } | null>(null);
   const [retroMsg, setRetroMsg] = useState<string>('');
   const onArquivo = async (f: File) => {
     setUpNome(f.name); setUpLoading(true); setConcResult(null); setConcLinhas([]);
@@ -5044,33 +5043,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
   const contasVis = contas.filter((c) => !c.cartao);
   const total = contasVis.reduce((s, c) => s + saldoConta(c.id).saldo, 0);
 
-  // ── Lançar gastos retroativos do Astrea (idempotente: pula o que já existe) ──
-  const norm = (s?: string | null) => (s || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
+  // Chave de dedup usada pelos aportes: mesmo centavo + mesmo mês.
   const centsOf = (v: number) => Math.round(Math.abs(v) * 100);
   const ymOf = (d: string) => `${d.slice(6, 10)}-${d.slice(3, 5)}`; // DD/MM/YYYY → YYYY-MM
-  const lancarRetro = async () => {
-    const existentes = data.transacoes.filter((t) => t.valor < 0).map((t) => ({ c: centsOf(t.valor), ym: ymOf(t.data), p: norm(t.recebedor || t.party || t.pagador) }));
-    const jaTem = (o: { data: string; valor: number; party: string }) => {
-      const c = centsOf(o.valor), ym = ymOf(o.data), p = norm(o.party);
-      return existentes.some((e) => e.c === c && e.ym === ym && (e.p === p || (!!e.p && !!p && (e.p.includes(p) || p.includes(e.p)))));
-    };
-    const todo = ASTREA_DESPESAS.filter((o) => !jaTem(o));
-    const pulados = ASTREA_DESPESAS.length - todo.length;
-    setRetroMsg('');
-    if (!todo.length) { setRetroMsg(`✅ Tudo já lançado — as ${ASTREA_DESPESAS.length} saídas do Astrea já constam.`); toast.success('Tudo já lançado.'); return; }
-    if (!confirm(`Lançar ${todo.length} gasto(s) retroativo(s) do Astrea?${pulados ? ` (${pulados} já existem e serão pulados)` : ''}\n\nTotal: ${brl(todo.reduce((s, o) => s + o.valor, 0))}. Pode rodar de novo sem duplicar.`)) return;
-    setRetro({ done: 0, total: todo.length, pulados });
-    let ok = 0, fail = 0, firstErr = '';
-    for (const o of todo) {
-      try { await financeiroService.addTransacao({ data: o.data, tipo: 'despesa', categoria: o.categoria, valor: o.valor, recebedor: o.party, dataPagamento: o.data, status: 'pago' }); ok++; }
-      catch (e: any) { fail++; if (!firstErr) firstErr = e?.response?.data?.message || e?.message || 'erro desconhecido'; }
-      setRetro({ done: ok + fail, total: todo.length, pulados });
-    }
-    qc.invalidateQueries({ queryKey: ['financeiro'] });
-    setRetro(null);
-    if (fail) { setRetroMsg(`⚠️ ${ok} lançado(s), ${fail} falharam. Erro: ${firstErr}`); toast.error(`${fail} falharam: ${firstErr}`); }
-    else { setRetroMsg(`✅ ${ok} gasto(s) lançado(s)${pulados ? ` · ${pulados} já existiam` : ''}. Recarregue pra ver os KPIs.`); toast.success(`${ok} gasto(s) lançado(s)`); }
-  };
 
   // ── Fechar o caixa com aportes (Você + Pai) — idempotente ──
   const [aporteRun, setAporteRun] = useState(false);
@@ -5293,17 +5268,6 @@ function ContasTab({ data }: { data: FinDashboard }) {
         {showTools && (<div className="border-t border-zinc-100 p-5 dark:border-zinc-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><ArrowDownCircle className="h-4 w-4 text-[#820AD1]" /> Gastos retroativos (Astrea)</h3>
-            <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">Lança de uma vez as <strong>{ASTREA_DESPESAS.length} saídas</strong> do Astrea (mai/2025 → jun/2026, {brl(ASTREA_DESPESAS.reduce((s, o) => s + o.valor, 0))}), com categoria e data corretas. <strong>Pula o que já existe</strong> — pode rodar quantas vezes quiser sem duplicar.</p>
-          </div>
-          <button onClick={lancarRetro} disabled={!!retro} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">
-            {retro ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Lançando {retro.done}/{retro.total}…</> : <><ArrowDownCircle className="h-3.5 w-3.5" /> Lançar gastos retroativos</>}
-          </button>
-        </div>
-        {retro && <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full rounded-full bg-[#820AD1] transition-all" style={{ width: `${Math.round((retro.done / Math.max(1, retro.total)) * 100)}%` }} /></div>}
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-          <div>
             <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><Scale className="h-4 w-4 text-amber-600" /> Empréstimo dos sócios (CPF)</h4>
             <p className="mt-1 max-w-2xl text-[13px] text-zinc-600 dark:text-zinc-300">O que entrou dos CPFs (você + seu pai) pra tapar o buraco = <strong>dívida a devolver</strong>, não faturamento. Registrando, a <strong>posição real = caixa − empréstimo</strong> volta a mostrar o vermelho real. O valor sugerido (<strong>{brl(sugEmp)}</strong>) é o que <strong>reconcilia</strong> o caixa com o operacional — <strong>edite</strong> pra bater com o que vocês de fato colocaram (confere no extrato do CPF). A dívida cai quando o escritório pagar os sócios de volta.</p>
           </div>
@@ -5509,7 +5473,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
       )}
 
       <CadastrosCard data={data} />
-      <ConciliacaoAstrea data={data} />
+      <Duplicatas data={data} />
     </>
   );
 }
@@ -5556,22 +5520,14 @@ function CadastrosCard({ data }: { data: FinDashboard }) {
   );
 }
 
-/** Auditoria do rombo real: compara o ledger vivo com a referência do Astrea, mês a mês. */
-function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
-  const [open, setOpen] = useState(false);
-  const ASTREA_RECEITA = 85110.58, ASTREA_RESULT = -29826.10;
-  const ymBR = (d: string) => { const m = d.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}` : ''; };
-  const astreaDesp = ASTREA_DESPESAS.reduce((s, o) => s + o.valor, 0);
-  const astreaMes = useMemo(() => { const m = new Map<string, number>(); for (const o of ASTREA_DESPESAS) { const k = ymBR(o.data); if (k) m.set(k, (m.get(k) ?? 0) + o.valor); } return m; }, []);
-  const realizados = (data.meses ?? []).filter((m) => !m.projecao);
-  const sysReceita = realizados.reduce((s, m) => s + m.receita, 0);
-  const sysDespesa = realizados.reduce((s, m) => s + m.despesaTotal, 0);
-  const sysResult = sysReceita - sysDespesa;
-  const diffRec = sysReceita - ASTREA_RECEITA;
-  const diffDesp = sysDespesa - astreaDesp;
-  const sysByKey = new Map(realizados.map((m) => [m.key, m]));
-  const meses = [...new Set([...astreaMes.keys(), ...realizados.map((m) => m.key)])].filter((k) => /^\d{4}-\d{2}$/.test(k)).sort((a, b) => b.localeCompare(a));
-
+/**
+ * DUPLICATAS — receita lançada duas vezes (import repetido, ASAAS + extrato do mesmo Pix).
+ *
+ * Era a metade viva do antigo card "Conciliação Astrea × sistema", que comparava o hub com
+ * números do Astrea CONGELADOS no código (receita 85.110,58). Essa comparação morreu com a
+ * migração: virou referência a um sistema que o escritório não usa mais.
+ */
+function Duplicatas({ data }: { data: FinDashboard }) {
   // Caça-duplicatas: receitas com MESMO valor + MESMO mês + MESMO pagador = provável duplicata.
   const [openDup, setOpenDup] = useState(false);
   const qc = useQueryClient();
@@ -5598,82 +5554,18 @@ function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
     toast.success(`${ok} cópia(s) removida(s)`);
   };
 
+  // Nada duplicado: o card não aparece — tela limpa vale mais que um card dizendo "0".
+  if (!dups.length) return null;
+
   return (
-    <Card title={<span className="flex items-center gap-2"><Scale className="h-4 w-4 text-amber-600" /> Conciliação Astrea × sistema</span>}
-      sub="por que o resultado operacional do sistema difere do déficit que você conhece do Astrea.">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Sistema (ledger vivo)</p>
-          <div className="mt-1 space-y-0.5 text-sm">
-            <div className="flex justify-between"><span className="text-zinc-500">Receita</span><span className="tabular-nums text-emerald-600">{brl2(sysReceita)}</span></div>
-            <div className="flex justify-between"><span className="text-zinc-500">Despesa</span><span className="tabular-nums text-rose-600">{brl2(sysDespesa)}</span></div>
-            <div className="flex justify-between border-t border-zinc-100 pt-0.5 font-semibold dark:border-zinc-800"><span className="text-zinc-600 dark:text-zinc-300">Resultado</span><span className={`tabular-nums ${sysResult >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(sysResult)}</span></div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Astrea (referência)</p>
-          <div className="mt-1 space-y-0.5 text-sm">
-            <div className="flex justify-between"><span className="text-zinc-500">Receita</span><span className="tabular-nums text-emerald-600">{brl2(ASTREA_RECEITA)}</span></div>
-            <div className="flex justify-between"><span className="text-zinc-500">Despesa</span><span className="tabular-nums text-rose-600">{brl2(astreaDesp)}</span></div>
-            <div className="flex justify-between border-t border-zinc-100 pt-0.5 font-semibold dark:border-zinc-800"><span className="text-zinc-600 dark:text-zinc-300">Resultado</span><span className="tabular-nums text-rose-600">{brl2(ASTREA_RESULT)}</span></div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">Diferença (sistema − Astrea)</p>
-          <div className="mt-1 space-y-0.5 text-sm">
-            <div className="flex justify-between"><span className="text-zinc-500">Receita</span><span className={`font-semibold tabular-nums ${Math.abs(diffRec) > 1000 ? 'text-amber-700 dark:text-amber-300' : 'text-zinc-500'}`}>{diffRec >= 0 ? '+' : ''}{brl2(diffRec)}</span></div>
-            <div className="flex justify-between"><span className="text-zinc-500">Despesa</span><span className={`font-semibold tabular-nums ${Math.abs(diffDesp) > 1000 ? 'text-amber-700 dark:text-amber-300' : 'text-zinc-500'}`}>{diffDesp >= 0 ? '+' : ''}{brl2(diffDesp)}</span></div>
-            <div className="flex justify-between border-t border-amber-200/60 pt-0.5 font-semibold dark:border-amber-900/40"><span className="text-zinc-600 dark:text-zinc-300">No resultado</span><span className="tabular-nums text-amber-700 dark:text-amber-300">{(sysResult - ASTREA_RESULT) >= 0 ? '+' : ''}{brl2(sysResult - ASTREA_RESULT)}</span></div>
-          </div>
-        </div>
-      </div>
-
-      <p className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-[13px] leading-relaxed text-zinc-600 dark:bg-zinc-800/40 dark:text-zinc-300">
-        {Math.abs(diffRec) >= Math.abs(diffDesp)
-          ? <>A maior causa é a <strong>receita</strong>: o sistema mostra <strong>{diffRec >= 0 ? `${brl2(diffRec)} a mais` : `${brl2(-diffRec)} a menos`}</strong> que o Astrea. {diffRec > 0 ? 'Provável: honorários que entraram por ASAAS/cobranças (e não estavam no relatório do Astrea), ou lançamentos duplicados. Confira os meses de receita alta abaixo — se algum não bater, é aí que o rombo "some".' : 'Faltam receitas no sistema.'}</>
-          : <>A maior causa é a <strong>despesa</strong>: o sistema tem <strong>{diffDesp >= 0 ? `${brl2(diffDesp)} a mais` : `${brl2(-diffDesp)} a menos`}</strong> que o Astrea. {diffDesp < 0 ? 'Faltam gastos retroativos — rode "Lançar gastos retroativos" acima.' : 'Há despesas além das do Astrea.'}</>}
-        {' '}O <strong>déficit real</strong> que você conhece (−{brl2(-ASTREA_RESULT)}) é o do Astrea; o sistema só bate com ele quando a receita e a despesa aqui casarem com a referência.
-      </p>
-
-      <button onClick={() => setOpen(!open)} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#228BE6] hover:underline">
-        {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />} {open ? 'Ocultar' : 'Ver'} mês a mês
-      </button>
-      {open && (
-        <div className="mt-2 overflow-x-auto scrollbar-thin">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Mês</th><th className="px-2 py-1.5 text-right font-medium">Despesa Astrea</th><th className="px-2 py-1.5 text-right font-medium">Despesa sistema</th><th className="px-2 py-1.5 text-right font-medium">Δ despesa</th><th className="px-2 py-1.5 text-right font-medium">Receita sistema</th><th className="px-2 py-1.5 text-right font-medium">Resultado sistema</th></tr></thead>
-            <tbody>
-              {meses.map((k) => {
-                const ad = astreaMes.get(k) ?? 0;
-                const sm = sysByKey.get(k);
-                const sd = sm?.despesaTotal ?? 0;
-                const sr = sm?.receita ?? 0;
-                const res = sr - sd;
-                const dd = sd - ad;
-                return (
-                  <tr key={k} className="border-t border-zinc-100 dark:border-zinc-800">
-                    <td className="px-2 py-1.5 text-zinc-600 dark:text-zinc-300">{mesLabel(k)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{ad ? brl2(ad) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-rose-600">{sd ? brl2(sd) : '—'}</td>
-                    <td className={`px-2 py-1.5 text-right tabular-nums ${Math.abs(dd) > 500 ? 'text-amber-600' : 'text-zinc-400'}`}>{dd ? `${dd >= 0 ? '+' : ''}${brl2(dd)}` : '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{sr ? brl2(sr) : '—'}</td>
-                    <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${res >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{sm ? brl2(res) : '—'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="mt-2 text-[11px] text-zinc-400">O Astrea só me deu o <strong>total</strong> de receitas (sem quebra por mês), então a coluna de receita mostra só a do sistema. <strong>Δ despesa</strong> em âmbar = mês onde o sistema destoa do Astrea (gasto faltando ou sobrando).</p>
-        </div>
-      )}
-
-      {dups.length > 0 && (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
+    <Card title={<span className="flex items-center gap-2"><Flame className="h-4 w-4 text-amber-600" /> Duplicatas</span>}
+      sub="receitas com mesmo valor, mesmo mês e mesmo pagador — confira e remova a cópia extra.">
+      <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
           <button onClick={() => setOpenDup(!openDup)} className="flex w-full items-center justify-between gap-2 text-left">
             <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300"><Flame className="h-4 w-4" /> {dups.length} possível(is) receita(s) duplicada(s) · ~{brl2(dupTotal)}</span>
             {openDup ? <ChevronDown className="h-4 w-4 text-amber-600" /> : <ChevronRight className="h-4 w-4 text-amber-600" />}
           </button>
-          <p className="mt-1 text-[11px] text-amber-700/80 dark:text-amber-300/80">Mesmo valor + mesmo mês + mesmo pagador. Confira e remova a cópia extra — isso deve aproximar o operacional do rombo real. (parcelas legítimas do mesmo cliente caem em meses diferentes, então não entram aqui.)</p>
+          <p className="mt-1 text-[11px] text-amber-700/80 dark:text-amber-300/80">Parcelas legítimas do mesmo cliente caem em meses diferentes, então não entram aqui.</p>
           <div className="mt-2">
             <button onClick={() => (armAll ? removerTodas() : setArmAll(true))} disabled={busyAll} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${armAll ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
               {busyAll ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Removendo…</> : armAll ? <><Trash2 className="h-3.5 w-3.5" /> Confirmar: remover {dupCount} cópia(s)</> : <><Trash2 className="h-3.5 w-3.5" /> Remover todas as cópias ({dupCount})</>}
@@ -5698,8 +5590,7 @@ function ConciliacaoAstrea({ data }: { data: FinDashboard }) {
               ))}
             </div>
           )}
-        </div>
-      )}
+      </div>
     </Card>
   );
 }
@@ -5735,7 +5626,7 @@ function FluxoTab({ data }: { data: FinDashboard }) {
         <MiniStat label="Meses no vermelho" value={`${k.mesesNoVermelho} / ${k.totalMesesRealizados}`} hint={k.melhorMes ? `melhor: ${k.melhorMes.label}` : ''} accent="#F59F00" />
       </div>
 
-      <Card title="Fluxo de caixa" sub="matriz mensal de receitas e despesas, como no Astrea. Role na horizontal para ver todos os meses; à direita da faixa, projeção."
+      <Card title="Fluxo de caixa" sub="matriz mensal de receitas e despesas. Role na horizontal para ver todos os meses; à direita da faixa, projeção."
         action={<div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">{JANELAS.map((j) => <button key={j.key} onClick={() => setJanela(j.key)} className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${janela === j.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>{j.label}</button>)}</div>}>
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full border-collapse text-xs">
