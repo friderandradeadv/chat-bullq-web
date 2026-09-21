@@ -26,7 +26,7 @@ import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { calculadoraCsService } from '@/features/calculadora-cs/services/calculadora-cs.service';
 import { useAuthStore } from '@/stores/auth-store';
 import {
-  aggregarClientes, aggregarRetiradas, achaAdvogado, normNome, mesKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
+  aggregarClientes, aggregarRetiradas, achaAdvogado, ehRetirada, normNome, mesKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
 import { MesTicketPicker } from '@/features/financeiro/components/mes-ticket-picker';
 
@@ -4357,7 +4357,12 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
   const advs = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
   const r = useMemo(() => aggregarRetiradas(data, advs), [data, advs]);
   const contas = data.contas ?? [];
-  const retiradas = useMemo(() => data.transacoes.filter((t) => t.categoria === 'Pró-labore' || t.categoria === 'Retirada').sort((a, b) => toISOInput(b.data).localeCompare(toISOInput(a.data))), [data.transacoes]);
+  // Uma definição só para a aba inteira (card, matriz e lista): ver `ehRetirada`. Antes a
+  // matriz e a lista olhavam só Pró-labore/Retirada enquanto o card somava repasse — a
+  // associada aparecia no acumulado e sumia das outras duas, e os totais não fechavam.
+  // O filtro de status é o mesmo do card (`aggregarRetiradas`): a aba fala do que JÁ FOI
+  // PAGO. Pró-labore agendado vive em Contas a pagar; contá-lo aqui inflaria o "já pago".
+  const retiradas = useMemo(() => data.transacoes.filter((t) => t.valor < 0 && ehRetirada(t.categoria) && (!t.status || t.status === 'pago')).sort((a, b) => toISOInput(b.data).localeCompare(toISOInput(a.data))), [data.transacoes]);
 
   // Matriz mês × advogado (quanto cada um retirou) — puxada DIRETO do livro-razão.
   const { matriz, colUsers, totalGeral } = useMemo(() => {
@@ -4400,13 +4405,13 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MiniStat label="Total já retirado" value={brl(r.totalRetirado)} hint="pró-labore + retiradas (livro-razão)" accent="#E64980" />
+        <MiniStat label="Total já pago aos advogados" value={brl(r.totalRetirado)} hint="pró-labore, retirada e repasse (livro-razão)" accent="#E64980" />
         <MiniStat label="Honorários recebidos" value={brl(r.totalHonorarios)} hint="base do rateio" accent="#2F9E44" />
         <MiniStat label="Ficou no escritório" value={brl(r.escritorio)} hint="parte do escritório no rateio" accent="#228BE6" />
         <MiniStat label="Crédito do rateio" value={brl(totalParts)} hint="parte dos advogados (informativo)" accent="#7048E8" />
       </div>
 
-      <Card title="Retiradas por mês" sub="quanto cada pessoa retirou em cada mês — espelho do livro-razão."
+      <Card title="Pago a cada advogado, por mês" sub="pró-labore e retirada (sócio) + honorários repassados (associado) — espelho do livro-razão."
         action={matriz.length > 0 ? (
           <div className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
             <CalendarClock className="h-3.5 w-3.5 text-zinc-400" />
@@ -4430,7 +4435,7 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
                   <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(row.tot)}</td>
                 </tr>
               ))}
-              {matrizF.length === 0 && <tr><td colSpan={colUsers.length + 2} className="py-8 text-center text-sm text-zinc-400">{mesRet ? 'Nenhuma retirada neste mês.' : 'Nenhuma retirada lançada ainda. Lance na aba Lançamentos.'}</td></tr>}
+              {matrizF.length === 0 && <tr><td colSpan={colUsers.length + 2} className="py-8 text-center text-sm text-zinc-400">{mesRet ? 'Nada pago a advogado neste mês.' : 'Nenhum pagamento a advogado lançado ainda. Lance na aba Lançamentos.'}</td></tr>}
             </tbody>
             {matrizF.length > 0 && (
               <tfoot>
@@ -4445,10 +4450,10 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
         </div>
       </Card>
 
-      <Card title="Por advogado (acumulado)" sub="crédito do rateio × o que já foi retirado — apenas informativo, sem 'a pagar'.">
+      <Card title="Por advogado (acumulado)" sub="crédito do rateio × o que já foi pago — apenas informativo, sem 'a pagar'.">
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Advogado</th><th className="px-2 py-1.5 text-right font-medium">Crédito do rateio</th><th className="px-2 py-1.5 text-right font-medium">Já retirou</th><th className="px-2 py-1.5 text-right font-medium">Diferença</th></tr></thead>
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Advogado</th><th className="px-2 py-1.5 text-right font-medium">Crédito do rateio</th><th className="px-2 py-1.5 text-right font-medium">Já pago</th><th className="px-2 py-1.5 text-right font-medium">Diferença</th></tr></thead>
             <tbody>
               {r.porUser.filter((u) => u.aReceber || u.retirado).map((u) => (
                 <tr key={u.userId} className="border-t border-zinc-100 dark:border-zinc-800">
@@ -4458,14 +4463,14 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
                   <td className={`px-2 py-1.5 text-right tabular-nums ${u.saldo >= 0 ? 'text-zinc-400' : 'text-amber-600'}`}>{brl2(u.saldo)}</td>
                 </tr>
               ))}
-              {r.porUser.filter((u) => u.aReceber || u.retirado).length === 0 && <tr><td colSpan={4} className="py-8 text-center text-sm text-zinc-400">Nenhum crédito ou retirada ainda.</td></tr>}
+              {r.porUser.filter((u) => u.aReceber || u.retirado).length === 0 && <tr><td colSpan={4} className="py-8 text-center text-sm text-zinc-400">Nenhum crédito ou pagamento ainda.</td></tr>}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[11px] text-zinc-400">O <strong>crédito do rateio</strong> é a parte que coube a cada advogado nos honorários recebidos (definida no lançamento do honorário). A <strong>diferença</strong> é só uma referência de quanto ainda não foi sacado — <strong>não é uma dívida a pagar</strong>. O pagamento real é o lançamento da retirada no livro-razão.</p>
+        <p className="mt-2 text-[11px] text-zinc-400">O <strong>crédito do rateio</strong> é a parte que coube a cada advogado nos honorários recebidos (definida no lançamento do honorário). A <strong>diferença</strong> é só uma referência de quanto ainda não foi sacado — <strong>não é uma dívida a pagar</strong>. O pagamento real é o lançamento no livro-razão. <strong>Sócio</strong> aparece aqui pelo pró-labore/retirada; <strong>associado</strong>, pelos honorários repassados.</p>
       </Card>
 
-      <Card title="Lançamentos de retirada" sub="pró-labore e retiradas do livro-razão. Para editar, abra a aba Lançamentos.">
+      <Card title="Cada pagamento, um a um" sub="pró-labore, retirada e honorários repassados do livro-razão. Para editar, abra a aba Lançamentos.">
         <div className="overflow-x-auto scrollbar-thin">
           <table className="w-full text-sm">
             <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Data</th><th className="px-2 py-1.5 font-medium">Tipo</th><th className="px-2 py-1.5 font-medium">Recebedor</th><th className="px-2 py-1.5 font-medium">Conta</th><th className="px-2 py-1.5 text-right font-medium">Valor</th></tr></thead>
@@ -4475,14 +4480,14 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
                 return (
                   <tr key={t.id} className="border-t border-zinc-100 dark:border-zinc-800">
                     <td className="px-2 py-1.5 tabular-nums text-zinc-600 dark:text-zinc-300">{t.data}</td>
-                    <td className="px-2 py-1.5"><span className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${t.categoria === 'Retirada' ? 'bg-pink-50 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' : 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'}`}>{t.categoria}</span></td>
+                    <td className="px-2 py-1.5"><span className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${t.categoria === 'Retirada' ? 'bg-pink-50 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' : /repassad/i.test(t.categoria || '') ? 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' : 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300'}`}>{t.categoria}</span></td>
                     <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{t.recebedor || t.party || '—'}</td>
                     <td className="px-2 py-1.5 text-zinc-500 dark:text-zinc-400">{conta?.nome || '—'}</td>
                     <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-rose-600">{brl2(Math.abs(t.valor))}</td>
                   </tr>
                 );
               })}
-              {retiradas.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Nenhuma retirada lançada ainda.</td></tr>}
+              {retiradas.length === 0 && <tr><td colSpan={5} className="py-8 text-center text-sm text-zinc-400">Nenhum pagamento a advogado lançado ainda.</td></tr>}
             </tbody>
           </table>
         </div>

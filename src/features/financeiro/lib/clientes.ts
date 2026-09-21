@@ -113,7 +113,16 @@ export interface RetiradasResumo { porUser: RetiradaUser[]; escritorio: number; 
 // "repassad" cobre "Honorários repassados" (o repasse do rateio ao advogado) — igual ao
 // holerite do backend. NÃO casa "Repasse ao cliente" (parte do alvará que é do cliente, não
 // é retirada de ninguém do time).
-const ehRetirada = (cat: string) => /pr[óo]\s*-?\s*labore|retirada|repassad/i.test(cat || '');
+/**
+ * Dinheiro que saiu do escritório PARA UM ADVOGADO: pró-labore e retirada (sócio) e
+ * honorários repassados (associado — a parte dele no rateio). É a definição única da aba
+ * Retiradas: o card, a matriz mensal e a lista precisam contar a MESMA coisa, senão a
+ * mesma pessoa aparece num quadro e some no outro (foi o que aconteceu com a associada).
+ *
+ * `repassad` de propósito, não `repasse`: "Repasse ao cliente" é dinheiro do CLIENTE
+ * saindo do alvará e não pode entrar aqui.
+ */
+export const ehRetirada = (cat: string) => /pr[óo]\s*-?\s*labore|retirada|repassad/i.test(cat || '');
 
 /**
  * Rateio de honorários por advogado: a parte de cada sócio/associado (do split dos
