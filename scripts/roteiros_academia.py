@@ -12,6 +12,116 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 2.6 — Agenda, Publicações e Tarefas (4:57). O mais longo da trilha do Hub,
+    # e o módulo em que erro custa prazo.
+    #
+    # O slide de proporção existe para este dado: "cerca de um quarto das
+    # publicações não traz o teor". Dito em voz alta é uma estatística que
+    # escorrega; desenhado como 1 quadrado aceso em 4, gruda.
+    #
+    # A asserção que mais importava aqui era a NEGATIVA: o vídeo não pode dizer
+    # "Claude". A geração de peça na Agenda é da IA do hub, e a versão anterior
+    # da 2.5 errou exatamente isso. Passou.
+    'agenda-prazos': {
+        'duracao': 297.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 2 · Aula 6',
+             'titulo': 'Agenda, Publicações e Tarefas',
+             'sub': ['O módulo em que erro custa prazo.', 'Aqui a atenção é outra.']},
+
+            {'t': 27.5, 'tipo': 'fluxo', 'secao': 'Publicações',
+             'titulo': 'A caixa de entrada do DJEN',
+             'etapas': ['Publicação chega', 'Classificador lê o ato', 'Calcula o prazo',
+                        'Cria o item e move o card'],
+             'aceso': 2},
+            {'t': 44.5, 'tipo': 'fluxo', 'secao': 'Publicações',
+             'titulo': 'A caixa de entrada do DJEN',
+             'etapas': ['Publicação chega', 'Classificador lê o ato', 'Calcula o prazo',
+                        'Cria o item e move o card'],
+             'aceso': 4,
+             'rodape': 'Tudo isso sem ninguém arrastar nada.'},
+
+            {'t': 58.5, 'tipo': 'frase', 'secao': 'O limite da automação', 'corpo': 46,
+             'linhas': ['O classificador é bom.', 'Infalível, não é.'],
+             'rodape': 'A conferência humana continua obrigatória. É ela que evita preclusão.'},
+
+            {'t': 76.0, 'tipo': 'lista', 'secao': 'O que você confere',
+             'titulo': 'Quatro perguntas, toda vez', 'itens': ['O ato foi lido certo? Sentença de mérito não vira "suspensão"',
+                       'O prazo bate? Atenção redobrada em prazo em dobro',
+                       'O prazo é NOSSO? Intimação da parte contrária não gera prazo',
+                       'A publicação tem teor? Ou é só ponteiro?'], 'aceso': None},
+            {'t': 79.5, 'tipo': 'lista', 'secao': 'O que você confere',
+             'titulo': 'Quatro perguntas, toda vez', 'itens': ['O ato foi lido certo? Sentença de mérito não vira "suspensão"',
+                       'O prazo bate? Atenção redobrada em prazo em dobro',
+                       'O prazo é NOSSO? Intimação da parte contrária não gera prazo',
+                       'A publicação tem teor? Ou é só ponteiro?'], 'aceso': 1},
+            {'t': 89.0, 'tipo': 'lista', 'secao': 'O que você confere',
+             'titulo': 'Quatro perguntas, toda vez', 'itens': ['O ato foi lido certo? Sentença de mérito não vira "suspensão"',
+                       'O prazo bate? Atenção redobrada em prazo em dobro',
+                       'O prazo é NOSSO? Intimação da parte contrária não gera prazo',
+                       'A publicação tem teor? Ou é só ponteiro?'], 'aceso': 2},
+            {'t': 96.0, 'tipo': 'lista', 'secao': 'O que você confere',
+             'titulo': 'Quatro perguntas, toda vez', 'itens': ['O ato foi lido certo? Sentença de mérito não vira "suspensão"',
+                       'O prazo bate? Atenção redobrada em prazo em dobro',
+                       'O prazo é NOSSO? Intimação da parte contrária não gera prazo',
+                       'A publicação tem teor? Ou é só ponteiro?'], 'aceso': 3},
+            {'t': 103.0, 'tipo': 'lista', 'secao': 'O que você confere',
+             'titulo': 'Quatro perguntas, toda vez', 'itens': ['O ato foi lido certo? Sentença de mérito não vira "suspensão"',
+                       'O prazo bate? Atenção redobrada em prazo em dobro',
+                       'O prazo é NOSSO? Intimação da parte contrária não gera prazo',
+                       'A publicação tem teor? Ou é só ponteiro?'], 'aceso': 4},
+
+            {'t': 106.0, 'tipo': 'proporcao', 'secao': 'Publicação sem teor',
+             'titulo': 'Uma em cada quatro', 'total': 4, 'marcados': 1,
+             'numero': '1 em 4',
+             'rodape': 'Cerca de um quarto das publicações não traz o teor do ato.'},
+
+            {'t': 126.0, 'tipo': 'frase', 'secao': 'Ato cego', 'corpo': 46,
+             'linhas': ['Selo de ato cego', 'é ordem de sair do hub.'],
+             'rodape': 'Abra os autos no tribunal e veja o que aconteceu antes de dar OK no prazo.'},
+
+            {'t': 143.0, 'tipo': 'cartoes', 'secao': 'A Agenda',
+             'titulo': 'O que cabe dentro de um item', 'cartoes': [
+               {'icone': 'documento',  'titulo': 'O recorte',  'sub': 'a publicação e o dispositivo'},
+               {'icone': 'calendario', 'titulo': 'Prazo de recurso', 'sub': 'já contado em dias úteis'},
+               {'icone': 'engrenagem', 'titulo': 'Gerar peça',  'sub': 'pela IA do hub'},
+               {'icone': 'chat',       'titulo': 'Comentar',    'sub': 'com menção, dentro do item'}], 'aceso': None},
+            {'t': 174.0, 'tipo': 'cartoes', 'secao': 'A Agenda',
+             'titulo': 'O que cabe dentro de um item', 'cartoes': [
+               {'icone': 'documento',  'titulo': 'O recorte',  'sub': 'a publicação e o dispositivo'},
+               {'icone': 'calendario', 'titulo': 'Prazo de recurso', 'sub': 'já contado em dias úteis'},
+               {'icone': 'engrenagem', 'titulo': 'Gerar peça',  'sub': 'pela IA do hub'},
+               {'icone': 'chat',       'titulo': 'Comentar',    'sub': 'com menção, dentro do item'}], 'aceso': 2,
+             'rodape': 'Feriados e recesso forense já entram na conta.'},
+            {'t': 191.0, 'tipo': 'cartoes', 'secao': 'A Agenda',
+             'titulo': 'O que cabe dentro de um item', 'cartoes': [
+               {'icone': 'documento',  'titulo': 'O recorte',  'sub': 'a publicação e o dispositivo'},
+               {'icone': 'calendario', 'titulo': 'Prazo de recurso', 'sub': 'já contado em dias úteis'},
+               {'icone': 'engrenagem', 'titulo': 'Gerar peça',  'sub': 'pela IA do hub'},
+               {'icone': 'chat',       'titulo': 'Comentar',    'sub': 'com menção, dentro do item'}], 'aceso': 3,
+             'rodape': 'O mesmo motor da ficha do processo. O Claude roda no Cowork, fora do hub.'},
+
+            {'t': 210.0, 'tipo': 'contraste', 'secao': 'Duas coisas diferentes',
+             'esquerda': {'rotulo': 'Agenda', 'titulo': 'Prazo', 'manda': True,
+                          'linhas': ['Prazo processual rígido,', 'que nasce da intimação.']},
+             'direita': {'rotulo': 'Tarefas', 'titulo': 'Trabalho',
+                         'linhas': ['Ligar para o cliente,', 'pedir documento,', 'conferir cálculo.']}},
+
+            {'t': 235.0, 'tipo': 'frase', 'secao': 'Tarefas', 'corpo': 48,
+             'linhas': ['Tarefa sem dono', 'não é feita.'],
+             'rodape': 'Responsável claro, data limite e o combinado nos comentários.'},
+
+            {'t': 250.0, 'tipo': 'frase', 'secao': 'A regra de ouro', 'corpo': 42,
+             'linhas': ['Prazo se confere na Agenda,', 'todo dia,', 'olhando a semana inteira.']},
+
+            {'t': 271.0, 'tipo': 'contraste', 'secao': 'O que controla de verdade',
+             'esquerda': {'rotulo': 'Notificação', 'titulo': 'Lembrete',
+                          'linhas': ['Avisa o que vence', 'nas próximas horas.']},
+             'direita': {'rotulo': 'Agenda, na semana', 'titulo': 'Controle', 'manda': True,
+                         'linhas': ['Mostra o que vem,', 'enquanto ainda dá tempo', 'de fazer alguma coisa.']}},
+        ],
+    },
+
     # 2.5 — Processos: a ficha do caso (3:51). SEGUNDA geração.
     #
     # A primeira dizia que a peça gerada pela ficha sai "acionando o Claude".

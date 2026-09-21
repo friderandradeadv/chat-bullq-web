@@ -374,6 +374,11 @@ export const HUB: Trilha = {
       titulo: 'Agenda, Publicações e Tarefas',
       resumo: 'Como o prazo nasce do DJEN, aparece na agenda e morre protocolado.',
       minutos: 12,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/agenda-prazos.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/agenda-prazos.vtt',
+      },
       manual: [
         '## Publicações',
         '',
