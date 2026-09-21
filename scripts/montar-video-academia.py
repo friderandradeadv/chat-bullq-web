@@ -95,11 +95,63 @@ def largura(d, txt, f):
     return d.textbbox((0, 0), txt, font=f)[2]
 
 
+def cabe(d, txt, familia, corpo, peso, larg_max, min_corpo=None):
+    """Devolve (linhas, fonte) que cabem em larg_max.
+
+    🚨 O TÍTULO NÃO SE DESENHA DIRETO. Em 21/09 o Matheus viu "Como o escritório
+    funciona por dentro" sair CORTADO no meio da palavra, porque o slide de
+    abertura fazia d.text() com Playfair 86 sem olhar a largura: o que não cabia
+    simplesmente sangrava para fora do quadro e sumia.
+
+    Aqui a ordem é: primeiro tenta quebrar em linhas no tamanho pedido; se ainda
+    não couber (palavra sozinha maior que a caixa), reduz o corpo em passos até
+    caber. Quebrar é melhor que encolher — o título perde menos presença.
+    """
+    min_corpo = min_corpo or int(corpo * 0.55)
+    palavras = txt.split()
+    tam = corpo
+    while tam >= min_corpo:
+        f = fonte(familia, tam, peso)
+        linhas, atual = [], ''
+        estourou = False
+        for w in palavras:
+            teste = (atual + ' ' + w).strip()
+            if largura(d, teste, f) <= larg_max:
+                atual = teste
+            else:
+                if atual:
+                    linhas.append(atual)
+                # palavra sozinha que não cabe: este corpo não serve
+                if largura(d, w, f) > larg_max:
+                    estourou = True
+                    break
+                atual = w
+        if estourou:
+            tam -= 4
+            continue
+        if atual:
+            linhas.append(atual)
+        return linhas, f
+    f = fonte(familia, min_corpo, peso)
+    return [txt], f
+
+
 def moldura(im, d, secao=None):
     """Barra vermelha à esquerda + etiqueta da seção. Presente em todo slide."""
     d.rectangle([(0, 0), (int(6 * ESC), H)], fill=VERMELHO)
     if secao:
         d.text((96 * ESC, 54 * ESC), secao.upper(), font=fonte('inter', 15, 500), fill=CINZA)
+
+
+def titulo_topo(d, txt):
+    """Título de topo de slide, com a MESMA proteção do slide de abertura:
+    quebra em linha nova antes de sangrar para fora do quadro."""
+    larg = W - 92 * ESC - 96 * ESC
+    linhas, f = cabe(d, txt, 'playfair', 44, 500, larg)
+    y = 80 * ESC
+    for l in linhas:
+        d.text((92 * ESC, y), l, font=f, fill=PAPEL)
+        y += f.size * 1.14
 
 
 def assinatura(im, d=None, tinta=None, e=0.62):
@@ -128,14 +180,28 @@ def novo():
 # ---------------------------------------------------------------- tipos de slide
 
 def slide_abertura(dados):
+    """Capa da aula. O bloco inteiro é ancorado PELO FIM, logo acima da
+    assinatura: com o título quebrando em duas ou três linhas, ancorar pelo
+    topo empurrava o subtítulo para cima da logo."""
     im, d = novo()
     moldura(im, d)
-    d.text((96 * ESC, 340 * ESC), dados['etiqueta'].upper(), font=fonte('inter', 16, 500), fill=CINZA)
-    d.text((92 * ESC, 378 * ESC), dados['titulo'], font=fonte('playfair', 86, 500), fill=PAPEL)
-    y = 500 * ESC
-    for linha in dados.get('sub', []):
+    larg = W - 92 * ESC - 96 * ESC
+    linhas_t, ft = cabe(d, dados['titulo'], 'playfair', 86, 500, larg)
+    subs = dados.get('sub', [])
+    passo_t = ft.size * 1.12
+    passo_s = 34 * ESC
+    alt = len(linhas_t) * passo_t + 22 * ESC + len(subs) * passo_s
+    base = H - 172 * ESC          # fim do bloco, com folga acima da assinatura
+    y = max(base - alt, 150 * ESC)
+    d.text((96 * ESC, y - 38 * ESC), dados['etiqueta'].upper(),
+           font=fonte('inter', 16, 500), fill=CINZA)
+    for lt in linhas_t:
+        d.text((92 * ESC, y), lt, font=ft, fill=PAPEL)
+        y += passo_t
+    y += 22 * ESC
+    for linha in subs:
         d.text((96 * ESC, y), linha, font=fonte('inter', 25), fill='#B9BEC2')
-        y += 34 * ESC
+        y += passo_s
     assinatura(im, e=0.85)
     return im
 
@@ -166,7 +232,7 @@ def slide_tela(dados):
     from PIL import Image
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     caminho = baixar_print(dados['print'])
     shot = Image.open(caminho).convert('RGB')
     cw = int(1088 * ESC)
@@ -185,7 +251,7 @@ def slide_passos(dados):
     """Lista numerada que cresce: o passo corrente em branco, os anteriores apagados."""
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     y = 240 * ESC
     fn = fonte('playfair', 38, 500)
     ft = fonte('inter', 32)
@@ -225,7 +291,7 @@ def slide_lista(dados):
     a narração em vez de despejar tudo de uma vez."""
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     itens = dados['itens']
     aceso = dados.get('aceso')          # 1-based; None acende todos
     duas = len(itens) > 6
@@ -269,7 +335,7 @@ def slide_fluxo(dados):
     Até 4 por linha; com mais, quebra em duas fileiras."""
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     itens = dados['etapas']
     aceso = dados.get('aceso')            # 1-based
     por_linha = 4 if len(itens) > 4 else len(itens)
@@ -329,7 +395,7 @@ def slide_proporcao(dados):
     a pessoa faça a conta de cabeça."""
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     total = dados['total']
     marcados = dados['marcados']
     col = min(total, 10)
@@ -364,7 +430,7 @@ def slide_linha_tempo(dados):
     onde o que importa é a ordem e a distância entre elas."""
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     marcos = dados['marcos']
     aceso = dados.get('aceso')
     x0, x1 = int(150 * ESC), W - int(150 * ESC)
@@ -412,7 +478,7 @@ def slide_cartoes(dados):
     import pictogramas_academia as P
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     itens = dados['cartoes']
     aceso = dados.get('aceso')
     col = min(len(itens), 4)
@@ -462,7 +528,7 @@ def slide_funil(dados):
     coisa que estreita de uma etapa para a próxima."""
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     fases = dados['fases']
     n = len(fases)
     topo = int(240 * ESC)
@@ -500,7 +566,7 @@ def slide_calendario(dados):
     mostra o tempo passando mesmo com ninguém abrindo a intimação."""
     im, d = novo()
     moldura(im, d, dados.get('secao'))
-    d.text((92 * ESC, 80 * ESC), dados['titulo'], font=fonte('playfair', 44, 500), fill=PAPEL)
+    titulo_topo(d, dados['titulo'])
     total = dados.get('total', 10)
     corridos = dados.get('corridos', 0)
     lado = int(96 * ESC)

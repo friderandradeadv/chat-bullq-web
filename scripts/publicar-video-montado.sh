@@ -63,8 +63,19 @@ while read -r arq seg; do
   out=\$(printf 'cena%03d.mp4' "\$i")
   quadros=\$(awk "BEGIN{printf \"%d\", \$seg * 30}")
   [ "\$quadros" -lt 2 ] && quadros=2
+  # 🚨 O ZOOM COMIA A FAIXA VERMELHA E TREMIA.
+  # Dois defeitos que o Matheus viu em 21/09, no mesmo movimento:
+  #   1. o zoompan amplia a partir do CENTRO, entao 3% de ampliacao jogam ~28px
+  #      de cada lado para fora do quadro. A faixa da marca tem 9px: sumia
+  #      inteira nos primeiros segundos de toda cena.
+  #   2. o zoompan calcula posicao em pixel INTEIRO; a 1080p o salto e visivel
+  #      e o movimento fica "mascado".
+  # Conserto: renderiza o movimento num espaco 1,5x maior (o salto de 1px la
+  # vira 0,66px aqui), reduz o zoom para 2% e, depois de tudo, REDESENHA a
+  # faixa por cima com drawbox — assim ela fica cravada na borda, imune ao
+  # movimento.
   ffmpeg -nostdin -y -loglevel error -loop 1 -i "\$arq" -t "\$seg" \
-    -vf "zoompan=z='min(zoom+0.00025,1.03)':d=\$quadros:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=30,format=yuv420p" \
+    -vf "scale=2880:1620:flags=lanczos,zoompan=z='min(zoom+0.00012,1.02)':d=\$quadros:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=30,drawbox=x=0:y=0:w=9:h=ih:color=0xCF3B2E@1.0:t=fill,format=yuv420p" \
     -c:v libx264 -preset veryfast -crf 21 -r 30 -threads 2 "\$out"
   echo "file '\$out'" >> trechos.txt
   ultimo="\$arq"
@@ -82,7 +93,7 @@ FALTA=\$(awk "BEGIN{d=\$DUR-\$SOMA; if(d<0)d=0; printf \"%.3f\", d+1.0}")
 if awk "BEGIN{exit !(\$FALTA > 0.2)}"; then
   echo "   estendendo a ultima cena em \${FALTA}s para cobrir o audio"
   ffmpeg -nostdin -y -loglevel error -loop 1 -i "\$ultimo" -t "\$FALTA" \
-    -vf "scale=1920:1080,format=yuv420p" \
+    -vf "scale=1920:1080,drawbox=x=0:y=0:w=9:h=ih:color=0xCF3B2E@1.0:t=fill,format=yuv420p" \
     -c:v libx264 -preset veryfast -crf 21 -r 30 -threads 2 cena_fim.mp4
   echo "file 'cena_fim.mp4'" >> trechos.txt
 fi

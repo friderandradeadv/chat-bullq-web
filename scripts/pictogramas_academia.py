@@ -126,14 +126,30 @@ def alerta(d, x, y, t, cor):
 
 
 def dinheiro(d, x, y, t, cor):
-    """Cifrão em círculo — o repasse, o proveito econômico."""
+    """Cifrão em círculo — o repasse, o proveito econômico.
+
+    🚨 O S SE DESENHA COM DOIS ARCOS DE ABERTURA OPOSTA. A primeira versão
+    usava start/end trocados e saía um emaranhado que o Matheus perguntou, com
+    razão, que símbolo era. No PIL o ângulo 0 é leste e cresce no sentido
+    horário (porque y cresce para baixo): a metade de cima é um "C" (falta o
+    setor leste) e a de baixo é um "C" espelhado (falta o setor oeste).
+    """
     g = _g(t)
     m = t * 0.12
     d.ellipse([(x + m, y + m), (x + t - m, y + t - m)], outline=cor, width=g)
     cx, cy = x + t / 2, y + t / 2
-    d.line([(cx, cy - t * 0.26), (cx, cy + t * 0.26)], fill=cor, width=max(1, g - 1))
-    d.arc([(cx - t * 0.16, cy - t * 0.22), (cx + t * 0.16, cy)], start=0, end=270, fill=cor, width=g)
-    d.arc([(cx - t * 0.16, cy), (cx + t * 0.16, cy + t * 0.22)], start=180, end=90, fill=cor, width=g)
+    # o S ocupa pouco menos da METADE do circulo: com as proporcoes da
+    # primeira tentativa (w=0.15, h=0.19) ele encostava na borda e virava
+    # rabisco.
+    w = t * 0.105         # meia-largura do S
+    h = t * 0.098         # cada metade do S tem 2h de altura; o S inteiro, 4h
+    # haste vertical, atravessando o S em cima e embaixo
+    d.line([(cx, cy - 2 * h - t * 0.055), (cx, cy + 2 * h + t * 0.055)],
+           fill=cor, width=max(1, g - 1))
+    # metade de cima: "C" — abertura voltada para a direita
+    d.arc([(cx - w, cy - 2 * h), (cx + w, cy)], start=40, end=320, fill=cor, width=g)
+    # metade de baixo: "C" espelhado — abertura voltada para a esquerda
+    d.arc([(cx - w, cy), (cx + w, cy + 2 * h)], start=220, end=140, fill=cor, width=g)
 
 
 def cadeado(d, x, y, t, cor):

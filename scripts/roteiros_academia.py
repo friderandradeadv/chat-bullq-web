@@ -12,6 +12,95 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 2.7 — Calculadoras (3:10). SEGUNDA geração: a primeira narrava o Cálculo
+    # Jurídico externo, que o escritório não usa mais desde 21/09. O material
+    # inteiro foi limpo e o prompt passou a afirmar a regra pela positiva —
+    # todo cálculo sai das calculadoras do hub.
+    #
+    # Aqui os prints valem mais que qualquer diagrama: a tela das calculadoras
+    # e a da RMC mostram de onde o número sai de verdade.
+    'calculadoras': {
+        'duracao': 190.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 2 · Aula 7',
+             'titulo': 'Calculadoras',
+             'sub': ['O número que vai na peça nasce aqui.', 'E em nenhum outro lugar.']},
+
+            {'t': 11.0, 'tipo': 'tela', 'secao': 'As calculadoras do hub',
+             'titulo': 'Uma para cada demanda', 'print': 'calculadoras'},
+
+            {'t': 19.0, 'tipo': 'lista', 'secao': 'O que cada uma faz',
+             'titulo': 'Seis ferramentas', 'itens': ['RMC e RCC: o descontado, o devido, a diferença e a repetição',
+                       'Revisional: recálculo do contrato de empréstimo',
+                       'Trabalhista: rescisão e verbas',
+                       'Superendividamento: capacidade de pagamento e plano',
+                       'Cumprimento de sentença: atualização para a execução',
+                       'Provisionamento: a perda esperada da carteira'], 'aceso': None},
+            {'t': 21.8, 'tipo': 'tela', 'secao': 'A tese bancária',
+             'titulo': 'RMC e RCC, por dentro', 'print': 'calculadora-rmc'},
+            {'t': 32.0, 'tipo': 'lista', 'secao': 'O que cada uma faz',
+             'titulo': 'Seis ferramentas', 'itens': ['RMC e RCC: o descontado, o devido, a diferença e a repetição',
+                       'Revisional: recálculo do contrato de empréstimo',
+                       'Trabalhista: rescisão e verbas',
+                       'Superendividamento: capacidade de pagamento e plano',
+                       'Cumprimento de sentença: atualização para a execução',
+                       'Provisionamento: a perda esperada da carteira'], 'aceso': 2},
+            {'t': 38.5, 'tipo': 'lista', 'secao': 'O que cada uma faz',
+             'titulo': 'Seis ferramentas', 'itens': ['RMC e RCC: o descontado, o devido, a diferença e a repetição',
+                       'Revisional: recálculo do contrato de empréstimo',
+                       'Trabalhista: rescisão e verbas',
+                       'Superendividamento: capacidade de pagamento e plano',
+                       'Cumprimento de sentença: atualização para a execução',
+                       'Provisionamento: a perda esperada da carteira'], 'aceso': 4},
+            {'t': 42.5, 'tipo': 'lista', 'secao': 'O que cada uma faz',
+             'titulo': 'Seis ferramentas', 'itens': ['RMC e RCC: o descontado, o devido, a diferença e a repetição',
+                       'Revisional: recálculo do contrato de empréstimo',
+                       'Trabalhista: rescisão e verbas',
+                       'Superendividamento: capacidade de pagamento e plano',
+                       'Cumprimento de sentença: atualização para a execução',
+                       'Provisionamento: a perda esperada da carteira'], 'aceso': 5},
+
+            {'t': 50.0, 'tipo': 'fluxo', 'secao': 'O fluxo',
+             'titulo': 'Três passos, nesta ordem',
+             'etapas': ['Calcular na calculadora', 'Salvar no processo',
+                        'Vira valor da causa e base da execução'],
+             'aceso': 2},
+
+            {'t': 67.0, 'tipo': 'frase', 'secao': 'O passo que se esquece', 'corpo': 44,
+             'linhas': ['Cálculo que você fez', 'e não salvou', 'não existe para a peça.'],
+             'rodape': 'Número que fica só na tela, o sistema não reconhece.'},
+
+            {'t': 82.0, 'tipo': 'contraste', 'secao': 'Trava de antiexcesso',
+             'esquerda': {'rotulo': 'O que parece', 'titulo': 'Implicância',
+                          'linhas': ['"O sistema não deixou', 'eu pedir o que eu queria."']},
+             'direita': {'rotulo': 'O que é', 'titulo': 'Proteção', 'manda': True,
+                         'linhas': ['Evita a peça ser fulminada', 'por excesso — e o escritório',
+                                    'perder credibilidade na vara.']}},
+
+            {'t': 103.0, 'tipo': 'frase', 'secao': 'Quando a trava acende', 'corpo': 46,
+             'linhas': ['Ela recusa', 'e registra a recusa.'],
+             'rodape': 'A tarefa passa a ser ajustar o pedido ao direito que se comprova.'},
+
+            {'t': 117.5, 'tipo': 'frase', 'secao': 'Art. 50 do Código de Ética', 'corpo': 42,
+             'linhas': ['Em êxito, contratual mais sucumbência', 'não pode superar',
+                        'a vantagem do cliente.'],
+             'rodape': 'Quando o cálculo se aproxima do teto, o alvará acende um alerta vermelho.'},
+
+            {'t': 136.5, 'tipo': 'contraste', 'secao': 'A base do contratual',
+             'esquerda': {'rotulo': 'Entra na base', 'titulo': 'Proveito', 'manda': True,
+                          'linhas': ['O proveito econômico', 'que a ação gerou.']},
+             'direita': {'rotulo': 'Fica de fora', 'titulo': 'Sucumbência',
+                         'linhas': ['É do advogado, por direito', 'próprio — art. 23 do Estatuto.']}},
+
+            {'t': 154.8, 'tipo': 'frase', 'secao': 'Antes de aplicar', 'corpo': 44,
+             'linhas': ['Confira a cláusula', 'do contrato daquele cliente.'],
+             'rodape': 'Não existe fórmula única de honorário. Padrão geral não decide caso concreto.'},
+
+            {'t': 171.5, 'tipo': 'frase', 'corpo': 42,
+             'linhas': ['O número nasce no hub,', 'fica salvo no processo', 'e é o mesmo que a execução usa.']},
+        ],
+    },
+
     # 2.6 — Agenda, Publicações e Tarefas (4:57). O mais longo da trilha do Hub,
     # e o módulo em que erro custa prazo.
     #
@@ -80,19 +169,10 @@ ROTEIROS = {
              'linhas': ['Selo de ato cego', 'é ordem de sair do hub.'],
              'rodape': 'Abra os autos no tribunal e veja o que aconteceu antes de dar OK no prazo.'},
 
-            {'t': 143.0, 'tipo': 'cartoes', 'secao': 'A Agenda',
-             'titulo': 'O que cabe dentro de um item', 'cartoes': [
-               {'icone': 'documento',  'titulo': 'O recorte',  'sub': 'a publicação e o dispositivo'},
-               {'icone': 'calendario', 'titulo': 'Prazo de recurso', 'sub': 'já contado em dias úteis'},
-               {'icone': 'engrenagem', 'titulo': 'Gerar peça',  'sub': 'pela IA do hub'},
-               {'icone': 'chat',       'titulo': 'Comentar',    'sub': 'com menção, dentro do item'}], 'aceso': None},
-            {'t': 174.0, 'tipo': 'cartoes', 'secao': 'A Agenda',
-             'titulo': 'O que cabe dentro de um item', 'cartoes': [
-               {'icone': 'documento',  'titulo': 'O recorte',  'sub': 'a publicação e o dispositivo'},
-               {'icone': 'calendario', 'titulo': 'Prazo de recurso', 'sub': 'já contado em dias úteis'},
-               {'icone': 'engrenagem', 'titulo': 'Gerar peça',  'sub': 'pela IA do hub'},
-               {'icone': 'chat',       'titulo': 'Comentar',    'sub': 'com menção, dentro do item'}], 'aceso': 2,
-             'rodape': 'Feriados e recesso forense já entram na conta.'},
+            {'t': 143.0, 'tipo': 'tela', 'secao': 'A Agenda',
+             'titulo': 'A semana inteira, de uma vez', 'print': 'agenda-semana'},
+            {'t': 174.0, 'tipo': 'tela', 'secao': 'O detalhe do prazo',
+             'titulo': 'Os selos PRAZO e FATAL', 'print': 'agenda-prazo-detalhe'},
             {'t': 191.0, 'tipo': 'cartoes', 'secao': 'A Agenda',
              'titulo': 'O que cabe dentro de um item', 'cartoes': [
                {'icone': 'documento',  'titulo': 'O recorte',  'sub': 'a publicação e o dispositivo'},
@@ -111,8 +191,8 @@ ROTEIROS = {
              'linhas': ['Tarefa sem dono', 'não é feita.'],
              'rodape': 'Responsável claro, data limite e o combinado nos comentários.'},
 
-            {'t': 250.0, 'tipo': 'frase', 'secao': 'A regra de ouro', 'corpo': 42,
-             'linhas': ['Prazo se confere na Agenda,', 'todo dia,', 'olhando a semana inteira.']},
+            {'t': 250.0, 'tipo': 'tela', 'secao': 'A regra de ouro',
+             'titulo': 'A carga real do mês', 'print': 'agenda-mes'},
 
             {'t': 271.0, 'tipo': 'contraste', 'secao': 'O que controla de verdade',
              'esquerda': {'rotulo': 'Notificação', 'titulo': 'Lembrete',
@@ -136,9 +216,8 @@ ROTEIROS = {
              'titulo': 'Processos: a ficha do caso',
              'sub': ['O que está na ficha é a verdade do processo.', 'O que está só na sua cabeça, não.']},
 
-            {'t': 24.5, 'tipo': 'frase', 'secao': 'Por que a ficha manda', 'corpo': 44,
-             'linhas': ['Sem anotação paralela.'],
-             'rodape': 'O que consta na ficha é a fonte da verdade para o andamento da ação.'},
+            {'t': 24.5, 'tipo': 'tela', 'secao': 'A ficha do processo',
+             'titulo': 'Tudo do caso numa tela só', 'print': 'ficha-processo'},
 
             {'t': 37.8, 'tipo': 'cartoes', 'secao': 'O que a ficha guarda',
              'titulo': 'Os dados que a peça usa', 'cartoes': [
@@ -159,13 +238,8 @@ ROTEIROS = {
                {'icone': 'pessoa',    'titulo': 'Partes',       'sub': 'CPF ou CNPJ: a qualificação sai daqui'},
                {'icone': 'pasta',     'titulo': 'Documentos',   'sub': 'e todas as movimentações'},
                {'icone': 'dinheiro',  'titulo': 'Cálculo',      'sub': 'vira valor da causa e da execução'}], 'aceso': 2},
-            {'t': 62.6, 'tipo': 'cartoes', 'secao': 'O que a ficha guarda',
-             'titulo': 'Os dados que a peça usa', 'cartoes': [
-               {'icone': 'balanca',   'titulo': 'CNJ e juízo',  'sub': 'do DataJud, nunca de cabeça'},
-               {'icone': 'pessoa',    'titulo': 'Partes',       'sub': 'CPF ou CNPJ: a qualificação sai daqui'},
-               {'icone': 'pasta',     'titulo': 'Documentos',   'sub': 'e todas as movimentações'},
-               {'icone': 'dinheiro',  'titulo': 'Cálculo',      'sub': 'vira valor da causa e da execução'}], 'aceso': 4,
-             'rodape': 'Recurso registrado vira apenso automaticamente.'},
+            {'t': 62.6, 'tipo': 'tela', 'secao': 'A ficha por dentro',
+             'titulo': 'Etiquetas, juízo, valor e as abas', 'print': 'processo-ficha'},
 
             {'t': 74.0, 'tipo': 'contraste', 'secao': 'Onde o documento mora',
              'esquerda': {'rotulo': 'Google Drive', 'titulo': 'O arquivo', 'manda': True,
@@ -238,26 +312,13 @@ ROTEIROS = {
                        'Execução & Repasse: cálculo, alvará, dinheiro no cliente',
                        'Planejamento Previdenciário e INSS Administrativo',
                        'Quadros personalizados, criados sem programação'], 'aceso': None},
-            {'t': 29.0, 'tipo': 'lista', 'secao': 'Os quadros',
-             'titulo': 'Cada um responde a uma pergunta', 'itens': ['Pré-Processual: o caso antes de existir processo',
-                       'Fase Bancária Investigativa: montar a prova antes da inicial',
-                       'REPB: a esteira da reestruturação de passivo',
-                       'Fase Judicial: o processo em curso, da inicial ao trânsito',
-                       'Execução & Repasse: cálculo, alvará, dinheiro no cliente',
-                       'Planejamento Previdenciário e INSS Administrativo',
-                       'Quadros personalizados, criados sem programação'], 'aceso': 6},
-            {'t': 34.5, 'tipo': 'lista', 'secao': 'Os quadros',
-             'titulo': 'Cada um responde a uma pergunta', 'itens': ['Pré-Processual: o caso antes de existir processo',
-                       'Fase Bancária Investigativa: montar a prova antes da inicial',
-                       'REPB: a esteira da reestruturação de passivo',
-                       'Fase Judicial: o processo em curso, da inicial ao trânsito',
-                       'Execução & Repasse: cálculo, alvará, dinheiro no cliente',
-                       'Planejamento Previdenciário e INSS Administrativo',
-                       'Quadros personalizados, criados sem programação'], 'aceso': 7},
+            {'t': 29.0, 'tipo': 'tela', 'secao': 'A primeira ponta',
+             'titulo': 'Pré-Processual', 'print': 'pre-processual'},
+            {'t': 34.5, 'tipo': 'tela', 'secao': 'A outra ponta',
+             'titulo': 'Execução & Repasse', 'print': 'execucao-repasse'},
 
-            {'t': 42.3, 'tipo': 'frase', 'secao': 'O mal-entendido', 'corpo': 46,
-             'linhas': ['Ninguém passa o dia', 'arrastando card na mão.'],
-             'rodape': 'Na Fase Judicial, quem move o card é o DJEN.'},
+            {'t': 42.3, 'tipo': 'tela', 'secao': 'O mal-entendido',
+             'titulo': 'Ninguém arrasta card o dia inteiro', 'print': 'kanban-fase-judicial'},
 
             {'t': 53.8, 'tipo': 'fluxo', 'secao': 'Como o card anda sozinho',
              'titulo': 'Da publicação à fase certa',
