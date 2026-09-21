@@ -12,6 +12,100 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 2.9 — Meu Espaço, Ajuda e Copiloto (2:35).
+    #
+    # A tela que mais importa aqui é o contraste do Financeiro: o pessoal, que
+    # é de cada um, e o do escritório, que é restrito a sócios. O Matheus
+    # estabeleceu essa regra quando eu ia capturar prints, e ela entrou no
+    # prompt — a narração devolveu a distinção com todas as letras.
+    'meu-espaco': {
+        'duracao': 155.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 2 · Aula 9',
+             'titulo': 'Meu Espaço, Ajuda e Copiloto',
+             'sub': ['A parte do hub que fala de você,', 'e onde tirar dúvida sobre o resto.']},
+
+            {'t': 12.5, 'tipo': 'tela', 'secao': 'Meu Espaço',
+             'titulo': 'A sua casa dentro do sistema', 'print': 'meu-espaco'},
+
+            {'t': 16.6, 'tipo': 'lista', 'secao': 'Meu Espaço',
+             'titulo': 'O que tem aqui dentro', 'itens': ['Perfil: foto, bio, OAB e frase — você mesmo edita',
+                       'Meu Contrato: o contrato assinado, sempre à mão',
+                       'Financeiro pessoal: holerite, honorários e suas condições',
+                       'Estrutura: organograma, cargos e plano de carreira',
+                       'Cultura: missão, visão, valores e regimento',
+                       'Manuais e onboarding'], 'aceso': None},
+            {'t': 24.7, 'tipo': 'lista', 'secao': 'Meu Espaço',
+             'titulo': 'O que tem aqui dentro', 'itens': ['Perfil: foto, bio, OAB e frase — você mesmo edita',
+                       'Meu Contrato: o contrato assinado, sempre à mão',
+                       'Financeiro pessoal: holerite, honorários e suas condições',
+                       'Estrutura: organograma, cargos e plano de carreira',
+                       'Cultura: missão, visão, valores e regimento',
+                       'Manuais e onboarding'], 'aceso': 2},
+            {'t': 33.7, 'tipo': 'lista', 'secao': 'Meu Espaço',
+             'titulo': 'O que tem aqui dentro', 'itens': ['Perfil: foto, bio, OAB e frase — você mesmo edita',
+                       'Meu Contrato: o contrato assinado, sempre à mão',
+                       'Financeiro pessoal: holerite, honorários e suas condições',
+                       'Estrutura: organograma, cargos e plano de carreira',
+                       'Cultura: missão, visão, valores e regimento',
+                       'Manuais e onboarding'], 'aceso': 3},
+
+            {'t': 42.2, 'tipo': 'contraste', 'secao': 'Dois financeiros diferentes',
+             'esquerda': {'rotulo': 'Financeiro pessoal', 'titulo': 'Seu', 'manda': True,
+                          'linhas': ['No Meu Espaço.', 'Seu holerite, seus honorários,',
+                                     'suas condições de contrato.']},
+             'direita': {'rotulo': 'Módulo Financeiro', 'titulo': 'Do escritório',
+                         'linhas': ['Outro lugar, acesso restrito', 'a sócios e administradores.']}},
+
+            {'t': 65.3, 'tipo': 'lista', 'secao': 'Meu Espaço',
+             'titulo': 'O que tem aqui dentro', 'itens': ['Perfil: foto, bio, OAB e frase — você mesmo edita',
+                       'Meu Contrato: o contrato assinado, sempre à mão',
+                       'Financeiro pessoal: holerite, honorários e suas condições',
+                       'Estrutura: organograma, cargos e plano de carreira',
+                       'Cultura: missão, visão, valores e regimento',
+                       'Manuais e onboarding'], 'aceso': 4},
+            {'t': 71.6, 'tipo': 'lista', 'secao': 'Meu Espaço',
+             'titulo': 'O que tem aqui dentro', 'itens': ['Perfil: foto, bio, OAB e frase — você mesmo edita',
+                       'Meu Contrato: o contrato assinado, sempre à mão',
+                       'Financeiro pessoal: holerite, honorários e suas condições',
+                       'Estrutura: organograma, cargos e plano de carreira',
+                       'Cultura: missão, visão, valores e regimento',
+                       'Manuais e onboarding'], 'aceso': 5},
+
+            {'t': 82.7, 'tipo': 'cartoes', 'secao': 'Onde tirar dúvida',
+             'titulo': 'Três apoios, três funções',
+             'cartoes': [
+               {'icone': 'chat',       'titulo': 'Ajuda',     'sub': 'ensina a usar o hub, para todo mundo'},
+               {'icone': 'engrenagem', 'titulo': 'Copiloto',  'sub': 'visão do escritório, só sócios e admins'},
+               {'icone': 'documento',  'titulo': 'Academia',  'sub': 'trilhas com vídeo e manual'}],
+             'aceso': 1},
+            {'t': 100.5, 'tipo': 'cartoes', 'secao': 'Onde tirar dúvida',
+             'titulo': 'Três apoios, três funções',
+             'cartoes': [
+               {'icone': 'chat',       'titulo': 'Ajuda',     'sub': 'ensina a usar o hub, para todo mundo'},
+               {'icone': 'engrenagem', 'titulo': 'Copiloto',  'sub': 'visão do escritório, só sócios e admins'},
+               {'icone': 'documento',  'titulo': 'Academia',  'sub': 'trilhas com vídeo e manual'}],
+             'aceso': 2},
+            {'t': 117.0, 'tipo': 'cartoes', 'secao': 'Onde tirar dúvida',
+             'titulo': 'Três apoios, três funções',
+             'cartoes': [
+               {'icone': 'chat',       'titulo': 'Ajuda',     'sub': 'ensina a usar o hub, para todo mundo'},
+               {'icone': 'engrenagem', 'titulo': 'Copiloto',  'sub': 'visão do escritório, só sócios e admins'},
+               {'icone': 'documento',  'titulo': 'Academia',  'sub': 'trilhas com vídeo e manual'}],
+             'aceso': 3},
+
+            {'t': 131.7, 'tipo': 'contraste', 'secao': 'Qual usar quando',
+             'esquerda': {'rotulo': 'Ajuda', 'titulo': 'Onde eu clico',
+                          'linhas': ['O caminho na tela,', 'passo a passo.']},
+             'direita': {'rotulo': 'Academia', 'titulo': 'Como se faz e por quê', 'manda': True,
+                         'linhas': ['O procedimento e a razão', 'por trás dele.']}},
+
+            {'t': 141.3, 'tipo': 'frase', 'corpo': 46,
+             'linhas': ['Use as duas.'],
+             'rodape': 'Uma resolve o atalho. A outra dá a base para você decidir.'},
+        ],
+    },
+
     # 2.7 — Calculadoras (3:10). SEGUNDA geração: a primeira narrava o Cálculo
     # Jurídico externo, que o escritório não usa mais desde 21/09. O material
     # inteiro foi limpo e o prompt passou a afirmar a regra pela positiva —

@@ -580,6 +580,11 @@ export const HUB: Trilha = {
       titulo: 'Meu Espaço, Ajuda e Copiloto',
       resumo: 'Seu contrato, seu holerite, sua carreira — e onde pedir socorro.',
       minutos: 6,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/meu-espaco.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/meu-espaco.vtt',
+      },
       manual: [
         '## Meu Espaço',
         '',
@@ -627,6 +632,8 @@ export const HUB: Trilha = {
         '5. Feche com a distinção: a Ajuda responde onde eu clico, a Academia responde como se faz e por quê. Recomende usar as duas.',
         '',
         'NÃO FAÇA: mostrar valores de holerite ou dados financeiros de pessoas reais.',
+        '',
+        'NÃO CONFUNDA o Financeiro pessoal do Meu Espaço, que é de cada um e mostra o próprio holerite e os próprios honorários, com o módulo Financeiro do escritório, que é outro lugar e é restrito. Deixe essa diferença explícita.',
       ].join('\n'),
     },
   ],

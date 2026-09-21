@@ -49,6 +49,8 @@ const PROMPT = [
   // REPB saiu "Rebe" em 19/09. Sigla lida em voz alta vira palavra no
   // transcritor; listar cada uma pelo nome é o unico jeito de segurar.
   'REPB (nunca "Rebe"), SISBAJUD, RENAJUD, DJE, CDA, TJMG, TJSP,',
+  // "holerite" saiu "lerite" em 21/09: o transcritor comeu a silaba inicial.
+  'holerite (nunca "lerite"), Meu Espaco, Copiloto, Academia, Cowork.',
   'Cálculo Jurídico (nome da ferramenta, em maiúsculas).',
 ].join('\n');
 
