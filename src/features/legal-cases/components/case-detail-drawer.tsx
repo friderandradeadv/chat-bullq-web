@@ -1216,6 +1216,16 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
           { duration: 8000 },
         );
       }
+      // O ARQUIVO do cliente é o que a PRÓXIMA ação dele vai procurar — a pasta
+      // do réu é só o pacote daquele processo. Dizer o que entrou ali evita
+      // reenviar o mesmo HISCON a cada ação.
+      if (r.arquivados?.length) {
+        toast.info(
+          `${r.arquivados.length} documento(s) guardado(s) no arquivo do cliente: ` +
+            r.arquivados.map((a) => `${a.nome} → ${a.para}`).join(' · '),
+          { duration: 8000 },
+        );
+      }
       if (r.arrumadosPulados?.length) {
         toast.warning(
           `Deixei na raiz por já existir igual na pasta: ${r.arrumadosPulados.join(', ')} — confira qual vale.`,

@@ -1076,6 +1076,8 @@ export const legalCasesService = {
     arrumados: { nome: string; para: string }[];
     /** soltos que ficaram onde estavam por já existir igual no destino */
     arrumadosPulados: string[];
+    /** documentos que passaram a existir no ARQUIVO do cliente (00. DOCUMENTOS) */
+    arquivados: { nome: string; para: string }[];
   }> {
     const { data } = await api.post(`/legal-cases/${id}/drive/organizar-inicial`, undefined, {
       // Rebaixar o kit da ZapSign e copiar o pacote inteiro passa fácil dos 30s
