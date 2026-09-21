@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { Loader2, X, Copy, Check } from 'lucide-react';
 import { channelsService, type ChannelType } from '../services/channels.service';
-import { ZappfyIcon, MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
+import { MetaIcon, InstagramIcon, WhatsAppIcon } from '@/components/ui/icons';
 
 const channelTypes: { value: ChannelType; label: string; icon: React.ElementType; color: string; description: string }[] = [
   {
@@ -16,13 +16,6 @@ const channelTypes: { value: ChannelType; label: string; icon: React.ElementType
     icon: WhatsAppIcon,
     color: 'bg-zinc-50 dark:bg-zinc-800',
     description: 'Evolution API self-hosted — instância própria, sem restrição de 24h',
-  },
-  {
-    value: 'WHATSAPP_ZAPPFY',
-    label: 'WhatsApp (Zappfy)',
-    icon: ZappfyIcon,
-    color: 'bg-zinc-50 dark:bg-zinc-800',
-    description: 'Conecte via Zappfy/Uazapi — sem restrição de 24h',
   },
   {
     value: 'WHATSAPP_OFFICIAL',
@@ -39,12 +32,6 @@ const channelTypes: { value: ChannelType; label: string; icon: React.ElementType
     description: 'Instagram API com login empresarial — DMs e stories',
   },
 ];
-
-const zappfySchema = z.object({
-  name: z.string().min(1, 'Nome é obrigatório'),
-  token: z.string().min(1, 'Token é obrigatório'),
-  webhookSecret: z.string().optional(),
-});
 
 const evolutionSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
@@ -72,7 +59,6 @@ const instagramSchema = z.object({
   webhookSecret: z.string().optional(),
 });
 
-type ZappfyFormData = z.infer<typeof zappfySchema>;
 type EvolutionFormData = z.infer<typeof evolutionSchema>;
 type WaOfficialFormData = z.infer<typeof waOfficialSchema>;
 type InstagramFormData = z.infer<typeof instagramSchema>;
@@ -95,11 +81,6 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
   // Default ORG = qualquer membro com permissão padrão enxerga.
   // PRIVATE = apenas quem tiver grant explícito (pra canais sensíveis).
   const [visibility, setVisibility] = useState<'ORG' | 'PRIVATE'>('ORG');
-
-  const zappfyForm = useForm<ZappfyFormData>({
-    resolver: zodResolver(zappfySchema),
-    defaultValues: { name: '', token: '', webhookSecret: '' },
-  });
 
   const evolutionForm = useForm<EvolutionFormData>({
     resolver: zodResolver(evolutionSchema),
@@ -143,9 +124,6 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
     }
   };
 
-  const onSubmitZappfy = (data: ZappfyFormData) =>
-    submitChannel('WHATSAPP_ZAPPFY', data.name, { token: data.token }, data.webhookSecret);
-
   const onSubmitEvolution = (data: EvolutionFormData) =>
     submitChannel(
       'WHATSAPP_EVOLUTION',
@@ -188,7 +166,6 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
   const handleClose = () => {
     setStep('type');
     setSelectedType(null);
-    zappfyForm.reset();
     evolutionForm.reset();
     waForm.reset();
     igForm.reset();
@@ -198,7 +175,6 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
   if (!open) return null;
 
   const titleMap: Record<string, string> = {
-    WHATSAPP_ZAPPFY: 'Configurar Zappfy',
     WHATSAPP_EVOLUTION: 'Configurar Evolution',
     WHATSAPP_OFFICIAL: 'Configurar WhatsApp Official',
     INSTAGRAM: 'Configurar Instagram',
@@ -235,14 +211,6 @@ export function CreateChannelDialog({ open, onClose, onCreated }: CreateChannelD
               </button>
             ))}
           </div>
-        ) : selectedType === 'WHATSAPP_ZAPPFY' ? (
-          <form onSubmit={zappfyForm.handleSubmit(onSubmitZappfy)} className="mt-6 space-y-4">
-            <Field label="Nome do canal" placeholder="Ex: WhatsApp Principal" error={zappfyForm.formState.errors.name?.message} {...zappfyForm.register('name')} />
-            <Field label="Token" placeholder="Token da instância Zappfy" error={zappfyForm.formState.errors.token?.message} {...zappfyForm.register('token')} />
-            <Field label="Webhook Secret" placeholder="Opcional" optional {...zappfyForm.register('webhookSecret')} />
-            <WebhookUrl url={`${apiBaseUrl}/webhooks/WHATSAPP_ZAPPFY`} copied={copied} onCopy={() => handleCopyWebhook('WHATSAPP_ZAPPFY')} />
-            <FormFooter isLoading={isLoading} onBack={() => setStep('type')} />
-          </form>
         ) : selectedType === 'WHATSAPP_EVOLUTION' ? (
           <form onSubmit={evolutionForm.handleSubmit(onSubmitEvolution)} className="mt-6 space-y-4">
             <Field label="Nome do canal" placeholder="Ex: Comercial" error={evolutionForm.formState.errors.name?.message} {...evolutionForm.register('name')} />
