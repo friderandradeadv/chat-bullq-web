@@ -26,7 +26,7 @@ import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { calculadoraCsService } from '@/features/calculadora-cs/services/calculadora-cs.service';
 import { useAuthStore } from '@/stores/auth-store';
 import {
-  aggregarClientes, aggregarRetiradas, normNome, mesKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
+  aggregarClientes, aggregarRetiradas, achaAdvogado, normNome, mesKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
 import { MesTicketPicker } from '@/features/financeiro/components/mes-ticket-picker';
 
@@ -170,7 +170,7 @@ export default function FinanceiroPage() {
         <div className="mx-auto max-w-3xl p-6">
           <h1 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100"><CircleDollarSign className="h-4 w-4 text-emerald-600" /> Financeiro</h1>
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-6 text-sm dark:border-amber-900/40 dark:bg-amber-900/10">
-            Ainda não importamos seus dados financeiros do Astrea. Assim que o snapshot for carregado, o painel completo aparece aqui.
+            Ainda não há lançamentos financeiros. Assim que o primeiro extrato for importado, o painel completo aparece aqui.
           </div>
         </div>
       </div>
@@ -268,7 +268,7 @@ export default function FinanceiroPage() {
         )}
 
         <p className="mt-6 flex items-center justify-center gap-1.5 pb-2 text-xs text-zinc-400">
-          <Sparkles className="h-3.5 w-3.5" /> Reimporte a planilha do Astrea quando quiser atualizar os números — seus lançamentos manuais ficam preservados.
+          <Sparkles className="h-3.5 w-3.5" /> Importe o extrato do banco quando quiser atualizar os números — seus lançamentos manuais ficam preservados.
         </p>
       </div>
     </div>
@@ -4362,7 +4362,10 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
     for (const t of retiradas) {
       const mk = mesKey(t);
       const nome = (t.recebedor || t.party || '').trim() || '—';
-      const u = advs.find((a) => normNome(a.name) === normNome(nome));
+      // Mesma regra do "Por advogado (acumulado)" — antes aqui a comparação era EXATA, e o
+      // lançamento de 06/2025 (importação antiga, nome sujo "Matheus Frider Andrade Quebra de
+      // Caixa PRÓLABORE -") abria uma SEGUNDA coluna para a mesma pessoa.
+      const u = achaAdvogado(advs, nome, t.responsavelId);
       const uk = u ? u.id : (normNome(nome) || '—');
       labels.set(uk, u ? u.name : nome);
       let mm = rows.get(mk); if (!mm) { mm = new Map(); rows.set(mk, mm); }

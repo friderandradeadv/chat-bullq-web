@@ -22,7 +22,7 @@ export default function FaseBancariaPage() {
   return (
     <AdminBoard
       title="Fase Bancária Investigativa"
-      subtitle="Réplica do pipe 02. Pré-Judicial do Pipefy — investigação RMC/RCC × bancos antes do protocolo."
+      subtitle="Investigação RMC/RCC × bancos antes do protocolo."
       icon={Landmark}
       accent="#228BE6"
       filter={(c) => c.phase.startsWith('banco_')}

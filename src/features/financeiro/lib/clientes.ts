@@ -119,6 +119,24 @@ const ehRetirada = (cat: string) => /pr[óo]\s*-?\s*labore|retirada|repassad/i.t
  * Rateio de honorários por advogado: a parte de cada sócio/associado (do split dos
  * honorários recebidos) × o que já foi retirado (despesas de Pró-labore/Retirada).
  */
+/**
+ * Casa o nome gravado num lançamento com um advogado do cadastro.
+ *
+ * O nome do lançamento nem sempre é o do cadastro: importação antiga despejou a DESCRIÇÃO
+ * inteira no campo ("Matheus Frider Andrade Quebra de Caixa PRÓLABORE -"), e o repasse
+ * automático grava `responsavelId` sem repetir o nome. Ordem: 1) responsavelId; 2) nome
+ * exato; 3) o nome do lançamento COMEÇA com o nome do advogado.
+ *
+ * Vive aqui, exportado, porque a matriz "Retiradas por mês" repetia a comparação EXATA por
+ * conta própria — e a mesma pessoa aparecia em duas colunas, uma com o nome sujo do import.
+ */
+export function achaAdvogado<T extends { id: string; name: string }>(users: T[], nome: string, responsavelId?: string | null): T | undefined {
+  const n = normNome((nome || '').trim());
+  return (responsavelId ? users.find((x) => x.id === responsavelId) : undefined)
+    || users.find((x) => normNome(x.name) === n)
+    || users.find((x) => !!n && !!normNome(x.name) && n.startsWith(normNome(x.name)));
+}
+
 export function aggregarRetiradas(data: FinDashboard | undefined | null, users: { id: string; name: string }[]): RetiradasResumo {
   const txs = data?.transacoes ?? [];
   const aReceber = new Map<string, number>();
@@ -146,9 +164,7 @@ export function aggregarRetiradas(data: FinDashboard | undefined | null, users: 
     // PRÓLABORE" casa com "Matheus Frider Andrade") — senão a retirada some do "já retirou".
     if (t.valor < 0 && ehRetirada(t.categoria) && (!t.status || t.status === 'pago')) {
       const nome = normNome((t.recebedor || t.party || '').trim());
-      const u = (t.responsavelId && users.find((x) => x.id === t.responsavelId))
-        || users.find((x) => normNome(x.name) === nome)
-        || users.find((x) => nome && normNome(x.name) && nome.startsWith(normNome(x.name)));
+      const u = achaAdvogado(users, (t.recebedor || t.party || '').trim(), t.responsavelId);
       const k = u ? u.id : nome;
       retirado.set(k, (retirado.get(k) ?? 0) - t.valor);
       totalRetirado += -t.valor;

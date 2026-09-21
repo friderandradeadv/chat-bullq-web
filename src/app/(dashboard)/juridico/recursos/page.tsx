@@ -78,7 +78,7 @@ export default function RecursosPage() {
         <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Recursos</h1>
         <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">{filtered.length}</span>
       </div>
-      <p className="mt-0.5 text-sm text-zinc-500">Recursos importados do Pipefy, vinculados aos processos.</p>
+      <p className="mt-0.5 text-sm text-zinc-500">Recursos vinculados aos processos.</p>
 
       <div className="mt-4 shrink-0">
         <RecursosInsightsPanel />
