@@ -1206,6 +1206,22 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
       // dizer só uma esconderia metade do trabalho de quem vai protocolar.
       const quais = (r.pastas ?? []).map((p) => `${p.familia} › ${p.pastaBanco}`).join(' e ');
       toast.success(`Pasta ${quais ? `"${quais}"` : `"${r.pastaBanco}"`} pronta: ${r.copiados.length} doc(s) assinados + ${r.enviados.length} do caso${r.incluirRenuncia ? ' (com renúncia — hipossuficiente)' : ''}.`);
+      // 🚨 Mover arquivo no Drive do cliente em silêncio é ruim: quem abre a
+      // pasta amanhã não faz ideia de que o HISCON saiu da raiz. O aviso diz
+      // quais saíram e para onde.
+      if (r.arrumados?.length) {
+        toast.info(
+          `${r.arrumados.length} documento(s) solto(s) arquivado(s) em ${r.arrumados[0].para}: ` +
+            r.arrumados.map((a) => a.nome).join(', '),
+          { duration: 8000 },
+        );
+      }
+      if (r.arrumadosPulados?.length) {
+        toast.warning(
+          `Deixei na raiz por já existir igual na pasta: ${r.arrumadosPulados.join(', ')} — confira qual vale.`,
+          { duration: 8000 },
+        );
+      }
       for (const p of r.pastas ?? []) window.open(p.webViewLink, '_blank', 'noopener');
       if (!r.pastas?.length && r.webViewLink) window.open(r.webViewLink, '_blank', 'noopener');
       onChanged();
