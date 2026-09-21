@@ -591,7 +591,7 @@ export const legalCasesService = {
     encontrou: boolean;
     confianca: 'alta' | 'media' | 'nenhuma';
     fonte: string;
-    acoes: Array<{ numeroProcesso: string; tribunal: string; orgao: string; tipo: string; data: string; temCpf: boolean; matchPor?: string | null }>;
+    acoes: Array<{ numeroProcesso: string; tribunal: string; orgao: string; tipo: string; data: string; temCpf: boolean; matchPor?: string | null; foraDoEstado?: boolean | null }>;
     totalBruto: number;
     // Quantos CPFs DIFERENTES têm esse mesmo nome no Brasil (Escavador).
     // 1 = é a pessoa; N = homônimos, o nome sozinho não prova. null = o DJEN não sabe contar.
@@ -600,6 +600,10 @@ export const legalCasesService = {
     totalNaFonte: number | null;
     // A fonte caiu. NÃO é "não achei nada": a tela precisa avisar, não dar ✓ verde.
     falhou: boolean;
+    // UF do cliente (do endereço do cadastro) e quantas ações são de fora dela.
+    // As de fora vêm no FIM da lista, marcadas — nunca removidas.
+    ufCliente: string | null;
+    deOutroEstado: number;
   }> {
     const { data } = await api.post(`/legal-cases/${id}/verificar-acoes`);
     return data.data ?? data;

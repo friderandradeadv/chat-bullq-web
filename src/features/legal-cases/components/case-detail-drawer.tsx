@@ -1494,7 +1494,11 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
     cpfsComEsseNome?: number | null;
     totalNaFonte?: number | null;
     falhou?: boolean;
-    acoes?: Array<{ numeroProcesso: string; tribunal: string; tipo: string; data: string; temCpf?: boolean; matchPor?: string | null }>;
+    // UF do cliente + quantas ações são de tribunal de outro estado. Elas já vêm
+    // por último na lista; aqui só rotulamos. Rebaixar não é esconder.
+    ufCliente?: string | null;
+    deOutroEstado?: number;
+    acoes?: Array<{ numeroProcesso: string; tribunal: string; tipo: string; data: string; temCpf?: boolean; matchPor?: string | null; foraDoEstado?: boolean | null }>;
   };
   const salvo = ((metadata as any)?.acoesExistentes ?? null) as Snapshot | null;
   const [busy, setBusy] = useState(false);
@@ -1512,6 +1516,8 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
         cpfsComEsseNome: r.cpfsComEsseNome ?? null,
         totalNaFonte: r.totalNaFonte ?? null,
         falhou: r.falhou,
+        ufCliente: r.ufCliente ?? null,
+        deOutroEstado: r.deOutroEstado ?? 0,
         acoes: r.acoes,
       });
       if (r.falhou) toast.error(`A fonte (${r.fonte}) não respondeu — NÃO é "sem processos". Tente de novo antes de protocolar.`);
@@ -1535,6 +1541,8 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
   // Dois números diferentes, e misturar os dois mente: `total` é o que sobrou
   // depois de tirar os processos DA CASA; `totalNaFonte` é o bruto do Escavador,
   // que ainda inclui os nossos e conta páginas que não carregamos.
+  const ufCliente = resultado?.ufCliente ?? null;
+  const deOutroEstado = resultado?.deOutroEstado ?? 0;
   const naFonte = resultado?.totalNaFonte ?? null;
   const fonteTemMais = naFonte !== null && naFonte > (resultado?.total ?? 0);
 
@@ -1602,11 +1610,20 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
               >
                 {nomeUnico ? '1 CPF com esse nome no Brasil — nome único' : `${cpfs} CPFs com esse nome no Brasil`}
               </span>
-              {temHomonimos && (
-                <span className="ml-1.5 text-[10px] text-amber-700 dark:text-amber-300">
-                  filtre pelo tribunal do estado do cliente antes de conferir um a um.
-                </span>
-              )}
+            </p>
+          )}
+
+          {/* O corte de graça: tribunal de fora do estado do cliente. As ações
+              continuam TODAS na lista, só descem e ficam marcadas. */}
+          {ufCliente && deOutroEstado > 0 && (
+            <p className="mt-1.5 text-[11px] text-amber-800 dark:text-amber-300">
+              <b>{deOutroEstado}</b> de {resultado.total} {deOutroEstado === 1 ? 'é' : 'são'} de tribunal fora de <b>{ufCliente}</b> e {deOutroEstado === 1 ? 'desceu' : 'desceram'} para o fim da lista.{' '}
+              <span className="text-amber-700 dark:text-amber-400">Provável homônimo — mas confira assim mesmo se a pessoa já morou em outro estado.</span>
+            </p>
+          )}
+          {!ufCliente && (
+            <p className="mt-1.5 text-[11px] italic text-zinc-500 dark:text-zinc-400">
+              Sem endereço no cadastro, então não dá para separar por estado. Preencha o endereço do cliente e verifique de novo: é o filtro que mais corta homônimo, e não custa nada.
             </p>
           )}
 
@@ -1616,6 +1633,9 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
                 <span className="font-mono">{a.numeroProcesso}</span>{a.tribunal ? ` · ${a.tribunal}` : ''}{a.tipo ? ` · ${a.tipo}` : ''}{a.data ? ` · ${a.data}` : ''}
                 {a.temCpf && <span className="ml-1 font-semibold text-emerald-700 dark:text-emerald-400">· CPF confere</span>}
                 {!a.temCpf && a.matchPor && <span className="ml-1 italic text-amber-700 dark:text-amber-300">· match por {a.matchPor}</span>}
+                {a.foraDoEstado === true && (
+                  <span className="ml-1 rounded bg-zinc-200 px-1 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">fora de {ufCliente}</span>
+                )}
               </li>
             ))}
             {(resultado.total ?? 0) > listadas.length && (
