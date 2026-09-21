@@ -234,6 +234,8 @@ export const TESES: Trilha = {
         '4. Feche com a pergunta que resume a tese: o banco consegue provar que aquela pessoa, naquele momento, entendeu que contratava cartão de crédito consignado com reserva de margem, e não empréstimo? Se não, o vício está demonstrado.',
         '',
         'NÃO FAÇA: afirmar que assinatura eletrônica simples é sempre inválida; a força é menor, não inexistente.',
+        '',
+        '🚨 NÃO LIDERE A TESE COM O ICP-BRASIL. Investigar a certificação, sim; apoiar a peça nela, não. Desde o julgado do STJ de março de 2026, a simples ausência de certificado ICP-Brasil NÃO anula o contrato digital quando o conjunto probatório indica que não houve fraude. O que sustenta a peça são os indícios concretos: assinatura relâmpago, laudo do assistente técnico, ausência de IP, geolocalização incompatível e trilha de auditoria. Diga isso no vídeo.',
       ].join('\n'),
     },
 
