@@ -2477,6 +2477,11 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [areas, setAreas] = useState<Record<number, string>>({}); // vertical escolhida por linha (init da sugestão da IA); '__ratear' = rateio abaixo
   const [rateios, setRateios] = useState<Record<number, { area: string; valor: string; label?: string }[]>>({}); // fatia de cada vertical quando areas[i] === '__ratear'
   const [contribs, setContribs] = useState<Record<number, ContribRow[]>>({}); // contribuição pessoal por linha (independente do rateio por vertical)
+  // HONORÁRIO com o CLIENTE ESCOLHIDO À MÃO (areas[i] === '__cliente'): o extrato nomeia quem
+  // TRANSFERIU, que nem sempre é o cliente (escritório parceiro, filho, homônimo). "Casa pelo
+  // cliente" erra nesses casos — aqui se diz quem pagou, e o lançamento nasce vinculado à ficha
+  // dele. Sem alvará/prestação de contas: é só honorário recebido.
+  const [honCli, setHonCli] = useState<Record<number, { contactId?: string; clienteNome?: string; vertical?: string }>>({});
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
   const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' | 'abatimento' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio'; unificar?: boolean }>>({});
@@ -2930,6 +2935,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
           return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).map((v) => ({ label: (v.label || '').trim(), valor: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor), natureza: (v.natureza === 'abatimento' ? 'proveito' : v.natureza) as 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' })).filter((v) => v.label && v.valor !== 0 && (v.valor > 0 || v.natureza === 'proveito')), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, unificar: a?.unificar === true }, split };
         }
+        // HONORÁRIO com cliente escolhido à mão: vai com o VÍNCULO (contactId) e o nome do
+        // CLIENTE — não o do pagador que o banco escreveu. '__cliente' é marcador de tela e
+        // nunca pode ir como vertical.
+        if (areas[i] === '__cliente') {
+          const h = honCli[i] ?? {};
+          return { data: l.data, valor: l.valor, descricao: l.descricao, area: (h.vertical || '').trim() || undefined, contactId: h.contactId || undefined, clienteNome: (h.clienteNome || '').trim() || undefined };
+        }
         const rawRateio = areas[i] === '__ratear' ? (rateios[i] ?? []) : [];
         const rv = rawRateio.filter((x) => x.area && parseValor(x.valor) > 0).map((x) => ({ area: x.area, valor: parseValor(x.valor), ...(x.label ? { label: x.label } : {}) }));
         const cb = (contribs[i] ?? []).filter((x) => x.nome && contribValorCalc(x, Math.abs(l.valor), rawRateio) > 0).map((x) => ({ userId: x.userId || undefined, nome: x.nome, valor: contribValorCalc(x, Math.abs(l.valor), rawRateio) }));
@@ -2953,6 +2965,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // Bloqueia importar se alguma linha selecionada estiver "ratear" sem nenhuma fatia válida
   // (área + valor) — evita cair de volta em "sem vertical" silenciosamente.
   const rateioIncompleto = [...sel].some((i) => areas[i] === '__ratear' && !(rateios[i] ?? []).some((x) => x.area && parseValor(x.valor) > 0));
+  // Honorário "eu escolho o cliente" sem cliente escolhido cairia no caixa como um recebimento
+  // anônimo — pior que o nome errado do banco, porque ninguém mais vai revisitar a linha.
+  const clienteIncompleto = [...sel].some((i) => areas[i] === '__cliente' && !((honCli[i]?.clienteNome ?? '').trim()));
   // Alvará: só importa quando a soma (cliente + sucumbência + honorário) fecha com o bruto E há cliente.
   const alvaraIncompleto = [...sel].some((i) => areas[i] === '__alvara' && (() => {
     const a = alvara[i]; if (!a || !conf) return true;
@@ -3078,9 +3093,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                         )
                       ) : (
                         <ComboBox className="w-44" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
-                          actions={[{ value: '', label: 'Honorário (casa pelo cliente)' }, { value: '__alvara', label: 'Alvará / êxito (prestação de contas)' }, { value: '__transfer', label: 'Transferência / cobertura (não é honorário)' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
-                          labelOf={(v) => v === '' ? 'casa pelo cliente' : v === '__alvara' ? '⚖️ alvará / êxito' : v === '__transfer' ? 'transferência (não honorário)' : v === 'Escritório' ? 'Escritório (comum)' : v}
-                          placeholder="honorário…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__alvara') setAlvara((s) => s[i] ? s : ({ ...s, [i]: { cliente: '', sucumbencia: '', honorarios: fmtMoney(Math.abs(conf.linhas[i].valor)) } })); }} />
+                          actions={[{ value: '', label: 'Honorário (casa pelo cliente)' }, { value: '__cliente', label: 'Honorário — eu escolho o cliente que pagou' }, { value: '__alvara', label: 'Alvará / êxito (prestação de contas)' }, { value: '__transfer', label: 'Transferência / cobertura (não é honorário)' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
+                          labelOf={(v) => v === '' ? 'casa pelo cliente' : v === '__cliente' ? `👤 ${(honCli[i]?.clienteNome || '').trim() || 'escolher o cliente'}` : v === '__alvara' ? '⚖️ alvará / êxito' : v === '__transfer' ? 'transferência (não honorário)' : v === 'Escritório' ? 'Escritório (comum)' : v}
+                          placeholder="honorário…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__alvara') setAlvara((s) => s[i] ? s : ({ ...s, [i]: { cliente: '', sucumbencia: '', honorarios: fmtMoney(Math.abs(conf.linhas[i].valor)) } })); if (v === '__cliente') setHonCli((s) => s[i] ? s : ({ ...s, [i]: { vertical: conf.linhas[i].verticalDetectada || '' } })); }} />
                       )}</td>
                       <td className="px-2 py-1.5">{l.baixaPendente
                         ? <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200" title={l.motivo || ''}>↻ Baixa</span>
@@ -3162,6 +3177,29 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               </div>
                               );
                             })()}
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                    {areas[i] === '__cliente' && (() => {
+                      const h = honCli[i] ?? {};
+                      const set = (patch: Partial<typeof h>) => setHonCli((st) => ({ ...st, [i]: { ...(st[i] ?? {}), ...patch } }));
+                      return (
+                        <tr className="border-t border-zinc-100 bg-emerald-50/40 dark:border-zinc-800 dark:bg-emerald-900/10">
+                          <td></td>
+                          <td colSpan={5} className="px-2 py-2">
+                            <div className="space-y-2 rounded-lg border border-emerald-200/70 p-2.5 dark:border-emerald-900/40">
+                              <p className="text-[11px] text-zinc-400">O extrato nomeia <strong>quem transferiu</strong> — nem sempre é o cliente. Diga <strong>de quem é esse honorário</strong>: o recebimento entra na ficha dele (e na carteira) em vez de casar pelo nome do banco.</p>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                                <Field label="Cliente que pagou"><BuscaCliente value={h.clienteNome ?? ''} onPick={(c) => set({ clienteNome: c?.nome ?? '', contactId: c?.id })} onText={(t) => set({ clienteNome: t, contactId: undefined })} /></Field>
+                                <Field label="Vertical"><ComboBox className="w-full" value={h.vertical ?? ''} options={VERTICAIS_PADRAO}
+                                  actions={[{ value: '', label: '— sem vertical —' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
+                                  labelOf={(v) => v === '' ? '— sem vertical —' : v} placeholder="vertical…" onChange={(v) => set({ vertical: v })} /></Field>
+                              </div>
+                              <p className="text-[11px] text-zinc-400">{(h.clienteNome || '').trim()
+                                ? <>Entra como <strong>Honorários</strong> de <strong>{h.clienteNome}</strong>{h.contactId ? ' · vinculado ao cadastro' : ' · nome livre (sem cadastro casado)'}{(h.vertical || '').trim() ? ` · ${h.vertical}` : ''}.</>
+                                : <span className="font-medium text-amber-600">escolha o cliente para poder importar esta linha</span>}</p>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -3584,8 +3622,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             <div className="mt-4 flex items-center justify-end gap-2">
               {rateioIncompleto && <span className="text-xs text-amber-600">⚠️ dê uma fatia (vertical + valor) pra cada rateio antes de importar</span>}
               {!rateioIncompleto && alvaraIncompleto && <span className="text-xs text-amber-600">⚠️ no alvará, escolha o cliente e faça cliente + sucumbência + honorário fecharem com o bruto</span>}
+              {!rateioIncompleto && !alvaraIncompleto && clienteIncompleto && <span className="text-xs text-amber-600">⚠️ escolha o cliente que pagou nas linhas marcadas como honorário</span>}
               <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
-              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0 || rateioIncompleto || alvaraIncompleto} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
+              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0 || rateioIncompleto || alvaraIncompleto || clienteIncompleto} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
             </div>
           </div>
         )}
