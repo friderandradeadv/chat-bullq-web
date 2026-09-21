@@ -1066,6 +1066,10 @@ export const legalCasesService = {
       webViewLink: string;
       copiados: string[];
       enviados: string[];
+      /** itens do modelo que ganharam o número da sequência (IRDR → 10. IRDR) */
+      renomeados: { de: string; para: string }[];
+      /** bases do modelo mandadas para a lixeira do Drive depois de usadas */
+      modelosRemovidos: string[];
     }[];
     pastaBanco: string;
     webViewLink: string;

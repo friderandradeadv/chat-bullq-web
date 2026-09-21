@@ -1226,6 +1226,14 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
           { duration: 8000 },
         );
       }
+      // A pasta sai PRONTA PARA PROTOCOLO: as bases do modelo saem depois de
+      // usadas (para a lixeira, 30 dias) e o que veio sem número ganha o dele.
+      const limpos = (r.pastas ?? []).flatMap((p) => p.modelosRemovidos ?? []);
+      if (limpos.length) {
+        toast.info(`${limpos.length} modelo(s) do template foram para a lixeira do Drive: ${limpos.join(', ')}`, {
+          duration: 8000,
+        });
+      }
       if (r.arrumadosPulados?.length) {
         toast.warning(
           `Deixei na raiz por já existir igual na pasta: ${r.arrumadosPulados.join(', ')} — confira qual vale.`,
