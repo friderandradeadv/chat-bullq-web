@@ -428,6 +428,43 @@ export interface ClientCaseRow {
 /** Candidato a vínculo: processo de cliente com o mesmo nome, amarrado a OUTRO
  *  contato (cliente da casa escrevendo de número novo). Só entra no painel
  *  depois que um humano confirma no botão "Vincular". */
+/** Um extrato recortado, como o painel lista. */
+export interface DocumentoPreparado {
+  nome: string;
+  /** páginas que ficaram */
+  paginas: number;
+  /** páginas que o extrato tinha */
+  de: number;
+  detalhe: string;
+}
+
+/**
+ * O preparo dos extratos, como fica gravado no card
+ * (`metadata.documentosDaInicial`).
+ *
+ * `estado` existe porque o recorte roda em SEGUNDO PLANO: entre mover o card e
+ * os PDFs aparecerem no Drive passa mais de meio minuto, e sem o selo o painel
+ * ficaria vazio nesse intervalo, como se nada tivesse acontecido.
+ */
+export interface DocumentosDaInicial {
+  estado?: 'preparando' | 'pronto' | 'falhou';
+  ok: boolean;
+  motivo?: string;
+  pasta?: string;
+  beneficio?: 'AP' | 'PM';
+  modalidade?: string;
+  contrato?: string | null;
+  feitos: DocumentoPreparado[];
+  /** subiram agora */
+  enviados?: string[];
+  /** já estavam na pasta e NÃO foram sobrescritos */
+  repetidos?: string[];
+  /** foram para a lixeira do Drive para dar lugar ao recorte novo */
+  substituidos?: string[];
+  avisos?: string[];
+  em?: string;
+}
+
 export interface ClientCaseSuggestion {
   partyId: string;
   caseId: string;
@@ -888,6 +925,24 @@ export const legalCasesService = {
       // ler 80 páginas de HISCRE e subir ao Drive passa de um minuto com folga
       timeout: 300000,
     });
+    return data.data ?? data;
+  },
+  /**
+   * Refaz o recorte dos extratos (roda sozinho ao entrar em MONTAR INICIAL).
+   *
+   * `substituir` manda para a lixeira do Drive os PDFs gerados no preparo
+   * anterior: sem isso o Drive PULA arquivo de mesmo nome e a pasta continua
+   * com o recorte velho, enquanto a tela mostra os números do novo.
+   */
+  async prepararDocumentosDaInicial(
+    id: string,
+    substituir = false,
+  ): Promise<DocumentosDaInicial> {
+    const { data } = await api.post(
+      `/legal-cases/${id}/documentos/preparar-inicial`,
+      {},
+      { params: substituir ? { substituir: 'true' } : {}, timeout: 300000 },
+    );
     return data.data ?? data;
   },
   /** Observações da revisão antes do protocolo — ficam no card. */
