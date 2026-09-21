@@ -2981,7 +2981,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const clienteIncompleto = [...sel].some((i) => areas[i] === '__cliente' && !((honCli[i]?.clienteNome ?? '').trim()));
   // Sem a pessoa escolhida a saída viraria uma despesa comum e o holerite dela ficaria sem a
   // entrada — que é justamente a razão de marcar a linha assim.
-  const pessoaIncompleta = [...sel].some((i) => areas[i] === '__pessoa' && !((pessoaPg[i]?.nome ?? '').trim()));
+  const pessoaIncompleta = [...sel].some((i) => areas[i] === '__pessoa' && (!((pessoaPg[i]?.nome ?? '').trim()) || !((pessoaPg[i]?.categoria ?? '').trim())));
   // Alvará: só importa quando a soma (cliente + sucumbência + honorário) fecha com o bruto E há cliente.
   const alvaraIncompleto = [...sel].some((i) => areas[i] === '__alvara' && (() => {
     const a = alvara[i]; if (!a || !conf) return true;
@@ -3095,7 +3095,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                             <ComboBox className="w-28" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
                               actions={[{ value: 'Escritório', label: 'Escritório (comum) · rateia auto' }, { value: '__pessoa', label: 'Pró-labore / repasse a alguém do time' }]}
                               labelOf={(v) => v === '' ? 'Escritório (comum · padrão)' : v === '__pessoa' ? `👤 ${(pessoaPg[i]?.nome || '').trim() || 'escolher a pessoa'}` : v === 'Escritório' ? 'Escritório (comum)' : v}
-                              placeholder="vertical…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__pessoa') setPessoaPg((st) => st[i] ? st : ({ ...st, [i]: { categoria: 'Pró-labore' } })); }} />
+                              placeholder="vertical…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__pessoa') setPessoaPg((st) => st[i] ? st : ({ ...st, [i]: { categoria: '' } })); }} />
                             <button type="button" title="Ratear entre várias verticais" onClick={() => {
                               const primeira = areas[i] && areas[i] !== 'Escritório' ? areas[i] : '';
                               setAreas((a) => ({ ...a, [i]: '__ratear' }));
@@ -3196,8 +3196,8 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       );
                     })()}
                     {areas[i] === '__pessoa' && (() => {
-                      const pg = pessoaPg[i] ?? { categoria: 'Pró-labore' };
-                      const set = (patch: Partial<typeof pg>) => setPessoaPg((st) => ({ ...st, [i]: { ...(st[i] ?? { categoria: 'Pró-labore' }), ...patch } }));
+                      const pg = pessoaPg[i] ?? { categoria: '' };
+                      const set = (patch: Partial<typeof pg>) => setPessoaPg((st) => ({ ...st, [i]: { ...(st[i] ?? { categoria: '' }), ...patch } }));
                       return (
                         <tr className="border-t border-zinc-100 bg-sky-50/40 dark:border-zinc-800 dark:bg-sky-900/10">
                           <td></td>
@@ -3213,16 +3213,20 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 </Field>
                                 <Field label="Tipo">
                                   <select className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={pg.categoria} onChange={(e) => set({ categoria: e.target.value })}>
-                                    <option>Pró-labore</option><option>Retirada</option><option>Honorários repassados</option>
+                                    <option value="">— escolher —</option>
+                                    <option value="Pró-labore">Pró-labore (sócio)</option>
+                                    <option value="Retirada">Retirada (sócio)</option>
+                                    <option value="Honorários repassados">Honorários repassados (associado)</option>
                                   </select>
                                 </Field>
                                 <Field label="Vertical"><ComboBox className="w-full" value={pg.vertical ?? ''} options={VERTICAIS_PADRAO}
                                   actions={[{ value: '', label: '— sem vertical —' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
                                   labelOf={(v) => v === '' ? '— sem vertical —' : v} placeholder="vertical…" onChange={(v) => set({ vertical: v })} /></Field>
                               </div>
-                              <p className="text-[11px] text-zinc-400">{(pg.nome || '').trim()
+                              <p className="text-[11px] text-zinc-400">{(pg.nome || '').trim() && (pg.categoria || '').trim()
                                 ? <>Entra como <strong>{pg.categoria}</strong> de <strong>{pg.nome}</strong> e aparece no holerite dela{(pg.vertical || '').trim() ? ` · custo em ${pg.vertical}` : ''}.</>
-                                : <span className="font-medium text-amber-600">escolha a pessoa para poder importar esta linha</span>}</p>
+                                : <span className="font-medium text-amber-600">escolha a pessoa e o tipo para poder importar esta linha</span>}</p>
+                              <p className="text-[11px] text-zinc-400"><strong>Sócio</strong> tira pró-labore ou retirada. <strong>Associado</strong> recebe <strong>honorários repassados</strong> — é a parte dele no rateio, não retirada, e é o que o quadro "Por advogado" compara com o crédito.</p>
                             </div>
                           </td>
                         </tr>
@@ -3670,7 +3674,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
               {rateioIncompleto && <span className="text-xs text-amber-600">⚠️ dê uma fatia (vertical + valor) pra cada rateio antes de importar</span>}
               {!rateioIncompleto && alvaraIncompleto && <span className="text-xs text-amber-600">⚠️ no alvará, escolha o cliente e faça cliente + sucumbência + honorário fecharem com o bruto</span>}
               {!rateioIncompleto && !alvaraIncompleto && clienteIncompleto && <span className="text-xs text-amber-600">⚠️ escolha o cliente que pagou nas linhas marcadas como honorário</span>}
-              {!rateioIncompleto && !alvaraIncompleto && !clienteIncompleto && pessoaIncompleta && <span className="text-xs text-amber-600">⚠️ escolha quem recebeu nas linhas de pró-labore / repasse</span>}
+              {!rateioIncompleto && !alvaraIncompleto && !clienteIncompleto && pessoaIncompleta && <span className="text-xs text-amber-600">⚠️ escolha quem recebeu e o tipo nas linhas de pró-labore / repasse</span>}
               <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
               <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0 || rateioIncompleto || alvaraIncompleto || clienteIncompleto || pessoaIncompleta} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
             </div>
