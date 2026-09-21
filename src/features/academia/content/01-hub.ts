@@ -519,6 +519,11 @@ export const HUB: Trilha = {
       titulo: 'Financeiro, alvará e prestação de contas',
       resumo: 'Do depósito judicial ao dinheiro na conta do cliente, com prova.',
       minutos: 10,
+      video: {
+        fonte: 'url',
+        url: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/financeiro.mp4',
+        legendas: 'https://api.friderandrade.com.br/api/v1/uploads/assets/academia/financeiro.vtt',
+      },
       manual: [
         '## O que o Financeiro faz',
         '',

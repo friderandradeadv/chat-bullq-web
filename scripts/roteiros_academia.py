@@ -12,6 +12,79 @@ compete com quem escuta.
 """
 
 ROTEIROS = {
+    # 2.8 — Financeiro, alvará e prestação de contas (3:43). Fecha a trilha do
+    # Hub, e é a aula mais sensível dela: o Matheus definiu que o módulo
+    # Financeiro do escritório é restrito a sócios, então o prompt cercou o
+    # escopo no caminho do dinheiro DO CLIENTE — nada de caixa, faturamento ou
+    # desempenho da banca. A auditoria confirmou que nada disso vazou.
+    'financeiro': {
+        'duracao': 223.0,
+        'cenas': [
+            {'t': 0.0, 'tipo': 'abertura', 'etiqueta': 'Trilha 2 · Aula 8',
+             'titulo': 'Financeiro, alvará e prestação de contas',
+             'sub': ['O caso só termina quando o dinheiro', 'chega na conta do cliente.']},
+
+            {'t': 17.0, 'tipo': 'frase', 'secao': 'O recorte que é seu', 'corpo': 44,
+             'linhas': ['O Financeiro faz muita coisa.', 'A sua parte é a ponta final:', 'do alvará ao repasse.'],
+             'rodape': 'Livro-caixa, contas, conciliação e DRE são do setor. O seu trecho começa no depósito.'},
+
+            {'t': 42.0, 'tipo': 'fluxo', 'secao': 'O caminho do dinheiro',
+             'titulo': 'Cinco passos, nesta ordem',
+             'etapas': ['Condenação transitada', 'Cumprimento com cálculo', 'Depósito e alvará',
+                        'Prestação de contas', 'Repasse com comprovante'],
+             'aceso': 1},
+            {'t': 54.0, 'tipo': 'fluxo', 'secao': 'O caminho do dinheiro',
+             'titulo': 'Cinco passos, nesta ordem',
+             'etapas': ['Condenação transitada', 'Cumprimento com cálculo', 'Depósito e alvará',
+                        'Prestação de contas', 'Repasse com comprovante'],
+             'aceso': 3},
+            {'t': 61.0, 'tipo': 'fluxo', 'secao': 'O caminho do dinheiro',
+             'titulo': 'Cinco passos, nesta ordem',
+             'etapas': ['Condenação transitada', 'Cumprimento com cálculo', 'Depósito e alvará',
+                        'Prestação de contas', 'Repasse com comprovante'],
+             'aceso': 5},
+
+            {'t': 69.0, 'tipo': 'lista', 'secao': 'Prestação de contas',
+             'titulo': 'O que o hub monta',
+             'itens': ['Valor bruto', 'Honorário contratual', 'Sucumbência', 'Custas',
+                       'O líquido do cliente'],
+             'aceso': None},
+            {'t': 83.0, 'tipo': 'frase', 'secao': 'O que é seu nisso', 'corpo': 44,
+             'linhas': ['O hub monta.', 'Você revisa o texto,', 'confere o PDF e só então aprova.'],
+             'rodape': 'A aprovação do envio vem depois da conferência, nunca antes.'},
+
+            {'t': 96.0, 'tipo': 'contraste', 'secao': 'Como o envio sai',
+             'esquerda': {'rotulo': 'Dentro de 24 horas', 'titulo': 'Mensagem livre', 'manda': True,
+                          'linhas': ['A janela do WhatsApp', 'ainda está aberta.']},
+             'direita': {'rotulo': 'Fora da janela', 'titulo': 'Template',
+                         'linhas': ['Sai por template aprovado,', 'e o hub guarda a prova do envio.']}},
+
+            {'t': 119.0, 'tipo': 'linha_tempo', 'secao': 'Cliente que não responde',
+             'titulo': 'A cadência das tentativas',
+             'marcos': [{'titulo': '48 horas', 'sub': 'primeira tentativa'},
+                        {'titulo': 'A cada 5 dias', 'sub': 'as seguintes'},
+                        {'titulo': 'O rastro', 'sub': 'identificador e leitura'}],
+             'aceso': None},
+
+            {'t': 139.0, 'tipo': 'frase', 'secao': 'Para que serve o rastro', 'corpo': 42,
+             'linhas': ['É a prova que sustenta', 'uma consignação em pagamento', 'se o cliente sumir.'],
+             'rodape': 'Sem ela, o dinheiro fica parado de forma irregular e a banca fica exposta.'},
+
+            {'t': 165.0, 'tipo': 'contraste', 'secao': 'A data que vale',
+             'esquerda': {'rotulo': 'Não é', 'titulo': 'Lançamento ou alvará',
+                          'linhas': ['A data em que se lançou.', 'A data do alvará.']},
+             'direita': {'rotulo': 'É', 'titulo': 'A data da baixa', 'manda': True,
+                         'linhas': ['O dia em que a movimentação', 'foi concluída de verdade.']}},
+
+            {'t': 188.0, 'tipo': 'frase', 'secao': 'O que não é seu', 'corpo': 44,
+             'linhas': ['Ação financeira e comando', 'destrutivo são de sócio e admin.'],
+             'rodape': 'Precisa de algo assim? Peça a quem tem a permissão. Não procure atalho.'},
+
+            {'t': 205.0, 'tipo': 'frase', 'corpo': 44,
+             'linhas': ['A vitória só se completa', 'quando a entrega do direito', 'está documentada.']},
+        ],
+    },
+
     # 2.9 — Meu Espaço, Ajuda e Copiloto (2:35).
     #
     # A tela que mais importa aqui é o contraste do Financeiro: o pessoal, que
