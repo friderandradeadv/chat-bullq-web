@@ -209,6 +209,8 @@ export function PendenciasPanel({
   const [conferindo, setConferindo] = useState(false);
   const [anexando, setAnexando] = useState<string | null>(null);
   const [destino, setDestino] = useState<Record<string, string>>({});
+  /** a última leitura olhou a conversa inteira (e não só desde o pedido) */
+  const [viuTudo, setViuTudo] = useState(false);
 
   /**
    * Lê o que o cliente mandou depois do pedido.
@@ -217,28 +219,39 @@ export function PendenciasPanel({
    * chegava no WhatsApp, onde alguém tinha que abrir, baixar uma a uma e
    * arquivar à mão — que é exatamente o trabalho que o card existe para evitar.
    */
-  const conferirRespostas = async () => {
+  const conferirRespostas = async (tudo = false) => {
     setConferindo(true);
     try {
+      // `desde` recorta a partir do PEDIDO. Sem pedido — ou pedindo "tudo" —, a
+      // busca vai à conversa inteira: o cliente que manda os documentos
+      // espontaneamente, no começo do atendimento, não tem pedido nenhum para
+      // servir de marco, e era ele que sumia desta tela.
       const carimbos = lista.map((p) => p.pedidoEm).filter(Boolean) as string[];
-      const desde = carimbos.sort()[0];
+      const desde = tudo ? undefined : carimbos.sort()[0];
       const r = await legalCasesService.respostasDoCliente(caseId, desde);
       setRespostas(r.itens);
-      if (!r.itens.length) toast.message(r.motivo || 'Nada novo desde o pedido.');
+      setViuTudo(tudo || !desde);
+      if (!r.itens.length) toast.message(r.motivo || (tudo ? 'A conversa não tem anexo nenhum.' : 'Nada novo desde o pedido.'));
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui ler as respostas.');
     } finally { setConferindo(false); }
   };
 
   const arquivar = async (messageId: string, nomeSugerido: string | null) => {
-    const pendenciaId = destino[messageId];
-    if (!pendenciaId) { toast.error('Escolha a que pendência este arquivo corresponde.'); return; }
-    const alvo = lista.find((p) => p.id === pendenciaId);
+    const escolha = destino[messageId];
+    if (!escolha) { toast.error('Diga a que pendência — ou a que pasta — este arquivo corresponde.'); return; }
+    // O cliente que manda documento sem ter sido pedido não tem pendência para
+    // casar. Aí o destino é a PASTA, escolhida por quem está olhando: arquivar
+    // no lugar errado é pior do que não arquivar.
+    const paraPasta = escolha.startsWith('pasta:') ? escolha.slice(6) : null;
+    const pendenciaId = paraPasta ? undefined : escolha;
+    const alvo = pendenciaId ? lista.find((p) => p.id === pendenciaId) : null;
     setAnexando(messageId);
     try {
       const r = await legalCasesService.anexarResposta(caseId, {
         messageId,
         pendenciaId,
+        pasta: paraPasta ?? undefined,
         nome: nomeSugerido || alvo?.titulo,
       });
       setRespostas((atual) =>
@@ -409,7 +422,7 @@ export function PendenciasPanel({
                   ? `Pedido hoje. Aguarde antes de cobrar de novo.`
                   : `Pedido há ${dias} dia(s)${dias >= 3 ? ' — já cabe cobrar.' : '.'}`}
             </span>
-            <button type="button" onClick={conferirRespostas} disabled={conferindo}
+            <button type="button" onClick={() => conferirRespostas(false)} disabled={conferindo}
               title="Lê o que o cliente mandou no WhatsApp desde o pedido"
               className="ml-auto inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-medium text-[#4b5863] hover:border-[#4a90e2] hover:text-[#1b6ec2] disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300">
               {conferindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Inbox className="h-3 w-3" />}
@@ -434,7 +447,7 @@ export function PendenciasPanel({
             <p className="flex-1 text-[11px] font-medium text-[#101820] dark:text-zinc-200">
               Respostas do cliente
             </p>
-            <button type="button" onClick={conferirRespostas} disabled={conferindo} title="Reler"
+            <button type="button" onClick={() => conferirRespostas(viuTudo)} disabled={conferindo} title="Reler"
               className="text-zinc-400 hover:text-[#1b6ec2] disabled:opacity-40">
               <RefreshCw className={`h-3 w-3 ${conferindo ? 'animate-spin' : ''}`} />
             </button>
@@ -442,7 +455,15 @@ export function PendenciasPanel({
 
           {respostas.length === 0 ? (
             <p className="mt-1 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
-              Nada desde o pedido. Se ela respondeu por áudio ou texto, a resposta está na conversa.
+              {viuTudo
+                ? 'A conversa não tem nenhum anexo. Se ela respondeu por áudio ou texto, a resposta está lá.'
+                : 'Nada desde o pedido.'}
+              {!viuTudo && (
+                <button type="button" onClick={() => conferirRespostas(true)} disabled={conferindo}
+                  className="ml-1 font-semibold text-[#1b6ec2] underline underline-offset-2 disabled:opacity-40">
+                  Olhar a conversa inteira
+                </button>
+              )}
             </p>
           ) : (
             <ul className="mt-1.5 space-y-1.5">
@@ -462,10 +483,12 @@ export function PendenciasPanel({
                         onChange={(e) => setDestino((d) => ({ ...d, [r.messageId]: e.target.value }))}
                         className="h-6 max-w-[190px] rounded border border-[#cfe0ed] bg-transparent px-1 text-[11px] text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-200"
                       >
-                        <option value="">é qual pendência?</option>
+                        <option value="">onde arquivar?</option>
                         {lista.filter((p) => p.status !== 'resolvido').map((p) => (
                           <option key={p.id} value={p.id}>{p.titulo.slice(0, 48)}</option>
                         ))}
+                        <option value="pasta:DOCUMENTOS PESSOAIS">📁 Documentos pessoais</option>
+                        <option value="pasta:DOCUMENTOS PROCESSO">📁 Documentos do processo</option>
                       </select>
                       <button type="button" onClick={() => arquivar(r.messageId, r.nome)}
                         disabled={anexando === r.messageId || !destino[r.messageId]}
@@ -480,6 +503,15 @@ export function PendenciasPanel({
             </ul>
           )}
         </div>
+      )}
+
+      {respostas === null && (
+        <button type="button" onClick={() => conferirRespostas(true)} disabled={conferindo}
+          title="Lista os anexos da conversa inteira, para arquivar um a um"
+          className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-[#4b5863] underline underline-offset-2 hover:text-[#1b6ec2] disabled:opacity-40 dark:text-zinc-400">
+          {conferindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Inbox className="h-3 w-3" />}
+          {conferindo ? 'Lendo…' : 'Ver o que o cliente já mandou na conversa'}
+        </button>
       )}
 
       <div className="mt-2 flex items-center gap-1.5">

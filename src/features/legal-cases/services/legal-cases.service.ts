@@ -963,7 +963,7 @@ export const legalCasesService = {
   /** Arquiva uma resposta no processo; resolve a pendência e pode mover a fase. */
   async anexarResposta(
     id: string,
-    dto: { messageId: string; pendenciaId?: string; nome?: string },
+    dto: { messageId: string; pendenciaId?: string; nome?: string; pasta?: string },
   ): Promise<{ ok: boolean; pendenciasRestantes: number | null; moveu: boolean }> {
     const { data } = await api.post(`/legal-cases/${id}/respostas-cliente/anexar`, dto, { timeout: 120000 });
     return data.data ?? data;
