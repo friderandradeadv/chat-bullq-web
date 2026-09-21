@@ -2482,6 +2482,11 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // cliente" erra nesses casos — aqui se diz quem pagou, e o lançamento nasce vinculado à ficha
   // dele. Sem alvará/prestação de contas: é só honorário recebido.
   const [honCli, setHonCli] = useState<Record<number, { contactId?: string; clienteNome?: string; vertical?: string }>>({});
+  // SAÍDA que é PAGAMENTO A ALGUÉM DO TIME (areas[i] === '__pessoa'): pró-labore, retirada ou
+  // honorário repassado. O holerite da pessoa casa por NOME DO RECEBEDOR + categoria, e o nome
+  // do extrato é o que o banco escreveu — por isso a pessoa se escolhe na lista de membros, que
+  // é de onde sai o nome cadastrado dela.
+  const [pessoaPg, setPessoaPg] = useState<Record<number, { userId?: string; nome?: string; categoria: string; vertical?: string }>>({});
   // ALVARÁ/ÊXITO por linha (entrada): cliente + processo + vertical + prestação de contas
   // (bruto → cliente/sucumbência/honorário) + rateio entre advogados (fatias em %).
   const [alvara, setAlvara] = useState<Record<number, { contactId?: string; clienteNome?: string; caseId?: string; procLabel?: string; cnj?: string; vertical?: string; cliente: string; sucumbencia: string; honorarios: string; honMode?: 'valor' | 'pct'; honPct?: string; sucMode?: 'valor' | 'pct'; sucPct?: string; sucBase?: string; sucBaseTipo?: string; dataBase?: string; indiceCausa?: string; parcial?: boolean; totalDevido?: string; totalFromIA?: boolean; clienteAjustado?: string; anexoAlvara?: { name: string; mime: string; base64: string }[]; split?: { userId?: string; nome: string; pct: string }[]; verbas?: { label: string; valor: string; natureza: 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' | 'abatimento' }[]; deducoes?: { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }[]; grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio'; unificar?: boolean }>>({});
@@ -2935,6 +2940,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
           return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).map((v) => ({ label: (v.label || '').trim(), valor: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor), natureza: (v.natureza === 'abatimento' ? 'proveito' : v.natureza) as 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' })).filter((v) => v.label && v.valor !== 0 && (v.valor > 0 || v.natureza === 'proveito')), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, unificar: a?.unificar === true }, split };
         }
+        // PAGAMENTO A PESSOA DO TIME: manda a categoria e o NOME CADASTRADO de quem recebeu —
+        // é o par que o holerite dela lê. '__pessoa' é marcador de tela, nunca vertical.
+        if (areas[i] === '__pessoa') {
+          const pg = pessoaPg[i] ?? { categoria: 'Pró-labore' };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, area: (pg.vertical || '').trim() || undefined, pessoa: { nome: (pg.nome || '').trim(), userId: pg.userId, categoria: pg.categoria } };
+        }
         // HONORÁRIO com cliente escolhido à mão: vai com o VÍNCULO (contactId) e o nome do
         // CLIENTE — não o do pagador que o banco escreveu. '__cliente' é marcador de tela e
         // nunca pode ir como vertical.
@@ -2968,6 +2979,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   // Honorário "eu escolho o cliente" sem cliente escolhido cairia no caixa como um recebimento
   // anônimo — pior que o nome errado do banco, porque ninguém mais vai revisitar a linha.
   const clienteIncompleto = [...sel].some((i) => areas[i] === '__cliente' && !((honCli[i]?.clienteNome ?? '').trim()));
+  // Sem a pessoa escolhida a saída viraria uma despesa comum e o holerite dela ficaria sem a
+  // entrada — que é justamente a razão de marcar a linha assim.
+  const pessoaIncompleta = [...sel].some((i) => areas[i] === '__pessoa' && !((pessoaPg[i]?.nome ?? '').trim()));
   // Alvará: só importa quando a soma (cliente + sucumbência + honorário) fecha com o bruto E há cliente.
   const alvaraIncompleto = [...sel].some((i) => areas[i] === '__alvara' && (() => {
     const a = alvara[i]; if (!a || !conf) return true;
@@ -3079,9 +3093,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                         ) : (
                           <div className="flex items-center gap-1">
                             <ComboBox className="w-28" value={areas[i] ?? ''} options={VERTICAIS_PADRAO}
-                              actions={[{ value: 'Escritório', label: 'Escritório (comum) · rateia auto' }]}
-                              labelOf={(v) => v === '' ? 'Escritório (comum · padrão)' : v === 'Escritório' ? 'Escritório (comum)' : v}
-                              placeholder="vertical…" onChange={(v) => setAreas((a) => ({ ...a, [i]: v }))} />
+                              actions={[{ value: 'Escritório', label: 'Escritório (comum) · rateia auto' }, { value: '__pessoa', label: 'Pró-labore / repasse a alguém do time' }]}
+                              labelOf={(v) => v === '' ? 'Escritório (comum · padrão)' : v === '__pessoa' ? `👤 ${(pessoaPg[i]?.nome || '').trim() || 'escolher a pessoa'}` : v === 'Escritório' ? 'Escritório (comum)' : v}
+                              placeholder="vertical…" onChange={(v) => { setAreas((a) => ({ ...a, [i]: v })); if (v === '__pessoa') setPessoaPg((st) => st[i] ? st : ({ ...st, [i]: { categoria: 'Pró-labore' } })); }} />
                             <button type="button" title="Ratear entre várias verticais" onClick={() => {
                               const primeira = areas[i] && areas[i] !== 'Escritório' ? areas[i] : '';
                               setAreas((a) => ({ ...a, [i]: '__ratear' }));
@@ -3177,6 +3191,39 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               </div>
                               );
                             })()}
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                    {areas[i] === '__pessoa' && (() => {
+                      const pg = pessoaPg[i] ?? { categoria: 'Pró-labore' };
+                      const set = (patch: Partial<typeof pg>) => setPessoaPg((st) => ({ ...st, [i]: { ...(st[i] ?? { categoria: 'Pró-labore' }), ...patch } }));
+                      return (
+                        <tr className="border-t border-zinc-100 bg-sky-50/40 dark:border-zinc-800 dark:bg-sky-900/10">
+                          <td></td>
+                          <td colSpan={5} className="px-2 py-2">
+                            <div className="space-y-2 rounded-lg border border-sky-200/70 p-2.5 dark:border-sky-900/40">
+                              <p className="text-[11px] text-zinc-400">Sai do caixa do escritório <strong>e entra no holerite da pessoa</strong>. A escolha abaixo é o que faz o valor aparecer lá: o holerite casa pelo <strong>nome cadastrado</strong> dela, não pelo nome que o banco escreveu no Pix.</p>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                <Field label="Quem recebeu">
+                                  <select className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={pg.userId ?? ''} onChange={(e) => { const u = advogados.find((a) => a.id === e.target.value); set({ userId: e.target.value || undefined, nome: u?.name }); }}>
+                                    <option value="">— escolher pessoa —</option>
+                                    {advogados.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                  </select>
+                                </Field>
+                                <Field label="Tipo">
+                                  <select className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" value={pg.categoria} onChange={(e) => set({ categoria: e.target.value })}>
+                                    <option>Pró-labore</option><option>Retirada</option><option>Honorários repassados</option>
+                                  </select>
+                                </Field>
+                                <Field label="Vertical"><ComboBox className="w-full" value={pg.vertical ?? ''} options={VERTICAIS_PADRAO}
+                                  actions={[{ value: '', label: '— sem vertical —' }, { value: 'Escritório', label: 'Escritório (comum)' }]}
+                                  labelOf={(v) => v === '' ? '— sem vertical —' : v} placeholder="vertical…" onChange={(v) => set({ vertical: v })} /></Field>
+                              </div>
+                              <p className="text-[11px] text-zinc-400">{(pg.nome || '').trim()
+                                ? <>Entra como <strong>{pg.categoria}</strong> de <strong>{pg.nome}</strong> e aparece no holerite dela{(pg.vertical || '').trim() ? ` · custo em ${pg.vertical}` : ''}.</>
+                                : <span className="font-medium text-amber-600">escolha a pessoa para poder importar esta linha</span>}</p>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -3623,8 +3670,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
               {rateioIncompleto && <span className="text-xs text-amber-600">⚠️ dê uma fatia (vertical + valor) pra cada rateio antes de importar</span>}
               {!rateioIncompleto && alvaraIncompleto && <span className="text-xs text-amber-600">⚠️ no alvará, escolha o cliente e faça cliente + sucumbência + honorário fecharem com o bruto</span>}
               {!rateioIncompleto && !alvaraIncompleto && clienteIncompleto && <span className="text-xs text-amber-600">⚠️ escolha o cliente que pagou nas linhas marcadas como honorário</span>}
+              {!rateioIncompleto && !alvaraIncompleto && !clienteIncompleto && pessoaIncompleta && <span className="text-xs text-amber-600">⚠️ escolha quem recebeu nas linhas de pró-labore / repasse</span>}
               <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
-              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0 || rateioIncompleto || alvaraIncompleto || clienteIncompleto} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
+              <button onClick={() => importM.mutate()} disabled={importM.isPending || sel.size === 0 || rateioIncompleto || alvaraIncompleto || clienteIncompleto || pessoaIncompleta} className="inline-flex items-center gap-1 rounded-lg bg-[#02883C] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Importar ${sel.size} selecionado(s)`}</button>
             </div>
           </div>
         )}
