@@ -453,7 +453,7 @@ export function CaseDetailDrawer({
                         </div>
                       );
                     })()}
-                    <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} area={c.area} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                    <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} area={c.area} calculo={(c.metadata as any)?.calculo} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                   </div>
                 )}
 
@@ -1138,7 +1138,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button onClick={addRow} className="inline-flex items-center gap-1 rounded border border-dashed border-[#cfe0ed] px-2.5 py-1 text-xs font-medium text-[#005efc] hover:bg-[#005efc]/5 dark:border-zinc-700"><Plus className="h-3.5 w-3.5" /> Adicionar</button>
         <button onClick={salvar} disabled={sav} className="rounded px-2.5 py-1 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">{sav ? 'Salvando…' : 'Salvar'}</button>
-        {!showDesmembrar && <span className="ml-auto text-[11px] text-zinc-400">A petição inicial é gerada no bloco “Cálculo RMC/RCC”.</span>}
+        {!showDesmembrar && <span className="ml-auto text-[11px] text-zinc-400">Estes contratos viram o número, a data e a parcela na inicial — o botão “Montar a inicial completa” os lê daqui.</span>}
       </div>
 
       {/* Intake: criar 1 card por banco réu e direcioná-los. Só depois, no card
@@ -1166,7 +1166,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
 // Ações da inicial: upar o JG (justiça gratuita → renda) e GERAR a petição inicial
 // (base no timbrado preenchida com cliente/réu/contrato/cálculo/JG; baixa o .docx).
 // A base (QUITADO/EM ABERTO) é escolhida pelo cálculo.
-function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string; jg: any; docs?: { jg?: string }; area?: string | null; onChanged: () => void }) {
+function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId: string; jg: any; docs?: { jg?: string }; area?: string | null; calculo?: any; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [jgBusy, setJgBusy] = useState(false);
   const fmtBRL = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -1186,9 +1186,16 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao ler o JG'); } finally { setJgBusy(false); }
   };
 
-  const [orgBusy, setOrgBusy] = useState(false);
+  /**
+   * Organiza a pasta do réu no Drive e AVISA o que mexeu.
+   *
+   * Deixou de ser botão em 21/09/2026 — é o passo 3 do botão mestre. A função
+   * continua porque é dela que saem os avisos: quais documentos saíram da raiz
+   * do cliente, quais foram para o arquivo dele e quais modelos do template
+   * foram para a lixeira. Mover arquivo no Drive de alguém em silêncio é ruim:
+   * quem abre a pasta amanhã não faz ideia de que o HISCON mudou de lugar.
+   */
   const organizarPasta = async () => {
-    setOrgBusy(true);
     try {
       const r = await legalCasesService.organizarPastaInicial(caseId);
       // Card de "RMC | RCC" monta DUAS pastas: os produtos não se misturam, e
@@ -1232,9 +1239,11 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
       for (const p of r.pastas ?? []) window.open(p.webViewLink, '_blank', 'noopener');
       if (!r.pastas?.length && r.webViewLink) window.open(r.webViewLink, '_blank', 'noopener');
       onChanged();
+      return r;
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Erro ao organizar a pasta no Drive');
-    } finally { setOrgBusy(false); }
+      toast.error(e?.response?.data?.message || 'A inicial foi gerada, mas a pasta do Drive não.');
+      return null;
+    }
   };
 
   /**
@@ -1252,6 +1261,25 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
   const [tudoBusy, setTudoBusy] = useState<string | null>(null);
   const montarTudo = async () => {
     const produto = (area || '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
+
+    // 🚨 SEM CÁLCULO A PEÇA SAI COM O PEDIDO ERRADO, e sem reclamar de nada.
+    // É o sinal da restituição que escolhe a base: positivo = cartão QUITADO,
+    // e aí se pede o indébito em DOBRO; zero ou negativo = EM ABERTO, e aí se
+    // pede a obrigação de fazer e o dano moral. `metadata.calculo` ausente lê
+    // como restituição 0 — ou seja, o gerador conclui "em aberto" por falta de
+    // dado, não por medição, e o dobro some do pedido de um cliente quitado.
+    // Barrar aqui é preferível a entregar uma inicial que pede menos do que se
+    // tem direito, porque nada na peça pronta denuncia a troca.
+    if (!calculo) {
+      toast.error(
+        'Falta o cálculo. Sem ele a inicial sai como "em aberto" e pede só o dano moral — ' +
+        'se o cartão estiver quitado, o pedido do indébito em dobro se perde. ' +
+        'Clique em "Calcular RMC/RCC" antes de montar.',
+        { duration: 10000 },
+      );
+      return;
+    }
+
     try {
       // 🚨 PRIMEIRO os documentos, depois a peça. O recorte do HISCON/HISCRE e o
       // JG composto vivem em "PARA A INICIAL", e é de lá que a organização da
@@ -1268,12 +1296,11 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
       setTudoBusy('Gerando a inicial…');
       await legalCasesService.gerarInicial(caseId, produto);
 
+      // A pasta falhar não desfaz a peça: ela já está anexada ao card. E vai por
+      // `organizarPasta`, não pelo serviço cru, para não perder os avisos de o
+      // que saiu da raiz do cliente e o que foi para o arquivo dele.
       setTudoBusy('Organizando a pasta…');
-      const org = await legalCasesService.organizarPastaInicial(caseId).catch((e) => {
-        // A pasta falhar não desfaz a peça: ela já está anexada ao card.
-        toast.error(e?.response?.data?.message || 'A inicial foi gerada, mas a pasta do Drive não.');
-        return null;
-      });
+      const org = await organizarPasta();
 
       setTudoBusy('Movendo para revisão…');
       await legalCasesService.movePhase(caseId, 'revisao_inicial');
@@ -1332,14 +1359,6 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
           passos seguintes eram para lembrar de fazer à mão. O botão mestre
           abaixo faz a sequência inteira, na ordem que o pacote exige, e o
           produto sai da ÁREA do card em vez de ser escolhido a cada clique. */}
-      <button
-        onClick={organizarPasta}
-        disabled={orgBusy}
-        title="Renomeia a pasta com o banco réu e junta na pasta da inicial: procuração, declarações (renúncia só se hipossuficiente), HISCON, HISCRE, JG e cálculos — sem o contrato de honorários."
-        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#7048e8] px-3 py-2 text-xs font-semibold text-white hover:bg-[#5f3dd0] disabled:opacity-50"
-      >
-        <Upload className="h-3.5 w-3.5" /> {orgBusy ? 'Organizando no Drive…' : 'Organizar pasta da inicial (Drive)'}
-      </button>
       <button
         onClick={() => montarTudo()}
         disabled={!!tudoBusy}
