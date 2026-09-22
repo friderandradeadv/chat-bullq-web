@@ -418,12 +418,21 @@ export function CaseDetailDrawer({
                   // Encolhê-lo ali esconderia o próximo passo de quem está operando.
                   if (!inMontar) return editor;
                   // Em MONTAR já é referência: o botão mestre é que lê estas linhas.
+                  // 🚨 Vazio aqui DEIXOU de ser problema, e o aviso tinha de sair
+                  // junto. O número, a data e a parcela do contrato passaram a vir
+                  // do cálculo (que os lê do HISCON) e o réu, do próprio card — a
+                  // lista nunca teve campo para os três. E o HISCON/HISCRE são
+                  // puxados da pasta do cliente na hora de montar, então faltar
+                  // aqui também não trava nada. Manter o âmbar seria assustar com
+                  // o que o botão já resolve.
                   const docsTxt = [docs?.hiscon ? 'HISCON ✓' : null, docs?.hiscre ? 'HISCRE ✓' : null].filter(Boolean).join(' · ');
                   const resumo = contratos.length
                     ? `${contratos.map((x: any) => [x.reu, x.produto].filter(Boolean).join(' ')).filter(Boolean).join(', ')}${docsTxt ? ` · ${docsTxt}` : ''}`
-                    : 'nenhum — número, data e parcela do contrato sairão em branco na peça';
+                    : docsTxt
+                      ? `${docsTxt} — o contrato sai do HISCON ao montar`
+                      : 'HISCON e HISCRE são puxados do Drive ao montar; liste aqui só para desmembrar por banco';
                   return (
-                    <Dobravel titulo="Contratos" resumo={resumo} alerta={!contratos.length}>
+                    <Dobravel titulo="Contratos" resumo={resumo}>
                       {editor}
                     </Dobravel>
                   );
@@ -1417,9 +1426,20 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
   // daquele produto (usa o contrato do produto se houver; senão o réu do card).
   return (
     <div className="mt-2 space-y-2">
-      <div className="flex items-center justify-between gap-2">
+      <Dobravel
+        titulo="Renda (JG)"
+        resumo={
+          temRenda
+            ? <>líquido <b>{fmtBRL(jg.liquido)}</b>{jg.anual != null ? <> · anual {fmtBRL(jg.anual)} · média {fmtBRL(jg.media)}</> : ''}</>
+            : jgSalvo
+              ? 'JG salvo, renda não lida — confira à mão na peça'
+              : 'sai do HISCRE e do informe de IR do Drive ao montar; upe só se não estiverem lá'
+        }
+      >
+      <div className="mt-2 flex items-center justify-between gap-2">
         <span className="text-[11px] text-[#48626f] dark:text-zinc-400">
-          {temRenda ? <>Justiça gratuita: líquido <b>{fmtBRL(jg.liquido)}</b>{jg.anual != null ? <> · anual {fmtBRL(jg.anual)}</> : ''}</> : jgSalvo ? 'JG salvo — renda não lida automaticamente (preencha à mão na inicial)' : 'JG: upe o Histórico de Créditos / IR para a renda'}
+          O líquido do mês vem do HISCRE e o bruto anual do informe de IR. A
+          média mensal divide por <b>13</b>, que é quantas vezes o INSS paga.
         </span>
         <DropZone accept="application/pdf,.pdf" multiple={false} disabled={jgBusy} onFiles={(fs) => void onJg(fs[0])} className="inline-block" overlayLabel="Soltar JG">
           <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'} ${jgVerde ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={jgVerde ? 'JG já enviado — clique ou arraste o PDF para substituir.' : 'Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a justiça gratuita. Também aceita arrastar o PDF.'}>
@@ -1428,6 +1448,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
           </label>
         </DropZone>
       </div>
+      </Dobravel>
       <button
         onClick={preencherCadastro}
         disabled={cadBusy}
