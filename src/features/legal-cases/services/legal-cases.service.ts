@@ -1048,8 +1048,11 @@ export const legalCasesService = {
     | { ok: true; total: number; cenarioTitulo?: string; banco?: string; competencias?: number; taxa?: number }
     | { ok: false; motivo: string; faltando?: string[] }
   > {
+    // 🚨 `data.data ?? data`, como os outros 76 métodos daqui: a API embrulha a
+    // resposta. Lendo `data` cru, `ok` vinha undefined — o botão entendia
+    // FALHA num cálculo que tinha dado certo, e o toast imprimia "undefined".
     const { data } = await api.post(`/legal-cases/${id}/calculo/automatico`, { produto });
-    return data;
+    return data.data ?? data;
   },
 
   /** Salva no processo o cálculo de RMC/RCC escolhido (e define o valor da causa). */

@@ -1363,8 +1363,11 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
         if (!r.ok) {
           // Não dá para seguir: a peça sairia pedindo a menos. O motivo vem do
           // servidor e diz o que falta — é recado para abrir a calculadora.
+          // Motivo vazio não vira "undefined" na tela: aviso que não explica
+          // nada é pior do que aviso genérico, porque parece defeito da peça.
+          const porque = r.motivo || 'Não consegui calcular e o servidor não disse por quê.';
           toast.error(
-            `${r.motivo}${'faltando' in r && r.faltando?.length ? ` Falta: ${r.faltando.join('; ')}.` : ''} ` +
+            `${porque}${'faltando' in r && r.faltando?.length ? ` Falta: ${r.faltando.join('; ')}.` : ''} ` +
             'Sem cálculo a inicial sairia como "em aberto" e o dobro se perderia.',
             { duration: 12000 },
           );
