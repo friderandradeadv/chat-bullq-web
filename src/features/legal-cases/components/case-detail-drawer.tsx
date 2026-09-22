@@ -1327,25 +1327,43 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
   const montarTudo = async () => {
     const produto = (area || '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
 
-    // 🚨 SEM CÁLCULO A PEÇA SAI COM O PEDIDO ERRADO, e sem reclamar de nada.
-    // É o sinal da restituição que escolhe a base: positivo = cartão QUITADO,
-    // e aí se pede o indébito em DOBRO; zero ou negativo = EM ABERTO, e aí se
-    // pede a obrigação de fazer e o dano moral. `metadata.calculo` ausente lê
-    // como restituição 0 — ou seja, o gerador conclui "em aberto" por falta de
-    // dado, não por medição, e o dobro some do pedido de um cliente quitado.
-    // Barrar aqui é preferível a entregar uma inicial que pede menos do que se
-    // tem direito, porque nada na peça pronta denuncia a troca.
-    if (!calculo) {
-      toast.error(
-        'Falta o cálculo. Sem ele a inicial sai como "em aberto" e pede só o dano moral — ' +
-        'se o cartão estiver quitado, o pedido do indébito em dobro se perde. ' +
-        'Clique em "Calcular RMC/RCC" antes de montar.',
-        { duration: 10000 },
-      );
-      return;
-    }
-
     try {
+      // ── PASSO 1: o cálculo ────────────────────────────────────────────────
+      // 🚨 É ELE QUE ESCOLHE O PEDIDO DA PEÇA. O sinal da restituição decide a
+      // base: positivo é cartão QUITADO e pede o indébito em DOBRO; zero ou
+      // negativo é EM ABERTO e pede a obrigação de fazer com o dano moral. Sem
+      // `metadata.calculo` o gerador lê restituição 0 e conclui "em aberto" por
+      // FALTA DE DADO, não por medição — e o dobro sumiria do pedido de um
+      // cliente quitado, sem que nada na peça pronta denunciasse a troca.
+      //
+      // Por isso o botão calcula sozinho a partir do HISCON do card, e só monta
+      // depois. Já existindo cálculo salvo, respeita o que está lá: refazer por
+      // conta própria sobrescreveria a escolha de quem abriu a calculadora.
+      if (!calculo) {
+        setTudoBusy('Calculando…');
+        const r = await legalCasesService.calcularAutomatico(caseId, produto).catch((e) => ({
+          ok: false as const,
+          motivo: e?.response?.data?.message || 'Erro ao calcular.',
+        }));
+        if (!r.ok) {
+          // Não dá para seguir: a peça sairia pedindo a menos. O motivo vem do
+          // servidor e diz o que falta — é recado para abrir a calculadora.
+          toast.error(
+            `${r.motivo}${'faltando' in r && r.faltando?.length ? ` Falta: ${r.faltando.join('; ')}.` : ''} ` +
+            'Sem cálculo a inicial sairia como "em aberto" e o dobro se perderia.',
+            { duration: 12000 },
+          );
+          return;
+        }
+        toast.success(
+          `Cálculo pronto: ${r.total?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` +
+          `${r.cenarioTitulo ? ` — ${r.cenarioTitulo}` : ''}` +
+          `${r.competencias ? ` · ${r.competencias} competências do HISCON` : ''}` +
+          `${r.taxa != null ? ` · taxa BACEN ${r.taxa}%` : ''}.`,
+          { duration: 8000 },
+        );
+      }
+
       // 🚨 PRIMEIRO os documentos, depois a peça. O recorte do HISCON/HISCRE e o
       // JG composto vivem em "PARA A INICIAL", e é de lá que a organização da
       // pasta tira o que vai ao protocolo. Gerar a peça antes de recortar faz o
@@ -1427,7 +1445,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       <button
         onClick={() => montarTudo()}
         disabled={!!tudoBusy}
-        title="Faz a sequência inteira: recorta HISCON e HISCRE, monta o JG grifado, gera a inicial no timbrado, organiza a pasta do réu no Drive e manda o card para Revisão inicial."
+        title="Faz a sequência inteira: calcula o RMC/RCC pelo HISCON (se ainda não houver cálculo salvo), recorta HISCON e HISCRE, monta o JG grifado, gera a inicial no timbrado, organiza a pasta do réu no Drive e manda o card para Revisão inicial."
         className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
       >
         <Sparkles className="h-3.5 w-3.5" /> {tudoBusy || 'Montar a inicial completa e mandar para revisão'}

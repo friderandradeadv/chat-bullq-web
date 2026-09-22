@@ -1033,6 +1033,25 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/peca/gerar`, payload, { timeout: 240_000 });
     return data.data ?? data;
   },
+  /**
+   * Calcula o RMC/RCC a partir do HISCON do card e grava — o passo do botão
+   * mestre que antes era manual.
+   *
+   * 🚨 Responde 200 com `ok: false` quando falta insumo: é recado, não erro. O
+   * serviço prefere não calcular a calcular errado — número aproximado aqui
+   * vira o PEDIDO da peça.
+   */
+  async calcularAutomatico(
+    id: string,
+    produto: 'RMC' | 'RCC',
+  ): Promise<
+    | { ok: true; total: number; cenarioTitulo?: string; banco?: string; competencias?: number; taxa?: number }
+    | { ok: false; motivo: string; faltando?: string[] }
+  > {
+    const { data } = await api.post(`/legal-cases/${id}/calculo/automatico`, { produto });
+    return data;
+  },
+
   /** Salva no processo o cálculo de RMC/RCC escolhido (e define o valor da causa). */
   async salvarCalculo(
     id: string,
