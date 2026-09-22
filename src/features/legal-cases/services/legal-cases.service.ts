@@ -1051,7 +1051,17 @@ export const legalCasesService = {
     // 🚨 `data.data ?? data`, como os outros 76 métodos daqui: a API embrulha a
     // resposta. Lendo `data` cru, `ok` vinha undefined — o botão entendia
     // FALHA num cálculo que tinha dado certo, e o toast imprimia "undefined".
-    const { data } = await api.post(`/legal-cases/${id}/calculo/automatico`, { produto });
+    // 🚨 300s, porque o `api` tem timeout GLOBAL de 15s e este passo NÃO cabe
+    // nele: varre a árvore do Drive atrás de "00. DOCUMENTOS", baixa HISCON,
+    // HISCRE e IR (mais de 1 MB na cliente medida), lê o PDF por geometria e
+    // ainda consulta a taxa no BACEN. Abortado aos 15s, o navegador mostrava
+    // "Erro ao calcular" sem que o servidor sequer registrasse a chamada — o
+    // pior sintoma possível, porque parece defeito do cálculo e é do relógio.
+    const { data } = await api.post(
+      `/legal-cases/${id}/calculo/automatico`,
+      { produto },
+      { timeout: 300_000 },
+    );
     return data.data ?? data;
   },
 
