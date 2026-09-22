@@ -487,6 +487,36 @@ export function CaseDetailDrawer({
                               <p className="mt-0.5 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
                                 {calc.cenarioTitulo ?? calc.cenario}{calc.config?.banco ? ` · ${calc.config.banco}` : ''}
                               </p>
+                              {/* 🚨 Quais contratos entraram na soma. Olhando só o
+                                  total ninguém sabe se ele cobre a cadeia inteira
+                                  ou um contrato só — e essa diferença é o tamanho
+                                  do pedido. */}
+                              {Array.isArray(calc.config?.contratos) && calc.config.contratos.length > 0 && (
+                                <div className="mt-2 border-t border-emerald-200 pt-1.5 dark:border-emerald-900/40">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700/70 dark:text-emerald-400/70">
+                                    {calc.config.contratos.length === 1
+                                      ? 'Contrato da conta'
+                                      : `${calc.config.contratos.length} contratos somados`}
+                                  </p>
+                                  <ul className="mt-1 space-y-0.5">
+                                    {calc.config.contratos.map((k: any, i: number) => (
+                                      <li key={`${k.contrato}-${i}`} className="text-[11px] text-emerald-800/90 dark:text-emerald-300/90">
+                                        <span className="font-mono">{k.contrato || '—'}</span>
+                                        {k.dataContratacao ? ` · ${String(k.dataContratacao).split('-').reverse().join('/')}` : ''}
+                                        {k.limite != null ? ` · limite ${fmtMoney(k.limite)}` : ''}
+                                        {k.descontos ? ` · ${k.descontos} descontos` : ''}
+                                        {k.total != null ? ` · ${fmtMoney(k.total)}` : ''}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  {calc.config.contratos.length > 1 && (
+                                    <p className="mt-1 text-[10px] leading-snug text-emerald-700/70 dark:text-emerald-400/70">
+                                      Os descontos dos {calc.config.contratos.length} somam; o limite não — é o mesmo cartão
+                                      renovado, e a data é a do contrato de origem.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <p className="mt-1.5 text-xs italic text-zinc-400">Abra a calculadora (HISCON/HISCRE → conversão + restituição) e salve aqui — vira o valor da causa.</p>
@@ -1373,9 +1403,11 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
           );
           return;
         }
+        const nContratos = Array.isArray(r.contratos) ? r.contratos.length : 0;
         toast.success(
           `Cálculo pronto: ${r.total?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` +
           `${r.cenarioTitulo ? ` — ${r.cenarioTitulo}` : ''}` +
+          `${nContratos > 1 ? ` · ${nContratos} contratos somados` : ''}` +
           `${r.competencias ? ` · ${r.competencias} competências do HISCON` : ''}` +
           `${r.taxa != null ? ` · taxa BACEN ${r.taxa}%` : ''}.`,
           { duration: 8000 },

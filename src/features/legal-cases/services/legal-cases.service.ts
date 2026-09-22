@@ -1053,7 +1053,11 @@ export const legalCasesService = {
     id: string,
     produto: 'RMC' | 'RCC',
   ): Promise<
-    | { ok: true; total: number; cenarioTitulo?: string; banco?: string; competencias?: number; taxa?: number }
+    | {
+        ok: true; total: number; cenarioTitulo?: string; banco?: string; competencias?: number; taxa?: number;
+        /** Os contratos que entraram na soma (regra: junta tudo do mesmo réu). */
+        contratos?: { contrato: string; dataContratacao: string | null; limite: number | null; descontos: number; total: number }[];
+      }
     | { ok: false; motivo: string; faltando?: string[] }
   > {
     // 🚨 `data.data ?? data`, como os outros 76 métodos daqui: a API embrulha a
