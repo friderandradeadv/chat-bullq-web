@@ -458,12 +458,18 @@ export function CaseDetailDrawer({
                   // restituição que escolhe a base da peça — quitado pede o dobro,
                   // em aberto pede obrigação de fazer —, então o cenário é o dado
                   // que decide o pedido, e some se a linha disser só um número.
+                  // 🚨 "Falta" deixou de ser alarme. O aviso nasceu quando o botão
+                  // apenas BARRAVA sem cálculo; agora ele calcula pelo HISCON, e
+                  // dizer que a peça sairia "em aberto" virou ameaça de algo que
+                  // não vai acontecer. O que continua verdade é que o cálculo
+                  // decide o pedido — por isso a linha mostra o CENÁRIO junto do
+                  // valor, e não só um "ok".
                   const resumo = calc
                     ? <>{fmtMoney(calc.total)} <span className="text-zinc-400">— valor da causa · {calc.cenarioTitulo ?? calc.cenario}</span></>
-                    : 'falta — sem ele a inicial sai como “em aberto” e o dobro some do pedido';
+                    : 'sai do HISCON ao montar — abra para conferir ou fazer à mão na calculadora';
                   return (
                     <>
-                      <Dobravel titulo="Cálculo" resumo={resumo} alerta={!calc}>
+                      <Dobravel titulo="Cálculo" resumo={resumo}>
                         <div className="mt-2">
                           <button
                             type="button"
