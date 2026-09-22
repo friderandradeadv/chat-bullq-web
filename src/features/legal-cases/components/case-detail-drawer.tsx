@@ -5,7 +5,7 @@ import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cor
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { FileSearch,
-  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, FileText, AlertTriangle, Loader2, ShieldCheck, Gavel,
+  X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, AlertTriangle, Loader2, ShieldCheck, Gavel,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -1186,17 +1186,6 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Erro ao ler o JG'); } finally { setJgBusy(false); }
   };
 
-  const gerar = async (produto?: string) => {
-    setBusy(produto || 'all');
-    try {
-      const r = await legalCasesService.gerarInicial(caseId, produto);
-      onChanged(); // recarrega a ficha → a inicial aparece na aba Anexos
-      toast.success(`Inicial${produto ? ` de ${produto}` : ''} gerada (base ${r.base === 'quitado' ? 'QUITADO' : 'EM ABERTO'}) — anexada na aba Anexos. Confira as lacunas “[ • ]” antes do protocolo.`);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Erro ao gerar a inicial');
-    } finally { setBusy(null); }
-  };
-
   const [orgBusy, setOrgBusy] = useState(false);
   const organizarPasta = async () => {
     setOrgBusy(true);
@@ -1264,6 +1253,18 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
   const montarTudo = async () => {
     const produto = (area || '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
     try {
+      // 🚨 PRIMEIRO os documentos, depois a peça. O recorte do HISCON/HISCRE e o
+      // JG composto vivem em "PARA A INICIAL", e é de lá que a organização da
+      // pasta tira o que vai ao protocolo. Gerar a peça antes de recortar faz o
+      // pacote sair com o extrato INTEIRO — 82 páginas em vez de 12, medido na
+      // MARIA CLIRENE — desfazendo no último passo a regra de juntar só o que a
+      // ação discute.
+      //
+      // Best-effort: documento que falta vira aviso no card, não erro aqui. Quem
+      // decide se dá para montar a inicial é o advogado.
+      setTudoBusy('Preparando os documentos…');
+      await legalCasesService.prepararDocumentosDaInicial(caseId).catch(() => undefined);
+
       setTudoBusy('Gerando a inicial…');
       await legalCasesService.gerarInicial(caseId, produto);
 
@@ -1279,7 +1280,7 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
 
       onChanged();
       toast.success(
-        `Inicial de ${produto} gerada${org ? ` e pasta "${org.pastaBanco}" montada` : ''} — card em Revisão inicial. ` +
+        `Documentos recortados e inicial de ${produto} gerada${org ? ` — pasta "${org.pastaBanco}" montada` : ''}. Card em Revisão inicial. ` +
         'Confira as lacunas "[ • ]" antes de protocolar.',
       );
     } catch (e: any) {
@@ -1304,7 +1305,6 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
   // Escolha SEMPRE disponível: gerar a inicial só de RMC ou só de RCC,
   // independente de quantos contratos o HISCON trouxe. Cada botão gera a peça
   // daquele produto (usa o contrato do produto se houver; senão o réu do card).
-  const OPCOES = ['RMC', 'RCC'];
   return (
     <div className="mt-2 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -1326,14 +1326,12 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
       >
         <Sparkles className="h-3.5 w-3.5" /> {cadBusy ? 'Preenchendo cadastro…' : 'Preencher cadastro do cliente (IA)'}
       </button>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Gerar petição inicial — escolha o produto</p>
-      <div className="flex gap-1.5">
-        {OPCOES.map((p) => (
-          <button key={p} onClick={() => gerar(p)} disabled={!!busy} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#005efc] px-3 py-2 text-xs font-semibold text-[#005efc] hover:bg-[#005efc]/5 disabled:opacity-50">
-            <FileText className="h-3.5 w-3.5" /> {busy === p ? 'Gerando…' : `Inicial ${p}`}
-          </button>
-        ))}
-      </div>
+      {/* 🚨 Os botões "Inicial RMC" e "Inicial RCC" SAÍRAM em 21/09/2026, por
+          determinação do escritório. Eles geravam só a peça, e quem os usava
+          ficava com a pasta do réu incompleta e o card parado na fase — os
+          passos seguintes eram para lembrar de fazer à mão. O botão mestre
+          abaixo faz a sequência inteira, na ordem que o pacote exige, e o
+          produto sai da ÁREA do card em vez de ser escolhido a cada clique. */}
       <button
         onClick={organizarPasta}
         disabled={orgBusy}
@@ -1345,10 +1343,10 @@ function InicialActions({ caseId, jg, docs, area, onChanged }: { caseId: string;
       <button
         onClick={() => montarTudo()}
         disabled={!!tudoBusy}
-        title="Gera a inicial do produto do card, organiza a pasta no Drive e manda o card para Revisão inicial."
+        title="Faz a sequência inteira: recorta HISCON e HISCRE, monta o JG grifado, gera a inicial no timbrado, organiza a pasta do réu no Drive e manda o card para Revisão inicial."
         className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
       >
-        <Sparkles className="h-3.5 w-3.5" /> {tudoBusy || 'Montar tudo e mandar para revisão'}
+        <Sparkles className="h-3.5 w-3.5" /> {tudoBusy || 'Montar a inicial completa e mandar para revisão'}
       </button>
     </div>
   );
