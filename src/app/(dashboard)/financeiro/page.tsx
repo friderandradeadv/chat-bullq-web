@@ -4175,10 +4175,16 @@ function CumprimentoTab() {
   const cumpCheio = cumprimento.filter((x) => x.valorCalculo > 0);
   const cumpVazio = cumprimento.length - cumpCheio.length;
   const prestVazio = prestacao.length - prestacaoCheia.length;
-  const brutoCump = r2(cumpCheio.reduce((s, x) => s + (x.valorCalculo || 0), 0));
+  // O arquivado provisoriamente (art. 921, III) aparece na lista mas NÃO soma na
+  // expectativa: é execução travada por falta de bens/endereço, não dinheiro a caminho.
+  const cumpAndando = cumpCheio.filter((x) => !x.paradoCs);
+  const cumpParado = cumpCheio.filter((x) => x.paradoCs);
+  const brutoCump = r2(cumpAndando.reduce((s, x) => s + (x.valorCalculo || 0), 0));
+  const brutoParado = r2(cumpParado.reduce((s, x) => s + (x.valorCalculo || 0), 0));
   const t = {
     nPrestacao: prestacao.length, aReceberPrestacao: r2(prestacao.reduce((s, x) => s + (x.aReceberNosso || 0), 0)),
     nCumprimento: cumprimento.length, brutoEmCumprimento: brutoCump, nossoEmCumprimento: r2(brutoCump * 0.4),
+    nParado: cumpParado.length, brutoParado, nossoParado: r2(brutoParado * 0.4),
     nFavoraveis: favoraveis.length, estimadoFavoraveis: r2(favoraveis.reduce((s, x) => s + (x.estimado || 0), 0)),
     nVencidas: vencidas.length, estimadoVencidas: r2(vencidas.reduce((s, x) => s + (x.estimado || 0), 0)),
     nRepb: repbCheio.length, aReceberRepb: r2(repbCheio.reduce((s, x) => s + (x.aReceberNosso || 0), 0)),
@@ -4236,7 +4242,7 @@ function CumprimentoTab() {
       </Card>
 
       {/* Em cumprimento — protocolado */}
-      <Card title="Em cumprimento de sentença — protocolado, aguardando alvará" sub="valor do cálculo (bruto da condenação). A parte do escritório é definida na prestação de contas.">
+      <Card title="Cumprimento de sentença — o quadro CS inteiro" sub="valor do cálculo (bruto da condenação). A parte do escritório é definida na prestação de contas. O arquivado provisoriamente aparece aqui, mas fora do total.">
         {cumpCheio.length === 0 ? (
           <p className="py-6 text-center text-sm text-zinc-400">Nenhum processo com valor de cálculo preenchido.{cumpVazio > 0 ? ` ${cumpVazio} em cumprimento aguardando o "Valor do cálculo" no card.` : ''}</p>
         ) : (
@@ -4252,12 +4258,13 @@ function CumprimentoTab() {
                 <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
                   <td className="px-2 py-1.5"><VerProcesso id={x.caseId}>{titleCase(x.cliente || x.title)}</VerProcesso></td>
                   <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-[#228BE6]">{brl2(x.valorCalculo)}</td>
-                  <td className="px-2 py-1.5 text-center"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${x.protocolado ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'}`}>{x.protocolado ? 'Protocolado' : 'A protocolar'}</span></td>
+                  <td className="px-2 py-1.5 text-center"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${x.paradoCs ? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300' : x.protocolado ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300'}`} title={x.paradoCs ? 'Art. 921, III do CPC — execução suspensa: não entra no total a receber' : undefined}>{x.situacaoCs ? (x.paradoCs ? 'Arq. provisório' : x.situacaoCs === 'recebido parcial' ? 'Recebido parcial' : x.protocolado ? 'Protocolado' : 'A protocolar') : (x.protocolado ? 'Protocolado' : 'A protocolar')}</span></td>
                   <td className="px-2 py-1.5 text-right"><EditNumeroCs caseId={x.caseId} value={x.numeroCs} /></td>
                 </tr>
               ))}
             </CsTabela>
-            {cumpVazio > 0 && <p className="mt-2 text-[11px] text-zinc-400">+ {cumpVazio} processo(s) em cumprimento sem o valor do cálculo preenchido no card.</p>}
+            {t.nParado > 0 && <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Dos acima, <strong>{t.nParado}</strong> está(ão) <strong>arquivado(s) provisoriamente</strong> (art. 921, III) somando {brl2(t.brutoParado)} de cálculo — <strong>fora</strong> do total a receber, porque a execução está suspensa por falta de bens ou endereço.</p>}
+            {cumpVazio > 0 && <p className="mt-2 text-[11px] text-zinc-400">+ {cumpVazio} processo(s) no quadro CS sem o valor do cálculo preenchido no card.</p>}
           </>
         )}
       </Card>

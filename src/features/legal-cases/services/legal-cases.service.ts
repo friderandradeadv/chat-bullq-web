@@ -395,7 +395,10 @@ export interface JurimetriaData {
 
 /** Recebíveis de Cumprimento de Sentença (valores preenchidos no card do processo). */
 export interface CsBase { caseId: string; title: string; cliente: string | null; cnj: string | null; area: string | null; responsavel: string | null; valorCausa: number | null; legalPhaseAt: string | null }
-export interface CsCumprimento extends CsBase { fase: 'cumprimento'; protocolado: boolean; valorCalculo: number; numeroCs: string | null }
+// `fase` cobre o quadro CS inteiro: cumprimento, recebido parcial e arquivado
+// provisoriamente (art. 921, III). `paradoCs` marca o travado — entra na lista, fica
+// fora do total de "a receber", porque expectativa parada não é caixa a caminho.
+export interface CsCumprimento extends CsBase { fase: 'cumprimento' | 'recebido_parcial' | 'arq_provisorio'; situacaoCs?: string; paradoCs?: boolean; protocolado: boolean; valorCalculo: number; numeroCs: string | null }
 export interface CsPrestacao extends CsBase { fase: 'prestacao_contas'; valorAlvara: number; honorariosNossos: number; sucumbencia: number; valorCliente: number; aReceberNosso: number }
 export interface CsFavoravel extends CsBase { fase: 'sentenca_favoravel' | 'recurso' | 'aguardando_arquivamento' | 'suspenso' | 'transito' | 'acoes_vencidas'; emRecurso?: boolean; situacao?: string | null; faseLabel?: string | null; baseLabel?: string | null; resultado: string | null; exito: number | null; estimado: number | null; manualEstimado?: boolean }
 export interface CsRepb extends CsBase { fase: 'repb_concluido' | 'repb_acordo'; concluido: boolean; dividaOriginal: number; valorAcordo: number; desconto: number; honorariosNossos: number; aReceberNosso: number }
