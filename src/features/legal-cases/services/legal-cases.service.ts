@@ -1010,7 +1010,15 @@ export const legalCasesService = {
     id: string,
     produto?: string,
   ): Promise<{ base: string; fileName: string; valorCausa: number; documentId: string; docxBase64: string }> {
-    const { data } = await api.post(`/legal-cases/${id}/inicial/gerar${produto ? `?produto=${encodeURIComponent(produto)}` : ''}`);
+    // 🚨 240s: desde 21/09 esta rota roda o `montar_peca_no_timbrado.py` — brasão
+    // na jurisprudência, keepNext, respiros, fecho da comarca —, e cirurgia de
+    // OOXML em Python não cabe nos 15s do timeout global. Cortada no meio, a
+    // peça FICA PRONTA no servidor e some para quem clicou.
+    const { data } = await api.post(
+      `/legal-cases/${id}/inicial/gerar${produto ? `?produto=${encodeURIComponent(produto)}` : ''}`,
+      undefined,
+      { timeout: 240_000 },
+    );
     return data.data ?? data;
   },
   /** Gera por IA uma peça (réplica/especificação de provas/recurso) sobre o timbrado → .docx base64. */
