@@ -73,9 +73,10 @@ function ChartTooltip({ active, payload, label }: any) {
 type View = 'lancamentos' | 'honorarios' | 'cobrancas' | 'cumprimento' | 'retiradas' | 'contas' | 'fluxo' | 'crescimento' | 'projecoes' | 'motivacao' | 'previsoes' | 'verticais' | 'advogado';
 const TABS: { key: View; label: string; icon: React.ElementType; grupo: string }[] = [
   { key: 'lancamentos', label: 'Lançamentos', icon: Receipt, grupo: 'Caixa' },
+  // Honorários reúne as três faces do mesmo assunto (recebido / a receber / pago ao
+  // advogado) — ver HonorariosHub. 'cobrancas' e 'retiradas' seguem no tipo View porque
+  // ainda são destinos válidos: abrem a aba já na face certa.
   { key: 'honorarios', label: 'Honorários', icon: Users, grupo: 'Caixa' },
-  { key: 'cobrancas', label: 'A receber', icon: CreditCard, grupo: 'Caixa' }, // cobranças (parcelas/ASAAS) + recebíveis dos processos (CS)
-  { key: 'retiradas', label: 'Retiradas', icon: Wallet, grupo: 'Caixa' },
   { key: 'contas', label: 'Contas', icon: Banknote, grupo: 'Caixa' },
   { key: 'verticais', label: 'Verticais', icon: Layers, grupo: 'Análise' },
   { key: 'projecoes', label: 'Projeções e crescimento', icon: Rocket, grupo: 'Análise' },
@@ -249,10 +250,9 @@ export default function FinanceiroPage() {
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={contasEmAberto(data)} />
 
         {view === 'lancamentos' && <LancamentosTab data={data} mesSel={mesSel} setMesSel={setMesSel} />}
-        {view === 'honorarios' && <HonorariosTab data={data} />}
-        {/* "A receber" reúne Cobranças (parcelas/ASAAS) + CS (recebíveis dos processos), separados por subaba. */}
-        {view === 'cobrancas' && <AReceberTab data={data} />}
-        {view === 'retiradas' && <RetiradasTab data={data} />}
+        {(view === 'honorarios' || view === 'cobrancas' || view === 'retiradas') && (
+          <HonorariosHub data={data} inicial={view === 'cobrancas' ? 'areceber' : view === 'retiradas' ? 'pago' : 'recebidos'} />
+        )}
         {view === 'contas' && <ContasTab data={data} />}
         {view === 'verticais' && <VerticaisTab data={data} />}
         {/* "Projeções e crescimento" reúne as antigas abas Projeções + Crescimento +
@@ -281,7 +281,7 @@ function TabsMenu({ view, setView, lancCount, aPagar }: { view: View; setView: (
   return (
     <div className="mt-5 flex gap-1 overflow-x-auto border-b border-zinc-200/70 pb-px scrollbar-thin dark:border-zinc-800">
       {TABS.map((t) => {
-        const ativo = view === t.key;
+        const ativo = view === t.key || (t.key === 'honorarios' && (view === 'cobrancas' || view === 'retiradas'));
         return (
           <button key={t.key} onClick={() => setView(t.key)} className={`inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition ${ativo ? 'border-[#228BE6] text-[#228BE6]' : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'}`}>
             <t.icon className="h-4 w-4 shrink-0" />
@@ -3689,7 +3689,44 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-zinc-400">{label}</span>{children}</label>;
 }
 
-// ═══════════════════════════ ABA · HONORÁRIOS (clientes) ═══════════════════════
+// ═══════════ ABA · HONORÁRIOS — as três faces de um só assunto ════════════════
+//
+// Eram três abas separadas (Honorários, A receber, Retiradas) e a conversa entre elas
+// só existia na cabeça de quem lia: o que ENTROU, o que FALTA entrar e o que SAIU para
+// quem trabalhou. Pior, "Retiradas" nomeava errado metade do próprio conteúdo — o
+// repasse ao associado não é retirada de sócio.
+//
+// Cada face traz os próprios cards de cima; o seletor só troca a face. A face
+// "A receber" tem um seletor interno (iniciais/ASAAS × judicial/CS) e explica a si
+// mesma, por isso o hub não repete a legenda nela.
+type FaceHon = 'recebidos' | 'areceber' | 'pago';
+const FACES_HON: { key: FaceHon; label: string; icon: React.ElementType; sub?: string }[] = [
+  { key: 'recebidos', label: 'Recebidos', icon: Users, sub: 'honorário que já entrou — carteira por cliente e cada pagamento, um a um.' },
+  { key: 'areceber', label: 'A receber', icon: CreditCard },
+  { key: 'pago', label: 'Pago aos advogados', icon: Wallet, sub: 'pró-labore e retirada (sócio) + honorários repassados (associado) — só o que já foi pago.' },
+];
+
+function HonorariosHub({ data, inicial }: { data: FinDashboard; inicial: FaceHon }) {
+  const [face, setFace] = useState<FaceHon>(inicial);
+  const atual = FACES_HON.find((f) => f.key === face);
+  return (
+    <div>
+      <div className="mt-4 inline-flex rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+        {FACES_HON.map((f) => (
+          <button key={f.key} onClick={() => setFace(f.key)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${face === f.key ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+            <f.icon className="h-3.5 w-3.5" /> {f.label}
+          </button>
+        ))}
+      </div>
+      {atual?.sub && <p className="mt-2 text-xs text-zinc-400">{atual.sub}</p>}
+      {face === 'recebidos' && <HonorariosTab data={data} />}
+      {face === 'areceber' && <AReceberTab data={data} />}
+      {face === 'pago' && <RetiradasTab data={data} />}
+    </div>
+  );
+}
+
+// ═══════════════════════════ FACE · RECEBIDOS (clientes) ═══════════════════════
 
 const STATUS_ORDER: StatusFin[] = ['em-dia', 'atencao', 'pontual', 'inativo'];
 
@@ -3940,9 +3977,11 @@ function AReceberTab({ data }: { data: FinDashboard }) {
   const [sub, setSub] = useState<'honorarios' | 'judicial'>('honorarios');
   return (
     <div>
-      <div className="mt-4 inline-flex rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+      {/* Sub-nível DENTRO da face "A receber": contorno em vez de bloco cheio, para não
+          parecer o mesmo nível do seletor de faces logo acima. */}
+      <div className="mt-3 inline-flex rounded-xl border border-zinc-200 p-1 dark:border-zinc-700">
         {([['honorarios', 'Honorários iniciais', CreditCard], ['judicial', 'A receber judicial', Gavel]] as const).map(([k, l, Icon]) => (
-          <button key={k} onClick={() => setSub(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${sub === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+          <button key={k} onClick={() => setSub(k)} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${sub === k ? 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
             <Icon className="h-3.5 w-3.5" /> {l}
           </button>
         ))}
@@ -4405,9 +4444,9 @@ function RetiradasTab({ data }: { data: FinDashboard }) {
   return (
     <>
       <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-gradient-to-br from-cyan-50 to-white p-5 dark:border-zinc-800 dark:from-cyan-900/15 dark:to-zinc-900">
-        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Wallet className="h-5 w-5 text-[#15AABF]" /> Retiradas e pró-labore</h2>
+        <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Wallet className="h-5 w-5 text-[#15AABF]" /> Pago aos advogados</h2>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
-          Painel <strong>informativo</strong>: mostra quanto cada pessoa já retirou por mês, lido direto do <strong>livro-razão</strong>. Para registrar uma retirada ou pró-labore, lance na aba <strong>Lançamentos</strong> (tipo despesa, categoria <em>Retirada</em>/<em>Pró-labore</em>, recebedor = a pessoa). Assim não há dois lugares para conferir.
+          Painel <strong>informativo</strong>: mostra quanto cada advogado já recebeu por mês, lido direto do <strong>livro-razão</strong>. Para registrar, lance na aba <strong>Lançamentos</strong> (tipo despesa, recebedor = a pessoa) com a categoria certa: <em>Pró-labore</em> ou <em>Retirada</em> para <strong>sócio</strong>, <em>Honorários repassados</em> para <strong>associado</strong>. Assim não há dois lugares para conferir.
         </p>
       </div>
 
