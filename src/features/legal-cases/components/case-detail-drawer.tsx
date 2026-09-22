@@ -1439,7 +1439,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
         titulo="Renda (JG)"
         resumo={
           temRenda
-            ? <>líquido <b>{fmtBRL(jg.liquido)}</b>{jg.anual != null ? <> · anual {fmtBRL(jg.anual)} · média {fmtBRL(jg.media)}</> : ''}</>
+            ? <>líquido <b>{fmtBRL(jg.liquido)}</b>{jg.competencia ? <> em {jg.competencia}</> : ''}{jg.anual != null ? <> · anual {fmtBRL(jg.anual)} · média {fmtBRL(jg.media)}</> : ''}</>
             : jgSalvo
               ? 'JG salvo, renda não lida — confira à mão na peça'
               : 'sai do HISCRE e do informe de IR do Drive ao montar; upe só se não estiverem lá'
@@ -1447,8 +1447,10 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       >
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className="text-[11px] text-[#48626f] dark:text-zinc-400">
-          O líquido do mês vem do HISCRE e o bruto anual do informe de IR. A
-          média mensal divide por <b>13</b>, que é quantas vezes o INSS paga.
+          O líquido é o da competência <b>mais recente</b> do HISCRE, lido da
+          linha do crédito — sem IA, porque o extrato tem dezenas de páginas e o
+          modelo só via o começo. O bruto anual vem do informe de IR, e a média
+          mensal divide por <b>13</b>, que é quantas vezes o INSS paga.
         </span>
         <DropZone accept="application/pdf,.pdf" multiple={false} disabled={jgBusy} onFiles={(fs) => void onJg(fs[0])} className="inline-block" overlayLabel="Soltar JG">
           <label className={`inline-flex items-center gap-1 text-xs font-medium hover:underline ${jgBusy ? 'opacity-50' : 'cursor-pointer'} ${jgVerde ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#005efc]'}`} title={jgVerde ? 'JG já enviado — clique ou arraste o PDF para substituir.' : 'Lê o Histórico de Créditos do INSS (líquido do último mês) e a declaração de IR (anual) para a justiça gratuita. Também aceita arrastar o PDF.'}>
