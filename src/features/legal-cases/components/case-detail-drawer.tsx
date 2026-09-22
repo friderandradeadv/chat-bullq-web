@@ -399,17 +399,35 @@ export function CaseDetailDrawer({
                 {/* Contratos a impugnar (intake). Nas fases de INTAKE (novos clientes →
                     doc. faltantes) mostra o desmembramento em cards por banco réu; nas
                     fases de MONTAR fica só como lista de referência que alimenta a inicial. */}
-                {inPre && isRmc && (
-                  <ContratosImpugnar
-                    caseId={c.id}
-                    phaseKey={phaseKey}
-                    initial={((c.metadata as any)?.contratos ?? []) as any[]}
-                    docs={(c.metadata as any)?.docs}
-                    showDesmembrar={inIntake && !isFilhote}
-                    onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
-                    onDesmembrado={() => { qc.invalidateQueries({ queryKey: ['legal-cases'] }); onClose(); }}
-                  />
-                )}
+                {inPre && isRmc && (() => {
+                  const contratos = ((c.metadata as any)?.contratos ?? []) as any[];
+                  const docs = (c.metadata as any)?.docs;
+                  const editor = (
+                    <ContratosImpugnar
+                      caseId={c.id}
+                      phaseKey={phaseKey}
+                      initial={contratos}
+                      docs={docs}
+                      showDesmembrar={inIntake && !isFilhote}
+                      onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
+                      onDesmembrado={() => { qc.invalidateQueries({ queryKey: ['legal-cases'] }); onClose(); }}
+                    />
+                  );
+                  // No INTAKE este bloco é a ferramenta de trabalho: é aqui que se
+                  // upa o HISCON e se desmembra o cliente em um card por banco réu.
+                  // Encolhê-lo ali esconderia o próximo passo de quem está operando.
+                  if (!inMontar) return editor;
+                  // Em MONTAR já é referência: o botão mestre é que lê estas linhas.
+                  const docsTxt = [docs?.hiscon ? 'HISCON ✓' : null, docs?.hiscre ? 'HISCRE ✓' : null].filter(Boolean).join(' · ');
+                  const resumo = contratos.length
+                    ? `${contratos.map((x: any) => [x.reu, x.produto].filter(Boolean).join(' ')).filter(Boolean).join(', ')}${docsTxt ? ` · ${docsTxt}` : ''}`
+                    : 'nenhum — número, data e parcela do contrato sairão em branco na peça';
+                  return (
+                    <Dobravel titulo="Contratos" resumo={resumo} alerta={!contratos.length}>
+                      {editor}
+                    </Dobravel>
+                  );
+                })()}
 
                 {/* Acelerador genérico (não-RMC): IA lê a conversa e sugere o polo
                     passivo, produto, área e valor — o advogado aplica no card. */}
@@ -424,38 +442,48 @@ export function CaseDetailDrawer({
                 {/* Cálculo RMC/RCC + gerar inicial: SÓ na fase Montar inicial em diante
                     (com o card certo — polo passivo/produto). Na fase de intake essa etapa
                     não aparece: primeiro cria-se os cards dos bancos réus. */}
-                {inMontar && isRmc && (
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cálculo RMC/RCC</p>
-                      <button
-                        type="button"
-                        onClick={() => window.open(`/juridico/calculos/rmc-rcc?case=${c.id}&cliente=${encodeURIComponent(cliente?.name ?? c.title ?? '')}&banco=${encodeURIComponent(adversa?.name ?? '')}&tipo=${encodeURIComponent(cleanArea(c.area) ?? '')}`, '_blank')}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline"
-                        title="Abre a calculadora em nova aba já com o HISCON/HISCRE do processo carregados. Ao salvar, o cálculo aparece aqui e a aba fecha sozinha."
-                      >
-                        <Calculator className="h-3.5 w-3.5" /> Calcular RMC/RCC
-                      </button>
-                    </div>
-                    {(() => {
-                      const calc = (c.metadata as any)?.calculo;
-                      if (!calc) {
-                        return <p className="mt-1.5 text-xs italic text-zinc-400">Abra a calculadora (HISCON/HISCRE → conversão + restituição) e salve aqui — vira o valor da causa.</p>;
-                      }
-                      return (
-                        <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-900/15">
-                          <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                            {fmtMoney(calc.total)} <span className="font-normal">— valor da causa</span>
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
-                            {calc.cenarioTitulo ?? calc.cenario}{calc.config?.banco ? ` · ${calc.config.banco}` : ''}
-                          </p>
+                {inMontar && isRmc && (() => {
+                  const calc = (c.metadata as any)?.calculo;
+                  const abrirCalculadora = () => window.open(`/juridico/calculos/rmc-rcc?case=${c.id}&cliente=${encodeURIComponent(cliente?.name ?? c.title ?? '')}&banco=${encodeURIComponent(adversa?.name ?? '')}&tipo=${encodeURIComponent(cleanArea(c.area) ?? '')}`, '_blank');
+                  // 🚨 O resumo diz o VALOR e o CENÁRIO, não só "ok". É o sinal da
+                  // restituição que escolhe a base da peça — quitado pede o dobro,
+                  // em aberto pede obrigação de fazer —, então o cenário é o dado
+                  // que decide o pedido, e some se a linha disser só um número.
+                  const resumo = calc
+                    ? <>{fmtMoney(calc.total)} <span className="text-zinc-400">— valor da causa · {calc.cenarioTitulo ?? calc.cenario}</span></>
+                    : 'falta — sem ele a inicial sai como “em aberto” e o dobro some do pedido';
+                  return (
+                    <>
+                      <Dobravel titulo="Cálculo" resumo={resumo} alerta={!calc}>
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={abrirCalculadora}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-[#005efc] hover:underline"
+                            title="Abre a calculadora em nova aba já com o HISCON/HISCRE do processo carregados. Ao salvar, o cálculo aparece aqui e a aba fecha sozinha."
+                          >
+                            <Calculator className="h-3.5 w-3.5" /> {calc ? 'Refazer o cálculo' : 'Calcular RMC/RCC'}
+                          </button>
+                          {calc ? (
+                            <div className="mt-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-900/15">
+                              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                                {fmtMoney(calc.total)} <span className="font-normal">— valor da causa</span>
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                                {calc.cenarioTitulo ?? calc.cenario}{calc.config?.banco ? ` · ${calc.config.banco}` : ''}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="mt-1.5 text-xs italic text-zinc-400">Abra a calculadora (HISCON/HISCRE → conversão + restituição) e salve aqui — vira o valor da causa.</p>
+                          )}
                         </div>
-                      );
-                    })()}
-                    <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} area={c.area} calculo={(c.metadata as any)?.calculo} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
-                  </div>
-                )}
+                      </Dobravel>
+                      {/* Fora do dobrável de propósito: o botão mestre é o que se
+                          aperta nesta fase, e não se esconde o que é para apertar. */}
+                      <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} area={c.area} calculo={calc} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                    </>
+                  );
+                })()}
 
                 {pf.recordUrl && (
                   <a href={pf.recordUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-xs text-[#228BE6] hover:underline">
@@ -979,6 +1007,43 @@ function SugerirDadosIA({ caseId, temAdversa, onApplied }: { caseId: string; tem
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Linha de status que abre no clique.
+ *
+ * Nasceu em 21/09/2026, quando o botão mestre passou a fazer a sequência
+ * inteira e o card ficou cheio de bloco que ninguém mais opera a cada passo.
+ * 🚨 Encolher não é remover: o que está aqui dentro são as ENTRADAS da peça
+ * (o HISCON, o HISCRE, o número do contrato, o cálculo que escolhe a base).
+ * Some da vista, não do card — e o `resumo` tem de dizer o bastante para o
+ * advogado saber se precisa abrir.
+ */
+function Dobravel({ titulo, resumo, alerta, children }: {
+  titulo: string; resumo: ReactNode; alerta?: boolean; children: ReactNode;
+}) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        title={aberto ? 'Recolher' : 'Abrir para conferir ou editar'}
+        className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors ${
+          alerta
+            ? 'border-amber-300 bg-amber-50 hover:bg-amber-100 dark:border-amber-900/50 dark:bg-amber-900/15 dark:hover:bg-amber-900/25'
+            : 'border-[#eef2f8] bg-[#f8fafc] hover:bg-[#eef2f8] dark:border-zinc-800 dark:bg-zinc-900/40 dark:hover:bg-zinc-800/60'
+        }`}
+      >
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">{titulo}</span>
+        <span className={`min-w-0 flex-1 truncate text-xs ${alerta ? 'font-medium text-amber-800 dark:text-amber-300' : 'text-[#101820] dark:text-zinc-200'}`}>
+          {resumo}
+        </span>
+        {aberto ? <ChevronUp className="h-3.5 w-3.5 shrink-0 text-zinc-400" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />}
+      </button>
+      {aberto && <div className="border-l-2 border-[#eef2f8] pl-2.5 dark:border-zinc-800">{children}</div>}
     </div>
   );
 }
