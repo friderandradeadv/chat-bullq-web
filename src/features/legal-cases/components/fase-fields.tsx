@@ -8,7 +8,11 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
 import { maskCurrencyBR, currencyToInput } from '@/lib/masks';
 
 type FieldType = 'checklist' | 'radio' | 'text' | 'textarea' | 'date' | 'datetime' | 'currency' | 'select';
-interface Field { key: string; label: string; type: FieldType; options?: string[] }
+interface Field {
+  key: string; label: string; type: FieldType; options?: string[];
+  /** Opção que, marcada, pinta de VERDE e move o card sozinho para esta fase. */
+  simMove?: { opcao: string; fase: string };
+}
 
 /** Reconhece o que vale clicar ou copiar dentro de um texto de campo. */
 const URL_RE = /https?:\/\/[^\s<>"')\]]+/;
@@ -67,19 +71,25 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'docs_faltantes', label: 'Quais documentos faltantes?', type: 'textarea' },
     { key: 'obter_docs', label: 'Obter documentos', type: 'checklist', options: ['Entrar em contato com o cliente', 'Solicitar documentos', 'Subir no Drive', 'Anexar documentos recebidos'] },
   ],
+  // 🚨 "Temos todos os documentos?" e "Petição pronta?" SAÍRAM em 24/09/2026.
+  // Perguntas que a própria fase já responde: o card só chega aqui depois de
+  // INFORMAÇÕES FALTANTES, e sai daqui quando a peça fica pronta. No lugar
+  // delas, o painel desta fase mostra o BOTÃO que monta a inicial — o que se
+  // aperta aqui, direto, sem passar pela aba Dados.
   montar_inicial: [
-    { key: 'docs_ok', label: 'Temos todos os documentos?', type: 'radio', options: ['Sim', 'Não'] },
-    { key: 'peticao_pronta', label: 'Petição pronta?', type: 'radio', options: ['Sim', 'Não'] },
     { key: 'info', label: 'Informações importantes', type: 'textarea' },
   ],
+  // 🚨 "Petição revisada?" SAIU em 24/09/2026: as duas perguntas mediam a mesma
+  // coisa, e a que decide é a aprovação. Marcar "Sim" aqui já manda o card para
+  // PROTOCOLO — o passo que antes era um segundo clique, esquecido com frequência.
   revisao_inicial: [
-    { key: 'revisada', label: 'Petição revisada?', type: 'radio', options: ['Sim', 'Não'] },
-    { key: 'aprovada', label: 'Aprovada para protocolo?', type: 'radio', options: ['Sim', 'Não'] },
+    { key: 'aprovada', label: 'Aprovada para protocolo?', type: 'radio', options: ['Sim', 'Não'],
+      simMove: { opcao: 'Sim', fase: 'protocolo' } },
   ],
   para_correcao: [{ key: 'pontos', label: 'Pontos para correção', type: 'textarea' }],
   revisao_final: [
-    { key: 'revisada', label: 'Petição revisada?', type: 'radio', options: ['Sim', 'Não'] },
-    { key: 'aprovada', label: 'Aprovada para protocolo?', type: 'radio', options: ['Sim', 'Não'] },
+    { key: 'aprovada', label: 'Aprovada para protocolo?', type: 'radio', options: ['Sim', 'Não'],
+      simMove: { opcao: 'Sim', fase: 'protocolo' } },
   ],
   inss_admin: [
     { key: 'numero', label: 'Número do processo administrativo', type: 'text' },
@@ -279,7 +289,15 @@ export function FaseFields({ caseId, phase, data }: { caseId: string; phase: str
     setVals((v) => ({ ...v, [key]: value }));
     try {
       await legalCasesService.saveFaseField(caseId, phase, key, value);
+      // Aprovar É mover: o campo que carrega `simMove` leva o card sozinho.
+      // Grava o campo ANTES, para que a fase nova já encontre a aprovação salva.
+      const gatilho = fields?.find((f) => f.key === key)?.simMove;
+      if (gatilho && value === gatilho.opcao) {
+        await legalCasesService.movePhase(caseId, gatilho.fase);
+        toast.success('Aprovada — card movido para Protocolo.');
+      }
       qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
+      qc.invalidateQueries({ queryKey: ['legal-cases'] });
     } catch { toast.error('Erro ao salvar'); }
   };
 
@@ -323,6 +341,7 @@ const toInputDate = (v: any): string => {
 };
 
 function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave: (v: any) => void }) {
+  const [piscou, setPiscou] = useState<string | null>(null);
   const [local, setLocal] = useState(
     field.type === 'currency'
       ? currencyToInput(value)
@@ -357,12 +376,27 @@ function FieldInput({ field, value, onSave }: { field: Field; value: any; onSave
   if (field.type === 'radio') {
     return (
       <div className="flex flex-wrap gap-1.5">
-        {field.options!.map((opt) => (
-          <button key={opt} onClick={() => onSave(value === opt ? '' : opt)}
-            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${value === opt ? 'border-[#228BE6] bg-[#228BE6] text-white' : 'border-[#cfe0ed] text-[#4b5863] hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'}`}>
-            {opt}
-          </button>
-        ))}
+        {field.options!.map((opt) => {
+          const marcado = value === opt;
+          // A opção que APROVA sai em verde: a cor diz que o card vai andar.
+          const aprova = field.simMove?.opcao === opt;
+          const acabouDeAprovar = marcado && aprova && piscou === opt;
+          return (
+            <button
+              key={opt}
+              onClick={() => { onSave(marcado ? '' : opt); if (!marcado && aprova) { setPiscou(opt); setTimeout(() => setPiscou(null), 900); } }}
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-all duration-300 ${
+                marcado
+                  ? aprova
+                    ? `border-emerald-600 bg-emerald-600 text-white ${acabouDeAprovar ? 'scale-110 shadow-lg shadow-emerald-500/40 ring-2 ring-emerald-300' : ''}`
+                    : 'border-[#228BE6] bg-[#228BE6] text-white'
+                  : 'border-[#cfe0ed] text-[#4b5863] hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'
+              }`}
+            >
+              {marcado && aprova ? <Check className="mr-1 inline h-3 w-3" /> : null}{opt}
+            </button>
+          );
+        })}
       </div>
     );
   }

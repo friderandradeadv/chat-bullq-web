@@ -295,6 +295,8 @@ export interface KanbanCard {
   // fase (via DataJud/Astrea). Badge de alerta — conferir e mover o card.
   revisarFase: { evento: string | null; desde: string | null } | null;
   inssResultado: string | null; // 'deferido' | 'recurso' | 'indeferido' — abas do board do INSS
+  /** ISO de quando a inicial foi montada — acende o ✓ verde no card. */
+  inicialEm?: string | null;
   tags: { id: string; name: string; color: string }[];
   court: string | null;
   value: number | null;
@@ -945,11 +947,12 @@ export const legalCasesService = {
   async prepararDocumentosDaInicial(
     id: string,
     substituir = false,
+    signal?: AbortSignal,
   ): Promise<DocumentosDaInicial> {
     const { data } = await api.post(
       `/legal-cases/${id}/documentos/preparar-inicial`,
       {},
-      { params: substituir ? { substituir: 'true' } : {}, timeout: 300000 },
+      { params: substituir ? { substituir: 'true' } : {}, timeout: 300000, signal },
     );
     return data.data ?? data;
   },
@@ -1009,6 +1012,7 @@ export const legalCasesService = {
   async gerarInicial(
     id: string,
     produto?: string,
+    signal?: AbortSignal,
   ): Promise<{ base: string; fileName: string; valorCausa: number; documentId: string; docxBase64: string }> {
     // 🚨 240s: desde 21/09 esta rota roda o `montar_peca_no_timbrado.py` — brasão
     // na jurisprudência, keepNext, respiros, fecho da comarca —, e cirurgia de
@@ -1017,7 +1021,7 @@ export const legalCasesService = {
     const { data } = await api.post(
       `/legal-cases/${id}/inicial/gerar${produto ? `?produto=${encodeURIComponent(produto)}` : ''}`,
       undefined,
-      { timeout: 240_000 },
+      { timeout: 240_000, signal },
     );
     return data.data ?? data;
   },
@@ -1052,6 +1056,7 @@ export const legalCasesService = {
   async calcularAutomatico(
     id: string,
     produto: 'RMC' | 'RCC',
+    signal?: AbortSignal,
   ): Promise<
     | {
         ok: true; total: number; cenarioTitulo?: string; banco?: string; competencias?: number; taxa?: number;
@@ -1072,7 +1077,7 @@ export const legalCasesService = {
     const { data } = await api.post(
       `/legal-cases/${id}/calculo/automatico`,
       { produto },
-      { timeout: 300_000 },
+      { timeout: 300_000 , signal },
     );
     return data.data ?? data;
   },
