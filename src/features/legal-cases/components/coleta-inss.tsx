@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Eye, EyeOff, ExternalLink, KeyRound, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
 
 /**
@@ -33,6 +34,19 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   // useRef declarado depois de um return condicional derrubou a PÁGINA inteira.
   const [verSenha, setVerSenha] = useState(false);
   const [pedindo, setPedindo] = useState(false);
+  // 🚨 ENQUANTO ESTÁ NA FILA, O CARD SE ATUALIZA SOZINHO. Sem isto o advogado
+  // pedia a coleta e tinha de fechar e reabrir o card para saber se terminou —
+  // e, pior, para descobrir que o vigia estava esperando o login dele. De 20 em
+  // 20 segundos, e SÓ enquanto pendente: parado, não consulta nada.
+  const qc = useQueryClient();
+  const naFila = coleta?.status === 'pendente';
+  useEffect(() => {
+    if (!naFila || !caseId) return;
+    const t = setInterval(() => {
+      qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
+    }, 20000);
+    return () => clearInterval(t);
+  }, [naFila, caseId, qc]);
   const cliente = parties?.find((p: CaseDetail['parties'][number]) => p.role === 'CLIENT');
   const cad = ((cliente?.contact?.metadata as any)?.cadastro ?? {}) as { login?: string; senha?: string };
   const login = cad.login?.trim();
@@ -145,7 +159,9 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
 
         <p className={`mt-1.5 text-[11px] leading-4 ${coleta.status === 'feita' ? 'text-emerald-700 dark:text-emerald-400' : coleta.status === 'falhou' ? 'text-rose-600 dark:text-rose-400' : 'text-[#48626f] dark:text-zinc-400'}`}>
 
-          {coleta.status === 'pendente' && 'Coleta na fila — o Mac pega em até 5 minutos.'}
+          {coleta.status === 'pendente' && (coleta.erro
+                ? `⏳ ${coleta.erro}`
+                : 'Coleta na fila — o Mac pega em até 5 minutos.')}
 
           {coleta.status === 'feita' && `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`}
 
