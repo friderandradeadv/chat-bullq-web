@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -523,6 +523,9 @@ export function CaseDetailDrawer({
                           )}
                         </div>
                       </Dobravel>
+                      {/* Fora do dobrável de propósito: o botão mestre é o que se
+                          aperta nesta fase, e não se esconde o que é para apertar. */}
+                      <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} area={c.area} calculo={calc} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                     </>
                   );
                 })()}
@@ -578,22 +581,6 @@ export function CaseDetailDrawer({
                 </select>
               </div>
             </div>
-
-            {/* 🚨 O BOTÃO DA FASE FICA NA FASE. Ele vivia na aba Dados, atrás de um
-                dobrável de cálculo: quem estava em MONTAR INICIAL tinha de sair do
-                painel para achar o que apertar. Aqui é a primeira coisa da fase. */}
-            {c && phaseKey === 'montar_inicial' && (
-              <div className="mt-5">
-                <InicialActions
-                  caseId={c.id}
-                  jg={(c.metadata as any)?.jg}
-                  docs={(c.metadata as any)?.docs}
-                  area={c.area}
-                  calculo={(c.metadata as any)?.calculo}
-                  onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
-                />
-              </div>
-            )}
 
             {c && phaseKey && (
               <div className="mt-5">
@@ -1382,21 +1369,8 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
    * Revisão inicial, e quem move para Protocolo é o advogado.
    */
   const [tudoBusy, setTudoBusy] = useState<string | null>(null);
-  // 🚨 ABORTAR: o botão mestre dispara uma sequência que MEXE NO DRIVE e MOVE a
-  // fase do card. Clicado por engano, não bastava esperar terminar: ao fim ele já
-  // teria recortado documentos, montado a pasta do réu e tirado o card de MONTAR
-  // INICIAL. O controller cancela a requisição em curso, e a checagem ENTRE as
-  // etapas impede que a seguinte comece — que é o que de fato protege.
-  const abortarRef = useRef<AbortController | null>(null);
   const montarTudo = async () => {
     const produto = (area || '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
-    const ac = new AbortController();
-    abortarRef.current = ac;
-    const cancelado = () => {
-      if (!ac.signal.aborted) return false;
-      toast('Montagem abortada — nada foi movido de fase.');
-      return true;
-    };
 
     try {
       // ── PASSO 1: o cálculo ────────────────────────────────────────────────
@@ -1412,7 +1386,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       // conta própria sobrescreveria a escolha de quem abriu a calculadora.
       if (!calculo) {
         setTudoBusy('Calculando…');
-        const r = await legalCasesService.calcularAutomatico(caseId, produto, ac.signal).catch((e) => ({
+        const r = await legalCasesService.calcularAutomatico(caseId, produto).catch((e) => ({
           ok: false as const,
           motivo: e?.response?.data?.message || 'Erro ao calcular.',
         }));
@@ -1449,24 +1423,18 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       //
       // Best-effort: documento que falta vira aviso no card, não erro aqui. Quem
       // decide se dá para montar a inicial é o advogado.
-      if (cancelado()) return;
       setTudoBusy('Preparando os documentos…');
-      await legalCasesService.prepararDocumentosDaInicial(caseId, false, ac.signal).catch(() => undefined);
+      await legalCasesService.prepararDocumentosDaInicial(caseId).catch(() => undefined);
 
-      if (cancelado()) return;
       setTudoBusy('Gerando a inicial…');
-      await legalCasesService.gerarInicial(caseId, produto, ac.signal);
+      await legalCasesService.gerarInicial(caseId, produto);
 
       // A pasta falhar não desfaz a peça: ela já está anexada ao card. E vai por
       // `organizarPasta`, não pelo serviço cru, para não perder os avisos de o
       // que saiu da raiz do cliente e o que foi para o arquivo dele.
-      // A peça já está anexada ao card. Abortar AQUI continua valendo: a pasta
-      // do réu e a mudança de fase são passos que o advogado pode não querer dar.
-      if (cancelado()) { onChanged(); return; }
       setTudoBusy('Organizando a pasta…');
       const org = await organizarPasta();
 
-      if (cancelado()) { onChanged(); return; }
       setTudoBusy('Movendo para revisão…');
       await legalCasesService.movePhase(caseId, 'revisao_inicial');
 
@@ -1476,13 +1444,8 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
         'Confira as lacunas "[ • ]" antes de protocolar.',
       );
     } catch (e: any) {
-      // Cancelamento não é falha: nada de toast vermelho para quem apertou parar.
-      if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || ac.signal.aborted) {
-        toast('Montagem abortada — nada foi movido de fase.');
-      } else {
-        toast.error(e?.response?.data?.message || 'Não consegui completar a montagem.');
-      }
-    } finally { setTudoBusy(null); abortarRef.current = null; }
+      toast.error(e?.response?.data?.message || 'Não consegui completar a montagem.');
+    } finally { setTudoBusy(null); }
   };
 
   const [cadBusy, setCadBusy] = useState(false);
@@ -1543,25 +1506,14 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
           passos seguintes eram para lembrar de fazer à mão. O botão mestre
           abaixo faz a sequência inteira, na ordem que o pacote exige, e o
           produto sai da ÁREA do card em vez de ser escolhido a cada clique. */}
-      <div className="flex w-full items-center gap-1.5">
-        <button
-          onClick={() => montarTudo()}
-          disabled={!!tudoBusy}
-          title="Faz a sequência inteira: calcula o RMC/RCC pelo HISCON (se ainda não houver cálculo salvo), recorta HISCON e HISCRE, monta o JG grifado, gera a inicial no timbrado, organiza a pasta do réu no Drive e manda o card para Revisão inicial."
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
-        >
-          <Sparkles className="h-3.5 w-3.5" /> {tudoBusy || 'Montar a inicial completa e mandar para revisão'}
-        </button>
-        {tudoBusy && (
-          <button
-            onClick={() => abortarRef.current?.abort()}
-            title="Para a montagem agora. O que já terminou fica; o que ainda não começou não roda, e o card não muda de fase."
-            className="shrink-0 rounded-lg border border-red-300 px-2.5 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-          >
-            Abortar
-          </button>
-        )}
-      </div>
+      <button
+        onClick={() => montarTudo()}
+        disabled={!!tudoBusy}
+        title="Faz a sequência inteira: calcula o RMC/RCC pelo HISCON (se ainda não houver cálculo salvo), recorta HISCON e HISCRE, monta o JG grifado, gera a inicial no timbrado, organiza a pasta do réu no Drive e manda o card para Revisão inicial."
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
+      >
+        <Sparkles className="h-3.5 w-3.5" /> {tudoBusy || 'Montar a inicial completa e mandar para revisão'}
+      </button>
     </div>
   );
 }
