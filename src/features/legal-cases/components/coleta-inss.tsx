@@ -61,7 +61,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
     setPedindo(true);
     try {
       await legalCasesService.pedirColetaInss(caseId, nb ?? undefined);
-      toast.success('Coleta pedida. O Mac busca HISCON e HISCRE na sua sessão do Meu INSS — até 5 minutos.');
+      toast.success('Pedido enviado. Se precisar de login, a janela do Meu INSS abre em alguns segundos.');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui pedir a coleta.');
     } finally { setPedindo(false); }
@@ -161,7 +161,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
 
           {coleta.status === 'pendente' && (coleta.erro
                 ? `⏳ ${coleta.erro}`
-                : 'Coleta na fila — o Mac pega em até 5 minutos.')}
+                : 'Na fila — o Mac pega em segundos.')}
 
           {coleta.status === 'feita' && `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`}
 
