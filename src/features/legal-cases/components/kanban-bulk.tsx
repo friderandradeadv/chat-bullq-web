@@ -27,7 +27,7 @@ import {
   Plus, Sparkles, Tag, Trash2, UserCog, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { montarInicialCompleta, produtoDoCard } from '@/features/legal-cases/lib/montar-inicial';
+import { montarInicialCompleta, porqueNaoMontou, produtoDoCard } from '@/features/legal-cases/lib/montar-inicial';
 import {
   legalCasesService, type CaseStatus, type KanbanCard, type KanbanData,
 } from '@/features/legal-cases/services/legal-cases.service';
@@ -307,7 +307,7 @@ export function KanbanBulkBar({
     const aviso = toast.loading(`Montando 0/${lista.length}…`);
     let prontas = 0;
     const falhas: typeof lista = [];
-    const semCalculo: string[] = [];
+    const recusados: { id: string; aviso: string }[] = [];
     for (const c of lista) {
       if (ac.signal.aborted) break;
       // A sequência vive em `lib/montar-inicial` — a mesma do botão do card e da
@@ -315,27 +315,32 @@ export function KanbanBulkBar({
       // o que impede o pacote de sair com o HISCON inteiro.
       const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), { signal: ac.signal });
       if (r.ok) prontas += 1;
-      else if (r.motivo === 'sem-calculo') semCalculo.push(c.client ?? c.title);
       else if (r.motivo === 'abortado') break;
-      else falhas.push(c);
+      else {
+        const porque = porqueNaoMontou(c.client ?? c.title, r);
+        if (porque) recusados.push({ id: c.id, aviso: porque });
+        if (r.motivo === 'erro') falhas.push(c);
+      }
       toast.loading(`Montando ${prontas}/${lista.length}…`, { id: aviso });
       recarregar(); // o ✓ verde acende conforme fica pronta
     }
     toast.dismiss(aviso);
-    const partes = [`${prontas} pronta(s)`];
-    if (semCalculo.length) partes.push(`${semCalculo.length} sem cálculo (não montei)`);
-    if (falhas.length) partes.push(`${falhas.length} falhou(ram)`);
-    if (ac.signal.aborted) partes.push('abortado');
-    (prontas && !falhas.length && !semCalculo.length ? toast.success : toast.info)(partes.join(' · '));
-    if (semCalculo.length) {
-      toast.warning(
-        `Sem cálculo, a peça sairia "em aberto" e o dobro sumiria do pedido: ${semCalculo.slice(0, 4).join(', ')}` +
-        `${semCalculo.length > 4 ? ` e mais ${semCalculo.length - 4}` : ''}. Abra a calculadora desses.`,
-        { duration: 12000 },
-      );
+
+    // 🚨 LOTE QUE NÃO MONTA TEM DE GRITAR O MOTIVO, UM POR CLIENTE. Em 24/09/2026
+    // o advogado mandou montar dois cards, nada aconteceu, e ele perguntou "gerou?"
+    // — o aviso vinha resumido num toast só, que some sozinho. Agora cada recusa
+    // vira um aviso próprio, que fica na tela até ser fechado.
+    if (prontas) toast.success(`${prontas} inicial(is) montada(s) — card(s) em Revisão inicial.`);
+    for (const rec of recusados) {
+      toast.warning(rec.aviso, { duration: Infinity, closeButton: true });
     }
-    if (falhas.length) bulk.replace(falhas.map((c) => c.id));
-    else if (!semCalculo.length) bulk.clear();
+    if (!prontas && !recusados.length && !ac.signal.aborted) {
+      toast.info('Nada a montar nos cards selecionados.');
+    }
+    if (ac.signal.aborted) toast.info(`Abortado — ${prontas} pronta(s) antes de parar.`);
+    if (recusados.length) bulk.replace(recusados.map((r) => r.id));
+    else if (falhas.length) bulk.replace(falhas.map((c) => c.id));
+    else bulk.clear();
     recarregar();
     abortarRef.current = null;
     setBusy(false);

@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core';
 import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Loader2, Plus, Download, ChevronDown, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import { montarInicialCompleta, produtoDoCard } from '@/features/legal-cases/lib/montar-inicial';
+import { montarInicialCompleta, porqueNaoMontou, produtoDoCard } from '@/features/legal-cases/lib/montar-inicial';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
 } from '@/features/legal-cases/services/legal-cases.service';
@@ -596,31 +596,39 @@ function Column({
 function BotaoMontarInicial({ c, onChanged }: { c: KanbanCard; onChanged?: () => void }) {
   const [etapa, setEtapa] = useState<string | null>(null);
   const rodando = etapa !== null;
-  const montar = async (e: React.MouseEvent) => {
+  const nome = c.client ?? c.title;
+  const montar = async (e: React.MouseEvent, permitirNegativo = false) => {
     e.stopPropagation();
     if (rodando) return;
     setEtapa('Começando…');
     const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), {
-      onEtapa: setEtapa,
+      onEtapa: setEtapa, permitirNegativo,
     });
     setEtapa(null);
     if (r.ok) {
-      toast.success(`${c.client ?? c.title}: inicial montada — card em Revisão inicial.`);
-    } else if (r.motivo === 'sem-calculo') {
-      // Sem cálculo a peça sairia "em aberto" e o dobro sumiria do pedido.
-      toast.error(
-        `${c.client ?? c.title}: sem cálculo, não montei. ${r.detalhe} ` +
-        'Abra a calculadora — sem ela a peça sairia "em aberto" e o dobro sumiria do pedido.',
-        { duration: 12000 },
-      );
-    } else if (r.motivo === 'erro') {
-      toast.error(`${c.client ?? c.title}: ${r.detalhe}`);
+      toast.success(`${nome}: inicial montada — card em Revisão inicial.`);
+    } else if (r.motivo === 'calculo-negativo') {
+      // 🚨 Decisão de MÉRITO, não do sistema: sem indébito, a ação se sustenta só
+      // no dano moral. Pergunta em vez de seguir — e em vez de barrar de vez.
+      const brl = r.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      if (confirm(
+        `${nome}: o cálculo deu ${brl} — NEGATIVO.\n\n` +
+        'Isso quer dizer que não há indébito a restituir: a ação se sustentaria só no ' +
+        'dano moral, e a peça sairá na base EM ABERTO.\n\nMontar assim mesmo?',
+      )) {
+        await montar(e, true);
+        return;
+      }
+      toast.info(`${nome}: não montei — cálculo negativo (${brl}).`);
+    } else {
+      const porque = porqueNaoMontou(nome, r);
+      if (porque) toast.warning(porque, { duration: Infinity, closeButton: true });
     }
     onChanged?.();
   };
   return (
     <button
-      onClick={montar}
+      onClick={(e) => montar(e)}
       onPointerDown={(e) => e.stopPropagation()}
       disabled={rodando}
       title="Calcula, recorta os documentos, monta a peça no timbrado, organiza a pasta do réu e manda para Revisão inicial."
