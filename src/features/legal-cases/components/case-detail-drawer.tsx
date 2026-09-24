@@ -523,9 +523,6 @@ export function CaseDetailDrawer({
                           )}
                         </div>
                       </Dobravel>
-                      {/* Fora do dobrável de propósito: o botão mestre é o que se
-                          aperta nesta fase, e não se esconde o que é para apertar. */}
-                      <InicialActions caseId={c.id} jg={(c.metadata as any)?.jg} docs={(c.metadata as any)?.docs} area={c.area} calculo={calc} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
                     </>
                   );
                 })()}
@@ -581,6 +578,22 @@ export function CaseDetailDrawer({
                 </select>
               </div>
             </div>
+
+            {/* 🚨 O BOTÃO DA FASE FICA NA FASE. Ele vivia na aba Dados, atrás de um
+                dobrável de cálculo: quem estava em MONTAR INICIAL tinha de sair do
+                painel para achar o que apertar. Aqui é a primeira coisa da fase. */}
+            {c && phaseKey === 'montar_inicial' && (
+              <div className="mt-5">
+                <InicialActions
+                  caseId={c.id}
+                  jg={(c.metadata as any)?.jg}
+                  docs={(c.metadata as any)?.docs}
+                  area={c.area}
+                  calculo={(c.metadata as any)?.calculo}
+                  onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
+                />
+              </div>
+            )}
 
             {c && phaseKey && (
               <div className="mt-5">

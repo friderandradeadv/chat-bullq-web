@@ -71,9 +71,12 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'docs_faltantes', label: 'Quais documentos faltantes?', type: 'textarea' },
     { key: 'obter_docs', label: 'Obter documentos', type: 'checklist', options: ['Entrar em contato com o cliente', 'Solicitar documentos', 'Subir no Drive', 'Anexar documentos recebidos'] },
   ],
+  // 🚨 "Temos todos os documentos?" e "Petição pronta?" SAÍRAM em 24/09/2026.
+  // Perguntas que a própria fase já responde: o card só chega aqui depois de
+  // INFORMAÇÕES FALTANTES, e sai daqui quando a peça fica pronta. No lugar
+  // delas, o painel desta fase mostra o BOTÃO que monta a inicial — o que se
+  // aperta aqui, direto, sem passar pela aba Dados.
   montar_inicial: [
-    { key: 'docs_ok', label: 'Temos todos os documentos?', type: 'radio', options: ['Sim', 'Não'] },
-    { key: 'peticao_pronta', label: 'Petição pronta?', type: 'radio', options: ['Sim', 'Não'] },
     { key: 'info', label: 'Informações importantes', type: 'textarea' },
   ],
   // 🚨 "Petição revisada?" SAIU em 24/09/2026: as duas perguntas mediam a mesma
