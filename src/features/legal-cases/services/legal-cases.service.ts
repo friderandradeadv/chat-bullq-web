@@ -1113,6 +1113,11 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/drive/upload`);
     return data.data ?? data;
   },
+  /** Enfileira a coleta no Meu INSS — quem executa é o vigia do Mac. */
+  async pedirColetaInss(id: string, nb?: string): Promise<{ ok: boolean; nb: string | null; status: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/coleta-inss/pedir`, { nb });
+    return data.data ?? data;
+  },
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */

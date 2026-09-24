@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Eye, EyeOff, ExternalLink, KeyRound } from 'lucide-react';
+import { Copy, Eye, EyeOff, ExternalLink, KeyRound, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
+import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
 
 /**
  * Atalho de coleta no Meu INSS.
@@ -22,8 +22,17 @@ const PORTAIS = [
   { nome: 'Restituição', url: 'https://www.restituicao.receita.fazenda.gov.br/' },
 ];
 
-export function ColetaInss({ parties }: { parties: CaseDetail['parties'] }) {
+export function ColetaInss({ parties, caseId, coleta, nb }: {
+  parties: CaseDetail['parties'];
+  caseId?: string;
+  /** `metadata.coletaInss` — o estado do último pedido. */
+  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[] } | null;
+  nb?: string | null;
+}) {
+  // 🚨 TODO HOOK ANTES DE QUALQUER `return` — ver a nota em kanban-bulk.tsx: um
+  // useRef declarado depois de um return condicional derrubou a PÁGINA inteira.
   const [verSenha, setVerSenha] = useState(false);
+  const [pedindo, setPedindo] = useState(false);
   const cliente = parties?.find((p: CaseDetail['parties'][number]) => p.role === 'CLIENT');
   const cad = ((cliente?.contact?.metadata as any)?.cadastro ?? {}) as { login?: string; senha?: string };
   const login = cad.login?.trim();
@@ -32,6 +41,17 @@ export function ColetaInss({ parties }: { parties: CaseDetail['parties'] }) {
   // Sem cliente vinculado não há o que abrir — e sem credencial o bloco vira só
   // os atalhos dos portais, que continuam úteis.
   if (!cliente) return null;
+
+  const pedirColeta = async () => {
+    if (!caseId) return;
+    setPedindo(true);
+    try {
+      await legalCasesService.pedirColetaInss(caseId, nb ?? undefined);
+      toast.success('Coleta pedida. O Mac busca HISCON e HISCRE na sua sessão do Meu INSS — até 5 minutos.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui pedir a coleta.');
+    } finally { setPedindo(false); }
+  };
 
   const copiar = (valor: string, rotulo: string) => {
     navigator.clipboard.writeText(valor);
@@ -88,10 +108,52 @@ export function ColetaInss({ parties }: { parties: CaseDetail['parties'] }) {
       )}
 
       <p className="mt-2 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
-        Abra o portal, cole as credenciais e resolva o segundo fator. Feito o login,
-        peça a coleta: os extratos, o corte por benefício e o arquivamento no Drive
-        rodam sem você.
+
+        Abra o portal e entre com as credenciais — o login e o segundo fator são seus, o
+
+        gov.br exige. Feita a sessão, peça a coleta: o HISCON e o HISCRE são baixados e
+
+        arquivados no Drive sem você.
+
       </p>
+
+      {caseId && (
+
+        <button
+
+          type="button"
+
+          onClick={pedirColeta}
+
+          disabled={pedindo}
+
+          title="Enfileira a coleta. Quem executa é este Mac, na janela do Meu INSS que você autenticou."
+
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+
+        >
+
+          {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+
+          {pedindo ? 'Pedindo…' : 'Coletar agora (HISCON + HISCRE)'}
+
+        </button>
+
+      )}
+
+      {coleta?.status && (
+
+        <p className={`mt-1.5 text-[11px] leading-4 ${coleta.status === 'feita' ? 'text-emerald-700 dark:text-emerald-400' : coleta.status === 'falhou' ? 'text-rose-600 dark:text-rose-400' : 'text-[#48626f] dark:text-zinc-400'}`}>
+
+          {coleta.status === 'pendente' && 'Coleta na fila — o Mac pega em até 5 minutos.'}
+
+          {coleta.status === 'feita' && `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`}
+
+          {coleta.status === 'falhou' && `Não coletei: ${coleta.erro ?? 'erro desconhecido'}`}
+
+        </p>
+
+      )}
     </div>
   );
 }

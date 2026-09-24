@@ -603,7 +603,14 @@ export function CaseDetailDrawer({
               </div>
             )}
 
-            {c && <ColetaInss parties={c.parties} />}
+            {c && (
+              <ColetaInss
+                parties={c.parties}
+                caseId={c.id}
+                coleta={(c.metadata as any)?.coletaInss ?? null}
+                nb={(c.metadata as any)?.beneficio?.nb ?? null}
+              />
+            )}
 
             {/* Só onde faltar documento é o assunto: em "montar inicial" para
                 diante, a pasta já está fechada e o painel viraria ruído. */}
