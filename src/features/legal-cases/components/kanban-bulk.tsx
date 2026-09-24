@@ -27,6 +27,7 @@ import {
   Plus, Sparkles, Tag, Trash2, UserCog, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { montarInicialCompleta, produtoDoCard } from '@/features/legal-cases/lib/montar-inicial';
 import {
   legalCasesService, type CaseStatus, type KanbanCard, type KanbanData,
 } from '@/features/legal-cases/services/legal-cases.service';
@@ -304,23 +305,14 @@ export function KanbanBulkBar({
     const semCalculo: string[] = [];
     for (const c of lista) {
       if (ac.signal.aborted) break;
-      const produto = (c.produto ?? c.areaJuridica ?? '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
-      try {
-        // 🚨 O CÁLCULO ESCOLHE O PEDIDO. Sem ele a peça sai "em aberto" e o dobro
-        // some, sem nada na peça pronta denunciando a troca. Falhou o cálculo,
-        // este card NÃO é montado — vai para a lista de pendentes.
-        const r = await legalCasesService.calcularAutomatico(c.id, produto as 'RMC' | 'RCC', ac.signal)
-          .catch(() => ({ ok: false as const, motivo: 'erro ao calcular' }));
-        if (!r.ok) { semCalculo.push(c.client ?? c.title); continue; }
-        await legalCasesService.prepararDocumentosDaInicial(c.id, false, ac.signal).catch(() => undefined);
-        await legalCasesService.gerarInicial(c.id, produto, ac.signal);
-        await legalCasesService.organizarPastaInicial(c.id).catch(() => undefined);
-        await legalCasesService.movePhase(c.id, 'revisao_inicial');
-        prontas += 1;
-      } catch (e: any) {
-        if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || ac.signal.aborted) break;
-        falhas.push(c);
-      }
+      // A sequência vive em `lib/montar-inicial` — a mesma do botão do card e da
+      // ficha. Duas cópias seriam duas chances de a ORDEM divergir, e a ordem é
+      // o que impede o pacote de sair com o HISCON inteiro.
+      const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), { signal: ac.signal });
+      if (r.ok) prontas += 1;
+      else if (r.motivo === 'sem-calculo') semCalculo.push(c.client ?? c.title);
+      else if (r.motivo === 'abortado') break;
+      else falhas.push(c);
       toast.loading(`Montando ${prontas}/${lista.length}…`, { id: aviso });
       recarregar(); // o ✓ verde acende conforme fica pronta
     }
