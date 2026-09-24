@@ -7,8 +7,9 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Plus, Download, ChevronDown, SlidersHorizontal } from 'lucide-react';
+import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Loader2, Plus, Download, ChevronDown, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { montarInicialCompleta, produtoDoCard } from '@/features/legal-cases/lib/montar-inicial';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
 } from '@/features/legal-cases/services/legal-cases.service';
@@ -588,6 +589,50 @@ function Column({
   );
 }
 
+/**
+ * Monta a inicial a partir do próprio card. Estado é local: cada card tem o seu,
+ * e um em andamento não trava os outros da coluna.
+ */
+function BotaoMontarInicial({ c, onChanged }: { c: KanbanCard; onChanged?: () => void }) {
+  const [etapa, setEtapa] = useState<string | null>(null);
+  const rodando = etapa !== null;
+  const montar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (rodando) return;
+    setEtapa('Começando…');
+    const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), {
+      onEtapa: setEtapa,
+    });
+    setEtapa(null);
+    if (r.ok) {
+      toast.success(`${c.client ?? c.title}: inicial montada — card em Revisão inicial.`);
+    } else if (r.motivo === 'sem-calculo') {
+      // Sem cálculo a peça sairia "em aberto" e o dobro sumiria do pedido.
+      toast.error(
+        `${c.client ?? c.title}: sem cálculo, não montei. ${r.detalhe} ` +
+        'Abra a calculadora — sem ela a peça sairia "em aberto" e o dobro sumiria do pedido.',
+        { duration: 12000 },
+      );
+    } else if (r.motivo === 'erro') {
+      toast.error(`${c.client ?? c.title}: ${r.detalhe}`);
+    }
+    onChanged?.();
+  };
+  return (
+    <button
+      onClick={montar}
+      onPointerDown={(e) => e.stopPropagation()}
+      disabled={rodando}
+      title="Calcula, recorta os documentos, monta a peça no timbrado, organiza a pasta do réu e manda para Revisão inicial."
+      className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-70"
+    >
+      {rodando
+        ? <><Loader2 className="h-3 w-3 animate-spin" /> {etapa}</>
+        : <><Sparkles className="h-3 w-3" /> Montar inicial</>}
+    </button>
+  );
+}
+
 const Card = memo(function Card({
   c, phases, bulk, colIds, onMove, onOpen, onIniciarCs, onChanged, overlay,
 }: {
@@ -659,6 +704,18 @@ const Card = memo(function Card({
             title={`Tribunal registrou ${c.revisarFase.evento ?? 'andamento'} à frente da fase — conferir e mover o card`}
           >
             🔎 revisar fase
+          </span>
+        )}
+        {/* ✓ verde: a inicial JÁ foi montada. Serve principalmente ao LOTE — é como
+            se vê, de relance, quais já ficaram prontas, sem abrir card por card.
+            Vem de `metadata.inicial`, gravado na geração: sobrevive a recarregar. */}
+        {c.inicialEm && (
+          <span
+            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3"
+            style={{ background: '#d1fae5', color: '#065f46' }}
+            title={`Inicial montada em ${new Date(c.inicialEm).toLocaleString('pt-BR')} — revise e marque "Aprovada para protocolo"`}
+          >
+            ✓ inicial
           </span>
         )}
         {/* Etiquetas jurídicas (EntityTag, incl. migradas do Astrea) NÃO vão na face
@@ -743,6 +800,15 @@ const Card = memo(function Card({
           >
             <Scale className="h-3 w-3" /> Iniciar CS
           </button>
+        </div>
+      )}
+
+      {/* Montar a inicial SEM ABRIR o card: em MONTAR INICIAL, o que se faz é um
+          só, e abrir a ficha para apertar um botão era um clique a mais em cada
+          processo da fila. Some quando a peça fica pronta — aí o selo é o ✓. */}
+      {!overlay && c.phase === 'montar_inicial' && !c.inicialEm && (
+        <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+          <BotaoMontarInicial c={c} onChanged={onChanged} />
         </div>
       )}
 

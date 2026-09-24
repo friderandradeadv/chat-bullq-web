@@ -24,9 +24,10 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Ban, Check, CheckCircle2, CheckSquare, ChevronDown, Loader2, MoveRight, PauseCircle,
-  Plus, Tag, Trash2, UserCog, X,
+  Plus, Sparkles, Tag, Trash2, UserCog, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { montarInicialCompleta, produtoDoCard } from '@/features/legal-cases/lib/montar-inicial';
 import {
   legalCasesService, type CaseStatus, type KanbanCard, type KanbanData,
 } from '@/features/legal-cases/services/legal-cases.service';
@@ -281,6 +282,60 @@ export function KanbanBulkBar({
     setBusy(false);
   };
 
+  // ── Montar a inicial completa, EM FILA ────────────────────────────────────
+  // 🚨 UMA DE CADA VEZ, de propósito. Cada montagem calcula, recorta HISCON e
+  // HISCRE, monta a peça no timbrado (cirurgia de OOXML em Python) e mexe no
+  // Drive — quatro delas ao mesmo tempo afogam a CPU da VPS, que é a mesma que
+  // serve o hub. Vinte minutos em fila é melhor do que o hub fora do ar.
+  const abortarRef = useRef<AbortController | null>(null);
+  const montarIniciais = async () => {
+    const lista = selecionados;
+    if (!lista.length) return;
+    if (!confirm(
+      `Montar a inicial completa de ${lista.length} processo(s)?\n\n` +
+      'Cada uma leva de 1 a 3 minutos e elas rodam em fila — o ✓ verde acende no ' +
+      'card conforme cada uma fica pronta. Dá para abortar a qualquer momento.',
+    )) return;
+    setBusy(true);
+    const ac = new AbortController();
+    abortarRef.current = ac;
+    const aviso = toast.loading(`Montando 0/${lista.length}…`);
+    let prontas = 0;
+    const falhas: typeof lista = [];
+    const semCalculo: string[] = [];
+    for (const c of lista) {
+      if (ac.signal.aborted) break;
+      // A sequência vive em `lib/montar-inicial` — a mesma do botão do card e da
+      // ficha. Duas cópias seriam duas chances de a ORDEM divergir, e a ordem é
+      // o que impede o pacote de sair com o HISCON inteiro.
+      const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), { signal: ac.signal });
+      if (r.ok) prontas += 1;
+      else if (r.motivo === 'sem-calculo') semCalculo.push(c.client ?? c.title);
+      else if (r.motivo === 'abortado') break;
+      else falhas.push(c);
+      toast.loading(`Montando ${prontas}/${lista.length}…`, { id: aviso });
+      recarregar(); // o ✓ verde acende conforme fica pronta
+    }
+    toast.dismiss(aviso);
+    const partes = [`${prontas} pronta(s)`];
+    if (semCalculo.length) partes.push(`${semCalculo.length} sem cálculo (não montei)`);
+    if (falhas.length) partes.push(`${falhas.length} falhou(ram)`);
+    if (ac.signal.aborted) partes.push('abortado');
+    (prontas && !falhas.length && !semCalculo.length ? toast.success : toast.info)(partes.join(' · '));
+    if (semCalculo.length) {
+      toast.warning(
+        `Sem cálculo, a peça sairia "em aberto" e o dobro sumiria do pedido: ${semCalculo.slice(0, 4).join(', ')}` +
+        `${semCalculo.length > 4 ? ` e mais ${semCalculo.length - 4}` : ''}. Abra a calculadora desses.`,
+        { duration: 12000 },
+      );
+    }
+    if (falhas.length) bulk.replace(falhas.map((c) => c.id));
+    else if (!semCalculo.length) bulk.clear();
+    recarregar();
+    abortarRef.current = null;
+    setBusy(false);
+  };
+
   // ── Responsável / status / arquivar: /legal-cases/bulk (só sócios). ──
   const rodarBulk = async (
     action: 'delete' | 'status' | 'responsible',
@@ -354,6 +409,23 @@ export function KanbanBulkBar({
           )}
         </BulkMenu>
 
+        {!vazio && !busy && (
+          <button
+            onClick={montarIniciais}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            <Sparkles className="h-4 w-4" /> Montar a inicial completa
+          </button>
+        )}
+        {busy && (
+          <button
+            onClick={() => abortarRef.current?.abort()}
+            title="Para a montagem agora; o que não começou não roda."
+            className="inline-flex shrink-0 items-center rounded-lg border border-red-300 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50"
+          >
+            Abortar
+          </button>
+        )}
         <BulkMenu label="Etiquetas" icon={<Tag className="h-4 w-4" />} disabled={busy || vazio} accent={accent}>
           {(close) => (
             <>

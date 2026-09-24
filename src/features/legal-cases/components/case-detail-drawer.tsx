@@ -1555,7 +1555,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
         {tudoBusy && (
           <button
             onClick={() => abortarRef.current?.abort()}
-            title="Para a montagem agora. O que já terminou fica; o que ainda não começou não roda, e o card não muda de fase."
+            title="Para a montagem agora; o que não começou não roda."
             className="shrink-0 rounded-lg border border-red-300 px-2.5 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
           >
             Abortar
