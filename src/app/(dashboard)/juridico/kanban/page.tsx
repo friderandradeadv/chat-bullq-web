@@ -661,6 +661,18 @@ const Card = memo(function Card({
             🔎 revisar fase
           </span>
         )}
+        {/* ✓ verde: a inicial JÁ foi montada. Serve principalmente ao LOTE — é como
+            se vê, de relance, quais já ficaram prontas, sem abrir card por card.
+            Vem de `metadata.inicial`, gravado na geração: sobrevive a recarregar. */}
+        {c.inicialEm && (
+          <span
+            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3"
+            style={{ background: '#d1fae5', color: '#065f46' }}
+            title={`Inicial montada em ${new Date(c.inicialEm).toLocaleString('pt-BR')} — revise e marque "Aprovada para protocolo"`}
+          >
+            ✓ inicial
+          </span>
+        )}
         {/* Etiquetas jurídicas (EntityTag, incl. migradas do Astrea) NÃO vão na face
             do card — enchiam demais e misturavam com produto/área (fix 406b46f, que
             regrediu). Ficam só produto + área aqui; a edição/visão das etiquetas é na

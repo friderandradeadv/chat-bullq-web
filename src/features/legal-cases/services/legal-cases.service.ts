@@ -295,6 +295,8 @@ export interface KanbanCard {
   // fase (via DataJud/Astrea). Badge de alerta — conferir e mover o card.
   revisarFase: { evento: string | null; desde: string | null } | null;
   inssResultado: string | null; // 'deferido' | 'recurso' | 'indeferido' — abas do board do INSS
+  /** ISO de quando a inicial foi montada — acende o ✓ verde no card. */
+  inicialEm?: string | null;
   tags: { id: string; name: string; color: string }[];
   court: string | null;
   value: number | null;
