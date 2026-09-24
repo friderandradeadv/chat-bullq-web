@@ -234,6 +234,12 @@ export function KanbanBulkBar({
   const qc = useQueryClient();
   const { canDeleteCases } = usePermissions();
   const [busy, setBusy] = useState(false);
+  // 🚨 TODOS OS HOOKS ANTES DO `if (!bulk.active) return null` ABAIXO. Declarado
+  // depois dele, este useRef só rodava com a barra ATIVA: ao marcar o primeiro
+  // card a barra acendia, a contagem de hooks mudava entre um render e o outro,
+  // e o React derrubava a PÁGINA INTEIRA ("This page couldn't load"). Medido em
+  // 24/09/2026 — o advogado clicava na caixinha de seleção do card e o hub caía.
+  const abortarRef = useRef<AbortController | null>(null);
 
   const selecionados = useMemo(() => cards.filter((c) => bulk.has(c.id)), [cards, bulk]);
   const total = selecionados.length;
@@ -287,7 +293,6 @@ export function KanbanBulkBar({
   // HISCRE, monta a peça no timbrado (cirurgia de OOXML em Python) e mexe no
   // Drive — quatro delas ao mesmo tempo afogam a CPU da VPS, que é a mesma que
   // serve o hub. Vinte minutos em fila é melhor do que o hub fora do ar.
-  const abortarRef = useRef<AbortController | null>(null);
   const montarIniciais = async () => {
     const lista = selecionados;
     if (!lista.length) return;
