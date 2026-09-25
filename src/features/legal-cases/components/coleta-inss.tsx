@@ -156,19 +156,30 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
       )}
 
       {coleta?.status && (
+        <>
+          <p className={`mt-1.5 text-[11px] leading-4 ${coleta.status === 'feita' ? 'text-emerald-700 dark:text-emerald-400' : coleta.status === 'falhou' ? 'text-rose-600 dark:text-rose-400' : 'text-[#48626f] dark:text-zinc-400'}`}>
 
-        <p className={`mt-1.5 text-[11px] leading-4 ${coleta.status === 'feita' ? 'text-emerald-700 dark:text-emerald-400' : coleta.status === 'falhou' ? 'text-rose-600 dark:text-rose-400' : 'text-[#48626f] dark:text-zinc-400'}`}>
+            {coleta.status === 'pendente' && (coleta.erro
+                  ? `⏳ ${coleta.erro}`
+                  : 'Na fila — o Mac pega em segundos.')}
 
-          {coleta.status === 'pendente' && (coleta.erro
-                ? `⏳ ${coleta.erro}`
-                : 'Na fila — o Mac pega em segundos.')}
+            {coleta.status === 'feita' && `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`}
 
-          {coleta.status === 'feita' && `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`}
+            {coleta.status === 'falhou' && `Não coletei: ${coleta.erro ?? 'erro desconhecido'}`}
 
-          {coleta.status === 'falhou' && `Não coletei: ${coleta.erro ?? 'erro desconhecido'}`}
+          </p>
 
-        </p>
-
+          {/* 🚨 COLETA PODE DAR CERTO COM RESSALVA, e a ressalva NÃO SE ENGOLE.
+              Quando o print do Portal MIR não sai, os três documentos do INSS
+              vêm assim mesmo e o status é "feita" — mas falta uma peça do JG.
+              Sem esta linha o aviso sumia e a gratuidade ia incompleta ao
+              protocolo sem ninguém perceber (25/09/2026). */}
+          {coleta.status === 'feita' && coleta.erro && (
+            <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
+              ⚠ {coleta.erro}
+            </p>
+          )}
+        </>
       )}
     </div>
   );
