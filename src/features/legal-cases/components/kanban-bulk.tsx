@@ -313,7 +313,15 @@ export function KanbanBulkBar({
       // A sequência vive em `lib/montar-inicial` — a mesma do botão do card e da
       // ficha. Duas cópias seriam duas chances de a ORDEM divergir, e a ordem é
       // o que impede o pacote de sair com o HISCON inteiro.
-      const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), { signal: ac.signal });
+      // 🚨 PASSO A PASSO, COMO NA COLETA. "Montando 0/2…" ficava parado por até
+      // três minutos por cliente e não distinguia trabalhando de travado — o
+      // mesmo defeito que a coleta do Meu INSS já tinha corrigido. A sequência
+      // sempre soube em que etapa estava (`onEtapa`); ninguém estava mostrando.
+      const quem = (c.client ?? c.title).split(' ').slice(0, 2).join(' ');
+      const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), {
+        signal: ac.signal,
+        onEtapa: (e) => toast.loading(`${prontas}/${lista.length} · ${quem}: ${e}`, { id: aviso }),
+      });
       if (r.ok) prontas += 1;
       else if (r.motivo === 'abortado') break;
       else {
