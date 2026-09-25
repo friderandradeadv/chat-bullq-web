@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, FileUp, Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
 /**
@@ -36,6 +37,7 @@ export function IntakeDocumentos({
   // convenção já usada em "Aprovada para protocolo" (fase-fields.tsx) — sem ela
   // o card sumia da fase sem nada acontecer na tela (25/09/2026).
   const [piscou, setPiscou] = useState(false);
+  const qc = useQueryClient();
   const [r, setR] = useState<Resultado | null>(null);
   const input = useRef<HTMLInputElement>(null);
   // 🚨 O QUE FALTA SE LÊ, NÃO SE PERGUNTA. Antes a fase tinha dois campos
@@ -83,6 +85,14 @@ export function IntakeDocumentos({
     setMovendo(true);
     try {
       await legalCasesService.movePhase(caseId, 'montar_inicial');
+      // 🚨 RECARREGAR O QUADRO, NÃO SÓ AVISAR. O toast dizia "movido" e o card
+      // continuava na coluna antiga até um F5 — o hub afirmava uma coisa e
+      // mostrava outra (25/09/2026). `onMovido` fecha a gaveta; quem atualiza o
+      // kanban é a invalidação, a mesma que a aprovação de fase já fazia.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['legal-cases'] }),
+        qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] }),
+      ]);
       toast.success('Card movido para MONTAR INICIAL');
       onMovido?.();
     } catch (e: any) {
