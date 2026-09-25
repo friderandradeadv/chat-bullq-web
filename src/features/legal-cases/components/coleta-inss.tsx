@@ -27,7 +27,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   parties: CaseDetail['parties'];
   caseId?: string;
   /** `metadata.coletaInss` — o estado do último pedido. */
-  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null } | null;
+  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string } | null;
   nb?: string | null;
 }) {
   // 🚨 TODO HOOK ANTES DE QUALQUER `return` — ver a nota em kanban-bulk.tsx: um
@@ -42,9 +42,11 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   const naFila = coleta?.status === 'pendente';
   useEffect(() => {
     if (!naFila || !caseId) return;
+    // 🚨 8 SEGUNDOS ENQUANTO COLETA. Com 20s os passos apareciam pela metade: a
+    // coleta inteira leva ~2min30 e cada documento fica pronto a cada ~40s.
     const t = setInterval(() => {
       qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
-    }, 20000);
+    }, 8000);
     return () => clearInterval(t);
   }, [naFila, caseId, qc]);
   const cliente = parties?.find((p: CaseDetail['parties'][number]) => p.role === 'CLIENT');
@@ -167,7 +169,15 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
 
             {coleta.status === 'pendente' && (coleta.erro
                   ? `⏳ ${coleta.erro}`
-                  : 'Na fila — o Mac pega em segundos.')}
+                  : coleta.etapa
+                    // 🚨 O PASSO EM QUE ESTÁ, NÃO "na fila". Entre o clique e o
+                    // "Coletado" passam uns 2min30, e um card imóvel não
+                    // distingue trabalhando de travado (25/09/2026).
+                    ? <span className="inline-flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                        {coleta.etapa}
+                      </span>
+                    : 'Na fila — o Mac pega em segundos.')}
 
             {coleta.status === 'feita' && (coleta.pasta
               ? `Coletado em ${coleta.pasta}: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`
