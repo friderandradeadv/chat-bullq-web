@@ -167,7 +167,10 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
         <>
           <p className={`mt-1.5 text-[11px] leading-4 ${coleta.status === 'feita' ? 'text-emerald-700 dark:text-emerald-400' : coleta.status === 'falhou' ? 'text-rose-600 dark:text-rose-400' : 'text-[#48626f] dark:text-zinc-400'}`}>
 
-            {coleta.status === 'pendente' && (coleta.erro
+            {/* 🚨 O PASSO VEM ANTES DO AVISO. Estando em andamento, o recado
+                anterior ("entre com o login") é história: mostrá-lo esconde a
+                narração e faz o hub parecer parado (25/09/2026). */}
+            {coleta.status === 'pendente' && (!coleta.etapa && coleta.erro
                   ? `⏳ ${coleta.erro}`
                   : coleta.etapa
                     // 🚨 O PASSO EM QUE ESTÁ, NÃO "na fila". Entre o clique e o
