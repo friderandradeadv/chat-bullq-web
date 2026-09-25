@@ -101,8 +101,23 @@ export async function montarInicialCompleta(
 export function porqueNaoMontou(nome: string, r: ResultadoMontagem): string | null {
   if (r.ok) return null;
   if (r.motivo === 'sem-calculo') {
-    return `${nome}: não montei — ${r.detalhe || 'sem HISCON para calcular'}. ` +
-      (r.pastaCriada ? 'A pasta do réu foi criada: arquive o HISCON lá e clique de novo.' : 'Arquive o HISCON na pasta do cliente.') +
+    // 🚨 NEM TODO "SEM CÁLCULO" É FALTA DE HISCON. Em 25/09/2026 o BACEN
+    // devolveu 502 na série da taxa e o card mandou o advogado "arquivar o
+    // HISCON" — documento que estava lá, e providência que não resolveria
+    // nada. Conselho errado é pior que conselho nenhum: manda trabalhar à toa
+    // e esconde a causa real.
+    const d = r.detalhe || 'sem HISCON para calcular';
+    const bacenFora = /SGS|BACEN|25468/i.test(d);
+    const ehDoHiscon = /HISCON/i.test(d);
+    const causa = bacenFora
+      ? 'o BACEN não respondeu a série da taxa de conversão (SGS 25468). Isso é fora do hub — tente de novo em alguns minutos'
+      : d;
+    const oQueFazer = ehDoHiscon
+      ? (r.pastaCriada
+          ? ' A pasta do réu foi criada: arquive o HISCON lá e clique de novo.'
+          : ' Arquive o HISCON na pasta do cliente.')
+      : '';
+    return `${nome}: não montei — ${causa}.${oQueFazer}` +
       ' Sem cálculo a peça sairia "em aberto" e o dobro sumiria do pedido.';
   }
   if (r.motivo === 'calculo-negativo') {
