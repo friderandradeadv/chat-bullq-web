@@ -606,20 +606,12 @@ function BotaoMontarInicial({ c, onChanged }: { c: KanbanCard; onChanged?: () =>
     });
     setEtapa(null);
     if (r.ok) {
-      toast.success(`${nome}: inicial montada — card em Revisão inicial.`);
-    } else if (r.motivo === 'calculo-negativo') {
-      // 🚨 Decisão de MÉRITO, não do sistema: sem indébito, a ação se sustenta só
-      // no dano moral. Pergunta em vez de seguir — e em vez de barrar de vez.
-      const brl = r.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      if (confirm(
-        `${nome}: o cálculo deu ${brl} — NEGATIVO.\n\n` +
-        'Isso quer dizer que não há indébito a restituir: a ação se sustentaria só no ' +
-        'dano moral, e a peça sairá na base EM ABERTO.\n\nMontar assim mesmo?',
-      )) {
-        await montar(e, true);
-        return;
-      }
-      toast.info(`${nome}: não montei — cálculo negativo (${brl}).`);
+      // 🚨 O NEGATIVO NÃO PERGUNTA MAIS. Sem restituição, a ação é de conversão
+      // + dano moral no modelo EM ABERTO — é regra do escritório, não dúvida.
+      // Eu barrava a montagem e abria um `confirm`; era erro meu. Agora a peça
+      // sai e o aviso diz em que modelo saiu (25/09/2026).
+      if (r.aviso) toast.warning(`${nome}: ${r.aviso}`, { duration: Infinity, closeButton: true });
+      else toast.success(`${nome}: inicial montada — card em Revisão inicial.`);
     } else {
       const porque = porqueNaoMontou(nome, r);
       if (porque) toast.warning(porque, { duration: Infinity, closeButton: true });

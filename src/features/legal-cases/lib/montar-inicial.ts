@@ -9,9 +9,8 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
  * inteiro, de 82 páginas.
  */
 export type ResultadoMontagem =
-  | { ok: true }
+  | { ok: true; aviso?: string }
   | { ok: false; motivo: 'sem-calculo'; detalhe: string; pastaCriada: boolean }
-  | { ok: false; motivo: 'calculo-negativo'; total: number }
   | { ok: false; motivo: 'abortado' }
   | { ok: false; motivo: 'erro'; detalhe: string };
 
@@ -32,6 +31,7 @@ export async function montarInicialCompleta(
 ): Promise<ResultadoMontagem> {
   const { signal, onEtapa } = opts;
   const abortou = () => !!signal?.aborted;
+  let avisoDoCalculo: string | null = null;
   try {
     // 🚨 O CÁLCULO ESCOLHE O PEDIDO. O sinal da restituição decide a base:
     // positivo é cartão QUITADO e pede o indébito EM DOBRO; zero ou negativo é
@@ -59,15 +59,19 @@ export async function montarInicialCompleta(
         return { ok: false, motivo: 'sem-calculo', detalhe: (r as any).motivo ?? '', pastaCriada };
       }
 
-      // 🚨 CÁLCULO NEGATIVO NÃO PASSA CALADO. Total negativo em "conversão +
-      // restituição" diz que NÃO HÁ INDÉBITO a restituir: a ação passa a se
-      // sustentar só no dano moral. Isso é decisão de mérito do advogado, não
-      // do sistema. Medido no PINE da MARIA CLIRENE (-R$ 1.266,21), que foi a
-      // PROTOCOLO sem que ninguém fosse avisado.
+      // 🚨 NEGATIVO NÃO É PENDÊNCIA: É A RESPOSTA. Regra do escritório, repetida
+      // em 25/09/2026: não havendo restituição, a ação é de CONVERSÃO + DANO
+      // MORAL, no modelo "em aberto" — que é exatamente o que o sinal do saldo
+      // já manda o gerador escolher. Eu vinha RECUSANDO a montagem nesse caso e
+      // devolvendo a decisão ao advogado; era erro meu, e parava peça que devia
+      // sair. O que o negativo exige é AVISO, não freio: o card diz em que
+      // modelo a peça saiu, para ninguém supor que há dobro no pedido.
       const total = Number((r as any).total);
-      if (Number.isFinite(total) && total < 0 && !opts.permitirNegativo) {
-        return { ok: false, motivo: 'calculo-negativo', total };
-      }
+      avisoDoCalculo =
+        Number.isFinite(total) && total <= 0
+          ? `cálculo ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} — ` +
+            'sem indébito a restituir: a peça saiu no modelo EM ABERTO, com conversão e dano moral, sem dobro.'
+          : null;
     }
     if (abortou()) return { ok: false, motivo: 'abortado' };
 
@@ -88,7 +92,7 @@ export async function montarInicialCompleta(
 
     onEtapa?.('Movendo para revisão…');
     await legalCasesService.movePhase(caseId, 'revisao_inicial');
-    return { ok: true };
+    return { ok: true, ...(avisoDoCalculo ? { aviso: avisoDoCalculo } : {}) };
   } catch (e: any) {
     if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || abortou()) {
       return { ok: false, motivo: 'abortado' };
@@ -120,11 +124,7 @@ export function porqueNaoMontou(nome: string, r: ResultadoMontagem): string | nu
     return `${nome}: não montei — ${causa}.${oQueFazer}` +
       ' Sem cálculo a peça sairia "em aberto" e o dobro sumiria do pedido.';
   }
-  if (r.motivo === 'calculo-negativo') {
-    return `${nome}: o cálculo deu ${r.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} — ` +
-      'NEGATIVO, ou seja, não há indébito a restituir. A ação se sustentaria só no dano moral. ' +
-      'Não montei: confirme no card se é isso mesmo.';
-  }
+
   if (r.motivo === 'erro') return `${nome}: ${r.detalhe}`;
   return null;
 }

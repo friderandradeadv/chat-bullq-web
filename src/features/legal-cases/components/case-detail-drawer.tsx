@@ -603,7 +603,12 @@ export function CaseDetailDrawer({
               </div>
             )}
 
-            {c && (
+            {/* 🚨 A COLETA É DE ANTES DA PEÇA. Em "montar inicial" para diante os
+                extratos já estão na pasta, e o bloco — com credencial, botões de
+                portal e histórico de coleta — só ocupa espaço no card que o
+                advogado usa para revisar e protocolar (25/09/2026). */}
+            {c && (phaseKey === 'novos_clientes' || phaseKey === 'reuniao_agendada'
+                   || phaseKey === 'info_faltantes') && (
               <ColetaInss
                 parties={c.parties}
                 caseId={c.id}
