@@ -4,8 +4,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
-  useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
+  DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors,
+  useDraggable, useDroppable, defaultDropAnimationSideEffects,
+  type DragStartEvent, type DragEndEvent, type DropAnimation,
 } from '@dnd-kit/core';
 import { Columns3, Clock, Scale, Search, RefreshCw, CalendarClock, Copy, LayoutGrid, List, Loader2, Plus, Download, ChevronDown, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -109,7 +110,16 @@ export default function FaseJudicialKanbanPage() {
   const activeFilters = [area, produto, resp].filter(Boolean).length + (phaseSel.length ? 1 : 0) + (tagSel.length ? 1 : 0) + (!showFora ? 1 : 0);
   const limparFiltros = () => { setArea(''); setProduto(''); setResp(''); setPhaseSel([]); setTagSel([]); setShowFora(true); };
   const dragScroll = useDragScroll();
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Mouse por distância, dedo por espera — ver a nota no quadro Pré-Processual.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  );
+  const dropAnimation: DropAnimation = {
+    duration: 220,
+    easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+    sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
+  };
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: KEY,
@@ -443,7 +453,9 @@ export default function FaseJudicialKanbanPage() {
             ))}
             {!isLoading && isOwner && <AddPhaseColumn board="judicial" accent="#e11970" onAdded={onChanged} />}
           </div>
-          <DragOverlay>{active ? <Card c={active} phases={boardPhases} onMove={move} overlay /> : null}</DragOverlay>
+          <DragOverlay dropAnimation={dropAnimation}>
+            {active ? <Card c={active} phases={boardPhases} onMove={move} overlay /> : null}
+          </DragOverlay>
           <KanbanBulkBar bulk={bulk} cards={filtered} phases={boardPhases} queryKey={KEY} accent="#e11970" />
         </DndContext>
       )}
@@ -638,7 +650,9 @@ const Card = memo(function Card({
 }: {
   c: KanbanCard; phases: KanbanPhase[]; bulk?: KanbanBulk; colIds?: string[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onIniciarCs?: (c: { id: string; title: string }) => void; onChanged?: () => void; overlay?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
+  // Quem se move é a CÓPIA do overlay, não o original — ver a nota no quadro
+  // Pré-Processual: os dois andavam juntos e o arraste parecia bugado.
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id, disabled: overlay });
   const down = useRef<{ x: number; y: number } | null>(null);
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
   const slaEstourado = c.slaDias > 0 && c.diasNaFase != null && c.diasNaFase > c.slaDias;
@@ -652,15 +666,14 @@ const Card = memo(function Card({
     // fora da tela (colunas/linhas não visíveis) — some com o engasgo de montar
     // centenas de cards. contain-intrinsic-size reserva ~altura pro scroll não pular.
     ...(overlay ? {} : { contentVisibility: 'auto', containIntrinsicSize: '0 116px' } as React.CSSProperties),
-    ...(transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {}),
   };
 
   return (
     <div
-      ref={setNodeRef}
+      ref={overlay ? undefined : setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
+      {...(overlay ? {} : listeners)}
+      {...(overlay ? {} : attributes)}
       {...(overlay ? {} : cardAttr(c.id))}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => {
@@ -668,9 +681,9 @@ const Card = memo(function Card({
         const d = down.current;
         if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
       }}
-      className={`group relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
-        isDragging && !overlay ? 'opacity-40' : ''
-      } ${overlay ? 'rotate-2 shadow-lg' : ''} ${terminal && !overlay ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}
+      className={`group relative cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-[opacity,box-shadow,transform] duration-150 hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
+        overlay ? 'pointer-events-none touch-none rotate-2 scale-[1.03] cursor-grabbing shadow-xl ring-1 ring-black/5' : 'touch-pan-y'
+      } ${isDragging && !overlay ? 'opacity-40' : ''} ${terminal && !overlay ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}
     >
       {bulk && !overlay && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent="#e11970" />}
       {/* Etiquetas: produto (cor) + área (cinza) — pr-5 reserva o canto da caixinha de seleção */}

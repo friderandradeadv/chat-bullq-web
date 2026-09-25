@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
-  useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
+  DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors,
+  useDraggable, useDroppable, defaultDropAnimationSideEffects,
+  type DragStartEvent, type DragEndEvent, type DropAnimation,
 } from '@dnd-kit/core';
 import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -95,7 +96,22 @@ export default function PreProcessualPage() {
   // Seleção em massa (caixinha no card + barra de ações no rodapé).
   const bulk = useKanbanBulk();
   const dragScroll = useDragScroll();
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // 🚨 MOUSE POR DISTÂNCIA, DEDO POR ESPERA. Havia só um `PointerSensor` de 6px:
+  // no celular, qualquer rolagem da coluna virava arraste, e o card saía junto
+  // com o dedo sem querer. Com `TouchSensor` por tempo, deslizar ROLA e segurar
+  // ARRASTA — e a tolerância de 8px perdoa o tremor da mão (25/09/2026).
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  );
+
+  // O card volta ao lugar desacelerando, em vez de sumir de repente; e a cópia
+  // que segue o ponteiro desbota ao pousar.
+  const dropAnimation: DropAnimation = {
+    duration: 220,
+    easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+    sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
+  };
 
   const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'pre' }), refetchInterval: 60_000 });
   // Só as fases DESTE quadro. `boardOfPhase` isola cada trilha por prefixo — banco_*
@@ -273,7 +289,9 @@ export default function PreProcessualPage() {
             ))}
             {!isLoading && canRename && <AddPhaseColumn board="pre" accent="#e11970" onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
           </div>
-          <DragOverlay>{active ? <Card c={active} /> : null}</DragOverlay>
+          <DragOverlay dropAnimation={dropAnimation}>
+            {active ? <Card c={active} overlay /> : null}
+          </DragOverlay>
           <KanbanBulkBar bulk={bulk} cards={filtered} phases={phases} queryKey={KEY} accent="#e11970" />
         </DndContext>
       )}
@@ -313,8 +331,13 @@ function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onChanged, 
   );
 }
 
-function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, onChanged }: { c: KanbanCard; terminal?: boolean; novo?: boolean; isNovos?: boolean; bulk?: KanbanBulk; colIds?: string[]; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
+function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, onChanged, overlay }: { c: KanbanCard; terminal?: boolean; novo?: boolean; isNovos?: boolean; bulk?: KanbanBulk; colIds?: string[]; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void; overlay?: boolean }) {
+  // 🚨 QUEM SE MOVE É A CÓPIA, NÃO O ORIGINAL. O card aplicava o `transform` do
+  // dnd-kit E o `DragOverlay` desenhava outro card seguindo o ponteiro: dois
+  // cards andando ao mesmo tempo, um por cima do outro, cada um com sua
+  // latência — era essa a sensação de arraste "bugado" (25/09/2026). O
+  // original agora fica parado e desbotado; a cópia é que viaja.
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id, disabled: overlay });
   const down = useRef<{ x: number; y: number } | null>(null);
   // Bolinha vermelha, mesma mecânica do funil REPB: em NOVOS CLIENTES todo card
   // nasce marcado; nas outras colunas vale o critério antigo (entrou na fase
@@ -326,12 +349,20 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
   const prod = produtoColor(c.produto);
   const iniciais = (c.responsible?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   const overdue = !!c.proximoPrazo && new Date(c.proximoPrazo.dueDate).getTime() < Date.now();
-  const style: React.CSSProperties = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : {};
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes} {...cardAttr(c.id)}
+    <div
+      ref={overlay ? undefined : setNodeRef}
+      {...(overlay ? {} : listeners)}
+      {...(overlay ? {} : attributes)}
+      {...(overlay ? {} : cardAttr(c.id))}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) { markCardClicked(c.id); onOpen(c.id); } }}
-      className={`group relative cursor-pointer touch-none rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${isDragging ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}>
+      className={`group relative cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-[opacity,box-shadow,transform] duration-150 hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
+        // 🚨 `touch-none` matava a rolagem do dedo sobre o card. Com o sensor de
+        // toque por ESPERA, o certo é `pan-y`: deslizar rola a coluna, segurar
+        // arrasta. No overlay não há gesto nenhum a tratar.
+        overlay ? 'pointer-events-none touch-none rotate-2 scale-[1.03] cursor-grabbing shadow-xl ring-1 ring-black/5' : 'touch-pan-y'
+      } ${isDragging && !overlay ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}>
       {/* Cliente novo — bolinha vermelha, some ao clicar no card (igual ao funil REPB) */}
       {mostrarNovo && <span className="absolute -right-1.5 -top-1.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" title="Novo cliente — clique para ver" />}
       {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent="#e11970" />}
