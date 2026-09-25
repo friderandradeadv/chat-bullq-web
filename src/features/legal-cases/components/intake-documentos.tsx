@@ -31,6 +31,11 @@ export function IntakeDocumentos({
   const [sobre, setSobre] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [movendo, setMovendo] = useState(false);
+  // 🚨 A MESMA PISCADA DA APROVAÇÃO. O botão que faz o card ANDAR avisa com o
+  // corpo antes de avisar com texto: cresce, ganha anel e sombra por 900ms. É a
+  // convenção já usada em "Aprovada para protocolo" (fase-fields.tsx) — sem ela
+  // o card sumia da fase sem nada acontecer na tela (25/09/2026).
+  const [piscou, setPiscou] = useState(false);
   const [r, setR] = useState<Resultado | null>(null);
   const input = useRef<HTMLInputElement>(null);
   // 🚨 O QUE FALTA SE LÊ, NÃO SE PERGUNTA. Antes a fase tinha dois campos
@@ -74,6 +79,7 @@ export function IntakeDocumentos({
   }
 
   async function moverParaMontar() {
+    setPiscou(true);
     setMovendo(true);
     try {
       await legalCasesService.movePhase(caseId, 'montar_inicial');
@@ -83,6 +89,7 @@ export function IntakeDocumentos({
       toast.error(e?.response?.data?.message ?? 'Não consegui mover o card.');
     } finally {
       setMovendo(false);
+      setTimeout(() => setPiscou(false), 900);
     }
   }
 
@@ -167,7 +174,9 @@ export function IntakeDocumentos({
       <button
         onClick={moverParaMontar}
         disabled={movendo}
-        className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+        className={`mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-all duration-300 hover:bg-emerald-700 disabled:opacity-60 ${
+          piscou ? 'scale-105 shadow-lg shadow-emerald-500/40 ring-2 ring-emerald-300' : ''
+        }`}
       >
         {movendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
         {movendo ? 'Movendo…' : 'Documentos OK — montar inicial'}
