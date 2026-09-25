@@ -61,6 +61,12 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
     setPedindo(true);
     try {
       await legalCasesService.pedirColetaInss(caseId, nb ?? undefined);
+      // 🚨 RECARREGAR O CARD AQUI, SEMPRE. Sem isto ele continuava com o estado
+      // ANTERIOR — e o advogado via, em vermelho, o erro de uma coleta de ontem
+      // enquanto a nova rodava. Pior: o laço de 20s só liga quando o status é
+      // "pendente", e o estado velho dizia "falhou", então o card congelava até
+      // ser fechado e reaberto (25/09/2026).
+      await qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
       toast.success('Pedido enviado. Se precisar de login, a janela do Meu INSS abre em alguns segundos.');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui pedir a coleta.');
