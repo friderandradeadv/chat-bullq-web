@@ -915,6 +915,16 @@ export const legalCasesService = {
     const { data } = await api.get(`/legal-cases/${id}/pasta-inicial`, { timeout: 120000 });
     return data.data ?? data;
   },
+  /** O que ainda falta na pasta do cliente — lido do Drive, sem subir nada. */
+  async documentosFaltantes(id: string): Promise<{
+    beneficio: 'AP' | 'PM' | null;
+    faltam: string[];
+    temTudo: boolean;
+  }> {
+    const { data } = await api.get(`/legal-cases/${id}/documentos/faltantes`);
+    return data?.data ?? data;
+  },
+
   /**
    * Arrasta os documentos do INSS de uma vez. O servidor reconhece cada um pelo
    * CONTEÚDO (o nome vem cru do portal e muda a cada download), renomeia no

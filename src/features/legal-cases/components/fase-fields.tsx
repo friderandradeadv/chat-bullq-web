@@ -67,10 +67,12 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'reuniao_feita', label: 'Reunião de pós-venda realizada?', type: 'radio', options: ['Sim', 'Não'] },
     { key: 'obs', label: 'Observações', type: 'textarea' },
   ],
-  info_faltantes: [
-    { key: 'docs_faltantes', label: 'Quais documentos faltantes?', type: 'textarea' },
-    { key: 'obter_docs', label: 'Obter documentos', type: 'checklist', options: ['Entrar em contato com o cliente', 'Solicitar documentos', 'Subir no Drive', 'Anexar documentos recebidos'] },
-  ],
+  // 🚨 ESTA FASE NÃO TEM MAIS CAMPO MANUAL. Havia "Quais documentos faltantes?"
+  // (texto livre) e a lista "Obter documentos" — os dois pediam ao advogado que
+  // digitasse o que o hub já enxerga na pasta do Drive. Campo que pergunta o que
+  // o sistema sabe envelhece sozinho e vira mentira no card. Quem responde agora
+  // é o bloco "Documentos faltantes", que LÊ a pasta (25/09/2026).
+  info_faltantes: [],
   // 🚨 "Temos todos os documentos?" e "Petição pronta?" SAÍRAM em 24/09/2026.
   // Perguntas que a própria fase já responde: o card só chega aqui depois de
   // INFORMAÇÕES FALTANTES, e sai daqui quando a peça fica pronta. No lugar

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, FileUp, Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
@@ -33,6 +33,26 @@ export function IntakeDocumentos({
   const [movendo, setMovendo] = useState(false);
   const [r, setR] = useState<Resultado | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  // 🚨 O QUE FALTA SE LÊ, NÃO SE PERGUNTA. Antes a fase tinha dois campos
+  // manuais — "Quais documentos faltantes?" e a lista "Obter documentos" — que
+  // pediam ao advogado o que o hub já enxerga na pasta do Drive (onde o kit
+  // assinado e os anexos da conversa também são espelhados). Removidos em
+  // 25/09/2026: quem responde é esta consulta.
+  const [check, setCheck] = useState<{ faltam: string[]; temTudo: boolean } | null>(null);
+  const [olhando, setOlhando] = useState(true);
+
+  const conferir = useCallback(async () => {
+    setOlhando(true);
+    try {
+      setCheck(await legalCasesService.documentosFaltantes(caseId));
+    } catch {
+      setCheck(null); // não invento: sem resposta, não afirmo que está completo
+    } finally {
+      setOlhando(false);
+    }
+  }, [caseId]);
+
+  useEffect(() => { void conferir(); }, [conferir]);
 
   async function enviar(files: FileList | File[] | null) {
     const lista = Array.from(files ?? []);
@@ -45,6 +65,7 @@ export function IntakeDocumentos({
       if (n) toast.success(`${n} documento${n > 1 ? 's' : ''} arquivado${n > 1 ? 's' : ''} no Drive`);
       else if (res.repetidos.length) toast.info('Esses documentos já estavam na pasta.');
       else toast.warning('Nada foi arquivado — veja o que o hub não reconheceu.');
+      void conferir();
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? 'Não consegui arquivar os documentos.');
     } finally {
@@ -73,6 +94,29 @@ export function IntakeDocumentos({
           Documentos faltantes
         </p>
       </div>
+
+      {olhando ? (
+        <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[#48626f] dark:text-zinc-400">
+          <Loader2 className="h-3 w-3 animate-spin" /> conferindo a pasta do cliente…
+        </p>
+      ) : check?.temTudo ? (
+        <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400">
+          <CheckCircle2 className="h-3 w-3 shrink-0" /> Está tudo na pasta do Drive.
+        </p>
+      ) : check?.faltam?.length ? (
+        <div className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+          <p className="flex items-center gap-1.5 font-medium">
+            <AlertTriangle className="h-3 w-3 shrink-0" /> Falta na pasta do cliente:
+          </p>
+          <ul className="mt-0.5 list-disc pl-5">
+            {check.faltam.map((x) => <li key={x}>{x}</li>)}
+          </ul>
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[11px] text-[#7d95a2] dark:text-zinc-500">
+          não consegui ler a pasta do cliente agora
+        </p>
+      )}
 
       <div
         onDragOver={(e) => {
@@ -119,6 +163,23 @@ export function IntakeDocumentos({
           </>
         )}
       </div>
+
+      <button
+        onClick={moverParaMontar}
+        disabled={movendo}
+        className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+      >
+        {movendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+        {movendo ? 'Movendo…' : 'Documentos OK — montar inicial'}
+      </button>
+      {/* 🚨 O BOTÃO NÃO SE BLOQUEIA, MAS NÃO MENTE. O advogado pode saber de algo
+          que a pasta não mostra (documento que virá, peça que dispensa aquele
+          extrato). O hub avisa e deixa a decisão com ele. */}
+      {!olhando && check && !check.temTudo && check.faltam.length > 0 && (
+        <p className="mt-1 text-center text-[10px] text-[#7d95a2] dark:text-zinc-500">
+          ainda falta documento na pasta — só siga se for de propósito
+        </p>
+      )}
 
       {r && (
         <div className="mt-2 space-y-1.5 text-[11px]">
