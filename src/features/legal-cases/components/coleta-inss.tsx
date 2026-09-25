@@ -27,7 +27,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   parties: CaseDetail['parties'];
   caseId?: string;
   /** `metadata.coletaInss` — o estado do último pedido. */
-  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[] } | null;
+  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null } | null;
   nb?: string | null;
 }) {
   // 🚨 TODO HOOK ANTES DE QUALQUER `return` — ver a nota em kanban-bulk.tsx: um
@@ -169,7 +169,9 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
                   ? `⏳ ${coleta.erro}`
                   : 'Na fila — o Mac pega em segundos.')}
 
-            {coleta.status === 'feita' && `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`}
+            {coleta.status === 'feita' && (coleta.pasta
+              ? `Coletado em ${coleta.pasta}: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`
+              : `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`)}
 
             {coleta.status === 'falhou' && `Não coletei: ${coleta.erro ?? 'erro desconhecido'}`}
 
