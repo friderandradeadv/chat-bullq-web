@@ -10,6 +10,7 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
  */
 export type ResultadoMontagem =
   | { ok: true; aviso?: string }
+  | { ok: false; motivo: 'jg-incompleto'; faltas: string[] }
   | { ok: false; motivo: 'sem-calculo'; detalhe: string; pastaCriada: boolean }
   | { ok: false; motivo: 'abortado' }
   | { ok: false; motivo: 'erro'; detalhe: string };
@@ -78,8 +79,31 @@ export async function montarInicialCompleta(
     // Documentos ANTES da peça: o recorte do HISCON/HISCRE e o JG composto vivem
     // em "PARA A INICIAL", e é de lá que a pasta do protocolo tira o que vai.
     onEtapa?.('Preparando os documentos…');
-    await legalCasesService.prepararDocumentosDaInicial(caseId, false, signal).catch(() => undefined);
+    // 🚨 O PREPARO FALA, E NINGUÉM ESCUTAVA. Esta linha era
+    // `...prepararDocumentosDaInicial(...).catch(() => undefined)`: o retorno
+    // — que traz os AVISOS, inclusive "não achei o IR" e "não achei o print do
+    // Portal MIR" — era descartado, e o erro, engolido. Resultado medido em
+    // 25/09/2026: de 4 clientes que passaram pela esteira, 3 tiveram o JG
+    // montado SEM o informe de IR e SEM o print, e as peças chegaram a
+    // "Revisão inicial" como se estivessem completas.
+    const preparo = await legalCasesService
+      .prepararDocumentosDaInicial(caseId, false, signal)
+      .catch((e: any) => ({ avisos: [e?.response?.data?.message ?? 'não consegui preparar os documentos'] } as any));
     if (abortou()) return { ok: false, motivo: 'abortado' };
+
+    // 🚨 JG SEM O IR E SEM O PRINT NÃO PROVA HIPOSSUFICIÊNCIA. O JG do escritório
+    // é um PDF composto de TRÊS peças (HISCRE grifado + informe de rendimentos +
+    // print do Portal MIR). Faltando peça, a gratuidade se defende com metade da
+    // prova — e é justamente pelo bruto que ela costuma ser indeferida. Então
+    // aqui a montagem PARA, como já parava sem cálculo: a pasta fica pronta, o
+    // card não anda, e o aviso diz o que coletar.
+    const faltas = (preparo?.avisos ?? []).filter((a: string) =>
+      /Portal MIR|IR do INSS|informe/i.test(a));
+    if (faltas.length) {
+      onEtapa?.('Preparando a pasta…');
+      await legalCasesService.organizarPastaInicial(caseId).catch(() => undefined);
+      return { ok: false, motivo: 'jg-incompleto', faltas };
+    }
 
     onEtapa?.('Gerando a inicial…');
     await legalCasesService.gerarInicial(caseId, produto, signal);
@@ -125,6 +149,12 @@ export function porqueNaoMontou(nome: string, r: ResultadoMontagem): string | nu
       ' Sem cálculo a peça sairia "em aberto" e o dobro sumiria do pedido.';
   }
 
+  if (r.motivo === 'jg-incompleto') {
+    return `${nome}: não montei — o JG sairia incompleto. ${r.faltas.join(' ')} ` +
+      'O JG é um PDF composto de três peças (HISCRE grifado + informe de rendimentos + print do ' +
+      'Portal MIR), e sem elas a gratuidade se defende com metade da prova. Colete o que falta ' +
+      'pelo bloco "Coleta no Meu INSS" e clique de novo — a pasta já está pronta.';
+  }
   if (r.motivo === 'erro') return `${nome}: ${r.detalhe}`;
   return null;
 }
