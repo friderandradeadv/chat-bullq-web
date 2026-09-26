@@ -1394,6 +1394,39 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
    * Revisão inicial, e quem move para Protocolo é o advogado.
    */
   const [tudoBusy, setTudoBusy] = useState<string | null>(null);
+  const [recalcBusy, setRecalcBusy] = useState(false);
+
+  /**
+   * Refaz o cálculo por cima do que está salvo — SÓ por gesto explícito.
+   *
+   * 🚨 POR QUE PRECISA EXISTIR. O botão mestre respeita o cálculo salvo, de
+   * propósito: refazer sozinho sobrescreveria o trabalho de quem abriu a
+   * calculadora. Mas isso prende o card ao número antigo — na MARIA CLIRENE, a
+   * conta feita pelo HISCON tinha UMA competência (o contrato migrou de banco
+   * três vezes) e a peça foi remontada em cima dela, sem nada mudar. Desde
+   * 26/09/2026 o cálculo lê as parcelas do HISCRE, e é preciso um gesto para
+   * alcançar quem já tinha cálculo gravado.
+   */
+  const recalcular = async () => {
+    const produto = (area || '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
+    if (!confirm(
+      'Refazer o cálculo agora?\n\nAs parcelas passam a vir do HISCRE (o desconto que saiu do ' +
+      'benefício), e não do HISCON (que registra a reserva). Isso SOBRESCREVE o cálculo salvo — ' +
+      'inclusive um que tenha sido feito à mão na calculadora.',
+    )) return;
+    setRecalcBusy(true);
+    try {
+      const r = await legalCasesService.calcularAutomatico(caseId, produto).catch((e: any) => ({
+        ok: false as const, motivo: e?.response?.data?.message || 'Erro ao calcular.',
+      }));
+      if (!r.ok) { toast.error(r.motivo, { duration: 12000 }); return; }
+      toast.success(
+        `Cálculo refeito: ${r.total?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` +
+        `${r.competencias ? ` · ${r.competencias} competências` : ''}.`,
+      );
+      onChanged();
+    } finally { setRecalcBusy(false); }
+  };
   // 🚨 ABORTAR: o botão mestre dispara uma sequência que MEXE NO DRIVE e MOVE a
   // fase do card. Clicado por engano, não bastava esperar terminar: ao fim ele já
   // teria recortado documentos, montado a pasta do réu e tirado o card de MONTAR
@@ -1548,6 +1581,14 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
         className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#7048e8] px-3 py-2 text-xs font-semibold text-[#7048e8] hover:bg-[#7048e8]/5 disabled:opacity-50"
       >
         <Sparkles className="h-3.5 w-3.5" /> {cadBusy ? 'Preenchendo cadastro…' : 'Preencher cadastro do cliente (IA)'}
+      </button>
+      <button
+        onClick={recalcular}
+        disabled={recalcBusy || !!tudoBusy}
+        title="Refaz o cálculo lendo as parcelas do HISCRE (rubrica 217 na RMC, 268 no RCC). Sobrescreve o cálculo salvo."
+        className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#48626f] px-3 py-2 text-xs font-semibold text-[#48626f] hover:bg-[#48626f]/5 disabled:opacity-50 dark:border-zinc-500 dark:text-zinc-300"
+      >
+        {recalcBusy ? 'Recalculando…' : 'Recalcular pelo HISCRE'}
       </button>
       {/* 🚨 Os botões "Inicial RMC" e "Inicial RCC" SAÍRAM em 21/09/2026, por
           determinação do escritório. Eles geravam só a peça, e quem os usava
