@@ -342,25 +342,62 @@ export function KanbanBulkBar({
     )) return;
 
     setBusy(true);
+    const ac = new AbortController();
+    abortarRef.current = ac;
+    const aviso = toast.loading(`Pedindo ${pedidos.length} coleta(s)…`);
     const falhas: string[] = [];
+    const naFila: { id: string; quem: string }[] = [];
     try {
       for (const grupo of pedidos) {
         const dono = grupo[0];
-        await legalCasesService.pedirColetaInss(dono.id).catch(() => {
-          falhas.push(dono.client ?? dono.title);
-        });
+        const quem = (dono.client ?? dono.title ?? '').split(' ').slice(0, 2).join(' ');
+        await legalCasesService
+          .pedirColetaInss(dono.id)
+          .then(() => naFila.push({ id: dono.id, quem }))
+          .catch(() => falhas.push(dono.client ?? dono.title));
+      }
+
+      // 🚨 O PASSO A PASSO É O MESMO DA MONTAGEM, e pela mesma razão: a coleta
+      // leva de 2 a 5 min por cliente e "na fila" durante esse tempo não é
+      // informação — não distingue trabalhando de travado. Quem narra é o vigia
+      // do Mac, que grava o passo em `coletaInss.etapa` a cada documento; aqui
+      // só se lê e se mostra. Pedido do escritório em 28/09/2026.
+      let prontas = 0;
+      while (naFila.length && !ac.signal.aborted) {
+        await new Promise((r) => setTimeout(r, 4000));
+        if (ac.signal.aborted) break;
+        for (let i = naFila.length - 1; i >= 0; i -= 1) {
+          const { id, quem } = naFila[i];
+          const c = await legalCasesService.get(id).catch(() => null);
+          const coleta = (c?.metadata as any)?.coletaInss ?? {};
+          if (coleta.status === 'pendente') {
+            const passo = coleta.etapa || (coleta.esperando === 'login'
+              ? 'esperando você entrar no Meu INSS…'
+              : 'na fila…');
+            toast.loading(`${prontas}/${pedidos.length} · ${quem}: ${passo}`, { id: aviso });
+            continue;
+          }
+          // terminou (feita ou falhou): sai da espera e o motivo vai no fim
+          if (coleta.status !== 'feita') falhas.push(`${quem} (${coleta.erro || 'falhou'})`);
+          naFila.splice(i, 1);
+          prontas += 1;
+        }
       }
     } finally {
       setBusy(false);
+      abortarRef.current = null;
+      toast.dismiss(aviso);
       qc.invalidateQueries({ queryKey });
     }
-    if (falhas.length) {
-      toast.error(`${pedidos.length - falhas.length} coleta(s) na fila; ${falhas.length} não entrou(ram): ${falhas.join(', ')}.`);
-    } else {
-      toast.success(
-        `${pedidos.length} coleta(s) na fila para ${lista.length} processo(s). ` +
-        'O card mostra o passo a passo enquanto roda.',
+    if (ac.signal.aborted) {
+      toast('Parei de acompanhar — as coletas na fila continuam rodando no Mac.');
+    } else if (falhas.length) {
+      toast.error(
+        `${pedidos.length - falhas.length} coleta(s) concluída(s); ${falhas.length} não: ${falhas.join(' · ')}.`,
+        { duration: 14000 },
       );
+    } else {
+      toast.success(`${pedidos.length} coleta(s) concluída(s) para ${lista.length} processo(s).`);
     }
   };
 
