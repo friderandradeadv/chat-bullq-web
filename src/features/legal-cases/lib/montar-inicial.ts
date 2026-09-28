@@ -11,6 +11,7 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
 export type ResultadoMontagem =
   | { ok: true; aviso?: string }
   | { ok: false; motivo: 'jg-incompleto'; faltas: string[] }
+  | { ok: false; motivo: 'documento-curto'; detalhe: string }
   | { ok: false; motivo: 'sem-calculo'; detalhe: string; pastaCriada: boolean }
   | { ok: false; motivo: 'abortado' }
   | { ok: false; motivo: 'erro'; detalhe: string };
@@ -45,6 +46,14 @@ export async function montarInicialCompleta(
         .calcularAutomatico(caseId, produto, signal)
         .catch((e: any) => ({ ok: false as const, motivo: e?.response?.data?.message || 'erro ao calcular' }));
 
+      // Extrato truncado tem tratamento próprio: o card volta para a fase dos
+      // documentos, porque o que falta é COLETA, não cálculo.
+      if (!r.ok && /HISCRE cobre s[óo]|Recolete o HISCRE/i.test(String((r as any).motivo ?? ''))) {
+        onEtapa?.('Preparando a pasta…');
+        await legalCasesService.organizarPastaInicial(caseId).catch(() => undefined);
+        await legalCasesService.movePhase(caseId, 'info_faltantes').catch(() => undefined);
+        return { ok: false, motivo: 'documento-curto', detalhe: String((r as any).motivo) };
+      }
       if (!r.ok) {
         // 🚨 A PASTA VAI ASSIM MESMO. Recusar a montagem e não deixar nada no
         // Drive obriga o advogado a criar a pasta à mão para arquivar o que
@@ -102,6 +111,13 @@ export async function montarInicialCompleta(
     if (faltas.length) {
       onEtapa?.('Preparando a pasta…');
       await legalCasesService.organizarPastaInicial(caseId).catch(() => undefined);
+      // 🚨 QUEM PRECISA DE DOCUMENTO VOLTA PARA "INFORMAÇÕES FALTANTES".
+      // Determinação do escritório em 28/09/2026: o card tem de ficar na fase
+      // que diz o que falta fazer nele. Parado em "montar inicial" com documento
+      // faltando, ele parece pronto — e alguém clica de novo achando que foi
+      // azar. Na fase de documentos, o bloco de coleta reaparece, que é
+      // justamente a ferramenta de que ele precisa.
+      await legalCasesService.movePhase(caseId, 'info_faltantes').catch(() => undefined);
       return { ok: false, motivo: 'jg-incompleto', faltas };
     }
 
@@ -149,11 +165,16 @@ export function porqueNaoMontou(nome: string, r: ResultadoMontagem): string | nu
       ' Sem cálculo a peça sairia "em aberto" e o dobro sumiria do pedido.';
   }
 
+  if (r.motivo === 'documento-curto') {
+    return `${nome}: não montei — ${r.detalhe} Movi o card para "Informações faltantes": ` +
+      'colete de novo pelo bloco "Coleta no Meu INSS" e mande montar outra vez.';
+  }
   if (r.motivo === 'jg-incompleto') {
     return `${nome}: não montei — o JG sairia incompleto. ${r.faltas.join(' ')} ` +
       'O JG é um PDF composto de três peças (HISCRE grifado + informe de rendimentos + print do ' +
-      'Portal MIR), e sem elas a gratuidade se defende com metade da prova. Colete o que falta ' +
-      'pelo bloco "Coleta no Meu INSS" e clique de novo — a pasta já está pronta.';
+      'Portal MIR), e sem elas a gratuidade se defende com metade da prova. Movi o card para ' +
+      '"Informações faltantes": colete o que falta pelo bloco "Coleta no Meu INSS" e mande ' +
+      'montar de novo — a pasta já está pronta.';
   }
   if (r.motivo === 'erro') return `${nome}: ${r.detalhe}`;
   return null;
