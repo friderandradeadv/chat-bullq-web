@@ -23,7 +23,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Ban, Check, CheckCircle2, CheckSquare, ChevronDown, Loader2, MoveRight, PauseCircle,
+  Ban, Check, CheckCircle2, CheckSquare, ChevronDown, Download, Loader2, MoveRight, PauseCircle,
   Plus, Sparkles, Tag, Trash2, UserCog, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -293,6 +293,77 @@ export function KanbanBulkBar({
   // HISCRE, monta a peça no timbrado (cirurgia de OOXML em Python) e mexe no
   // Drive — quatro delas ao mesmo tempo afogam a CPU da VPS, que é a mesma que
   // serve o hub. Vinte minutos em fila é melhor do que o hub fora do ar.
+  /**
+   * Pede a coleta no Meu INSS dos selecionados, SEM repetir a mesma pasta.
+   *
+   * 🚨 A COLETA É DA PASTA DO BENEFÍCIO, NÃO DO CARD. Quem tem aposentadoria e
+   * pensão guarda uma `00. DOCUMENTOS` por benefício, e dois cards do MESMO
+   * cliente contra bancos diferentes dividem a mesma pasta: coletar uma vez
+   * serve aos dois. Pedir por card faria a MARIA CLIRENE rodar quatro coletas
+   * de ~5 min para dois conjuntos de documentos (28/09/2026).
+   *
+   * Agrupa por cliente + benefício (o prefixo AP/PM do título, padrão do
+   * escritório) e enfileira UM pedido por grupo, dizendo quais cards ele cobre.
+   */
+  const coletarEmMassa = async () => {
+    const lista = selecionados;
+    if (!lista.length) return;
+    const beneficio = (c: KanbanCard) =>
+      (/^\s*(AP|PM|AI)\b/i.exec(c.title ?? '')?.[1] ?? '').toUpperCase();
+    const chave = (c: KanbanCard) =>
+      `${(c.client ?? c.title ?? '').trim().toUpperCase()}|${beneficio(c) || '—'}`;
+
+    const grupos = new Map<string, KanbanCard[]>();
+    for (const c of lista) {
+      const k = chave(c);
+      grupos.set(k, [...(grupos.get(k) ?? []), c]);
+    }
+    const pedidos = [...grupos.values()];
+    const cobertos = pedidos.filter((g) => g.length > 1).length;
+    // 🚨 A SESSÃO DO MEU INSS É DE UM CLIENTE POR VEZ. O coletor confere de quem
+    // é a janela antes de salvar, e recusa a de outro — é o que impede o extrato
+    // de um cliente ir para a pasta de outro. Selecionando vários clientes, o
+    // advogado terá de entrar com o login de cada um, na ordem. Dizer isto ANTES
+    // é a diferença entre uma fila que ele acompanha e uma que parece travada.
+    const clientes = new Set(pedidos.map((g) => (g[0].client ?? g[0].title ?? '').trim().toUpperCase()));
+
+    if (!confirm(
+      `Pedir a coleta no Meu INSS de ${lista.length} processo(s)?\n\n` +
+      `São ${pedidos.length} coleta(s): a coleta é da PASTA do benefício, então cards do ` +
+      `mesmo cliente e mesmo benefício entram juntos` +
+      (cobertos ? ` (${cobertos} grupo(s) com mais de um card).` : '.') +
+      `\n\nCada uma leva de 2 a 5 minutos e roda na janela do Meu INSS que VOCÊ autenticou — ` +
+      `se ela pedir login, entre nela.` +
+      (clientes.size > 1
+        ? `\n\n⚠️ São ${clientes.size} CLIENTES diferentes. A sessão do Meu INSS é de um cliente ` +
+          `por vez: você vai precisar entrar com o login de cada um, na ordem em que as coletas ` +
+          `rodarem. Coletar um cliente por vez costuma ser mais rápido.`
+        : ''),
+    )) return;
+
+    setBusy(true);
+    const falhas: string[] = [];
+    try {
+      for (const grupo of pedidos) {
+        const dono = grupo[0];
+        await legalCasesService.pedirColetaInss(dono.id).catch(() => {
+          falhas.push(dono.client ?? dono.title);
+        });
+      }
+    } finally {
+      setBusy(false);
+      qc.invalidateQueries({ queryKey });
+    }
+    if (falhas.length) {
+      toast.error(`${pedidos.length - falhas.length} coleta(s) na fila; ${falhas.length} não entrou(ram): ${falhas.join(', ')}.`);
+    } else {
+      toast.success(
+        `${pedidos.length} coleta(s) na fila para ${lista.length} processo(s). ` +
+        'O card mostra o passo a passo enquanto roda.',
+      );
+    }
+  };
+
   const montarIniciais = async () => {
     const lista = selecionados;
     if (!lista.length) return;
@@ -427,6 +498,15 @@ export function KanbanBulkBar({
           )}
         </BulkMenu>
 
+        {!vazio && !busy && (
+          <button
+            onClick={coletarEmMassa}
+            title="Pede a coleta no Meu INSS (HISCON, HISCRE, IR e print do Portal MIR). Cards do mesmo cliente e mesmo benefício dividem a pasta e entram numa coleta só."
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+          >
+            <Download className="h-4 w-4" /> Coletar no Meu INSS
+          </button>
+        )}
         {!vazio && !busy && (
           <button
             onClick={montarIniciais}
