@@ -25,7 +25,6 @@ export async function montarInicialCompleta(
   produto: 'RMC' | 'RCC',
   opts: {
     signal?: AbortSignal;
-    temCalculo?: boolean;
     /** Segue mesmo com o cálculo NEGATIVO (sem indébito) — exige decisão humana. */
     permitirNegativo?: boolean;
     onEtapa?: (e: string) => void;
@@ -40,7 +39,18 @@ export async function montarInicialCompleta(
     // EM ABERTO. Sem cálculo o gerador lê restituição 0 e conclui "em aberto"
     // por FALTA DE DADO, não por medição — e o dobro some do pedido de um
     // cliente quitado sem que nada na peça pronta denuncie a troca.
-    if (!opts.temCalculo) {
+    // 🚨 A MONTAGEM CALCULA SEMPRE. Determinação do escritório em 28/09/2026:
+    // *"ao clicar para montar inicial, o cálculo deve puxar tanto do hiscre
+    // quanto do hiscon — hiscon lê o contrato, o banco, o início do desconto; o
+    // hiscre pega os descontos de fato, mês a mês"*. Antes a montagem PULAVA o
+    // cálculo quando já havia um salvo, e cálculo salvo envelhece: o do
+    // DAYCOVAL valia −R$ 1.241,85, tirado de UMA competência do HISCON num
+    // contrato de 2015 que migrou de banco três vezes.
+    //
+    // Quem decide se refaz é o SERVIDOR (`calcularEGravar`), porque a montagem
+    // em lote não conhece o metadata do card: cálculo digitado na calculadora
+    // fica como está; do hub, refaz-se.
+    {
       onEtapa?.('Calculando…');
       const r = await legalCasesService
         .calcularAutomatico(caseId, produto, signal)

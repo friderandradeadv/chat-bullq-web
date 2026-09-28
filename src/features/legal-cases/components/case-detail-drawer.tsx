@@ -1394,7 +1394,6 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
    * Revisão inicial, e quem move para Protocolo é o advogado.
    */
   const [tudoBusy, setTudoBusy] = useState<string | null>(null);
-  const [recalcBusy, setRecalcBusy] = useState(false);
 
   /**
    * Refaz o cálculo por cima do que está salvo — SÓ por gesto explícito.
@@ -1407,26 +1406,6 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
    * 26/09/2026 o cálculo lê as parcelas do HISCRE, e é preciso um gesto para
    * alcançar quem já tinha cálculo gravado.
    */
-  const recalcular = async () => {
-    const produto = (area || '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
-    if (!confirm(
-      'Refazer o cálculo agora?\n\nAs parcelas passam a vir do HISCRE (o desconto que saiu do ' +
-      'benefício), e não do HISCON (que registra a reserva). Isso SOBRESCREVE o cálculo salvo — ' +
-      'inclusive um que tenha sido feito à mão na calculadora.',
-    )) return;
-    setRecalcBusy(true);
-    try {
-      const r = await legalCasesService.calcularAutomatico(caseId, produto).catch((e: any) => ({
-        ok: false as const, motivo: e?.response?.data?.message || 'Erro ao calcular.',
-      }));
-      if (!r.ok) { toast.error(r.motivo, { duration: 12000 }); return; }
-      toast.success(
-        `Cálculo refeito: ${r.total?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` +
-        `${r.competencias ? ` · ${r.competencias} competências` : ''}.`,
-      );
-      onChanged();
-    } finally { setRecalcBusy(false); }
-  };
   // 🚨 ABORTAR: o botão mestre dispara uma sequência que MEXE NO DRIVE e MOVE a
   // fase do card. Clicado por engano, não bastava esperar terminar: ao fim ele já
   // teria recortado documentos, montado a pasta do réu e tirado o card de MONTAR
@@ -1452,10 +1431,14 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       // FALTA DE DADO, não por medição — e o dobro sumiria do pedido de um
       // cliente quitado, sem que nada na peça pronta denunciasse a troca.
       //
-      // Por isso o botão calcula sozinho a partir do HISCON do card, e só monta
-      // depois. Já existindo cálculo salvo, respeita o que está lá: refazer por
-      // conta própria sobrescreveria a escolha de quem abriu a calculadora.
-      if (!calculo) {
+      // 🚨 CALCULA SEMPRE. Determinação do escritório em 28/09/2026: *"ao clicar
+      // para montar inicial, o cálculo deve puxar tanto do hiscre quanto do
+      // hiscon"*. Antes o botão pulava o cálculo quando já havia um salvo — e
+      // cálculo salvo envelhece: o do DAYCOVAL valia −R$ 1.241,85, de UMA
+      // competência do HISCON num contrato de 2015 que migrou de banco três
+      // vezes. Quem digitou na calculadora continua mandando: essa decisão é do
+      // SERVIDOR, que reconhece o cálculo feito à mão e não o refaz.
+      {
         setTudoBusy('Calculando…');
         const r = await legalCasesService.calcularAutomatico(caseId, produto, ac.signal).catch((e) => ({
           ok: false as const,
@@ -1582,14 +1565,6 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       >
         <Sparkles className="h-3.5 w-3.5" /> {cadBusy ? 'Preenchendo cadastro…' : 'Preencher cadastro do cliente (IA)'}
       </button>
-      <button
-        onClick={recalcular}
-        disabled={recalcBusy || !!tudoBusy}
-        title="Refaz o cálculo lendo as parcelas do HISCRE (rubrica 217 na RMC, 268 no RCC). Sobrescreve o cálculo salvo."
-        className="mt-1.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#48626f] px-3 py-2 text-xs font-semibold text-[#48626f] hover:bg-[#48626f]/5 disabled:opacity-50 dark:border-zinc-500 dark:text-zinc-300"
-      >
-        {recalcBusy ? 'Recalculando…' : 'Recalcular pelo HISCRE'}
-      </button>
       {/* 🚨 Os botões "Inicial RMC" e "Inicial RCC" SAÍRAM em 21/09/2026, por
           determinação do escritório. Eles geravam só a peça, e quem os usava
           ficava com a pasta do réu incompleta e o card parado na fase — os
@@ -1600,7 +1575,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
         <button
           onClick={() => montarTudo()}
           disabled={!!tudoBusy}
-          title="Faz a sequência inteira: calcula o RMC/RCC pelo HISCON (se ainda não houver cálculo salvo), recorta HISCON e HISCRE, monta o JG grifado, gera a inicial no timbrado, organiza a pasta do réu no Drive e manda o card para Revisão inicial."
+          title="Faz a sequência inteira: calcula o RMC/RCC lendo o contrato no HISCON e os descontos mês a mês no HISCRE (cálculo digitado na calculadora fica como está), recorta HISCON e HISCRE, monta o JG grifado, gera a inicial no timbrado, organiza a pasta do réu no Drive e manda o card para Revisão inicial."
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
         >
           <Sparkles className="h-3.5 w-3.5" /> {tudoBusy || 'Montar a inicial completa e mandar para revisão'}
