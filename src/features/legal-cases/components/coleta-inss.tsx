@@ -27,7 +27,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   parties: CaseDetail['parties'];
   caseId?: string;
   /** `metadata.coletaInss` — o estado do último pedido. */
-  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string; precisaLoginMir?: boolean; pedidoMir?: boolean; naPasta?: string[]; alcance?: string; avisoAlcance?: string | null } | null;
+  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string; precisaLoginMir?: boolean; pedidoMir?: boolean; naPasta?: string[]; alcance?: string; avisoAlcance?: string | null; mirConferido?: boolean } | null;
   nb?: string | null;
 }) {
   // 🚨 TODO HOOK ANTES DE QUALQUER `return` — ver a nota em kanban-bulk.tsx: um
@@ -259,9 +259,21 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
 
           {coleta.naPasta?.length ? (
             coleta.naPasta.length >= 4 && coleta.alcance === 'ok' ? (
-              <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] leading-4 font-medium text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300">
-                ✓ Os 4 documentos do INSS estão na pasta{coleta.pasta ? ` (${coleta.pasta})` : ''} — pode clicar em “Documentos OK”.
-              </p>
+              <>
+                <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] leading-4 font-medium text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300">
+                  ✓ Os 4 documentos do INSS estão na pasta{coleta.pasta ? ` (${coleta.pasta})` : ''} — pode clicar em “Documentos OK”.
+                </p>
+                {/* 🚨 O PRINT PODE SER LEGÍTIMO E NÃO PROVAR NADA. Em 29/09/2026
+                    um aviso do Portal cobriu IRPF 2026, 2025, 2024 e 2023 e o PNG
+                    foi arquivado com nome e tamanho normais. Quando a captura não
+                    passou pela conferência de cobertura, o card diz que não sabe
+                    — em vez de deixar o verde responder por ela. */}
+                {coleta.mirConferido === false && (
+                  <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
+                    O print do MIR não passou pela conferência de cobertura — abra e confira se algum aviso do Portal tapa os anos do IRPF.
+                  </p>
+                )}
+              </>
             ) : (
               <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
                 Na pasta: {coleta.naPasta.join(', ')}
