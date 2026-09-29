@@ -117,7 +117,22 @@ export function AssinaturaBanner() {
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const { tocar: bipar, ligado: somLiberado } = usarBipe();
   const [mudo, setMudo] = useState(false);
-  const jaAvisado = useRef<string>('');
+
+  // 🚨 O SILÊNCIO TEM DE GRUDAR. A versão anterior religava o som sozinha toda
+  // vez que a lista mudava ("peça nova merece tocar"), o que na prática desfazia
+  // o botão de silenciar do advogado minutos depois de ele apertá-lo. Botão que
+  // não obedece é pior que botão nenhum. Agora: silenciou, fica silenciado, e
+  // atravessa recarregamento de página.
+  useEffect(() => {
+    try { setMudo(window.localStorage.getItem('faixa-assinatura-mudo') === '1'); } catch { /* sem storage: segue com som */ }
+  }, []);
+  const alternarMudo = useCallback(() => {
+    setMudo((m) => {
+      const novo = !m;
+      try { window.localStorage.setItem('faixa-assinatura-mudo', novo ? '1' : '0'); } catch { /* ok */ }
+      return novo;
+    });
+  }, []);
 
   const { data } = useQuery({
     queryKey: ['legal-cases', 'protocolo', 'aguardando', activeOrgId],
@@ -131,31 +146,27 @@ export function AssinaturaBanner() {
   });
 
   const itens = useMemo(() => data ?? [], [data]);
-  const chave = useMemo(() => itens.map((i) => i.caseId).join(','), [itens]);
 
-  // Peça NOVA na fila volta a tocar mesmo se você tinha silenciado a anterior:
-  // silenciar vale para o que você já viu, não para o que chegou depois.
+  // 🚨 TOCA UMA VEZ POR PEÇA NOVA, E SÓ — E "NOVA" É POR IDENTIDADE, NÃO POR
+  // "A LISTA MUDOU". A primeira versão repetia a cada 25s enquanto houvesse peça
+  // esperando: com quatro peças na fila virou um bipe a cada 25 segundos, a
+  // noite inteira ("o hub fica apitando o tempo todo", 29/09/2026). A segunda
+  // tocava quando a CHAVE mudava — mas a chave é a lista de ids concatenada, de
+  // modo que uma peça mudando de estado, entrando ou saindo refazia a chave e
+  // tocava de novo, ainda que nada de novo tivesse chegado.
+  // Aqui a conta é a certa: guardo os ids que já tocaram e só bipo por id que
+  // nunca tocou. Id que sai da lista é esquecido, para que a MESMA peça, se
+  // voltar depois de uma remontagem, volte a avisar.
+  const jaTocou = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (chave && chave !== jaAvisado.current) {
-      jaAvisado.current = chave;
-      setMudo(false);
-    }
-  }, [chave]);
-
-  // 🚨 TOCA UMA VEZ POR PEÇA NOVA, E SÓ. A primeira versão repetia a cada 25s
-  // enquanto houvesse peça esperando — e com quatro peças na fila isso virou um
-  // bipe a cada 25 segundos, a noite inteira. O advogado: "e o hub fica apitando
-  // o tempo todo" (29/09/2026). Aviso que não para deixa de ser aviso: vira
-  // ruído, e a primeira coisa que se aprende com ruído é a desligá-lo.
-  // A faixa fica na tela; ela é o lembrete permanente. O som é só o sobressalto
-  // do momento em que a peça chega.
-  const jaTocou = useRef<string>('');
-  useEffect(() => {
-    if (itens.length === 0 || mudo) return;
-    if (chave === jaTocou.current) return;
-    jaTocou.current = chave;
+    if (mudo) return;
+    const atuais = new Set(itens.map((i) => i.caseId));
+    jaTocou.current.forEach((id) => { if (!atuais.has(id)) jaTocou.current.delete(id); });
+    const novos = itens.filter((i) => !jaTocou.current.has(i.caseId));
+    if (novos.length === 0) return;
+    novos.forEach((i) => jaTocou.current.add(i.caseId));
     bipar();
-  }, [chave, itens.length, mudo, bipar]);
+  }, [itens, mudo, bipar]);
 
   if (itens.length === 0) return null;
 
@@ -200,7 +211,7 @@ export function AssinaturaBanner() {
 
         <button
           type="button"
-          onClick={() => setMudo((m) => !m)}
+          onClick={alternarMudo}
           title={
             mudo
               ? 'Som desligado — clique para ligar'

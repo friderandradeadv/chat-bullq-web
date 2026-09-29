@@ -17,6 +17,7 @@ import { usePartnerPreview } from '@/features/partnerships/hooks/use-partner-pre
 import { authService } from '@/features/auth/services/auth.service';
 import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sync';
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
+import { AvisoNovaVersao } from '@/features/legal-cases/components/aviso-nova-versao';
 import { AssinaturaBanner } from '@/features/legal-cases/components/assinatura-banner';
 import { GlobalSearch } from '@/components/layout/global-search';
 import { ThemeToggle } from '@/features/auth/components/theme-toggle';
@@ -205,7 +206,8 @@ export default function DashboardLayout({
                 </button>
               </div>
             )}
-            <AssinaturaBanner />
+            <AvisoNovaVersao />
+      <AssinaturaBanner />
             <ToolFailureBanner />
           </div>
           {/* Container interno: novo contexto de posicionamento pra topbar glass. */}
