@@ -1264,7 +1264,6 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const [respId, setRespId] = useState(activity.responsibleId);
   const [respName, setRespName] = useState(activity.responsibleName);
   const [prazoBusy, setPrazoBusy] = useState(false);
-  const [peticaoBusy, setPeticaoBusy] = useState(false);
   const [naoRecorrerOpen, setNaoRecorrerOpen] = useState(false); // "não vamos recorrer" (decisão)
   const [motivoNR, setMotivoNR] = useState('');
   const [remessaOpen, setRemessaOpen] = useState(false); // "recurso provido → remessa à origem" (acórdão)
@@ -1765,38 +1764,6 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           </div>
           {activity.caseTitle && <Row label="Processo"><button onClick={() => onOpenCase(activity.caseId!)} className="text-left font-light text-[#228BE6] hover:underline">{procLabel}{procSuffix ? ` - ${procSuffix}` : ''}</button></Row>}
 
-          {/* 🚨 O PROTOCOLO SAI DA PRÓPRIA TAREFA. Pedido do escritório em
-              29/09/2026: *"crie um botão na agenda dentro da tarefa para fazer o
-              protocolo (você faz), para deixar os prazos automatizados também"*.
-              Antes, cumprir um prazo era: ler a tarefa aqui, achar o card do
-              processo em outra tela, achar a peça numa terceira, e protocolar à
-              mão. A tarefa já sabe o processo; faltava a porta.
-
-              🚨 SÓ COM CNJ. Juntada de petição existe em processo distribuído —
-              card sem número não tem autos onde juntar, e o agente descobriria
-              isso só com a janela do PJe aberta. */}
-          {activity.source === 'tarefa' && activity.caseId && activity.cnj && (
-            <Row label="Protocolo">
-              <button
-                type="button"
-                disabled={peticaoBusy}
-                onClick={async () => {
-                  setPeticaoBusy(true);
-                  try {
-                    await legalCasesService.pedirPeticao(activity.caseId!, { tarefaId: activity.rawId });
-                    toast.success('Pedido enviado — o agente abre os autos no PJe e para na sua assinatura.');
-                    onRefetch();
-                  } catch (e: any) {
-                    toast.error(e?.response?.data?.message || 'Não consegui pedir a juntada.');
-                  } finally { setPeticaoBusy(false); }
-                }}
-                className="inline-flex items-center gap-1.5 rounded-md bg-[#228BE6] px-2.5 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
-              >
-                {peticaoBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Stamp className="h-3.5 w-3.5" />}
-                {peticaoBusy ? 'Pedindo…' : 'Protocolar no PJe'}
-              </button>
-            </Row>
-          )}
           {activity.cnj && <Row label="Número do processo"><CnjNumber value={activity.cnj} /></Row>}
           {(activity.source === 'tarefa' || activity.source === 'prazo' || activity.responsibleName) && (
             <Row label="Responsável">

@@ -1138,12 +1138,6 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/coleta-inss/pedir`, { nb });
     return data.data ?? data;
   },
-  /** Pede ao agente que JUNTE uma petição no processo que já corre. */
-  async pedirPeticao(id: string, dto: { arquivo?: string; tipo?: string; tarefaId?: string } = {}): Promise<{ ok: boolean; cnj: string }> {
-    const { data } = await api.post(`/legal-cases/${id}/peticionar`, dto);
-    return data.data ?? data;
-  },
-
   /** Pede SÓ o print do Portal MIR — o Mac abre a janela e espera o advogado entrar. */
   async pedirPrintMir(id: string): Promise<{ ok: boolean }> {
     const { data } = await api.post(`/legal-cases/${id}/coleta-inss/mir`);
