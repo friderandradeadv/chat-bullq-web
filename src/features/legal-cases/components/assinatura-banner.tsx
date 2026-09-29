@@ -37,50 +37,70 @@ type Aguardando = {
  * isso o primeiro bipe do dia sairia mudo, sem erro nenhum.
  */
 
-/** Bipe curto de dois tons. Sem arquivo: nada para baixar, nada para faltar. */
+/**
+ * Bipe curto de dois tons. Sem arquivo: nada para baixar, nada para faltar.
+ *
+ * 🚨 O DESTRAVE NÃO PODE SER `once`. A política de autoplay exige um gesto do
+ * usuário antes de tocar — mas se o gesto acontecer ANTES desta faixa montar,
+ * um ouvinte `{ once: true }` nunca dispara e o som fica mudo para sempre, sem
+ * erro nenhum. Medido em 29/09/2026: o advogado nunca ouviu o bipe.
+ * Aqui o contexto é criado na montagem (nasce suspenso, o que é permitido) e
+ * QUALQUER interação depois o retoma — e cada bipe tenta retomar de novo.
+ */
 function usarBipe() {
   const ctxRef = useRef<AudioContext | null>(null);
+  const [ligado, setLigado] = useState(false);
 
-  // destrava no primeiro gesto (política de autoplay)
   useEffect(() => {
+    const Ctx =
+      typeof window !== 'undefined'
+        ? window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        : null;
+    if (!Ctx) return;
+    try {
+      ctxRef.current = new Ctx();
+      setLigado(ctxRef.current.state === 'running');
+    } catch {
+      return;
+    }
     const destravar = () => {
-      try {
-        const Ctx =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext?: typeof AudioContext })
-            .webkitAudioContext;
-        if (!Ctx) return;
-        if (!ctxRef.current) ctxRef.current = new Ctx();
-        void ctxRef.current.resume();
-      } catch {
-        /* navegador sem áudio: a faixa continua valendo, só não toca */
-      }
+      const c = ctxRef.current;
+      if (!c) return;
+      void c.resume().then(() => setLigado(c.state === 'running')).catch(() => undefined);
     };
-    window.addEventListener('pointerdown', destravar, { once: true });
-    window.addEventListener('keydown', destravar, { once: true });
-    return () => {
-      window.removeEventListener('pointerdown', destravar);
-      window.removeEventListener('keydown', destravar);
-    };
+    // 🚨 SEM `once`: o usuário pode interagir muitas vezes antes de existir som
+    // para tocar, e qualquer uma delas serve para destravar.
+    const eventos = ['pointerdown', 'keydown', 'click', 'touchstart'];
+    eventos.forEach((e) => window.addEventListener(e, destravar, { passive: true }));
+    destravar();
+    return () => eventos.forEach((e) => window.removeEventListener(e, destravar));
   }, []);
 
-  return useCallback(() => {
+  const tocar = useCallback(() => {
     const ctx = ctxRef.current;
-    if (!ctx || ctx.state !== 'running') return;
-    const agora = ctx.currentTime;
-    [0, 0.22].forEach((atraso, i) => {
-      const osc = ctx.createOscillator();
-      const vol = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = i === 0 ? 880 : 1174; // lá → ré
-      vol.gain.setValueAtTime(0.0001, agora + atraso);
-      vol.gain.exponentialRampToValueAtTime(0.18, agora + atraso + 0.02);
-      vol.gain.exponentialRampToValueAtTime(0.0001, agora + atraso + 0.18);
-      osc.connect(vol).connect(ctx.destination);
-      osc.start(agora + atraso);
-      osc.stop(agora + atraso + 0.2);
-    });
+    if (!ctx) return;
+    const soar = () => {
+      const agora = ctx.currentTime;
+      [0, 0.22].forEach((atraso, i) => {
+        const osc = ctx.createOscillator();
+        const vol = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = i === 0 ? 880 : 1174; // lá → ré
+        vol.gain.setValueAtTime(0.0001, agora + atraso);
+        vol.gain.exponentialRampToValueAtTime(0.25, agora + atraso + 0.02);
+        vol.gain.exponentialRampToValueAtTime(0.0001, agora + atraso + 0.2);
+        osc.connect(vol).connect(ctx.destination);
+        osc.start(agora + atraso);
+        osc.stop(agora + atraso + 0.22);
+      });
+    };
+    if (ctx.state === 'running') { soar(); return; }
+    // suspenso: tenta retomar AGORA e tocar em seguida
+    void ctx.resume().then(() => { setLigado(true); soar(); }).catch(() => undefined);
   }, []);
+
+  return { tocar, ligado };
 }
 
 function haQuantoTempo(iso: string | null): string {
@@ -95,7 +115,7 @@ function haQuantoTempo(iso: string | null): string {
 export function AssinaturaBanner() {
   const user = useAuthStore((s) => s.user);
   const activeOrgId = useAuthStore((s) => s.activeOrgId);
-  const bipar = usarBipe();
+  const { tocar: bipar, ligado: somLiberado } = usarBipe();
   const [mudo, setMudo] = useState(false);
   const jaAvisado = useRef<string>('');
 
@@ -175,10 +195,20 @@ export function AssinaturaBanner() {
         <button
           type="button"
           onClick={() => setMudo((m) => !m)}
-          title={mudo ? 'Voltar a tocar' : 'Silenciar (a faixa continua)'}
+          title={
+            mudo
+              ? 'Som desligado — clique para ligar'
+              : somLiberado
+                ? 'Som ligado — clique para silenciar'
+                : 'O navegador ainda não liberou o som; clique em qualquer lugar da página'
+          }
           className="rounded-md border border-amber-300 px-2 py-1 text-xs text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900/40"
         >
-          {mudo ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+          {mudo || !somLiberado ? (
+            <VolumeX className="h-3.5 w-3.5 opacity-60" />
+          ) : (
+            <Volume2 className="h-3.5 w-3.5" />
+          )}
         </button>
       </div>
     </div>
