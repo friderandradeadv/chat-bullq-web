@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/core';
 import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { BarraProgresso } from '@/features/legal-cases/components/barra-progresso';
 import { api } from '@/lib/api';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
@@ -409,6 +410,16 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
           <CalendarClock className="h-3.5 w-3.5" /> {overdue ? 'Venc' : 'Vence'} {fmtDate(c.proximoPrazo.dueDate)}{c.proximoPrazo.type === 'FATAL' && <span className="font-semibold">· fatal</span>}
         </span>
       )}
+      {/* 🚨 A BARRA NO PRÓPRIO CARD, não só na gaveta. O advogado acompanha pelo
+          QUADRO — pedir que ele abra o card para ver o andamento é o mesmo que
+          não mostrar. Só nos cards da coluna de protocolo (onde o agente roda),
+          para não fazer uma consulta por card em todo o quadro. */}
+      {onMontarPje && (
+        <div className="mt-2">
+          <BarraProgresso caseId={c.id} compacta />
+        </div>
+      )}
+
       {/* Rodapé: relógios + Protocolar + avatar */}
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#eef2f8] pt-1.5 dark:border-zinc-800">
         <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4b5863] dark:text-zinc-400" title="Tempo na fase atual"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNaFase)}</span>
