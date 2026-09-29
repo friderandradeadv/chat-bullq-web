@@ -203,6 +203,16 @@ export interface CaseDetail extends Omit<CaseListItem, 'parties' | '_count'> {
    * candidatos). O web NÃO deduz identidade de cliente — ver AbrirConversa.
    */
   clienteConversa?: ConversaDoCliente | null;
+  /**
+   * Estado do aviso automático ao cliente nesta fase. O aviso falha calado de
+   * dois jeitos — arraste no kanban não avisa, e cliente sem WhatsApp vinculado
+   * nunca recebe —, então o card mostra os dois.
+   */
+  avisoCliente?: {
+    faseAvisavel: boolean;
+    enviadoEm: string | null;
+    temWhatsapp: boolean;
+  } | null;
 }
 
 export interface CreateCaseInput {

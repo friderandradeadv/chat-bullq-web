@@ -557,6 +557,7 @@ export function CaseDetailDrawer({
           <div className="flex-1 p-4 lg:overflow-y-auto lg:p-6">
             <h3 className="text-base font-semibold text-black dark:text-zinc-100">Fase atual</h3>
             <p className="mt-1 text-xs font-semibold" style={{ color: MAGENTA }}>{fase?.label ?? '—'}</p>
+            <AvisoAoCliente estado={c?.avisoCliente ?? null} />
 
             <div className="mt-5">
               <p className="text-sm font-medium text-[#101820] dark:text-zinc-200">Responsável</p>
@@ -1091,6 +1092,56 @@ function SugerirDadosIA({ caseId, temAdversa, onApplied }: { caseId: string; tem
  * Some da vista, não do card — e o `resumo` tem de dizer o bastante para o
  * advogado saber se precisa abrir.
  */
+/**
+ * Diz se o cliente foi avisado desta fase — e quando não foi, por quê.
+ *
+ * 🚨 O AVISO FALHA CALADO, DE DOIS JEITOS (apontados pelo escritório em
+ * 28/09/2026, depois de um card ir para citação em 15/09 sem ninguém saber):
+ *
+ *   • ARRASTAR o card no kanban NÃO avisa. É de propósito — arrastar é gesto
+ *     rápido, errar coluna é comum e não há desfazer —, mas quem arrastou não
+ *     tinha como saber que o cliente ficou sem notícia.
+ *   • CLIENTE SEM WHATSAPP vinculado nunca recebe, e nada falha.
+ *
+ * Só aparece quando há o que dizer: em fase sem mensagem curada (montar
+ * inicial, revisão, correção) o componente não renderiza nada.
+ */
+function AvisoAoCliente({ estado }: { estado?: CaseDetail['avisoCliente'] }) {
+  if (!estado) return null;
+  const { faseAvisavel, enviadoEm, temWhatsapp } = estado;
+
+  if (!temWhatsapp) {
+    return (
+      <p className="mt-1.5 flex items-start gap-1 text-[11px] text-amber-700 dark:text-amber-400">
+        <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+        <span>
+          Cliente <b>sem WhatsApp vinculado</b> — não recebe nenhum aviso automático.
+          Vincule o contato na ficha para os avisos de andamento chegarem nele.
+        </span>
+      </p>
+    );
+  }
+  if (!faseAvisavel) return null;
+  if (enviadoEm) {
+    return (
+      <p className="mt-1.5 flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400">
+        <Check className="h-3 w-3 shrink-0" />
+        Cliente avisado desta fase em {new Date(enviadoEm).toLocaleString('pt-BR')}.
+      </p>
+    );
+  }
+  return (
+    <p className="mt-1.5 flex items-start gap-1 text-[11px] text-amber-700 dark:text-amber-400">
+      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+      <span>
+        <b>O cliente não foi avisado desta fase.</b> Arrastar o card no kanban não
+        dispara o aviso, de propósito. Para avisar, escolha a fase de novo no
+        seletor abaixo.
+      </span>
+    </p>
+  );
+}
+
 function Dobravel({ titulo, resumo, alerta, children }: {
   titulo: string; resumo: ReactNode; alerta?: boolean; children: ReactNode;
 }) {
