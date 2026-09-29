@@ -38,6 +38,7 @@ import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
 import { DropZone } from '@/components/drop-zone';
 import { AbrirConversa, ConversaDoClienteBloco } from '@/components/ui/abrir-conversa';
 
+import { BarraProgresso } from './barra-progresso';
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
 const BLUE = '#005efc';
@@ -558,6 +559,14 @@ export function CaseDetailDrawer({
             <h3 className="text-base font-semibold text-black dark:text-zinc-100">Fase atual</h3>
             <p className="mt-1 text-xs font-semibold" style={{ color: MAGENTA }}>{fase?.label ?? '—'}</p>
             <AvisoAoCliente estado={c?.avisoCliente ?? null} />
+
+            {/* Barra das operações longas (documentos, inicial, protocolo, coleta).
+                Some sozinha quando não há nada rodando. */}
+            {c?.id && (
+              <div className="mt-3">
+                <BarraProgresso caseId={c.id} inicial={(c.metadata as any)?.progresso ?? null} />
+              </div>
+            )}
 
             <div className="mt-5">
               <p className="text-sm font-medium text-[#101820] dark:text-zinc-200">Responsável</p>
