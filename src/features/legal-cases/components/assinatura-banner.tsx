@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth-store';
 type Aguardando = {
   caseId: string;
   titulo: string;
+  estado?: 'aguardando_assinatura' | 'aguardando_protocolo';
   sistema: string | null;
   tribunal: string | null;
   url: string | null;
@@ -135,17 +136,22 @@ export function AssinaturaBanner() {
   const primeiro = itens[0];
   const onde = [primeiro.sistema, primeiro.tribunal].filter(Boolean).join('/');
 
+  // 🚨 DOIS ESTADOS, DOIS RECADOS. Com um só, a faixa pedia assinatura de peça
+  // já assinada — e recado errado é pior que recado nenhum, porque ensina a
+  // ignorar a faixa. Pedido do escritório em 29/09/2026.
+  const pronta = primeiro.estado === 'aguardando_protocolo';
+  const titulo = itens.length === 1
+    ? (pronta ? 'Pronta para protocolar' : 'Assinar para protocolar')
+    : `${itens.length} peças esperando você`;
+  const acao = pronta ? 'Protocolar' : 'Abrir a tela';
+
   return (
     <div className="border-b border-amber-300 bg-amber-50 px-6 py-2.5 dark:border-amber-800/60 dark:bg-amber-900/25">
       <div className="flex items-center gap-3">
         <PenLine className="h-4 w-4 flex-shrink-0 text-amber-700 dark:text-amber-400" />
 
         <div className="flex-1 text-sm text-amber-900 dark:text-amber-100">
-          <span className="font-semibold">
-            {itens.length === 1
-              ? 'Assinar para protocolar'
-              : `${itens.length} peças aguardando assinatura`}
-          </span>
+          <span className="font-semibold">{titulo}</span>
           <span className="ml-2 text-amber-800 dark:text-amber-200">
             · {primeiro.titulo}
             {onde ? ` · ${onde}` : ''}
@@ -162,7 +168,7 @@ export function AssinaturaBanner() {
             className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            Abrir a tela
+            {acao}
           </a>
         )}
 
