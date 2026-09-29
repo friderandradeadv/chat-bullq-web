@@ -27,7 +27,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   parties: CaseDetail['parties'];
   caseId?: string;
   /** `metadata.coletaInss` — o estado do último pedido. */
-  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string; precisaLoginMir?: boolean; pedidoMir?: boolean } | null;
+  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string; precisaLoginMir?: boolean; pedidoMir?: boolean; naPasta?: string[] } | null;
   nb?: string | null;
 }) {
   // 🚨 TODO HOOK ANTES DE QUALQUER `return` — ver a nota em kanban-bulk.tsx: um
@@ -217,9 +217,17 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
                       </span>
                     : 'Na fila — o Mac pega em segundos.')}
 
-            {coleta.status === 'feita' && (coleta.pasta
-              ? `Coletado em ${coleta.pasta}: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`
-              : `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`)}
+            {/* 🚨 A PERGUNTA É SOBRE A PASTA, NÃO SOBRE A RODADA. "Coletado:
+                PORTAL MIR.png" é verdade e não serve: depois de um pedido só do
+                print, some da tela que HISCON, HISCRE e IR já estavam lá, e o
+                advogado não sabe se pode clicar em "Documentos OK — montar
+                inicial". Pedido dele em 29/09/2026: "deve avisar que está tudo
+                na pasta para eu clicar em documentos ok". */}
+            {coleta.status === 'feita' && (coleta.naPasta?.length
+              ? `Nesta rodada: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`
+              : (coleta.pasta
+                  ? `Coletado em ${coleta.pasta}: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`
+                  : `Coletado: ${(coleta.arquivos ?? []).join(', ') || 'arquivos no Drive'}.`))}
 
             {coleta.status === 'falhou' && `Não coletei: ${coleta.erro ?? 'erro desconhecido'}`}
 
@@ -230,6 +238,24 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
               vêm assim mesmo e o status é "feita" — mas falta uma peça do JG.
               Sem esta linha o aviso sumia e a gratuidade ia incompleta ao
               protocolo sem ninguém perceber (25/09/2026). */}
+          {/* Os quatro documentos do INSS que instruem o JG. Verde só quando os
+              QUATRO estão lá — três de quatro é gratuidade incompleta, e é
+              justamente o caso em que "quase pronto" engana. */}
+          {coleta.naPasta?.length ? (
+            coleta.naPasta.length >= 4 ? (
+              <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] leading-4 font-medium text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300">
+                ✓ Os 4 documentos do INSS estão na pasta{coleta.pasta ? ` (${coleta.pasta})` : ''} — pode clicar em “Documentos OK”.
+              </p>
+            ) : (
+              <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
+                Na pasta: {coleta.naPasta.join(', ')} — faltam{' '}
+                {['HISCON.pdf', 'HISCRE.pdf', 'IR.pdf', 'PORTAL MIR.png']
+                  .filter((d) => !coleta.naPasta?.includes(d))
+                  .join(', ')}.
+              </p>
+            )
+          ) : null}
+
           {coleta.status === 'feita' && coleta.erro && (
             <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
               ⚠ {coleta.erro}
