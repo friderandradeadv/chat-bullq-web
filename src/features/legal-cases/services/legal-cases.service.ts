@@ -1138,6 +1138,11 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/coleta-inss/pedir`, { nb });
     return data.data ?? data;
   },
+  /** Pede SÓ o print do Portal MIR — o Mac abre a janela e espera o advogado entrar. */
+  async pedirPrintMir(id: string): Promise<{ ok: boolean }> {
+    const { data } = await api.post(`/legal-cases/${id}/coleta-inss/mir`);
+    return data.data ?? data;
+  },
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */

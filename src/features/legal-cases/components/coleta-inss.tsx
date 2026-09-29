@@ -27,19 +27,23 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   parties: CaseDetail['parties'];
   caseId?: string;
   /** `metadata.coletaInss` — o estado do último pedido. */
-  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string } | null;
+  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string; precisaLoginMir?: boolean; pedidoMir?: boolean } | null;
   nb?: string | null;
 }) {
   // 🚨 TODO HOOK ANTES DE QUALQUER `return` — ver a nota em kanban-bulk.tsx: um
   // useRef declarado depois de um return condicional derrubou a PÁGINA inteira.
   const [verSenha, setVerSenha] = useState(false);
   const [pedindo, setPedindo] = useState(false);
+  const [pedindoMir, setPedindoMir] = useState(false);
   // 🚨 ENQUANTO ESTÁ NA FILA, O CARD SE ATUALIZA SOZINHO. Sem isto o advogado
   // pedia a coleta e tinha de fechar e reabrir o card para saber se terminou —
   // e, pior, para descobrir que o vigia estava esperando o login dele. De 20 em
   // 20 segundos, e SÓ enquanto pendente: parado, não consulta nada.
   const qc = useQueryClient();
-  const naFila = coleta?.status === 'pendente';
+  // 🚨 O PEDIDO SÓ-DO-MIR TAMBÉM É "na fila". Ele não mexe no `status` (a coleta
+  // já terminou), então sem isto o card ficava imóvel justamente enquanto espera
+  // o advogado entrar no gov.br — que é quando ele mais precisa ver movimento.
+  const naFila = coleta?.status === 'pendente' || coleta?.pedidoMir === true;
   useEffect(() => {
     if (!naFila || !caseId) return;
     // 🚨 8 SEGUNDOS ENQUANTO COLETA. Com 20s os passos apareciam pela metade: a
@@ -57,6 +61,18 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   // Sem cliente vinculado não há o que abrir — e sem credencial o bloco vira só
   // os atalhos dos portais, que continuam úteis.
   if (!cliente) return null;
+
+  const pedirPrintMir = async () => {
+    if (!caseId) return;
+    setPedindoMir(true);
+    try {
+      await legalCasesService.pedirPrintMir(caseId);
+      await qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
+      toast.success('Abrindo o Portal MIR. Entre com o gov.br na janela do Chrome — eu printo e arquivo sozinho.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui abrir o Portal MIR.');
+    } finally { setPedindoMir(false); }
+  };
 
   const pedirColeta = async () => {
     if (!caseId) return;
@@ -161,6 +177,25 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
 
         </button>
 
+      )}
+
+      {/* 🚨 AVISO COM AÇÃO, NÃO SÓ COM PROBLEMA. O Portal MIR é o único dos quatro
+          documentos que pode faltar por um ato do ADVOGADO: ele pede a
+          autorização gov.br dele, e nenhuma automação entra por ele. Antes o card
+          dizia "O print do Portal MIR não saiu" e a saída era repetir a coleta
+          INTEIRA. Pedido do escritório em 29/09/2026: "quero um botão para
+          resolver isso". */}
+      {caseId && coleta?.precisaLoginMir && !coleta?.pedidoMir && (
+        <button
+          type="button"
+          onClick={pedirPrintMir}
+          disabled={pedindoMir}
+          title="Abro o Portal MIR na janela do Chrome e espero você entrar no gov.br. Assim que entrar, tiro o print e arquivo."
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+        >
+          {pedindoMir ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+          {pedindoMir ? 'Abrindo…' : 'Entrar no MIR e tirar o print'}
+        </button>
       )}
 
       {coleta?.status && (
