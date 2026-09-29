@@ -27,7 +27,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   parties: CaseDetail['parties'];
   caseId?: string;
   /** `metadata.coletaInss` — o estado do último pedido. */
-  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string; precisaLoginMir?: boolean; pedidoMir?: boolean; naPasta?: string[] } | null;
+  coleta?: { status?: string; pedidoEm?: string; terminadaEm?: string; erro?: string; arquivos?: string[]; pasta?: string | null; etapa?: string | null; etapaEm?: string; precisaLoginMir?: boolean; pedidoMir?: boolean; naPasta?: string[]; alcance?: string; avisoAlcance?: string | null } | null;
   nb?: string | null;
 }) {
   // 🚨 TODO HOOK ANTES DE QUALQUER `return` — ver a nota em kanban-bulk.tsx: um
@@ -241,17 +241,30 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
           {/* Os quatro documentos do INSS que instruem o JG. Verde só quando os
               QUATRO estão lá — três de quatro é gratuidade incompleta, e é
               justamente o caso em que "quase pronto" engana. */}
+          {/* 🚨 O VERDE NÃO É SOBRE CONTAGEM. Quatro arquivos na pasta com um
+              HISCRE que não alcança a contratação é pior que faltar arquivo:
+              parece pronto. A inicial sairia "em aberto" e o dobro se perderia
+              (ANTÔNIA BRAGA VILELA, 29/09/2026 — contrato 06/2017, HISCRE desde
+              01/2021). Verde só com os quatro E com o alcance conferido. */}
+          {coleta.avisoAlcance && (
+            <p className="mt-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] leading-4 font-medium text-rose-800 dark:bg-rose-900/25 dark:text-rose-300">
+              ⚠ {coleta.avisoAlcance}
+            </p>
+          )}
+
           {coleta.naPasta?.length ? (
-            coleta.naPasta.length >= 4 ? (
+            coleta.naPasta.length >= 4 && coleta.alcance === 'ok' ? (
               <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] leading-4 font-medium text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300">
                 ✓ Os 4 documentos do INSS estão na pasta{coleta.pasta ? ` (${coleta.pasta})` : ''} — pode clicar em “Documentos OK”.
               </p>
             ) : (
               <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
-                Na pasta: {coleta.naPasta.join(', ')} — faltam{' '}
-                {['HISCON.pdf', 'HISCRE.pdf', 'IR.pdf', 'PORTAL MIR.png']
-                  .filter((d) => !coleta.naPasta?.includes(d))
-                  .join(', ')}.
+                Na pasta: {coleta.naPasta.join(', ')}
+                {coleta.naPasta.length < 4
+                  ? ` — faltam ${['HISCON.pdf', 'HISCRE.pdf', 'IR.pdf', 'PORTAL MIR.png']
+                      .filter((d) => !coleta.naPasta?.includes(d))
+                      .join(', ')}.`
+                  : ' — os 4 estão aqui, mas o alcance do HISCRE não foi confirmado (veja acima).'}
               </p>
             )
           ) : null}
