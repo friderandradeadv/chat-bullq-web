@@ -415,21 +415,29 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {onProtocolar && (
             <>
-              {/* 🚨 DOIS BOTÕES, DE PROPÓSITO, porque são coisas opostas:
-                  "Montar no PJe" MANDA o agente montar a peça (e para na
-                  assinatura); "Protocolar" REGISTRA um protocolo que já
-                  aconteceu, pedindo CNJ e data. Ter um só, ambíguo, faria o
-                  advogado abrir um formulário pedindo um número que ainda não
-                  existe. */}
+              {/* 🚨 UM BOTÃO PRINCIPAL, UMA EXCEÇÃO DISCRETA.
+                  "Protocolar" é a ação que o advogado quer: dispara o agente,
+                  que monta a peça no PJe e para na assinatura. Registrar um
+                  protocolo feito FORA do hub (CNJ e data na mão) é exceção —
+                  ganhava o mesmo peso visual e fazia parecer que havia escolha
+                  a fazer. Apontado pelo escritório em 29/09/2026. */}
               <button
                 onClick={(e) => { e.stopPropagation(); onMontarPje?.(c.id); }}
                 onPointerDown={(e) => e.stopPropagation()}
-                title="O agente monta a peça no PJe e para na assinatura"
-                className="inline-flex items-center gap-1 rounded-full bg-[#7b2ff7] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90"
+                title="O agente monta a peça no PJe e para na sua assinatura"
+                className="inline-flex h-6 items-center gap-1 rounded-full bg-[#005efc] px-2.5 text-[11px] font-semibold text-white hover:opacity-90"
               >
-                <Sparkles className="h-3 w-3" /> Montar no PJe
+                <Sparkles className="h-3 w-3" /> Protocolar
               </button>
-              <button onClick={(e) => { e.stopPropagation(); onProtocolar(c.id); }} onPointerDown={(e) => e.stopPropagation()} title="Registrar um protocolo que já aconteceu" className="inline-flex items-center gap-1 rounded-full bg-[#005efc] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90"><FileCheck2 className="h-3 w-3" /> Protocolar</button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onProtocolar(c.id); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                title="Registrar um protocolo já feito fora do hub (CNJ e data)"
+                aria-label="Registrar protocolo já feito"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#cfe0ed] text-[#4b5863] hover:bg-[#f2f7fb] dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                <FileCheck2 className="h-3 w-3" />
+              </button>
             </>
           )}
           {c.responsible && (c.responsible.avatarUrl
