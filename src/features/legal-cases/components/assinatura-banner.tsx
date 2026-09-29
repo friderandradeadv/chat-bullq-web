@@ -142,14 +142,20 @@ export function AssinaturaBanner() {
     }
   }, [chave]);
 
-  // Toca na hora e repete enquanto ninguém assina. 25s é insistente sem virar
-  // tortura — e a faixa continua na tela de qualquer jeito.
+  // 🚨 TOCA UMA VEZ POR PEÇA NOVA, E SÓ. A primeira versão repetia a cada 25s
+  // enquanto houvesse peça esperando — e com quatro peças na fila isso virou um
+  // bipe a cada 25 segundos, a noite inteira. O advogado: "e o hub fica apitando
+  // o tempo todo" (29/09/2026). Aviso que não para deixa de ser aviso: vira
+  // ruído, e a primeira coisa que se aprende com ruído é a desligá-lo.
+  // A faixa fica na tela; ela é o lembrete permanente. O som é só o sobressalto
+  // do momento em que a peça chega.
+  const jaTocou = useRef<string>('');
   useEffect(() => {
     if (itens.length === 0 || mudo) return;
+    if (chave === jaTocou.current) return;
+    jaTocou.current = chave;
     bipar();
-    const t = setInterval(bipar, 25_000);
-    return () => clearInterval(t);
-  }, [itens.length, mudo, bipar]);
+  }, [chave, itens.length, mudo, bipar]);
 
   if (itens.length === 0) return null;
 

@@ -53,9 +53,22 @@ export function BarraProgresso({
       const c = data?.data ?? data;
       return ((c?.metadata as any)?.progresso ?? null) as Progresso | null;
     },
-    initialData: inicial ?? null,
-    // só insiste enquanto está rodando
-    refetchInterval: (q) => ((q.state.data as Progresso | null)?.status === 'rodando' ? 3000 : false),
+    // 🚨 `initialData: null` NÃO É "sem dado inicial": para o react-query, null é
+    // um dado já carregado e fresco, então a primeira busca NUNCA acontece. O
+    // sintoma medido em 29/09/2026: a barra só aparecia no card depois que o
+    // advogado abria o card uma vez (o que remonta o componente). `undefined` é
+    // o valor que significa "não tenho nada, vá buscar".
+    initialData: inicial ?? undefined,
+    // 🚨 E PRECISA INSISTIR MESMO PARADA. Antes só repetia com status
+    // 'rodando' — ou seja, uma operação que COMEÇASSE depois da tela aberta
+    // jamais apareceria, que é justo o caso de quem pede "quero ver trabalhando".
+    // Também não é terminal o 'ok' em "esperando sua assinatura": o vigia muda
+    // esse estado minutos depois, quando o advogado assina.
+    refetchInterval: (q) => {
+      const d = q.state.data as Progresso | null | undefined;
+      if (d?.status === 'rodando') return 3000;
+      return d ? 10000 : 20000;
+    },
     staleTime: 1500,
   });
 
