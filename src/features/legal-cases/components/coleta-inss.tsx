@@ -149,7 +149,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
 
         Abra o portal e entre com as credenciais — o login e o segundo fator são seus, o
 
-        gov.br exige. Feita a sessão, peça a coleta: o HISCON e o HISCRE são baixados e
+        gov.br exige. Feita a sessão, peça a coleta: HISCON, HISCRE, informe de IR e o print do Portal MIR são baixados e
 
         arquivados no Drive sem você.
 
@@ -173,7 +173,12 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
 
           {pedindo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
 
-          {pedindo ? 'Pedindo…' : 'Coletar agora (HISCON + HISCRE)'}
+          {/* 🚨 O RÓTULO NOMEIA OS QUATRO. Ele dizia "HISCON + HISCRE" e a coleta
+              traz também o IR e o print do Portal MIR — quem lê o botão não sabe
+              o que vai receber, e o que falta depois parece defeito em vez de
+              coisa que nunca foi prometida. Apontado pelo advogado em
+              29/09/2026: "e o coletar agora é HISCON + HISCRE + MIR". */}
+          {pedindo ? 'Pedindo…' : 'Coletar agora (HISCON, HISCRE, IR e MIR)'}
 
         </button>
 
