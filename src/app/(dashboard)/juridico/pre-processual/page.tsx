@@ -88,6 +88,13 @@ export default function PreProcessualPage() {
       if (r?.ok === false) { toast.error(r.motivo || 'Não deu para pedir a montagem.'); return; }
       toast.success('Pedido enviado — o agente monta no PJe e te chama para assinar.');
       qc.invalidateQueries({ queryKey: KEY });
+      // 🚨 ACENDER A BARRA NO CLIQUE, não na próxima consulta de rotina. Sem
+      // isto, entre apertar Protocolar e ver qualquer sinal na tela passavam
+      // dezenas de segundos (a fila só olhava de 20 em 20s e a barra só
+      // consultava de 20 em 20s). "Demorou um pouco pra me dar o feedback,
+      // precisa ser mais rápido" — 29/09/2026. Um botão que não responde ao
+      // toque é indistinguível de um botão quebrado.
+      qc.invalidateQueries({ queryKey: ['legal-cases', id, 'progresso'] });
     } catch {
       toast.error('Não consegui pedir a montagem.');
     }

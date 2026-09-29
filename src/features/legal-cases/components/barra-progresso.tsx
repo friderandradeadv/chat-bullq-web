@@ -67,7 +67,9 @@ export function BarraProgresso({
     refetchInterval: (q) => {
       const d = q.state.data as Progresso | null | undefined;
       if (d?.status === 'rodando') return 3000;
-      return d ? 10000 : 20000;
+      // 🚨 8s SEM DADO, não 20s: é a janela em que o advogado acabou de clicar e
+      // está olhando a tela esperando o agente aparecer.
+      return d ? 10000 : 8000;
     },
     staleTime: 1500,
   });
