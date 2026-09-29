@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/core';
 import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
 import {
   legalCasesService, type KanbanCard, type KanbanData, type KanbanPhase,
 } from '@/features/legal-cases/services/legal-cases.service';
@@ -72,6 +73,24 @@ export default function PreProcessualPage() {
     if (cid) setOpenCaseId(cid);
   }, []);
   const [protocolarId, setProtocolarId] = useState<string | null>(null);
+
+  /**
+   * Pede ao agente do Mac que monte a peça no PJe.
+   *
+   * 🚨 NÃO PROTOCOLA. O agente monta tudo e PARA na assinatura, porque o PIN do
+   * token é do advogado. O aviso de "assinar" chega pela faixa do topo.
+   */
+  const montarNoPje = async (id: string) => {
+    try {
+      const { data } = await api.post(`/legal-cases/${id}/protocolo-pje`);
+      const r = (data?.data ?? data) as { ok?: boolean; motivo?: string };
+      if (r?.ok === false) { toast.error(r.motivo || 'Não deu para pedir a montagem.'); return; }
+      toast.success('Pedido enviado — o agente monta no PJe e te chama para assinar.');
+      qc.invalidateQueries({ queryKey: KEY });
+    } catch {
+      toast.error('Não consegui pedir a montagem.');
+    }
+  };
 
   // "Novos clientes" no board: captura o marcador de VISTO no momento em que a
   // pessoa abre o quadro (baseline/última visita) e, em seguida, avança o marcador
@@ -285,7 +304,7 @@ export default function PreProcessualPage() {
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} novoIds={novoIds} bulk={bulk} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} phases={phases} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} novoIds={novoIds} bulk={bulk} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onMontarPje={montarNoPje} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} phases={phases} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
             ))}
             {!isLoading && canRename && <AddPhaseColumn board="pre" accent="#e11970" onAdded={() => qc.invalidateQueries({ queryKey: KEY })} />}
           </div>
@@ -304,7 +323,7 @@ export default function PreProcessualPage() {
   );
 }
 
-function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, phases, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; bulk: KanbanBulk; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; cardOrder?: string[]; phases: KanbanPhase[]; onMoveLeft?: () => void; onMoveRight?: () => void }) {
+function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, phases, onMoveLeft, onMoveRight }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; bulk: KanbanBulk; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onMontarPje: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; cardOrder?: string[]; phases: KanbanPhase[]; onMoveLeft?: () => void; onMoveRight?: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
   // Coluna de entrada do board. Nela a bolinha vermelha segue a regra do funil
@@ -325,13 +344,13 @@ function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onChanged, 
       </div>
       <div ref={setNodeRef} {...colAttr(phase.key)} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {sorted.map((c) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} isNovos={isNovos} bulk={bulk} colIds={colIds} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onChanged={onChanged} />)}
+        {sorted.map((c) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} isNovos={isNovos} bulk={bulk} colIds={colIds} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onMontarPje={isProtocolo ? onMontarPje : undefined} onChanged={onChanged} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, onChanged, overlay }: { c: KanbanCard; terminal?: boolean; novo?: boolean; isNovos?: boolean; bulk?: KanbanBulk; colIds?: string[]; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onChanged?: () => void; overlay?: boolean }) {
+function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, onMontarPje, onChanged, overlay }: { c: KanbanCard; terminal?: boolean; novo?: boolean; isNovos?: boolean; bulk?: KanbanBulk; colIds?: string[]; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onMontarPje?: (id: string) => void; onChanged?: () => void; overlay?: boolean }) {
   // 🚨 QUEM SE MOVE É A CÓPIA, NÃO O ORIGINAL. O card aplicava o `transform` do
   // dnd-kit E o `DragOverlay` desenhava outro card seguindo o ponteiro: dois
   // cards andando ao mesmo tempo, um por cima do outro, cada um com sua
@@ -395,7 +414,23 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
         <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#4b5863] dark:text-zinc-400" title="Tempo na fase atual"><Clock className="h-3.5 w-3.5 text-[#ff6f00]" /> {fmtDias(c.diasNaFase)}</span>
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {onProtocolar && (
-            <button onClick={(e) => { e.stopPropagation(); onProtocolar(c.id); }} onPointerDown={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 rounded-full bg-[#005efc] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90"><FileCheck2 className="h-3 w-3" /> Protocolar</button>
+            <>
+              {/* 🚨 DOIS BOTÕES, DE PROPÓSITO, porque são coisas opostas:
+                  "Montar no PJe" MANDA o agente montar a peça (e para na
+                  assinatura); "Protocolar" REGISTRA um protocolo que já
+                  aconteceu, pedindo CNJ e data. Ter um só, ambíguo, faria o
+                  advogado abrir um formulário pedindo um número que ainda não
+                  existe. */}
+              <button
+                onClick={(e) => { e.stopPropagation(); onMontarPje?.(c.id); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                title="O agente monta a peça no PJe e para na assinatura"
+                className="inline-flex items-center gap-1 rounded-full bg-[#7b2ff7] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90"
+              >
+                <Sparkles className="h-3 w-3" /> Montar no PJe
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); onProtocolar(c.id); }} onPointerDown={(e) => e.stopPropagation()} title="Registrar um protocolo que já aconteceu" className="inline-flex items-center gap-1 rounded-full bg-[#005efc] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90"><FileCheck2 className="h-3 w-3" /> Protocolar</button>
+            </>
           )}
           {c.responsible && (c.responsible.avatarUrl
             // eslint-disable-next-line @next/next/no-img-element
