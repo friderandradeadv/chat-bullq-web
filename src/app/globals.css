@@ -432,3 +432,11 @@
     padding-top: 2.875rem;
   }
 }
+
+/* Kanban: a cópia que segue o ponteiro nasce reta e "pega" o card — antes ela
+   aparecia já inclinada e maior, de um quadro para o outro, o que lia como
+   tranco no início do arraste (29/09/2026). Ver features/legal-cases/lib/kanban-dnd.ts */
+@keyframes kanban-pegar {
+  from { transform: rotate(0deg) scale(1); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+  to   { transform: rotate(2deg) scale(1.03); }
+}
