@@ -39,6 +39,7 @@ import { DropZone } from '@/components/drop-zone';
 import { AbrirConversa, ConversaDoClienteBloco } from '@/components/ui/abrir-conversa';
 
 import { BarraProgresso } from './barra-progresso';
+import { montarInicialCompleta, produtoDoCard, porqueNaoMontou } from '../lib/montar-inicial';
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
 const BLUE = '#005efc';
@@ -600,6 +601,7 @@ export function CaseDetailDrawer({
                   docs={(c.metadata as any)?.docs}
                   area={c.area}
                   calculo={(c.metadata as any)?.calculo}
+                  clienteNome={cliente?.name ?? c.title}
                   onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
                 />
               </div>
@@ -1361,7 +1363,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
 // Ações da inicial: upar o JG (justiça gratuita → renda) e GERAR a petição inicial
 // (base no timbrado preenchida com cliente/réu/contrato/cálculo/JG; baixa o .docx).
 // A base (QUITADO/EM ABERTO) é escolhida pelo cálculo.
-function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId: string; jg: any; docs?: { jg?: string }; area?: string | null; calculo?: any; onChanged: () => void }) {
+function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChanged }: { caseId: string; jg: any; docs?: { jg?: string }; area?: string | null; calculo?: any; clienteNome?: string | null; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [jgBusy, setJgBusy] = useState(false);
   const fmtBRL = (n: number | null | undefined) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -1473,111 +1475,66 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
   // etapas impede que a seguinte comece — que é o que de fato protege.
   const abortarRef = useRef<AbortController | null>(null);
   const montarTudo = async () => {
-    const produto = (area || '').toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
+    const produto = produtoDoCard(null, area);
     const ac = new AbortController();
     abortarRef.current = ac;
-    const cancelado = () => {
-      if (!ac.signal.aborted) return false;
-      toast('Montagem abortada — nada foi movido de fase.');
-      return true;
-    };
-    // 🚨 O BOTÃO SABIA E O CARD NÃO (30/09/2026). Este fluxo é o do BOTÃO DA
-    // FICHA, separado do fluxo do quadro (`lib/montar-inicial.ts`), e só o do
-    // quadro tinha ganhado narração. Resultado: com a ficha aberta, o botão
-    // dizia "Preparando os documentos…" e a barra do card não mostrava nada —
-    // "não sei se está fazendo ou não".
+
+    // 🚨 UM FLUXO SÓ (30/09/2026). Até hoje existiam DOIS: este, do botão da
+    // ficha, e o de `lib/montar-inicial.ts`, do quadro. Faziam a mesma coisa em
+    // ordens levemente diferentes, e toda melhoria precisava ser feita duas
+    // vezes — na prática, era feita uma. O escritório pagou por isso duas vezes
+    // na mesma noite: a barra de progresso e depois a narração dos passos
+    // chegaram só ao quadro, e pela ficha o card ficava mudo.
     //
-    // Os primeiros passos rodam no NAVEGADOR (calcular, preparar documentos) e
-    // a API só entra a partir de `gerarInicial`. `passo` faz as duas coisas: o
-    // rótulo do botão e o registro que a barra lê.
-    const passo = (texto: string) => {
-      setTudoBusy(texto);
-      legalCasesService.narrarProgresso(caseId, texto);
-    };
-
+    // 🚨 E HAVIA UMA DIFERENÇA QUE NÃO ERA DE ESTILO: este fluxo NÃO conferia o
+    // JG. O do quadro PARA a montagem quando falta peça da justiça gratuita —
+    // regra que existe porque 3 de 4 peças saíram com JG incompleto. Pela ficha
+    // a peça saía assim mesmo. Unificar fecha essa porta, e é a razão principal
+    // de este bloco ter virado uma chamada.
+    //
+    // O que a ficha tinha A MAIS foi preservado por gancho: o toast detalhado
+    // do cálculo (`onCalculo`) e o envoltório da pasta (`organizarPasta`), que
+    // colhe os avisos do que saiu da raiz do cliente.
+    setTudoBusy('Calculando…');
     try {
-      // ── PASSO 1: o cálculo ────────────────────────────────────────────────
-      // 🚨 É ELE QUE ESCOLHE O PEDIDO DA PEÇA. O sinal da restituição decide a
-      // base: positivo é cartão QUITADO e pede o indébito em DOBRO; zero ou
-      // negativo é EM ABERTO e pede a obrigação de fazer com o dano moral. Sem
-      // `metadata.calculo` o gerador lê restituição 0 e conclui "em aberto" por
-      // FALTA DE DADO, não por medição — e o dobro sumiria do pedido de um
-      // cliente quitado, sem que nada na peça pronta denunciasse a troca.
-      //
-      // 🚨 CALCULA SEMPRE. Determinação do escritório em 28/09/2026: *"ao clicar
-      // para montar inicial, o cálculo deve puxar tanto do hiscre quanto do
-      // hiscon"*. Antes o botão pulava o cálculo quando já havia um salvo — e
-      // cálculo salvo envelhece: o do DAYCOVAL valia −R$ 1.241,85, de UMA
-      // competência do HISCON num contrato de 2015 que migrou de banco três
-      // vezes. Quem digitou na calculadora continua mandando: essa decisão é do
-      // SERVIDOR, que reconhece o cálculo feito à mão e não o refaz.
-      {
-        passo('Calculando…');
-        const r = await legalCasesService.calcularAutomatico(caseId, produto, ac.signal).catch((e) => ({
-          ok: false as const,
-          motivo: e?.response?.data?.message || 'Erro ao calcular.',
-        }));
-        if (!r.ok) {
-          // Não dá para seguir: a peça sairia pedindo a menos. O motivo vem do
-          // servidor e diz o que falta — é recado para abrir a calculadora.
-          // Motivo vazio não vira "undefined" na tela: aviso que não explica
-          // nada é pior do que aviso genérico, porque parece defeito da peça.
-          const porque = r.motivo || 'Não consegui calcular e o servidor não disse por quê.';
-          toast.error(
-            `${porque}${'faltando' in r && r.faltando?.length ? ` Falta: ${r.faltando.join('; ')}.` : ''} ` +
-            'Sem cálculo a inicial sairia como "em aberto" e o dobro se perderia.',
-            { duration: 12000 },
+      const r = await montarInicialCompleta(caseId, produto, {
+        signal: ac.signal,
+        onEtapa: (e) => setTudoBusy(e),
+        onCalculo: (c: any) => {
+          const nContratos = Array.isArray(c.contratos) ? c.contratos.length : 0;
+          toast.success(
+            `Cálculo pronto: ${c.total?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` +
+            `${c.cenarioTitulo ? ` — ${c.cenarioTitulo}` : ''}` +
+            `${nContratos > 1 ? ` · ${nContratos} contratos somados` : ''}` +
+            `${c.competencias ? ` · ${c.competencias} competências do HISCON` : ''}` +
+            `${c.taxa != null ? ` · taxa BACEN ${c.taxa}%` : ''}.`,
+            { duration: 8000 },
           );
-          return;
-        }
-        const nContratos = Array.isArray(r.contratos) ? r.contratos.length : 0;
-        toast.success(
-          `Cálculo pronto: ${r.total?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` +
-          `${r.cenarioTitulo ? ` — ${r.cenarioTitulo}` : ''}` +
-          `${nContratos > 1 ? ` · ${nContratos} contratos somados` : ''}` +
-          `${r.competencias ? ` · ${r.competencias} competências do HISCON` : ''}` +
-          `${r.taxa != null ? ` · taxa BACEN ${r.taxa}%` : ''}.`,
-          { duration: 8000 },
-        );
-      }
-
-      // 🚨 PRIMEIRO os documentos, depois a peça. O recorte do HISCON/HISCRE e o
-      // JG composto vivem em "PARA A INICIAL", e é de lá que a organização da
-      // pasta tira o que vai ao protocolo. Gerar a peça antes de recortar faz o
-      // pacote sair com o extrato INTEIRO — 82 páginas em vez de 12, medido na
-      // MARIA CLIRENE — desfazendo no último passo a regra de juntar só o que a
-      // ação discute.
-      //
-      // Best-effort: documento que falta vira aviso no card, não erro aqui. Quem
-      // decide se dá para montar a inicial é o advogado.
-      if (cancelado()) return;
-      passo('Preparando os documentos…');
-      await legalCasesService.prepararDocumentosDaInicial(caseId, false, ac.signal).catch(() => undefined);
-
-      if (cancelado()) return;
-      passo('Gerando a inicial…');
-      await legalCasesService.gerarInicial(caseId, produto, ac.signal);
-
-      // A pasta falhar não desfaz a peça: ela já está anexada ao card. E vai por
-      // `organizarPasta`, não pelo serviço cru, para não perder os avisos de o
-      // que saiu da raiz do cliente e o que foi para o arquivo dele.
-      // A peça já está anexada ao card. Abortar AQUI continua valendo: a pasta
-      // do réu e a mudança de fase são passos que o advogado pode não querer dar.
-      if (cancelado()) { onChanged(); return; }
-      passo('Organizando a pasta…');
-      const org = await organizarPasta();
-
-      if (cancelado()) { onChanged(); return; }
-      setTudoBusy('Movendo para revisão…');
-      await legalCasesService.movePhase(caseId, 'revisao_inicial');
+        },
+        organizarPasta: () => organizarPasta() as any,
+      });
 
       onChanged();
-      toast.success(
-        `Documentos recortados e inicial de ${produto} gerada${org ? ` — pasta "${org.pastaBanco}" montada` : ''}. Card em Revisão inicial. ` +
-        'Confira as lacunas "[ • ]" antes de protocolar.',
-      );
+
+      if (r.ok) {
+        const nome = (r.org as any)?.pastaBanco;
+        toast.success(
+          `Documentos recortados e inicial de ${produto} gerada${nome ? ` — pasta "${nome}" montada` : ''}. ` +
+          'Card em Revisão inicial. Confira as lacunas "[ • ]" antes de protocolar.',
+        );
+        if (r.aviso) toast(r.aviso, { duration: 12000 });
+        return;
+      }
+      if (r.motivo === 'abortado') {
+        toast('Montagem abortada — nada foi movido de fase.');
+        return;
+      }
+      // Recusa: o texto de cada motivo mora em `porqueNaoMontou`, o MESMO que o
+      // quadro usa — recado diferente para o mesmo defeito confunde mais do que
+      // ajuda.
+      const recado = porqueNaoMontou(clienteNome || 'o cliente', r);
+      toast.error(recado || 'Não consegui completar a montagem.', { duration: 12000 });
     } catch (e: any) {
-      // Cancelamento não é falha: nada de toast vermelho para quem apertou parar.
       if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || ac.signal.aborted) {
         toast('Montagem abortada — nada foi movido de fase.');
       } else {

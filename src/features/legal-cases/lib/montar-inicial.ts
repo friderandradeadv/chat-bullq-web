@@ -9,7 +9,7 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
  * inteiro, de 82 páginas.
  */
 export type ResultadoMontagem =
-  | { ok: true; aviso?: string }
+  | { ok: true; aviso?: string; org?: { pastaBanco?: string } | null }
   | { ok: false; motivo: 'jg-incompleto'; faltas: string[] }
   | { ok: false; motivo: 'documento-curto'; detalhe: string }
   | { ok: false; motivo: 'sem-calculo'; detalhe: string; pastaCriada: boolean }
@@ -28,9 +28,25 @@ export async function montarInicialCompleta(
     /** Segue mesmo com o cálculo NEGATIVO (sem indébito) — exige decisão humana. */
     permitirNegativo?: boolean;
     onEtapa?: (e: string) => void;
+    /**
+     * Chamado com o resultado do cálculo que deu certo.
+     *
+     * 🚨 EXISTE PARA A UNIFICAÇÃO NÃO EMPOBRECER A FICHA (30/09/2026). Havia
+     * DOIS fluxos de montagem — este e um embutido no `case-detail-drawer` — e
+     * o da ficha mostrava um toast detalhado do cálculo (total, cenário,
+     * contratos somados, competências, taxa do BACEN) que este não tinha.
+     * Unificar sem o gancho apagaria essa informação da tela.
+     */
+    onCalculo?: (r: any) => void;
+    /**
+     * Substitui o passo da pasta. A ficha chama um envoltório que colhe os
+     * avisos do que saiu da raiz do cliente e do que foi para o arquivo dele —
+     * o serviço cru perde isso. Devolve o resultado para o toast final.
+     */
+    organizarPasta?: () => Promise<{ pastaBanco?: string } | null | undefined>;
   } = {},
 ): Promise<ResultadoMontagem> {
-  const { signal, onEtapa } = opts;
+  const { signal, onEtapa, onCalculo, organizarPasta } = opts;
   const abortou = () => !!signal?.aborted;
   // 🚨 O TOAST SABIA E O CARD NÃO (30/09/2026). Os primeiros passos da montagem
   // rodam AQUI, no navegador — cálculo, preparo dos documentos, preparo da
@@ -92,6 +108,9 @@ export async function montarInicialCompleta(
         return { ok: false, motivo: 'sem-calculo', detalhe: (r as any).motivo ?? '', pastaCriada };
       }
 
+      // O cálculo deu certo: quem chamou pode detalhá-lo na tela.
+      onCalculo?.(r);
+
       // 🚨 NEGATIVO NÃO É PENDÊNCIA: É A RESPOSTA. Regra do escritório, repetida
       // em 25/09/2026: não havendo restituição, a ação é de CONVERSÃO + DANO
       // MORAL, no modelo "em aberto" — que é exatamente o que o sinal do saldo
@@ -150,12 +169,14 @@ export async function montarInicialCompleta(
 
     // A pasta falhar não desfaz a peça: ela já está anexada ao card.
     onEtapa?.('Organizando a pasta…');
-    await legalCasesService.organizarPastaInicial(caseId).catch(() => undefined);
+    const org = organizarPasta
+      ? await organizarPasta().catch(() => null)
+      : await legalCasesService.organizarPastaInicial(caseId).catch(() => null);
     if (abortou()) return { ok: false, motivo: 'abortado' };
 
     onEtapa?.('Movendo para revisão…');
     await legalCasesService.movePhase(caseId, 'revisao_inicial');
-    return { ok: true, ...(avisoDoCalculo ? { aviso: avisoDoCalculo } : {}) };
+    return { ok: true, org: (org as any) ?? null, ...(avisoDoCalculo ? { aviso: avisoDoCalculo } : {}) };
   } catch (e: any) {
     if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED' || abortou()) {
       return { ok: false, motivo: 'abortado' };
