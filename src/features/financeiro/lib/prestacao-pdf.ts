@@ -38,6 +38,10 @@ function buildHtml(d: PrestacaoDados): string {
   // PAGAMENTO PARCIAL: o banco depositou menos que o executado. Sem este bloco o cliente
   // recebe um documento que parece encerrar o caso, quando ainda se briga pelo resto.
   const ex = d.execucao && d.execucao.remanescente > 0 ? d.execucao : null;
+  // O CLIENTE RECEBEU DIRETO. A condenação caiu na conta dele e ao escritório o tribunal
+  // pagou só a sucumbência; o contratual veio por repasse dele. Sem esta bandeira o
+  // documento prometia uma transferência que não vai acontecer — e o cliente cobraria.
+  const direto = d.clienteRecebeuDireto === true;
   const pctFalta = ex && ex.totalExecutado > 0 ? Math.round((ex.remanescente / ex.totalExecutado) * 100) : 0;
   const pctPago = 100 - pctFalta;
   const sub = [`Ação judicial`, d.autos ? `Autos nº ${esc(d.autos)}` : ''].filter(Boolean).join(' · ');
@@ -67,7 +71,7 @@ function buildHtml(d: PrestacaoDados): string {
       <div data-b style="margin-top:28px">
         <div><span style="${secNum}">${nSec()}</span><span style="${secTit}">O que a parte contrária pagou, verba por verba</span></div>
         <div style="${secSub}">A condenação não é um valor só: cada parcela tem origem própria na decisão.</div>
-        <div style="font-size:12.5px;margin-bottom:12px">O total depositado corresponde às verbas fixadas no seu título judicial:</div>
+        <div style="font-size:12.5px;margin-bottom:12px">${direto ? 'O crédito pago pela parte contrária corresponde às verbas fixadas no seu título judicial:' : 'O total depositado corresponde às verbas fixadas no seu título judicial:'}</div>
         <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e3e6eb;border-radius:10px;overflow:hidden">
           ${verbas.map((x) => {
             const n = Math.round(Number(x.valor) * 100) / 100;
@@ -75,7 +79,7 @@ function buildHtml(d: PrestacaoDados): string {
             const glosa = abate ? ' <span style="color:#6b7480">(abatimento determinado no título)</span>' : (glosaNat[String(x.natureza)] ?? '');
             return `<tr><td style="${cell}">${esc(x.label)}${glosa}</td><td style="${val}">(${abate ? '−' : '+'}) ${brl(Math.abs(n))}</td></tr>`;
           }).join('')}
-          <tr style="background:#eef4fb"><td style="${cell};border-bottom:none;font-weight:800">Total depositado e levantado</td><td style="${val};border-bottom:none;font-weight:800">(=) ${brl(d.bruto)}</td></tr>
+          <tr style="background:#eef4fb"><td style="${cell};border-bottom:none;font-weight:800">${direto ? 'Crédito total do processo' : 'Total depositado e levantado'}</td><td style="${val};border-bottom:none;font-weight:800">(=) ${brl(d.bruto)}</td></tr>
         </table>
       </div>` : '';
   return `
@@ -88,8 +92,9 @@ function buildHtml(d: PrestacaoDados): string {
     </div>
     <div style="padding:22px 34px 14px">
       <div data-b style="background:#e9f7ef;border:1px solid #7cc79a;border-left:5px solid #2f9e57;border-radius:10px;padding:15px 20px">
-        <div style="color:#2f7d4f;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">Valor líquido que será transferido a você${ex ? ' agora' : ''}</div>
+        <div style="color:#2f7d4f;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">${direto ? 'Valor que ficou com você' : `Valor líquido que será transferido a você${ex ? ' agora' : ''}`}</div>
         <div style="color:#1f8a4c;font-size:31px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums">${brl(d.liquido)}</div>
+        ${direto ? `<div style="color:#2f7d4f;font-size:11.5px;margin-top:6px">Este valor <b>já está com você</b>: a condenação foi depositada diretamente na sua conta. Não há transferência a fazer — esta prestação existe para você conferir a conta.</div>` : ''}
         ${ex ? `<div style="color:#2f7d4f;font-size:11.5px;margin-top:6px">Este é um <b>pagamento parcial</b>. O processo continua, e ainda cobramos ${brl(ex.remanescente)} do banco.</div>` : ''}
       </div>
 
@@ -97,10 +102,12 @@ function buildHtml(d: PrestacaoDados): string {
 
       <div data-b style="margin-top:28px">
         <div><span style="${secNum}">${nSec()}</span><span style="${secTit}">Como chegamos a esse valor</span></div>
-        <div style="${secSub}">Do valor depositado no alvará até o que é efetivamente seu.</div>
-        <div style="font-size:12.5px;margin-bottom:12px">A parte contrária depositou <b>${brl(d.bruto)}</b> no alvará judicial. Veja como esse valor se divide:</div>
+        <div style="${secSub}">${direto ? 'Do crédito reconhecido no processo até o que é efetivamente seu.' : 'Do valor depositado no alvará até o que é efetivamente seu.'}</div>
+        <div style="font-size:12.5px;margin-bottom:12px">${direto
+          ? `A parte contrária pagou <b>${brl(d.bruto)}</b> neste processo, e o dinheiro entrou por <b>duas portas</b>: a sucumbência foi depositada diretamente ao escritório (a lei manda que seja assim) e a sua condenação foi depositada na sua conta. Veja como esse valor se divide:`
+          : `A parte contrária depositou <b>${brl(d.bruto)}</b> no alvará judicial. Veja como esse valor se divide:`}</div>
         <table style="width:100%;border-collapse:separate;border-spacing:0;border:1px solid #e3e6eb;border-radius:10px;overflow:hidden">
-          <tr><td style="${cell}">Valor total depositado (alvará)</td><td style="${val}">(+) ${brl(d.bruto)}</td></tr>
+          <tr><td style="${cell}">${direto ? 'Crédito total pago pela parte contrária' : 'Valor total depositado (alvará)'}</td><td style="${val}">(+) ${brl(d.bruto)}</td></tr>
           <tr><td style="${cell}">Honorários sucumbenciais <span style="color:#6b7480">(pagos pela parte contrária, por lei — não saem do seu bolso)</span></td><td style="${val}">(-) ${brl(d.suc)}</td></tr>
           ${reembEsc > 0 ? `<tr><td style="${cell}">Despesas processuais adiantadas pelo escritório <span style="color:#6b7480">(devolução)</span></td><td style="${val}">(-) ${brl(reembEsc)}</td></tr>` : ''}
           ${reembCli > 0 ? `<tr><td style="${cell}">Reembolso das custas que <b>você</b> adiantou <span style="color:#6b7480">(volta integral para você, sem desconto de honorários)</span></td><td style="${val}">(-) ${brl(reembCli)}</td></tr>` : ''}
@@ -109,7 +116,7 @@ function buildHtml(d: PrestacaoDados): string {
           ${temExtras ? `<tr style="background:#f5f8fc"><td style="${cell}">Sua parte da condenação</td><td style="${val}">(=) ${brl(Math.round((d.condenacao - d.hon) * 100) / 100)}</td></tr>` : ''}
           ${reembCli > 0 ? `<tr><td style="${cell}">Reembolso das custas que você adiantou</td><td style="${val}">(+) ${brl(reembCli)}</td></tr>` : ''}
           ${deducoes.map((x) => `<tr><td style="${cell}">${esc(x.label)}${x.cnjIncidente ? ` <span style="color:#6b7480">(autos nº ${esc(x.cnjIncidente)})</span>` : ''}</td><td style="${val}">(-) ${brl(x.valor)}</td></tr>`).join('')}
-          <tr style="background:#eef4fb"><td style="${cell};border-bottom:none;font-weight:800">Valor líquido a transferir para você</td><td style="${val};border-bottom:none;font-weight:800;color:#1f8a4c">(=) ${brl(d.liquido)}</td></tr>
+          <tr style="background:#eef4fb"><td style="${cell};border-bottom:none;font-weight:800">${direto ? 'Valor que ficou com você' : 'Valor líquido a transferir para você'}</td><td style="${val};border-bottom:none;font-weight:800;color:#1f8a4c">(=) ${brl(d.liquido)}</td></tr>
         </table>
       </div>
 
@@ -130,7 +137,7 @@ function buildHtml(d: PrestacaoDados): string {
         </div>
         <div data-b style="margin-top:14px;background:#f7f9fc;border:1px solid #e3e6eb;border-left:4px solid #1f2126;border-radius:9px;padding:13px 16px">
           <div style="font-weight:800;font-size:12.5px;color:#1f2733;margin-bottom:5px">Por que este valor é seu</div>
-          <div style="font-size:12px;line-height:1.6;color:#4a515c">Este valor é seu por direito: corresponde à sua condenação (${brl(d.condenacao)}) menos os honorários contratuais que você aceitou em contrato. A sucumbência não entra nessa conta — a lei manda a parte contrária pagá-la diretamente ao escritório (art. 85 do CPC), e por isso ela nunca reduz o que é seu.${deducoes.length ? ` Os valores descontados acima são obrigações suas que o escritório quita diretamente do alvará, com comprovante juntado à sua pasta — não são honorários.` : ''}${respeitaTeto ? ` Seguimos ainda o art. 50 do Código de Ética da OAB: os honorários do escritório (contratuais somados à sucumbência) <b>não superam</b> o que fica com você.` : ''}${reduziu ? ` Neste caso, para respeitar esse limite, <b>reduzimos os honorários contratuais</b> abaixo do previsto no contrato — de modo que você não recebesse menos que o escritório.` : ''}</div>
+          <div style="font-size:12px;line-height:1.6;color:#4a515c">Este valor é seu por direito: corresponde à sua condenação (${brl(d.condenacao)}) menos os honorários contratuais que você aceitou em contrato${direto ? ', que você nos repassou depois de receber o depósito' : ''}. A sucumbência não entra nessa conta — a lei manda a parte contrária pagá-la diretamente ao escritório (art. 85 do CPC), e por isso ela nunca reduz o que é seu.${deducoes.length ? ` Os valores descontados acima são obrigações suas que o escritório quita diretamente do alvará, com comprovante juntado à sua pasta — não são honorários.` : ''}${respeitaTeto ? ` Seguimos ainda o art. 50 do Código de Ética da OAB: os honorários do escritório (contratuais somados à sucumbência) <b>não superam</b> o que fica com você.` : ''}${reduziu ? ` Neste caso, para respeitar esse limite, <b>reduzimos os honorários contratuais</b> abaixo do previsto no contrato — de modo que você não recebesse menos que o escritório.` : ''}</div>
         </div>
       </div>
 
@@ -156,7 +163,9 @@ function buildHtml(d: PrestacaoDados): string {
 
       <div data-b style="margin-top:26px">
         <div><span style="${secNum}">${nSec()}</span><span style="${secTit}">Considerações finais</span></div>
-        <div style="font-size:12.5px;line-height:1.6;margin-top:10px">O valor de <b>${brl(d.liquido)}</b> será transferido para a sua conta. Qualquer dúvida sobre esses números ou sobre o andamento do caso, estamos à disposição para explicar com calma.</div>
+        <div style="font-size:12.5px;line-height:1.6;margin-top:10px">${direto
+          ? `O valor de <b>${brl(d.liquido)}</b> já está na sua conta — foi depositado diretamente pela Justiça. Qualquer dúvida sobre esses números ou sobre o andamento do caso, estamos à disposição para explicar com calma.`
+          : `O valor de <b>${brl(d.liquido)}</b> será transferido para a sua conta. Qualquer dúvida sobre esses números ou sobre o andamento do caso, estamos à disposição para explicar com calma.`}</div>
         <div style="font-size:12.5px;line-height:1.6;margin-top:8px">${ex ? 'Seguimos com o processo até o pagamento integral. Obrigado pela confiança!' : 'Foi um prazer lutar pelos seus direitos. Obrigado pela confiança!'}</div>
         <div style="margin-top:18px;font-size:12px;color:#7b8798">Atenciosamente,</div>
         <div style="margin-top:4px;font-weight:800;color:#1f2126;font-size:13px">FRIDER ANDRADE <span style="color:#C1272D">▪</span> ADVOGADOS</div>

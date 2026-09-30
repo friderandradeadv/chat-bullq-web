@@ -23,7 +23,9 @@ export interface Conta { id: string; nome: string; banco: string; cor?: string; 
 export interface ReconConta { saldoReal: number | null; saldoCalculado: number; diferenca: number | null; nLancamentos: number }
 export type CadastroTipo = 'escritorio' | 'fornecedor' | 'socio' | 'cliente' | 'outro';
 export interface FinCadastro { id: string; nome: string; tipo: CadastroTipo; doc?: string | null }
-export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number }
+export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number;
+  // marcado quando o repasse já saiu do caixa (some da lista de pendentes; some em dobro se ignorado)
+  repassado?: boolean; repasseData?: string; repasseTxId?: string }
 // Espelha o RateioExito da api. Os quatro números são o resumo; a DECOMPOSIÇÃO é o que
 // permite a prestação discriminar verba por verba — e, desde 09/09/2026, também trafega na
 // edição do lançamento (antes o editor mandava só os 4 e o service apagava o resto).
@@ -35,6 +37,8 @@ export interface RateioExito {
   verbas?: { label: string; valor: number; natureza: VerbaNatureza }[];
   deducoesCliente?: { label: string; valor: number; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string }[];
   grupoId?: string; beneficiarioAlvara?: 'cliente' | 'escritorio';
+  /** O cliente recebeu a parte dele direto: `bruto` é o crédito do processo, não o que caiu aqui. */
+  clienteRecebeuDireto?: boolean;
 }
 export interface FinAnexo { id: string; name: string; mime: string; size: number; key: string; url: string; uploadedById?: string | null; uploadedAt: string }
 export interface PrestacaoDados {
@@ -52,7 +56,30 @@ export interface PrestacaoDados {
   clienteBruto?: number; reembCli?: number; reembEsc?: number; totalDeducoes?: number;
   honorariosEscritorio?: number; excedeCliente?: boolean;
   grupo?: { id: string; entradas: number } | null;
+  /** O cliente recebeu a condenação direto na conta dele — não há repasse a prometer. */
+  clienteRecebeuDireto?: boolean;
   anexos: { key: string; url: string; mime: string; name: string }[];
+}
+
+/**
+ * Prestação de contas do ADVOGADO — o espelho, para quem dividiu o trabalho, do documento
+ * que o cliente recebe. `origens` é o que o resumo "nosso × fatia" nunca disse: de onde
+ * veio cada parcela do honorário (sucumbência paga pela parte contrária × contratual pago
+ * pelo cliente), porque elas nascem em lugares diferentes e a fatia incide sobre a soma.
+ */
+export interface RepasseAdvogadoDados {
+  advogado: { userId: string | null; nome: string; tipo: 'socio' | 'associado'; valor: number; pct: number | null; repassado: boolean; repasseData: string | null };
+  processo: { cliente: string; autos: string; reu: string; area: string | null };
+  credito: { bruto: number; base: number; honPct: number | null; sucPct: number | null; clienteLiquido: number; verbas: { label: string; valor: number; natureza: VerbaNatureza }[] };
+  nosso: { total: number; sucumbencia: number; contratual: number };
+  origens: { rotulo: string; valor: number; quemPagou: string; explicacao: string }[];
+  /** O cliente recebeu a condenação direto na conta dele (o dinheiro nunca passou por nós). */
+  clienteRecebeuDireto: boolean;
+  escritorio: { valor: number; pct: number | null };
+  outros: { nome: string; valor: number; repassado: boolean }[];
+  recebimento: { data: string; entradas: number; conta: string | null };
+  execucao?: { totalExecutado: number; recebido: number; remanescente: number } | null;
+  geradoEm: string;
 }
 
 /** URL absoluta do anexo (a base da API já termina em /api/v1). */
@@ -546,6 +573,11 @@ export const financeiroService = {
   // Aprova o rascunho: envia agora (envio especializado) ou agenda para uma hora futura.
   async aprovarPrestacao(txId: string, body: { texto?: string; agendarAt?: string }): Promise<{ enviado?: boolean; agendado?: boolean; quando?: string; motivo?: string }> {
     const { data } = await api.post(`/financeiro/prestacao-contas/${txId}/aprovar`, body, { timeout: 120000 });
+    return data.data ?? data;
+  },
+  /** Prestação de contas do advogado (fatia do rateio) — dados p/ o PDF que ele recebe. */
+  async repasseAdvogado(txId: string, userId?: string | null): Promise<RepasseAdvogadoDados> {
+    const { data } = await api.get(`/financeiro/repasse-advogado/${txId}`, { params: userId ? { userId } : {} });
     return data.data ?? data;
   },
   async rateioSugerido(caseId: string, vertical?: string): Promise<{ vertical: string; responsavelId: string | null; split: Array<{ tipo: 'socio'; userId: string; nome: string; pct: number }> }> {
