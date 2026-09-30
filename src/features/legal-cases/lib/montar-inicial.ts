@@ -32,6 +32,19 @@ export async function montarInicialCompleta(
 ): Promise<ResultadoMontagem> {
   const { signal, onEtapa } = opts;
   const abortou = () => !!signal?.aborted;
+  // 🚨 O TOAST SABIA E O CARD NÃO (30/09/2026). Os primeiros passos da montagem
+  // rodam AQUI, no navegador — cálculo, preparo dos documentos, preparo da
+  // pasta — e só depois a API entra com `gerarInicial`, que era a única a
+  // narrar. Quem clicava via o toast trabalhando e o card imóvel: "não funciona
+  // quando eu seleciono entendeu? Quero que apareça no card."
+  //
+  // `etapa` passa a fazer as duas coisas. Sem número de passo de propósito: o
+  // caminho tem desvios (documento faltando devolve o card para a fase dos
+  // documentos), então numerar seria inventar um total que não se cumpre.
+  const etapa = (texto: string) => {
+    onEtapa?.(texto);
+    legalCasesService.narrarProgresso(caseId, texto);
+  };
   let avisoDoCalculo: string | null = null;
   try {
     // 🚨 O CÁLCULO ESCOLHE O PEDIDO. O sinal da restituição decide a base:
@@ -51,7 +64,7 @@ export async function montarInicialCompleta(
     // em lote não conhece o metadata do card: cálculo digitado na calculadora
     // fica como está; do hub, refaz-se.
     {
-      onEtapa?.('Calculando…');
+      etapa('Calculando…');
       const r = await legalCasesService
         .calcularAutomatico(caseId, produto, signal)
         .catch((e: any) => ({ ok: false as const, motivo: e?.response?.data?.message || 'erro ao calcular' }));
@@ -59,7 +72,7 @@ export async function montarInicialCompleta(
       // Extrato truncado tem tratamento próprio: o card volta para a fase dos
       // documentos, porque o que falta é COLETA, não cálculo.
       if (!r.ok && /HISCRE cobre s[óo]|Recolete o HISCRE/i.test(String((r as any).motivo ?? ''))) {
-        onEtapa?.('Preparando a pasta…');
+        etapa('Preparando a pasta…');
         await legalCasesService.organizarPastaInicial(caseId).catch(() => undefined);
         await legalCasesService.movePhase(caseId, 'info_faltantes').catch(() => undefined);
         return { ok: false, motivo: 'documento-curto', detalhe: String((r as any).motivo) };
@@ -71,7 +84,7 @@ export async function montarInicialCompleta(
         // MARIA CLIRENE em 24/09/2026: sem HISCON, sem pasta, sem onde pôr o
         // HISCON. Organizar aqui cria a estrutura do benefício e o
         // `01. PETIÇÃO INICIAL`, então o documento que falta tem endereço.
-        onEtapa?.('Preparando a pasta…');
+        etapa('Preparando a pasta…');
         const pastaCriada = await legalCasesService
           .organizarPastaInicial(caseId)
           .then(() => true)
@@ -97,7 +110,7 @@ export async function montarInicialCompleta(
 
     // Documentos ANTES da peça: o recorte do HISCON/HISCRE e o JG composto vivem
     // em "PARA A INICIAL", e é de lá que a pasta do protocolo tira o que vai.
-    onEtapa?.('Preparando os documentos…');
+    etapa('Preparando os documentos…');
     // 🚨 O PREPARO FALA, E NINGUÉM ESCUTAVA. Esta linha era
     // `...prepararDocumentosDaInicial(...).catch(() => undefined)`: o retorno
     // — que traz os AVISOS, inclusive "não achei o IR" e "não achei o print do
@@ -119,7 +132,7 @@ export async function montarInicialCompleta(
     const faltas = (preparo?.avisos ?? []).filter((a: string) =>
       /Portal MIR|IR do INSS|informe/i.test(a));
     if (faltas.length) {
-      onEtapa?.('Preparando a pasta…');
+      etapa('Preparando a pasta…');
       await legalCasesService.organizarPastaInicial(caseId).catch(() => undefined);
       // 🚨 QUEM PRECISA DE DOCUMENTO VOLTA PARA "INFORMAÇÕES FALTANTES".
       // Determinação do escritório em 28/09/2026: o card tem de ficar na fase
@@ -131,7 +144,7 @@ export async function montarInicialCompleta(
       return { ok: false, motivo: 'jg-incompleto', faltas };
     }
 
-    onEtapa?.('Gerando a inicial…');
+    etapa('Gerando a inicial…');
     await legalCasesService.gerarInicial(caseId, produto, signal);
     if (abortou()) return { ok: false, motivo: 'abortado' };
 

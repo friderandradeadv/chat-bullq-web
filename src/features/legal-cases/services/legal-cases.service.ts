@@ -1143,6 +1143,18 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/coleta-inss/mir`);
     return data.data ?? data;
   },
+  /**
+   * Narra um passo da operação longa no CARD (`metadata.progresso`).
+   *
+   * 🚨 Nunca lança e nunca espera: progresso é informação, não resultado. Uma
+   * narração que falha não pode derrubar a montagem — a regra é a mesma do
+   * `ProgressoService` no servidor.
+   */
+  narrarProgresso(id: string, passo: string, op = 'inicial'): void {
+    void api.post(`/legal-cases/${id}/progresso-app`, { op, passo, status: 'rodando' })
+      .catch(() => undefined);
+  },
+
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */
