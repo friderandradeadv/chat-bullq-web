@@ -56,6 +56,13 @@ const NOME: Record<string, string> = {
   inicial: 'Montando a inicial',
   protocolo: 'Protocolando',
   coleta: 'Coletando no Meu INSS',
+  // 🚨 'Protocolando' É PALAVRA SÉRIA — protocolar é ato do advogado, nunca da
+  // máquina. Em 30/09/2026 a recusa de um PDF na conferência foi gravada como
+  // `op: 'protocolo'` e o card exibiu "Protocolando · na cidade de" em
+  // vermelho. O escritório leu que o robô estava peticionando sozinho. Nada
+  // estava: era conferência. Rótulo que assusta é defeito, ainda que o dado
+  // por baixo esteja certo.
+  conferencia: 'Conferência da peça',
 };
 
 /**
