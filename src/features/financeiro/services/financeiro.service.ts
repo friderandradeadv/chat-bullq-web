@@ -362,7 +362,7 @@ export const financeiroService = {
     return data.data ?? data;
   },
   /** Repassa a fatia: `userId` para membro, `nome` para advogado externo (sem conta aqui). */
-  async repassar(txId: string, userId?: string | null, nome?: string | null): Promise<{ repassados: number; total: number }> {
+  async repassar(txId: string, userId?: string | null, nome?: string | null): Promise<{ repassados: number; total: number; transacoes?: { id?: string }[] }> {
     const { data } = await api.post(`/financeiro/transacoes/${txId}/repassar`, { ...(userId ? { userId } : {}), ...(!userId && nome ? { nome } : {}) });
     return data.data ?? data;
   },

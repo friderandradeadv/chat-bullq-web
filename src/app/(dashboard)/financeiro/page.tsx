@@ -1059,7 +1059,29 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const updM = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpdateTransacaoInput }) => financeiroService.updateTransacao(id, input), onSuccess: () => { invalidate(); toast.success('Lançamento atualizado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar') });
   const delM = useMutation({ mutationFn: ({ id, escopo }: { id: string; escopo: 'uma' | 'proximas' }) => financeiroService.removeTransacao(id, escopo), onSuccess: (r) => { invalidate(); toast.success(`${r.removidos} lançamento(s) removido(s)`); setSerieDel(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
   // Repasse da fatia do rateio ao advogado — a ação mora na linha de Contas a pagar.
-  const repassarM = useMutation({ mutationFn: ({ txId, userId, nome }: { txId: string; userId?: string | null; nome?: string | null }) => financeiroService.repassar(txId, userId, nome), onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(`Repasse feito: ${r.repassados} advogado(s) · ${brl2(r.total)} — já cai no holerite`); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao repassar') });
+  // REPASSAR e, no mesmo ato, GUARDAR o comprovante que estava escolhido na linha pendente.
+  // Antes o arquivo vivia só na tela, preso ao id da linha sintética — e ela deixa de existir
+  // no instante em que a fatia é repassada, então o comprovante sumia justamente ali. O lugar
+  // dele é o lançamento da transferência, que só nasce agora: por isso o upload é aqui.
+  const repassarM = useMutation({
+    mutationFn: async ({ txId, userId, nome, linhaId }: { txId: string; userId?: string | null; nome?: string | null; linhaId?: string }) => {
+      const r = await financeiroService.repassar(txId, userId, nome);
+      const files = linhaId ? (raAnexos[linhaId] ?? []) : [];
+      const novoId = r.transacoes?.[0]?.id;
+      let anexados = 0;
+      if (files.length && novoId) {
+        try { await financeiroService.uploadAnexos(novoId, files); anexados = files.length; }
+        catch { toast.error('Repassei, mas não consegui guardar o comprovante — anexe pelo clipe do lançamento.'); }
+      }
+      return { ...r, anexados, linhaId };
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['financeiro'] });
+      if (r.linhaId) setRaAnexos((m) => { const n = { ...m }; delete n[r.linhaId!]; return n; });
+      toast.success(`Repasse feito: ${r.repassados} advogado(s) · ${brl2(r.total)}${r.anexados ? ` · ${r.anexados} comprovante(s) anexado(s) ao lançamento` : ''}`);
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao repassar'),
+  });
 
   const temPeriodo = !!(deISO || ateISO); // período por calendário vence o filtro de mês
   const txs = useMemo(() => {
@@ -1518,7 +1540,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                                 depender de já existir o lançamento da transferência. */}
                             <button onClick={() => { raAlvoRef.current = t.id!; raFileRef.current?.click(); }} title={(raAnexos[t.id!]?.length ?? 0) > 0 ? `${raAnexos[t.id!]!.length} anexo(s) escolhido(s): ${raAnexos[t.id!]!.map((f) => f.name).join(', ')} — vão no PDF` : 'Anexar o comprovante da transferência ao PDF da prestação'} className={`relative rounded p-1 transition ${(raAnexos[t.id!]?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" />{(raAnexos[t.id!]?.length ?? 0) > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#7048E8] px-0.5 text-[8px] font-bold leading-none text-white">{raAnexos[t.id!]!.length}</span>}</button>
                             <button onClick={() => abrirRepasseAdvogado(rep!.txId, rep!.userId, rep!.nome, rep!.chave, t.id!)} disabled={raLoad === `${rep!.txId}:${rep!.chave}`} title={`Prestação de contas de ${rep!.nome} (PDF) — pra mandar junto com o repasse`} className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{raLoad === `${rep!.txId}:${rep!.chave}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}</button>
-                            <button onClick={() => repassarM.mutate({ txId: rep!.txId, userId: rep!.userId, nome: rep!.nome })} disabled={repassarM.isPending} title={rep!.externo ? 'Gera a saída de caixa pro advogado parceiro (sem holerite — ele não tem folha aqui)' : 'Gera a saída de caixa pro advogado e faz cair no holerite dele'} className="inline-flex items-center gap-1 rounded-md bg-[#02883C] px-2 py-1 text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
+                            <button onClick={() => repassarM.mutate({ txId: rep!.txId, userId: rep!.userId, nome: rep!.nome, linhaId: t.id! })} disabled={repassarM.isPending} title={rep!.externo ? 'Gera a saída de caixa pro advogado parceiro (sem holerite — ele não tem folha aqui)' : 'Gera a saída de caixa pro advogado e faz cair no holerite dele'} className="inline-flex items-center gap-1 rounded-md bg-[#02883C] px-2 py-1 text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
                             </>
                           ) : (
                           <>
