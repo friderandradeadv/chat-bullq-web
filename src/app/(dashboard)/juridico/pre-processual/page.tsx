@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -65,6 +66,23 @@ function cleanProduto(s: string | null): string | null {
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.floor(d / 365)}a` : d >= 30 ? `${Math.floor(d / 30)}m` : `${d}d`);
+
+/**
+ * Aplica a mudança e força o React a PINTAR antes de seguir.
+ *
+ * 🚨 `flushSync` lança se for chamado de dentro de um ciclo de vida do React, e
+ * o dnd-kit chama o `onDragEnd` de dentro do próprio fluxo dele. Lançar ali
+ * derrubaria o soltar inteiro — por isso o resgate: sem o flush, o card ainda
+ * vai para a coluna certa, só perde o pouso animado. Degradar é aceitável;
+ * quebrar o arraste não é.
+ */
+function pintarAgora(fn: () => void) {
+  try {
+    flushSync(fn);
+  } catch {
+    fn();
+  }
+}
 
 export default function PreProcessualPage() {
   const qc = useQueryClient();
@@ -229,30 +247,51 @@ export default function PreProcessualPage() {
     onDrop: (k, alvo, onde) => applyPhaseDrag(qc, KEY, k, alvo, onde),
   });
 
-  const onDragEnd = async (e: DragEndEvent) => {
-    setActiveId(null);
+  // 🚨 O CARD CHEGA NA COLUNA ANTES DE A CÓPIA POUSAR (29/09/2026).
+  //
+  // A cópia que viaja com o ponteiro (`DragOverlay`) pousa animando até a
+  // posição do card REAL de mesmo id. Se, na hora de soltar, o card ainda está
+  // na coluna antiga — porque o `setActiveId(null)` vinha PRIMEIRO e a mudança
+  // de fase esperava a rede — ela voa de volta para o lugar de origem, some, e o
+  // card aparece na fase nova um instante depois. É o "delay para subir".
+  //
+  // A ordem certa é física, não estética:
+  //   1. move otimista no cache, dentro de `flushSync` para o React PINTAR antes;
+  //   2. só então limpa o `active`, e a cópia pousa sobre o card que já está lá;
+  //   3. a rede vai depois, sem ninguém esperando por ela.
+  //
+  // `persistCardOrder` e `move` já atualizam o cache de forma otimista na parte
+  // SÍNCRONA deles (antes do primeiro `await`), então chamá-los sem `await`
+  // dentro do `flushSync` move o card na hora e deixa a gravação em segundo
+  // plano — que é o que eles já faziam, só que tarde demais.
+  const onDragEnd = (e: DragEndEvent) => {
     const to = e.over?.id as string | undefined;
     const card = cards.find((x) => x.id === e.active.id);
-    if (!to || !card || !(preKeys.has(to))) return;
+    if (!to || !card || !(preKeys.has(to))) { setActiveId(null); return; }
     const mesmaFase = card.phase === to;
     // Ordem à mão só vale na coluna em "Padrão (manual)" — com uma regra de
     // ordenação ligada, ela reordenaria tudo de novo no próximo render.
     const sort = loadPhaseSort(to);
     if (sort !== 'manual') {
-      if (mesmaFase) avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
-      else move(card, to);
+      if (mesmaFase) {
+        setActiveId(null);
+        avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
+        return;
+      }
+      pintarAgora(() => { void move(card, to); });
+      setActiveId(null);
       return;
     }
     // Y do ponteiro ao soltar = onde o arraste começou + o quanto andou.
     const y = ((e.activatorEvent as PointerEvent | undefined)?.clientY ?? 0) + e.delta.y;
     const idx = dropIndexAt(to, y, card.id);
-    if (idx >= 0) {
-      const exibidos = applyCardSort(byPhase[to] ?? [], 'manual', kanbanCardKeys, data?.cardOrder?.[to]);
-      // Grava a ordem ANTES de mover de fase: mover invalida o quadro, e o
-      // refetch já volta com a ordem nova (sem o card piscar de lugar).
-      await persistCardOrder(qc, KEY, to, idsWithMove(exibidos.map((c) => c.id), card.id, idx));
-    }
-    if (!mesmaFase) move(card, to);
+    const exibidos = applyCardSort(byPhase[to] ?? [], 'manual', kanbanCardKeys, data?.cardOrder?.[to]);
+    const ordem = idx >= 0 ? idsWithMove(exibidos.map((c) => c.id), card.id, idx) : null;
+    pintarAgora(() => {
+      if (ordem) void persistCardOrder(qc, KEY, to, ordem);
+      if (!mesmaFase) void move(card, to);
+    });
+    setActiveId(null);
   };
 
   return (
