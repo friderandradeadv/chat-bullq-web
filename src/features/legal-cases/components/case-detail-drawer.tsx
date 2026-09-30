@@ -1481,6 +1481,19 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       toast('Montagem abortada — nada foi movido de fase.');
       return true;
     };
+    // 🚨 O BOTÃO SABIA E O CARD NÃO (30/09/2026). Este fluxo é o do BOTÃO DA
+    // FICHA, separado do fluxo do quadro (`lib/montar-inicial.ts`), e só o do
+    // quadro tinha ganhado narração. Resultado: com a ficha aberta, o botão
+    // dizia "Preparando os documentos…" e a barra do card não mostrava nada —
+    // "não sei se está fazendo ou não".
+    //
+    // Os primeiros passos rodam no NAVEGADOR (calcular, preparar documentos) e
+    // a API só entra a partir de `gerarInicial`. `passo` faz as duas coisas: o
+    // rótulo do botão e o registro que a barra lê.
+    const passo = (texto: string) => {
+      setTudoBusy(texto);
+      legalCasesService.narrarProgresso(caseId, texto);
+    };
 
     try {
       // ── PASSO 1: o cálculo ────────────────────────────────────────────────
@@ -1499,7 +1512,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       // vezes. Quem digitou na calculadora continua mandando: essa decisão é do
       // SERVIDOR, que reconhece o cálculo feito à mão e não o refaz.
       {
-        setTudoBusy('Calculando…');
+        passo('Calculando…');
         const r = await legalCasesService.calcularAutomatico(caseId, produto, ac.signal).catch((e) => ({
           ok: false as const,
           motivo: e?.response?.data?.message || 'Erro ao calcular.',
@@ -1538,11 +1551,11 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       // Best-effort: documento que falta vira aviso no card, não erro aqui. Quem
       // decide se dá para montar a inicial é o advogado.
       if (cancelado()) return;
-      setTudoBusy('Preparando os documentos…');
+      passo('Preparando os documentos…');
       await legalCasesService.prepararDocumentosDaInicial(caseId, false, ac.signal).catch(() => undefined);
 
       if (cancelado()) return;
-      setTudoBusy('Gerando a inicial…');
+      passo('Gerando a inicial…');
       await legalCasesService.gerarInicial(caseId, produto, ac.signal);
 
       // A pasta falhar não desfaz a peça: ela já está anexada ao card. E vai por
@@ -1551,7 +1564,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, onChanged }: { caseId
       // A peça já está anexada ao card. Abortar AQUI continua valendo: a pasta
       // do réu e a mudança de fase são passos que o advogado pode não querer dar.
       if (cancelado()) { onChanged(); return; }
-      setTudoBusy('Organizando a pasta…');
+      passo('Organizando a pasta…');
       const org = await organizarPasta();
 
       if (cancelado()) { onChanged(); return; }
