@@ -35,6 +35,22 @@ export type Progresso = {
  */
 const OK_QUE_ESPERA = new Set(['protocolo']);
 
+/**
+ * Por quanto tempo um `ok` que não espera ninguém continua na tela.
+ *
+ * 🚨 NÃO ESCONDER O `ok` DE VEZ (30/09/2026, mesma noite). Esconder sempre
+ * apagou a barra no trecho mais longo da montagem: `gerarInicial` fecha em "ok"
+ * e a cópia da pasta no Drive leva MINUTOS depois disso. O escritório rodou dois
+ * cards e perguntou "cadê o cardzinho de progresso" — com o robô trabalhando.
+ *
+ * O fantasma que motivou o esconde-`ok` era de OUTRO tipo: um `ok` do dia
+ * anterior, num card arrastado de volta para MONTAR INICIAL. Esse caso hoje é
+ * impossível por outra via — mudar de fase apaga o registro, na API. Sobra só o
+ * `ok` de um card que termina e NÃO se move (a fase falhou), e é esse que a
+ * janela cobre: aparece, cumpre o papel de dizer que acabou, e sai.
+ */
+const JANELA_DO_OK_MS = 2 * 60 * 1000;
+
 const NOME: Record<string, string> = {
   documentos: 'Preparando documentos',
   inicial: 'Montando a inicial',
@@ -96,10 +112,13 @@ export function BarraProgresso({
 
   const p = data;
   if (!p) return null;
-  // Concluído e sem ninguém esperando → a barra não tem o que dizer. (O erro
-  // FICA: recusa tem de sobreviver ao recarregamento, que é o motivo de ela
-  // existir em vermelho.)
-  if (p.status === 'ok' && !OK_QUE_ESPERA.has(p.op)) return null;
+  // Concluído, sem ninguém esperando e já VELHO → a barra não tem o que dizer.
+  // (O erro FICA: recusa tem de sobreviver ao recarregamento, que é o motivo de
+  // ela existir em vermelho.)
+  if (p.status === 'ok' && !OK_QUE_ESPERA.has(p.op)) {
+    const quando = Date.parse(p.em ?? '');
+    if (!Number.isFinite(quando) || Date.now() - quando > JANELA_DO_OK_MS) return null;
+  }
 
   const titulo = NOME[p.op] ?? 'Trabalhando';
   const rodando = p.status === 'rodando';
