@@ -189,6 +189,12 @@ export default function FinanceiroPage() {
   // boletos/DARF/despesas e a fatura do cartão (gastos a_pagar do cartão). A receber = honorários etc.
   const aPagarTotal = (data.transacoes ?? []).filter((t) => (t.status ?? (t.valor >= 0 ? 'recebido' : 'pago')) === 'a_pagar' && t.valor < 0).reduce((s, t) => s + Math.abs(t.valor), 0);
   const aPagarRepasses = (data.transacoes ?? []).filter((t) => (t.status ?? '') === 'a_pagar' && t.valor < 0 && /repasse ao cliente/i.test(t.categoria || '')).reduce((s, t) => s + Math.abs(t.valor), 0);
+  // Fatias do rateio ainda não repassadas: dívida com quem trabalhou no caso. Não está em
+  // `transacoes` (só vira lançamento quando alguém aperta "Repassar"), então tem de somar à
+  // parte — senão a Posição real conta como do escritório um dinheiro que já tem dono.
+  // Vem do endpoint, que varre o razão inteiro; o dashboard corta nos 400 mais recentes.
+  const aPagarRepassesAdv = repassesTop?.total ?? 0;
+  const aPagarGeral = aPagarTotal + aPagarRepassesAdv;
   const aReceberTotal = (data.transacoes ?? []).filter((t) => (t.status ?? '') === 'a_receber' && t.valor > 0).reduce((s, t) => s + t.valor, 0);
 
   return (
@@ -237,12 +243,13 @@ export default function FinanceiroPage() {
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {(() => {
             const caixa = kpiMes.caixa; const divida = k.aporteAcumulado ?? 0;
-            // POSIÇÃO REAL FIEL: caixa − o que DEVEMOS (repasses a clientes + boletos/DARF/despesas +
-            // fatura do cartão em aberto) − empréstimo dos sócios. Grande parte do caixa é dinheiro de
-            // cliente (alvará a repassar) — não é do escritório, por isso sai da conta.
-            const pos = caixa - aPagarTotal - divida;
+            // POSIÇÃO REAL FIEL: caixa − o que DEVEMOS (repasses a clientes, fatias do rateio ainda
+            // não repassadas aos advogados, boletos/DARF/despesas e a fatura do cartão em aberto)
+            // − empréstimo dos sócios. Grande parte do caixa é dinheiro de cliente (alvará a
+            // repassar) ou de quem trabalhou no caso — não é do escritório, por isso sai da conta.
+            const pos = caixa - aPagarGeral - divida;
             return (
-          <Kpi icon={Scale} accent={pos < 0 ? '#E03131' : '#2F9E44'} label={`Posição real · ${kpiMes.label}`} value={brl(pos)} hint={`${brl(caixa)} caixa − ${brl(aPagarTotal)} a pagar${divida > 0 ? ` − ${brl(divida)} sócios` : ''}`} onClick={() => setShowSaldo(true)} />
+          <Kpi icon={Scale} accent={pos < 0 ? '#E03131' : '#2F9E44'} label={`Posição real · ${kpiMes.label}`} value={brl(pos)} hint={`${brl(caixa)} caixa − ${brl(aPagarGeral)} a pagar${divida > 0 ? ` − ${brl(divida)} sócios` : ''}`} onClick={() => setShowSaldo(true)} />
           ); })()}
           <Kpi icon={kpiMes.resultado >= 0 ? TrendingUp : TrendingDown} accent={kpiMes.resultado >= 0 ? '#2F9E44' : '#E03131'} label={`Resultado · ${kpiMes.label}`} value={brl(kpiMes.resultado)} hint={`receita ${brl(kpiMes.receita)} · despesa ${brl(kpiMes.despesa)}`} />
           <Kpi icon={Landmark} accent={(k.caixaContas ?? 0) < 0 ? '#E03131' : '#12B886'} label="Total em conta" value={brl(k.caixaContas ?? 0)} hint="Nubank + ASAAS (dinheiro nas contas)" onClick={() => setShowSaldo(true)} />
@@ -250,7 +257,7 @@ export default function FinanceiroPage() {
           <Kpi icon={ArrowDownCircle} accent="#E03131" label="Despesa (12 meses)" value={brl(k.despesa12m)} hint={`fixo ${brl(k.custoFixoMensal)}/mês`} />
         </div>
 
-        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} aPagarTotal={aPagarTotal} aPagarRepasses={aPagarRepasses} aReceberTotal={aReceberTotal} onClose={() => setShowSaldo(false)} />}
+        {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} aPagarTotal={aPagarGeral} aPagarRepasses={aPagarRepasses} aPagarRepassesAdv={aPagarRepassesAdv} aReceberTotal={aReceberTotal} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
         <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={contasEmAberto(data, repassesTop?.itens)} />
@@ -318,7 +325,7 @@ function Kpi({ icon: Icon, accent, label, value, hint, onClick }: { icon: React.
 }
 
 // Detalhe do saldo acumulado: saldo inicial das contas + soma dos resultados mês a mês.
-function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, aPagarTotal, aPagarRepasses, aReceberTotal, onClose }: { meses: FinMes[]; saldoAtual: number; saldoOperacional: number; caixaContas: number; aPagarTotal: number; aPagarRepasses: number; aReceberTotal: number; onClose: () => void }) {
+function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, aPagarTotal, aPagarRepasses, aPagarRepassesAdv, aReceberTotal, onClose }: { meses: FinMes[]; saldoAtual: number; saldoOperacional: number; caixaContas: number; aPagarTotal: number; aPagarRepasses: number; aPagarRepassesAdv: number; aReceberTotal: number; onClose: () => void }) {
   const realizados = meses.filter((m) => !m.projecao);
   const saldoInicial = realizados.length ? realizados[0].acumulado - realizados[0].resultado - (realizados[0].aporte ?? 0) : 0;
   const totalReceita = realizados.reduce((s, m) => s + m.receita, 0);
@@ -358,7 +365,7 @@ function SaldoDetalheModal({ meses, saldoAtual, saldoOperacional, caixaContas, a
           <div className="flex items-center justify-between text-zinc-500"><span>Total de despesas</span><span className="tabular-nums text-rose-600">− {brl2(totalDespesa)}</span></div>
           {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Resultado operacional <span className="text-[11px] text-zinc-400">(o que o escritório gerou/queimou)</span></span><span className={`font-semibold tabular-nums ${saldoOperacional >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(saldoOperacional)}</span></div>}
           <div className="flex items-center justify-between border-t border-dashed border-zinc-200 pt-1.5 font-semibold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Caixa real <span className="text-[11px] font-normal text-zinc-400">(dinheiro nas contas agora)</span></span><span className={`tabular-nums ${caixaContas >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(caixaContas)}</span></div>
-          {aPagarTotal > 0 && <div className="flex items-center justify-between text-zinc-500"><span>A pagar <span className="text-[11px] text-zinc-400">(repasses a clientes{aPagarRepasses > 0 ? ` ${brl2(aPagarRepasses)}` : ''} + contas + cartão)</span></span><span className="tabular-nums text-rose-600">− {brl2(aPagarTotal)}</span></div>}
+          {aPagarTotal > 0 && <div className="flex items-center justify-between text-zinc-500"><span>A pagar <span className="text-[11px] text-zinc-400">(repasses a clientes{aPagarRepasses > 0 ? ` ${brl2(aPagarRepasses)}` : ''}{aPagarRepassesAdv > 0 ? ` + advogados ${brl2(aPagarRepassesAdv)}` : ''} + contas + cartão)</span></span><span className="tabular-nums text-rose-600">− {brl2(aPagarTotal)}</span></div>}
           {totalAporte > 0 && <div className="flex items-center justify-between text-zinc-500"><span>Empréstimo dos sócios <span className="text-[11px] text-zinc-400">(dívida a devolver aos CPFs)</span></span><span className="tabular-nums text-amber-600">− {brl2(totalAporte)}</span></div>}
           {(() => { const pos = caixaContas - aPagarTotal - totalAporte; return (
           <div className="flex items-center justify-between border-t border-zinc-200 pt-1.5 font-bold dark:border-zinc-700"><span className="text-zinc-700 dark:text-zinc-200">Posição real <span className="text-[11px] font-normal text-zinc-400">(caixa − a pagar{totalAporte > 0 ? ' − sócios' : ''})</span></span><span className={`tabular-nums ${pos >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(pos)}</span></div>
@@ -483,7 +490,7 @@ function repasseBillsDe(itens: RepassePendenteItem[] | undefined): FinTransacao[
     // Vence no dia em que o dinheiro entrou: é desde então que o escritório segura a parte
     // de quem trabalhou no caso. Sem data o passivo ficaria fora das bolinhas e a subaba
     // voltaria a discordar do topo.
-    id: `__repasse:${i.txId}:${i.userId}`, data: i.data, vencimento: i.data, mes: i.mes,
+    id: `__repasse:${i.txId}:${i.chave}`, data: i.data, vencimento: i.data, mes: i.mes,
     tipo: 'despesa', categoria: 'Honorários repassados', valor: -(Math.round(Number(i.valor) * 100) / 100),
     party: i.nome, recebedor: i.nome, pagador: null, status: 'a_pagar',
     area: i.area ?? null, obs: `fatia do rateio · ${i.origem}`,
@@ -974,6 +981,9 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const cardBills = useMemo(() => cardBillsDe(data), [data]);
   // Fatias do rateio ainda não repassadas — dívida real do escritório com quem trabalhou no caso.
   const repasseBills = useMemo(() => repasseBillsDe(repasses?.itens), [repasses]);
+  // A linha sintética guarda só o id; o destinatário (membro por userId, externo por nome)
+  // vem daqui — codificar o nome no id quebraria com dois-pontos e acento.
+  const repassePorId = useMemo(() => new Map((repasses?.itens ?? []).map((i) => [`__repasse:${i.txId}:${i.chave}`, i])), [repasses]);
   // Atrasadas × vencendo hoje — alimenta as bolinhas da subaba e do topo da lista.
   const emAberto = useMemo(() => contasEmAberto(data, repasses?.itens), [data, repasses]);
   const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>('ledger');
@@ -1050,7 +1060,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const delM = useMutation({ mutationFn: ({ id, escopo }: { id: string; escopo: 'uma' | 'proximas' }) => financeiroService.removeTransacao(id, escopo), onSuccess: (r) => { invalidate(); toast.success(`${r.removidos} lançamento(s) removido(s)`); setSerieDel(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
   // Repasses pendentes (rateio de honorários ainda não pago ao advogado) — selo + botão
   const [repAberto, setRepAberto] = useState(false);
-  const repassarM = useMutation({ mutationFn: ({ txId, userId }: { txId: string; userId?: string }) => financeiroService.repassar(txId, userId), onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(`Repasse feito: ${r.repassados} advogado(s) · ${brl2(r.total)} — já cai no holerite`); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao repassar') });
+  const repassarM = useMutation({ mutationFn: ({ txId, userId, nome }: { txId: string; userId?: string | null; nome?: string | null }) => financeiroService.repassar(txId, userId, nome), onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(`Repasse feito: ${r.repassados} advogado(s) · ${brl2(r.total)} — já cai no holerite`); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao repassar') });
   const repassarTodosM = useMutation({
     mutationFn: async () => {
       const txIds = [...new Set((repasses?.itens ?? []).map((i) => i.txId))];
@@ -1302,21 +1312,23 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // tribunal paga ao escritório não entra pela mesma porta que o contratual do cliente).
   // Abre pra conferir E baixa com o nome certo — é um arquivo pra mandar, não pra olhar.
   const [raLoad, setRaLoad] = useState<string | null>(null);
-  const abrirRepasseAdvogado = async (txId: string, userId?: string | null) => {
-    const k = `${txId}:${userId ?? ''}`;
+  // `chave` identifica a fatia na tela: userId para membro, `nome:<normalizado>` para o
+  // advogado parceiro, que não tem conta aqui e por isso não tem id.
+  const abrirRepasseAdvogado = async (txId: string, userId?: string | null, nome?: string | null, chave?: string) => {
+    const k = `${txId}:${chave ?? userId ?? ''}`;
     setRaLoad(k);
     try {
-      const d = await financeiroService.repasseAdvogado(txId, userId ?? null);
+      const d = await financeiroService.repasseAdvogado(txId, userId ?? null, nome ?? null);
       const { gerarRepasseAdvogadoPdf, nomeRepasseAdvogadoPdf } = await import('@/features/financeiro/lib/repasse-advogado-pdf');
       const blob = await gerarRepasseAdvogadoPdf(d);
-      const nome = nomeRepasseAdvogadoPdf(d);
+      const nomeArquivo = nomeRepasseAdvogadoPdf(d);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = nome; a.rel = 'noopener';
+      a.href = url; a.download = nomeArquivo; a.rel = 'noopener';
       document.body.appendChild(a); a.click(); a.remove();
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      toast.success(`Prestação de ${d.advogado.nome} gerada · salva como ${nome}`);
+      toast.success(`Prestação de ${d.advogado.nome} gerada · salva como ${nomeArquivo}`);
     } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao gerar a prestação do advogado'); }
     finally { setRaLoad(null); }
   };
@@ -1410,11 +1422,11 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
               )}
               {repasses.itens.map((it, i) => (
                 <div key={i} className="flex items-center gap-2 rounded-lg bg-white/70 px-2.5 py-1.5 text-sm dark:bg-zinc-900/40">
-                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-200"><strong>{it.nome}</strong> <span className="text-zinc-400">· {it.origem}{it.mes ? ` · ${mesLabel(it.mes)}` : ''}</span></span>
+                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-200"><strong>{it.nome}</strong>{it.externo && <span className="ml-1 rounded bg-zinc-200 px-1 py-0.5 text-[9px] font-semibold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300" title="Advogado parceiro, sem conta no sistema — o repasse sai do caixa e não entra em holerite">externo</span>} <span className="text-zinc-400">· {it.origem}{it.mes ? ` · ${mesLabel(it.mes)}` : ''}</span></span>
                   <span className="shrink-0 font-semibold tabular-nums text-emerald-600">{brl2(it.valor)}</span>
                   {/* O documento vem ANTES do Pix: o parceiro recebe sabendo de onde saiu cada centavo. */}
-                  <button disabled={raLoad === `${it.txId}:${it.userId}`} onClick={() => abrirRepasseAdvogado(it.txId, it.userId)} title={`Prestação de contas de ${it.nome} (PDF) — pra mandar junto com o repasse`} className="shrink-0 rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{raLoad === `${it.txId}:${it.userId}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}</button>
-                  <button disabled={repassarM.isPending} onClick={() => repassarM.mutate({ txId: it.txId, userId: it.userId })} className="shrink-0 rounded-lg bg-[#02883C] px-2.5 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
+                  <button disabled={raLoad === `${it.txId}:${it.chave}`} onClick={() => abrirRepasseAdvogado(it.txId, it.userId, it.nome, it.chave)} title={`Prestação de contas de ${it.nome} (PDF) — pra mandar junto com o repasse`} className="shrink-0 rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{raLoad === `${it.txId}:${it.chave}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}</button>
+                  <button disabled={repassarM.isPending} onClick={() => repassarM.mutate({ txId: it.txId, userId: it.userId, nome: it.nome })} className="shrink-0 rounded-lg bg-[#02883C] px-2.5 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
                 </div>
               ))}
               <p className="pt-1 text-[11px] text-rose-600/80 dark:text-rose-400/70">Repassar gera a saída do caixa pro advogado e faz cair no holerite dele — a fatia sai desta lista (não conta em dobro).</p>
@@ -1485,7 +1497,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                   // Fatia do rateio ainda não repassada. Sintética como a fatura: não se
                   // edita, não se apaga e não se baixa pelo ✓ — quem quita é o "Repassar",
                   // que gera a saída de caixa e faz cair no holerite do advogado.
-                  const rep = (t.id || '').startsWith('__repasse:') ? (t.id || '').split(':') : null;
+                  const rep = repassePorId.get(t.id || '') ?? null;
                   const isRepasse = !!rep;
                   return (
                     <div key={t.id} className={`border-b border-zinc-100 last:border-0 dark:border-zinc-800/70 ${atrasada ? 'bg-rose-50/40 dark:bg-rose-900/10' : ''}`}>
@@ -1504,6 +1516,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                             : <ClienteLink nome={nome} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />}
                           {isCard && <span className="shrink-0 rounded bg-[#820AD1]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#820AD1]">saldo ao vivo</span>}
                           {isRepasse && <span className="shrink-0 rounded bg-[#02883C]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#02883C]">rateio</span>}
+                          {isRepasse && rep!.externo && <span className="shrink-0 rounded bg-zinc-200 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300" title="Advogado parceiro, sem conta no sistema — o repasse sai do caixa e não entra em holerite">externo</span>}
                           {!isCard && !isRepasse && t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {(t.anexos?.length ?? 0) > 0 && <span className="shrink-0 text-[10px] text-[#7048E8]" title={`${t.anexos!.length} anexo(s)`}>📎{t.anexos!.length}</span>}
                           {t.obs ? <span className="hidden truncate text-[11px] italic text-zinc-400 md:inline" title={t.obs}>· {t.obs}</span> : null}
@@ -1516,8 +1529,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                             <button onClick={() => setModo('cartao')} title="Abrir a fatura na aba Cartão de crédito (pra pagar/conferir)" className="inline-flex items-center gap-1 rounded-md bg-[#820AD1]/10 px-2 py-1 text-[11px] font-semibold text-[#820AD1] transition hover:bg-[#820AD1]/20"><CreditCard className="h-3.5 w-3.5" /> Cartão</button>
                           ) : isRepasse ? (
                             <>
-                            <button onClick={() => abrirRepasseAdvogado(rep![1], rep![2])} disabled={raLoad === `${rep![1]}:${rep![2]}`} title={`Prestação de contas de ${nome} (PDF) — pra mandar junto com o repasse`} className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{raLoad === `${rep![1]}:${rep![2]}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}</button>
-                            <button onClick={() => repassarM.mutate({ txId: rep![1], userId: rep![2] })} disabled={repassarM.isPending} title="Gera a saída de caixa pro advogado e faz cair no holerite dele" className="inline-flex items-center gap-1 rounded-md bg-[#02883C] px-2 py-1 text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
+                            <button onClick={() => abrirRepasseAdvogado(rep!.txId, rep!.userId, rep!.nome, rep!.chave)} disabled={raLoad === `${rep!.txId}:${rep!.chave}`} title={`Prestação de contas de ${rep!.nome} (PDF) — pra mandar junto com o repasse`} className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{raLoad === `${rep!.txId}:${rep!.chave}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}</button>
+                            <button onClick={() => repassarM.mutate({ txId: rep!.txId, userId: rep!.userId, nome: rep!.nome })} disabled={repassarM.isPending} title={rep!.externo ? 'Gera a saída de caixa pro advogado parceiro (sem holerite — ele não tem folha aqui)' : 'Gera a saída de caixa pro advogado e faz cair no holerite dele'} className="inline-flex items-center gap-1 rounded-md bg-[#02883C] px-2 py-1 text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
                             </>
                           ) : (
                           <>
@@ -3777,15 +3790,19 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               {/* Rateio entre advogados — % sobre o NOSSO; Escritório fica com a sobra. */}
                               <div className="space-y-1.5 rounded-lg border border-emerald-200/60 p-2 dark:border-emerald-900/40">
                                 <p className="text-[11px] text-zinc-400">Rateio entre advogados sobre o <strong>nosso</strong> ({brl2(calc.nosso)}) — puxado da divisão salva do responsável; ajuste se precisar.</p>
+                                {rows.some((r) => r.nome.trim() && !r.userId) && (
+                                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Nome fora da lista entra como <strong>advogado parceiro</strong> (sem conta no sistema): a fatia aparece em Contas a pagar e se repassa normalmente, só não entra em holerite. Se for alguém do escritório, escolha da lista para o repasse cair na folha.</p>
+                                )}
                                 {rows.map((r, j) => { const pct = parseFloat(String(r.pct || '').replace(',', '.')) || 0; return (
                                   <div key={j} className="flex flex-wrap items-center gap-1.5">
-                                    <input value={r.nome} onChange={(e) => setRows((rr) => rr.map((y, k) => k === j ? { ...y, nome: e.target.value, userId: undefined } : y))} placeholder="advogado" className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" />
+                                    <input value={r.nome} onChange={(e) => { const nome = e.target.value; setRows((rr) => rr.map((y, k) => k === j ? { ...y, nome, userId: advogados.find((a) => normNome(a.name) === normNome(nome))?.id } : y)); }} placeholder="advogado" list="adv-rateio" className={`min-w-0 flex-1 rounded-md border bg-white px-2 py-1.5 text-sm dark:bg-zinc-900 ${r.nome.trim() && !r.userId ? 'border-amber-400 dark:border-amber-600' : 'border-zinc-300 dark:border-zinc-700'}`} />
                                     <div className="flex w-20 items-center gap-1"><input value={r.pct} onChange={(e) => setRows((rr) => rr.map((y, k) => k === j ? { ...y, pct: e.target.value } : y))} placeholder="0" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
                                     <span className="w-20 text-right text-[11px] tabular-nums text-zinc-500">{brl2(calc.nosso * (pct / 100))}</span>
                                     <button onClick={() => setRows((rr) => rr.filter((_, k) => k !== j))} className="rounded p-1 text-zinc-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>
                                   </div>
                                 ); })}
                                 <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <datalist id="adv-rateio">{advogados.map((a) => <option key={a.id} value={a.name} />)}</datalist>
                                   <button onClick={() => setRows((rr) => [...rr, { nome: '', pct: '' }])} className="inline-flex items-center gap-1 text-xs font-medium text-[#228BE6] hover:underline"><Plus className="h-3.5 w-3.5" /> Adicionar advogado</button>
                                   <span className={`text-[11px] ${somaPct > 100.01 ? 'text-rose-600' : 'text-zinc-400'}`}>Escritório fica com <strong>{escrPct.toFixed(0)}%</strong> ({brl2(calc.nosso * (escrPct / 100))}){somaPct > 100.01 ? ' · passou de 100%!' : ''}</span>
                                 </div>

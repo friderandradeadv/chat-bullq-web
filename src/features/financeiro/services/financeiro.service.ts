@@ -283,11 +283,16 @@ export interface UpdateTransacaoInput {
   escopo?: 'uma' | 'proximas';
 }
 
-export interface RepassePendenteItem { txId: string; userId: string; nome: string; valor: number; mes: string; data: string; origem: string; area: string | null }
+/**
+ * Fatia do rateio ainda não repassada. `userId` é NULO para advogado EXTERNO (parceiro sem
+ * conta no sistema) — a fatia dele vive pelo nome, e `chave` é o identificador estável que a
+ * tela usa nos dois casos. Exigir userId deixava a fatia do externo invisível e impagável.
+ */
+export interface RepassePendenteItem { txId: string; userId: string | null; nome: string; chave: string; externo: boolean; valor: number; mes: string; data: string; origem: string; area: string | null }
 export interface RepassesPendentes {
   count: number; total: number;
   itens: RepassePendenteItem[];
-  porPessoa: { userId: string; nome: string; total: number; count: number }[];
+  porPessoa: { userId: string | null; nome: string; chave: string; externo: boolean; total: number; count: number }[];
 }
 
 export interface GuiaContabil {
@@ -352,8 +357,9 @@ export const financeiroService = {
     const { data } = await api.delete(`/financeiro/transacoes/${txId}/anexos/${anexoId}`);
     return data.data ?? data;
   },
-  async repassar(txId: string, userId?: string): Promise<{ repassados: number; total: number }> {
-    const { data } = await api.post(`/financeiro/transacoes/${txId}/repassar`, userId ? { userId } : {});
+  /** Repassa a fatia: `userId` para membro, `nome` para advogado externo (sem conta aqui). */
+  async repassar(txId: string, userId?: string | null, nome?: string | null): Promise<{ repassados: number; total: number }> {
+    const { data } = await api.post(`/financeiro/transacoes/${txId}/repassar`, { ...(userId ? { userId } : {}), ...(!userId && nome ? { nome } : {}) });
     return data.data ?? data;
   },
   async listContas(): Promise<Conta[]> {
@@ -576,8 +582,8 @@ export const financeiroService = {
     return data.data ?? data;
   },
   /** Prestação de contas do advogado (fatia do rateio) — dados p/ o PDF que ele recebe. */
-  async repasseAdvogado(txId: string, userId?: string | null): Promise<RepasseAdvogadoDados> {
-    const { data } = await api.get(`/financeiro/repasse-advogado/${txId}`, { params: userId ? { userId } : {} });
+  async repasseAdvogado(txId: string, userId?: string | null, nome?: string | null): Promise<RepasseAdvogadoDados> {
+    const { data } = await api.get(`/financeiro/repasse-advogado/${txId}`, { params: { ...(userId ? { userId } : {}), ...(!userId && nome ? { nome } : {}) } });
     return data.data ?? data;
   },
   async rateioSugerido(caseId: string, vertical?: string): Promise<{ vertical: string; responsavelId: string | null; split: Array<{ tipo: 'socio'; userId: string; nome: string; pct: number }> }> {
