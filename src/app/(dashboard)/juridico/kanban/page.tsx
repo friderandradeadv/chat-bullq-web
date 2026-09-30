@@ -24,7 +24,7 @@ import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, SORT_OPTIO
 import { avisoOrdenacaoAtiva, cardAttr, colAttr, idsWithMove, persistCardOrder } from '@/features/legal-cases/lib/card-order';
 import {
   useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
-  pintarAgora, indiceDeQueda, useVaoKanban, comVao, estiloDoVao, type VaoKanban,
+  pintarAgora, indiceDeQueda, yDoPonteiro, useVaoKanban, comVao, estiloDoVao, type VaoKanban,
 } from '@/features/legal-cases/lib/kanban-dnd';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { usePhaseDrag, applyPhaseDrag, type PhaseDrag } from '@/features/legal-cases/lib/phase-drag';
@@ -300,9 +300,10 @@ export default function FaseJudicialKanbanPage() {
       setActiveId(null);
       return;
     }
-    // Y do ponteiro ao soltar = onde o arraste começou + o quanto andou.
-    const y = ((e.activatorEvent as PointerEvent | undefined)?.clientY ?? 0) + e.delta.y;
-    const idx = indiceDeQueda(to, y, card.id);
+    // 🚨 O Y vem do PONTEIRO, não de `activator + delta`: o delta do dnd-kit já
+    // embute o ajuste do auto-scroll, e somá-lo contava a rolagem duas vezes.
+    // Tem de ser a MESMA conta que abriu o vão, ou o card cai onde ninguém viu.
+    const idx = indiceDeQueda(to, yDoPonteiro(e), card.id);
     const exibidos = applyCardSort(byPhase[to] ?? [], 'manual', kanbanCardKeys, data?.cardOrder?.[to]);
     const ordem = idx >= 0 ? idsWithMove(exibidos.map((c) => c.id), card.id, idx) : null;
     pintarAgora(() => {
