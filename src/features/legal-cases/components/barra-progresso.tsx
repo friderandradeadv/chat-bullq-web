@@ -15,6 +15,26 @@ export type Progresso = {
   em: string;
 };
 
+/**
+ * OPERAÇÕES CUJO `ok` É ESPERA, NÃO FIM.
+ *
+ * 🚨 A barra é ESTADO do card, não histórico. Terminou bem e nada mais depende
+ * de ninguém? Não há o que mostrar — some. O escritório apontou em 30/09/2026
+ * dois cards da ANTÔNIA parados em MONTAR INICIAL exibindo "100% · passo 5 de 5"
+ * com tique verde, de uma montagem do dia anterior: "não pedi pra montar e ficou
+ * com o card de progresso". Barra acesa em card em que ninguém clicou faz o
+ * quadro mentir sobre o que o robô está fazendo AGORA.
+ *
+ * O PROTOCOLO é a exceção, e é por isso que esta lista existe em vez de um
+ * simples `status !== 'ok'`: lá o `ok` quer dizer "esperando sua assinatura"
+ * (frider-protocolo/hub.js), ou seja, a bola está com o advogado e o aviso tem
+ * de ficar à vista até ele assinar — pode levar horas.
+ *
+ * Distinguir pela OPERAÇÃO, nunca pelo texto do passo: a frase muda, e casar
+ * por substring quebraria calado no dia em que alguém a reescrevesse.
+ */
+const OK_QUE_ESPERA = new Set(['protocolo']);
+
 const NOME: Record<string, string> = {
   documentos: 'Preparando documentos',
   inicial: 'Montando a inicial',
@@ -76,6 +96,10 @@ export function BarraProgresso({
 
   const p = data;
   if (!p) return null;
+  // Concluído e sem ninguém esperando → a barra não tem o que dizer. (O erro
+  // FICA: recusa tem de sobreviver ao recarregamento, que é o motivo de ela
+  // existir em vermelho.)
+  if (p.status === 'ok' && !OK_QUE_ESPERA.has(p.op)) return null;
 
   const titulo = NOME[p.op] ?? 'Trabalhando';
   const rodando = p.status === 'rodando';
