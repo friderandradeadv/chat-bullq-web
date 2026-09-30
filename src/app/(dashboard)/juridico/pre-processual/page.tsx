@@ -361,6 +361,12 @@ export default function PreProcessualPage() {
 function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, phases, onMoveLeft, onMoveRight, vao, arrastadoId }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; bulk: KanbanBulk; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onMontarPje: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; cardOrder?: string[]; phases: KanbanPhase[]; onMoveLeft?: () => void; onMoveRight?: () => void; vao?: VaoKanban | null; arrastadoId?: string | null }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
+  // 🚨 A BARRA TAMBÉM NA MONTAGEM (30/09/2026). O agente monta a inicial nesta
+  // coluna e leva minutos: sem barra, o card fica imóvel, e imóvel não distingue
+  // "trabalhando" de "travado" — foi por isso que ela existe no protocolo. A
+  // conta de consultas continua contida: só as colunas em que o robô trabalha,
+  // não o quadro inteiro.
+  const temAgente = isProtocolo || phase.key === 'montar_inicial';
   // Coluna de entrada do board. Nela a bolinha vermelha segue a regra do funil
   // REPB: todo card nasce marcado e só apaga quando a pessoa CLICA nele.
   const isNovos = phase.key === 'novos_clientes';
@@ -379,13 +385,13 @@ function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje
       </div>
       <div ref={setNodeRef} {...colAttr(phase.key)} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {comVao(sorted, phase.key, vao ?? null, arrastadoId ?? null).map(({ item: c, desloca }) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} isNovos={isNovos} bulk={bulk} colIds={colIds} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onMontarPje={isProtocolo ? onMontarPje : undefined} onChanged={onChanged} desloca={desloca} />)}
+        {comVao(sorted, phase.key, vao ?? null, arrastadoId ?? null).map(({ item: c, desloca }) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} isNovos={isNovos} bulk={bulk} colIds={colIds} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onMontarPje={isProtocolo ? onMontarPje : undefined} onChanged={onChanged} desloca={desloca} temAgente={temAgente} />)}
       </div>
     </div>
   );
 }
 
-function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, onMontarPje, onChanged, overlay, desloca = 0 }: { c: KanbanCard; terminal?: boolean; novo?: boolean; isNovos?: boolean; bulk?: KanbanBulk; colIds?: string[]; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onMontarPje?: (id: string) => void; onChanged?: () => void; overlay?: boolean; desloca?: number }) {
+function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, onMontarPje, onChanged, overlay, desloca = 0, temAgente }: { c: KanbanCard; terminal?: boolean; novo?: boolean; isNovos?: boolean; bulk?: KanbanBulk; colIds?: string[]; onOpen?: (id: string) => void; onProtocolar?: (id: string) => void; onMontarPje?: (id: string) => void; onChanged?: () => void; overlay?: boolean; desloca?: number; temAgente?: boolean }) {
   // 🚨 QUEM SE MOVE É A CÓPIA, NÃO O ORIGINAL. O card aplicava o `transform` do
   // dnd-kit E o `DragOverlay` desenhava outro card seguindo o ponteiro: dois
   // cards andando ao mesmo tempo, um por cima do outro, cada um com sua
@@ -452,7 +458,7 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
           QUADRO — pedir que ele abra o card para ver o andamento é o mesmo que
           não mostrar. Só nos cards da coluna de protocolo (onde o agente roda),
           para não fazer uma consulta por card em todo o quadro. */}
-      {onMontarPje && (
+      {temAgente && !overlay && (
         <div className="mt-2">
           <BarraProgresso caseId={c.id} compacta />
         </div>
