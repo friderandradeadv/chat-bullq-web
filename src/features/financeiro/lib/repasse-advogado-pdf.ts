@@ -16,7 +16,7 @@ const brl = (n: number) => 'R$ ' + (Number(n) || 0).toLocaleString('pt-BR', { mi
 const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const pct = (n: number | null) => (n == null ? '' : `${Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`);
 
-function buildHtml(d: RepasseAdvogadoDados): string {
+function buildHtml(d: RepasseAdvogadoDados, extras: File[] = []): string {
   const F = `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
   const cell = `padding:11px 14px;font-size:12.5px;color:#20262f;border-bottom:1px solid #eef0f3`;
   const val = `padding:11px 14px;font-size:12.5px;text-align:right;white-space:nowrap;border-bottom:1px solid #eef0f3;font-variant-numeric:tabular-nums`;
@@ -122,9 +122,9 @@ function buildHtml(d: RepasseAdvogadoDados): string {
         <div style="font-size:12.5px;line-height:1.6;margin-top:10px">${pago
           ? `O valor de <b>${brl(d.advogado.valor)}</b> já foi transferido${d.advogado.repasseData ? ` em ${esc(d.advogado.repasseData)}` : ''}.`
           : `O valor de <b>${brl(d.advogado.valor)}</b> será transferido para a sua conta.`} Qualquer divergência nesses números, é só apontar — o demonstrativo do processo está à disposição.</div>
-        ${d.anexos?.length ? `<div style="font-size:12.5px;line-height:1.6;margin-top:8px">Seguem anexos a este documento: ${esc([
-          d.anexos.some((a) => a.origem === 'alvara') ? 'o alvará do processo' : '',
-          d.anexos.some((a) => a.origem === 'comprovante') ? 'o comprovante da transferência da sua parte' : '',
+        ${(d.anexos?.length || extras.length) ? `<div style="font-size:12.5px;line-height:1.6;margin-top:8px">Seguem anexos a este documento: ${esc([
+          d.anexos?.some((a) => a.origem === 'alvara') ? 'o alvará do processo' : '',
+          (d.anexos?.some((a) => a.origem === 'comprovante') || extras.length) ? 'o comprovante da transferência da sua parte' : '',
         ].filter(Boolean).join(' e '))}.</div>` : ''}
         <div style="font-size:12.5px;line-height:1.6;margin-top:8px">Obrigado pelo trabalho neste caso.</div>
         <div style="margin-top:18px;font-size:12px;color:#7b8798">Atenciosamente,</div>
@@ -136,10 +136,16 @@ function buildHtml(d: RepasseAdvogadoDados): string {
 }
 
 /** Renderiza o HTML offscreen, vira imagem e monta o PDF A4 paginado. Retorna Blob. */
-export async function gerarRepasseAdvogadoPdf(d: RepasseAdvogadoDados, onAnexoFalhou?: (nomes: string[]) => void): Promise<Blob> {
+/**
+ * `extras` são arquivos escolhidos NA HORA de gerar (o comprovante do Pix que está na mão,
+ * antes mesmo de o repasse virar lançamento). Somam-se aos anexos já guardados no razão —
+ * exigir que o repasse existisse primeiro para poder anexar era pôr o sistema na frente do
+ * fato: o advogado já foi pago, o documento é que falta.
+ */
+export async function gerarRepasseAdvogadoPdf(d: RepasseAdvogadoDados, onAnexoFalhou?: (nomes: string[]) => void, extras: File[] = []): Promise<Blob> {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1;pointer-events:none';
-  host.innerHTML = buildHtml(d);
+  host.innerHTML = buildHtml(d, extras);
   document.body.appendChild(host);
   const root = host.firstElementChild as HTMLElement;
   // Quebra só no topo de um bloco marcado — nunca no meio de uma tabela ou de um card.
@@ -183,9 +189,11 @@ export async function gerarRepasseAdvogadoPdf(d: RepasseAdvogadoDados, onAnexoFa
   // Falha de anexo NÃO pode passar calada: o PDF sai com cara de completo e o advogado recebe
   // a prestação sem a prova do pagamento. Quem chama decide o que fazer, mas fica sabendo.
   const falhas: string[] = [];
-  for (const a of d.anexos ?? []) {
+  const guardados = (d.anexos ?? []).map((a) => ({ name: a.name, mime: a.mime, bytes: null as ArrayBuffer | null, href: anexoHref(a as any) }));
+  const escolhidos = extras.map((f) => ({ name: f.name, mime: f.type || '', bytes: null as ArrayBuffer | null, file: f }));
+  for (const a of [...guardados, ...escolhidos] as Array<{ name: string; mime: string; href?: string; file?: File }>) {
     try {
-      const bytes = await (await fetch(anexoHref(a as any))).arrayBuffer();
+      const bytes = a.file ? await a.file.arrayBuffer() : await (await fetch(a.href!)).arrayBuffer();
       const isPdf = /pdf/i.test(a.mime) || /\.pdf$/i.test(a.name);
       if (isPdf) {
         const donor = await PDFDocument.load(bytes, { ignoreEncryption: true });

@@ -1301,15 +1301,22 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // tribunal paga ao escritório não entra pela mesma porta que o contratual do cliente).
   // Abre pra conferir E baixa com o nome certo — é um arquivo pra mandar, não pra olhar.
   const [raLoad, setRaLoad] = useState<string | null>(null);
+  // Comprovante escolhido NA HORA, por linha de repasse. Enquanto a fatia está pendente não
+  // existe lançamento onde anexar (ele nasce no "Repassar"), e exigir essa ordem punha o
+  // sistema na frente do fato: o advogado já foi pago, o que falta é o documento.
+  const [raAnexos, setRaAnexos] = useState<Record<string, File[]>>({});
+  const raFileRef = useRef<HTMLInputElement | null>(null);
+  const raAlvoRef = useRef<string>('');
   // `chave` identifica a fatia na tela: userId para membro, `nome:<normalizado>` para o
   // advogado parceiro, que não tem conta aqui e por isso não tem id.
-  const abrirRepasseAdvogado = async (txId: string, userId?: string | null, nome?: string | null, chave?: string) => {
+  const abrirRepasseAdvogado = async (txId: string, userId?: string | null, nome?: string | null, chave?: string, linhaId?: string) => {
     const k = `${txId}:${chave ?? userId ?? ''}`;
+    const extras = linhaId ? (raAnexos[linhaId] ?? []) : [];
     setRaLoad(k);
     try {
       const d = await financeiroService.repasseAdvogado(txId, userId ?? null, nome ?? null);
       const { gerarRepasseAdvogadoPdf, nomeRepasseAdvogadoPdf } = await import('@/features/financeiro/lib/repasse-advogado-pdf');
-      const blob = await gerarRepasseAdvogadoPdf(d, (nomes) => toast(`Não consegui anexar ao PDF: ${nomes.join(', ')}. A prestação saiu SEM o comprovante.`, { icon: '⚠️', duration: 9000 }));
+      const blob = await gerarRepasseAdvogadoPdf(d, (nomes) => toast(`Não consegui anexar ao PDF: ${nomes.join(', ')}. A prestação saiu SEM o comprovante.`, { icon: '⚠️', duration: 9000 }), extras);
       // ABRE para conferir; SALVAR é escolha de quem olhou. Baixar automático enchia a pasta
       // de Downloads de PDF que ninguém tinha lido ainda — e o arquivo só interessa depois
       // que os números foram conferidos. Mesmo comportamento da prestação do cliente.
@@ -1402,6 +1409,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
     <Card title={<>Lançamentos <span className="font-normal text-zinc-400">· livro-razão editável</span></>}
       action={<div className="flex items-center gap-2">
         <input ref={contaFileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => lerContaDoc(e.target.files?.[0])} />
+        <input ref={raFileRef} type="file" accept="application/pdf,image/png,image/jpeg" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []); const id = raAlvoRef.current; if (id && fs.length) { setRaAnexos((m) => ({ ...m, [id]: [...(m[id] ?? []), ...fs] })); toast.success(`${fs.length} anexo(s) prontos — saem no PDF da prestação`); } e.currentTarget.value = ''; }} />
         <button onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-[#02883C] hover:text-[#02883C] dark:border-zinc-700 dark:text-zinc-300"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar extrato</button>
         <button onClick={() => contaFileRef.current?.click()} disabled={lendoConta} title="A IA lê o boleto/DARF e já preenche a despesa a pagar com o vencimento" className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8]/50 bg-[#7048E8]/5 px-3 py-1.5 text-xs font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/10 disabled:opacity-60">{lendoConta ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> lendo…</> : <><Sparkles className="h-3.5 w-3.5" /> Lançar conta (IA lê boleto/DARF)</>}</button>
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>
@@ -1506,7 +1514,10 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                             <button onClick={() => setModo('cartao')} title="Abrir a fatura na aba Cartão de crédito (pra pagar/conferir)" className="inline-flex items-center gap-1 rounded-md bg-[#820AD1]/10 px-2 py-1 text-[11px] font-semibold text-[#820AD1] transition hover:bg-[#820AD1]/20"><CreditCard className="h-3.5 w-3.5" /> Cartão</button>
                           ) : isRepasse ? (
                             <>
-                            <button onClick={() => abrirRepasseAdvogado(rep!.txId, rep!.userId, rep!.nome, rep!.chave)} disabled={raLoad === `${rep!.txId}:${rep!.chave}`} title={`Prestação de contas de ${rep!.nome} (PDF) — pra mandar junto com o repasse`} className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{raLoad === `${rep!.txId}:${rep!.chave}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}</button>
+                            {/* Clipe da LINHA PENDENTE: o comprovante do Pix entra direto no PDF, sem
+                                depender de já existir o lançamento da transferência. */}
+                            <button onClick={() => { raAlvoRef.current = t.id!; raFileRef.current?.click(); }} title={(raAnexos[t.id!]?.length ?? 0) > 0 ? `${raAnexos[t.id!]!.length} anexo(s) escolhido(s): ${raAnexos[t.id!]!.map((f) => f.name).join(', ')} — vão no PDF` : 'Anexar o comprovante da transferência ao PDF da prestação'} className={`relative rounded p-1 transition ${(raAnexos[t.id!]?.length ?? 0) > 0 ? 'text-[#7048E8] hover:text-[#5f3dc4]' : 'text-zinc-300 hover:text-[#7048E8]'}`}><Paperclip className="h-3.5 w-3.5" />{(raAnexos[t.id!]?.length ?? 0) > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-[#7048E8] px-0.5 text-[8px] font-bold leading-none text-white">{raAnexos[t.id!]!.length}</span>}</button>
+                            <button onClick={() => abrirRepasseAdvogado(rep!.txId, rep!.userId, rep!.nome, rep!.chave, t.id!)} disabled={raLoad === `${rep!.txId}:${rep!.chave}`} title={`Prestação de contas de ${rep!.nome} (PDF) — pra mandar junto com o repasse`} className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{raLoad === `${rep!.txId}:${rep!.chave}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}</button>
                             <button onClick={() => repassarM.mutate({ txId: rep!.txId, userId: rep!.userId, nome: rep!.nome })} disabled={repassarM.isPending} title={rep!.externo ? 'Gera a saída de caixa pro advogado parceiro (sem holerite — ele não tem folha aqui)' : 'Gera a saída de caixa pro advogado e faz cair no holerite dele'} className="inline-flex items-center gap-1 rounded-md bg-[#02883C] px-2 py-1 text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
                             </>
                           ) : (
