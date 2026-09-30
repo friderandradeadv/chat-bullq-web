@@ -14,7 +14,7 @@ import {
   Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip, ReceiptText, Send, FileDown,
 } from 'lucide-react';
 import { extractPdfText } from '@/features/knowledge/lib/extract-text';
-import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type RepassePendenteItem, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
 import { DropZone } from '@/components/drop-zone';
 import { APORTES } from '@/features/financeiro/data/astrea-despesas';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
@@ -150,6 +150,12 @@ export default function FinanceiroPage() {
     return { sel: sm, label: mesLabel(sm), resultado: receita - despesa, receita, despesa, caixa };
   }, [mesSel, data]);
 
+  // Repasses pendentes também contam na bolinha do menu — senão o topo diz um número e a
+  // subaba "Contas a pagar" diz outro, que é o bug que a fonte única existe para impedir.
+  // AQUI, junto dos outros hooks: abaixo há quatro `return` condicionais, e hook depois de
+  // return condicional derruba a página inteira (tsc e servidor ficam limpos, só o browser acusa).
+  const { data: repassesTop } = useQuery({ queryKey: ['financeiro', 'repasses-pendentes'], queryFn: () => financeiroService.repassesPendentes(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
+
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
 
   if (data?.semAcesso) {
@@ -247,7 +253,7 @@ export default function FinanceiroPage() {
         {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} aPagarTotal={aPagarTotal} aPagarRepasses={aPagarRepasses} aReceberTotal={aReceberTotal} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
-        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={contasEmAberto(data)} />
+        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={contasEmAberto(data, repassesTop?.itens)} />
 
         {view === 'lancamentos' && <LancamentosTab data={data} mesSel={mesSel} setMesSel={setMesSel} />}
         {(view === 'honorarios' || view === 'cobrancas' || view === 'retiradas') && (
@@ -450,7 +456,41 @@ const ehLiquidado = (s: TxStatus) => s === 'recebido' || s === 'pago';
  * A fatura ficava de fora inteira, e a tela mostrava a fatura vencida em vermelho
  * enquanto as bolinhas diziam que não havia nada a pagar.
  */
-function contasEmAberto(data: FinDashboard) {
+/**
+ * REPASSES AOS ADVOGADOS AINDA NÃO PAGOS — uma linha sintética por fatia pendente do
+ * rateio (id `__repasse:<txId>:<userId>`; não é lançamento de verdade).
+ *
+ * POR QUE EXISTE: a fatia do advogado nasce no rateio do êxito e só virava lançamento
+ * quando alguém apertava "Repassar". Até lá era uma dívida do escritório que NÃO aparecia
+ * em Contas a pagar — a subaba somava R$ 1.650,55 de fatura de cartão enquanto havia
+ * R$ 804,76 devidos à Janine. Dívida invisível é o que essa tela existe para impedir, e o
+ * repasse ao CLIENTE já nasce `a_pagar` desde o import: a fatia do advogado passa a se
+ * comportar igual.
+ *
+ * Sintética, e não lançamento gravado, por dois motivos: pega de graça as fatias que já
+ * estavam pendentes (sem migração) e não corre risco de contar em dobro com a saída que o
+ * `repassar` gera — a fonte da verdade continua sendo o `split`.
+ *
+ * A fonte é o ENDPOINT de repasses pendentes, não `data.transacoes`: o dashboard devolve
+ * só os 400 lançamentos mais recentes, e uma fatia preso a um êxito mais antigo sumiria da
+ * lista sem nenhum aviso — dívida que desaparece da tela é pior que dívida que nunca
+ * apareceu. O endpoint varre o razão inteiro.
+ * Fonte única: alimenta tanto a subaba quanto `contasEmAberto` — enquanto eram duas
+ * listas, a subaba mostrava a fatura vencida e as bolinhas a ignoravam.
+ */
+function repasseBillsDe(itens: RepassePendenteItem[] | undefined): FinTransacao[] {
+  return (itens ?? []).map((i) => ({
+    // Vence no dia em que o dinheiro entrou: é desde então que o escritório segura a parte
+    // de quem trabalhou no caso. Sem data o passivo ficaria fora das bolinhas e a subaba
+    // voltaria a discordar do topo.
+    id: `__repasse:${i.txId}:${i.userId}`, data: i.data, vencimento: i.data, mes: i.mes,
+    tipo: 'despesa', categoria: 'Honorários repassados', valor: -(Math.round(Number(i.valor) * 100) / 100),
+    party: i.nome, recebedor: i.nome, pagador: null, status: 'a_pagar',
+    area: i.area ?? null, obs: `fatia do rateio · ${i.origem}`,
+  } as FinTransacao));
+}
+
+function contasEmAberto(data: FinDashboard, repasses?: RepassePendenteItem[]) {
   const hojeISO = toISOInput(hojeBR());
   const cardIds = new Set((data.contas ?? []).filter((c) => c.cartao).map((c) => c.id));
   let atrasadas = 0, hoje = 0, totalAtrasadas = 0, totalHoje = 0;
@@ -465,6 +505,7 @@ function contasEmAberto(data: FinDashboard) {
     conta(toISOInput(t.vencimento || t.data), t.valor);
   }
   for (const f of cardBillsDe(data)) conta(toISOInput(f.vencimento || ''), f.valor);
+  for (const r of repasseBillsDe(repasses)) conta(toISOInput(r.vencimento || ''), r.valor);
   return { atrasadas, hoje, count: atrasadas + hoje, totalAtrasadas, totalHoje };
 }
 
@@ -927,9 +968,14 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // LANÇADA À MÃO numa conta-cartão (ex.: repasse) NÃO é fatura — fica no livro-razão.
   const isFaturaCartao = (t: FinTransacao) => !!t.conta && cardIds.has(t.conta) && t.valor < 0 && (!!t.fonteImport || txStatus(t) === 'a_pagar');
   // Saldo do cartão como conta a pagar (ao vivo) — mesma fonte que as bolinhas contam.
+  // Declarado ANTES dos memos abaixo: eles dependem de `repasses`, e `const` usado antes
+  // da declaração é TDZ — derruba a página inteira em runtime, com tsc e servidor limpos.
+  const { data: repasses } = useQuery({ queryKey: ['financeiro', 'repasses-pendentes'], queryFn: () => financeiroService.repassesPendentes(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   const cardBills = useMemo(() => cardBillsDe(data), [data]);
+  // Fatias do rateio ainda não repassadas — dívida real do escritório com quem trabalhou no caso.
+  const repasseBills = useMemo(() => repasseBillsDe(repasses?.itens), [repasses]);
   // Atrasadas × vencendo hoje — alimenta as bolinhas da subaba e do topo da lista.
-  const emAberto = useMemo(() => contasEmAberto(data), [data]);
+  const emAberto = useMemo(() => contasEmAberto(data, repasses?.itens), [data, repasses]);
   const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>('ledger');
   // Verticais disponíveis para ratear uma despesa (ex.: agência 1/3 cada).
   const areasVert = useMemo(() => {
@@ -1003,7 +1049,6 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const updM = useMutation({ mutationFn: ({ id, input }: { id: string; input: UpdateTransacaoInput }) => financeiroService.updateTransacao(id, input), onSuccess: () => { invalidate(); toast.success('Lançamento atualizado'); setEditor(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao atualizar') });
   const delM = useMutation({ mutationFn: ({ id, escopo }: { id: string; escopo: 'uma' | 'proximas' }) => financeiroService.removeTransacao(id, escopo), onSuccess: (r) => { invalidate(); toast.success(`${r.removidos} lançamento(s) removido(s)`); setSerieDel(null); }, onError: (e: any) => toast.error(e?.message || 'Erro ao remover') });
   // Repasses pendentes (rateio de honorários ainda não pago ao advogado) — selo + botão
-  const { data: repasses } = useQuery({ queryKey: ['financeiro', 'repasses-pendentes'], queryFn: () => financeiroService.repassesPendentes(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
   const [repAberto, setRepAberto] = useState(false);
   const repassarM = useMutation({ mutationFn: ({ txId, userId }: { txId: string; userId?: string }) => financeiroService.repassar(txId, userId), onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(`Repasse feito: ${r.repassados} advogado(s) · ${brl2(r.total)} — já cai no holerite`); }, onError: (e: any) => toast.error(e?.response?.data?.message || 'Erro ao repassar') });
   const repassarTodosM = useMutation({
@@ -1401,6 +1446,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
         const bills = [
           ...data.transacoes.filter((t) => txStatus(t) === 'a_pagar' && t.valor < 0 && !isFaturaCartao(t)),
           ...cardBills, // saldo do cartão por fatura (ao vivo)
+          ...repasseBills, // fatia do advogado no rateio, ainda não repassada
         ].sort((a, b) => (toISOInput(a.vencimento || a.data) || '9999').localeCompare(toISOInput(b.vencimento || b.data) || '9999'));
         const total = bills.reduce((s, t) => s + Math.abs(t.valor), 0);
         const hojeISO = toISOInput(hojeBR());
@@ -1436,6 +1482,11 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                   const venceHoje = !!vencISO && vencISO === hojeISO;
                   const nome = titleCase((t.recebedor || t.party || t.pagador) || '') || t.categoria;
                   const isCard = (t.id || '').startsWith('__card:'); // linha sintética = saldo do cartão
+                  // Fatia do rateio ainda não repassada. Sintética como a fatura: não se
+                  // edita, não se apaga e não se baixa pelo ✓ — quem quita é o "Repassar",
+                  // que gera a saída de caixa e faz cair no holerite do advogado.
+                  const rep = (t.id || '').startsWith('__repasse:') ? (t.id || '').split(':') : null;
+                  const isRepasse = !!rep;
                   return (
                     <div key={t.id} className={`border-b border-zinc-100 last:border-0 dark:border-zinc-800/70 ${atrasada ? 'bg-rose-50/40 dark:bg-rose-900/10' : ''}`}>
                       <div className="group flex items-center gap-2 px-3 py-2 text-sm">
@@ -1448,9 +1499,12 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
                           {isCard
                             ? <span className="flex items-center gap-1 truncate font-medium text-zinc-700 dark:text-zinc-200"><CreditCard className="h-3.5 w-3.5 shrink-0 text-[#820AD1]" /> {t.categoria}</span>
+                            : isRepasse
+                            ? <span className="flex items-center gap-1 truncate font-medium text-zinc-700 dark:text-zinc-200"><Users className="h-3.5 w-3.5 shrink-0 text-[#02883C]" /> {nome}</span>
                             : <ClienteLink nome={nome} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />}
                           {isCard && <span className="shrink-0 rounded bg-[#820AD1]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#820AD1]">saldo ao vivo</span>}
-                          {!isCard && t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
+                          {isRepasse && <span className="shrink-0 rounded bg-[#02883C]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#02883C]">rateio</span>}
+                          {!isCard && !isRepasse && t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {(t.anexos?.length ?? 0) > 0 && <span className="shrink-0 text-[10px] text-[#7048E8]" title={`${t.anexos!.length} anexo(s)`}>📎{t.anexos!.length}</span>}
                           {t.obs ? <span className="hidden truncate text-[11px] italic text-zinc-400 md:inline" title={t.obs}>· {t.obs}</span> : null}
                         </span>
@@ -1460,6 +1514,11 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="flex w-40 shrink-0 items-center justify-end gap-0.5">
                           {isCard ? (
                             <button onClick={() => setModo('cartao')} title="Abrir a fatura na aba Cartão de crédito (pra pagar/conferir)" className="inline-flex items-center gap-1 rounded-md bg-[#820AD1]/10 px-2 py-1 text-[11px] font-semibold text-[#820AD1] transition hover:bg-[#820AD1]/20"><CreditCard className="h-3.5 w-3.5" /> Cartão</button>
+                          ) : isRepasse ? (
+                            <>
+                            <button onClick={() => abrirRepasseAdvogado(rep![1], rep![2])} disabled={raLoad === `${rep![1]}:${rep![2]}`} title={`Prestação de contas de ${nome} (PDF) — pra mandar junto com o repasse`} className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{raLoad === `${rep![1]}:${rep![2]}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}</button>
+                            <button onClick={() => repassarM.mutate({ txId: rep![1], userId: rep![2] })} disabled={repassarM.isPending} title="Gera a saída de caixa pro advogado e faz cair no holerite dele" className="inline-flex items-center gap-1 rounded-md bg-[#02883C] px-2 py-1 text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50">Repassar</button>
+                            </>
                           ) : (
                           <>
                           <button onClick={() => quickReceber(t)} title="Marcar como pago" className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>
