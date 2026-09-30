@@ -79,6 +79,10 @@ export interface RepasseAdvogadoDados {
   outros: { nome: string; valor: number; repassado: boolean }[];
   recebimento: { data: string; entradas: number; conta: string | null };
   execucao?: { totalExecutado: number; recebido: number; remanescente: number } | null;
+  /** Alvará (de onde o dinheiro veio) + comprovante da transferência da fatia dele. */
+  anexos: { key: string; url: string; mime: string; name: string; origem: 'alvara' | 'comprovante' }[];
+  /** Lançamento da transferência — é nele que se anexa o comprovante do Pix. */
+  repasseTxId: string | null;
   geradoEm: string;
 }
 

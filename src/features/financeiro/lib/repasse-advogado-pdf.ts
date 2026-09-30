@@ -10,7 +10,7 @@
 // advogado incide sobre a soma; sem isso escrito, ele não tem como conferir nada.
 import { PDFDocument } from 'pdf-lib';
 import html2canvas from 'html2canvas-pro';
-import type { RepasseAdvogadoDados } from '../services/financeiro.service';
+import { anexoHref, type RepasseAdvogadoDados } from '../services/financeiro.service';
 
 const brl = (n: number) => 'R$ ' + (Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -122,6 +122,10 @@ function buildHtml(d: RepasseAdvogadoDados): string {
         <div style="font-size:12.5px;line-height:1.6;margin-top:10px">${pago
           ? `O valor de <b>${brl(d.advogado.valor)}</b> já foi transferido${d.advogado.repasseData ? ` em ${esc(d.advogado.repasseData)}` : ''}.`
           : `O valor de <b>${brl(d.advogado.valor)}</b> será transferido para a sua conta.`} Qualquer divergência nesses números, é só apontar — o demonstrativo do processo está à disposição.</div>
+        ${d.anexos?.length ? `<div style="font-size:12.5px;line-height:1.6;margin-top:8px">Seguem anexos a este documento: ${esc([
+          d.anexos.some((a) => a.origem === 'alvara') ? 'o alvará do processo' : '',
+          d.anexos.some((a) => a.origem === 'comprovante') ? 'o comprovante da transferência da sua parte' : '',
+        ].filter(Boolean).join(' e '))}.</div>` : ''}
         <div style="font-size:12.5px;line-height:1.6;margin-top:8px">Obrigado pelo trabalho neste caso.</div>
         <div style="margin-top:18px;font-size:12px;color:#7b8798">Atenciosamente,</div>
         <div style="margin-top:4px;font-weight:800;color:#1f2126;font-size:13px">FRIDER ANDRADE <span style="color:#C1272D">▪</span> ADVOGADOS</div>
@@ -132,7 +136,7 @@ function buildHtml(d: RepasseAdvogadoDados): string {
 }
 
 /** Renderiza o HTML offscreen, vira imagem e monta o PDF A4 paginado. Retorna Blob. */
-export async function gerarRepasseAdvogadoPdf(d: RepasseAdvogadoDados): Promise<Blob> {
+export async function gerarRepasseAdvogadoPdf(d: RepasseAdvogadoDados, onAnexoFalhou?: (nomes: string[]) => void): Promise<Blob> {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1;pointer-events:none';
   host.innerHTML = buildHtml(d);
@@ -175,6 +179,31 @@ export async function gerarRepasseAdvogadoPdf(d: RepasseAdvogadoDados): Promise<
     page.drawImage(img, { x: MARG_LAT, y: A4H - MARG_TOPO - hpt, width: larguraPt, height: hpt });
     y = end;
   }
+  // ANEXA o alvará e o comprovante da transferência (PDF → páginas; imagem → página cheia).
+  // Falha de anexo NÃO pode passar calada: o PDF sai com cara de completo e o advogado recebe
+  // a prestação sem a prova do pagamento. Quem chama decide o que fazer, mas fica sabendo.
+  const falhas: string[] = [];
+  for (const a of d.anexos ?? []) {
+    try {
+      const bytes = await (await fetch(anexoHref(a as any))).arrayBuffer();
+      const isPdf = /pdf/i.test(a.mime) || /\.pdf$/i.test(a.name);
+      if (isPdf) {
+        const donor = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        const pages = await pdf.copyPages(donor, donor.getPageIndices());
+        pages.forEach((p) => pdf.addPage(p));
+      } else if (/png|jpe?g/i.test(a.mime) || /\.(png|jpe?g)$/i.test(a.name)) {
+        const aimg = (/png/i.test(a.mime) || /\.png$/i.test(a.name)) ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+        const p = pdf.addPage([A4W, A4H]);
+        const sc = Math.min(A4W / aimg.width, (A4H - 60) / aimg.height, 1);
+        p.drawImage(aimg, { x: (A4W - aimg.width * sc) / 2, y: A4H - 30 - aimg.height * sc, width: aimg.width * sc, height: aimg.height * sc });
+      }
+    } catch (e) {
+      falhas.push(a.name || 'anexo');
+      console.error('[repasse-advogado] anexo não entrou no PDF:', a.name, e);
+    }
+  }
+  if (falhas.length) onAnexoFalhou?.(falhas);
+
   const out = await pdf.save();
   return new Blob([out as BlobPart], { type: 'application/pdf' });
 }
