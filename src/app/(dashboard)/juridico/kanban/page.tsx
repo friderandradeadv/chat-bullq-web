@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors,
+  DndContext, DragOverlay,
   useDraggable, useDroppable, defaultDropAnimationSideEffects,
   type DragStartEvent, type DragEndEvent, type DropAnimation,
 } from '@dnd-kit/core';
@@ -21,7 +21,11 @@ import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dial
 import { BeneficioTag, PhaseHeader, AddPhaseColumn } from '@/features/legal-cases/components/kanban-card-bits';
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { applyCardSort, kanbanCardKeys, loadPhaseSort, savePhaseSort, SORT_OPTIONS, type CardSort } from '@/features/legal-cases/lib/kanban-sort';
-import { avisoOrdenacaoAtiva, cardAttr, colAttr, dropIndexAt, idsWithMove, persistCardOrder } from '@/features/legal-cases/lib/card-order';
+import { avisoOrdenacaoAtiva, cardAttr, colAttr, idsWithMove, persistCardOrder } from '@/features/legal-cases/lib/card-order';
+import {
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+  pintarAgora, indiceDeQueda, useVaoKanban, comVao, estiloDoVao, type VaoKanban,
+} from '@/features/legal-cases/lib/kanban-dnd';
 import { fireConfetti, isTerminalPhase, shouldCelebrate, terminalCardClass } from '@/features/legal-cases/lib/kanban-terminal';
 import { usePhaseDrag, applyPhaseDrag, type PhaseDrag } from '@/features/legal-cases/lib/phase-drag';
 import { membersService } from '@/features/settings/services/members.service';
@@ -111,15 +115,8 @@ export default function FaseJudicialKanbanPage() {
   const limparFiltros = () => { setArea(''); setProduto(''); setResp(''); setPhaseSel([]); setTagSel([]); setShowFora(true); };
   const dragScroll = useDragScroll();
   // Mouse por distância, dedo por espera — ver a nota no quadro Pré-Processual.
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
-  );
-  const dropAnimation: DropAnimation = {
-    duration: 220,
-    easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
-    sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
-  };
+  const sensors = useSensoresKanban();
+  const vaoK = useVaoKanban((id) => phases.some((p) => p.key === id));
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: KEY,
@@ -283,30 +280,36 @@ export default function FaseJudicialKanbanPage() {
     }
   }, [qc]);
 
-  const onDragEnd = async (e: DragEndEvent) => {
-    setActiveId(null);
+  // Ordem do soltar e vão: ver `lib/kanban-dnd`.
+  const onDragEnd = (e: DragEndEvent) => {
+    vaoK.fechar();
     const to = e.over?.id as string | undefined;
     const card = cards.find((x) => x.id === e.active.id);
-    if (!to || !card || !phases.some((p) => p.key === to)) return;
+    if (!to || !card || !phases.some((p) => p.key === to)) { setActiveId(null); return; }
     const mesmaFase = card.phase === to;
     // Ordem à mão só faz sentido na coluna em "Padrão (manual)" — com uma regra
     // de ordenação ligada, ela reordenaria tudo de novo no próximo render.
     const sort = loadPhaseSort(to);
     if (sort !== 'manual') {
-      if (mesmaFase) avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
-      else move(card, to);
+      if (mesmaFase) {
+        setActiveId(null);
+        avisoOrdenacaoAtiva(SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort);
+        return;
+      }
+      pintarAgora(() => { void move(card, to); });
+      setActiveId(null);
       return;
     }
     // Y do ponteiro ao soltar = onde o arraste começou + o quanto andou.
     const y = ((e.activatorEvent as PointerEvent | undefined)?.clientY ?? 0) + e.delta.y;
-    const idx = dropIndexAt(to, y, card.id);
-    if (idx >= 0) {
-      const exibidos = applyCardSort(byPhase[to] ?? [], 'manual', kanbanCardKeys, data?.cardOrder?.[to]);
-      // Grava a ordem ANTES de mover de fase: mover invalida o quadro, e o
-      // refetch já volta com a ordem nova (sem o card piscar de lugar).
-      await persistCardOrder(qc, KEY, to, idsWithMove(exibidos.map((c) => c.id), card.id, idx));
-    }
-    if (!mesmaFase) move(card, to);
+    const idx = indiceDeQueda(to, y, card.id);
+    const exibidos = applyCardSort(byPhase[to] ?? [], 'manual', kanbanCardKeys, data?.cardOrder?.[to]);
+    const ordem = idx >= 0 ? idsWithMove(exibidos.map((c) => c.id), card.id, idx) : null;
+    pintarAgora(() => {
+      if (ordem) void persistCardOrder(qc, KEY, to, ordem);
+      if (!mesmaFase) void move(card, to);
+    });
+    setActiveId(null);
   };
 
   // Exporta a lista FILTRADA (as mesmas linhas que aparecem no quadro/lista) em CSV.
@@ -445,15 +448,15 @@ export default function FaseJudicialKanbanPage() {
       {view === 'lista' ? (
         <CasesListView byPhase={byPhase} phases={visiblePhases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
-        <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => { vaoK.aoIniciar(e); setActiveId(e.active.id as string); }} onDragMove={vaoK.aoMover} onDragCancel={() => { vaoK.fechar(); setActiveId(null); }} onDragEnd={onDragEnd}>
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && visiblePhases.map((phase, i) => (
-              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onIniciarCs={setCsCase} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
+              <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} phases={boardPhases} bulk={bulk} onMove={move} onOpen={setOpenCaseId} onIniciarCs={setCsCase} onChanged={onChanged} canRename={isOwner} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} onMoveLeft={isOwner && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={isOwner && i < visiblePhases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined}  vao={vaoK.vao} arrastadoId={activeId} />
             ))}
             {!isLoading && isOwner && <AddPhaseColumn board="judicial" accent="#e11970" onAdded={onChanged} />}
           </div>
-          <DragOverlay dropAnimation={dropAnimation}>
+          <DragOverlay dropAnimation={pousoKanban}>
             {active ? <Card c={active} phases={boardPhases} onMove={move} overlay /> : null}
           </DragOverlay>
           <KanbanBulkBar bulk={bulk} cards={filtered} phases={boardPhases} queryKey={KEY} accent="#e11970" />
@@ -541,9 +544,10 @@ function MultiSelect({
 const COLUNA_INICIAL = 20;
 
 function Column({
-  phase, items, phases, bulk, onMove, onOpen, onIniciarCs, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, onMoveLeft, onMoveRight,
+  phase, items, phases, bulk, onMove, onOpen, onIniciarCs, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, onMoveLeft, onMoveRight, vao, arrastadoId,
 }: {
   phase: KanbanPhase; items: KanbanCard[]; phases: KanbanPhase[]; bulk: KanbanBulk;
+  vao?: VaoKanban | null; arrastadoId?: string | null;
   onMove: (c: KanbanCard, to: string) => void; onOpen: (id: string) => void;
   onIniciarCs: (c: { id: string; title: string }) => void;
   onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void;
@@ -587,7 +591,7 @@ function Column({
             Vazio
           </p>
         )}
-        {shown.map((c) => <Card key={c.id} c={c} phases={phases} bulk={bulk} colIds={shownIds} onMove={onMove} onOpen={onOpen} onIniciarCs={onIniciarCs} onChanged={onChanged} />)}
+        {comVao(shown, phase.key, vao ?? null, arrastadoId ?? null).map(({ item: c, desloca }) => <Card key={c.id} c={c} phases={phases} bulk={bulk} colIds={shownIds} onMove={onMove} onOpen={onOpen} onIniciarCs={onIniciarCs} onChanged={onChanged} desloca={desloca} />)}
         {rest > 0 && (
           <button
             onClick={() => setLimit((l) => l + 50)}
@@ -646,9 +650,9 @@ function BotaoMontarInicial({ c, onChanged }: { c: KanbanCard; onChanged?: () =>
 }
 
 const Card = memo(function Card({
-  c, phases, bulk, colIds, onMove, onOpen, onIniciarCs, onChanged, overlay,
+  c, phases, bulk, colIds, onMove, onOpen, onIniciarCs, onChanged, overlay, desloca = 0,
 }: {
-  c: KanbanCard; phases: KanbanPhase[]; bulk?: KanbanBulk; colIds?: string[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onIniciarCs?: (c: { id: string; title: string }) => void; onChanged?: () => void; overlay?: boolean;
+  c: KanbanCard; phases: KanbanPhase[]; bulk?: KanbanBulk; colIds?: string[]; onMove: (c: KanbanCard, to: string) => void; onOpen?: (id: string) => void; onIniciarCs?: (c: { id: string; title: string }) => void; onChanged?: () => void; overlay?: boolean; desloca?: number;
 }) {
   // Quem se move é a CÓPIA do overlay, não o original — ver a nota no quadro
   // Pré-Processual: os dois andavam juntos e o arraste parecia bugado.
@@ -666,6 +670,8 @@ const Card = memo(function Card({
     // fora da tela (colunas/linhas não visíveis) — some com o engasgo de montar
     // centenas de cards. contain-intrinsic-size reserva ~altura pro scroll não pular.
     ...(overlay ? {} : { contentVisibility: 'auto', containIntrinsicSize: '0 116px' } as React.CSSProperties),
+    // o vão que se abre sob o ponteiro (ver lib/kanban-dnd)
+    ...estiloDoVao(desloca),
   };
 
   return (
@@ -681,8 +687,8 @@ const Card = memo(function Card({
         const d = down.current;
         if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) onOpen(c.id);
       }}
-      className={`group relative cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-[opacity,box-shadow,transform] duration-150 hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
-        overlay ? 'pointer-events-none touch-none rotate-2 scale-[1.03] cursor-grabbing shadow-xl ring-1 ring-black/5' : 'touch-pan-y'
+      className={`group relative cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-[opacity,box-shadow,transform] duration-200 ease-out hover:shadow-[0_4px_6px_0_rgba(102,102,102,.09),0_9px_14px_0_rgba(102,102,102,.06)] active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${
+        overlay ? classeCartaoArrastado : 'touch-pan-y'
       } ${isDragging && !overlay ? 'opacity-40' : ''} ${terminal && !overlay ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}
     >
       {bulk && !overlay && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent="#e11970" />}

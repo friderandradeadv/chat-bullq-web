@@ -5,10 +5,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
   useDraggable,
   useDroppable,
   type DragStartEvent,
@@ -29,6 +25,9 @@ import { ConversationDialog } from '@/features/inbox/components/conversation-dia
 import { avatarColor, avatarInitials, chipTextColor } from '@/lib/avatar';
 import { formatPhone } from '@/lib/brazil-states';
 import { relativeTime, cn } from '@/lib/utils';
+import {
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+} from '@/features/legal-cases/lib/kanban-dnd';
 
 export default function KanbanPage() {
   const qc = useQueryClient();
@@ -51,9 +50,7 @@ export default function KanbanPage() {
     refetchInterval: 20_000,
   });
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useSensoresKanban();
 
   // cardId → statusId (origem) pro handler de mover.
   const cardStatus = useMemo(() => {
@@ -208,7 +205,8 @@ export default function KanbanPage() {
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={colisaoKanban}
+          measuring={medicaoKanban}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
@@ -223,7 +221,7 @@ export default function KanbanPage() {
               />
             ))}
           </div>
-          <DragOverlay>
+          <DragOverlay dropAnimation={pousoKanban}>
             {activeCard ? (
               <Card card={activeCard} dragging />
             ) : activeColumn ? (
@@ -303,19 +301,15 @@ function Column({
 }
 
 function Card({ card, onClick, dragging }: { card: TCard; onClick?: () => void; dragging?: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: card.id,
     data: { type: 'card', card },
   });
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined;
   const color = avatarColor(card.name);
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
       {...listeners}
       {...attributes}
       onClick={onClick}

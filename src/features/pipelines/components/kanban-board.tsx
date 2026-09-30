@@ -4,10 +4,6 @@ import { useState, useMemo } from 'react';
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -21,6 +17,9 @@ import { CardDialog } from './card-dialog';
 import { AddConversationDialog } from './add-conversation-dialog';
 import { ConversationDialog } from '@/features/inbox/components/conversation-dialog';
 import { useDragScroll } from '@/lib/use-drag-scroll';
+import {
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+} from '@/features/legal-cases/lib/kanban-dnd';
 
 interface Props {
   pipelineId: string;
@@ -43,9 +42,7 @@ export function KanbanBoard({ pipelineId }: Props) {
     queryFn: () => pipelinesService.getBoard(pipelineId),
   });
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useSensoresKanban();
 
   // Build a fast lookup: cardId → { stageId, index } for the move handler.
   const cardIndex = useMemo(() => {
@@ -139,7 +136,8 @@ export function KanbanBoard({ pipelineId }: Props) {
         </div>
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={colisaoKanban}
+          measuring={medicaoKanban}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
@@ -160,7 +158,7 @@ export function KanbanBoard({ pipelineId }: Props) {
               />
             ))}
           </div>
-          <DragOverlay>
+          <DragOverlay dropAnimation={pousoKanban}>
             {activeCard ? <KanbanCard card={activeCard} /> : null}
           </DragOverlay>
         </DndContext>

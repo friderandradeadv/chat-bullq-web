@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/core';
 import {
   useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+  pintarAgora, indiceDeQueda, useVaoKanban, comVao, estiloDoVao, type VaoKanban,
 } from '@/features/legal-cases/lib/kanban-dnd';
 import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -66,47 +67,6 @@ function cleanProduto(s: string | null): string | null {
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const fmtDias = (d: number | null) => (d == null ? '—' : d >= 365 ? `${Math.floor(d / 365)}a` : d >= 30 ? `${Math.floor(d / 30)}m` : `${d}d`);
-
-/**
- * Aplica a mudança e força o React a PINTAR antes de seguir.
- *
- * 🚨 `flushSync` lança se for chamado de dentro de um ciclo de vida do React, e
- * o dnd-kit chama o `onDragEnd` de dentro do próprio fluxo dele. Lançar ali
- * derrubaria o soltar inteiro — por isso o resgate: sem o flush, o card ainda
- * vai para a coluna certa, só perde o pouso animado. Degradar é aceitável;
- * quebrar o arraste não é.
- */
-/**
- * Índice de queda, DESCONTANDO o vão já aberto.
- *
- * 🚨 `dropIndexAt` mede `getBoundingClientRect()`, que inclui o `transform`. Com
- * o vão aberto, os cards abaixo do ponto estão deslocados — a medida muda, o
- * índice calculado muda junto, o vão pula para outro lugar e a coluna treme. O
- * `@dnd-kit/sortable` resolve isso medindo o layout ORIGINAL; aqui o mesmo
- * efeito se obtém subtraindo o deslocamento que nós mesmos aplicamos.
- */
-function indiceDeQueda(fase: string, y: number, arrastado: string): number {
-  const col = document.querySelector(`[data-phase-col="${CSS.escape(fase)}"]`);
-  if (!col) return -1;
-  let i = 0;
-  for (const el of Array.from(col.querySelectorAll<HTMLElement>('[data-card-id]'))) {
-    if (el.dataset.cardId === arrastado) continue;
-    const r = el.getBoundingClientRect();
-    const m = /translate3d\(\s*0(?:px)?\s*,\s*(-?[\d.]+)px/.exec(el.style.transform || '');
-    const topReal = r.top - (m ? parseFloat(m[1]) : 0);
-    if (y < topReal + r.height / 2) return i;
-    i++;
-  }
-  return i;
-}
-
-function pintarAgora(fn: () => void) {
-  try {
-    flushSync(fn);
-  } catch {
-    fn();
-  }
-}
 
 export default function PreProcessualPage() {
   const qc = useQueryClient();
@@ -299,23 +259,11 @@ export default function PreProcessualPage() {
   //
   // O deslocamento é `transform`, não margem: transform não reflui o layout,
   // então os 20 cards da coluna não são remedidos a cada pixel do ponteiro.
-  const [vao, setVao] = useState<{ fase: string; idx: number; h: number } | null>(null);
-  const alturaArrastado = useRef(0);
-
-  const onDragMove = (e: DragMoveEvent) => {
-    const to = e.over?.id as string | undefined;
-    if (!to || !preKeys.has(to)) { if (vao) setVao(null); return; }
-    const y = ((e.activatorEvent as PointerEvent | undefined)?.clientY ?? 0) + e.delta.y;
-    const idx = indiceDeQueda(to, y, e.active.id as string);
-    if (idx < 0) { if (vao) setVao(null); return; }
-    // só re-renderiza quando o ALVO muda; o ponteiro dispara isto dezenas de
-    // vezes por segundo e cada setState aqui repintaria a coluna toda.
-    if (vao && vao.fase === to && vao.idx === idx) return;
-    setVao({ fase: to, idx, h: alturaArrastado.current });
-  };
+  const vaoK = useVaoKanban((id) => preKeys.has(id));
+  const vao = vaoK.vao;
 
   const onDragEnd = (e: DragEndEvent) => {
-    setVao(null);
+    vaoK.fechar();
     const to = e.over?.id as string | undefined;
     const card = cards.find((x) => x.id === e.active.id);
     if (!to || !card || !(preKeys.has(to))) { setActiveId(null); return; }
@@ -387,7 +335,7 @@ export default function PreProcessualPage() {
       {view === 'lista' ? (
         <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
-        <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => { alturaArrastado.current = e.active.rect.current.initial?.height ?? 96; setActiveId(e.active.id as string); }} onDragMove={onDragMove} onDragCancel={() => { setVao(null); setActiveId(null); }} onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => { vaoK.aoIniciar(e); setActiveId(e.active.id as string); }} onDragMove={vaoK.aoMover} onDragCancel={() => { vaoK.fechar(); setActiveId(null); }} onDragEnd={onDragEnd}>
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
@@ -410,10 +358,8 @@ export default function PreProcessualPage() {
   );
 }
 
-function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, phases, onMoveLeft, onMoveRight, vao, arrastadoId }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; bulk: KanbanBulk; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onMontarPje: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; cardOrder?: string[]; phases: KanbanPhase[]; onMoveLeft?: () => void; onMoveRight?: () => void; vao?: { fase: string; idx: number; h: number } | null; arrastadoId?: string | null }) {
+function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, phases, onMoveLeft, onMoveRight, vao, arrastadoId }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; bulk: KanbanBulk; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onMontarPje: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; cardOrder?: string[]; phases: KanbanPhase[]; onMoveLeft?: () => void; onMoveRight?: () => void; vao?: VaoKanban | null; arrastadoId?: string | null }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
-  // O vão só vale na coluna sob o ponteiro.
-  const vaoAqui = vao && vao.fase === phase.key ? vao : null;
   const isProtocolo = phase.key === 'protocolo';
   // Coluna de entrada do board. Nela a bolinha vermelha segue a regra do funil
   // REPB: todo card nasce marcado e só apaga quando a pessoa CLICA nele.
@@ -433,7 +379,7 @@ function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje
       </div>
       <div ref={setNodeRef} {...colAttr(phase.key)} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
-        {(() => { let n = 0; return sorted.map((c) => { const ehOArrastado = c.id === arrastadoId; const desloca = !ehOArrastado && !!vaoAqui && n >= vaoAqui.idx; if (!ehOArrastado) n += 1; return <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} isNovos={isNovos} bulk={bulk} colIds={colIds} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onMontarPje={isProtocolo ? onMontarPje : undefined} onChanged={onChanged} desloca={desloca ? (vaoAqui!.h + 10) : 0} />; }); })()}
+        {comVao(sorted, phase.key, vao ?? null, arrastadoId ?? null).map(({ item: c, desloca }) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} isNovos={isNovos} bulk={bulk} colIds={colIds} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onMontarPje={isProtocolo ? onMontarPje : undefined} onChanged={onChanged} desloca={desloca} />)}
       </div>
     </div>
   );
@@ -466,7 +412,7 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
       // 🚨 O VÃO: o card desce a altura do arrastado para abrir espaço. É
       // `transform`, que não reflui o layout — margem aqui remediria a coluna
       // inteira a cada pixel do ponteiro. A transição é a mesma da classe.
-      style={desloca ? { transform: `translate3d(0, ${desloca}px, 0)` } : undefined}
+      style={estiloDoVao(desloca)}
       onPointerDownCapture={(e) => { down.current = { x: e.clientX, y: e.clientY }; }}
       onClick={(e) => { if (!onOpen) return; const d = down.current; if (d && Math.abs(e.clientX - d.x) < 6 && Math.abs(e.clientY - d.y) < 6) { markCardClicked(c.id); onOpen(c.id); } }}
       className={`group relative cursor-pointer rounded-lg border border-[#cfe0ed] bg-white py-3 pl-3 pr-3 shadow-sm transition-[opacity,box-shadow,transform] duration-200 ease-out hover:shadow-md active:cursor-grabbing dark:border-transparent dark:bg-[#1E2226] ${

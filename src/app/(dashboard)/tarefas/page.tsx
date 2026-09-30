@@ -4,8 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogPanel } from '@headlessui/react';
 import {
-  DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter,
-  useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
+  DndContext, DragOverlay, useDraggable, useDroppable, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core';
 import { toast } from 'sonner';
 import {
@@ -21,6 +20,9 @@ import { useOrgId } from '@/hooks/use-org-query-key';
 import { useAuthStore } from '@/stores/auth-store';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { cn } from '@/lib/utils';
+import {
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+} from '@/features/legal-cases/lib/kanban-dnd';
 
 const COLUMNS: TaskStatus[] = ['TODO', 'DOING', 'DONE'];
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
@@ -64,7 +66,7 @@ export default function TarefasPage() {
     return g;
   }, [visible]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useSensoresKanban();
 
   const handleDragEnd = async (e: DragEndEvent) => {
     setActiveTask(null);
@@ -123,7 +125,8 @@ export default function TarefasPage() {
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={colisaoKanban}
+          measuring={medicaoKanban}
           onDragStart={(e: DragStartEvent) => {
             const t = tasks.find((x) => x.id === e.active.id);
             if (t) setActiveTask(t);
@@ -141,7 +144,7 @@ export default function TarefasPage() {
               />
             ))}
           </div>
-          <DragOverlay>{activeTask ? <Card task={activeTask} memberMap={memberMap} dragging /> : null}</DragOverlay>
+          <DragOverlay dropAnimation={pousoKanban}>{activeTask ? <Card task={activeTask} memberMap={memberMap} dragging /> : null}</DragOverlay>
         </DndContext>
       )}
 
@@ -193,8 +196,7 @@ function Card({
 }: {
   task: Task; memberMap: Map<string, MemberLite>; onClick?: () => void; dragging?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
-  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id });
   const assignee = task.assigneeId ? memberMap.get(task.assigneeId) : null;
   const overdue = task.dueAt && task.status !== 'DONE' && new Date(task.dueAt).getTime() < Date.now();
   const done = task.status === 'DONE';
@@ -202,7 +204,6 @@ function Card({
   return (
     <div
       ref={setNodeRef}
-      style={style}
       {...listeners}
       {...attributes}
       onClick={onClick}
