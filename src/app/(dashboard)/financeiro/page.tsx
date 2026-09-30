@@ -1310,14 +1310,28 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       const d = await financeiroService.repasseAdvogado(txId, userId ?? null, nome ?? null);
       const { gerarRepasseAdvogadoPdf, nomeRepasseAdvogadoPdf } = await import('@/features/financeiro/lib/repasse-advogado-pdf');
       const blob = await gerarRepasseAdvogadoPdf(d);
+      // ABRE para conferir; SALVAR é escolha de quem olhou. Baixar automático enchia a pasta
+      // de Downloads de PDF que ninguém tinha lido ainda — e o arquivo só interessa depois
+      // que os números foram conferidos. Mesmo comportamento da prestação do cliente.
       const nomeArquivo = nomeRepasseAdvogadoPdf(d);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = nomeArquivo; a.rel = 'noopener';
-      document.body.appendChild(a); a.click(); a.remove();
       window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      toast.success(`Prestação de ${d.advogado.nome} gerada · salva como ${nomeArquivo}`);
+      setTimeout(() => URL.revokeObjectURL(url), 120_000);
+      toast.success(`Prestação de ${d.advogado.nome} aberta em outra aba`, {
+        description: 'Confira os números antes de mandar. Para guardar o arquivo com o nome certo, use Baixar.',
+        duration: 15_000,
+        action: {
+          label: 'Baixar',
+          // URL nova: a da aba pode já ter sido revogada quando você clicar aqui.
+          onClick: () => {
+            const dl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = dl; a.download = nomeArquivo; a.rel = 'noopener';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(dl), 30_000);
+          },
+        },
+      });
     } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Erro ao gerar a prestação do advogado'); }
     finally { setRaLoad(null); }
   };
