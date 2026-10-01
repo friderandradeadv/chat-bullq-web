@@ -51,6 +51,21 @@ const OK_QUE_ESPERA = new Set(['protocolo']);
  */
 const JANELA_DO_OK_MS = 2 * 60 * 1000;
 
+/**
+ * Por quanto tempo uma RECUSA fica na tela.
+ *
+ * 🚨 ERRO TAMBÉM ENVELHECE (01/10/2026). A regra era "o erro FICA", para a
+ * recusa sobreviver ao recarregamento — e sobreviveu demais: o card da LINDOMAR
+ * exibia barra vermelha "Protocolando · esta peça é de CRUZEIRO DO OESTE/PR" de
+ * 29/09, dois dias depois, sem nada rodando. O advogado apontou: "lindomar não
+ * iniciamos nada, não é pra ter barra de progresso".
+ *
+ * Um dia é tempo de sobra para quem clicou ver por que não saiu. Passado isso,
+ * barra vermelha num card parado só mente sobre atividade — e o motivo não se
+ * perde: cada recusa vira movimento no histórico do card.
+ */
+const JANELA_DO_ERRO_MS = 24 * 60 * 60 * 1000;
+
 const NOME: Record<string, string> = {
   documentos: 'Preparando documentos',
   inicial: 'Montando a inicial',
@@ -125,6 +140,10 @@ export function BarraProgresso({
   if (p.status === 'ok' && !OK_QUE_ESPERA.has(p.op)) {
     const quando = Date.parse(p.em ?? '');
     if (!Number.isFinite(quando) || Date.now() - quando > JANELA_DO_OK_MS) return null;
+  }
+  if (p.status === 'erro') {
+    const quando = Date.parse(p.em ?? '');
+    if (!Number.isFinite(quando) || Date.now() - quando > JANELA_DO_ERRO_MS) return null;
   }
 
   const titulo = NOME[p.op] ?? 'Trabalhando';
