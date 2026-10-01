@@ -180,7 +180,18 @@ export function AssinaturaBanner() {
   const titulo = itens.length === 1
     ? (pronta ? 'Pronta para protocolar' : 'Assinar para protocolar')
     : `${itens.length} peças esperando você`;
-  const acao = pronta ? 'Protocolar' : 'Abrir a tela';
+  // 🚨 O BOTÃO ABRE NO NAVEGADOR PADRÃO, E ISSO TEM DE ESTAR NO NOME
+  // (01/10/2026). Ele se chamava "Abrir a tela", e o advogado leu, com razão,
+  // que levaria à tela ONDE O AGENTE ESTÁ TRABALHANDO. Não leva: página web não
+  // dá foco à janela de outro aplicativo, então o clique cai no navegador
+  // padrão — que não tem a sessão do PJe e mostra a tela de login.
+  //
+  // Quem resolve a tela certa é o agente, que traz a própria janela para a
+  // frente ao pedir a assinatura. Este botão continua útil para olhar o
+  // processo de OUTRA máquina, e agora o nome promete só isso.
+  const acao = pronta ? 'Protocolar no PJe' : 'Ver no PJe';
+  const explicacao = 'Abre no seu navegador padrão, onde pode ser preciso entrar de novo. '
+    + 'Na máquina do agente a janela certa já vem para a frente sozinha.';
 
   return (
     <div className="border-b border-amber-300 bg-amber-50 px-6 py-2.5 dark:border-amber-800/60 dark:bg-amber-900/25">
@@ -202,6 +213,7 @@ export function AssinaturaBanner() {
             href={primeiro.url}
             target="_blank"
             rel="noopener noreferrer"
+            title={explicacao}
             className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700"
           >
             <ExternalLink className="h-3.5 w-3.5" />
