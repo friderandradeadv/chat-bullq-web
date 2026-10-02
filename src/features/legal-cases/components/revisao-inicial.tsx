@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save, FileText, Pencil } from 'lucide-react';
+import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save, FileText, Pencil, FolderSync } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -58,6 +58,40 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
   // reescrever. `tocado` evita que um refetch apague o que está sendo digitado.
   const salvas = ((caso.metadata as any)?.revisaoInicial?.observacoes ?? '') as string;
   useEffect(() => { if (!tocado) setObs(salvas); }, [salvas, tocado]);
+
+  /**
+   * 🚨 POR QUE ESTE BOTÃO EXISTE (02/10/2026). A pasta de protocolo é montada
+   * DENTRO do "Montar a inicial completa" — e só ali. Quando um documento
+   * assinado aparece DEPOIS da montagem, ele fica na pasta do cliente e nunca
+   * chega ao pacote: a revisão segue mostrando a linha vazia, e a única saída
+   * era remontar a inicial inteira, regerando peça e PDF à toa.
+   *
+   * Aconteceu com o ANISIO PERONDI: a declaração de hipossuficiência, a de
+   * residência e a de renúncia estavam assinadas desde 10/03/2026 DENTRO do
+   * envelope do ZapSign, e só foram recortadas depois que a peça já estava
+   * pronta. Ele apertou "Refazer o recorte" — que é outra coisa, refaz
+   * HISCON/HISCRE/JG — e nada mudou.
+   *
+   * A rota já existia (`POST :id/drive/organizar-inicial`); faltava o botão.
+   */
+  const [organizando, setOrganizando] = useState(false);
+  const organizar = async () => {
+    setOrganizando(true);
+    try {
+      const r = await legalCasesService.organizarPastaInicial(caso.id);
+      const copiados = (r as any)?.copiados?.length ?? 0;
+      await refetch();
+      await pasta.refetch();
+      qc.invalidateQueries({ queryKey: ['legal-case', caso.id] });
+      toast.success(copiados
+        ? `${copiados} documento(s) levados para o pacote de protocolo.`
+        : 'A pasta já estava com tudo o que existe nos documentos do cliente.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Não consegui organizar a pasta.');
+    } finally {
+      setOrganizando(false);
+    }
+  };
 
   const salvar = async () => {
     setSalvando(true);
@@ -211,12 +245,20 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
 
           {/* O link da pasta vem do conferidor quando ele o traz; sem ele, o
               caminho impresso acima já diz onde procurar no Drive. */}
-          {(data as any)?.webViewLink && (
-            <a href={(data as any).webViewLink} target="_blank" rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-1 rounded-md bg-[#228BE6] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[#1c7ed6]">
-              <ExternalLink className="h-3 w-3" /> Abrir a pasta no Drive
-            </a>
-          )}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {(data as any)?.webViewLink && (
+              <a href={(data as any).webViewLink} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-[#228BE6] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[#1c7ed6]">
+                <ExternalLink className="h-3 w-3" /> Abrir a pasta no Drive
+              </a>
+            )}
+            <button type="button" onClick={organizar} disabled={organizando}
+              title="Relê os documentos assinados e pessoais do cliente e leva para o pacote o que ainda não está nele. Não regera a peça."
+              className="inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-medium text-[#48626f] transition hover:border-[#2f6f8f] hover:text-[#2f6f8f] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-400 dark:hover:text-zinc-200">
+              {organizando ? <Loader2 className="h-3 w-3 animate-spin" /> : <FolderSync className="h-3 w-3" />}
+              Buscar documentos que faltam
+            </button>
+          </div>
         </>
       )}
 
