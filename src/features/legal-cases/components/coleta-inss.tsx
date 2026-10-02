@@ -65,6 +65,12 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
   // bloqueado por possuir atributos que o caracteriza como um acesso
   // automatizado"), então quem digita é ele, em qualquer navegador. Deixar os
   // dois a um clique de distância é o que resta de automação honesta ali.
+  // 🚨 E O BOTÃO COPIA SÓ OS NÚMEROS (02/10/2026). O campo "Data de Nascimento"
+  // da Restituição tem máscara: colar "02/07/1948" com as barras derruba o
+  // formatador do Flutter e sobra **"0"** (medido, 1/10 no contador da própria
+  // tela). Digitado cru, "02071948" vira "02/07/1948" sozinho. Na tela a data
+  // continua legível com barra; o que vai para a área de transferência é o que o
+  // portal aceita.
   const nascimento = cad.nascimento?.trim();
 
   // Sem cliente vinculado não há o que abrir — e sem credencial o bloco vira só
@@ -150,7 +156,8 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
           {nascimento && (
             <div className="flex items-center gap-1.5">
               <span className="w-12 shrink-0 text-[10px] uppercase text-[#48626f] dark:text-zinc-400">Nasc.</span>
-              <button type="button" onClick={() => copiar(nascimento, 'Data de nascimento')} title="Copiar data de nascimento"
+              <button type="button" onClick={() => copiar(nascimento.replace(/\D/g, ''), 'Data de nascimento (só os números)')}
+                title="Copia só os números (02071948) — o campo da Restituição monta a barra sozinho; colar com barra quebra a máscara"
                 className="inline-flex min-w-0 flex-1 items-center gap-1 rounded border border-[#cfe0ed] bg-white px-1.5 py-0.5 text-left text-[11px] font-mono text-[#101820] hover:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
                 <span className="truncate">{nascimento}</span>
                 <Copy className="ml-auto h-3 w-3 shrink-0 opacity-60" />
