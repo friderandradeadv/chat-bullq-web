@@ -54,9 +54,18 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
     return () => clearInterval(t);
   }, [naFila, caseId, qc]);
   const cliente = parties?.find((p: CaseDetail['parties'][number]) => p.role === 'CLIENT');
-  const cad = ((cliente?.contact?.metadata as any)?.cadastro ?? {}) as { login?: string; senha?: string };
+  const cad = ((cliente?.contact?.metadata as any)?.cadastro ?? {}) as
+    { login?: string; senha?: string; nascimento?: string };
   const login = cad.login?.trim();
   const senha = cad.senha?.trim();
+  // 🚨 A DATA DE NASCIMENTO ENTRA AQUI PORQUE A RESTITUIÇÃO PEDE OS DOIS
+  // (02/10/2026). Quando o Portal MIR recusa por nível de conta (prata/ouro), a
+  // prova sai da Consulta Restituição — e ela pergunta CPF **e** nascimento. O
+  // portal é Flutter e **bloqueia preenchimento automatizado** ("seu acesso foi
+  // bloqueado por possuir atributos que o caracteriza como um acesso
+  // automatizado"), então quem digita é ele, em qualquer navegador. Deixar os
+  // dois a um clique de distância é o que resta de automação honesta ali.
+  const nascimento = cad.nascimento?.trim();
 
   // Sem cliente vinculado não há o que abrir — e sem credencial o bloco vira só
   // os atalhos dos portais, que continuam úteis.
@@ -112,7 +121,7 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
         ))}
       </div>
 
-      {(login || senha) ? (
+      {(login || senha || nascimento) ? (
         <div className="mt-2 space-y-1">
           {login && (
             <div className="flex items-center gap-1.5">
@@ -135,6 +144,16 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
               <button type="button" onClick={() => setVerSenha((v) => !v)} title={verSenha ? 'Esconder' : 'Mostrar'}
                 className="shrink-0 text-zinc-400 hover:text-[#1b6ec2]">
                 {verSenha ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          )}
+          {nascimento && (
+            <div className="flex items-center gap-1.5">
+              <span className="w-12 shrink-0 text-[10px] uppercase text-[#48626f] dark:text-zinc-400">Nasc.</span>
+              <button type="button" onClick={() => copiar(nascimento, 'Data de nascimento')} title="Copiar data de nascimento"
+                className="inline-flex min-w-0 flex-1 items-center gap-1 rounded border border-[#cfe0ed] bg-white px-1.5 py-0.5 text-left text-[11px] font-mono text-[#101820] hover:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                <span className="truncate">{nascimento}</span>
+                <Copy className="ml-auto h-3 w-3 shrink-0 opacity-60" />
               </button>
             </div>
           )}
