@@ -32,6 +32,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { OfertaChurning } from './oferta-churning';
 import { RevisaoInicial } from './revisao-inicial';
 import { DocumentosDaInicial } from './documentos-da-inicial';
+import { AlertaGratuidade } from './alerta-gratuidade';
 import { BeneficioTag, ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
@@ -655,7 +656,10 @@ export function CaseDetailDrawer({
                 Vem ANTES da conferência porque é o insumo dela: são estes PDFs
                 que entram na pasta de protocolo. */}
             {c && ['montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final'].includes(c.legalPhase ?? '') && (
-              <DocumentosDaInicial caso={c} />
+              <>
+                <AlertaGratuidade caso={c} />
+                <DocumentosDaInicial caso={c} />
+              </>
             )}
 
             {/* Conferência antes do protocolo: da montagem em diante, é o que o

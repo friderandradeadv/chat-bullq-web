@@ -1174,6 +1174,16 @@ export const legalCasesService = {
       .catch(() => undefined);
   },
 
+  /**
+   * Avisa o cliente do risco de a gratuidade ser indeferida, com os valores da
+   * declaração de IR dele. Texto aprovado por ele em 02/10/2026; uma resposta
+   * rápida de atalho `custas` sobrescreve.
+   */
+  async avisarRiscoDeCustas(id: string): Promise<{ ok: boolean; enviado: boolean }> {
+    const { data } = await api.post(`/legal-cases/${id}/irpf/aviso-custas`);
+    return data?.data ?? data;
+  },
+
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */
