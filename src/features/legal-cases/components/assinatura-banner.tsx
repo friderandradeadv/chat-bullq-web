@@ -189,7 +189,13 @@ export function AssinaturaBanner() {
   // Quem resolve a tela certa é o agente, que traz a própria janela para a
   // frente ao pedir a assinatura. Este botão continua útil para olhar o
   // processo de OUTRA máquina, e agora o nome promete só isso.
-  const acao = pronta ? 'Protocolar no PJe' : 'Ver no PJe';
+  // 🚨 O NOME DO SISTEMA VEM DA PEÇA, NÃO DO MEU HÁBITO (02/10/2026). Cravei
+  // "PJe" aqui ontem à noite, quando só existia PJe. Hoje Minas protocola no
+  // eproc, e a faixa ficou dizendo "eproc/TJMG" de um lado e "Ver no PJe" do
+  // outro — o mesmo erro de cravar tribunal que já tinha mandado o advogado
+  // para o foro errado uma vez. Quem sabe o sistema é o item.
+  const ondeNome = primeiro.sistema || 'PJe';
+  const acao = pronta ? `Protocolar no ${ondeNome}` : `Ver no ${ondeNome}`;
   const explicacao = 'Abre no seu navegador padrão, onde pode ser preciso entrar de novo. '
     + 'Na máquina do agente a janela certa já vem para a frente sozinha.';
 
