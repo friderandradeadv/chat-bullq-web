@@ -565,6 +565,8 @@ function OptionsMenu({
   // 'other-to-this' = escolher um processo pra apensar A ESTE;
   // 'this-to-other' = escolher o principal ao qual ESTE será apensado.
   const [apensar, setApensar] = useState<null | 'other-to-this' | 'this-to-other'>(null);
+  // O CS deste processo já tem ficha? (título no padrão do acervo: "CS - FULANA x BANCO").
+  const jaTemCs = (c.apensos ?? []).some((a) => /^cs\s*[-–—]/i.test(a.title ?? ''));
 
   const close = () => setOpen(false);
 
@@ -625,6 +627,27 @@ function OptionsMenu({
         <>
           <div className="fixed inset-0 z-10" onClick={close} />
           <div className="absolute right-0 top-11 z-20 w-64 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 text-left shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <MenuItem
+              icon={Gavel}
+              onClick={async () => {
+                close();
+                try {
+                  const r = await legalCasesService.criarApenso(c.id, { especie: 'cs' });
+                  toast.success(
+                    r.criado ? `${r.title} criado e apensado` : `${r.title} apensado`,
+                    { description: r.aviso ?? undefined, duration: r.aviso ? 8000 : 4000 },
+                  );
+                  onChange();
+                } catch (e: any) {
+                  toast.error(e?.response?.data?.message || e?.message || 'Erro ao criar o apenso');
+                }
+              }}
+              // Já existindo o CS, criar outro só duplicaria a ficha — o caminho
+              // é abrir o que existe no card "Processos relacionados".
+              disabled={jaTemCs}
+            >
+              {jaTemCs ? 'Cumprimento de sentença já apensado' : 'Criar apenso: cumprimento de sentença'}
+            </MenuItem>
             <MenuItem
               icon={Paperclip}
               onClick={() => {
@@ -799,6 +822,34 @@ function ApensarModal({
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<{ id: string; title: string; cnjNumber: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [criando, setCriando] = useState(false);
+
+  // O nº digitado só vira nº do apenso se for CNJ completo (20 dígitos) e
+  // DIFERENTE do principal — no TJSP o cumprimento costuma correr nos mesmos
+  // autos, e o nº não se repete em duas fichas.
+  const digitado = search.replace(/\D/g, '');
+  const numeroProprio = digitado.length === 20 && digitado !== (c.cnjNumber ?? '').replace(/\D/g, '');
+
+  // Cria a ficha do cumprimento de sentença já preenchida com o que este
+  // processo sabe (título, produto, comarca, partes, etiquetas, valor do
+  // cálculo) e apensa — em vez de abrir um card vazio e digitar tudo de novo.
+  const criarCs = async () => {
+    setCriando(true);
+    try {
+      const r = await legalCasesService.criarApenso(c.id, {
+        especie: 'cs',
+        cnjNumber: numeroProprio ? search.trim() : null,
+      });
+      toast.success(r.criado ? `${r.title} criado e apensado` : `${r.title} apensado`, {
+        description: r.aviso ?? undefined,
+        duration: r.aviso ? 8000 : 4000,
+      });
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao criar o apenso');
+      setCriando(false);
+    }
+  };
 
   const { data: results = [], isFetching } = useQuery({
     queryKey: ['apensar-search', search],
@@ -882,6 +933,26 @@ function ApensarModal({
           ))
         )}
       </div>
+      {direction === 'other-to-this' && (
+        <div className="mt-3 rounded-lg border border-dashed border-[#DEE2E6] p-3 dark:border-zinc-700">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Não existe ficha ainda? O hub cria a do <strong>cumprimento de sentença</strong> já
+            preenchida com o que este processo sabe — título, produto, comarca, partes, etiquetas e o
+            valor do cálculo.{' '}
+            {numeroProprio
+              ? `Vai nascer com o nº ${search.trim()}.`
+              : 'Sem nº próprio digitado, nasce sem número: corre nos mesmos autos do principal.'}
+          </p>
+          <button
+            onClick={criarCs}
+            disabled={criando}
+            className="mt-2 flex items-center gap-2 rounded-md border border-[#DEE2E6] px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <Gavel className="h-4 w-4" />
+            {criando ? 'Criando…' : 'Criar o CS e apensar'}
+          </button>
+        </div>
+      )}
       <ModalActions
         saving={saving}
         onClose={onClose}

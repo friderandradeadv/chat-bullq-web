@@ -788,6 +788,25 @@ export const legalCasesService = {
   async apensar(id: string, parentCaseId: string | null): Promise<void> {
     await api.patch(`/legal-cases/${id}/apensar`, { parentCaseId });
   },
+  /**
+   * Cria a ficha de um APENSO já preenchida a partir do processo `id` (padrão:
+   * o CUMPRIMENTO DE SENTENÇA) e apensa. Sem nº CNJ = mesmos autos do principal
+   * — a ficha nasce sem número, porque o nº não se repete em duas fichas.
+   */
+  async criarApenso(
+    id: string,
+    input: { especie?: 'cs' | 'exec'; cnjNumber?: string | null; title?: string | null } = {},
+  ): Promise<{
+    id: string;
+    title: string;
+    cnjNumber: string | null;
+    criado: boolean;
+    mesmosAutos: boolean;
+    aviso?: string | null;
+  }> {
+    const { data } = await api.post(`/legal-cases/${id}/apenso`, input);
+    return data.data ?? data;
+  },
   async remove(id: string): Promise<void> {
     await api.delete(`/legal-cases/${id}`);
   },
