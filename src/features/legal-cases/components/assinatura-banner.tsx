@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { PenLine, Volume2, VolumeX, ExternalLink } from 'lucide-react';
+import { PenLine, Volume2, VolumeX, ExternalLink, Check, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -195,6 +196,31 @@ export function AssinaturaBanner() {
   // outro — o mesmo erro de cravar tribunal que já tinha mandado o advogado
   // para o foro errado uma vez. Quem sabe o sistema é o item.
   const ondeNome = primeiro.sistema || 'PJe';
+
+  /**
+   * 🚨 POR QUE ESTE BOTÃO EXISTE (02/10/2026). O agente descobria sozinho que a
+   * assinatura tinha terminado: de 10 em 10 segundos ele percorria todos os
+   * frames da janela do tribunal rodando JavaScript, procurando o botão de
+   * confirmar. O Chrome morreu TRÊS VEZES nesse ponto — 17:55, 18:16 e 18:29 —
+   * sempre no processo do navegador, duas por uso de memória já liberada e uma
+   * por verificação interna do próprio Chrome. Cutucar o navegador enquanto ele
+   * abre e fecha janelas para assinar é a única coisa anormal acontecendo ali.
+   *
+   * Agora o agente SOLTA o navegador durante a assinatura e fica perguntando ao
+   * hub, por HTTP, se já pode voltar. Quem responde é este botão.
+   */
+  const [avisando, setAvisando] = useState(false);
+  const jaAssinei = async () => {
+    setAvisando(true);
+    try {
+      await api.post(`/legal-cases/${primeiro.caseId}/protocolo/assinei`);
+      toast.success('Avisei o agente — ele volta e conclui o protocolo.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Não consegui avisar o agente.');
+    } finally {
+      setAvisando(false);
+    }
+  };
   const acao = pronta ? `Protocolar no ${ondeNome}` : `Ver no ${ondeNome}`;
   const explicacao = 'Abre no seu navegador padrão, onde pode ser preciso entrar de novo. '
     + 'Na máquina do agente a janela certa já vem para a frente sozinha.';
@@ -225,6 +251,19 @@ export function AssinaturaBanner() {
             <ExternalLink className="h-3.5 w-3.5" />
             {acao}
           </a>
+        )}
+
+        {!pronta && (
+          <button
+            type="button"
+            onClick={jaAssinei}
+            disabled={avisando}
+            title="Avisa o agente que você terminou de assinar. Ele fica fora do navegador durante a assinatura — foi o que ele fazia ali que derrubava o Chrome."
+            className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-700 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/40"
+          >
+            {avisando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            Já assinei
+          </button>
         )}
 
         <button
