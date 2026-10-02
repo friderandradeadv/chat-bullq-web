@@ -169,6 +169,30 @@ export function AssinaturaBanner() {
     bipar();
   }, [itens, mudo, bipar]);
 
+  // 🚨 ESTE HOOK FICA ACIMA DO `return null` (02/10/2026). Eu o pus abaixo e
+  // derrubei o HUB INTEIRO: esta faixa é renderizada em todas as páginas, e com
+  // `itens.length === 0` — o caso normal, sem peça esperando — o componente
+  // retornava antes do `useState`. Contagem de hooks diferente entre
+  // renderizações faz o React abortar a aplicação toda, e o sintoma foi "This
+  // page couldn't load" no Opera E no Chrome, enquanto o `curl` devolvia 200
+  // (porque o curl busca o HTML e não executa React).
+  //
+  // A memória do escritório já tinha essa armadilha escrita, de outro caso:
+  // "hook depois de return condicional derruba a página inteira — servidor
+  // limpo, tsc limpo". O `tsc` passou aqui também. Nenhuma ferramenta pega.
+  const [avisando, setAvisando] = useState(false);
+  const jaAssinei = async () => {
+    setAvisando(true);
+    try {
+      await api.post(`/legal-cases/${primeiro.caseId}/protocolo/assinei`);
+      toast.success('Avisei o agente — ele volta e conclui o protocolo.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Não consegui avisar o agente.');
+    } finally {
+      setAvisando(false);
+    }
+  };
+
   if (itens.length === 0) return null;
 
   const primeiro = itens[0];
@@ -209,18 +233,6 @@ export function AssinaturaBanner() {
    * Agora o agente SOLTA o navegador durante a assinatura e fica perguntando ao
    * hub, por HTTP, se já pode voltar. Quem responde é este botão.
    */
-  const [avisando, setAvisando] = useState(false);
-  const jaAssinei = async () => {
-    setAvisando(true);
-    try {
-      await api.post(`/legal-cases/${primeiro.caseId}/protocolo/assinei`);
-      toast.success('Avisei o agente — ele volta e conclui o protocolo.');
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? 'Não consegui avisar o agente.');
-    } finally {
-      setAvisando(false);
-    }
-  };
   const acao = pronta ? `Protocolar no ${ondeNome}` : `Ver no ${ondeNome}`;
   const explicacao = 'Abre no seu navegador padrão, onde pode ser preciso entrar de novo. '
     + 'Na máquina do agente a janela certa já vem para a frente sozinha.';
