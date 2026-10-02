@@ -178,8 +178,15 @@ export function BarraProgresso({
           {titulo}
         </span>
 
+        {/* 🚨 ERRO NÃO CABE EM UMA LINHA, E CORTADO NÃO ENSINA NADA (01/10/2026).
+            O advogado fechou o Chrome de propósito para testar e o card mostrou
+            "PAREI: SESSAO_CAIDA: a janela do agente não a…" — truncado no meio,
+            em dialeto de máquina, sem dizer o que fazer. Pedido dele: "você tem
+            que me mostrar no hub como recuperar, entrar o acesso".
+            O passo normal continua truncado (é uma linha de progresso); o ERRO
+            sai inteiro, abaixo, com espaço para a instrução. */}
         <span className={`${compacta ? 'text-[11px]' : 'text-xs'} flex-1 truncate text-neutral-600 dark:text-neutral-400`}>
-          · {erro ? p.erro || 'falhou' : p.passo}
+          · {erro ? 'o agente parou' : p.passo}
         </span>
 
         {pct != null && (
@@ -191,6 +198,12 @@ export function BarraProgresso({
           <span className="text-[11px] tabular-nums text-neutral-500">{p.n}</span>
         )}
       </div>
+
+      {erro && p.erro && (
+        <p className={`${compacta ? 'text-[11px]' : 'text-xs'} mt-1 whitespace-pre-line leading-snug text-red-700 dark:text-red-300`}>
+          {p.erro}
+        </p>
+      )}
 
       <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
         {pct != null ? (
