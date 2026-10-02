@@ -128,7 +128,7 @@ const getPolo = (c: CaseDetail): 'exequente' | 'executado' => {
 
 // Raia do card no kanban: fases pré-judiciais vivem no quadro Pré-Processual;
 // o resto no quadro Fase Judicial. Ambos abrem a ficha via ?case=<id>.
-const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
+const PRE_PHASES = new Set(['novos_clientes', 'verificar_acao', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
 const kanbanHref = (c: CaseDetail): string => {
   const base = c.legalPhase?.startsWith('repb_')
     ? '/juridico/repb'

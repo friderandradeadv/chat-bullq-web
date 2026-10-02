@@ -68,11 +68,11 @@ const cleanArea = (s: string | null): string | null => {
 const fmtSize = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 // Fases da raia pré-judicial e detecção de produto bancário (RMC/RCC) — gate da
 // seção "Contratos a impugnar".
-const PRE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
+const PRE_PHASES = new Set(['novos_clientes', 'verificar_acao', 'reuniao_agendada', 'info_faltantes', 'montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo', 'inss_admin']);
 // INTAKE (novos clientes → doc. faltantes): importar HISCON, listar bancos réus e
 // DESMEMBRAR em 1 card por banco. MONTAR (montar inicial em diante): cálculo +
 // gerar a petição. São etapas diferentes — a inicial só se faz no card certo.
-const INTAKE_PHASES = new Set(['novos_clientes', 'reuniao_agendada', 'info_faltantes']);
+const INTAKE_PHASES = new Set(['novos_clientes', 'verificar_acao', 'reuniao_agendada', 'info_faltantes']);
 const MONTAR_PHASES = new Set(['montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final', 'protocolo']);
 // Cor da etiqueta por produto (igual ao card do kanban).
 
@@ -294,7 +294,7 @@ export function CaseDetailDrawer({
             {isLoading && <p className="py-6 text-sm text-zinc-400">Carregando…</p>}
             {c && tab === 'dados' && (
               <>
-                <AcoesExistentesCard caseId={c.id} metadata={c.metadata} onDone={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
+                <AcoesExistentesCard caseId={c.id} metadata={c.metadata} fase={c.legalPhase} onDone={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
 
                 <DadosForm c={c} pf={pf} showJuizo={showJuizo} onSaved={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
 
@@ -1757,7 +1757,7 @@ function AnaliseViabilidade({ caseId, analise, onDone }: { caseId: string; anali
 // ação em curso por nome/CPF, pra o advogado conferir ANTES de montar a inicial
 // (risco de litispendência/duplicidade). Mostra o resultado já gravado em
 // metadata.acoesExistentes e permite re-verificar sob demanda.
-function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; metadata: unknown; onDone: () => void }) {
+function AcoesExistentesCard({ caseId, metadata, fase, onDone }: { caseId: string; metadata: unknown; fase?: string | null; onDone: () => void }) {
   type Snapshot = {
     verificadoEm?: string;
     fonte?: string;
@@ -1773,6 +1773,12 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
     ufCliente?: string | null;
     deOutroEstado?: number;
     acoes?: Array<{ numeroProcesso: string; tribunal: string; tipo: string; data: string; temCpf?: boolean; matchPor?: string | null; foraDoEstado?: boolean | null }>;
+    // De onde o card foi tirado quando a verificação o parou — é para cá que o
+    // botão "homônimo" o devolve.
+    faseOrigem?: string | null;
+    // Veredito humano já dado sobre ESTE conjunto de achados (ver assinatura no
+    // backend). Preenchido = o card já passou pela fila.
+    triagem?: { decisao?: 'homonimo' | 'confirmado'; em?: string } | null;
   };
   const salvo = ((metadata as any)?.acoesExistentes ?? null) as Snapshot | null;
   const [busy, setBusy] = useState(false);
@@ -1802,6 +1808,32 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
       toast.error(e?.response?.data?.message || 'Erro ao verificar ações existentes');
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Despacho da fila: só aparece quando o card ESTÁ parado na triagem, porque é
+  // só ali que ele tem de onde voltar. Em qualquer outra fase o bloco segue
+  // sendo o alerta de sempre, sem botão que mexa no card.
+  const [triando, setTriando] = useState<null | 'homonimo' | 'confirmado'>(null);
+  const naTriagem = fase === 'verificar_acao';
+  const faseOrigem = (resultado as any)?.faseOrigem ?? (salvo as any)?.faseOrigem ?? null;
+
+  const triar = async (decisao: 'homonimo' | 'confirmado') => {
+    if (decisao === 'confirmado'
+      && !window.confirm('Dispensar este cliente por ação já existente?\n\nO card vai para DESISTÊNCIA (arquivado). Confirme que a ação é DELE mesmo — não de um homônimo.')) return;
+    setTriando(decisao);
+    try {
+      const r = await legalCasesService.triarAcoesExistentes(caseId, decisao);
+      toast.success(
+        decisao === 'homonimo'
+          ? `Homônimo registrado — card devolvido para "${r.fase}".`
+          : 'Cliente dispensado (DESISTÊNCIA) por ação pré-existente.',
+      );
+      onDone();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao registrar a triagem');
+    } finally {
+      setTriando(null);
     }
   };
 
@@ -1922,6 +1954,46 @@ function AcoesExistentesCard({ caseId, metadata, onDone }: { caseId: string; met
           {fonteTemMais && (
             <p className="mt-2 text-[10px] italic text-amber-700 dark:text-amber-300">
               A fonte atribui {naFonte} processo(s) a esta pessoa e carregamos só a primeira página — o que não está na lista acima não foi conferido.
+            </p>
+          )}
+
+          {/* As duas saídas da fila. Sem elas o card parado em "VERIFICAR AÇÃO
+              EXISTENTE" não teria como sair a não ser arrastado à mão — e
+              aí o veredito não ficaria registrado em lugar nenhum. */}
+          {naTriagem && (
+            <div className="mt-3 border-t border-amber-200 pt-2.5 dark:border-amber-800/50">
+              <p className="mb-2 text-[11px] font-medium text-amber-900 dark:text-amber-200">
+                Este card está parado para conferência. Confira os processos acima e despache:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => triar('homonimo')}
+                  disabled={!!triando}
+                  className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-700/60 dark:bg-emerald-950/40 dark:text-emerald-300"
+                >
+                  {triando === 'homonimo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                  Não é ele (homônimo) — seguir{faseOrigem ? ` para "${faseOrigem}"` : ''}
+                </button>
+                <button
+                  onClick={() => triar('confirmado')}
+                  disabled={!!triando}
+                  className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-800 hover:bg-red-100 disabled:opacity-50 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-300"
+                >
+                  {triando === 'confirmado' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                  É ele mesmo — dispensar cliente
+                </button>
+              </div>
+              <p className="mt-1.5 text-[10px] italic text-amber-700 dark:text-amber-300">
+                O DJEN casa só por NOME. Antes de dispensar, confira o CPF no processo (consulta do tribunal) — dispensar homônimo é perder cliente bom.
+              </p>
+            </div>
+          )}
+
+          {/* Veredito já dado: o card voltou ao fluxo, mas o registro fica. */}
+          {!naTriagem && resultado?.triagem?.decisao && (
+            <p className="mt-2 text-[10px] italic text-amber-700 dark:text-amber-300">
+              Triado em {resultado.triagem.em ? new Date(resultado.triagem.em).toLocaleDateString('pt-BR') : '—'} como{' '}
+              <b>{resultado.triagem.decisao === 'homonimo' ? 'homônimo' : 'ação confirmada'}</b>. Achado novo reabre a conferência.
             </p>
           )}
         </article>

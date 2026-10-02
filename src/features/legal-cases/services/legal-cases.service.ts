@@ -623,6 +623,16 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/verificar-acoes`);
     return data.data ?? data;
   },
+  // Despacha a fila "VERIFICAR AÇÃO EXISTENTE": 'homonimo' devolve o card à
+  // fase de onde ele foi tirado (e ele não para mais pelo mesmo achado);
+  // 'confirmado' dispensa o cliente (DESISTÊNCIA) por litispendência.
+  async triarAcoesExistentes(
+    id: string,
+    decisao: 'homonimo' | 'confirmado',
+  ): Promise<{ ok: boolean; fase: string | null }> {
+    const { data } = await api.post(`/legal-cases/${id}/triar-acoes`, { decisao });
+    return data.data ?? data;
+  },
   // IA lê a sentença do prazo e sugere o motivo do recurso (1-2 frases).
   async sugerirMotivoRecurso(deadlineId: string): Promise<{ motivo: string }> {
     const { data } = await api.post('/legal-cases/recurso/sugerir-motivo', { deadlineId });
