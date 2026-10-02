@@ -80,7 +80,9 @@ export default function PreProcessualPage() {
   const [protocolarId, setProtocolarId] = useState<string | null>(null);
 
   /**
-   * Pede ao agente do Mac que monte a peça no PJe.
+   * Pede ao agente do Mac que monte a peça no sistema do tribunal (PJe,
+   * eproc ou Projudi — quem decide é o descobridor, pela comarca e pela
+   * competência lidas no endereçamento da peça).
    *
    * 🚨 NÃO PROTOCOLA. O agente monta tudo e PARA na assinatura, porque o PIN do
    * token é do advogado. O aviso de "assinar" chega pela faixa do topo.
@@ -90,7 +92,12 @@ export default function PreProcessualPage() {
       const { data } = await api.post(`/legal-cases/${id}/protocolo-pje`);
       const r = (data?.data ?? data) as { ok?: boolean; motivo?: string };
       if (r?.ok === false) { toast.error(r.motivo || 'Não deu para pedir a montagem.'); return; }
-      toast.success('Pedido enviado — o agente monta no PJe e te chama para assinar.');
+      // 🚨 NÃO SE DIZ "PJe" AQUI (02/10/2026). O sistema não se sabe neste
+      // momento: ele sai do descobridor, que lê a COMARCA e a COMPETÊNCIA do
+      // endereçamento da peça — e em 2026 a mesma comarca responde por dois
+      // sistemas (Cianorte/PR: juizado no eproc, vara cível no Projudi). O card
+      // do ANISIO PERONDI, que é Projudi, foi anunciado como PJe.
+      toast.success('Pedido enviado — o agente monta no sistema do tribunal e te chama para assinar.');
       qc.invalidateQueries({ queryKey: KEY });
       // 🚨 ACENDER A BARRA NO CLIQUE, não na próxima consulta de rotina. Sem
       // isto, entre apertar Protocolar e ver qualquer sinal na tela passavam
@@ -473,14 +480,14 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
             <>
               {/* 🚨 UM BOTÃO PRINCIPAL, UMA EXCEÇÃO DISCRETA.
                   "Protocolar" é a ação que o advogado quer: dispara o agente,
-                  que monta a peça no PJe e para na assinatura. Registrar um
+                  que monta a peça no sistema do tribunal e para na assinatura. Registrar um
                   protocolo feito FORA do hub (CNJ e data na mão) é exceção —
                   ganhava o mesmo peso visual e fazia parecer que havia escolha
                   a fazer. Apontado pelo escritório em 29/09/2026. */}
               <button
                 onClick={(e) => { e.stopPropagation(); onMontarPje?.(c.id); }}
                 onPointerDown={(e) => e.stopPropagation()}
-                title="O agente monta a peça no PJe e para na sua assinatura"
+                title="O agente monta a peça no sistema do tribunal (PJe, eproc ou Projudi) e para na sua assinatura"
                 className="inline-flex h-6 items-center gap-1 rounded-full bg-[#005efc] px-2.5 text-[11px] font-semibold text-white hover:opacity-90"
               >
                 <Sparkles className="h-3 w-3" /> Protocolar
