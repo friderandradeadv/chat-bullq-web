@@ -9,7 +9,7 @@ import {
   type DragStartEvent, type DragEndEvent, type DragMoveEvent,
 } from '@dnd-kit/core';
 import {
-  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado, RolagemNoArraste,
   pintarAgora, indiceDeQueda, yDoPonteiro, useVaoKanban, comVao, estiloDoVao, type VaoKanban,
 } from '@/features/legal-cases/lib/kanban-dnd';
 import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles } from 'lucide-react';
@@ -344,6 +344,8 @@ export default function PreProcessualPage() {
         <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => { vaoK.aoIniciar(e); setActiveId(e.active.id as string); }} onDragMove={vaoK.aoMover} onDragCancel={() => { vaoK.fechar(); setActiveId(null); }} onDragEnd={onDragEnd}>
+          {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+          <RolagemNoArraste />
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (

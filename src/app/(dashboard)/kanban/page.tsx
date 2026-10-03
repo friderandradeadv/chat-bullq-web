@@ -26,7 +26,7 @@ import { avatarColor, avatarInitials, chipTextColor } from '@/lib/avatar';
 import { formatPhone } from '@/lib/brazil-states';
 import { relativeTime, cn } from '@/lib/utils';
 import {
-  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado, RolagemNoArraste,
 } from '@/features/legal-cases/lib/kanban-dnd';
 
 export default function KanbanPage() {
@@ -210,6 +210,8 @@ export default function KanbanPage() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
+          {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+          <RolagemNoArraste />
           <div className={cn('flex gap-3 px-4 pb-4 pt-2.5 lg:flex-1 lg:min-h-0', view === 'lista' ? 'flex-col lg:overflow-y-auto' : 'overflow-x-auto')}>
             {board.columns.map((col) => (
               <Column

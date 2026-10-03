@@ -32,6 +32,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useRepbSeenStore } from '@/stores/repb-seen-store';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
+import { RolagemNoArraste } from '@/features/legal-cases/lib/kanban-dnd';
 
 const KEY = ['legal-cases', 'kanban', 'repbc'];
 const ACCENT = '#E8590C'; // laranja — funil comercial (leads de campanha) do REPB
@@ -217,6 +218,8 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
         <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent={ACCENT} />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+          {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+          <RolagemNoArraste />
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (

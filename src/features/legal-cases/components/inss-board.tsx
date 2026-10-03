@@ -16,6 +16,7 @@ import { useDragScroll } from '@/lib/use-drag-scroll';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, KanbanSelectTrigger, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
+import { RolagemNoArraste } from '@/features/legal-cases/lib/kanban-dnd';
 
 // inss_admin está na trilha 'pre' — escopa a busca por lane (mesma key/cache do
 // board Pré-processual, que puxa os mesmos cards).
@@ -171,6 +172,8 @@ export function InssBoard() {
         <CasesListView byPhase={listaByPhase} phases={listaPhases} onOpen={setOpenCaseId} accent={ACCENT} />
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+          {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+          <RolagemNoArraste />
           <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
             {COLS.map((col) => (
               <Column key={col.dropId} col={col} items={byRes[col.key]} bulk={bulk} onOpen={setOpenCaseId} onEntrarJudicial={entrarJudicial} />

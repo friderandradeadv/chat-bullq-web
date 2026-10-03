@@ -22,6 +22,7 @@ import { phasesOfBoard, type Board } from '@/features/legal-cases/lib/phase-boar
 import { useAuthStore } from '@/stores/auth-store';
 import { matchesKanbanSearch } from '@/features/legal-cases/lib/kanban-search';
 import { useCasesFilter, CasesFilterBanner } from '@/features/legal-cases/lib/use-cases-filter';
+import { RolagemNoArraste } from '@/features/legal-cases/lib/kanban-dnd';
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -246,6 +247,8 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
         </div>
       ) : (
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
+          {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+          <RolagemNoArraste />
         <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
           {columns.map((col, i) => {
             const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys, data?.cardOrder?.[col.key]) : col.cards;

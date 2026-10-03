@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import {
-  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado, RolagemNoArraste,
 } from '@/features/legal-cases/lib/kanban-dnd';
 import { useRouter } from 'next/navigation';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -342,6 +342,8 @@ function BancoBoard({ caseId, phases, onOpenBank, scroll }: { caseId: string; ph
 
   return (
     <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragCancel={() => setActiveId(null)} onDragEnd={onDragEnd}>
+      {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+      <RolagemNoArraste />
       <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
         {phases.map((phase) => <BancoColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} malCount={malCount} onOpen={(bid) => onOpenBank(caseId, bid)} />)}
       </div>
@@ -440,6 +442,8 @@ function BancosGlobalBoard({ clientes, phases, onOpenBank, scroll }: { clientes:
 
   return (
     <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragCancel={() => setActiveId(null)} onDragEnd={onDragEnd}>
+      {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+      <RolagemNoArraste />
       <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
         {phases.map((phase) => <BancoGlobalColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={onOpenBank} />)}
       </div>
@@ -549,6 +553,8 @@ function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMo
 
   return (
     <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragCancel={() => setActiveId(null)} onDragEnd={onDragEnd}>
+      {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+      <RolagemNoArraste />
       <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
         {loading && !items.length && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
         {phases.map((phase, i) => <UnifiedColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpenBank={onOpenBank} onOpenCase={onOpenCase} canRename={canRename} onRename={onRename} onDelete={onDelete} phaseDrag={phaseDrag} onMoveLeft={canRename && i > 0 ? () => onReorder(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => onReorder(phase, 'right') : undefined} />)}

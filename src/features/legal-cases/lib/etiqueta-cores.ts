@@ -35,6 +35,12 @@ export function produtoColor(p: string | null | undefined): CorEtiqueta {
   if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
   if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
   if (/REPB|REESTRUT|PASSIVO/.test(s)) return { bg: 'rgb(183,121,31)', fg: '#fff' };
+  // 🚨 ANTES de PORTABIL/REVISIONAL/CONSIGNAD, que é regra larga. "Churning" é
+  // a reciclagem de contratos: refinanciamento em cadeia no mesmo grupo
+  // econômico, com dívida nova nascendo da quitação da anterior. Réu próprio,
+  // ação própria, cor própria — e um rótulo futuro do tipo "Churning
+  // consignado" cairia no azul daquela regra se viesse depois. (02/10/2026)
+  if (/CHURNING|RECICLAGEM/.test(s)) return { bg: 'rgb(230,126,34)', fg: '#fff' };
   if (/PORTABIL|REVISIONAL|CONSIGNAD/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
   // ── cível / consumidor ──────────────────────────────────────────────────
   if (/CONSUMID|DANO|INDENIZ|VOO|FRAUDE|NULID|OBRIGACAO|ANULA|ABUSIV/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };

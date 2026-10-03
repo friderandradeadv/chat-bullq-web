@@ -18,7 +18,7 @@ import { AddConversationDialog } from './add-conversation-dialog';
 import { ConversationDialog } from '@/features/inbox/components/conversation-dialog';
 import { useDragScroll } from '@/lib/use-drag-scroll';
 import {
-  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado, RolagemNoArraste,
 } from '@/features/legal-cases/lib/kanban-dnd';
 
 interface Props {
@@ -141,6 +141,8 @@ export function KanbanBoard({ pipelineId }: Props) {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
+          {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+          <RolagemNoArraste />
           <div ref={dragScroll.ref} {...(view === 'lista' ? {} : dragScroll.handlers)} className={`flex gap-5 px-4 pb-4 pt-2 lg:min-h-0 lg:flex-1 ${view === 'lista' ? 'flex-col lg:overflow-y-auto' : 'overflow-x-auto cursor-grab'}`}>
             {board.stages.map((stage) => (
               <KanbanColumn

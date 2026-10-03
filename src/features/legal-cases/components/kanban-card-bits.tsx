@@ -8,6 +8,7 @@
 //   jurídica (2º badge) é derivada disso no backend, então atualiza sozinha.
 
 import { useEffect, useState } from 'react';
+import { produtoColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Pencil, Trash2, Check, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp, CheckSquare, ListChecks, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
@@ -405,24 +406,17 @@ const PRODUTO_PRESETS = [
   'Consumidor', 'Cível', 'Família',
 ];
 
-function produtoBg(p: string): { bg: string; fg: string } {
-  const s = (p ?? '').toUpperCase();
-  if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
-  if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
-  if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
-  if (/TRABALH|RESCIS|FERIAS/.test(s)) return { bg: 'rgb(255,161,0)', fg: '#101820' };
-  // 🚨 ANTES de PORTABIL/REVISIONAL/CONSIGNAD: "Churning" não casa com nenhum
-  // deles hoje, mas a regra do consignado é larga e um rótulo futuro do tipo
-  // "Churning consignado" cairia no azul dela. Cor própria, porque é réu
-  // próprio e ação própria.
-  if (/CHURNING|RECICLAGEM/.test(s)) return { bg: 'rgb(230,126,34)', fg: '#fff' };
-  if (/PORTABIL|REVISIONAL|CONSIGNAD|CONSUMID/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
-  if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
-  if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
-  if (/CONTRIBUI/.test(s)) return { bg: 'rgb(32,164,140)', fg: '#fff' };
-  if (/SEGURO|TARIFA/.test(s)) return { bg: 'rgb(126,87,194)', fg: '#fff' };
-  return { bg: 'rgb(209,209,209)', fg: '#101820' };
-}
+/**
+ * 🚨 ESTA FUNÇÃO ERA UMA SÉTIMA CÓPIA, E ELA DIVERGIU (02/10/2026). O arquivo
+ * `lib/etiqueta-cores.ts` diz, em letras garrafais, que cor de etiqueta se muda
+ * num lugar só — ele nasceu de consolidar SEIS cópias que já tinham divergido.
+ * Esta aqui escapou da consolidação. Resultado medido hoje: acrescentei
+ * "Churning" nela, o card fechado continuou cinza, e eu fui procurar o defeito
+ * no deploy em vez de na duplicata.
+ *
+ * Agora é um apelido da canônica. Acrescentar cor aqui, nunca.
+ */
+const produtoBg = produtoColor;
 
 /** Case.area pode ser string simples OU JSON array (ex.: ["RMC","RCC"]). */
 function parseProdutos(area: string | null): string[] {

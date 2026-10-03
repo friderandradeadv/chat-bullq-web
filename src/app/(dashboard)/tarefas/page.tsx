@@ -21,7 +21,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
 import { cn } from '@/lib/utils';
 import {
-  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado,
+  useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado, RolagemNoArraste,
 } from '@/features/legal-cases/lib/kanban-dnd';
 
 const COLUMNS: TaskStatus[] = ['TODO', 'DOING', 'DONE'];
@@ -133,6 +133,8 @@ export default function TarefasPage() {
           }}
           onDragEnd={handleDragEnd}
         >
+          {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+          <RolagemNoArraste />
           <div className="flex gap-3 overflow-x-auto p-4 lg:flex-1 lg:min-h-0">
             {COLUMNS.map((col) => (
               <Column
