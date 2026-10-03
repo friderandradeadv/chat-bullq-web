@@ -18,6 +18,7 @@ import {
 // o campo que sobrou com flex-1, que some espremido.
 const INPUT_BASE = 'h-9 rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 const INPUT = INPUT_BASE + ' w-full';
+import { CnjNumber } from '@/app/(dashboard)/processos/page';
 import { membersService } from '@/features/settings/services/members.service';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
 import { FaseFields } from './fase-fields';
@@ -1936,7 +1937,7 @@ function AcoesExistentesCard({ caseId, metadata, fase, onDone }: { caseId: strin
           <ul className="mt-2 space-y-1 border-t border-amber-200 pt-2 dark:border-amber-800/50">
             {listadas.map((a, i) => (
               <li key={i} className="text-[11px] text-amber-900 dark:text-amber-200">
-                <span className="font-mono">{a.numeroProcesso}</span>{a.tribunal ? ` · ${a.tribunal}` : ''}{a.tipo ? ` · ${a.tipo}` : ''}{a.data ? ` · ${a.data}` : ''}
+                <CnjNumber value={a.numeroProcesso} className="font-mono !text-amber-900 dark:!text-amber-200" />{a.tribunal ? ` · ${a.tribunal}` : ''}{a.tipo ? ` · ${a.tipo}` : ''}{a.data ? ` · ${a.data}` : ''}
                 {a.temCpf && <span className="ml-1 font-semibold text-emerald-700 dark:text-emerald-400">· CPF confere</span>}
                 {!a.temCpf && a.matchPor && <span className="ml-1 italic text-amber-700 dark:text-amber-300">· match por {a.matchPor}</span>}
                 {a.foraDoEstado === true && (
