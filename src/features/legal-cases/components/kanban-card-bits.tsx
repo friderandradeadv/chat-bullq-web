@@ -393,7 +393,13 @@ export function AddPhaseColumn({
 
 // ── Produto/Área (etiquetas coloridas do card) ──
 const PRODUTO_PRESETS = [
-  'RMC', 'RCC', 'Revisional Consignado', 'Portabilidade', 'Contribuições',
+  // 🚨 "Churning" entrou em 02/10/2026, a pedido dele. É a reciclagem de
+  // contratos: refinanciamento em cadeia dentro do mesmo grupo econômico, com
+  // dívida nova nascendo da quitação da anterior e, às vezes, sem liberação
+  // nenhuma ao consumidor. Já tem motor próprio (`indicios.engine.ts`, 9 dos 13
+  // indícios) e base de peça (`BASE_INICIAL_CONSIGNADO.docx`), mas não tinha
+  // etiqueta: o card não sabia dizer que a ação era essa.
+  'RMC', 'RCC', 'Churning', 'Revisional Consignado', 'Portabilidade', 'Contribuições',
   'Tarifas/Seguros', 'BPC/LOAS', 'BPC/LOAS - Doença', 'Auxílio-doença',
   'Aposentadoria por Idade', 'Aposentadoria por Invalidez', 'Trabalhista',
   'Consumidor', 'Cível', 'Família',
@@ -405,6 +411,11 @@ function produtoBg(p: string): { bg: string; fg: string } {
   if (/IDADE/.test(s)) return { bg: 'rgb(250,201,0)', fg: '#101820' };
   if (/BPC|LOAS/.test(s)) return { bg: 'rgb(248,231,28)', fg: '#101820' };
   if (/TRABALH|RESCIS|FERIAS/.test(s)) return { bg: 'rgb(255,161,0)', fg: '#101820' };
+  // 🚨 ANTES de PORTABIL/REVISIONAL/CONSIGNAD: "Churning" não casa com nenhum
+  // deles hoje, mas a regra do consignado é larga e um rótulo futuro do tipo
+  // "Churning consignado" cairia no azul dela. Cor própria, porque é réu
+  // próprio e ação própria.
+  if (/CHURNING|RECICLAGEM/.test(s)) return { bg: 'rgb(230,126,34)', fg: '#fff' };
   if (/PORTABIL|REVISIONAL|CONSIGNAD|CONSUMID/.test(s)) return { bg: 'rgb(74,144,226)', fg: '#fff' };
   if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
   if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
