@@ -95,6 +95,80 @@ export interface ResultadoRevisional {
   linhas: LinhaRevisional[];
 }
 
+
+// ── Auditoria do contrato (upload do PDF) ──────────────────────────────────
+export interface ExtracaoContrato {
+  banco: string | null;
+  numeroContrato: string | null;
+  modalidade: string | null;
+  valorFinanciado: number | null;
+  valorLiberadoLiquido: number | null;
+  valorParcela: number | null;
+  numeroParcelas: number | null;
+  dataContratacao: string | null;
+  primeiroVencimento: string | null;
+  taxaMensalContratada: number | null;
+  taxaAnualContratada: number | null;
+  cetMensalContratado: number | null;
+  cetAnualContratado: number | null;
+  sistemaAmortizacao: 'price' | 'sac' | null;
+  encargos: {
+    iof: number | null; tac: number | null; cadastro: number | null;
+    seguro: number | null; registro: number | null; avaliacao: number | null; outros: number | null;
+  };
+  encargosFinanciados: boolean | null;
+  comissaoPermanencia: boolean | null;
+  observacoes: string | null;
+}
+
+export interface DivergenciaTaxa {
+  escritaPct: number;
+  praticadaPct: number;
+  diferencaPp: number;
+  excedentePct: number;
+}
+
+export interface AuditoriaContrato {
+  valorLiberadoLiquido: number;
+  encargosTotais: number;
+  carenciaDias: number;
+  taxaPeriodicaMensalPct: number;
+  taxaEfetivaMensalPct: number;
+  cetMensalPct: number;
+  cetAnualPct: number;
+  divergenciaTaxa: DivergenciaTaxa | null;
+  divergenciaCet: DivergenciaTaxa | null;
+  capitalizacao: {
+    mensalContratadaPct: number | null;
+    anualContratadaPct: number | null;
+    duodecuploPct: number | null;
+    anualEquivalentePct: number | null;
+    pactuada: boolean | null;
+    praticada: boolean;
+    fundamento: string;
+  };
+}
+
+export interface IrregularidadeContrato {
+  id: string;
+  tipo: string;
+  valor: string;
+  fundamento: string;
+  confianca: 'alta' | 'media' | 'baixa';
+}
+
+export interface ExtracaoContratoResposta {
+  extraido: ExtracaoContrato;
+  auditoria: AuditoriaContrato | null;
+  irregularidades: IrregularidadeContrato[];
+  resumo: {
+    totalCreditos: number;
+    confianca: 'alta' | 'media' | 'baixa';
+    via: 'texto' | 'visao';
+    faltando: string[];
+  };
+}
+
 export const calculadoraRevisionalService = {
   async listarModalidades(): Promise<Modalidade[]> {
     const { data } = await api.get('/calculadora-revisional/modalidades');
@@ -110,6 +184,20 @@ export const calculadoraRevisionalService = {
 
   async calcular(input: CalcularRevisionalInput): Promise<ResultadoRevisional> {
     const { data } = await api.post('/calculadora-revisional/calcular', input);
+    return data.data ?? data;
+  },
+
+  /**
+   * Sobe o PDF do contrato: a IA transcreve os campos e o backend audita
+   * (taxa escrita × praticada, CET sobre o líquido, capitalização, tarifas).
+   * Não grava nada — quem persiste é o card do banco réu no REPB.
+   */
+  async extrairContrato(pdfBase64: string, nome?: string): Promise<ExtracaoContratoResposta> {
+    const { data } = await api.post(
+      '/calculadora-revisional/extrair-contrato',
+      { pdfBase64, nome },
+      { timeout: 240_000 }, // PDF escaneado vai por visão: demora
+    );
     return data.data ?? data;
   },
 };

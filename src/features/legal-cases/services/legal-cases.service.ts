@@ -1062,13 +1062,18 @@ export const legalCasesService = {
     id: string,
     produto?: string,
     signal?: AbortSignal,
+    /** Tese escolhida no seletor do card; vence a etiqueta na API. */
+    tese?: 'rmc' | 'churning',
   ): Promise<{ base: string; fileName: string; valorCausa: number; documentId: string; docxBase64: string }> {
     // 🚨 240s: desde 21/09 esta rota roda o `montar_peca_no_timbrado.py` — brasão
     // na jurisprudência, keepNext, respiros, fecho da comarca —, e cirurgia de
     // OOXML em Python não cabe nos 15s do timeout global. Cortada no meio, a
     // peça FICA PRONTA no servidor e some para quem clicou.
     const { data } = await api.post(
-      `/legal-cases/${id}/inicial/gerar${produto ? `?produto=${encodeURIComponent(produto)}` : ''}`,
+      `/legal-cases/${id}/inicial/gerar?${new URLSearchParams({
+        ...(produto ? { produto } : {}),
+        ...(tese ? { tese } : {}),
+      }).toString()}`,
       undefined,
       { timeout: 240_000, signal },
     );

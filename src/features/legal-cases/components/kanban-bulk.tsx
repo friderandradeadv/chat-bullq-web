@@ -427,6 +427,7 @@ export function KanbanBulkBar({
       // sempre soube em que etapa estava (`onEtapa`); ninguém estava mostrando.
       const quem = (c.client ?? c.title).split(' ').slice(0, 2).join(' ');
       const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), {
+        etiquetas: { produto: c.produto, area: c.areaJuridica },
         signal: ac.signal,
         onEtapa: (e) => toast.loading(`${prontas}/${lista.length} · ${quem}: ${e}`, { id: aviso }),
       });

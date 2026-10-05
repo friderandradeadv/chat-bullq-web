@@ -621,6 +621,8 @@ function BotaoMontarInicial({ c, onChanged }: { c: KanbanCard; onChanged?: () =>
     if (rodando) return;
     setEtapa('Começando…');
     const r = await montarInicialCompleta(c.id, produtoDoCard(c.produto, c.areaJuridica), {
+      // a TESE sai daqui: churning pula o cálculo de restituição
+      etiquetas: { produto: c.produto, area: c.areaJuridica },
       onEtapa: setEtapa, permitirNegativo,
     });
     setEtapa(null);

@@ -20,6 +20,41 @@ export function produtoDoCard(produto?: string | null, area?: string | null): 'R
   return `${produto ?? ''} ${area ?? ''}`.toUpperCase().includes('RCC') ? 'RCC' : 'RMC';
 }
 
+/**
+ * A TESE do card, pela etiqueta — a mesma regra do `inicial/teses.ts` da API.
+ *
+ * 🚨 Olha TODAS as etiquetas e testa churning ANTES de RMC/RCC, porque o cliente
+ * de churning quase sempre é cliente de RMC e o card carrega as duas palavras em
+ * campos diferentes (`produto` = "RMC", `area` = "Churning"). `produtoDoCard`
+ * acima devolve só 'RMC'|'RCC' e por isso NÃO serve para esta decisão.
+ */
+/**
+ * AS INICIAIS QUE ESTE CARD PODE MONTAR — espelho de `montaveisDoCard` da API.
+ *
+ * 🚨 Uma de cada vez, nunca em lote: cada tese é uma AÇÃO, com réu, pasta e
+ * petição próprios. É a mesma razão pela qual o card "RMC | RCC" sempre rendeu
+ * duas pastas, e não uma.
+ */
+export type Montavel = { tese: 'rmc' | 'churning'; rotulo: string; produto?: 'RMC' | 'RCC' };
+
+export function montaveisDoCard(produto?: string | null, area?: string | null): Montavel[] {
+  const t = `${produto ?? ''} ${area ?? ''}`
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  const out: Montavel[] = [];
+  if (/CHURNING|RECICLAGEM/.test(t)) out.push({ tese: 'churning', rotulo: 'Churning' });
+  if (/\bRMC\b|RESERVA DE MARGEM/.test(t)) out.push({ tese: 'rmc', rotulo: 'RMC', produto: 'RMC' });
+  if (/\bRCC\b|CARTAO DE CREDITO CONSIGNADO|CARTAO CONSIGNADO/.test(t)) {
+    out.push({ tese: 'rmc', rotulo: 'RCC', produto: 'RCC' });
+  }
+  return out.length ? out : [{ tese: 'rmc', rotulo: 'RMC', produto: 'RMC' }];
+}
+
+export function teseDoCard(produto?: string | null, area?: string | null): 'rmc' | 'churning' {
+  const t = `${produto ?? ''} ${area ?? ''}`
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return /CHURNING|RECICLAGEM/.test(t) ? 'churning' : 'rmc';
+}
+
 export async function montarInicialCompleta(
   caseId: string,
   produto: 'RMC' | 'RCC',
@@ -44,9 +79,26 @@ export async function montarInicialCompleta(
      * o serviço cru perde isso. Devolve o resultado para o toast final.
      */
     organizarPasta?: () => Promise<{ pastaBanco?: string } | null | undefined>;
+    /**
+     * As etiquetas do card (`produto` e `area`), para decidir a TESE.
+     *
+     * 🚨 Sem isto o botão mestre trava num card de churning. O primeiro passo é
+     * o cálculo de restituição de RMC/RCC, e quando ele falha a montagem PARA
+     * com "sem cálculo", sem nunca chegar na peça. A ação de churning não tem
+     * esse cálculo: o valor da causa não sai dele. Omitir mantém o
+     * comportamento de sempre (RMC).
+     */
+    etiquetas?: { produto?: string | null; area?: string | null } | null;
+    /**
+     * A TESE escolhida no seletor do card. Quando vem, vence a etiqueta — tanto
+     * aqui (pular o cálculo) quanto na API (qual base montar). É instrução
+     * humana, e instrução humana ganha de dedução.
+     */
+    tese?: 'rmc' | 'churning';
   } = {},
 ): Promise<ResultadoMontagem> {
   const { signal, onEtapa, onCalculo, organizarPasta } = opts;
+  const tese = opts.tese ?? teseDoCard(opts.etiquetas?.produto, opts.etiquetas?.area);
   const abortou = () => !!signal?.aborted;
   // 🚨 O TOAST SABIA E O CARD NÃO (30/09/2026). Os primeiros passos da montagem
   // rodam AQUI, no navegador — cálculo, preparo dos documentos, preparo da
@@ -79,7 +131,15 @@ export async function montarInicialCompleta(
     // Quem decide se refaz é o SERVIDOR (`calcularEGravar`), porque a montagem
     // em lote não conhece o metadata do card: cálculo digitado na calculadora
     // fica como está; do hub, refaz-se.
-    {
+    // 🚨 CHURNING NÃO PASSA PELO CÁLCULO. A ação de churning não apura
+    // restituição de RMC/RCC: o valor da causa sai da cadeia, que o advogado
+    // fecha na peça. Rodar o cálculo aqui ou FALHARIA (parando a montagem
+    // inteira em "sem cálculo", antes mesmo de gerar a peça) ou, pior,
+    // SUCEDERIA e anexaria à ação de churning um "09. CALCULO" de RMC — prova
+    // de outra tese dentro do pacote de protocolo.
+    if (tese === 'churning') {
+      etapa('Churning: sem cálculo de restituição, a tese é a cadeia.');
+    } else {
       etapa('Calculando…');
       const r = await legalCasesService
         .calcularAutomatico(caseId, produto, signal)
@@ -164,7 +224,7 @@ export async function montarInicialCompleta(
     }
 
     etapa('Gerando a inicial…');
-    await legalCasesService.gerarInicial(caseId, produto, signal);
+    await legalCasesService.gerarInicial(caseId, produto, signal, tese);
     if (abortou()) return { ok: false, motivo: 'abortado' };
 
     // A pasta falhar não desfaz a peça: ela já está anexada ao card.

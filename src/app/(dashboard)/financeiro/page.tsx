@@ -5336,9 +5336,16 @@ function ContasTab({ data }: { data: FinDashboard }) {
       if (t.valor >= 0) { if (st === 'recebido') mov += t.valor; else aReceber += t.valor; }
       else { if (st === 'pago') mov += t.valor; else aPagar += -t.valor; }
     }
-    // saldo REAL da API (ASAAS) vence o somatório do ledger (que ignora transferências de saída)
+    // 🚨 A ÂNCORA NÃO É O SALDO DE HOJE. `saldosReais[id]` é o saldo do dia em que o
+    // extrato foi conferido; exibi-lo puro CONGELA a conta naquele dia. Em 05/10/2026 o
+    // Nubank recebeu R$ 15.000 de um acordo e este card continuou mostrando o mesmo
+    // número de antes, enquanto o KPI "Total em conta" já somava — duas respostas para a
+    // mesma pergunta, na mesma tela. Quem manda é `reconciliacao[id].caixa`, calculado no
+    // servidor (âncora + o que se moveu depois dela), que é a fonte do KPI.
     const real = data.saldosReais?.[id];
-    return { saldo: real != null ? real : ini + mov, aReceber, aPagar, n, real: real != null };
+    const ancorado = data.reconciliacao?.[id]?.caixa;
+    const saldo = typeof ancorado === 'number' ? ancorado : (real != null ? real : ini + mov);
+    return { saldo, aReceber, aPagar, n, real: real != null };
   };
   const semConta = data.transacoes.filter((t) => !t.conta).length;
   // Cartões não entram na lista de contas nem no "saldo somado" — vivem na aba Cartão de crédito.
@@ -5708,7 +5715,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
                 </span>
               </div>
               <p className={`mt-2 text-2xl font-bold tabular-nums ${s.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(s.saldo)}</p>
-              <p className="text-[11px] text-zinc-400">{s.real ? 'saldo real · ' : ''}{c.cartao ? 'cartão · ' : ''}{s.n} lançamento(s) nesta conta</p>
+              <p className="text-[11px] text-zinc-400">{s.real ? 'extrato + movimentos depois dele · ' : ''}{c.cartao ? 'cartão · ' : ''}{s.n} lançamento(s) nesta conta</p>
               {(() => {
                 const rc = data.reconciliacao?.[c.id];
                 if (!rc || rc.saldoReal == null) return null;

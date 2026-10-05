@@ -20,7 +20,10 @@ export interface FinCliente { cliente: string; recebido: number; parcelas: numbe
 export type TxStatus = 'a_receber' | 'recebido' | 'a_pagar' | 'pago';
 export type AcessoNivel = 'full' | 'cases' | 'none';
 export interface Conta { id: string; nome: string; banco: string; cor?: string; saldoInicial?: number; ativa?: boolean; cartao?: boolean; fechamento?: number; vencimento?: number }
-export interface ReconConta { saldoReal: number | null; saldoCalculado: number; diferenca: number | null; nLancamentos: number }
+// `caixa` é o saldo ANCORADO: a âncora do último extrato MAIS o que se moveu depois dela.
+// É o mesmo número do KPI "Total em conta" (o backend soma `caixaConta` de cada conta).
+// Sem ele, a tela exibia a âncora pura e o saldo ficava congelado no dia da conferência.
+export interface ReconConta { saldoReal: number | null; saldoCalculado: number; diferenca: number | null; nLancamentos: number; caixa?: number; ancoradaEm?: string | null }
 export type CadastroTipo = 'escritorio' | 'fornecedor' | 'socio' | 'cliente' | 'outro';
 export interface FinCadastro { id: string; nome: string; tipo: CadastroTipo; doc?: string | null }
 export interface SplitItem { tipo: 'escritorio' | 'socio' | 'associado'; userId?: string | null; nome: string; valor: number;
@@ -165,7 +168,7 @@ export interface FinDashboard {
   cadastros?: FinCadastro[]; // pagadores/recebedores cadastrados (escritório + fornecedores/sócios)
   saldosReais?: Record<string, number>; // saldo real por conta (ASAAS via API, ou âncora do extrato)
   // Reconciliação por conta: saldo real (banco) × saldo calculado pelo livro-razão.
-  reconciliacao?: Record<string, { saldoReal: number | null; saldoCalculado: number; diferenca: number | null; nLancamentos: number }>;
+  reconciliacao?: Record<string, ReconConta>;
   acessoMembros?: Record<string, AcessoNivel>;
   // controle de acesso por membro
   nivel?: AcessoNivel;

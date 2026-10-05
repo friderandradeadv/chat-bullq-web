@@ -42,7 +42,7 @@ import { DropZone } from '@/components/drop-zone';
 import { AbrirConversa, ConversaDoClienteBloco } from '@/components/ui/abrir-conversa';
 
 import { BarraProgresso } from './barra-progresso';
-import { montarInicialCompleta, produtoDoCard, porqueNaoMontou } from '../lib/montar-inicial';
+import { montarInicialCompleta, produtoDoCard, porqueNaoMontou, montaveisDoCard } from '../lib/montar-inicial';
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
 const BLUE = '#005efc';
@@ -1493,8 +1493,9 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
   // INICIAL. O controller cancela a requisição em curso, e a checagem ENTRE as
   // etapas impede que a seguinte comece — que é o que de fato protege.
   const abortarRef = useRef<AbortController | null>(null);
-  const montarTudo = async () => {
-    const produto = produtoDoCard(null, area);
+  const montarTudo = async (escolha?: ReturnType<typeof montaveisDoCard>[number]) => {
+    const alvo = escolha ?? montaveisDoCard(null, area)[0];
+    const produto = alvo.produto ?? produtoDoCard(null, area);
     const ac = new AbortController();
     abortarRef.current = ac;
 
@@ -1517,6 +1518,10 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
     setTudoBusy('Calculando…');
     try {
       const r = await montarInicialCompleta(caseId, produto, {
+        // a TESE sai do seletor quando o card oferece mais de uma inicial;
+        // `produto` acima só sabe dizer RMC ou RCC.
+        etiquetas: { produto: null, area },
+        tese: alvo.tese,
         signal: ac.signal,
         onEtapa: (e) => setTudoBusy(e),
         onCalculo: (c: any) => {
@@ -1620,6 +1625,29 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           passos seguintes eram para lembrar de fazer à mão. O botão mestre
           abaixo faz a sequência inteira, na ordem que o pacote exige, e o
           produto sai da ÁREA do card em vez de ser escolhido a cada clique. */}
+      {/* 🚨 O SELETOR SÓ APARECE QUANDO HÁ ESCOLHA. Card de uma tese só mantém o
+          botão exatamente como sempre foi — pedir escolha onde não há é atrito
+          em 99% dos cliques. Ele nasce do card que tem as DUAS etiquetas (o
+          cliente é de RMC e a ação nova é de churning): ali a etiqueta sozinha
+          não consegue dizer qual das duas se quer montar AGORA.
+          Uma de cada vez, nunca as duas: cada tese é uma ação, com réu, pasta e
+          petição próprios. */}
+      {montaveisDoCard(null, area).length > 1 && (
+        <div className="mb-1.5 flex w-full flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Montar a inicial de:</span>
+          {montaveisDoCard(null, area).map((m) => (
+            <button
+              key={m.rotulo}
+              onClick={() => montarTudo(m)}
+              disabled={!!tudoBusy}
+              title={`Monta a inicial de ${m.rotulo} e manda para revisão. Cada tese é uma ação separada, com pasta própria.`}
+              className="rounded-lg border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              {m.rotulo}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex w-full items-center gap-1.5">
         <button
           onClick={() => montarTudo()}
@@ -1627,7 +1655,8 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           title="Faz a sequência inteira: calcula o RMC/RCC lendo o contrato no HISCON e os descontos mês a mês no HISCRE (cálculo digitado na calculadora fica como está), recorta HISCON e HISCRE, monta o JG grifado, gera a inicial no timbrado, organiza a pasta do réu no Drive e manda o card para Revisão inicial."
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
         >
-          <Sparkles className="h-3.5 w-3.5" /> {tudoBusy || 'Montar a inicial completa e mandar para revisão'}
+          <Sparkles className="h-3.5 w-3.5" /> {tudoBusy
+            || `Montar a inicial${montaveisDoCard(null, area).length > 1 ? ` de ${montaveisDoCard(null, area)[0].rotulo}` : ''} completa e mandar para revisão`}
         </button>
         {tudoBusy && (
           <button

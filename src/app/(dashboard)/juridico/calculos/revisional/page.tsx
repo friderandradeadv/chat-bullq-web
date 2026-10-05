@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Percent, Loader2, AlertTriangle, CheckCircle2, Save } from 'lucide-react';
+import { ArrowLeft, Percent, Loader2, AlertTriangle, CheckCircle2, Save, FileText, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   calculadoraRevisionalService as svc,
@@ -10,7 +10,11 @@ import {
   type ResultadoRevisional,
   type TaxaMedia,
   type IndiceCorrecao,
+  type AuditoriaContrato,
+  type ExtracaoContrato,
+  type IrregularidadeContrato,
 } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
+import { DropZone } from '@/components/drop-zone';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
 const fmtBRL = (v: number | null | undefined) =>
@@ -54,6 +58,65 @@ export default function RevisionalPage() {
   const [res, setRes] = useState<ResultadoRevisional | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // ── Leitura do contrato (PDF) ───────────────────────────────────────────
+  const [lendo, setLendo] = useState(false);
+  const [extraido, setExtraido] = useState<ExtracaoContrato | null>(null);
+  const [auditoria, setAuditoria] = useState<AuditoriaContrato | null>(null);
+  const [irregs, setIrregs] = useState<IrregularidadeContrato[]>([]);
+  const [avisoLeitura, setAvisoLeitura] = useState<string | null>(null);
+
+  const lerContrato = async (file?: File) => {
+    if (!file) return;
+    setLendo(true);
+    setAvisoLeitura(null);
+    setExtraido(null);
+    setAuditoria(null);
+    setIrregs([]);
+    try {
+      const b64 = await new Promise<string>((ok, falha) => {
+        const fr = new FileReader();
+        fr.onload = () => ok(String(fr.result).split(',')[1] ?? '');
+        fr.onerror = falha;
+        fr.readAsDataURL(file);
+      });
+      const r = await svc.extrairContrato(b64, file.name);
+      setExtraido(r.extraido);
+      setAuditoria(r.auditoria);
+      setIrregs(r.irregularidades);
+
+      const e = r.extraido;
+      setForm((f) => ({
+        ...f,
+        ...(e.modalidade ? { modalidade: e.modalidade } : {}),
+        ...(e.valorFinanciado ? { valorLiberado: String(e.valorFinanciado) } : {}),
+        ...(e.valorParcela ? { valorParcela: String(e.valorParcela) } : {}),
+        ...(e.numeroParcelas ? { numeroParcelas: String(e.numeroParcelas) } : {}),
+        ...(e.dataContratacao ? { dataContratacao: e.dataContratacao } : {}),
+        ...(e.numeroParcelas && (e.primeiroVencimento || e.dataContratacao)
+          ? { parcelasPagas: String(vencidasAte(e.primeiroVencimento ?? e.dataContratacao!, e.numeroParcelas)) }
+          : {}),
+        ...(e.banco && !f.nomeCalculo ? { nomeCalculo: e.banco } : {}),
+      }));
+
+      if (r.resumo.faltando.length) {
+        setAvisoLeitura(
+          `Não achei no contrato: ${r.resumo.faltando.join(', ')}. Preencha à mão — nada foi estimado.`,
+        );
+        toast.warning('Contrato lido em parte — confira os campos.');
+      } else {
+        toast.success(
+          r.resumo.via === 'visao'
+            ? 'Contrato lido por imagem (escaneado) — confira os campos.'
+            : 'Contrato lido ✓ — confira os campos antes de calcular.',
+        );
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui ler o contrato. Tente de novo.');
+    } finally {
+      setLendo(false);
+    }
+  };
 
   const [caseId, setCaseId] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -218,6 +281,45 @@ export default function RevisionalPage() {
 
         {/* ── Formulário ─────────────────────────────────────────────── */}
         <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          {/* ── Contrato em PDF: a IA transcreve, a conta é determinística ── */}
+          <DropZone
+            accept="application/pdf,.pdf"
+            multiple={false}
+            disabled={lendo}
+            overlayLabel="Solte o contrato (PDF) aqui"
+            className="mb-5"
+            onFiles={(fs) => lerContrato(fs[0])}
+          >
+            <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-5 text-center transition hover:border-blue-500 hover:bg-blue-50/40 dark:border-zinc-700 dark:bg-zinc-800/40 dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                disabled={lendo}
+                onChange={(e) => lerContrato(e.target.files?.[0] ?? undefined)}
+              />
+              {lendo ? (
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+              ) : (
+                <Upload className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              )}
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                {lendo ? 'Lendo o contrato… (pode levar 1–2 min)' : 'Arraste o contrato (PDF) aqui ou clique para escolher'}
+              </span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                A IA só transcreve os campos do instrumento — a conta é determinística. Campo não lido fica em branco, nunca estimado.
+              </span>
+            </label>
+          </DropZone>
+
+          {avisoLeitura && (
+            <p className="mb-4 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {avisoLeitura}
+            </p>
+          )}
+
+          {auditoria && <PainelAuditoria a={auditoria} e={extraido} irregs={irregs} />}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Modalidade de crédito" className="sm:col-span-2">
               <select
