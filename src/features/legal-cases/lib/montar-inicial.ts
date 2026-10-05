@@ -37,6 +37,25 @@ export function produtoDoCard(produto?: string | null, area?: string | null): 'R
  */
 export type Montavel = { tese: 'rmc' | 'churning'; rotulo: string; produto?: 'RMC' | 'RCC' };
 
+/**
+ * TODAS as iniciais que o escritório sabe montar hoje.
+ *
+ * 🚨 O seletor mostra TODAS, sempre — não só as que a etiqueta do card oferece.
+ * Primeira versão escondia o seletor quando havia uma tese só, e o advogado não
+ * o viu no card do JOSÉ BATISTA (etiquetado só "Churning"): *"não vi o seletor
+ * de inicial"*. Esconder a escolha para poupar um clique tirou dele a resposta
+ * para "o que este botão vai montar?", que é a pergunta que o seletor existe
+ * para responder.
+ *
+ * As que a etiqueta oferece vêm destacadas; as outras seguem clicáveis, porque
+ * a escolha explícita vence a etiqueta na API (`?tese=`).
+ */
+export const TODAS_AS_INICIAIS: Montavel[] = [
+  { tese: 'rmc', rotulo: 'RMC', produto: 'RMC' },
+  { tese: 'rmc', rotulo: 'RCC', produto: 'RCC' },
+  { tese: 'churning', rotulo: 'Churning' },
+];
+
 export function montaveisDoCard(produto?: string | null, area?: string | null): Montavel[] {
   const t = `${produto ?? ''} ${area ?? ''}`
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();

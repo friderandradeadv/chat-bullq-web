@@ -42,7 +42,7 @@ import { DropZone } from '@/components/drop-zone';
 import { AbrirConversa, ConversaDoClienteBloco } from '@/components/ui/abrir-conversa';
 
 import { BarraProgresso } from './barra-progresso';
-import { montarInicialCompleta, produtoDoCard, porqueNaoMontou, montaveisDoCard } from '../lib/montar-inicial';
+import { montarInicialCompleta, produtoDoCard, porqueNaoMontou, montaveisDoCard, TODAS_AS_INICIAIS } from '../lib/montar-inicial';
 const INTER = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const MAGENTA = '#f51f7e';
 const BLUE = '#005efc';
@@ -1493,8 +1493,12 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
   // INICIAL. O controller cancela a requisição em curso, e a checagem ENTRE as
   // etapas impede que a seguinte comece — que é o que de fato protege.
   const abortarRef = useRef<AbortController | null>(null);
+  // A inicial escolhida no seletor. Começa na que a etiqueta do card oferece.
+  const [teseEscolhida, setTeseEscolhida] = useState<string | null>(null);
+  const oferecidas = montaveisDoCard(null, area);
+  const escolhida = TODAS_AS_INICIAIS.find((m) => m.rotulo === teseEscolhida) ?? oferecidas[0];
   const montarTudo = async (escolha?: ReturnType<typeof montaveisDoCard>[number]) => {
-    const alvo = escolha ?? montaveisDoCard(null, area)[0];
+    const alvo = escolha ?? escolhida;
     const produto = alvo.produto ?? produtoDoCard(null, area);
     const ac = new AbortController();
     abortarRef.current = ac;
@@ -1625,29 +1629,41 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           passos seguintes eram para lembrar de fazer à mão. O botão mestre
           abaixo faz a sequência inteira, na ordem que o pacote exige, e o
           produto sai da ÁREA do card em vez de ser escolhido a cada clique. */}
-      {/* 🚨 O SELETOR SÓ APARECE QUANDO HÁ ESCOLHA. Card de uma tese só mantém o
-          botão exatamente como sempre foi — pedir escolha onde não há é atrito
-          em 99% dos cliques. Ele nasce do card que tem as DUAS etiquetas (o
-          cliente é de RMC e a ação nova é de churning): ali a etiqueta sozinha
-          não consegue dizer qual das duas se quer montar AGORA.
-          Uma de cada vez, nunca as duas: cada tese é uma ação, com réu, pasta e
-          petição próprios. */}
-      {montaveisDoCard(null, area).length > 1 && (
-        <div className="mb-1.5 flex w-full flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Montar a inicial de:</span>
-          {montaveisDoCard(null, area).map((m) => (
+      {/* 🚨 O SELETOR APARECE SEMPRE, com TODAS as iniciais. A primeira versão o
+          escondia quando havia uma tese só, e ele sumiu no card do JOSÉ BATISTA,
+          etiquetado apenas "Churning": *"não vi o seletor de inicial"*. Esconder
+          a escolha poupava um clique e tirava a resposta para "o que este botão
+          vai montar?" — que é a pergunta que o seletor existe para responder.
+          As que a etiqueta do card oferece vêm destacadas; as outras continuam
+          clicáveis, porque a escolha explícita vence a etiqueta na API. E monta
+          UMA de cada vez: cada tese é uma ação, com réu, pasta e petição
+          próprios. */}
+      <div className="mb-1.5 flex w-full flex-wrap items-center gap-1.5">
+        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Inicial a montar:</span>
+        {TODAS_AS_INICIAIS.map((m) => {
+          const daEtiqueta = oferecidas.some((o) => o.rotulo === m.rotulo);
+          const ativa = escolhida?.rotulo === m.rotulo;
+          return (
             <button
               key={m.rotulo}
-              onClick={() => montarTudo(m)}
+              onClick={() => setTeseEscolhida(m.rotulo)}
               disabled={!!tudoBusy}
-              title={`Monta a inicial de ${m.rotulo} e manda para revisão. Cada tese é uma ação separada, com pasta própria.`}
-              className="rounded-lg border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              title={daEtiqueta
+                ? `A etiqueta do card oferece ${m.rotulo}.`
+                : `${m.rotulo} não está nas etiquetas deste card — clicar escolhe mesmo assim, e a escolha vence a etiqueta.`}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-50 ${
+                ativa
+                  ? 'border-[#CF3B2E] bg-[#CF3B2E] text-white'
+                  : daEtiqueta
+                    ? 'border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                    : 'border-dashed border-zinc-300 text-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-900'
+              }`}
             >
               {m.rotulo}
             </button>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
       <div className="flex w-full items-center gap-1.5">
         <button
           onClick={() => montarTudo()}
@@ -1656,7 +1672,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
         >
           <Sparkles className="h-3.5 w-3.5" /> {tudoBusy
-            || `Montar a inicial${montaveisDoCard(null, area).length > 1 ? ` de ${montaveisDoCard(null, area)[0].rotulo}` : ''} completa e mandar para revisão`}
+            || `Montar a inicial de ${escolhida?.rotulo ?? 'RMC'} e mandar para revisão`}
         </button>
         {tudoBusy && (
           <button
