@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Percent, Loader2, AlertTriangle, CheckCircle2, Save, FileText, Upload, Presentation } from 'lucide-react';
+import { ArrowLeft, Percent, Loader2, AlertTriangle, CheckCircle2, Save, FileText, Upload, Presentation, ClipboardCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   calculadoraRevisionalService as svc,
@@ -19,6 +19,10 @@ import {
   ApresentacaoVendasRevisional,
   type DadosApresentacaoRevisional,
 } from '@/features/calculadora-revisional/components/apresentacao-vendas-revisional';
+import {
+  MemoriaCalculoRevisional,
+  ParecerInternoRevisional,
+} from '@/features/calculadora-revisional/components/documentos-revisional';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
 const fmtBRL = (v: number | null | undefined) =>
@@ -122,7 +126,7 @@ export default function RevisionalPage() {
     }
   };
 
-  const [apresentar, setApresentar] = useState(false);
+  const [doc, setDoc] = useState<null | 'calculo' | 'apresentacao' | 'parecer'>(null);
 
   /**
    * Dados da apresentação de vendas. O proveito sai do que o cálculo tem, mas é
@@ -465,9 +469,11 @@ export default function RevisionalPage() {
           </div>
 
           {/* Avançado */}
+          {/* 🚨 `block`: este botão e o "Calcular" são inline-flex e fluíam na MESMA
+              linha, um por cima do outro — defeito visível desde a 1ª tela. */}
           <button
             onClick={() => setAvancado((v) => !v)}
-            className="mt-4 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+            className="mt-4 block text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
           >
             {avancado ? '− Opções avançadas' : '+ Opções avançadas'}
           </button>
@@ -546,14 +552,16 @@ export default function RevisionalPage() {
             </div>
           )}
 
-          <button
-            onClick={calcular}
-            disabled={loading}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {loading ? 'Calculando…' : 'Calcular revisional'}
-          </button>
+          <div className="mt-5">
+            <button
+              onClick={calcular}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? 'Calculando…' : 'Calcular revisional'}
+            </button>
+          </div>
         </div>
 
         {/* ── Resultado ──────────────────────────────────────────────── */}
@@ -616,12 +624,24 @@ export default function RevisionalPage() {
               </dl>
               <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-600">
                 <button
-                  onClick={() => setApresentar(true)}
+                  onClick={() => setDoc('calculo')}
+                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  <FileText className="h-4 w-4" /> Memória de cálculo
+                </button>
+                <button
+                  onClick={() => setDoc('apresentacao')}
                   className="inline-flex items-center gap-2 rounded-lg bg-[#B7791F] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
                 >
-                  <Presentation className="h-4 w-4" /> Apresentação para o cliente
+                  <Presentation className="h-4 w-4" /> Apresentação ao cliente
                 </button>
-                <span className="text-xs text-zinc-400">proposta com honorários, ancoragem de preço e PDF</span>
+                <button
+                  onClick={() => setDoc('parecer')}
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-500 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  <ClipboardCheck className="h-4 w-4" /> Parecer interno
+                </button>
+                <span className="w-full text-xs text-zinc-400 sm:w-auto">cálculo e apresentação vão ao cliente; o parecer é só nosso</span>
               </div>
               {caseId && (
                 <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-600">
@@ -707,8 +727,20 @@ export default function RevisionalPage() {
           </div>
         )}
       </div>
-      {apresentar && dadosApresentacao() && (
-        <ApresentacaoVendasRevisional dados={dadosApresentacao()!} onClose={() => setApresentar(false)} />
+      {doc === 'apresentacao' && dadosApresentacao() && (
+        <ApresentacaoVendasRevisional dados={dadosApresentacao()!} onClose={() => setDoc(null)} />
+      )}
+      {doc === 'calculo' && res && (
+        <MemoriaCalculoRevisional
+          res={res} auditoria={auditoria} extraido={extraido}
+          nome={form.nomeCalculo} onClose={() => setDoc(null)}
+        />
+      )}
+      {doc === 'parecer' && res && (
+        <ParecerInternoRevisional
+          res={res} auditoria={auditoria} extraido={extraido} irregs={irregs}
+          nome={form.nomeCalculo} onClose={() => setDoc(null)}
+        />
       )}
     </div>
   );
@@ -754,7 +786,7 @@ function Check({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-zinc-300 text-blue-600 dark:border-zinc-600"
+        className="h-4 w-4 rounded border-zinc-300 accent-blue-600 text-blue-600 dark:border-zinc-500 dark:bg-zinc-900"
       />
       {label}
     </label>
