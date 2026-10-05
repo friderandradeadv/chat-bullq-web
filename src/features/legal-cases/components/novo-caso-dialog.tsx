@@ -26,6 +26,26 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
   const [phase, setPhase] = useState(targetPhase ?? phases[0]?.key ?? '');
   const [busy, setBusy] = useState(false);
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
+  // 🚨 SUGESTÃO = PRESET + O QUE O ESCRITÓRIO JÁ USA (05/10/2026). Só os presets
+  // deixavam toda etiqueta nova invisível para a próxima vez: quem criasse
+  // "Portabilidade BMG" digitando teria de digitar de novo no processo seguinte,
+  // e é assim que nasce grafia divergente. As em uso vêm do banco, ordenadas da
+  // mais comum para a mais rara, e entram DEPOIS dos presets. O dedupe é sem
+  // caixa, para não oferecer "RMC" e "rmc" lado a lado.
+  const { data: emUso = [] } = useQuery({
+    queryKey: ['etiquetas-em-uso'],
+    queryFn: () => legalCasesService.etiquetasEmUso(),
+    staleTime: 5 * 60_000,
+  });
+  const sugestoes = (() => {
+    const vistas = new Set(PRODUTO_PRESETS.map((p) => p.toLowerCase()));
+    return [...PRODUTO_PRESETS, ...emUso.filter((e) => {
+      const k = (e ?? '').trim().toLowerCase();
+      if (!k || vistas.has(k)) return false;
+      vistas.add(k);
+      return true;
+    })];
+  })();
 
   const submit = async () => {
     if (!cliente.trim()) { toast.error('Informe o nome do cliente'); return; }
@@ -85,7 +105,7 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
           <div className="grid grid-cols-2 gap-3">
             <Field label="Produto">
               <input list="produtos-novo" value={produto} onChange={(e) => setProduto(e.target.value)} placeholder="RMC, RCC…" className={INPUT} />
-              <datalist id="produtos-novo">{PRODUTO_PRESETS.map((p) => <option key={p} value={p} />)}</datalist>
+              <datalist id="produtos-novo">{sugestoes.map((p) => <option key={p} value={p} />)}</datalist>
             </Field>
             <Field label="Responsável">
               <select value={respId} onChange={(e) => setRespId(e.target.value)} className={INPUT}>

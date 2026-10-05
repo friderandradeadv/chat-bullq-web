@@ -519,6 +519,12 @@ export const legalCasesService = {
     }
     return kb;
   },
+  /** Etiquetas (produto/área) já usadas nos processos, da mais comum para a mais rara. */
+  async etiquetasEmUso(): Promise<string[]> {
+    const { data } = await api.get('/legal-cases/etiquetas');
+    return Array.isArray(data) ? data : (data?.data ?? []);
+  },
+
   async opponents(): Promise<OpponentRow[]> {
     const { data } = await api.get('/legal-cases/opponents');
     return data.data ?? data;
