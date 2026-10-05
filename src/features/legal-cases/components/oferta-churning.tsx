@@ -428,12 +428,33 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         )}
       </div>
 
-      {respondida ? (
-        <p className="mt-2 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
-          {oferta?.status === 'aceita'
-            ? 'O cliente aceitou. Os réus entraram em "Contratos a impugnar" e o card foi para "Montar inicial" — confira as linhas e clique em "Gerar iniciais" para os cards nascerem.'
-            : 'O cliente recusou. Fica registrado no card; a ação do cartão segue normalmente.'}
-        </p>
+      {respondida && !achado ? (
+        /* 🚨 RESPONDIDA NÃO É FIM. O painel fechava de vez ao registrar a
+           resposta, e com isso sumia o "Analisar cadeia" — mas um HISCON rende
+           VÁRIOS grupos, e cada um é uma ação própria. No JOSÉ BATISTA são
+           cinco: aceito o Itaú, os outros quatro ficavam inalcançáveis ("não
+           deixa reabrir a reciclagem"). Agora o estado respondido mostra o que
+           foi feito E deixa reabrir; depois de reabrir, `achado` existe e a
+           tela volta a ser a da análise. */
+        <>
+          <p className="mt-2 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
+            {oferta?.status === 'aceita'
+              ? 'O cliente aceitou. Os réus entraram em "Contratos a impugnar" e o card foi para "Montar inicial" — confira as linhas e clique em "Gerar iniciais" para os cards nascerem.'
+              : 'O cliente recusou. Fica registrado no card; a ação do cartão segue normalmente.'}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={analisar}
+              disabled={analisando}
+              title="Lê o HISCON de novo e lista os grupos. Um HISCON costuma render mais de um grupo, e cada um é uma ação própria — use para ofertar os demais."
+              className="inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-medium text-[#4b5863] hover:border-[#4a90e2] hover:text-[#1b6ec2] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+            >
+              {analisando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+              {analisando ? 'Lendo o HISCON…' : 'Reabrir — ofertar outro grupo'}
+            </button>
+          </div>
+        </>
       ) : (
         <>
           <p className="mt-2 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
