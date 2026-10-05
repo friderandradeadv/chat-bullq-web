@@ -346,8 +346,10 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
       onMudou?.();
       toast.success(
-        `${escolhidos.length} grupo(s) aceito(s) — ${n} réu(s) em "Contratos a impugnar"`
-        + (r.moveu ? '; card movido para Montar inicial' : ''),
+        `${escolhidos.length} grupo(s) aceito(s), ${n} réu(s) em "Contratos a impugnar".`
+        + ' Agora clique em "Gerar iniciais" no card para criar um processo por réu.'
+        + (r.moveu ? ' O card foi para Montar inicial.' : ''),
+        { duration: 12000 },
       );
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui registrar os grupos.');
@@ -375,14 +377,29 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
           }));
         if (novas.length) {
           await legalCasesService.saveContratos(caso.id, [...atuais, ...novas] as any);
-          toast.success(`${novas.length} réu(s) do churning entraram em "Contratos a impugnar"`);
         }
       }
       const r = await legalCasesService.registrarOfertaChurning(caso.id, { status });
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
       onMudou?.();
-      toast.success(r.moveu ? 'Aceita — card movido para Montar inicial' : status === 'aceita' ? 'Aceita registrada' : 'Recusa registrada');
+      // 🚨 O ACEITE NÃO CRIA OS CARDS DOS RÉUS, e isso precisa estar ESCRITO.
+      // Quem cria é "Gerar iniciais" — de propósito, para existir um lugar só
+      // que faz nascer card e para o réu ser conferido na lista antes. Mas o
+      // drawer fecha quando o card muda de fase, e o advogado ficou olhando um
+      // card sem réu achando que algo tinha dado errado: "criou esse card
+      // vazio". O toast é o único lugar que sobra para dizer o próximo passo.
+      if (status === 'aceita') {
+        const nomes = (achado?.instituicoes ?? []).join(' e ');
+        toast.success(
+          `${nomes || 'Réus'} em "Contratos a impugnar".`
+          + ` Agora clique em "Gerar iniciais" no card para criar um processo por réu.`
+          + (r.moveu ? ' O card foi para Montar inicial.' : ''),
+          { duration: 12000 },
+        );
+      } else {
+        toast.success('Recusa registrada');
+      }
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui registrar a resposta.');
     } finally {
