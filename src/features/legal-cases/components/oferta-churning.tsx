@@ -70,7 +70,7 @@ type Achado = {
  * sai o "sim" que move o card.
  */
 function textoDaOferta(nome: string | null, a: Achado): string {
-  const primeiro = (nome ?? '').trim().split(/\s+/)[0] || 'Senhor(a)';
+  const primeiro = (nome ?? '').trim().split(/\s+/)[0] || 'Olá';
   // Uma instituição: diz o nome. Várias do mesmo grupo: diz o grupo e quantas,
   // porque despejar onze nomes numa mensagem de WhatsApp não informa ninguém.
   const banco =
@@ -106,10 +106,15 @@ function textoDaOferta(nome: string | null, a: Achado): string {
   // Honorários no padrão do escritório: quota litis meio a meio. Dito em uma
   // linha e sem percentual escondido — é a parte que o cliente mais releva e a
   // que mais gera briga depois.
+  // 🚨 SEGUNDA PESSOA, SEM TRATAMENTO DE GÊNERO. Esta linha dizia "a senhora",
+  // cravado — foi escrita para uma cliente e nunca parametrizada. Saiu assim
+  // numa mensagem para o JOSÉ BATISTA ("josé e chamando de senhora"), e já
+  // destoava do resto do próprio texto, que trata por "sua conta", "seu
+  // benefício", "seus empréstimos". "Você" resolve sem adivinhar gênero.
   linhas.push(
-    'Os honorários são os mesmos do seu contrato: meio a meio. Do que a senhora ' +
-      'receber, 50% fica com a senhora e 50% com o escritório. Se não houver ' +
-      'recebimento, a senhora não paga nada.',
+    'Os honorários são os mesmos do seu contrato: meio a meio. Do que você ' +
+      'receber, 50% fica com você e 50% com o escritório. Se não houver ' +
+      'recebimento, você não paga nada.',
   );
   linhas.push('');
   linhas.push('Quer que eu inclua essa parte? Responda SIM ou NÃO que eu sigo daqui.');
@@ -127,6 +132,16 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
   const [grupos, setGrupos] = useState<any[]>([]);
   /** Os indícios de churning do HISCON inteiro — recortados por grupo na troca. */
   const [indiciosDoHiscon, setIndiciosDoHiscon] = useState<any[]>([]);
+  /**
+   * Quais grupos ENTRAM com ação. Marcar é decisão do advogado, não do motor.
+   *
+   * 🚨 Começa marcado só o que o plano de ação deu como AJUIZAR, porque é o que
+   * tem operação dentro dos 4 anos E indício forte documentado. Os demais ficam
+   * desmarcados mas CLICÁVEIS: `REPOSICIONAR_TESE` vira ação boa com outro
+   * enquadramento, e `INDICIO_FRACO` pode virar depois da exibição. Filtrar em
+   * silêncio esconderia um grupo inteiro do caso.
+   */
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
 
   /**
    * Põe UM grupo na tela: recorta os indícios dele, monta o texto ao cliente e
@@ -230,6 +245,10 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       // ficariam para trás sem ninguém perceber. Cada um continua sendo uma
       // ação e uma conversa própria — por isso se escolhe um de cada vez.
       setGrupos(ordenadas);
+      setMarcados(new Set(
+        ordenadas.filter((g: any) => g.veredito === 'AJUIZAR')
+          .map((g: any) => String(g.grupo ?? (g.instituicoes ?? [])[0] ?? '')),
+      ));
       aplicarGrupo(ordenadas[0], doChurning, ordenadas.length);
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
     } catch (e: any) {
@@ -306,7 +325,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
   };
 
   /**
-   * ACEITA TODOS OS GRUPOS DE UMA VEZ.
+   * ACEITA OS GRUPOS MARCADOS, de uma vez.
    *
    * 🚨 Existe para o caso em que a conversa com o cliente JÁ ACONTECEU por
    * fora — foi o pedido do advogado no JOSÉ BATISTA: *"no caso dele eu já
@@ -315,17 +334,19 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    * de qual se está falando. Por isso o botão diz quantos grupos vai aceitar e
    * fica separado do "Aceitou" do grupo da vez.
    */
-  const aceitarTodos = async () => {
+  const aceitarMarcados = async () => {
     setRegistrando(true);
     try {
-      const todos = grupos.flatMap((g: any) => (g.instituicoes ?? []) as string[]);
+      const escolhidos = grupos.filter((g: any) =>
+        marcados.has(String(g.grupo ?? (g.instituicoes ?? [])[0] ?? '')));
+      const todos = escolhidos.flatMap((g: any) => (g.instituicoes ?? []) as string[]);
       const n = await gravarReus(todos);
       const r = await legalCasesService.registrarOfertaChurning(caso.id, { status: 'aceita' });
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
       onMudou?.();
       toast.success(
-        `${grupos.length} grupos aceitos — ${n} réu(s) em "Contratos a impugnar"`
+        `${escolhidos.length} grupo(s) aceito(s) — ${n} réu(s) em "Contratos a impugnar"`
         + (r.moveu ? '; card movido para Montar inicial' : ''),
       );
     } catch (e: any) {
@@ -462,8 +483,9 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                         conversa própria, por isso se escolhe UM de cada vez. */}
                     <div className="flex flex-wrap items-center gap-1.5">
                       <p className="text-[10px] leading-4 text-amber-700 dark:text-amber-400">
-                        {grupos.length} grupos com indício de reciclagem. Cada um é uma ação e uma
-                        conversa própria: escolha de qual ofertar agora.
+                        {grupos.length} grupos com indício de reciclagem. Marque na caixa quais
+                        entram com ação; clique no nome para ver os números de cada um. Em itálico,
+                        os que o plano de ação não manda ajuizar.
                       </p>
                       {/* 🚨 ATALHO PARA QUANDO A CONVERSA JÁ ACONTECEU POR FORA.
                           Pedido do advogado no JOSÉ BATISTA: "no caso dele eu já
@@ -472,13 +494,14 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                           separado do "Aceitou" do grupo da vez e diz, no próprio
                           rótulo, quantas ações está aceitando. */}
                       <button
-                        onClick={() => aceitarTodos()}
-                        disabled={registrando || analisando}
-                        title={`Grava os réus dos ${grupos.length} grupos em "Contratos a impugnar" de uma vez. `
-                          + 'Use quando o cliente já autorizou todos por fora — cada grupo continua virando uma ação separada.'}
+                        onClick={() => aceitarMarcados()}
+                        disabled={registrando || analisando || marcados.size === 0}
+                        title={`Grava os réus dos ${marcados.size} grupo(s) marcados em "Contratos a impugnar" de uma vez. `
+                          + 'Cada grupo continua virando uma ação separada. Comece marcado só o que o plano manda ajuizar; '
+                          + 'marque os outros se você decidir entrar com eles.'}
                         className="rounded-lg border border-emerald-500 px-2 py-1 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950"
                       >
-                        Aceitar todos os {grupos.length}
+                        Aceitar os {marcados.size} marcados
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-1">
@@ -487,23 +510,45 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                         const n = (g.indicios ?? []).filter((x: any) => IDS_CHURNING.has(x.id)).length;
                         const ativo = achado.grupo === nome;
                         return (
+                          <span key={nome} className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
+                          {/* 🚨 DUAS AÇÕES, DOIS CONTROLES. A caixa decide se o
+                              grupo ENTRA com ação; o rótulo só troca o que está
+                              na tela. Juntar as duas num clique só faria olhar
+                              um grupo marcá-lo sem querer. */}
                           <button
-                            key={nome}
+                            type="button"
+                            onClick={() => setMarcados((m) => {
+                              const n2 = new Set(m);
+                              if (n2.has(nome)) n2.delete(nome); else n2.add(nome);
+                              return n2;
+                            })}
+                            disabled={analisando || registrando}
+                            title={marcados.has(nome) ? `${nome} ENTRA com ação.` : `${nome} fica de fora.`}
+                            className={`px-1.5 text-[10px] font-bold ${
+                              marcados.has(nome)
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+                            }`}
+                          >
+                            {marcados.has(nome) ? '✓' : '○'}
+                          </button>
+                          <button
                             onClick={() => aplicarGrupo(g, indiciosDoHiscon, grupos.length)}
                             disabled={analisando}
                             title={g.veredito === 'AJUIZAR'
                               ? `${nome}: ${n} indício(s). O plano de ação manda ajuizar.`
                               : `${nome}: ${n} indício(s). O plano de ação NÃO manda ajuizar este — confira antes de ofertar.`}
-                            className={`rounded-lg border px-2 py-1 text-[10px] font-semibold disabled:opacity-50 ${
+                            className={`px-2 py-1 text-[10px] font-semibold disabled:opacity-50 ${
                               ativo
-                                ? 'border-[#CF3B2E] bg-[#CF3B2E] text-white'
+                                ? 'bg-[#CF3B2E] text-white'
                                 : g.veredito === 'AJUIZAR'
-                                  ? 'border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800'
-                                  : 'border-dashed border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950'
+                                  ? 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                                  : 'italic text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950'
                             }`}
                           >
                             {nome} · {n}
                           </button>
+                          </span>
                         );
                       })}
                     </div>
