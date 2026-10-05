@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Percent, Loader2, AlertTriangle, CheckCircle2, Save, FileText, Upload } from 'lucide-react';
+import { ArrowLeft, Percent, Loader2, AlertTriangle, CheckCircle2, Save, FileText, Upload, Presentation } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   calculadoraRevisionalService as svc,
@@ -15,6 +15,10 @@ import {
   type IrregularidadeContrato,
 } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
 import { DropZone } from '@/components/drop-zone';
+import {
+  ApresentacaoVendasRevisional,
+  type DadosApresentacaoRevisional,
+} from '@/features/calculadora-revisional/components/apresentacao-vendas-revisional';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
 const fmtBRL = (v: number | null | undefined) =>
@@ -116,6 +120,44 @@ export default function RevisionalPage() {
     } finally {
       setLendo(false);
     }
+  };
+
+  const [apresentar, setApresentar] = useState(false);
+
+  /**
+   * Dados da apresentação de vendas. O proveito sai do que o cálculo tem, mas é
+   * EDITÁVEL lá dentro: em contrato sem abusividade de juros, o proveito vem das
+   * rubricas (seguros, tarifas), que o motor da revisional não soma sozinho.
+   */
+  const dadosApresentacao = (): DadosApresentacaoRevisional | null => {
+    if (!res) return null;
+    const afastadas: string[] = [];
+    if (!res.taxas.abusivo)
+      afastadas.push(`Juros abusivos — o contrato pratica ${fmtPct(res.taxas.contratoMensalPct)} a.m. contra a média de ${fmtPct(res.taxas.referenciaMensalPct)} a.m. do Banco Central`);
+    if (auditoria?.capitalizacao.pactuada === true)
+      afastadas.push('Capitalização de juros — expressamente pactuada (Súmulas 539 e 541 do STJ)');
+    if (auditoria?.divergenciaTaxa && auditoria.divergenciaTaxa.diferencaPp <= 0.01)
+      afastadas.push('Taxa praticada acima da escrita — o contrato pratica o que escreve');
+    if (auditoria?.divergenciaCet && auditoria.divergenciaCet.diferencaPp <= 0)
+      afastadas.push('CET informado a menor — o banco declarou o custo a maior');
+    const brlNum = (v: string) =>
+      Number(String(v).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+    const teses = irregs
+      .filter((i) => brlNum(i.valor) > 0)
+      .map((i) => ({ rubrica: i.tipo, valor: brlNum(i.valor), forca: i.confianca }));
+    const economiaFutura = Math.max(0, res.resumo.economiaTotal - res.resumo.totalPagoAMais);
+    return {
+      cliente: form.nomeCalculo || 'Cliente',
+      credor: extraido?.banco || res.modalidade.label,
+      contrato: extraido?.numeroContrato || '—',
+      proveito: Math.round(res.resumo.restituicaoAtualizada + economiaFutura),
+      parcelaAtual: res.resumo.parcelaContrato,
+      parcelaNova: res.resumo.parcelaRecalculada,
+      restituicao: res.resumo.restituicaoAtualizada,
+      economiaFutura,
+      afastadas,
+      teses,
+    };
   };
 
   const [caseId, setCaseId] = useState<string | null>(null);
@@ -280,7 +322,7 @@ export default function RevisionalPage() {
         </div>
 
         {/* ── Formulário ─────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-600 dark:bg-[#292F31]">
           {/* ── Contrato em PDF: a IA transcreve, a conta é determinística ── */}
           <DropZone
             accept="application/pdf,.pdf"
@@ -290,7 +332,7 @@ export default function RevisionalPage() {
             className="mb-5"
             onFiles={(fs) => lerContrato(fs[0])}
           >
-            <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-5 text-center transition hover:border-blue-500 hover:bg-blue-50/40 dark:border-zinc-700 dark:bg-zinc-800/40 dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
+            <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-5 text-center transition hover:border-blue-500 hover:bg-blue-50/40 dark:border-zinc-600 dark:bg-[#2F3639] dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
               <input
                 type="file"
                 accept="application/pdf,.pdf"
@@ -548,11 +590,11 @@ export default function RevisionalPage() {
             </div>
 
             {/* Resumo financeiro */}
-            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-600 dark:bg-[#292F31]">
               <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-white">
                 Resumo — {res.modalidade.label}
               </div>
-              <dl className="divide-y divide-zinc-100 dark:divide-zinc-700">
+              <dl className="divide-y divide-zinc-100 dark:divide-zinc-600">
                 <Row label="Parcela cobrada" valor={fmtBRL(res.resumo.parcelaContrato)} />
                 <Row label="Parcela justa (taxa de referência)" valor={fmtBRL(res.resumo.parcelaRecalculada)} />
                 <Row label="Diferença por parcela" valor={fmtBRL(res.resumo.diferencaParcela)} />
@@ -572,8 +614,17 @@ export default function RevisionalPage() {
                   destaque
                 />
               </dl>
+              <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-600">
+                <button
+                  onClick={() => setApresentar(true)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#B7791F] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                >
+                  <Presentation className="h-4 w-4" /> Apresentação para o cliente
+                </button>
+                <span className="text-xs text-zinc-400">proposta com honorários, ancoragem de preço e PDF</span>
+              </div>
               {caseId && (
-                <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-700">
+                <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-600">
                   {salvouOk ? (
                     <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
                       <CheckCircle2 className="h-4 w-4" /> Salvo no processo
@@ -593,14 +644,14 @@ export default function RevisionalPage() {
             </div>
 
             {/* Planilha de descumprimento */}
-            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-600 dark:bg-[#292F31]">
               <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-white">
                 Planilha de descumprimento contratual
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">
+                    <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-500 dark:text-zinc-400">
                       <th className="px-4 py-2 font-medium">#</th>
                       <th className="px-4 py-2 font-medium">Vencimento</th>
                       <th className="px-4 py-2 text-right font-medium">Parcela cobrada</th>
@@ -613,7 +664,7 @@ export default function RevisionalPage() {
                     {res.linhas.map((l) => (
                       <tr
                         key={l.numero}
-                        className="border-b border-zinc-100 last:border-0 odd:bg-zinc-50/60 dark:border-zinc-700 dark:odd:bg-white/[0.04]"
+                        className="border-b border-zinc-100 last:border-0 odd:bg-zinc-50/60 dark:border-zinc-600 dark:odd:bg-white/[0.05]"
                       >
                         <td className="px-4 py-1.5 text-zinc-500 dark:text-zinc-400">{l.numero}</td>
                         <td className="px-4 py-1.5">
@@ -638,7 +689,7 @@ export default function RevisionalPage() {
                               )}
                             </span>
                           ) : (
-                            <span className="text-zinc-400 dark:text-zinc-500">—</span>
+                            <span className="text-zinc-400">—</span>
                           )}
                         </td>
                       </tr>
@@ -656,6 +707,9 @@ export default function RevisionalPage() {
           </div>
         )}
       </div>
+      {apresentar && dadosApresentacao() && (
+        <ApresentacaoVendasRevisional dados={dadosApresentacao()!} onClose={() => setApresentar(false)} />
+      )}
     </div>
   );
 }
@@ -725,7 +779,7 @@ function Card({
         ? 'text-emerald-600 dark:text-emerald-400'
         : 'text-zinc-900 dark:text-white';
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-600 dark:bg-[#292F31]">
       <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{titulo}</div>
       <div className={`mt-1 text-2xl font-semibold ${toneCls}`}>{valor}</div>
       {sub && <div className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{sub}</div>}
@@ -796,7 +850,7 @@ function PainelAuditoria({
 }) {
   const cap = a.capitalizacao;
   return (
-    <div className="mb-5 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
+    <div className="mb-5 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-600 dark:bg-[#2F3639]">
       <div className="mb-3 flex items-center gap-2">
         <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
@@ -852,7 +906,7 @@ function PainelAuditoria({
       </div>
 
       {irregs.length > 0 && (
-        <ul className="mt-3 space-y-1.5 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+        <ul className="mt-3 space-y-1.5 border-t border-zinc-200 pt-3 dark:border-zinc-600">
           {irregs.map((i) => (
             <li key={i.id} className="flex items-start gap-2 text-xs">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -868,7 +922,7 @@ function PainelAuditoria({
       )}
 
       {e?.observacoes && (
-        <p className="mt-3 border-t border-zinc-200 pt-2 text-[11px] text-zinc-400 dark:border-zinc-700">
+        <p className="mt-3 border-t border-zinc-200 pt-2 text-[11px] text-zinc-400 dark:border-zinc-600">
           Leitura: {e.observacoes}
         </p>
       )}
@@ -888,7 +942,7 @@ function Cell({
   alerta?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-2.5 dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="rounded-lg border border-zinc-200 bg-white p-2.5 dark:border-zinc-600 dark:bg-[#292F31]">
       <div className="text-[10px] uppercase tracking-wide text-zinc-400">{titulo}</div>
       <div
         className={`mt-0.5 text-base font-semibold tabular-nums ${alerta ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-900 dark:text-white'}`}
