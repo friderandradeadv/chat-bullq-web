@@ -9,6 +9,7 @@ import { membersService } from '@/features/settings/services/members.service';
 import { OpponentCombobox } from '@/features/legal-cases/components/opponent-combobox';
 import { ClientCombobox } from '@/features/legal-cases/components/client-combobox';
 import { PRODUTO_PRESETS } from '@/features/legal-cases/lib/etiquetas';
+import { ProdutoPicker } from '@/features/legal-cases/components/produto-picker';
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
 // 🚨 a lista era uma CÓPIA, e divergiu da do card — agora é uma só (lib/etiquetas.ts)
@@ -18,7 +19,7 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
   const [cliente, setCliente] = useState('');
   const [clienteDoc, setClienteDoc] = useState('');
   const [clienteContactId, setClienteContactId] = useState('');
-  const [produto, setProduto] = useState('');
+  const [produtos, setProdutos] = useState<string[]>([]);
   const [adversa, setAdversa] = useState('');
   const [adversaDoc, setAdversaDoc] = useState<string>('');
   const [adversaContactId, setAdversaContactId] = useState<string>('');
@@ -66,7 +67,12 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
         });
       const novo = await legalCasesService.create({
         title: cliente.trim(),
-        area: produto.trim() || undefined,
+        // mesma codificação que o card usa em ProdutoTags.save: vazio, string
+        // simples, ou lista JSON. Agora dá para nascer já com produto E área
+        // (ex.: RMC + Bancário), como os cards antigos têm.
+        area: produtos.length === 0 ? undefined
+          : produtos.length === 1 ? produtos[0]
+          : JSON.stringify(produtos),
         responsibleId: respId || undefined,
         parties,
       });
@@ -104,8 +110,15 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Produto">
-              <input list="produtos-novo" value={produto} onChange={(e) => setProduto(e.target.value)} placeholder="RMC, RCC…" className={INPUT} />
-              <datalist id="produtos-novo">{sugestoes.map((p) => <option key={p} value={p} />)}</datalist>
+              <div className="min-h-9 rounded-lg border border-[#cfe0ed] bg-white px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+                <ProdutoPicker
+                  list={produtos}
+                  sugestoes={sugestoes}
+                  onAdd={(p) => setProdutos((v) => [...v, p])}
+                  onRemove={(p) => setProdutos((v) => v.filter((x) => x !== p))}
+                />
+              </div>
+
             </Field>
             <Field label="Responsável">
               <select value={respId} onChange={(e) => setRespId(e.target.value)} className={INPUT}>

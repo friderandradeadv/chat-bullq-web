@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { produtoColor } from '@/features/legal-cases/lib/etiqueta-cores';
-import { PRODUTO_PRESETS } from '@/features/legal-cases/lib/etiquetas';
+import { ProdutoPicker } from '@/features/legal-cases/components/produto-picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Pencil, Trash2, Check, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp, CheckSquare, ListChecks, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
@@ -433,8 +433,6 @@ export function ProdutoTags({
 }) {
   const list = parseProdutos(area);
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [custom, setCustom] = useState('');
 
   const save = async (next: string[]) => {
     setBusy(true);
@@ -452,69 +450,11 @@ export function ProdutoTags({
   const add = (p: string) => {
     const v = p.trim();
     if (v && !list.some((x) => x.toLowerCase() === v.toLowerCase())) save([...list, v]);
-    setCustom('');
-    setOpen(false);
   };
 
   return (
-    <div
-      className="flex flex-wrap items-center gap-1"
-      onClick={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      {list.map((p) => {
-        const col = produtoBg(p);
-        return (
-          <span
-            key={p}
-            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold"
-            style={{ background: col.bg, color: col.fg }}
-          >
-            {p}
-            <button type="button" disabled={busy} title="Remover" onClick={() => remove(p)} className="hover:opacity-70">
-              <X className="h-2.5 w-2.5" />
-            </button>
-          </span>
-        );
-      })}
-      <div className="relative">
-        <button
-          type="button"
-          title="Adicionar produto/área"
-          onClick={() => setOpen((v) => !v)}
-          className="rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#e11970] dark:hover:bg-zinc-800"
-        >
-          <Plus className="h-3 w-3" />
-        </button>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute left-0 z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-              <p className="px-3 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-[#6C757D]">Produto / Área</p>
-              <div className="px-2 pb-1">
-                <input
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(custom); } }}
-                  placeholder="Digitar e Enter…"
-                  className="w-full rounded border border-zinc-300 px-2 py-1 text-xs outline-none focus:border-[#e11970] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                />
-              </div>
-              {PRODUTO_PRESETS.filter((p) => !list.some((x) => x.toLowerCase() === p.toLowerCase())).map((p) => (
-                <button
-                  key={p}
-                  disabled={busy}
-                  onClick={() => add(p)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800"
-                >
-                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: produtoBg(p).bg }} />
-                  <span className="truncate text-zinc-700 dark:text-zinc-300">{p}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+    <div onPointerDown={(e) => e.stopPropagation()}>
+      <ProdutoPicker list={list} onAdd={add} onRemove={remove} busy={busy} />
     </div>
   );
 }
