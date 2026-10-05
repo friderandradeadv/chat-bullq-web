@@ -280,7 +280,7 @@ export default function RevisionalPage() {
         </div>
 
         {/* ── Formulário ─────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
           {/* ── Contrato em PDF: a IA transcreve, a conta é determinística ── */}
           <DropZone
             accept="application/pdf,.pdf"
@@ -430,7 +430,7 @@ export default function RevisionalPage() {
             {avancado ? '− Opções avançadas' : '+ Opções avançadas'}
           </button>
           {avancado && (
-            <div className="mt-3 grid grid-cols-1 gap-4 border-t border-zinc-200 pt-4 sm:grid-cols-2 dark:border-zinc-800">
+            <div className="mt-3 grid grid-cols-1 gap-4 border-t border-zinc-200 pt-4 sm:grid-cols-2 dark:border-zinc-700">
               <Field
                 label="Taxa de referência manual (% a.m.)"
                 hint="Sobrepõe o BACEN. Obrigatória p/ crédito direcionado (ex.: Pronampe)."
@@ -548,16 +548,16 @@ export default function RevisionalPage() {
             </div>
 
             {/* Resumo financeiro */}
-            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-900 dark:border-zinc-800 dark:text-white">
+            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-white">
                 Resumo — {res.modalidade.label}
               </div>
-              <dl className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <dl className="divide-y divide-zinc-100 dark:divide-zinc-700">
                 <Row label="Parcela cobrada" valor={fmtBRL(res.resumo.parcelaContrato)} />
                 <Row label="Parcela justa (taxa de referência)" valor={fmtBRL(res.resumo.parcelaRecalculada)} />
                 <Row label="Diferença por parcela" valor={fmtBRL(res.resumo.diferencaParcela)} />
                 <Row label="Total pago a mais (nominal)" valor={fmtBRL(res.resumo.totalPagoAMais)} />
-                <Row label="Economia no contrato inteiro" valor={fmtBRL(res.resumo.economiaTotal)} />
+                <Row label="Economia no contrato inteiro" valor={fmtBRL(res.resumo.economiaTotal)} numero={res.resumo.economiaTotal} />
                 {res.config.corrigir && (
                   <Row label="Restituição corrigida" valor={fmtBRL(res.resumo.restituicaoCorrigida)} />
                 )}
@@ -568,11 +568,12 @@ export default function RevisionalPage() {
                       : 'Restituição atualizada'
                   }
                   valor={fmtBRL(res.resumo.restituicaoAtualizada)}
+                  numero={res.resumo.restituicaoAtualizada}
                   destaque
                 />
               </dl>
               {caseId && (
-                <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-800">
+                <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-700">
                   {salvouOk ? (
                     <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
                       <CheckCircle2 className="h-4 w-4" /> Salvo no processo
@@ -592,14 +593,14 @@ export default function RevisionalPage() {
             </div>
 
             {/* Planilha de descumprimento */}
-            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-900 dark:border-zinc-800 dark:text-white">
+            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-white">
                 Planilha de descumprimento contratual
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                    <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-600 dark:text-zinc-400">
                       <th className="px-4 py-2 font-medium">#</th>
                       <th className="px-4 py-2 font-medium">Vencimento</th>
                       <th className="px-4 py-2 text-right font-medium">Parcela cobrada</th>
@@ -612,7 +613,7 @@ export default function RevisionalPage() {
                     {res.linhas.map((l) => (
                       <tr
                         key={l.numero}
-                        className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/60"
+                        className="border-b border-zinc-100 last:border-0 odd:bg-zinc-50/60 dark:border-zinc-700 dark:odd:bg-white/[0.04]"
                       >
                         <td className="px-4 py-1.5 text-zinc-500 dark:text-zinc-400">{l.numero}</td>
                         <td className="px-4 py-1.5">
@@ -637,7 +638,7 @@ export default function RevisionalPage() {
                               )}
                             </span>
                           ) : (
-                            <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                            <span className="text-zinc-400 dark:text-zinc-500">—</span>
                           )}
                         </td>
                       </tr>
@@ -724,7 +725,7 @@ function Card({
         ? 'text-emerald-600 dark:text-emerald-400'
         : 'text-zinc-900 dark:text-white';
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
       <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{titulo}</div>
       <div className={`mt-1 text-2xl font-semibold ${toneCls}`}>{valor}</div>
       {sub && <div className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{sub}</div>}
@@ -732,23 +733,40 @@ function Card({
   );
 }
 
+/**
+ * 🚨 COR AQUI É AFIRMAÇÃO, NÃO ENFEITE. Verde pintado num total ZERO dizia
+ * "ganhamos" num contrato em que não há o que restituir; e "economia" negativa
+ * (contrato mais barato que a média do BACEN) saía na cor do texto comum, como
+ * se fosse um resultado qualquer. Verde só quando há valor; âmbar quando o
+ * número contraria a tese.
+ */
 function Row({
   label,
   valor,
   destaque,
+  numero,
 }: {
   label: string;
   valor: string;
   destaque?: boolean;
+  /** valor numérico, quando a cor depende do sinal/zero */
+  numero?: number;
 }) {
+  const positivo = numero == null || numero > 0;
+  const negativo = numero != null && numero < 0;
+  const corValor = destaque
+    ? positivo
+      ? 'text-lg font-bold text-emerald-600 dark:text-emerald-400'
+      : 'text-lg font-bold text-zinc-500 dark:text-zinc-400'
+    : negativo
+      ? 'font-medium text-amber-600 dark:text-amber-400'
+      : 'font-medium text-zinc-900 dark:text-zinc-100';
   return (
     <div className="flex items-center justify-between px-5 py-2.5">
       <dt className={`text-sm ${destaque ? 'font-semibold text-zinc-900 dark:text-white' : 'text-zinc-600 dark:text-zinc-300'}`}>
         {label}
       </dt>
-      <dd className={`text-sm ${destaque ? 'text-lg font-bold text-emerald-600 dark:text-emerald-400' : 'font-medium text-zinc-900 dark:text-zinc-100'}`}>
-        {valor}
-      </dd>
+      <dd className={`text-sm ${corValor}`}>{valor}</dd>
     </div>
   );
 }
@@ -778,7 +796,7 @@ function PainelAuditoria({
 }) {
   const cap = a.capitalizacao;
   return (
-    <div className="mb-5 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-800/30">
+    <div className="mb-5 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
       <div className="mb-3 flex items-center gap-2">
         <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
