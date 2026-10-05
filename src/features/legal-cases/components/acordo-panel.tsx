@@ -9,7 +9,11 @@ import { financeiroService } from '@/features/financeiro/services/financeiro.ser
 import { maskCurrencyBR, parseCurrencyBR, currencyToInput } from '@/lib/masks';
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
-const LABEL = 'mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#6C757D]';
+// 🚨 RÓTULO EM CAIXA NORMAL, não em CAIXA-ALTA com `tracking-wide`. A gaveta do
+// card tem 420px de coluna (case-detail-drawer.tsx), e caixa-alta espaçada gasta
+// ~30% mais largura: "REEMBOLSO AO ESCRITÓRIO" quebrava em três linhas e colava
+// no campo vizinho. Os campos das outras fases (FaseFields) já são caixa normal.
+const LABEL = 'mb-1 block text-[11px] font-medium leading-tight text-[#6C757D] dark:text-zinc-400';
 const brl = (n: number | null | undefined) => (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /** DD/MM/YYYY → YYYY-MM-DD (valor do <input type=date>). */
@@ -207,7 +211,11 @@ export function AcordoPanel({ caseId, podeLancar }: { caseId: string; podeLancar
   const pctRecebido = acordo && acordo.valorTotal > 0 ? Math.round(((st?.recebido ?? 0) / acordo.valorTotal) * 100) : 0;
 
   return (
-    <div className="mt-4 rounded-lg border border-[#cfe0ed] p-3 dark:border-zinc-800">
+    // 🚨 `@container` + variantes `@sm/@lg`: os breakpoints do Tailwind (sm:, lg:)
+    // medem a JANELA, e este painel vive numa coluna de 420px dentro de uma tela
+    // de 2000px — `sm:grid-cols-4` enfiava quatro campos em 380px e cortava
+    // "Parcelado" em "Parce…". Container query mede a largura REAL do painel.
+    <div className="@container mt-4 rounded-lg border border-[#cfe0ed] p-3 dark:border-zinc-800">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#6C757D]">
           <Handshake className="h-3.5 w-3.5" /> Acordo
@@ -262,7 +270,7 @@ export function AcordoPanel({ caseId, podeLancar }: { caseId: string; podeLancar
           </div>
 
           {/* A divisão — a mesma cascata da prestação de contas do alvará */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 @xs:grid-cols-2 @xl:grid-cols-3 @3xl:grid-cols-4">
             <Mini label="Cliente (líquido)" valor={d.clienteLiquido} cor="#228BE6" />
             <Mini label={`Contratual${d.honorariosPct ? ` ${d.honorariosPct}%` : ''}`} valor={d.honorarios} cor="#2F9E44" />
             <Mini label="Sucumbência" valor={d.sucumbencia} cor="#7048E8" />
@@ -335,7 +343,7 @@ export function AcordoPanel({ caseId, podeLancar }: { caseId: string; podeLancar
       {/* ── Formulário dos termos ────────────────────────────────────────────── */}
       {editando && (
         <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 @xs:grid-cols-2 @xl:grid-cols-3 @3xl:grid-cols-4">
             <div>
               <label className={LABEL}>Valor do acordo</label>
               <input value={form.valorTotal} onChange={(e) => set('valorTotal', maskCurrencyBR(e.target.value))} inputMode="decimal" placeholder="R$ 0,00" className={INPUT} />
@@ -373,7 +381,7 @@ export function AcordoPanel({ caseId, podeLancar }: { caseId: string; podeLancar
             ) : null}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 @xs:grid-cols-2 @xl:grid-cols-3 @3xl:grid-cols-4">
             <div>
               <label className={LABEL}>Acordo</label>
               <select value={form.tipo} onChange={(e) => set('tipo', e.target.value as Form['tipo'])} className={INPUT}>
@@ -403,7 +411,7 @@ export function AcordoPanel({ caseId, podeLancar }: { caseId: string; podeLancar
           {/* Divisão do dinheiro */}
           <div className="rounded-lg border border-dashed border-[#cfe0ed] p-2.5 dark:border-zinc-700">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#6C757D]">A divisão</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 @xs:grid-cols-2 @xl:grid-cols-3 @3xl:grid-cols-4">
               <div>
                 <label className={LABEL}>Contratual (%)</label>
                 <input value={form.honorariosPct} onChange={(e) => set('honorariosPct', e.target.value.replace(/[^\d]/g, '').slice(0, 2))} inputMode="numeric" placeholder="40" className={INPUT} title="Percentual do contrato sobre o proveito do cliente." />
@@ -506,17 +514,17 @@ export function AcordoPanel({ caseId, podeLancar }: { caseId: string; podeLancar
             ) : (
               <div className="mt-2 space-y-1.5">
                 {repasses.map((r, i) => (
-                  <div key={i} className="flex flex-wrap items-center gap-1.5">
+                  <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-1.5">
                     <input
                       value={r.nome}
                       onChange={(e) => setRepasses((xs) => xs.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)))}
                       placeholder="Nome do parceiro / advogado"
-                      className={INPUT + ' flex-1 min-w-[150px]'}
+                      className={INPUT + ' col-span-3 min-w-0'}
                     />
                     <select
                       value={r.modo}
                       onChange={(e) => setRepasses((xs) => xs.map((x, j) => (j === i ? { ...x, modo: e.target.value as 'pct' | 'valor' } : x)))}
-                      className="h-9 rounded-lg border border-[#cfe0ed] bg-white px-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                      className="h-9 w-full min-w-0 rounded-lg border border-[#cfe0ed] bg-white px-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                     >
                       <option value="pct">% do nosso</option>
                       <option value="valor">valor fixo</option>
@@ -626,12 +634,16 @@ function Cronograma({
   contas: Array<{ id: string; nome: string }>;
   onMudou: () => void;
 }) {
+  // Parceiros que entram no rateio de CADA parcela: é para eles que sai a prestação
+  // do parceiro (o espelho do documento que o cliente recebe, terminando na fatia dele).
+  const parceiros = (acordo.repasses ?? []).filter((r) => String(r.nome || '').trim());
   const [abrindo, setAbrindo] = useState<number | null>(null);
   const [data, setData] = useState(hojeInput());
   const [valor, setValor] = useState('');
   const [conta, setConta] = useState(acordo.conta ?? '');
   const [busy, setBusy] = useState<number | null>(null);
   const [pcLoad, setPcLoad] = useState<number | null>(null);
+  const [rpLoad, setRpLoad] = useState<string | null>(null);
 
   const parcelas = useMemo(() => acordo.parcelas ?? [], [acordo]);
 
@@ -680,6 +692,30 @@ function Cronograma({
     } finally { setPcLoad(null); }
   };
 
+  /**
+   * PRESTAÇÃO DE CONTAS DO PARCEIRO — o espelho, para quem dividiu o trabalho, do
+   * documento que o cliente recebe: termina na fatia DELE e diz de onde veio cada
+   * parcela do honorário. Mesmo gerador que o repasse do alvará já usa; aqui ele só
+   * passa a estar à mão na parcela, em vez de obrigar a caçar o lançamento no razão.
+   */
+  const prestacaoParceiro = async (p: AcordoParcela, nome: string, userId?: string | null) => {
+    if (!p.txId) { toast.error('Esta parcela não tem lançamento — sem ele não há o que repassar.'); return; }
+    const chave = `${p.num}:${nome}`;
+    setRpLoad(chave);
+    try {
+      const d = await financeiroService.repasseAdvogado(p.txId, userId ?? null, nome);
+      const { gerarRepasseAdvogadoPdf, nomeRepasseAdvogadoPdf } = await import('@/features/financeiro/lib/repasse-advogado-pdf');
+      const blob = await gerarRepasseAdvogadoPdf(d);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nomeRepasseAdvogadoPdf(d); a.click();
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao gerar a prestação do parceiro.');
+    } finally { setRpLoad(null); }
+  };
+
   if (!parcelas.length) return null;
 
   return (
@@ -688,14 +724,13 @@ function Cronograma({
         <CalendarClock className="h-3.5 w-3.5" /> Cronograma
       </p>
       <div className="overflow-x-auto rounded-lg border border-[#eef0f3] dark:border-zinc-800">
-        <table className="w-full min-w-[460px] text-left text-[11px]">
+        <table className="w-full min-w-[300px] text-left text-[11px]">
           <thead className="bg-[#f7fafc] text-[10px] uppercase tracking-wide text-zinc-400 dark:bg-zinc-800/60">
             <tr>
-              <th className="px-2 py-1.5">#</th>
-              <th className="px-2 py-1.5">Vencimento</th>
-              <th className="px-2 py-1.5 text-right">Valor</th>
-              <th className="px-2 py-1.5">Situação</th>
-              <th className="px-2 py-1.5"></th>
+              <th className="px-1.5 py-1.5">Parcela</th>
+              <th className="px-1.5 py-1.5 text-right">Valor</th>
+              <th className="px-1.5 py-1.5">Situação</th>
+              <th className="px-1.5 py-1.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -703,12 +738,11 @@ function Cronograma({
               const atrasada = p.status === 'aberta' && venceu(p.vencimento);
               return (
                 <tr key={p.num} className="border-t border-[#eef0f3] dark:border-zinc-800">
-                  <td className="px-2 py-1.5 tabular-nums text-zinc-400">{p.entrada ? 'E' : p.num}</td>
-                  <td className={`px-2 py-1.5 tabular-nums ${atrasada ? 'font-semibold text-red-600 dark:text-red-400' : 'text-zinc-600 dark:text-zinc-300'}`}>
-                    {p.vencimento}
+                  <td className={`px-1.5 py-1.5 whitespace-nowrap tabular-nums ${atrasada ? 'font-semibold text-red-600 dark:text-red-400' : 'text-zinc-600 dark:text-zinc-300'}`}>
+                    <span className="mr-1 text-zinc-400">{p.entrada ? 'E' : p.num}</span>{p.vencimento}
                   </td>
-                  <td className="px-2 py-1.5 text-right font-medium tabular-nums text-[#101820] dark:text-zinc-100">{brl(p.valor)}</td>
-                  <td className="px-2 py-1.5">
+                  <td className="px-1.5 py-1.5 text-right font-medium tabular-nums whitespace-nowrap text-[#101820] dark:text-zinc-100">{brl(p.valor)}</td>
+                  <td className="px-1.5 py-1.5">
                     {p.status === 'recebida' ? (
                       <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                         <Check className="h-3 w-3" /> recebida {p.dataPagamento ?? ''}
@@ -721,8 +755,8 @@ function Cronograma({
                       <span className="text-zinc-400">aberta</span>
                     )}
                   </td>
-                  <td className="px-2 py-1.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  <td className="px-1.5 py-1.5 text-right">
+                    <div className="flex flex-wrap items-center justify-end gap-1">
                       {p.status === 'recebida' && (
                         <>
                           <button
@@ -731,8 +765,19 @@ function Cronograma({
                             title="Prestação de contas desta parcela (PDF) — com o saldo que ainda falta"
                             className="inline-flex items-center gap-1 rounded border border-[#DEE2E6] px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 hover:border-[#4a90e2] disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200"
                           >
-                            {pcLoad === p.num ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />} prestação
+                            {pcLoad === p.num ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="hidden h-3 w-3 @md:inline" />} cliente
                           </button>
+                          {parceiros.map((rp) => (
+                            <button
+                              key={rp.nome}
+                              onClick={() => prestacaoParceiro(p, rp.nome, rp.userId)}
+                              disabled={rpLoad === `${p.num}:${rp.nome}`}
+                              title={`Prestação de contas do parceiro ${rp.nome} desta parcela (PDF): a fatia dele e de onde veio cada parte do honorário`}
+                              className="inline-flex items-center gap-1 rounded border border-[#DEE2E6] px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 hover:border-[#4a90e2] disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200"
+                            >
+                              {rpLoad === `${p.num}:${rp.nome}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Users className="hidden h-3 w-3 @md:inline" />} {rp.nome.split(' ')[0].toLowerCase()}
+                            </button>
+                          ))}
                           {podeLancar && (
                             <button
                               onClick={() => estornar(p)}
@@ -762,22 +807,30 @@ function Cronograma({
         </table>
       </div>
 
+      {parceiros.length > 0 && (
+        <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+          Os botões com o nome do parceiro geram a <strong>prestação de contas dele</strong> daquela parcela.
+          O <strong>pagamento</strong> do repasse (a saída do caixa) continua saindo pelo botão “Repassar” no
+          livro-razão, que é onde se anexa o comprovante do Pix.
+        </p>
+      )}
+
       {/* Confirmação do recebimento: data, valor efetivo e conta. O valor vem preenchido
           com o da parcela — parcela paga a menor é comum, e o razão tem de registrar o
           que entrou, não o que estava combinado. */}
       {abrindo != null && (
-        <div className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-[#f7fafc] p-2.5 dark:bg-zinc-800/40">
+        <div className="mt-2 grid grid-cols-1 items-end gap-2 rounded-lg bg-[#f7fafc] p-2.5 @xs:grid-cols-2 dark:bg-zinc-800/40">
           <div>
             <label className={LABEL}>Recebido em</label>
-            <input type="date" value={data} onChange={(e) => setData(e.target.value)} className="h-9 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
+            <input type="date" value={data} onChange={(e) => setData(e.target.value)} className="h-9 w-full min-w-0 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
           <div>
             <label className={LABEL}>Valor que entrou</label>
-            <input value={valor} onChange={(e) => setValor(maskCurrencyBR(e.target.value))} inputMode="decimal" className="h-9 w-28 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
+            <input value={valor} onChange={(e) => setValor(maskCurrencyBR(e.target.value))} inputMode="decimal" className="h-9 w-full min-w-0 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" />
           </div>
           <div>
             <label className={LABEL}>Conta</label>
-            <select value={conta} onChange={(e) => setConta(e.target.value)} className="h-9 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+            <select value={conta} onChange={(e) => setConta(e.target.value)} className="h-9 w-full min-w-0 rounded-lg border border-[#cfe0ed] bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
               <option value="">—</option>
               {contas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
@@ -785,11 +838,11 @@ function Cronograma({
           <button
             onClick={() => { const p = parcelas.find((x) => x.num === abrindo); if (p) receber(p); }}
             disabled={busy != null}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#02883C] px-3 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#02883C] px-3 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60 @xs:w-auto"
           >
             {busy != null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Lançar no financeiro
           </button>
-          <button onClick={() => setAbrindo(null)} className="h-9 rounded-lg border border-[#DEE2E6] px-3 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+          <button onClick={() => setAbrindo(null)} className="h-9 w-full rounded-lg border border-[#DEE2E6] px-3 text-xs font-medium text-zinc-600 @xs:w-auto dark:border-zinc-700 dark:text-zinc-300">
             Cancelar
           </button>
           <p className="w-full text-[10px] text-zinc-400 dark:text-zinc-500">
