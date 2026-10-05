@@ -123,6 +123,48 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [registrando, setRegistrando] = useState(false);
+  /** Todos os grupos com indício, na ordem do plano. Um de cada vez vira oferta. */
+  const [grupos, setGrupos] = useState<any[]>([]);
+  /** Os indícios de churning do HISCON inteiro — recortados por grupo na troca. */
+  const [indiciosDoHiscon, setIndiciosDoHiscon] = useState<any[]>([]);
+
+  /**
+   * Põe UM grupo na tela: recorta os indícios dele, monta o texto ao cliente e
+   * grava a oferta com o grupo como campo.
+   *
+   * 🚨 O recorte por grupo não é detalhe. O motor marca cada indício com o
+   * banco, e numa cliente real o HISCON trouxe 84 indícios em 11 instituições:
+   * sem recortar, os 84 entrariam numa oferta sobre um réu só, e a frase ao
+   * cliente afirmaria que o mesmo empréstimo foi refinanciado 37 vezes.
+   */
+  const aplicarGrupo = async (alvo: any, todosOsIndicios: any[], quantosGrupos: number) => {
+    const instituicoes: string[] = alvo.instituicoes ?? [];
+    const doGrupo = todosOsIndicios.filter((i: any) =>
+      (i.bancos ?? []).some((b: string) => instituicoes.includes(b)),
+    );
+    const usados = doGrupo.length ? doGrupo : todosOsIndicios;
+    const contratos = new Set(usados.flatMap((i: any) => i.contratos ?? [])).size;
+    const a: Achado = {
+      grupo: alvo.grupo ?? instituicoes[0] ?? '',
+      instituicoes,
+      indicios: usados.map((i: any) => ({ id: i.id, titulo: i.titulo, evidencia: i.evidencia })),
+      dinheiro: alvo?.dinheiro ?? null,
+      contratos,
+      outrosGrupos: Math.max(0, quantosGrupos - 1),
+    };
+    setAchado(a);
+    setTexto(textoDaOferta(cliente?.name ?? null, a));
+    await legalCasesService.registrarOfertaChurning(caso.id, {
+      status: 'analisada',
+      resumo: `${a.grupo || 'grupo'}: ${a.indicios.length} indício(s) em ${contratos} contrato(s)`,
+      indicios: a.indicios.map((i) => i.id),
+      // O grupo vai como CAMPO, não só dentro do resumo: é ele que o montador
+      // de churning lê para saber contra quem é a ação.
+      grupo: a.grupo || undefined,
+    });
+    qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
+  };
+
 
   const cliente = caso.parties?.find((p) => p.role === 'CLIENT') ?? null;
   const conversa = caso.clienteConversa ?? null;
@@ -167,47 +209,28 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       // Quantos indícios de churning cada ação (= grupo econômico = réu) carrega.
       const peso = (ac: any) => (ac.indicios ?? []).filter((x: any) => IDS_CHURNING.has(x.id)).length;
       const comChurning = acoes.filter((ac) => peso(ac) > 0);
+      setIndiciosDoHiscon(doChurning);
       // Ordena por AJUIZAR primeiro: não se oferta ao cliente o grupo que o
       // próprio plano manda descartar por decadência ou indício fraco.
       const ordenadas = [...comChurning].sort(
         (a, b) =>
           Number(b.veredito === 'AJUIZAR') - Number(a.veredito === 'AJUIZAR') || peso(b) - peso(a),
       );
-      const alvo = ordenadas[0];
-      if (!alvo) {
+      if (!ordenadas.length) {
         setAchado({ grupo: '', instituicoes: [], indicios: [], dinheiro: null, contratos: 0, outrosGrupos: 0 });
+        setGrupos([]);
         toast.message('Sem indício de reciclagem de contratos neste HISCON.');
         return;
       }
 
-      // Só os indícios DESTE grupo: o motor marca cada indício com o banco, e as
-      // instituições do grupo estão na ação. Sem esse recorte, os 84 indícios do
-      // HISCON inteiro entrariam numa oferta sobre um réu só.
-      const instituicoes: string[] = alvo.instituicoes ?? [];
-      const doGrupo = doChurning.filter((i: any) =>
-        (i.bancos ?? []).some((b: string) => instituicoes.includes(b)),
-      );
-      const usados = doGrupo.length ? doGrupo : doChurning;
-      const contratos = new Set(usados.flatMap((i: any) => i.contratos ?? [])).size;
-
-      const a: Achado = {
-        grupo: alvo.grupo ?? instituicoes[0] ?? '',
-        instituicoes,
-        indicios: usados.map((i: any) => ({ id: i.id, titulo: i.titulo, evidencia: i.evidencia })),
-        dinheiro: alvo?.dinheiro ?? null,
-        contratos,
-        outrosGrupos: Math.max(0, comChurning.length - 1),
-      };
-      setAchado(a);
-      setTexto(textoDaOferta(cliente.name, a));
-      await legalCasesService.registrarOfertaChurning(caso.id, {
-        status: 'analisada',
-        resumo: `${a.grupo || 'grupo'}: ${a.indicios.length} indício(s) em ${contratos} contrato(s)`,
-        indicios: a.indicios.map((i) => i.id),
-        // O grupo vai como CAMPO, não só dentro do resumo: é ele que o
-        // montador de churning lê para saber contra quem é a ação.
-        grupo: a.grupo || undefined,
-      });
+      // 🚨 TODOS OS GRUPOS FICAM À MÃO, não só o do topo. Antes a análise
+      // escolhia `ordenadas[0]` e os demais viravam um NÚMERO na frase ("outros
+      // 4 grupos também têm indício"): eles existiam, apareciam na tela e não
+      // havia como ofertá-los. No HISCON do JOSÉ BATISTA eram CINCO, e quatro
+      // ficariam para trás sem ninguém perceber. Cada um continua sendo uma
+      // ação e uma conversa própria — por isso se escolhe um de cada vez.
+      setGrupos(ordenadas);
+      aplicarGrupo(ordenadas[0], doChurning, ordenadas.length);
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui ler o HISCON da pasta.');
@@ -356,11 +379,45 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                     {achado.instituicoes.join(' · ')}
                   </p>
                 )}
-                {achado.outrosGrupos > 0 && (
-                  <p className="text-[10px] leading-4 text-amber-700 dark:text-amber-400">
-                    Outros {achado.outrosGrupos} grupo(s) também têm indício de reciclagem — cada um é
-                    uma ação e uma conversa própria.
-                  </p>
+                {grupos.length > 1 && (
+                  <div className="flex flex-col gap-1">
+                    {/* 🚨 OS OUTROS GRUPOS PRECISAM SER ALCANÇÁVEIS, não contados.
+                        Antes esta área dizia "outros 4 grupos também têm indício" e
+                        parava aí: eles existiam, apareciam na tela e não havia como
+                        ofertá-los. No HISCON do JOSÉ BATISTA eram cinco, e quatro
+                        ficariam para trás. Cada um continua sendo uma ação e uma
+                        conversa própria, por isso se escolhe UM de cada vez. */}
+                    <p className="text-[10px] leading-4 text-amber-700 dark:text-amber-400">
+                      {grupos.length} grupos com indício de reciclagem. Cada um é uma ação e uma
+                      conversa própria: escolha de qual ofertar agora.
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {grupos.map((g: any) => {
+                        const nome = g.grupo ?? (g.instituicoes ?? [])[0] ?? '—';
+                        const n = (g.indicios ?? []).filter((x: any) => IDS_CHURNING.has(x.id)).length;
+                        const ativo = achado.grupo === nome;
+                        return (
+                          <button
+                            key={nome}
+                            onClick={() => aplicarGrupo(g, indiciosDoHiscon, grupos.length)}
+                            disabled={analisando}
+                            title={g.veredito === 'AJUIZAR'
+                              ? `${nome}: ${n} indício(s). O plano de ação manda ajuizar.`
+                              : `${nome}: ${n} indício(s). O plano de ação NÃO manda ajuizar este — confira antes de ofertar.`}
+                            className={`rounded-lg border px-2 py-1 text-[10px] font-semibold disabled:opacity-50 ${
+                              ativo
+                                ? 'border-[#CF3B2E] bg-[#CF3B2E] text-white'
+                                : g.veredito === 'AJUIZAR'
+                                  ? 'border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                                  : 'border-dashed border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950'
+                            }`}
+                          >
+                            {nome} · {n}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
                 <ul className="mt-1 space-y-0.5">
                   {achado.indicios.slice(0, 6).map((i) => (
