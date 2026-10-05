@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { produtoColor } from '@/features/legal-cases/lib/etiqueta-cores';
+import { PRODUTO_PRESETS } from '@/features/legal-cases/lib/etiquetas';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Pencil, Trash2, Check, Tag as TagIcon, MoreVertical, ArrowLeft, ArrowRight, ArrowDownUp, CheckSquare, ListChecks, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
@@ -393,18 +394,8 @@ export function AddPhaseColumn({
 }
 
 // ── Produto/Área (etiquetas coloridas do card) ──
-const PRODUTO_PRESETS = [
-  // 🚨 "Churning" entrou em 02/10/2026, a pedido dele. É a reciclagem de
-  // contratos: refinanciamento em cadeia dentro do mesmo grupo econômico, com
-  // dívida nova nascendo da quitação da anterior e, às vezes, sem liberação
-  // nenhuma ao consumidor. Já tem motor próprio (`indicios.engine.ts`, 9 dos 13
-  // indícios) e base de peça (`BASE_INICIAL_CONSIGNADO.docx`), mas não tinha
-  // etiqueta: o card não sabia dizer que a ação era essa.
-  'RMC', 'RCC', 'Churning', 'Revisional Consignado', 'Portabilidade', 'Contribuições',
-  'Tarifas/Seguros', 'BPC/LOAS', 'BPC/LOAS - Doença', 'Auxílio-doença',
-  'Aposentadoria por Idade', 'Aposentadoria por Invalidez', 'Trabalhista',
-  'Consumidor', 'Cível', 'Família',
-];
+// a lista vive em lib/etiquetas.ts (uma só) — ver a nota lá
+
 
 /**
  * 🚨 ESTA FUNÇÃO ERA UMA SÉTIMA CÓPIA, E ELA DIVERGIU (02/10/2026). O arquivo

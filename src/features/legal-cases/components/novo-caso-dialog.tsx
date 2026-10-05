@@ -8,9 +8,10 @@ import { legalCasesService, type PartyInput } from '@/features/legal-cases/servi
 import { membersService } from '@/features/settings/services/members.service';
 import { OpponentCombobox } from '@/features/legal-cases/components/opponent-combobox';
 import { ClientCombobox } from '@/features/legal-cases/components/client-combobox';
+import { PRODUTO_PRESETS } from '@/features/legal-cases/lib/etiquetas';
 
 const INPUT = 'h-9 w-full rounded-lg border border-[#cfe0ed] bg-white px-2.5 text-sm text-[#101820] outline-none focus:border-[#4a90e2] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
-const PRODUTOS = ['RMC', 'RCC', 'RMC + RCC', 'BPC-LOAS', 'Aposentadoria', 'Auxílio-doença', 'Revisional', 'Consumidor', 'Trabalhista'];
+// 🚨 a lista era uma CÓPIA, e divergiu da do card — agora é uma só (lib/etiquetas.ts)
 
 /** Dialog de criação de processo/card. targetPhase = fase inicial; phases = opções de fase. */
 export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }: { targetPhase?: string; phases?: { key: string; label: string }[]; onClose: () => void; onCreated: () => void }) {
@@ -84,7 +85,7 @@ export function NovoCasoDialog({ targetPhase, phases = [], onClose, onCreated }:
           <div className="grid grid-cols-2 gap-3">
             <Field label="Produto">
               <input list="produtos-novo" value={produto} onChange={(e) => setProduto(e.target.value)} placeholder="RMC, RCC…" className={INPUT} />
-              <datalist id="produtos-novo">{PRODUTOS.map((p) => <option key={p} value={p} />)}</datalist>
+              <datalist id="produtos-novo">{PRODUTO_PRESETS.map((p) => <option key={p} value={p} />)}</datalist>
             </Field>
             <Field label="Responsável">
               <select value={respId} onChange={(e) => setRespId(e.target.value)} className={INPUT}>
