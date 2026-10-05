@@ -5713,12 +5713,43 @@ function ContasTab({ data }: { data: FinDashboard }) {
                 const rc = data.reconciliacao?.[c.id];
                 if (!rc || rc.saldoReal == null) return null;
                 const ok = Math.abs(rc.diferenca ?? 0) <= 0.01;
+                const dif = rc.diferenca ?? 0;
+                const iniAtual = Number(c.saldoInicial) || 0;
+                const iniNovo = Math.round((iniAtual + dif) * 100) / 100;
                 return (
+                  <>
                   <div className={`mt-2 rounded-lg border px-2 py-1.5 text-[11px] ${ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300'}`}>
                     {ok
                       ? <>✓ <strong>Bate com o livro-razão</strong> — o extrato fecha com os lançamentos.</>
-                      : <>⚠️ <strong>Difere {brl2(Math.abs(rc.diferenca ?? 0))}</strong> do razão (banco {brl2(rc.saldoReal ?? 0)} · razão {brl2(rc.saldoCalculado)}). {(rc.diferenca ?? 0) > 0 ? 'Falta lançar entradas' : 'Sobrou lançamento ou falta despesa'} — suba o extrato do período ou confira o saldo inicial.</>}
+                      : <>⚠️ <strong>Difere {brl2(Math.abs(dif))}</strong> do razão (banco {brl2(rc.saldoReal ?? 0)} · razão {brl2(rc.saldoCalculado)}). {dif > 0 ? 'Faltam entradas' : 'Sobrou lançamento ou falta despesa'} — ou o razão não tem a história inteira da conta, e a diferença é o <strong>saldo de abertura</strong>.</>}
                   </div>
+                  {/* 🚨 O AVISO ACIMA COBRA O IMPOSSÍVEL quando o escritório começou a lançar no
+                      meio do caminho: ele compara o saldo do banco com "saldo inicial + TODOS os
+                      lançamentos desta conta", ou seja, exige o histórico completo desde a
+                      abertura. Para a conta que já tinha dinheiro antes do primeiro lançamento, a
+                      diferença não é erro: é o saldo de abertura, e era isso que faltava poder
+                      declarar em um clique (05/10/2026). O botão NÃO cria movimento nenhum e não
+                      mexe em lançamento: só diz por onde o razão daquela conta começa. */}
+                  {!ok && (
+                    <button
+                      onClick={() => {
+                        if (!window.confirm(
+                          `Fechar "${c.nome}" com o banco?\n\n`
+                          + `O razão soma ${brl2(rc.saldoCalculado)} e o banco diz ${brl2(rc.saldoReal ?? 0)}.\n`
+                          + `A diferença de ${brl2(dif)} passa a ser o SALDO DE ABERTURA: o que já existia na conta antes do primeiro lançamento do hub.\n\n`
+                          + `Saldo inicial: ${brl2(iniAtual)}  →  ${brl2(iniNovo)}\n\n`
+                          + `Isto não procura lançamento faltando e não cria movimento nenhum. Se você acha que falta lançar entradas, suba o extrato do período ANTES de usar este botão.`,
+                        )) return;
+                        updM.mutate({ id: c.id, i: { nome: c.nome, banco: c.banco, saldoInicial: iniNovo } });
+                      }}
+                      disabled={updM.isPending}
+                      title={`Declara ${brl2(dif)} como saldo de abertura da conta. Não cria lançamento.`}
+                      className="mt-1.5 w-full rounded-lg border border-[#DEE2E6] px-2 py-1.5 text-[11px] font-medium text-zinc-700 transition hover:border-[#02883C] hover:bg-[#02883C]/5 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-200"
+                    >
+                      Fechar com o banco · lançar {brl2(Math.abs(dif))} como saldo de abertura
+                    </button>
+                  )}
+                  </>
                 );
               })()}
               {s.saldo < 0 && !s.real && !c.cartao && (c.saldoInicial ?? 0) === 0 && (
