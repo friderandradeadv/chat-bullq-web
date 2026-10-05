@@ -60,7 +60,8 @@ export function ApresentacaoVendasRevisional({
   onClose,
 }: {
   dados: DadosApresentacaoRevisional;
-  onClose: () => void;
+  /** só existe quando aberto como modal; em aba própria não há o que fechar */
+  onClose?: () => void;
 }) {
   const nome = (dados.cliente || 'Cliente').toUpperCase();
   const vt0 = round100(SERVICOS_BASE * porteMult(dados.proveito));
@@ -143,8 +144,8 @@ export function ApresentacaoVendasRevisional({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-100 dark:bg-zinc-950">
-      <div className="no-print flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="flex min-h-screen flex-col bg-zinc-100 dark:bg-zinc-950">
+      <div className="no-print sticky top-0 z-10 flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-700 dark:bg-zinc-900">
         <Sliders className="h-4 w-4 text-[#B7791F]" />
         <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Apresentação de vendas — {nome}</span>
         <div className="ml-auto flex items-center gap-2">
@@ -155,12 +156,14 @@ export function ApresentacaoVendasRevisional({
             {ocupado === 'baixar' ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando…</> : <><Download className="h-4 w-4" /> Baixar</>}
           </button>
           <button onClick={() => window.print()} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"><Printer className="h-4 w-4" /> Imprimir</button>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
+          {onClose && (
+            <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
+          )}
         </div>
       </div>
 
       {/* Controles de preço — não entram no PDF */}
-      <div className="no-print flex shrink-0 flex-wrap items-end gap-4 border-b border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-700 dark:bg-zinc-900/60">
+      <div className="no-print sticky top-[49px] z-10 flex shrink-0 flex-wrap items-end gap-4 border-b border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-700 dark:bg-zinc-900/60">
         <Campo label="Proveito econômico">{num(proveito, setProveito)}</Campo>
         <Campo label="Valor de tabela">{num(valorTabela, setValorTabela)}</Campo>
         <Campo label="Êxito tabela %">{num(pctExitoTabela, setPctExitoTabela)}</Campo>

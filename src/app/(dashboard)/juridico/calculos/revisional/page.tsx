@@ -15,14 +15,8 @@ import {
   type IrregularidadeContrato,
 } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
 import { DropZone } from '@/components/drop-zone';
-import {
-  ApresentacaoVendasRevisional,
-  type DadosApresentacaoRevisional,
-} from '@/features/calculadora-revisional/components/apresentacao-vendas-revisional';
-import {
-  MemoriaCalculoRevisional,
-  ParecerInternoRevisional,
-} from '@/features/calculadora-revisional/components/documentos-revisional';
+import type { DadosApresentacaoRevisional } from '@/features/calculadora-revisional/components/apresentacao-vendas-revisional';
+import { PREFIXO_DOC, type PayloadDocumentoRevisional } from '@/features/calculadora-revisional/documento-payload';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
 const fmtBRL = (v: number | null | undefined) =>
@@ -126,7 +120,34 @@ export default function RevisionalPage() {
     }
   };
 
-  const [doc, setDoc] = useState<null | 'calculo' | 'apresentacao' | 'parecer'>(null);
+  /**
+   * Abre o documento em ABA PRÓPRIA. O payload vai por localStorage (a query
+   * string levaria dado do cliente para o histórico do navegador); a aba nova
+   * recebe só a chave. Guarda no máximo 8 documentos para a chave não crescer
+   * sem fim.
+   */
+  const abrirDoc = (tipo: PayloadDocumentoRevisional['tipo']) => {
+    if (!res) return;
+    try {
+      const antigas = Object.keys(localStorage).filter((k) => k.startsWith(PREFIXO_DOC)).sort();
+      for (const k of antigas.slice(0, Math.max(0, antigas.length - 7))) localStorage.removeItem(k);
+      const chave = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const payload: PayloadDocumentoRevisional = {
+        tipo,
+        nome: form.nomeCalculo,
+        res,
+        auditoria,
+        extraido,
+        irregs,
+        dadosApresentacao: dadosApresentacao(),
+      };
+      localStorage.setItem(PREFIXO_DOC + chave, JSON.stringify(payload));
+      const aba = window.open(`/documentos/revisional?k=${encodeURIComponent(chave)}`, '_blank');
+      if (!aba) toast.error('O navegador bloqueou a aba. Libere o pop-up para este site.');
+    } catch {
+      toast.error('Não consegui abrir o documento.');
+    }
+  };
 
   /**
    * Dados da apresentação de vendas. O proveito sai do que o cálculo tem, mas é
@@ -624,24 +645,24 @@ export default function RevisionalPage() {
               </dl>
               <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-700">
                 <button
-                  onClick={() => setDoc('calculo')}
+                  onClick={() => abrirDoc('calculo')}
                   className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                 >
                   <FileText className="h-4 w-4" /> Memória de cálculo
                 </button>
                 <button
-                  onClick={() => setDoc('apresentacao')}
+                  onClick={() => abrirDoc('apresentacao')}
                   className="inline-flex items-center gap-2 rounded-lg bg-[#B7791F] px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
                 >
                   <Presentation className="h-4 w-4" /> Apresentação ao cliente
                 </button>
                 <button
-                  onClick={() => setDoc('parecer')}
+                  onClick={() => abrirDoc('parecer')}
                   className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
                   <ClipboardCheck className="h-4 w-4" /> Parecer interno
                 </button>
-                <span className="w-full text-xs text-zinc-400 sm:w-auto">cálculo e apresentação vão ao cliente; o parecer é só nosso</span>
+                <span className="w-full text-xs text-zinc-400 sm:w-auto">abrem em outra aba · cálculo e apresentação vão ao cliente, o parecer é só nosso</span>
               </div>
               {caseId && (
                 <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-700">
@@ -727,21 +748,6 @@ export default function RevisionalPage() {
           </div>
         )}
       </div>
-      {doc === 'apresentacao' && dadosApresentacao() && (
-        <ApresentacaoVendasRevisional dados={dadosApresentacao()!} onClose={() => setDoc(null)} />
-      )}
-      {doc === 'calculo' && res && (
-        <MemoriaCalculoRevisional
-          res={res} auditoria={auditoria} extraido={extraido}
-          nome={form.nomeCalculo} onClose={() => setDoc(null)}
-        />
-      )}
-      {doc === 'parecer' && res && (
-        <ParecerInternoRevisional
-          res={res} auditoria={auditoria} extraido={extraido} irregs={irregs}
-          nome={form.nomeCalculo} onClose={() => setDoc(null)}
-        />
-      )}
     </div>
   );
 }
