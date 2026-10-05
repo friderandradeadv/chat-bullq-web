@@ -16,6 +16,7 @@ import {
 } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
 import { DropZone } from '@/components/drop-zone';
 import type { DadosApresentacaoRevisional } from '@/features/calculadora-revisional/components/apresentacao-vendas-revisional';
+import { porTese, brlNum } from '@/features/calculadora-revisional/proveito';
 import { PREFIXO_DOC, type PayloadDocumentoRevisional } from '@/features/calculadora-revisional/documento-payload';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -156,30 +157,43 @@ export default function RevisionalPage() {
    */
   const dadosApresentacao = (): DadosApresentacaoRevisional | null => {
     if (!res) return null;
-    const afastadas: string[] = [];
+    const afastadas: { o: string; porque: string }[] = [];
     if (!res.taxas.abusivo)
-      afastadas.push(`Juros abusivos — o contrato pratica ${fmtPct(res.taxas.contratoMensalPct)} a.m. contra a média de ${fmtPct(res.taxas.referenciaMensalPct)} a.m. do Banco Central`);
+      afastadas.push({ o: 'Juros do contrato', porque: `o contrato cobra ${fmtPct(res.taxas.contratoMensalPct)} ao mês contra a média de ${fmtPct(res.taxas.referenciaMensalPct)} do Banco Central — está abaixo do mercado` });
     if (auditoria?.capitalizacao.pactuada === true)
-      afastadas.push('Capitalização de juros — expressamente pactuada (Súmulas 539 e 541 do STJ)');
+      afastadas.push({ o: 'Capitalização de juros', porque: 'o contrato pactuou a capitalização de forma expressa, o que as Súmulas 539 e 541 do STJ admitem' });
     if (auditoria?.divergenciaTaxa && auditoria.divergenciaTaxa.diferencaPp <= 0.01)
-      afastadas.push('Taxa praticada acima da escrita — o contrato pratica o que escreve');
+      afastadas.push({ o: 'Taxa diferente da escrita', porque: 'a parcela cobrada bate com a taxa do contrato' });
     if (auditoria?.divergenciaCet && auditoria.divergenciaCet.diferencaPp <= 0)
-      afastadas.push('CET informado a menor — o banco declarou o custo a maior');
-    const brlNum = (v: string) =>
-      Number(String(v).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+      afastadas.push({ o: 'Custo Efetivo Total', porque: 'o banco informou o CET a maior que o apurado, não a menor' });
+    for (const x of irregs.filter((y) => y.somavel === false && !brlNum(y.valor)))
+      afastadas.push({ o: x.rubrica || x.tipo, porque: 'sem valor apurável com os documentos de hoje' });
+
     const teses = irregs
-      .filter((i) => brlNum(i.valor) > 0)
-      .map((i) => ({ rubrica: i.tipo, valor: brlNum(i.valor), forca: i.confianca }));
-    const economiaFutura = Math.max(0, res.resumo.economiaTotal - res.resumo.totalPagoAMais);
+      .filter((x) => x.somavel !== false && brlNum(x.valor) > 0)
+      .map((x) => {
+        const t = porTese(res, brlNum(x.valor));
+        return { rubrica: x.rubrica || x.tipo, cobrado: t.principal, recebe: Math.round(t.proveito), forca: x.confianca };
+      });
+    const economiaFuturaJuros = Math.max(0, res.resumo.economiaTotal - res.resumo.totalPagoAMais);
+    if (res.taxas.abusivo)
+      teses.unshift({
+        rubrica: 'Juros acima da média de mercado',
+        cobrado: 0,
+        recebe: Math.round(res.resumo.restituicaoAtualizada + economiaFuturaJuros),
+        forca: 'alta',
+      });
+
+    const proveito = teses.reduce((s2, t) => s2 + t.recebe, 0);
     return {
       cliente: form.nomeCalculo || 'Cliente',
       credor: extraido?.banco || res.modalidade.label,
       contrato: extraido?.numeroContrato || '—',
-      proveito: Math.round(res.resumo.restituicaoAtualizada + economiaFutura),
+      proveito,
       parcelaAtual: res.resumo.parcelaContrato,
       parcelaNova: res.resumo.parcelaRecalculada,
       restituicao: res.resumo.restituicaoAtualizada,
-      economiaFutura,
+      economiaFutura: economiaFuturaJuros,
       afastadas,
       teses,
     };

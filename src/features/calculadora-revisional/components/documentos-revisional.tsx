@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Download, Eye, Loader2, Printer, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { porTese, brlNum } from '@/features/calculadora-revisional/proveito';
 import type {
   AuditoriaContrato,
   ExtracaoContrato,
@@ -204,6 +205,7 @@ export function MemoriaCalculoRevisional({
 }
 
 // ─────────────────────────────────────────────────── PARECER INTERNO
+
 export function ParecerInternoRevisional({
   res, auditoria, extraido, irregs, nome, onClose,
 }: {
@@ -215,21 +217,62 @@ export function ParecerInternoRevisional({
   onClose?: () => void;
 }) {
   const a = useMemo(() => {
-    const brlNum = (v: string) =>
-      Number(String(v).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
-    const rubricas = irregs.map((i) => ({ tipo: i.tipo, valor: brlNum(i.valor), confianca: i.confianca }));
-    const somaRubricas = rubricas.reduce((s, r) => s + r.valor, 0);
-    const economiaFutura = Math.max(0, res.resumo.economiaTotal - res.resumo.totalPagoAMais);
-    const proveitoJuros = res.taxas.abusivo ? res.resumo.restituicaoAtualizada + economiaFutura : 0;
-    const proveito = Math.round(proveitoJuros + somaRubricas);
-    const maior = rubricas.reduce((m, r) => (r.valor > m ? r.valor : m), proveitoJuros);
+    const cfg = res.config;
+    const n = cfg.numeroParcelas;
+    const pagas = Math.min(cfg.parcelasPagas, n);
+    const vincendas = Math.max(0, n - pagas);
+
+    // Entram só as rubricas SOMÁVEIS (o motor marca quais são).
+    const teses = irregs
+      .filter((x) => x.somavel !== false && brlNum(x.valor) > 0)
+      .map((x) => ({
+        rubrica: x.rubrica || x.tipo,
+        confianca: x.confianca,
+        fundamento: x.fundamento,
+        ...porTese(res, brlNum(x.valor)),
+      }));
+
+    // A tese de juros tem conta própria (vem do motor da revisional).
+    const economiaFuturaJuros = Math.max(0, res.resumo.economiaTotal - res.resumo.totalPagoAMais);
+    const teseJuros = res.taxas.abusivo
+      ? {
+          rubrica: 'Juros acima da média de mercado',
+          confianca: 'alta' as const,
+          proveito: res.resumo.restituicaoAtualizada + economiaFuturaJuros,
+          restituicaoDobro: res.resumo.restituicaoAtualizada,
+          restituicaoSimples: res.resumo.restituicaoAtualizada,
+          economiaFutura: economiaFuturaJuros,
+          reducao: res.resumo.diferencaParcela,
+          principal: 0,
+        }
+      : null;
+
+    const todas = [...(teseJuros ? [teseJuros] : []), ...teses];
+    const proveito = Math.round(todas.reduce((s, t) => s + t.proveito, 0));
+    const maior = todas.reduce((m, t) => (t.proveito > m ? t.proveito : m), 0);
     const concentracao = proveito > 0 ? (maior / proveito) * 100 : 0;
-    // Faixas decididas pelo custo real de uma ação cível completa (12 a 24 meses).
-    const veredito =
-      proveito < 5_000 ? 'DECLINAR' : proveito < 15_000 ? 'CONDICIONAL' : 'ACEITAR';
+
+    // Fora da conta: o que foi conferido e NÃO vira pedido com valor.
+    const fora: { o: string; porque: string }[] = [];
+    if (!res.taxas.abusivo)
+      fora.push({ o: 'Juros remuneratórios', porque: `o contrato pratica ${pctF(res.taxas.contratoMensalPct)} a.m. contra a média de ${pctF(res.taxas.referenciaMensalPct)} a.m. do BACEN — está abaixo do mercado` });
+    if (auditoria?.capitalizacao.pactuada === true)
+      fora.push({ o: 'Capitalização de juros', porque: `a taxa anual (${pctF(auditoria.capitalizacao.anualContratadaPct)}) supera o duodécuplo da mensal (${pctF(auditoria.capitalizacao.duodecuploPct)}): pactuação expressa, Súmulas 539 e 541 do STJ` });
+    if (auditoria?.divergenciaTaxa && auditoria.divergenciaTaxa.diferencaPp <= 0.01)
+      fora.push({ o: 'Taxa praticada maior que a escrita', porque: `diferença de ${auditoria.divergenciaTaxa.diferencaPp.toFixed(3).replace('.', ',')} ponto percentual — arredondamento, não cobrança a maior` });
+    if (auditoria?.divergenciaCet && auditoria.divergenciaCet.diferencaPp <= 0)
+      fora.push({ o: 'CET informado a menor', porque: `declarou ${pctF(auditoria.divergenciaCet.escritaPct)} a.a. contra ${pctF(auditoria.divergenciaCet.praticadaPct)} apurados: informou a maior` });
+    for (const x of irregs.filter((y) => y.somavel === false)) {
+      if (x.rubrica === 'Juros embutidos nos encargos financiados')
+        fora.push({ o: `${x.rubrica} (${x.valor})`, porque: 'já está dentro do que cada rubrica acima devolve — somar de novo contaria o mesmo dinheiro duas vezes' });
+      else if (!brlNum(x.valor))
+        fora.push({ o: x.rubrica || x.tipo, porque: 'sem valor apurável com os documentos de hoje' });
+    }
+
+    const veredito = proveito < 5_000 ? 'DECLINAR' : proveito < 15_000 ? 'CONDICIONAL' : 'ACEITAR';
     const entradaMinima = Math.max(1_500, Math.round((proveito * 0.2) / 100) * 100);
-    return { rubricas, somaRubricas, proveitoJuros, proveito, concentracao, veredito, entradaMinima, economiaFutura };
-  }, [res, irregs]);
+    return { todas, proveito, concentracao, fora, veredito, entradaMinima, pagas, vincendas, dobro: cfg.dobro };
+  }, [res, irregs, auditoria]);
 
   const cor =
     a.veredito === 'ACEITAR' ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
@@ -252,44 +295,90 @@ export function ParecerInternoRevisional({
         </div>
       </div>
 
-      <H n="01">Proveito econômico</H>
-      <Linha k="Pela tese de juros (acima da média do BACEN)" v={a.proveitoJuros > 0 ? brl(a.proveitoJuros) : 'não há — contrato abaixo da média'} />
-      {a.rubricas.map((r) => (
-        <Linha key={r.tipo} k={`${r.tipo} (confiança ${r.confianca})`} v={r.valor > 0 ? brl(r.valor) : 'sem valor apurado'} />
-      ))}
-      <Linha k="Proveito econômico estimado" v={brl(a.proveito)} forte />
+      <H n="01">O que é irregular e cabe ação</H>
+      {a.todas.length === 0 ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-800">
+          Nenhuma rubrica irregular foi apurada neste contrato. Não há pedido com valor a deduzir.
+        </p>
+      ) : (
+        <table className="w-full border-collapse text-[12px]">
+          <thead>
+            <tr className="border-b border-zinc-300 text-left text-[10.5px] uppercase tracking-wide text-zinc-500">
+              <th className="py-2 pr-3 font-semibold">Rubrica</th>
+              <th className="py-2 pr-3 text-right font-semibold">Cobrado</th>
+              <th className="py-2 pr-3 text-right font-semibold">Cai da parcela</th>
+              <th className="py-2 pr-3 text-right font-semibold">{a.dobro ? 'Devolve em dobro' : 'Devolve'}</th>
+              <th className="py-2 pr-3 text-right font-semibold">Economia futura</th>
+              <th className="py-2 text-right font-semibold">O cliente recebe</th>
+            </tr>
+          </thead>
+          <tbody>
+            {a.todas.map((t) => (
+              <tr key={t.rubrica} className="border-b border-zinc-100">
+                <td className="py-2 pr-3">{t.rubrica}</td>
+                <td className="py-2 pr-3 text-right tabular-nums text-zinc-500">{t.principal > 0 ? brl(t.principal) : '—'}</td>
+                <td className="py-2 pr-3 text-right tabular-nums">{brl(t.reducao)}/mês</td>
+                <td className="py-2 pr-3 text-right tabular-nums">{brl(a.dobro ? t.restituicaoDobro : (t as { restituicaoSimples?: number }).restituicaoSimples ?? t.restituicaoDobro)}</td>
+                <td className="py-2 pr-3 text-right tabular-nums">{brl(t.economiaFutura)}</td>
+                <td className="py-2 text-right font-bold tabular-nums text-zinc-900">{brl(t.proveito)}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-zinc-300">
+              <td className="py-2 pr-3 font-bold text-zinc-900" colSpan={5}>Proveito econômico estimado</td>
+              <td className="py-2 text-right text-base font-bold tabular-nums text-zinc-900">{brl(a.proveito)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+      <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+        Base: {a.pagas} parcelas já vencidas e {a.vincendas} a vencer. Tirar a rubrica do principal reduz a parcela;
+        a redução vezes as parcelas pagas é o que se repete {a.dobro ? 'em dobro (art. 42, § único, do CDC)' : 'na forma simples'},
+        e vezes as vincendas é a economia futura. <b>O juro que incidiu sobre a rubrica já está nessa redução</b> — por isso não aparece como linha à parte.
+      </p>
 
-      <H n="02">Risco de concentração</H>
+      <H n="02">O que NÃO entra na conta</H>
+      {a.fora.length === 0 ? (
+        <p className="text-[13px] text-zinc-600">Nada foi descartado na auditoria.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {a.fora.map((f) => (
+            <li key={f.o} className="flex gap-3 border-b border-zinc-100 pb-2 last:border-0 text-[13px]">
+              <span className="mt-0.5 shrink-0 text-zinc-400">✕</span>
+              <span><b className="text-zinc-900">{f.o}</b> — <span className="text-zinc-600">{f.porque}</span></span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <H n="03">Risco de concentração</H>
       <p className="text-[13px] leading-relaxed text-zinc-700">
-        A maior rubrica responde por <b>{a.concentracao.toFixed(0)}%</b> do proveito.
+        A maior tese responde por <b>{a.concentracao.toFixed(0)}%</b> do proveito.
         {a.concentracao > 70
-          ? ' Acima de 70%: se essa tese cair, o caso perde quase todo o valor. Não ancorar a expectativa do cliente nela.'
+          ? ' Acima de 70%: se ela cair, o caso perde quase todo o valor. Não ancorar a expectativa do cliente nela.'
           : ' Distribuição aceitável entre as teses.'}
       </p>
 
-      <H n="03">Honorários mínimos para o caso fechar</H>
+      <H n="04">Honorários para o caso fechar</H>
       <Linha k="Entrada sugerida (no ato, não reembolsável)" v={brl(a.entradaMinima)} />
       <Linha k="Êxito sugerido sobre o proveito" v="40% (contratual da casa)" />
       <Linha k="Receita estimada do escritório" v={brl(Math.round(a.proveito * 0.4))} />
-      <Linha k="Fica com o cliente" v={brl(Math.round(a.proveito * 0.6))} />
+      <Linha k="Fica com o cliente" v={brl(Math.round(a.proveito * 0.6))} forte />
       <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-        Base: art. 23 do Estatuto da OAB — a sucumbência é do advogado e não entra no cálculo do contratual.
+        Art. 23 do Estatuto da OAB: a sucumbência é do advogado e não entra no cálculo do contratual.
         Custas, taxa judiciária e perícia são do cliente; o escritório não as absorve.
       </p>
 
-      <H n="04">O que pesa contra</H>
+      <H n="05">O que pesa contra</H>
       <ul className="flex list-disc flex-col gap-1.5 pl-5 text-[13px] leading-relaxed text-zinc-700">
-        {!res.taxas.abusivo && <li>A tese de juros abusivos <b>não existe</b>: o contrato pratica {pctF(res.taxas.contratoMensalPct)} a.m. contra média de {pctF(res.taxas.referenciaMensalPct)} a.m. Pedi-la entrega ao banco o argumento mais fácil da contestação.</li>}
-        {auditoria?.capitalizacao.pactuada === true && <li>Capitalização expressamente pactuada (anual supera o duodécuplo) — Súmulas 539 e 541 do STJ afastam o anatocismo.</li>}
-        {auditoria?.divergenciaCet && auditoria.divergenciaCet.diferencaPp <= 0 && <li>O CET foi declarado <b>a maior</b> que o apurado: não há vício de informação a explorar.</li>}
+        {a.fora.slice(0, 3).map((f) => <li key={f.o}>{f.o}: {f.porque}.</li>)}
         <li>Risco de sucumbência entre 10% e 20% do valor da causa, por conta do cliente.</li>
         <li>Prazo realista de 12 a 24 meses em primeira instância, com acompanhamento integral.</li>
       </ul>
 
-      <H n="05">Conclusão</H>
+      <H n="06">Conclusão</H>
       <p className="text-[13px] leading-relaxed text-zinc-700">
         {a.veredito === 'DECLINAR' && <>Proveito de {brl(a.proveito)} não sustenta uma ação cível completa no padrão de honorários da casa. <b>Recomenda-se declinar</b> ou encaminhar para acordo extrajudicial direto.</>}
-        {a.veredito === 'CONDICIONAL' && <>Caso pequeno: proveito de {brl(a.proveito)}. <b>Só vale com a entrada paga no ato</b> — ela é o que cobre o trabalho independentemente do desfecho. Se o cliente não aceitar a entrada, declinar.</>}
+        {a.veredito === 'CONDICIONAL' && <>Caso pequeno: proveito de {brl(a.proveito)}. <b>Só vale com a entrada paga no ato</b> — ela cobre o trabalho independentemente do desfecho. Se o cliente não aceitar a entrada, declinar.</>}
         {a.veredito === 'ACEITAR' && <>Proveito de {brl(a.proveito)} comporta a estrutura da ação. <b>Recomenda-se aceitar</b>, com entrada no ato e êxito sobre o proveito.</>}
       </p>
 

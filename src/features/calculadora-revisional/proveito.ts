@@ -1,0 +1,45 @@
+import type { ResultadoRevisional } from './services/calculadora-revisional.service';
+
+/** Parcela fixa (Price) de um principal a uma taxa mensal (fração). */
+export function price(pv: number, i: number, n: number): number {
+  if (n <= 0) return 0;
+  if (i <= 0) return pv / n;
+  return (pv * i) / (1 - Math.pow(1 + i, -n));
+}
+
+export interface ProveitoDaTese {
+  principal: number;
+  /** quanto a parcela cai se essa rubrica sair do financiamento */
+  reducao: number;
+  restituicaoSimples: number;
+  restituicaoDobro: number;
+  economiaFutura: number;
+  /** o que o cliente efetivamente recebe por essa tese */
+  proveito: number;
+}
+
+/**
+ * 🚨 O VALOR DE UMA TESE NÃO É O VALOR DA RUBRICA. Tirar R$ 668 do principal não
+ * devolve R$ 668: devolve a REDUÇÃO DA PARCELA vezes o prazo — e essa redução já
+ * carrega o juro que incidiu sobre a rubrica durante todo o contrato. É por isso
+ * que o juro embutido nos encargos não entra como linha somável à parte: somá-lo
+ * contaria o mesmo dinheiro duas vezes.
+ */
+export function porTese(res: ResultadoRevisional, principal: number): ProveitoDaTese {
+  const cfg = res.config;
+  const i = res.taxas.contratoMensalPct / 100;
+  const n = cfg.numeroParcelas;
+  const pagas = Math.min(cfg.parcelasPagas, n);
+  const vincendas = Math.max(0, n - pagas);
+  const reducao = Math.max(0, cfg.valorParcela - price(Math.max(0, cfg.valorLiberado - principal), i, n));
+  const restituicaoSimples = reducao * pagas;
+  const restituicaoDobro = restituicaoSimples * 2;
+  const economiaFutura = reducao * vincendas;
+  const base = cfg.dobro ? restituicaoDobro : restituicaoSimples;
+  return { principal, reducao, restituicaoSimples, restituicaoDobro, economiaFutura, proveito: base + economiaFutura };
+}
+
+/** "R$ 1.234,56" → 1234.56 */
+export function brlNum(v: string): number {
+  return Number(String(v).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+}

@@ -151,10 +151,15 @@ export interface AuditoriaContrato {
 
 export interface IrregularidadeContrato {
   id: string;
+  /** categoria que a UI do card conhece — pode repetir entre achados */
   tipo: string;
+  /** rótulo curto e ÚNICO da rubrica (duas tarifas distintas têm o mesmo `tipo`) */
+  rubrica?: string;
   valor: string;
   fundamento: string;
   confianca: 'alta' | 'media' | 'baixa';
+  /** false = NÃO somar ao proveito: já está dentro do que cada rubrica devolve */
+  somavel?: boolean;
 }
 
 export interface ExtracaoContratoResposta {

@@ -51,8 +51,10 @@ export interface DadosApresentacaoRevisional {
   parcelaNova: number;
   restituicao: number;
   economiaFutura: number;
-  afastadas: string[];
-  teses: { rubrica: string; valor: number; forca: string }[];
+  /** o que foi conferido e NÃO vira pedido — com o motivo */
+  afastadas: { o: string; porque: string }[];
+  /** cada tese com o que o banco cobrou e o que o cliente recebe de volta */
+  teses: { rubrica: string; cobrado: number; recebe: number; forca: string }[];
 }
 
 export function ApresentacaoVendasRevisional({
@@ -195,23 +197,42 @@ export function ApresentacaoVendasRevisional({
               Auditamos o contrato inteiro, não só os juros. Começamos pelo que <b>não</b> dá para pedir — é isso que separa análise de promessa.
             </p>
             <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">Teses que este contrato não sustenta</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">O que NÃO vamos pedir, e por quê</p>
               <ul className="mt-2 flex flex-col gap-1.5">
                 {dados.afastadas.map((a) => (
-                  <li key={a} className="flex items-start gap-2 text-[13px] text-zinc-600 dark:text-zinc-300"><X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" /> {a}</li>
+                  <li key={a.o} className="flex items-start gap-2 text-[12.5px] text-zinc-600 dark:text-zinc-300">
+                    <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                    <span><b className="text-zinc-800 dark:text-zinc-100">{a.o}</b> — {a.porque}</span>
+                  </li>
                 ))}
               </ul>
             </div>
             <div className="mt-4">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-[#B7791F]">O que vamos pedir</p>
-              <div className="mt-2 flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
-                {dados.teses.map((t) => (
-                  <div key={t.rubrica} className="flex items-center justify-between gap-4 py-2.5">
-                    <span className="flex items-center gap-2 text-[13px] text-zinc-700 dark:text-zinc-200"><Check className="h-4 w-4 shrink-0 text-[#B7791F]" /> {t.rubrica}</span>
-                    <span className="shrink-0 font-serif text-base font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(t.valor)}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#B7791F]">O que é irregular e vamos pedir</p>
+              <table className="mt-2 w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-200 text-left text-[10px] uppercase tracking-wide text-zinc-500 dark:border-zinc-700">
+                    <th className="py-1.5 pr-3 font-semibold">Rubrica</th>
+                    <th className="py-1.5 pr-3 text-right font-semibold">O banco cobrou</th>
+                    <th className="py-1.5 text-right font-semibold">Você recebe de volta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dados.teses.map((t) => (
+                    <tr key={t.rubrica} className="border-b border-zinc-100 dark:border-zinc-800">
+                      <td className="py-2 pr-3 text-[12.5px] text-zinc-700 dark:text-zinc-200">
+                        <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0 text-[#B7791F]" /> {t.rubrica}</span>
+                      </td>
+                      <td className="py-2 pr-3 text-right text-[12.5px] tabular-nums text-zinc-500">{t.cobrado > 0 ? fmtBRL(t.cobrado) : '—'}</td>
+                      <td className="py-2 text-right font-serif text-base font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{fmtBRL(t.recebe)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+                "Você recebe de volta" é maior que o cobrado porque inclui os <b>juros</b> que incidiram sobre a
+                cobrança durante o contrato, a devolução do que já foi pago e a redução das parcelas que faltam.
+              </p>
             </div>
           </Slide>
 
