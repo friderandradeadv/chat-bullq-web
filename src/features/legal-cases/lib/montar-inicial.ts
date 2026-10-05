@@ -227,8 +227,13 @@ export async function montarInicialCompleta(
     // prova — e é justamente pelo bruto que ela costuma ser indeferida. Então
     // aqui a montagem PARA, como já parava sem cálculo: a pasta fica pronta, o
     // card não anda, e o aviso diz o que coletar.
+    // 🚨 SÓ O QUE COMEÇA COM "Não achei" BLOQUEIA. O filtro casava com QUALQUER
+    // aviso que mencionasse "Portal MIR", e isso passou a incluir a NOTA que
+    // explica por que a tela de isenção não se aplica a quem declara IRPF — o
+    // card do JOSÉ BATISTA travou por causa dela em 05/10/2026. Falta é ausência
+    // de peça, não menção à peça.
     const faltas = (preparo?.avisos ?? []).filter((a: string) =>
-      /Portal MIR|IR do INSS|informe/i.test(a));
+      /^Não achei/i.test(a) && /Portal MIR|IR do INSS|informe/i.test(a));
     if (faltas.length) {
       etapa('Preparando a pasta…');
       await legalCasesService.organizarPastaInicial(caseId).catch(() => undefined);
