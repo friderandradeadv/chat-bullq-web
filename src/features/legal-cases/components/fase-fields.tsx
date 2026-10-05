@@ -162,6 +162,11 @@ export const FASE_FORMS: Record<string, Field[]> = {
     { key: 'motivo_nao_recorrer', label: 'Motivo (se não recorremos)', type: 'textarea' },
     { key: 'obs', label: 'Anotações importantes', type: 'textarea' },
   ],
+  // ACORDO não tem campo de fase: valor, parcelamento, dia de vencimento, divisão e
+  // cronograma vivem no painel próprio (`AcordoPanel`), porque parcela é tabela que
+  // muda de estado (vence, atrasa, é recebida, estorna), não campo de formulário.
+  // Duplicar o valor aqui criaria duas verdades sobre o mesmo dinheiro.
+  acordo: [],
   cumprimento: [
     { key: 'protocolado', label: 'Cumprimento de sentença protocolado?', type: 'radio', options: ['Sim', 'Ainda não'] },
     { key: 'valor_calculo', label: 'Valor do cálculo', type: 'currency' },

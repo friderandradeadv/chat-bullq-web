@@ -1035,7 +1035,7 @@ export const legalCasesService = {
   /** Registra o andamento; status 'aceita' move o card para "montar inicial". */
   async registrarOfertaChurning(
     id: string,
-    dto: { status: 'analisada' | 'enviada' | 'aceita' | 'recusada'; resumo?: string; indicios?: string[]; mensagem?: string },
+    dto: { status: 'analisada' | 'enviada' | 'aceita' | 'recusada'; resumo?: string; indicios?: string[]; mensagem?: string; grupo?: string },
   ): Promise<{ ok: boolean; oferta: OfertaChurning; moveu: boolean; fase: string }> {
     const { data } = await api.post(`/legal-cases/${id}/oferta-churning`, dto);
     return data.data ?? data;

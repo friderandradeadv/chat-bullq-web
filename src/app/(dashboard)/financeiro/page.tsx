@@ -24,6 +24,7 @@ import { MeuFinanceiroConteudo, BuscaCliente, BuscaProcesso } from '@/features/f
 import { ComboBox } from '@/features/financeiro/components/combo-box';
 import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { calculadoraCsService } from '@/features/calculadora-cs/services/calculadora-cs.service';
+import { acordosService, type AcordoResumo } from '@/features/financeiro/services/acordos.service';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   aggregarClientes, aggregarRetiradas, achaAdvogado, ehRetirada, normNome, mesKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
@@ -4149,7 +4150,7 @@ function AReceberTab({ data }: { data: FinDashboard }) {
       </div>
       <p className="mt-2 text-xs text-zinc-400">{sub === 'honorarios'
         ? 'Boletos/parcelas dos honorários iniciais — sincroniza sozinho do ASAAS.'
-        : 'Recebíveis dos processos (prestação de contas + cumprimento de sentença) — a parte do escritório, preenchida no card de cada processo.'}</p>
+        : 'Recebíveis dos processos (prestação de contas + cumprimento de sentença + acordos parcelados) — a parte do escritório, preenchida no card de cada processo.'}</p>
       {sub === 'honorarios' && <CobrancasTab data={data} />}
       {sub === 'judicial' && <CumprimentoTab />}
     </div>
@@ -4316,6 +4317,12 @@ function CobrancasTab({ data }: { data: FinDashboard }) {
 
 // ═══════════════════════════ ABA · CUMPRIMENTO DE SENTENÇA ════════════════════
 
+// ACORDOS do escritório — terceiro caminho do dinheiro, ao lado do cumprimento e da
+// prestação de contas, e o único parcelado (vem de `case.metadata.acordo`).
+function useAcordosFin() {
+  return useQuery({ queryKey: ['financeiro', 'acordos'], queryFn: () => acordosService.listar(), staleTime: 60_000 });
+}
+
 function useCumprimentoFin() {
   return useQuery({ queryKey: ['financeiro', 'cumprimento'], queryFn: () => legalCasesService.cumprimentoFinanceiro(), staleTime: 60_000 });
 }
@@ -4354,6 +4361,7 @@ function EditNumeroCs({ caseId, value }: { caseId: string; value: string | null 
 
 function CumprimentoTab() {
   const { data: cs, isLoading } = useCumprimentoFin();
+  const { data: acd } = useAcordosFin();
   const [areaF, setAreaF] = useState('');
   const [respF, setRespF] = useState('');
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
@@ -4370,6 +4378,12 @@ function CumprimentoTab() {
   const favoraveis = cs.favoraveis.filter(match);
   const vencidas = (cs.vencidas ?? []).filter(match);
   const repb = (cs.repb ?? []).filter(match);
+  // ACORDO: o que falta entrar de um acordo fechado é a expectativa MENOS incerta da
+  // casa — já tem valor, data e assinatura. Acordo quitado sai do total (o dinheiro já
+  // passou pelo razão) e o descumprido também (virou cobrança, não recebível).
+  const acordos = (acd?.acordos ?? []).filter(match).filter((x) => x.status !== 'cancelado');
+  const acordosVivos = acordos.filter((x) => x.status !== 'quitado');
+  const acordosAtrasados = acordos.filter((x) => x.atrasado > 0);
   const repbCheio = repb.filter((x) => x.aReceberNosso > 0);
   const prestacaoCheia = prestacao.filter((x) => x.aReceberNosso > 0);
   const cumpCheio = cumprimento.filter((x) => x.valorCalculo > 0);
@@ -4389,6 +4403,12 @@ function CumprimentoTab() {
     nVencidas: vencidas.length, estimadoVencidas: r2(vencidas.reduce((s, x) => s + (x.estimado || 0), 0)),
     nRepb: repbCheio.length, aReceberRepb: r2(repbCheio.reduce((s, x) => s + (x.aReceberNosso || 0), 0)),
     acordadoRepb: r2(repbCheio.reduce((s, x) => s + (x.valorAcordo || 0), 0)), descontoRepb: r2(repbCheio.reduce((s, x) => s + (x.desconto || 0), 0)),
+    nAcordos: acordosVivos.length,
+    acordado: r2(acordosVivos.reduce((s, x) => s + x.valorTotal, 0)),
+    acordoAReceber: r2(acordosVivos.reduce((s, x) => s + x.aReceber, 0)),
+    acordoNossoAReceber: r2(acordosVivos.reduce((s, x) => s + x.nossoAReceber, 0)),
+    acordoAtrasado: r2(acordos.reduce((s, x) => s + x.atrasado, 0)),
+    acordoRepasseParceiros: r2(acordosVivos.reduce((s, x) => s + x.repasseParceiros, 0)),
   };
 
   return (
@@ -4396,7 +4416,7 @@ function CumprimentoTab() {
       <div className="mt-4 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 dark:border-emerald-900/40 dark:from-emerald-900/15 dark:to-zinc-900">
         <h2 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Landmark className="h-5 w-5 text-emerald-600" /> Caixa a receber dos processos</h2>
         <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
-          Puxado direto dos cards da Fase Judicial. Em <strong>Cumprimento de Sentença</strong> você lança o valor do cálculo; em <strong>Prestação de Contas</strong>, a divisão (nosso / sucumbência / cliente). O que está na prestação já é <strong>caixa nosso, quase certo</strong>; as sentenças favoráveis são <strong>parâmetro</strong> (ainda há risco de reforma no tribunal).
+          Puxado direto dos cards da Fase Judicial. Em <strong>Cumprimento de Sentença</strong> você lança o valor do cálculo; em <strong>Prestação de Contas</strong>, a divisão (nosso / sucumbência / cliente); em <strong>Acordo</strong>, o valor fechado e o cronograma das parcelas. O que está na prestação já é <strong>caixa nosso, quase certo</strong>, e o acordo vem logo atrás (tem valor e data); as sentenças favoráveis são <strong>parâmetro</strong> (ainda há risco de reforma no tribunal).
         </p>
       </div>
 
@@ -4409,12 +4429,13 @@ function CumprimentoTab() {
         </div>
       )}
 
-      <div className={`mt-4 grid gap-3 sm:grid-cols-2 ${t.nRepb > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+      <div className={`mt-4 grid gap-3 sm:grid-cols-2 ${t.nRepb > 0 && t.nAcordos > 0 ? 'lg:grid-cols-6' : (t.nRepb > 0 || t.nAcordos > 0) ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         <MiniStat label="A receber (nosso) — prestação" value={brl(t.aReceberPrestacao)} hint={`${t.nPrestacao} processo(s)`} accent="#2F9E44" />
         <MiniStat label="Em cumprimento (nosso ~40%)" value={brl(t.nossoEmCumprimento)} hint={`${t.nCumprimento} caso(s) · ${brl(t.brutoEmCumprimento)} bruto`} accent="#228BE6" />
         <MiniStat label="Sentenças favoráveis (estimado)" value={brl(t.estimadoFavoraveis)} hint={`${t.nFavoraveis} caso(s) · maior risco`} accent="#F59F00" />
+        {t.nAcordos > 0 && <MiniStat label="Acordos (nosso a receber)" value={brl(t.acordoNossoAReceber)} hint={`${t.nAcordos} acordo(s) · ${brl(t.acordoAReceber)} em parcelas${t.acordoAtrasado > 0 ? ` · ${brl(t.acordoAtrasado)} atrasado` : ''}`} accent="#0CA678" />}
         {t.nRepb > 0 && <MiniStat label="Acordos REPB (honorários)" value={brl(t.aReceberRepb)} hint={`${t.nRepb} acordo(s) · ${brl(t.acordadoRepb)} acordado`} accent="#B7791F" />}
-        <MiniStat label="Total a receber (nosso)" value={brl(t.aReceberPrestacao + t.nossoEmCumprimento + t.estimadoFavoraveis + t.aReceberRepb)} hint="prestação + 40% cumprimento + sentenças + REPB" accent="#7048E8" />
+        <MiniStat label="Total a receber (nosso)" value={brl(t.aReceberPrestacao + t.nossoEmCumprimento + t.estimadoFavoraveis + t.aReceberRepb + t.acordoNossoAReceber)} hint="prestação + 40% cumprimento + sentenças + REPB + acordos" accent="#7048E8" />
       </div>
 
       {/* Prestação de contas — nosso */}
@@ -4440,6 +4461,71 @@ function CumprimentoTab() {
           </CsTabela>
         )}
       </Card>
+
+      {/* ACORDOS — o único recebível PARCELADO do escritório. Vem do painel do card
+          (coluna ACORDO): cada parcela recebida entra no razão e gera a prestação de
+          contas daquela parcela. Aqui é a leitura de carteira: quanto está acordado,
+          quanto já entrou, quanto falta e — o que exige ação hoje — o que atrasou. */}
+      {acordos.length > 0 && (
+        <Card
+          title="Acordos — parcelas a receber"
+          sub="valor fechado, com data e assinatura: é a expectativa menos incerta da casa. Acordo quitado sai do total (já passou pelo caixa); descumprido vira cobrança e também sai."
+        >
+          <CsTabela
+            cols={['Cliente', 'Acordo', 'Parcelas', 'Recebido', 'Falta (nosso)', 'Próx. vencimento']}
+            widths={['24%', '15%', '13%', '14%', '16%', '18%']}
+            foot={<tr className="font-bold text-zinc-700 dark:text-zinc-100">
+              <td className="px-2 py-1.5">Total ({acordosVivos.length} em pagamento)</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-[#0CA678]">{brl2(t.acordado)}</td>
+              <td className="px-2 py-1.5" />
+              <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{brl2(acordosVivos.reduce((sum, x) => sum + x.recebido, 0))}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-[#0CA678]">{brl2(t.acordoNossoAReceber)}</td>
+              <td className="px-2 py-1.5 text-right text-[11px] font-semibold text-zinc-500">{brl2(t.acordoAReceber)} em parcelas</td>
+            </tr>}
+          >
+            {acordos.map((x) => (
+              <tr key={x.caseId} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="px-2 py-1.5">
+                  <VerProcesso id={x.caseId}>{titleCase(x.cliente || x.title)}</VerProcesso>
+                  {x.parceriaNome && <span className="ml-1 text-[10px] text-zinc-400" title={`Parceria ${x.parceriaNome} — ${brl2(x.repasseParceiros)} de repasse`}>· {x.parceriaNome}</span>}
+                </td>
+                <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-[#0CA678]">{brl2(x.valorTotal)}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-zinc-500 dark:text-zinc-400">
+                  {x.forma === 'avista' ? 'à vista' : `${x.nParcelas}×`}
+                  {x.homologado === 'Sim' ? ' · homolog.' : x.homologado === 'Aguardando' ? ' · aguard.' : ''}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-emerald-600">{brl2(x.recebido)}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-300" title={`Falta entrar ${brl2(x.aReceber)} no total do acordo; a parte do escritório desse saldo é ${brl2(x.nossoAReceber)}`}>
+                  {x.status === 'quitado' ? <span className="text-[11px] font-semibold text-emerald-600">quitado</span> : brl2(x.nossoAReceber)}
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  {x.status === 'quitado' ? (
+                    <span className="text-[11px] text-zinc-400">—</span>
+                  ) : x.atrasado > 0 ? (
+                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-900/25 dark:text-red-300" title={`${x.nAtrasadas} parcela(s) vencida(s) somando ${brl2(x.atrasado)}`}>
+                      {x.nAtrasadas} atrasada(s) · {brl2(x.atrasado)}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                      {x.proximoVencimento ?? '—'}{x.proximoValor ? ` · ${brl2(x.proximoValor)}` : ''}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </CsTabela>
+          {acordosAtrasados.length > 0 && (
+            <p className="mt-2 text-[11px] text-red-700 dark:text-red-400">
+              <strong>{acordosAtrasados.length} acordo(s) com parcela vencida</strong>, somando {brl2(t.acordoAtrasado)}. Parcela em atraso é execução do acordo — veja a cláusula de multa e de vencimento antecipado no card.
+            </p>
+          )}
+          {t.acordoRepasseParceiros > 0 && (
+            <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              Dos honorários desses acordos, {brl2(t.acordoRepasseParceiros)} são <strong>repasse a parceiros</strong> — a fatia nasce no rateio de cada parcela lançada e se paga pelo botão de repasse no livro-razão.
+            </p>
+          )}
+        </Card>
+      )}
 
       {/* Em cumprimento — protocolado */}
       <Card title="Cumprimento de sentença — o quadro CS inteiro" sub="valor do cálculo (bruto da condenação). A parte do escritório é definida na prestação de contas. O arquivado provisoriamente aparece aqui, mas fora do total.">
@@ -6123,14 +6209,20 @@ function ProjecoesTab({ data }: { data: FinDashboard }) {
   const ticket = p.ticketMedio || 250;
   const [x, setX] = useState(p.clientesEquilibrio || 3);
   const { data: cs } = useCumprimentoFin();
+  const { data: acd } = useAcordosFin();
   const csCerto = cs?.totais.aReceberPrestacao ?? 0;      // prestação de contas = caixa real
   const csProvavel = cs?.totais.nossoEmCumprimento ?? 0;  // cumprimento, nossa parte 40% = provável
   const csEstimado = cs?.totais.estimadoFavoraveis ?? 0;  // sentenças favoráveis = estimado (risco)
+  // ACORDO assinado, com valor e data de cada parcela: a expectativa de MENOR risco da
+  // casa — mais firme que o cumprimento (que ainda depende de achar bem) e por isso
+  // entra ligada por padrão, como a prestação.
+  const csAcordo = acd?.totais.nossoAReceber ?? 0;
   const [camCerto, setCamCerto] = useState(true);
+  const [camAcordo, setCamAcordo] = useState(true);
   const [camProvavel, setCamProvavel] = useState(true);
   const [camEstimado, setCamEstimado] = useState(false);  // risco de reforma — desligado por padrão
-  const temCS = csCerto + csProvavel + csEstimado > 0;
-  const inj = (camCerto ? csCerto : 0) + (camProvavel ? csProvavel : 0) + (camEstimado ? csEstimado : 0);
+  const temCS = csCerto + csAcordo + csProvavel + csEstimado > 0;
+  const inj = (camCerto ? csCerto : 0) + (camAcordo ? csAcordo : 0) + (camProvavel ? csProvavel : 0) + (camEstimado ? csEstimado : 0);
 
   const chartData = useMemo(() => {
     const sim = simula(data.meses, ticket, x, inj);
@@ -6170,8 +6262,9 @@ function ProjecoesTab({ data }: { data: FinDashboard }) {
       {temCS && (
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Renda esperada dos processos — some à projeção por nível de certeza</p>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className={`grid gap-2 ${csAcordo > 0 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
             <CamadaCS label="Certo" hint="prestação de contas (caixa nosso)" cor="#2F9E44" value={csCerto} on={camCerto} setOn={setCamCerto} />
+            {csAcordo > 0 && <CamadaCS label="Acordo" hint="parcelas a vencer · nossa parte" cor="#0CA678" value={csAcordo} on={camAcordo} setOn={setCamAcordo} />}
             <CamadaCS label="Provável" hint="cumprimento · nossa parte 40%" cor="#228BE6" value={csProvavel} on={camProvavel} setOn={setCamProvavel} />
             <CamadaCS label="Estimado" hint="sentenças (IA) · cabe recurso" cor="#F59F00" value={csEstimado} on={camEstimado} setOn={setCamEstimado} />
           </div>
@@ -6228,10 +6321,12 @@ function MotivacaoTab({ data }: { data: FinDashboard }) {
   const k = data.kpis!; const p = data.projecao!;
   const [fraseIdx, setFraseIdx] = useState(0);
   const { data: cs } = useCumprimentoFin();
+  const { data: acd } = useAcordosFin();
   const csCerto = cs?.totais.aReceberPrestacao ?? 0;
   const csProvavel = cs?.totais.nossoEmCumprimento ?? 0;
   const csEstimado = cs?.totais.estimadoFavoraveis ?? 0;
-  const csTotal = csCerto + csProvavel + csEstimado;
+  const csAcordo = acd?.totais.nossoAReceber ?? 0;
+  const csTotal = csCerto + csAcordo + csProvavel + csEstimado;
   const clientes = useMemo(() => aggregarClientes(data), [data]);
   const atencao = clientes.filter((c) => c.status === 'atencao');
   const reativavel = Math.round(atencao.reduce((s, c) => s + c.medio, 0));
@@ -6286,9 +6381,10 @@ function MotivacaoTab({ data }: { data: FinDashboard }) {
       {csTotal > 0 && (
         <Card title={<span className="flex items-center gap-2"><Landmark className="h-4 w-4 text-emerald-600" /> Tem caixa a caminho dos processos</span>}
           sub="o que os processos da fase judicial devem trazer — fôlego que não depende de novo cliente.">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className={`grid gap-3 ${csAcordo > 0 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
             {[
               { label: 'Certo', hint: 'prestação de contas', cor: '#2F9E44', v: csCerto },
+              ...(csAcordo > 0 ? [{ label: 'Acordo', hint: 'parcelas a vencer · nossa parte', cor: '#0CA678', v: csAcordo }] : []),
               { label: 'Provável', hint: 'cumprimento · nossos 40%', cor: '#228BE6', v: csProvavel },
               { label: 'Estimado', hint: 'sentenças (IA) · cabe recurso', cor: '#F59F00', v: csEstimado },
             ].map((c) => (

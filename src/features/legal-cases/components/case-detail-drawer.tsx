@@ -34,6 +34,7 @@ import { OfertaChurning } from './oferta-churning';
 import { RevisaoInicial } from './revisao-inicial';
 import { DocumentosDaInicial } from './documentos-da-inicial';
 import { AlertaGratuidade } from './alerta-gratuidade';
+import { AcordoPanel } from './acordo-panel';
 import { BeneficioTag, ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
 import { maskCurrencyBR, currencyToInput, maskCpfCnpj } from '@/lib/masks';
@@ -617,6 +618,19 @@ export function CaseDetailDrawer({
               </div>
             )}
 
+            {/* ACORDO — valor, parcelamento, dia de pagamento, divisão e o cronograma
+                com o recebimento de cada parcela. Aparece na coluna ACORDO, em quem já
+                TEM acordo gravado (mesmo que o card tenha andado para prestação de
+                contas) e nas fases em que o acordo de fato se fecha: as audiências e a
+                execução. Fora disso seria um formulário vazio em todo card. */}
+            {c && phaseKey && (
+              phaseKey === 'acordo'
+              || !!(c.metadata as any)?.acordo
+              || ['aud_conciliacao', 'aud_instrucao', 'cumprimento', 'recebido_parcial'].includes(phaseKey)
+            ) && (
+              <AcordoPanel caseId={c.id} podeLancar={isSocio} />
+            )}
+
             {/* 🚨 A COLETA É DE ANTES DA PEÇA. Em "montar inicial" para diante os
                 extratos já estão na pasta, e o bloco — com credencial, botões de
                 portal e histórico de coleta — só ocupa espaço no card que o
@@ -675,7 +689,7 @@ export function CaseDetailDrawer({
             {/* Avanço rápido pós-sentença (kanban vivo): move o card e preenche os
                 campos da fase (que alimentam Financeiro/Meu Espaço). O gatilho normal
                 é concluir o prazo na agenda; aqui é o botão pra quando não há prazo. */}
-            {c && phaseKey && ['sentenca', 'sentenca_favoravel', 'sentenca_desfavoravel', 'recurso', 'aguardando_arquivamento', 'transito', 'cumprimento', 'prestacao_contas'].includes(phaseKey) && (
+            {c && phaseKey && ['sentenca', 'sentenca_favoravel', 'sentenca_desfavoravel', 'recurso', 'aguardando_arquivamento', 'transito', 'acordo', 'cumprimento', 'prestacao_contas'].includes(phaseKey) && (
               <div className="mt-4 rounded-lg border border-[#cfe0ed] p-3 dark:border-zinc-800">
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Avançar fase</p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -690,7 +704,7 @@ export function CaseDetailDrawer({
             {/* CONTA PARA REPASSE — pré-requisito do aviso do alvará. A mensagem
                 CONFIRMA a conta (só os 4 últimos dígitos vão no texto) em vez de
                 pedir os dados: pedir dado por mensagem é o formato do golpe. */}
-            {c && phaseKey && ['transito', 'cumprimento', 'prestacao_contas', 'acoes_vencidas'].includes(phaseKey) && (
+            {c && phaseKey && ['transito', 'acordo', 'cumprimento', 'prestacao_contas', 'acoes_vencidas'].includes(phaseKey) && (
               <div className="mt-4 rounded-lg border border-[#cfe0ed] p-3 dark:border-zinc-800">
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#6C757D]">Conta para repasse</p>
                 {contaAtual && !contaEdit ? (

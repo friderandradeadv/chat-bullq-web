@@ -204,6 +204,9 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         status: 'analisada',
         resumo: `${a.grupo || 'grupo'}: ${a.indicios.length} indício(s) em ${contratos} contrato(s)`,
         indicios: a.indicios.map((i) => i.id),
+        // O grupo vai como CAMPO, não só dentro do resumo: é ele que o
+        // montador de churning lê para saber contra quem é a ação.
+        grupo: a.grupo || undefined,
       });
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
     } catch (e: any) {
