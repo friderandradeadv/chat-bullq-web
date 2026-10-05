@@ -326,7 +326,7 @@ export default function RevisionalPage() {
         </div>
 
         {/* ── Formulário ─────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-600 dark:bg-[#292F31]">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
           {/* ── Contrato em PDF: a IA transcreve, a conta é determinística ── */}
           <DropZone
             accept="application/pdf,.pdf"
@@ -336,7 +336,7 @@ export default function RevisionalPage() {
             className="mb-5"
             onFiles={(fs) => lerContrato(fs[0])}
           >
-            <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-5 text-center transition hover:border-blue-500 hover:bg-blue-50/40 dark:border-zinc-600 dark:bg-[#2F3639] dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
+            <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-5 text-center transition hover:border-blue-500 hover:bg-blue-50/40 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-blue-500 dark:hover:bg-blue-950/20">
               <input
                 type="file"
                 accept="application/pdf,.pdf"
@@ -598,11 +598,11 @@ export default function RevisionalPage() {
             </div>
 
             {/* Resumo financeiro */}
-            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-600 dark:bg-[#292F31]">
+            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
               <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-white">
                 Resumo — {res.modalidade.label}
               </div>
-              <dl className="divide-y divide-zinc-100 dark:divide-zinc-600">
+              <dl className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 <Row label="Parcela cobrada" valor={fmtBRL(res.resumo.parcelaContrato)} />
                 <Row label="Parcela justa (taxa de referência)" valor={fmtBRL(res.resumo.parcelaRecalculada)} />
                 <Row label="Diferença por parcela" valor={fmtBRL(res.resumo.diferencaParcela)} />
@@ -622,7 +622,7 @@ export default function RevisionalPage() {
                   destaque
                 />
               </dl>
-              <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-600">
+              <div className="flex flex-wrap items-center gap-2 border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-700">
                 <button
                   onClick={() => setDoc('calculo')}
                   className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -637,14 +637,14 @@ export default function RevisionalPage() {
                 </button>
                 <button
                   onClick={() => setDoc('parecer')}
-                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-500 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
                   <ClipboardCheck className="h-4 w-4" /> Parecer interno
                 </button>
                 <span className="w-full text-xs text-zinc-400 sm:w-auto">cálculo e apresentação vão ao cliente; o parecer é só nosso</span>
               </div>
               {caseId && (
-                <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-600">
+                <div className="border-t border-zinc-200 px-5 py-3.5 dark:border-zinc-700">
                   {salvouOk ? (
                     <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
                       <CheckCircle2 className="h-4 w-4" /> Salvo no processo
@@ -664,14 +664,14 @@ export default function RevisionalPage() {
             </div>
 
             {/* Planilha de descumprimento */}
-            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-600 dark:bg-[#292F31]">
+            <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
               <div className="border-b border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-900 dark:border-zinc-700 dark:text-white">
                 Planilha de descumprimento contratual
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-500 dark:text-zinc-400">
+                    <tr className="border-b border-zinc-200 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
                       <th className="px-4 py-2 font-medium">#</th>
                       <th className="px-4 py-2 font-medium">Vencimento</th>
                       <th className="px-4 py-2 text-right font-medium">Parcela cobrada</th>
@@ -684,10 +684,10 @@ export default function RevisionalPage() {
                     {res.linhas.map((l) => (
                       <tr
                         key={l.numero}
-                        className="border-b border-zinc-100 last:border-0 odd:bg-zinc-50/60 dark:border-zinc-600 dark:odd:bg-white/[0.05]"
+                        className="border-b border-zinc-100 last:border-0 dark:border-zinc-800"
                       >
                         <td className="px-4 py-1.5 text-zinc-500 dark:text-zinc-400">{l.numero}</td>
-                        <td className="px-4 py-1.5">
+                        <td className="px-4 py-1.5 text-zinc-700 dark:text-zinc-200">
                           {l.data.split('-').reverse().join('/')}
                           {l.paga && (
                             <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
@@ -695,11 +695,11 @@ export default function RevisionalPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-1.5 text-right">{fmtBRL(l.parcelaContrato)}</td>
+                        <td className="px-4 py-1.5 text-right text-zinc-900 dark:text-zinc-100">{fmtBRL(l.parcelaContrato)}</td>
                         <td className="px-4 py-1.5 text-right text-zinc-500 dark:text-zinc-400">
                           {fmtBRL(l.parcelaRecalculada)}
                         </td>
-                        <td className="px-4 py-1.5 text-right">{fmtBRL(l.diferenca)}</td>
+                        <td className="px-4 py-1.5 text-right text-zinc-900 dark:text-zinc-100">{fmtBRL(l.diferenca)}</td>
                         <td className="px-4 py-1.5 text-right font-medium">
                           {l.paga && l.valorAtualizado > 0 ? (
                             <span className="text-emerald-600 dark:text-emerald-400">
@@ -811,7 +811,7 @@ function Card({
         ? 'text-emerald-600 dark:text-emerald-400'
         : 'text-zinc-900 dark:text-white';
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-600 dark:bg-[#292F31]">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
       <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{titulo}</div>
       <div className={`mt-1 text-2xl font-semibold ${toneCls}`}>{valor}</div>
       {sub && <div className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{sub}</div>}
@@ -882,7 +882,7 @@ function PainelAuditoria({
 }) {
   const cap = a.capitalizacao;
   return (
-    <div className="mb-5 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-600 dark:bg-[#2F3639]">
+    <div className="mb-5 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
       <div className="mb-3 flex items-center gap-2">
         <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
@@ -938,7 +938,7 @@ function PainelAuditoria({
       </div>
 
       {irregs.length > 0 && (
-        <ul className="mt-3 space-y-1.5 border-t border-zinc-200 pt-3 dark:border-zinc-600">
+        <ul className="mt-3 space-y-1.5 border-t border-zinc-200 pt-3 dark:border-zinc-700">
           {irregs.map((i) => (
             <li key={i.id} className="flex items-start gap-2 text-xs">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -954,7 +954,7 @@ function PainelAuditoria({
       )}
 
       {e?.observacoes && (
-        <p className="mt-3 border-t border-zinc-200 pt-2 text-[11px] text-zinc-400 dark:border-zinc-600">
+        <p className="mt-3 border-t border-zinc-200 pt-2 text-[11px] text-zinc-400 dark:border-zinc-700">
           Leitura: {e.observacoes}
         </p>
       )}
@@ -974,7 +974,7 @@ function Cell({
   alerta?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-2.5 dark:border-zinc-600 dark:bg-[#292F31]">
+    <div className="rounded-lg border border-zinc-200 bg-white p-2.5 dark:border-zinc-700 dark:bg-zinc-900">
       <div className="text-[10px] uppercase tracking-wide text-zinc-400">{titulo}</div>
       <div
         className={`mt-0.5 text-base font-semibold tabular-nums ${alerta ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-900 dark:text-white'}`}
