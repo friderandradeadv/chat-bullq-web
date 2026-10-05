@@ -272,11 +272,73 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    * você vê a linha na tela e confere o réu antes de o card existir. Criar por
    * fora seria um segundo caminho, invisível e sem revisão.
    */
+  /**
+   * Grava os réus em "Contratos a impugnar". Devolve quantos entraram.
+   *
+   * 🚨 ACUMULA, não substitui: `jaTem` descarta quem já está na lista. É o que
+   * permite aceitar um grupo, trocar e aceitar o seguinte sem perder o
+   * anterior — e o que faz "aceitar todos" ser seguro depois de aceites
+   * avulsos.
+   */
+  const gravarReus = async (instituicoes: string[]) => {
+    // A lista vive no metadata do caso, é de onde o próprio drawer a lê.
+    const atuais: any[] = ((caso.metadata as any)?.contratos ?? []) as any[];
+    const jaTem = (reu: string) =>
+      atuais.some((c: any) => String(c?.reu ?? '').toUpperCase().trim() === reu.toUpperCase().trim());
+    const vistos = new Set<string>();
+    const novas = instituicoes
+      .filter((reu) => {
+        const k = reu.toUpperCase().trim();
+        if (!k || jaTem(reu) || vistos.has(k)) return false;
+        vistos.add(k);
+        return true;
+      })
+      .map((reu, i) => ({
+        id: `churn${Date.now().toString(36)}${i}`,
+        reu,
+        doc: null,
+        produto: 'CHURNING',
+        valor: null,
+        beneficio: /^(AP|PM)\b/.exec(caso.title ?? '')?.[1] ?? null,
+      }));
+    if (novas.length) await legalCasesService.saveContratos(caso.id, [...atuais, ...novas] as any);
+    return novas.length;
+  };
+
+  /**
+   * ACEITA TODOS OS GRUPOS DE UMA VEZ.
+   *
+   * 🚨 Existe para o caso em que a conversa com o cliente JÁ ACONTECEU por
+   * fora — foi o pedido do advogado no JOSÉ BATISTA: *"no caso dele eu já
+   * falei, ele já autorizou"*. Fora disso a regra continua sendo uma conversa
+   * por grupo, porque cada grupo é uma ação própria e o cliente precisa saber
+   * de qual se está falando. Por isso o botão diz quantos grupos vai aceitar e
+   * fica separado do "Aceitou" do grupo da vez.
+   */
+  const aceitarTodos = async () => {
+    setRegistrando(true);
+    try {
+      const todos = grupos.flatMap((g: any) => (g.instituicoes ?? []) as string[]);
+      const n = await gravarReus(todos);
+      const r = await legalCasesService.registrarOfertaChurning(caso.id, { status: 'aceita' });
+      qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
+      qc.invalidateQueries({ queryKey: ['legal-cases'] });
+      onMudou?.();
+      toast.success(
+        `${grupos.length} grupos aceitos — ${n} réu(s) em "Contratos a impugnar"`
+        + (r.moveu ? '; card movido para Montar inicial' : ''),
+      );
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui registrar os grupos.');
+    } finally {
+      setRegistrando(false);
+    }
+  };
+
   const responder = async (status: 'aceita' | 'recusada') => {
     setRegistrando(true);
     try {
       if (status === 'aceita' && achado?.instituicoes?.length) {
-        // A lista vive no metadata do caso, é de onde o próprio drawer a lê.
         const atuais: any[] = ((caso.metadata as any)?.contratos ?? []) as any[];
         const jaTem = (reu: string) =>
           atuais.some((c: any) => String(c?.reu ?? '').toUpperCase().trim() === reu.toUpperCase().trim());
@@ -387,10 +449,27 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                         ofertá-los. No HISCON do JOSÉ BATISTA eram cinco, e quatro
                         ficariam para trás. Cada um continua sendo uma ação e uma
                         conversa própria, por isso se escolhe UM de cada vez. */}
-                    <p className="text-[10px] leading-4 text-amber-700 dark:text-amber-400">
-                      {grupos.length} grupos com indício de reciclagem. Cada um é uma ação e uma
-                      conversa própria: escolha de qual ofertar agora.
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-[10px] leading-4 text-amber-700 dark:text-amber-400">
+                        {grupos.length} grupos com indício de reciclagem. Cada um é uma ação e uma
+                        conversa própria: escolha de qual ofertar agora.
+                      </p>
+                      {/* 🚨 ATALHO PARA QUANDO A CONVERSA JÁ ACONTECEU POR FORA.
+                          Pedido do advogado no JOSÉ BATISTA: "no caso dele eu já
+                          falei, ele já autorizou". Fora disso a regra continua
+                          sendo uma conversa por grupo — por isso este botão fica
+                          separado do "Aceitou" do grupo da vez e diz, no próprio
+                          rótulo, quantas ações está aceitando. */}
+                      <button
+                        onClick={() => aceitarTodos()}
+                        disabled={registrando || analisando}
+                        title={`Grava os réus dos ${grupos.length} grupos em "Contratos a impugnar" de uma vez. `
+                          + 'Use quando o cliente já autorizou todos por fora — cada grupo continua virando uma ação separada.'}
+                        className="rounded-lg border border-emerald-500 px-2 py-1 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                      >
+                        Aceitar todos os {grupos.length}
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-1">
                       {grupos.map((g: any) => {
                         const nome = g.grupo ?? (g.instituicoes ?? [])[0] ?? '—';
