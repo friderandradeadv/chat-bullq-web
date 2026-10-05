@@ -752,3 +752,132 @@ function Row({
     </div>
   );
 }
+
+/** Parcelas já vencidas até hoje, a partir do 1º vencimento (cap em n). */
+function vencidasAte(primeiroVencimento: string, n: number): number {
+  const [ay, am, ad] = primeiroVencimento.split('-').map(Number);
+  if (!ay || !am) return 0;
+  const hoje = new Date();
+  let meses = (hoje.getFullYear() - ay) * 12 + (hoje.getMonth() + 1 - am);
+  if (hoje.getDate() >= (ad || 1)) meses += 1; // a do mês corrente já venceu
+  return Math.max(0, Math.min(n, meses));
+}
+
+/**
+ * O que o contrato DIZ × o que ele FAZ. Aparece depois de ler o PDF e antes do
+ * cálculo — é a conferência que o advogado faz com o instrumento na mão.
+ */
+function PainelAuditoria({
+  a,
+  e,
+  irregs,
+}: {
+  a: AuditoriaContrato;
+  e: ExtracaoContrato | null;
+  irregs: IrregularidadeContrato[];
+}) {
+  const cap = a.capitalizacao;
+  return (
+    <div className="mb-5 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-800/30">
+      <div className="mb-3 flex items-center gap-2">
+        <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+          Auditoria do contrato
+          {e?.banco ? <span className="font-normal text-zinc-500"> — {e.banco}</span> : null}
+          {e?.numeroContrato ? <span className="font-normal text-zinc-400"> · {e.numeroContrato}</span> : null}
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Cell
+          titulo="Taxa escrita"
+          valor={a.divergenciaTaxa ? fmtPct(a.divergenciaTaxa.escritaPct) : '—'}
+          sub="a.m., como no contrato"
+        />
+        <Cell
+          titulo="Taxa praticada"
+          valor={fmtPct(a.taxaPeriodicaMensalPct)}
+          sub="a.m., pela parcela cobrada"
+          alerta={!!a.divergenciaTaxa && a.divergenciaTaxa.diferencaPp > 0.01}
+        />
+        <Cell
+          titulo="CET apurado"
+          valor={fmtPct(a.cetAnualPct)}
+          sub={
+            a.divergenciaCet
+              ? `a.a. · contrato diz ${fmtPct(a.divergenciaCet.escritaPct)}`
+              : 'a.a., sobre o líquido liberado'
+          }
+          alerta={!!a.divergenciaCet && a.divergenciaCet.diferencaPp > 0.1}
+        />
+        <Cell
+          titulo="Líquido liberado"
+          valor={fmtBRL(a.valorLiberadoLiquido)}
+          sub={a.encargosTotais > 0 ? `${fmtBRL(a.encargosTotais)} de encargos` : 'sem encargos lidos'}
+          alerta={a.encargosTotais > 0}
+        />
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+        <p className="text-zinc-600 dark:text-zinc-300">
+          <span className="font-medium">Carência:</span> {a.carenciaDias} dias até a 1ª parcela
+          {a.carenciaDias > 32 ? ' — prazo extra embute juros.' : '.'}
+        </p>
+        <p className="text-zinc-600 dark:text-zinc-300">
+          <span className="font-medium">Capitalização:</span>{' '}
+          {cap.pactuada === null
+            ? 'taxas do contrato não lidas — teste do duodécuplo não aplicado.'
+            : cap.pactuada
+              ? `pactuada (anual ${fmtPct(cap.anualContratadaPct)} > duodécuplo ${fmtPct(cap.duodecuploPct)}).`
+              : `SEM pactuação expressa (anual ${fmtPct(cap.anualContratadaPct)} ≤ duodécuplo ${fmtPct(cap.duodecuploPct)}) — Súmulas 539 e 541/STJ.`}
+        </p>
+      </div>
+
+      {irregs.length > 0 && (
+        <ul className="mt-3 space-y-1.5 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+          {irregs.map((i) => (
+            <li key={i.id} className="flex items-start gap-2 text-xs">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+              <span className="text-zinc-600 dark:text-zinc-300">
+                <b className="text-zinc-800 dark:text-zinc-100">{i.tipo}</b>
+                {i.valor ? <span className="text-amber-600 dark:text-amber-400"> · {i.valor}</span> : null}
+                <br />
+                {i.fundamento}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {e?.observacoes && (
+        <p className="mt-3 border-t border-zinc-200 pt-2 text-[11px] text-zinc-400 dark:border-zinc-700">
+          Leitura: {e.observacoes}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Cell({
+  titulo,
+  valor,
+  sub,
+  alerta,
+}: {
+  titulo: string;
+  valor: string;
+  sub?: string;
+  alerta?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-2.5 dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="text-[10px] uppercase tracking-wide text-zinc-400">{titulo}</div>
+      <div
+        className={`mt-0.5 text-base font-semibold tabular-nums ${alerta ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-900 dark:text-white'}`}
+      >
+        {valor}
+      </div>
+      {sub && <div className="text-[10px] text-zinc-400">{sub}</div>}
+    </div>
+  );
+}
