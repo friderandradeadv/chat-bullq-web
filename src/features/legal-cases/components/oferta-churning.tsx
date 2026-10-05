@@ -409,9 +409,20 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
               {analisando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
               {analisando ? 'Lendo o HISCON…' : 'Analisar cadeia'}
             </button>
-            {enviada && (
+            {/* 🚨 A RESPOSTA DO CLIENTE NÃO DEPENDE DE TER ENVIADO POR AQUI.
+                Estes botões só apareciam com `enviada`, isto é, depois de a
+                mensagem sair pelo hub. Mas a conversa acontece fora dele o
+                tempo todo — no JOSÉ BATISTA o advogado já tinha falado e
+                autorizado ("não tem botão de cliente aceitou, quero criar os
+                cards"), e sem o botão não havia como registrar o aceite nem
+                criar os cards dos réus. Basta haver análise: quem fala com o
+                cliente é o advogado, não a tela. */}
+            {(enviada || !!achado?.instituicoes?.length) && (
               <>
                 <button type="button" onClick={() => responder('aceita')} disabled={registrando}
+                  title={enviada
+                    ? 'Registra o aceite e põe os réus deste grupo em "Contratos a impugnar".'
+                    : 'A conversa aconteceu por fora? Registra o aceite deste grupo do mesmo jeito e põe os réus em "Contratos a impugnar".'}
                   className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
                   <Check className="h-3 w-3" /> Cliente aceitou
                 </button>
