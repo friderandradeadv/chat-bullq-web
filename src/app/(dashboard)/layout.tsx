@@ -19,6 +19,7 @@ import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sy
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
 import { AvisoNovaVersao } from '@/features/legal-cases/components/aviso-nova-versao';
 import { AssinaturaBanner } from '@/features/legal-cases/components/assinatura-banner';
+import { EtiquetaCoresProvider } from '@/features/legal-cases/components/etiqueta-cores-provider';
 import { GlobalSearch } from '@/components/layout/global-search';
 import { ThemeToggle } from '@/features/auth/components/theme-toggle';
 import {
@@ -161,6 +162,9 @@ export default function DashboardLayout({
     // Provider ENVOLVE o SidebarLayout: assim o sino (no app bar do topo, que o
     // SidebarLayout renderiza) e o painel de notificações compartilham o contexto.
     <NotificationCenterProvider>
+      {/* Carrega as cores escolhidas à mão para as etiquetas antes dos quadros
+          desenharem — ver a nota no próprio provedor. */}
+      <EtiquetaCoresProvider>
       <SidebarLayout
         hideDesktopSidebar={simples}
         sidebar={<AppSidebar />}
@@ -256,6 +260,7 @@ export default function DashboardLayout({
         {/* Modo simples: barra de atalhos inferior também no desktop */}
         {simples && <SimpleTabBar />}
       </SidebarLayout>
+      </EtiquetaCoresProvider>
     </NotificationCenterProvider>
   );
 }

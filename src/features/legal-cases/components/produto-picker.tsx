@@ -2,7 +2,10 @@
 
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import { produtoColor } from '@/features/legal-cases/lib/etiqueta-cores';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { produtoColor, setEtiquetaCores, getEtiquetaCores } from '@/features/legal-cases/lib/etiqueta-cores';
+import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { PRODUTO_PRESETS } from '@/features/legal-cases/lib/etiquetas';
 
 /**
@@ -18,10 +21,10 @@ import { PRODUTO_PRESETS } from '@/features/legal-cases/lib/etiquetas';
  * `lib/etiquetas.ts`; agora o seletor também. É a mesma regra de
  * `etiqueta-cores.ts`: isto se muda num lugar só.
  *
- * 🚨 A COR VEM DE REGRA, NÃO DE CAMPO. `produtoColor` casa por pedaço do nome
- * ("BPC", "RMC", "TRABALH"…). Etiqueta nova sem regra sai CINZA — e, hoje, não
- * há onde guardar cor escolhida à mão: isso exige armazenamento, que não
- * existe. Enquanto não existir, cor nova se acrescenta em `etiqueta-cores.ts`.
+ * 🚨 A COR TEM DOIS DONOS, NESTA ORDEM. Primeiro a escolhida à mão (guardada em
+ * `organizations.settings.etiquetaCores`, editável na bolinha ao lado de cada
+ * item); se não houver, a REGRA de `etiqueta-cores.ts`, que casa por pedaço do
+ * nome. Etiqueta nova sem nenhuma das duas sai cinza — e agora dá para pintar.
  */
 export function ProdutoPicker({
   list,
@@ -41,6 +44,28 @@ export function ProdutoPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState('');
+  const [salvando, setSalvando] = useState('');
+  const qc = useQueryClient();
+
+  // 🚨 PINTA ANTES DE CONFIRMAR, E DESPINTA SE FALHAR. O seletor de cor do
+  // navegador dispara a cada arrasto; esperar o servidor a cada evento deixaria
+  // a bolinha travada. Então o mapa do módulo muda na hora (é o que todos os
+  // cards leem) e o servidor é avisado no fim. Dando erro, volta ao que era.
+  const pintar = async (nome: string, hex: string) => {
+    const antes = { ...getEtiquetaCores() };
+    setEtiquetaCores({ ...antes, [nome.trim().toLowerCase()]: hex });
+    setSalvando(nome);
+    try {
+      const map = await legalCasesService.salvarEtiquetaCor(nome, hex);
+      setEtiquetaCores(map);
+      qc.invalidateQueries({ queryKey: ['etiqueta-cores'] });
+    } catch (e: any) {
+      setEtiquetaCores(antes);
+      toast.error(e?.response?.data?.message || 'Não consegui salvar a cor');
+    } finally {
+      setSalvando('');
+    }
+  };
 
   const disponiveis = sugestoes.filter(
     (p) =>
@@ -113,15 +138,29 @@ export function ProdutoPicker({
                 </button>
               )}
               {disponiveis.map((p) => (
-                <button
-                  key={p}
-                  disabled={busy}
-                  onClick={() => adicionar(p)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800"
-                >
-                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: produtoColor(p).bg }} />
-                  <span className="truncate text-zinc-700 dark:text-zinc-300">{p}</span>
-                </button>
+                <div key={p} className="flex w-full items-center gap-2 px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                  {/* a bolinha É o seletor de cor: clicar nela pinta a etiqueta
+                      em todos os quadros; clicar no nome adiciona ao processo */}
+                  <label
+                    title={`Cor de ${p}`}
+                    className="relative h-3.5 w-3.5 shrink-0 cursor-pointer rounded-full ring-1 ring-black/10"
+                    style={{ background: produtoColor(p).bg, opacity: salvando === p ? 0.4 : 1 }}
+                  >
+                    <input
+                      type="color"
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      onChange={(e) => pintar(p, e.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => adicionar(p)}
+                    className="flex min-w-0 flex-1 items-center text-left text-sm disabled:opacity-50"
+                  >
+                    <span className="truncate text-zinc-700 dark:text-zinc-300">{p}</span>
+                  </button>
+                </div>
               ))}
               {!disponiveis.length && !custom.trim() && (
                 <p className="px-3 py-2 text-xs text-zinc-400">Todas já estão no processo.</p>

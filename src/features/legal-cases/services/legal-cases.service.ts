@@ -519,6 +519,18 @@ export const legalCasesService = {
     }
     return kb;
   },
+  /** Cores escolhidas à mão para as etiquetas (mapa nome-minúsculo → #RRGGBB). */
+  async etiquetaCores(): Promise<Record<string, string>> {
+    const { data } = await api.get('/legal-cases/etiquetas/cores');
+    return (data?.data ?? data) ?? {};
+  },
+
+  /** Define a cor de uma etiqueta; `cor = null` devolve ela à regra padrão. */
+  async salvarEtiquetaCor(nome: string, cor: string | null): Promise<Record<string, string>> {
+    const { data } = await api.put('/legal-cases/etiquetas/cores', { nome, cor });
+    return (data?.data ?? data) ?? {};
+  },
+
   /** Etiquetas (produto/área) já usadas nos processos, da mais comum para a mais rara. */
   async etiquetasEmUso(): Promise<string[]> {
     const { data } = await api.get('/legal-cases/etiquetas');

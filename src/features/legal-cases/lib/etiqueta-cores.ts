@@ -15,8 +15,47 @@ export interface CorEtiqueta { bg: string; fg: string }
 
 const CINZA: CorEtiqueta = { bg: 'rgb(209,209,209)', fg: '#101820' };
 
+/**
+ * EXCEÇÕES ESCOLHIDAS À MÃO (05/10/2026) — mapa nome(minúsculo) → #RRGGBB.
+ *
+ * 🚨 A REGRA ABAIXO CONTINUA SENDO O PADRÃO. Ela casa por pedaço do nome e
+ * cobre o catálogo do escritório; o que ela não conhece saía CINZA, e não havia
+ * onde dizer outra coisa. Isto aqui é a exceção, consultada ANTES dela, e vem
+ * de `organizations.settings.etiquetaCores`.
+ *
+ * 🚨 É MÓDULO, NÃO ESTADO DE REACT, de propósito. `produtoColor` é função pura
+ * chamada em 15 lugares de 8 arquivos; transformá-la em hook obrigaria a mexer
+ * em todos. Quem carrega o mapa é o `EtiquetaCoresProvider`, montado no layout
+ * do painel: ele preenche isto ANTES de os quadros desenharem e re-renderiza
+ * uma vez quando o mapa chega.
+ */
+let EXCECOES: Record<string, string> = {};
+
+export function setEtiquetaCores(map: Record<string, string> | null | undefined) {
+  EXCECOES = map && typeof map === 'object' ? map : {};
+}
+export function getEtiquetaCores(): Record<string, string> {
+  return EXCECOES;
+}
+
+/** Preto ou branco por cima do fundo, pela luminância — texto tem de ser legível. */
+export function corDoTexto(hex: string): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#101820' : '#fff';
+}
+
+function excecao(nome: string | null | undefined): CorEtiqueta | null {
+  const k = (nome ?? '').trim().toLowerCase();
+  if (!k) return null;
+  const hex = EXCECOES[k];
+  return hex ? { bg: hex, fg: corDoTexto(hex) } : null;
+}
+
 /** Cor do PRODUTO (1ª etiqueta: RMC, Contribuições, Execução de Título…). */
 export function produtoColor(p: string | null | undefined): CorEtiqueta {
+  const escolhida = excecao(p);
+  if (escolhida) return escolhida;   // cor à mão vence a regra
   const s = (p ?? '').toUpperCase();
   // ── previdenciário ──────────────────────────────────────────────────────
   if (/DOEN/.test(s)) return { bg: 'rgb(229,176,80)', fg: '#101820' };
@@ -65,6 +104,8 @@ export function produtoColor(p: string | null | undefined): CorEtiqueta {
  * Continua sendo função (e não uma constante solta) para o cinza morar num
  * lugar só: antes ele estava escrito à mão em cinco quadros diferentes.
  */
-export function areaColor(_a?: string | null): CorEtiqueta {
-  return CINZA;
+export function areaColor(a?: string | null): CorEtiqueta {
+  // a 2ª etiqueta é cinza por padrão, mas cor escolhida à mão vale aqui também:
+  // quem pinta "Bancário" espera ver "Bancário" pintado nos dois lugares.
+  return excecao(a) ?? CINZA;
 }
