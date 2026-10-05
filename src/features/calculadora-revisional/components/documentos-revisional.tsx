@@ -69,7 +69,7 @@ function Folha({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-zinc-100 dark:bg-zinc-950">
-      <div className="no-print flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-600 dark:bg-[#292F31]">
+      <div className="no-print flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-700 dark:bg-zinc-900">
         <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{titulo}</span>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => gerar(true)} disabled={ocupado !== null} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">

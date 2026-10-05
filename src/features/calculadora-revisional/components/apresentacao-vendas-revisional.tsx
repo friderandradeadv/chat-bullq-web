@@ -138,13 +138,13 @@ export function ApresentacaoVendasRevisional({
       type="number"
       value={v}
       onChange={(e) => set(Number(e.target.value) || 0)}
-      className="w-28 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+      className="w-28 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
     />
   );
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-zinc-100 dark:bg-zinc-950">
-      <div className="no-print flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-700 dark:bg-[#292F31]">
+      <div className="no-print flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white px-4 py-2 dark:border-zinc-700 dark:bg-zinc-900">
         <Sliders className="h-4 w-4 text-[#B7791F]" />
         <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Apresentação de vendas — {nome}</span>
         <div className="ml-auto flex items-center gap-2">
@@ -160,7 +160,7 @@ export function ApresentacaoVendasRevisional({
       </div>
 
       {/* Controles de preço — não entram no PDF */}
-      <div className="no-print flex shrink-0 flex-wrap items-end gap-4 border-b border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-700 dark:bg-[#22272A]">
+      <div className="no-print flex shrink-0 flex-wrap items-end gap-4 border-b border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-700 dark:bg-zinc-900/60">
         <Campo label="Proveito econômico">{num(proveito, setProveito)}</Campo>
         <Campo label="Valor de tabela">{num(valorTabela, setValorTabela)}</Campo>
         <Campo label="Êxito tabela %">{num(pctExitoTabela, setPctExitoTabela)}</Campo>
@@ -201,7 +201,7 @@ export function ApresentacaoVendasRevisional({
             </div>
             <div className="mt-4">
               <p className="text-[11px] font-bold uppercase tracking-wide text-[#B7791F]">O que vamos pedir</p>
-              <div className="mt-2 flex flex-col divide-y divide-zinc-100 dark:divide-zinc-700">
+              <div className="mt-2 flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
                 {dados.teses.map((t) => (
                   <div key={t.rubrica} className="flex items-center justify-between gap-4 py-2.5">
                     <span className="flex items-center gap-2 text-[13px] text-zinc-700 dark:text-zinc-200"><Check className="h-4 w-4 shrink-0 text-[#B7791F]" /> {t.rubrica}</span>
@@ -237,7 +237,7 @@ export function ApresentacaoVendasRevisional({
           <Slide>
             <SlideKicker>O que está incluído</SlideKicker>
             <p className="text-[13px] text-zinc-600 dark:text-zinc-300">Contratado avulso, cada etapa custaria:</p>
-            <div className="mt-3 flex flex-col divide-y divide-zinc-100 dark:divide-zinc-700">
+            <div className="mt-3 flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
               {stack.map((s) => (
                 <div key={s.n} className="flex items-center justify-between gap-4 py-2">
                   <span className="flex items-center gap-2 text-[13px] text-zinc-700 dark:text-zinc-300"><Check className="h-4 w-4 shrink-0 text-[#B7791F]" /> {s.n}</span>
@@ -348,7 +348,7 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
 }
 function Slide({ children, dark }: { children: React.ReactNode; dark?: boolean }) {
   return (
-    <section className={`print-slide flex min-h-[440px] flex-col rounded-2xl p-9 shadow-sm ${dark ? 'bg-gradient-to-br from-[#1a1206] via-[#2a1d0a] to-[#101820] ring-1 ring-[#B7791F]/20' : 'border border-zinc-200 bg-white dark:border-zinc-600 dark:bg-[#292F31]'}`} style={{ pageBreakAfter: 'always' }}>
+    <section className={`print-slide flex min-h-[440px] flex-col rounded-2xl p-9 shadow-sm ${dark ? 'bg-gradient-to-br from-[#1a1206] via-[#2a1d0a] to-[#101820] ring-1 ring-[#B7791F]/20' : 'border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'}`} style={{ pageBreakAfter: 'always' }}>
       {children}
     </section>
   );
@@ -358,7 +358,7 @@ function SlideKicker({ children }: { children: React.ReactNode }) {
 }
 function Stat({ label, value, good }: { label: string; value: string; good?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 text-center ${good ? 'border-emerald-500/30 bg-emerald-50 dark:bg-emerald-900/15' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800/40'}`}>
+    <div className={`rounded-xl border p-4 text-center ${good ? 'border-emerald-500/30 bg-emerald-50 dark:bg-emerald-900/15' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/40'}`}>
       <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
       <p className={`mt-1 font-serif text-xl font-bold ${good ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}`}>{value}</p>
     </div>
@@ -366,7 +366,7 @@ function Stat({ label, value, good }: { label: string; value: string; good?: boo
 }
 function ExitoExplica({ proveito, pctExito, exito, dark }: { proveito: number; pctExito: number; exito: number; dark?: boolean }) {
   return (
-    <div className={`mt-3 rounded-lg border p-3.5 text-[12px] leading-relaxed ${dark ? 'border-[#B7791F]/30 bg-white/5 text-white/75' : 'border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-600 dark:bg-zinc-800/40 dark:text-zinc-300'}`}>
+    <div className={`mt-3 rounded-lg border p-3.5 text-[12px] leading-relaxed ${dark ? 'border-[#B7791F]/30 bg-white/5 text-white/75' : 'border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300'}`}>
       <p>O êxito é <b>{pct(pctExito)} sobre o proveito</b> — sobre o que você efetivamente recuperar e deixar de pagar, nunca sobre o valor do contrato.</p>
       <p className={`mt-1.5 font-semibold ${dark ? 'text-[#e0b872]' : 'text-[#B7791F]'}`}>Ex.: proveito de {fmtBRL(proveito)} × {pct(pctExito)} = {fmtBRL(exito)} de êxito</p>
       <p className={`mt-1.5 ${dark ? 'text-white/55' : 'text-zinc-400'}`}>É uma <b>estimativa</b> pela projeção atual e <b>varia com o resultado</b>: o fixo é o <b>percentual</b>, nunca o valor.</p>
