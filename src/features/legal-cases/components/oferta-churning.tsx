@@ -366,7 +366,10 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       onMudou?.();
       toast.success(
         `${escolhidos.length} grupo(s) aceito(s). `
-        + (criados ? `${criados} card(s) de réu criados em Montar inicial.` : 'Nenhum card novo: os réus já tinham card.'),
+        + (criados
+          ? `${criados} card(s) de réu criados em Montar inicial.`
+            + ' Este card segue sendo a análise — volte aqui para ofertar outro grupo.'
+          : 'Nenhum card novo: os réus já tinham card.'),
         { duration: 10000 },
       );
     } catch (e: any) {
@@ -412,7 +415,8 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         const nomes = (achado?.instituicoes ?? []).join(' e ');
         toast.success(
           criados
-            ? `${criados} card(s) criados em Montar inicial: ${nomes}.`
+            ? `${criados} card(s) de réu criados em Montar inicial: ${nomes}.`
+              + ' Este card segue sendo a análise — volte aqui para ofertar outro grupo.'
             : `${nomes || 'Os réus'} já tinham card — nada novo foi criado.`,
           { duration: 10000 },
         );
