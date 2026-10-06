@@ -299,6 +299,20 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    * anterior — e o que faz "aceitar todos" ser seguro depois de aceites
    * avulsos.
    */
+  /**
+   * Cria os cards dos réus logo depois do aceite.
+   *
+   * 🚨 SEM ARQUIVAR O PAI. O desmembramento do intake arquiva o card de origem,
+   * porque lá ele cumpriu o papel. No churning o MESMO card rende uma oferta
+   * por grupo econômico: arquivá-lo no primeiro aceite tornaria os outros
+   * grupos inalcançáveis. Réu que já tem card é pulado na API, então aceitar o
+   * segundo grupo não recria os cards do primeiro.
+   */
+  const criarCardsDosReus = async () => {
+    const r = await legalCasesService.gerarIniciais(caso.id, 'montar_inicial', false);
+    return r?.criados ?? 0;
+  };
+
   const gravarReus = async (instituicoes: string[]) => {
     // A lista vive no metadata do caso, é de onde o próprio drawer a lê.
     const atuais: any[] = ((caso.metadata as any)?.contratos ?? []) as any[];
@@ -340,16 +354,16 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       const escolhidos = grupos.filter((g: any) =>
         marcados.has(String(g.grupo ?? (g.instituicoes ?? [])[0] ?? '')));
       const todos = escolhidos.flatMap((g: any) => (g.instituicoes ?? []) as string[]);
-      const n = await gravarReus(todos);
+      await gravarReus(todos);
       const r = await legalCasesService.registrarOfertaChurning(caso.id, { status: 'aceita' });
+      const criados = await criarCardsDosReus();
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
       onMudou?.();
       toast.success(
-        `${escolhidos.length} grupo(s) aceito(s), ${n} réu(s) em "Contratos a impugnar".`
-        + ' Agora clique em "Gerar iniciais" no card para criar um processo por réu.'
-        + (r.moveu ? ' O card foi para Montar inicial.' : ''),
-        { duration: 12000 },
+        `${escolhidos.length} grupo(s) aceito(s). `
+        + (criados ? `${criados} card(s) de réu criados em Montar inicial.` : 'Nenhum card novo: os réus já tinham card.'),
+        { duration: 10000 },
       );
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui registrar os grupos.');
@@ -390,12 +404,13 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       // card sem réu achando que algo tinha dado errado: "criou esse card
       // vazio". O toast é o único lugar que sobra para dizer o próximo passo.
       if (status === 'aceita') {
+        const criados = await criarCardsDosReus();
         const nomes = (achado?.instituicoes ?? []).join(' e ');
         toast.success(
-          `${nomes || 'Réus'} em "Contratos a impugnar".`
-          + ` Agora clique em "Gerar iniciais" no card para criar um processo por réu.`
-          + (r.moveu ? ' O card foi para Montar inicial.' : ''),
-          { duration: 12000 },
+          criados
+            ? `${criados} card(s) criados em Montar inicial: ${nomes}.`
+            : `${nomes || 'Os réus'} já tinham card — nada novo foi criado.`,
+          { duration: 10000 },
         );
       } else {
         toast.success('Recusa registrada');

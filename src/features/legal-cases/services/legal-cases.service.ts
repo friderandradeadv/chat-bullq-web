@@ -958,8 +958,13 @@ export const legalCasesService = {
   async gerarIniciais(
     id: string,
     destino?: 'info_faltantes' | 'montar_inicial',
-  ): Promise<{ ok: boolean; criados: number; filhos: { id: string; title: string; reu: string; produto: string }[] }> {
-    const { data } = await api.post(`/legal-cases/${id}/gerar-iniciais`, destino ? { destino } : {});
+    /** `false` mantém o card-pai vivo — o churning desmembra uma vez por grupo. */
+    arquivarPai?: boolean,
+  ): Promise<{ ok: boolean; criados: number; jaExistiam?: number; filhos: { id: string; title: string; reu: string; produto: string }[] }> {
+    const { data } = await api.post(`/legal-cases/${id}/gerar-iniciais`, {
+      ...(destino ? { destino } : {}),
+      ...(arquivarPai === false ? { arquivarPai: false } : {}),
+    });
     return data.data ?? data;
   },
   /** Upload do JG (PDF base64) → IA extrai líquido/anual para a justiça gratuita. */
