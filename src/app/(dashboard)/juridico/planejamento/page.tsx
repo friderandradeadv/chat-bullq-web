@@ -170,7 +170,7 @@ export default function PlanejamentoPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 lg:!pt-12">
       {casesFilter.caseIds && (
         <CasesFilterBanner
           cliente={casesFilter.cliente}
@@ -210,7 +210,7 @@ export default function PlanejamentoPage() {
         <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => { vaoK.aoIniciar(e); setActiveId(e.active.id as string); }} onDragMove={vaoK.aoMover} onDragCancel={() => { vaoK.fechar(); setActiveId(null); }} onDragEnd={onDragEnd}>
           {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
           <RolagemNoArraste />
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:pl-6 snap-x snap-mandatory lg:snap-none">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} bulk={bulk} onOpen={setOpenCaseId} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} phases={phases} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined}  vao={vaoK.vao} arrastadoId={activeId} />
@@ -236,7 +236,7 @@ function Column({ phase, items, bulk, onOpen, canRename, onRename, onDelete, pha
   // Ids na ordem da tela — habilitam o "selecionar todos" e o shift+clique.
   const colIds = useMemo(() => sorted.map((c) => c.id), [sorted]);
   return (
-    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#12B886] bg-[#12B886]/5 dark:bg-[#12B886]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[280px] sm:max-w-none rounded-xl border transition-colors ${isOver ? 'border-[#12B886] bg-[#12B886]/5 dark:bg-[#12B886]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(colIds, true); }} cardIds={colIds} phases={phases} />
         <span className="ml-auto flex items-center gap-1.5">
@@ -244,7 +244,7 @@ function Column({ phase, items, bulk, onOpen, canRename, onRename, onDelete, pha
           <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
         </span>
       </div>
-      <div ref={setNodeRef} {...colAttr(phase.key)} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+      <div ref={setNodeRef} {...colAttr(phase.key)} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {comVao(sorted, phase.key, vao ?? null, arrastadoId ?? null).map(({ item: c, desloca }) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} bulk={bulk} colIds={colIds} onOpen={onOpen} desloca={desloca} />)}
       </div>

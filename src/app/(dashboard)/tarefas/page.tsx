@@ -89,7 +89,7 @@ export default function TarefasPage() {
   };
 
   return (
-    <div className="flex h-full flex-col min-h-0 max-lg:overflow-y-auto">
+    <div className="flex h-full flex-col min-h-0">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
         <h1 className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
@@ -135,7 +135,7 @@ export default function TarefasPage() {
         >
           {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
           <RolagemNoArraste />
-          <div className="flex gap-3 overflow-x-auto p-4 lg:flex-1 lg:min-h-0">
+          <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 snap-x snap-mandatory lg:snap-none">
             {COLUMNS.map((col) => (
               <Column
                 key={col}
@@ -169,7 +169,7 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
-    <div className="flex w-80 shrink-0 flex-col rounded-xl bg-zinc-100/70 dark:bg-zinc-900/60">
+    <div className="flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-80 sm:max-w-none rounded-xl bg-zinc-100/70 dark:bg-zinc-900/60">
       <div className="flex items-center gap-2 px-3 py-2.5">
         <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{TASK_STATUS_LABELS[status]}</span>
         <span className="ml-auto rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
@@ -179,7 +179,7 @@ function Column({
       <div
         ref={setNodeRef}
         className={cn(
-          'space-y-2 rounded-lg px-2 pb-2 min-h-[120px] transition-colors lg:flex-1 lg:overflow-y-auto',
+          'space-y-2 rounded-lg px-2 pb-2 min-h-[120px] transition-colors flex-1 overflow-y-auto',
           isOver && 'bg-primary/[0.06] ring-1 ring-inset ring-primary/30',
         )}
       >

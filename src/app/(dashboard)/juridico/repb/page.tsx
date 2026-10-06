@@ -162,7 +162,7 @@ export default function RepbPage() {
   });
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 lg:!pt-12">
       {/* Toggle Passivo | Funil de vendas — o Funil é a fase comercial pré-contrato. */}
       {casesFilter.caseIds && (
         <CasesFilterBanner
@@ -242,12 +242,12 @@ export default function RepbPage() {
 function Column({ phase, items, onOpen, canRename, onRename, onDelete }: { phase: KanbanPhase; items: KanbanCard[]; onOpen: (id: string) => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   return (
-    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div className={`flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[280px] sm:max-w-none rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} />
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
-      <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+      <div ref={setNodeRef} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((c) => <Card key={c.id} c={c} onOpen={onOpen} />)}
       </div>
@@ -344,7 +344,7 @@ function BancoBoard({ caseId, phases, onOpenBank, scroll }: { caseId: string; ph
     <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragCancel={() => setActiveId(null)} onDragEnd={onDragEnd}>
       {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
       <RolagemNoArraste />
-      <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+      <div ref={scroll.ref} {...scroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:pl-6 snap-x snap-mandatory lg:snap-none">
         {phases.map((phase) => <BancoColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} malCount={malCount} onOpen={(bid) => onOpenBank(caseId, bid)} />)}
       </div>
       <DragOverlay dropAnimation={pousoKanban}>{activeParty ? <BancoCard party={activeParty} malCount={malCount} overlay /> : null}</DragOverlay>
@@ -356,13 +356,13 @@ function BancoColumn({ phase, items, malCount, onOpen }: { phase: KanbanPhase; i
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const total = items.reduce((a, p) => a + parseBRL((p.metadata as any)?.saldoDevedor), 0);
   return (
-    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div className={`flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[280px] sm:max-w-none rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <span className="truncate text-[13px] font-semibold text-[#101820] dark:text-zinc-200">{phase.label}</span>
         {total > 0 && <span className="text-[11px] text-zinc-400">{fmtMoney(total)}</span>}
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
-      <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+      <div ref={setNodeRef} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((p) => <BancoCard key={p.id} party={p} malCount={malCount} onOpen={onOpen} />)}
       </div>
@@ -444,7 +444,7 @@ function BancosGlobalBoard({ clientes, phases, onOpenBank, scroll }: { clientes:
     <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragCancel={() => setActiveId(null)} onDragEnd={onDragEnd}>
       {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
       <RolagemNoArraste />
-      <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+      <div ref={scroll.ref} {...scroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:pl-6 snap-x snap-mandatory lg:snap-none">
         {phases.map((phase) => <BancoGlobalColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpen={onOpenBank} />)}
       </div>
       <DragOverlay dropAnimation={pousoKanban}>{activeB ? <BancoGlobalCard b={activeB} overlay /> : null}</DragOverlay>
@@ -456,13 +456,13 @@ function BancoGlobalColumn({ phase, items, onOpen }: { phase: KanbanPhase; items
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const total = items.reduce((a, b) => a + parseBRL((b.party.metadata as any)?.saldoDevedor), 0);
   return (
-    <div className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div className={`flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[280px] sm:max-w-none rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <span className="truncate text-[13px] font-semibold text-[#101820] dark:text-zinc-200">{phase.label}</span>
         {total > 0 && <span className="text-[11px] text-zinc-400">{fmtMoney(total)}</span>}
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
-      <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+      <div ref={setNodeRef} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((b) => <BancoGlobalCard key={b.party.id} b={b} onOpen={onOpen} />)}
       </div>
@@ -555,7 +555,7 @@ function UnifiedRepbBoard({ clientes, foco, phases, onOpenBank, onOpenCase, onMo
     <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragCancel={() => setActiveId(null)} onDragEnd={onDragEnd}>
       {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
       <RolagemNoArraste />
-      <div ref={scroll.ref} {...scroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+      <div ref={scroll.ref} {...scroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:pl-6 snap-x snap-mandatory lg:snap-none">
         {loading && !items.length && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
         {phases.map((phase, i) => <UnifiedColumn key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} onOpenBank={onOpenBank} onOpenCase={onOpenCase} canRename={canRename} onRename={onRename} onDelete={onDelete} phaseDrag={phaseDrag} onMoveLeft={canRename && i > 0 ? () => onReorder(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => onReorder(phase, 'right') : undefined} />)}
         {canRename && <AddPhaseColumn board="repb" accent={ACCENT} onAdded={onMovedCase} />}
@@ -586,13 +586,13 @@ function UnifiedColumn({ phase, items, onOpenBank, onOpenCase, canRename, onRena
   const sorted = useMemo(() => applyCardSort(items, sort, uItemKeys), [items, sort]);
   const total = items.reduce((a, it) => a + (it.kind === 'bank' ? parseBRL((it.party.metadata as any)?.saldoDevedor) : (it.card.value ?? 0)), 0);
   return (
-    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[280px] sm:max-w-none rounded-xl border transition-colors ${isOver ? 'border-[#B7791F] bg-[#B7791F]/5 dark:bg-[#B7791F]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} />
         {total > 0 && <span className="text-[11px] text-zinc-400">{fmtMoney(total)}</span>}
         <span className="ml-auto rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
       </div>
-      <div ref={setNodeRef} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+      <div ref={setNodeRef} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {sorted.map((it) => it.kind === 'bank'
           ? <UnifiedBankCard key={it.id} it={it} terminal={isTerminalPhase(phase)} onOpen={() => onOpenBank(it.caseId, it.party.id)} />
