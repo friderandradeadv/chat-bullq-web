@@ -319,7 +319,17 @@ export default function PreProcessualPage() {
           <Workflow className="h-4 w-4 shrink-0 text-[#e11970]" />
           <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Pré-Processual</h1>
           <span className="rounded bg-[#edeff3] px-2 py-0.5 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{filtered.length}</span>
-          {isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-400" />}
+          {/* no celular, instalado como app, não há barra de endereço: este é o único
+              jeito de recarregar a mão. Gira enquanto busca. */}
+          <button
+            type="button"
+            title="Atualizar o quadro"
+            aria-label="Atualizar o quadro"
+            onClick={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}
+            className="-m-1.5 shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-[#edeff3] hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
           <span className="hidden truncate text-xs text-zinc-400 2xl:inline">· do fechamento do contrato até o protocolo — ao protocolar, o processo migra para a Fase Judicial</span>
           <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
