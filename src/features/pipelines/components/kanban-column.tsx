@@ -59,7 +59,7 @@ export function KanbanColumn({ stage, cards, onAddCard, onCardClick, list }: Pro
       : null;
 
   return (
-    <div className={`flex flex-col ${list ? 'w-full' : 'h-full w-72 shrink-0'}`}>
+    <div className={`flex min-h-0 flex-col ${list ? 'w-full' : 'h-full w-[86vw] max-w-[320px] shrink-0 snap-start sm:w-72 sm:max-w-none'}`}>
       <div
         className={`flex items-center justify-between gap-2 rounded-t-lg border-b-2 px-3 py-2 ${headerCls}`}
       >
@@ -92,7 +92,7 @@ export function KanbanColumn({ stage, cards, onAddCard, onCardClick, list }: Pro
 
       <div
         ref={setNodeRef}
-        className={`space-y-2 rounded-b-lg p-2 transition-colors ${list ? 'min-h-[40px]' : 'lg:flex-1 lg:overflow-y-auto'} ${
+        className={`space-y-2 rounded-b-lg p-2 transition-colors ${list ? 'min-h-[40px]' : 'min-h-0 flex-1 overflow-y-auto'} ${
           isOver
             ? 'bg-primary/10 ring-2 ring-primary/30'
             : 'bg-zinc-50/40 dark:bg-zinc-900/40'

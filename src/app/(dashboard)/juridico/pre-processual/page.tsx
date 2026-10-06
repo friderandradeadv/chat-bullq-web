@@ -305,7 +305,7 @@ export default function PreProcessualPage() {
     // lg:!pt-12 encolhe o respiro global do topo (o `.under-bar > *` põe 3.75rem;
     // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
     // o quadro sobe e os cards ganham altura, sem esmagar nada.
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 lg:!pt-12">
       {casesFilter.caseIds && (
         <CasesFilterBanner
           cliente={casesFilter.cliente}
@@ -355,8 +355,18 @@ export default function PreProcessualPage() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => { vaoK.aoIniciar(e); setActiveId(e.active.id as string); }} onDragMove={vaoK.aoMover} onDragCancel={() => { vaoK.fechar(); setActiveId(null); }} onDragEnd={onDragEnd}>
           {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
+          {/* 🚨 NO CELULAR QUEM ROLA É A LISTA DE CARDS, NÃO A PÁGINA. Até
+              06/10/2026 a raiz tinha `max-lg:overflow-y-auto` e as colunas só
+              ganhavam altura limitada em `lg:`. No celular, então, a página
+              inteira rolava como um documento: a coluna crescia até o tamanho
+              do conteúdo, o CABEÇALHO DELA saía da tela junto com os cards (não
+              dava para saber em que fase se estava), e duas colunas de alturas
+              diferentes lado a lado deixavam um bloco escuro vazio ao lado dos
+              cards. É o que o advogado fotografou às 19h56.
+              A altura é segura: o `SidebarLayout` é `h-svh` com `overflow-hidden`,
+              então o encadeamento já é limitado também no celular. */}
           <RolagemNoArraste />
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6 snap-x snap-mandatory lg:snap-none">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:pl-6 snap-x snap-mandatory lg:snap-none">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} novoIds={novoIds} bulk={bulk} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onMontarPje={montarNoPje} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} phases={phases} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} vao={vao} arrastadoId={activeId} />
@@ -403,7 +413,7 @@ function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje
           <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
         </span>
       </div>
-      <div ref={setNodeRef} {...colAttr(phase.key)} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+      <div ref={setNodeRef} {...colAttr(phase.key)} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {comVao(sorted, phase.key, vao ?? null, arrastadoId ?? null).map(({ item: c, desloca }) => <Card key={c.id} c={c} terminal={isTerminalPhase(phase)} novo={novoIds.has(c.id)} isNovos={isNovos} bulk={bulk} colIds={colIds} onOpen={onOpen} onProtocolar={isProtocolo ? onProtocolar : undefined} onMontarPje={isProtocolo ? onMontarPje : undefined} onChanged={onChanged} desloca={desloca} temAgente={temAgente} />)}
       </div>

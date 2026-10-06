@@ -139,7 +139,7 @@ export function InssBoard() {
     // lg:!pt-12 encolhe o respiro global do topo (o `.under-bar > *` põe 3.75rem;
     // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
     // o quadro sobe e os cards ganham altura, sem esmagar nada.
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 lg:!pt-12">
       <div className="shrink-0 border-b border-[#dbeaf5] px-4 py-2 lg:px-6 dark:border-zinc-800">
         {/* Título + dica + busca + ações na MESMA linha (quebra se faltar espaço) */}
         <div className="flex flex-wrap items-center gap-2">
@@ -174,7 +174,7 @@ export function InssBoard() {
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
           {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
           <RolagemNoArraste />
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:pl-6 snap-x snap-mandatory lg:snap-none">
             {COLS.map((col) => (
               <Column key={col.dropId} col={col} items={byRes[col.key]} bulk={bulk} onOpen={setOpenCaseId} onEntrarJudicial={entrarJudicial} />
             ))}
@@ -209,7 +209,7 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.dropId });
   return (
-    <div className={`group/col flex min-h-0 w-[300px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5 dark:bg-[#7048e8]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div className={`group/col flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[300px] sm:max-w-none rounded-xl border transition-colors ${isOver ? 'border-[#7048e8] bg-[#7048e8]/5 dark:bg-[#7048e8]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} />
         <h2 className="truncate text-sm font-medium" style={{ color: col.color }}>{col.label}</h2>
@@ -220,7 +220,7 @@ function Column({
         </span>
       </div>
       <div ref={setNodeRef}
-        className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {items.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {items.map((c) => <InssCard key={c.id} c={c} bulk={bulk} colIds={items.map((x) => x.id)} onOpen={onOpen} onEntrarJudicial={onEntrarJudicial} />)}
       </div>

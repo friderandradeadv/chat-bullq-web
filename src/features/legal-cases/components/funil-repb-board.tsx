@@ -183,8 +183,8 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
   };
 
   const rootClass = embedded
-    ? 'flex min-h-0 flex-1 flex-col text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto'
-    : 'flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12';
+    ? 'flex min-h-0 flex-1 flex-col text-[#101820] dark:text-zinc-200'
+    : 'flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] dark:bg-zinc-950 text-[#101820] dark:text-zinc-200 lg:!pt-12';
 
   return (
     <div className={rootClass}>
@@ -220,7 +220,7 @@ export function FunilRepbBoard({ embedded = false }: { embedded?: boolean }) {
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
           {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
           <RolagemNoArraste />
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:pl-6 snap-x snap-mandatory lg:snap-none">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} bulk={bulk} onOpen={setOpenCaseId} onFechou={moverParaClientes} onApresentar={setApresentar} onAgendar={setAgendar} onFollowup={setFollowup} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} phases={phases} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} />
@@ -254,7 +254,7 @@ function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar,
   // Agendar reunião: só antes de estar agendado (Novos Leads).
   const podeAgendar = phase.key === 'repbc_novos_leads';
   return (
-    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#E8590C] bg-[#E8590C]/5 dark:bg-[#E8590C]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[280px] sm:max-w-none rounded-xl border transition-colors ${isOver ? 'border-[#E8590C] bg-[#E8590C]/5 dark:bg-[#E8590C]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(colIds, true); }} cardIds={colIds} phases={phases} />
         <span className="ml-auto flex items-center gap-1.5">
@@ -262,7 +262,7 @@ function Column({ phase, items, bulk, onOpen, onFechou, onApresentar, onAgendar,
           <span className="rounded bg-[#edeff3] px-1 text-[13px] text-[#101820] dark:bg-zinc-800 dark:text-zinc-300">{items.length}</span>
         </span>
       </div>
-      <div ref={setNodeRef} {...colAttr(phase.key)} className="flex flex-col gap-2.5 px-2.5 pb-2.5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+      <div ref={setNodeRef} {...colAttr(phase.key)} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5">
         {sorted.length === 0 && <p className="rounded border border-dashed border-[#dcdfe5] py-5 text-center text-xs text-zinc-400 dark:border-zinc-800">Vazio</p>}
         {sorted.map((c) => <Card key={c.id} c={c} bulk={bulk} colIds={colIds} isNovos={phase.key === 'repbc_novos_leads'} terminal={isTerminalPhase(phase)} onOpen={onOpen} onFechou={isFechado ? onFechou : undefined} onApresentar={podeApresentar ? onApresentar : undefined} onAgendar={podeAgendar ? onAgendar : undefined} onFollowup={isRepescagem ? onFollowup : undefined} staleFollowup={isRepescagem && (c.diasNaFase ?? 0) >= 7} />)}
       </div>

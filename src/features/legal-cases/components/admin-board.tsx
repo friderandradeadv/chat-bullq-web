@@ -207,7 +207,7 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
     // lg:!pt-12 encolhe o respiro global do topo (o `.under-bar > *` põe 3.75rem;
     // 3rem basta pra passar a barra de vidro) e o cabeçalho vira UMA linha —
     // o quadro sobe e os cards ganham altura, sem esmagar nada.
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 max-lg:overflow-y-auto lg:!pt-12">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[#fafafa] text-[#101820] dark:bg-zinc-950 dark:text-zinc-200 lg:!pt-12">
       {casesFilter.caseIds && (
         <CasesFilterBanner
           cliente={casesFilter.cliente}
@@ -249,14 +249,14 @@ export function AdminBoard({ title, subtitle, icon: Icon, accent, filter, emptyH
         <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setActiveId(e.active.id as string)} onDragEnd={onDragEnd}>
           {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
           <RolagemNoArraste />
-        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+        <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex min-h-0 flex-1 cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:pl-6 snap-x snap-mandatory lg:snap-none">
           {columns.map((col, i) => {
             const sortedCards = col.key ? applyCardSort(col.cards, sortOf(col.key), kanbanCardKeys, data?.cardOrder?.[col.key]) : col.cards;
             const colTerminal = isTerminalPhase(col.key ? data?.phases?.find((p) => p.key === col.key) : null);
             return (
             <div key={col.key ?? col.nome} ref={col.key ? phaseDrag.columnRef(col.key) : undefined}
               style={col.key ? phaseDrag.columnStyle(col.key) : undefined}
-              className="group/col flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] transition-shadow dark:border-transparent dark:bg-black/55">
+              className="group/col flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col sm:w-[280px] sm:max-w-none rounded-xl border border-[#dcdfe5] bg-[#f2f2f2] transition-shadow dark:border-transparent dark:bg-black/55">
               <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
                 {col.key ? (
                   <PhaseHeader
@@ -326,7 +326,7 @@ function ColunaDrop({ phaseKey, accent, attrs, children }: {
       ref={setNodeRef}
       {...attrs}
       style={isOver && phaseKey ? { boxShadow: `inset 0 0 0 2px ${accent}`, borderRadius: 12 } : undefined}
-      className="flex flex-col gap-2.5 px-2.5 pb-2.5 transition-shadow lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+      className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pb-2.5 transition-shadow"
     >
       {children}
     </div>
