@@ -328,7 +328,11 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       })
       .map((reu, i) => ({
         id: `churn${Date.now().toString(36)}${i}`,
-        reu,
+        // 🚨 RÉU EM CAIXA-ALTA, como o acervo inteiro. Medido em 05/10/2026:
+        // 762 dos 853 réus do escritório (89,3%) estão assim. Os nomes vêm do
+        // registro de instituições em caixa mista ("Itaú Unibanco S.A.") e
+        // entravam assim no card, destoando de todos os outros.
+        reu: reu.toUpperCase(),
         doc: null,
         produto: 'CHURNING',
         valor: null,
