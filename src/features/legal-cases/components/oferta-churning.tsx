@@ -300,16 +300,23 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    * avulsos.
    */
   /**
-   * Cria os cards dos réus logo depois do aceite.
+   * Cria os cards dos réus logo depois do aceite, e ARQUIVA o card-mãe.
    *
-   * 🚨 SEM ARQUIVAR O PAI. O desmembramento do intake arquiva o card de origem,
-   * porque lá ele cumpriu o papel. No churning o MESMO card rende uma oferta
-   * por grupo econômico: arquivá-lo no primeiro aceite tornaria os outros
-   * grupos inalcançáveis. Réu que já tem card é pulado na API, então aceitar o
-   * segundo grupo não recria os cards do primeiro.
+   * 🚨 Arquivar é decisão do advogado, de 05/10/2026: *"ele pode sumir depois
+   * que faz a filtragem"*. Só passou a fazer sentido porque o seletor com
+   * caixas deixa marcar TODOS os grupos que entram numa tomada só — antes, com
+   * uma oferta por vez, arquivar no primeiro aceite tornaria os demais grupos
+   * inalcançáveis.
+   *
+   * O pai vira o registro do desmembramento, com os filhos anotados, igual ao
+   * intake de sempre. Se mais tarde faltar um grupo, o card se recupera: a
+   * exclusão e o arquivamento são de marca, nada se apaga de verdade.
+   *
+   * 🚨 Não arquiva quando NADA nasce: a API devolve cedo, sem tocar no pai, se
+   * todos os réus já tiverem card.
    */
   const criarCardsDosReus = async () => {
-    const r = await legalCasesService.gerarIniciais(caso.id, 'montar_inicial', false);
+    const r = await legalCasesService.gerarIniciais(caso.id, 'montar_inicial');
     return r?.criados ?? 0;
   };
 
@@ -368,7 +375,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         `${escolhidos.length} grupo(s) aceito(s). `
         + (criados
           ? `${criados} card(s) de réu criados em Montar inicial.`
-            + ' Este card segue sendo a análise — volte aqui para ofertar outro grupo.'
+            + ' Este card foi arquivado e virou o registro do desmembramento.'
           : 'Nenhum card novo: os réus já tinham card.'),
         { duration: 10000 },
       );
@@ -416,7 +423,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         toast.success(
           criados
             ? `${criados} card(s) de réu criados em Montar inicial: ${nomes}.`
-              + ' Este card segue sendo a análise — volte aqui para ofertar outro grupo.'
+              + ' Este card foi arquivado e virou o registro do desmembramento.'
             : `${nomes || 'Os réus'} já tinham card — nada novo foi criado.`,
           { duration: 10000 },
         );
@@ -546,7 +553,8 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                       <p className="text-[10px] leading-4 text-amber-700 dark:text-amber-400">
                         {grupos.length} grupos com indício de reciclagem. Marque na caixa quais
                         entram com ação; clique no nome para ver os números de cada um. Em itálico,
-                        os que o plano de ação não manda ajuizar.
+                        os que o plano de ação não manda ajuizar. <strong>Marque todos os que quiser
+                        de uma vez</strong>: ao aceitar, os cards nascem e este aqui é arquivado.
                       </p>
                       {/* 🚨 ATALHO PARA QUANDO A CONVERSA JÁ ACONTECEU POR FORA.
                           Pedido do advogado no JOSÉ BATISTA: "no caso dele eu já
