@@ -77,7 +77,7 @@ export function ApresentacaoVendasRevisional({
   const [pctMeioAMeio, setPctMeioAMeio] = useState(50);
   const [ocupado, setOcupado] = useState<'ver' | 'baixar' | null>(null);
   const [fone, setFone] = useState('');
-  const [msg, setMsg] = useState<string | null>(null); // null = ainda não editada à mão
+  const [msgs, setMsgs] = useState<string[] | null>(null); // null = ainda não editadas à mão
   const slideRef = useRef<HTMLDivElement>(null);
 
   const c = useMemo(() => {
@@ -139,64 +139,70 @@ export function ApresentacaoVendasRevisional({
   };
 
   /**
-   * Mensagem pronta para o WhatsApp, montada dos dados do caso.
+   * A proposta em MENSAGENS CURTAS, não num bloco só.
    *
-   * 🚨 TERMINA SEMPRE EM PERGUNTA FECHADA. "Opção 1 ou opção 2?" é o que faz o
-   * cliente responder; "qualquer dúvida estou à disposição" encerra a conversa.
-   * E a Opção 2 vai SEM VALOR: o que se divide é o resultado, que só existe na
-   * sentença.
+   * 🚨 PAREDÃO DE TEXTO NÃO SE LÊ NO WHATSAPP. O cliente abre, vê o tamanho e
+   * deixa para depois. Em bolhas curtas ele lê uma, responde ou segue — e cada
+   * bolha carrega UMA ideia: quem fala, o que não cabe, o que cabe, quanto dá,
+   * as duas opções, as ressalvas, a pergunta.
+   *
+   * 🚨 A ÚLTIMA É SEMPRE PERGUNTA FECHADA. "Opção 1 ou opção 2" faz responder;
+   * "estou à disposição" encerra a conversa.
    */
-  const mensagemPadrao = useMemo(() => {
-    const L: string[] = [];
+  const mensagensPadrao = useMemo(() => {
     const primeiro = (dados.cliente || '').trim().split(/\s+/)[0] || 'tudo bem';
-    L.push(`Olá, ${primeiro}! Aqui é do escritório Frider Andrade Advogados.`);
-    L.push('');
-    L.push(`Terminei a análise do seu contrato com o ${dados.credor} e já tenho o resultado.`);
+    const M: string[] = [];
+    // "AYMORÉ ... S.A." já termina em ponto: somar outro vira "S.A..".
+    const credor = (dados.credor || '').trim().replace(/\.$/, '');
+    M.push(`Olá, ${primeiro}! Aqui é do escritório Frider Andrade Advogados. Terminei a análise do seu contrato com o ${credor}.`);
     if (dados.afastadas.length) {
-      L.push('');
-      L.push('Começo pelo que NÃO dá para pedir, porque é importante você saber:');
-      for (const a of dados.afastadas.slice(0, 3)) L.push(`• ${a.o} — ${a.porque}`);
+      M.push(
+        'Começo pelo que *não* dá para pedir, porque é importante você saber:\n' +
+        dados.afastadas.slice(0, 3).map((a) => `• ${a.o} — ${a.porque}`).join('\n'),
+      );
     }
     if (dados.teses.length) {
-      L.push('');
-      L.push('O que encontrei de irregular e cabe ação:');
-      for (const t of dados.teses) {
-        L.push(t.cobrado > 0 ? `• ${t.rubrica} — o banco cobrou ${fmtBRL(t.cobrado)}` : `• ${t.rubrica}`);
-      }
+      M.push(
+        'Agora o que encontrei de irregular e cabe ação:\n' +
+        dados.teses.map((t) => (t.cobrado > 0 ? `• ${t.rubrica} — o banco cobrou ${fmtBRL(t.cobrado)}` : `• ${t.rubrica}`)).join('\n'),
+      );
     }
-    L.push('');
-    L.push(`A estimativa é recuperar cerca de ${fmtBRL(c.P)}, somando a devolução do que você já pagou e a redução das parcelas que faltam.`);
-    if (dados.parcelaAtual - dados.parcelaNova > 0.5) {
-      L.push(`Sua parcela cairia de ${fmtBRL(dados.parcelaAtual)} para cerca de ${fmtBRL(dados.parcelaNova)}.`);
-    }
-    L.push('');
-    L.push('Sobre os honorários, você escolhe:');
-    L.push('');
-    L.push(`*OPÇÃO 1 — entrada + êxito*`);
-    L.push(`Você paga ${fmtBRL(entradaPadrao)} agora e, no fim, ${pct(pctExitoPadrao)} do que receber, já abatida a entrada.`);
-    L.push('');
-    L.push(`*OPÇÃO 2 — meio a meio*`);
-    L.push('Você não paga nada agora. No fim, dividimos meio a meio o que você receber.');
-    L.push('');
-    L.push('A diferença é só *quando* você paga: na 1 a entrada barateia o total, porque você divide o risco com o escritório; na 2 nós só recebemos se você receber.');
-    L.push('');
-    L.push('Dois pontos importantes: o valor final não está fechado — o que se divide é o resultado da ação, e ele só se conhece na sentença. E até sair a decisão, a parcela continua sendo paga normalmente.');
-    L.push('');
-    L.push('Me responde aqui: vai ser a *OPÇÃO 1* ou a *OPÇÃO 2*? Com a sua resposta eu já mando o contrato e a procuração para assinatura digital e começamos.');
-    return L.join('\n');
+    const queda = dados.parcelaAtual - dados.parcelaNova > 0.5
+      ? ` Sua parcela cairia de ${fmtBRL(dados.parcelaAtual)} para cerca de ${fmtBRL(dados.parcelaNova)}.`
+      : '';
+    M.push(`A estimativa é recuperar cerca de *${fmtBRL(c.P)}*, somando a devolução do que você já pagou e a redução das parcelas que faltam.${queda}`);
+    M.push(
+      'Sobre os honorários, você escolhe:\n\n' +
+      `*OPÇÃO 1 — entrada + êxito*\nVocê paga ${fmtBRL(entradaPadrao)} agora e, no fim, ${pct(pctExitoPadrao)} do que receber, já abatida a entrada.\n\n` +
+      '*OPÇÃO 2 — meio a meio*\nVocê não paga nada agora. No fim, dividimos meio a meio o que você receber.',
+    );
+    M.push('A diferença é só *quando* você paga: na 1 a entrada barateia o total, porque você divide o risco com o escritório; na 2 nós só recebemos se você receber.');
+    M.push('Dois pontos importantes: o valor final não está fechado — o que se divide é o resultado da ação, e ele só se conhece na sentença. E até sair a decisão, a parcela continua sendo paga normalmente.');
+    M.push('Me responde aqui: vai ser a *OPÇÃO 1* ou a *OPÇÃO 2*? Com a sua resposta eu já mando o contrato e a procuração para assinatura digital e começamos.');
+    return M;
   }, [dados, c.P, entradaPadrao, pctExitoPadrao]);
 
-  const texto = msg ?? mensagemPadrao;
+  const mensagens = msgs ?? mensagensPadrao;
   const foraDeHora = (() => {
     const h = new Date().getHours();
     return h < 8 || h >= 19;
   })();
 
-  const abrirWhatsapp = () => {
+  const numeroLimpo = () => {
     const d = fone.replace(/\D/g, '');
-    if (d.length < 10) return toast.error('Informe o WhatsApp do cliente com DDD.');
-    const numero = d.startsWith('55') ? d : `55${d}`;
+    if (d.length < 10) return null;
+    return d.startsWith('55') ? d : `55${d}`;
+  };
+
+  /** Abre a conversa já com a PRIMEIRA mensagem; as outras vão pelo copiar. */
+  const abrirWhatsapp = (texto: string) => {
+    const numero = numeroLimpo();
+    if (!numero) return toast.error('Informe o WhatsApp do cliente com DDD.');
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`, '_blank');
+  };
+
+  const copiar = (t: string, aviso = 'Mensagem copiada') => {
+    navigator.clipboard.writeText(t).then(() => toast.success(aviso)).catch(() => toast.error('Não consegui copiar'));
   };
 
   const num = (v: number, set: (n: number) => void) => (
@@ -466,15 +472,10 @@ export function ApresentacaoVendasRevisional({
             <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Mandar a proposta pelo WhatsApp</p>
           </div>
           <p className="mt-1 text-[12px] text-zinc-500">
-            Mensagem montada com os números deste caso. Termina na pergunta das duas opções — é ela que faz o cliente responder.
+            {mensagens.length} mensagens curtas, uma ideia em cada. Mande na ordem — a última é a pergunta que faz o cliente responder.
           </p>
-          <textarea
-            value={texto}
-            onChange={(e) => setMsg(e.target.value)}
-            rows={14}
-            className="mt-3 w-full rounded-lg border border-zinc-300 bg-zinc-50 p-3 font-mono text-[12px] leading-relaxed text-zinc-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200"
-          />
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <input
               value={fone}
               onChange={(e) => setFone(e.target.value)}
@@ -483,30 +484,53 @@ export function ApresentacaoVendasRevisional({
               className="w-60 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
             />
             <button
-              onClick={abrirWhatsapp}
+              onClick={() => abrirWhatsapp(mensagens[0])}
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
             >
-              <MessageCircle className="h-4 w-4" /> Abrir conversa com a mensagem
+              <MessageCircle className="h-4 w-4" /> Abrir conversa com a 1ª
             </button>
-            <button
-              onClick={() => { navigator.clipboard.writeText(texto).then(() => toast.success('Mensagem copiada')).catch(() => toast.error('Não consegui copiar')); }}
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              <Copy className="h-4 w-4" /> Copiar
-            </button>
-            {msg !== null && (
-              <button onClick={() => setMsg(null)} className="text-[12px] text-zinc-400 underline hover:text-zinc-600">
+            {msgs !== null && (
+              <button onClick={() => setMsgs(null)} className="text-[12px] text-zinc-400 underline hover:text-zinc-600">
                 voltar ao texto gerado
               </button>
             )}
           </div>
+          <p className="mt-2 text-[11px] text-zinc-400">
+            O WhatsApp só aceita uma mensagem por link. A primeira vai pelo botão; as demais, pelo copiar de cada bolha, na ordem.
+          </p>
+
+          <div className="mt-4 flex flex-col gap-2.5">
+            {mensagens.map((m, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="mt-2 w-5 shrink-0 text-right text-[11px] font-bold text-zinc-400">{i + 1}</span>
+                <textarea
+                  value={m}
+                  onChange={(e) => {
+                    const prox = [...mensagens];
+                    prox[i] = e.target.value;
+                    setMsgs(prox);
+                  }}
+                  rows={Math.min(8, m.split('\n').length + 1)}
+                  className="flex-1 rounded-xl rounded-tl-sm border border-zinc-200 bg-emerald-50/50 p-3 text-[12.5px] leading-relaxed text-zinc-800 dark:border-zinc-700 dark:bg-emerald-900/10 dark:text-zinc-200"
+                />
+                <button
+                  onClick={() => copiar(m, `Mensagem ${i + 1} copiada`)}
+                  title={`Copiar a mensagem ${i + 1}`}
+                  className="mt-1 shrink-0 rounded-lg border border-zinc-300 p-2 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+
           {foraDeHora && (
-            <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+            <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
               Fora do horário comercial. Proposta que chega de madrugada costuma ser lida como golpe — vale enviar a partir das 8h.
             </p>
           )}
           <p className="mt-3 text-[11px] text-zinc-400">
-            Anexe o PDF da apresentação na mesma conversa, logo depois da mensagem. O parecer interno NÃO vai junto.
+            Anexe o PDF da apresentação depois da última mensagem. O parecer interno NÃO vai junto.
           </p>
         </div>
       </div>
