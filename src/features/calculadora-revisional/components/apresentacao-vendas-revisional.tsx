@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
-import { Check, Copy, Download, Eye, Loader2, MessageCircle, Printer, Sliders, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Copy, Download, Eye, Loader2, MessageCircle, Printer, Send, Sliders, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { inboxService } from '@/features/inbox/services/inbox.service';
+import { channelsService, type Channel } from '@/features/channels/services/channels.service';
 
 /**
  * APRESENTAÇÃO DE VENDAS — REVISIONAL. Mesmo modelo da do REPB
@@ -78,6 +80,22 @@ export function ApresentacaoVendasRevisional({
   const [ocupado, setOcupado] = useState<'ver' | 'baixar' | null>(null);
   const [fone, setFone] = useState('');
   const [msgs, setMsgs] = useState<string[] | null>(null); // null = ainda não editadas à mão
+  const [canais, setCanais] = useState<Channel[]>([]);
+  const [canalId, setCanalId] = useState('');
+  const [enviando, setEnviando] = useState<number | null>(null); // índice em curso
+
+  // Canais de WhatsApp ativos — é por um deles que a proposta sai, com o número
+  // oficial do escritório, e não pelo WhatsApp pessoal de quem está na tela.
+  useEffect(() => {
+    channelsService
+      .list()
+      .then((cs) => {
+        const wpp = cs.filter((c) => c.isActive && /whatsapp/i.test(c.type));
+        setCanais(wpp);
+        if (wpp.length) setCanalId(wpp[0].id);
+      })
+      .catch(() => { /* sem canal: sobra o wa.me */ });
+  }, []);
   const slideRef = useRef<HTMLDivElement>(null);
 
   const c = useMemo(() => {
@@ -199,6 +217,41 @@ export function ApresentacaoVendasRevisional({
     const numero = numeroLimpo();
     if (!numero) return toast.error('Informe o WhatsApp do cliente com DDD.');
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`, '_blank');
+  };
+
+  /**
+   * Envia as mensagens pelo HUB, em ordem, pelo número oficial.
+   *
+   * 🚨 NÃO é `oneOff`. O envio ASSUME a conversa e pausa a IA de propósito: a
+   * última mensagem pede "opção 1 ou 2", e sem pausar o robô ele responderia o
+   * cliente no lugar do advogado.
+   *
+   * Pausa curta entre uma e outra: a fila do backend é FIFO, mas o provedor
+   * entrega mais confiável quando não recebe oito de uma vez.
+   */
+  const enviarPeloHub = async () => {
+    const numero = numeroLimpo();
+    if (!numero) return toast.error('Informe o WhatsApp do cliente com DDD.');
+    if (!canalId) return toast.error('Nenhum canal de WhatsApp ativo para enviar.');
+    try {
+      setEnviando(0);
+      const conversa = await inboxService.startConversation(canalId, numero);
+      for (let i = 0; i < mensagens.length; i++) {
+        setEnviando(i + 1);
+        await inboxService.sendMessage({
+          conversationId: conversa.id,
+          type: 'TEXT',
+          content: { text: mensagens[i] },
+        });
+        if (i < mensagens.length - 1) await new Promise((r) => setTimeout(r, 900));
+      }
+      toast.success(`${mensagens.length} mensagens enviadas pelo hub`);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || 'Não consegui enviar pelo hub. Use o botão do WhatsApp.');
+    } finally {
+      setEnviando(null);
+    }
   };
 
   const copiar = (t: string, aviso = 'Mensagem copiada') => {
@@ -483,11 +536,29 @@ export function ApresentacaoVendasRevisional({
               inputMode="tel"
               className="w-60 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
             />
+            {canais.length > 1 && (
+              <select
+                value={canalId}
+                onChange={(e) => setCanalId(e.target.value)}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              >
+                {canais.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+              </select>
+            )}
+            <button
+              onClick={enviarPeloHub}
+              disabled={enviando !== null || !canalId}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {enviando !== null
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando {enviando}/{mensagens.length}…</>
+                : <><Send className="h-4 w-4" /> Enviar as {mensagens.length} pelo hub</>}
+            </button>
             <button
               onClick={() => abrirWhatsapp(mensagens[0])}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-600/50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
             >
-              <MessageCircle className="h-4 w-4" /> Abrir conversa com a 1ª
+              <MessageCircle className="h-4 w-4" /> Abrir no meu WhatsApp
             </button>
             {msgs !== null && (
               <button onClick={() => setMsgs(null)} className="text-[12px] text-zinc-400 underline hover:text-zinc-600">
@@ -496,7 +567,9 @@ export function ApresentacaoVendasRevisional({
             )}
           </div>
           <p className="mt-2 text-[11px] text-zinc-400">
-            O WhatsApp só aceita uma mensagem por link. A primeira vai pelo botão; as demais, pelo copiar de cada bolha, na ordem.
+            {canais.length
+              ? 'Pelo hub as oito saem em sequência, do número oficial do escritório, e a conversa fica atribuída a você com a IA pausada — senão o robô responde o cliente no seu lugar. O botão do WhatsApp é a alternativa: abre a conversa no seu número com a 1ª mensagem, e as demais vão pelo copiar.'
+              : 'Nenhum canal de WhatsApp ativo encontrado — sobra o envio pelo seu WhatsApp: a 1ª vai pelo botão, as demais pelo copiar de cada bolha.'}
           </p>
 
           <div className="mt-4 flex flex-col gap-2.5">
