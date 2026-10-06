@@ -52,6 +52,7 @@ export default function RevisionalPage() {
     modulacaoStj: true,
     jurosMora: '0',
     nomeCalculo: '',
+    cliente: '',
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -99,7 +100,9 @@ export default function RevisionalPage() {
         ...(e.numeroParcelas && (e.primeiroVencimento || e.dataContratacao)
           ? { parcelasPagas: String(vencidasAte(e.primeiroVencimento ?? e.dataContratacao!, e.numeroParcelas)) }
           : {}),
-        ...(e.banco && !f.nomeCalculo ? { nomeCalculo: e.banco } : {}),
+        // 🚨 NUNCA o banco aqui. Em 05/10/2026 isto preenchia `nomeCalculo` com
+        // o nome do CREDOR, e a capa da proposta saiu com "CLIENTE: AYMORÉ".
+        ...(e.cliente ? { cliente: e.cliente } : {}),
       }));
 
       if (r.resumo.faltando.length) {
@@ -192,7 +195,7 @@ export default function RevisionalPage() {
       .reduce((s2, x) => s2 + brlNum(x.valor), 0);
     const tot = proveitoTotal(res, principalIndevido);
     return {
-      cliente: form.nomeCalculo || 'Cliente',
+      cliente: form.cliente || form.nomeCalculo || 'Cliente',
       credor: extraido?.banco || res.modalidade.label,
       contrato: extraido?.numeroContrato || '—',
       proveito: Math.round(tot.proveito),
@@ -463,6 +466,14 @@ export default function RevisionalPage() {
                 value={form.parcelasPagas}
                 onChange={(e) => set('parcelasPagas', e.target.value)}
                 placeholder="Ex.: 12"
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Nome do cliente" hint="Quem contratou o crédito — vai na capa da proposta.">
+              <input
+                value={form.cliente}
+                onChange={(e) => set('cliente', e.target.value)}
+                placeholder="Ex.: José Aparecido Flores"
                 className={inputCls}
               />
             </Field>

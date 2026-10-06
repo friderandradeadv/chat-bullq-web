@@ -186,16 +186,16 @@ export function ApresentacaoVendasRevisional({
       );
     }
     const queda = dados.parcelaAtual - dados.parcelaNova > 0.5
-      ? ` Sua parcela cairia de ${fmtBRL(dados.parcelaAtual)} para cerca de ${fmtBRL(dados.parcelaNova)}.`
+      ? ` Se o pedido for acolhido, sua parcela cairia de ${fmtBRL(dados.parcelaAtual)} para cerca de ${fmtBRL(dados.parcelaNova)}.`
       : '';
-    M.push(`A estimativa é recuperar cerca de *${fmtBRL(c.P)}*, somando a devolução do que você já pagou e a redução das parcelas que faltam.${queda}`);
+    M.push(`Pela minha estimativa, dá para *buscar cerca de ${fmtBRL(c.P)}*, somando a devolução do que você já pagou e a redução das parcelas que faltam.${queda}`);
     M.push(
       'Sobre os honorários, você escolhe:\n\n' +
-      `*OPÇÃO 1 — entrada + êxito*\nVocê paga ${fmtBRL(entradaPadrao)} agora e, no fim, ${pct(pctExitoPadrao)} do que receber, já abatida a entrada.\n\n` +
-      '*OPÇÃO 2 — meio a meio*\nVocê não paga nada agora. No fim, dividimos meio a meio o que você receber.',
+      `*OPÇÃO 1 — entrada + êxito*\nVocê paga ${fmtBRL(entradaPadrao)} agora e, no fim, ${pct(pctExitoPadrao)} do que vier a receber, já abatida a entrada.\n\n` +
+      '*OPÇÃO 2 — meio a meio*\nVocê não paga nada agora. No fim, dividimos meio a meio o que você vier a receber.',
     );
-    M.push('A diferença é só *quando* você paga: na 1 a entrada barateia o total, porque você divide o risco com o escritório; na 2 nós só recebemos se você receber.');
-    M.push('Dois pontos importantes: o valor final não está fechado — o que se divide é o resultado da ação, e ele só se conhece na sentença. E até sair a decisão, a parcela continua sendo paga normalmente.');
+    M.push('A diferença é só *quando* você paga: na 1 a entrada barateia o total, porque você divide o risco com o escritório; na 2 nós só recebemos se você vier a receber.');
+    M.push('Dois pontos importantes: esses números são *estimativa*, não garantia — eu não posso prometer resultado, e o valor só se conhece na sentença. E até sair a decisão, a parcela continua sendo paga normalmente.');
     M.push('Me responde aqui: vai ser a *OPÇÃO 1* ou a *OPÇÃO 2*? Com a sua resposta eu já mando o contrato e a procuração para assinatura digital e começamos.');
     return M;
   }, [dados, c.P, entradaPadrao, pctExitoPadrao]);
@@ -339,7 +339,7 @@ export function ApresentacaoVendasRevisional({
                   <tr className="border-b border-zinc-200 text-left text-[10px] uppercase tracking-wide text-zinc-500 dark:border-zinc-700">
                     <th className="py-1.5 pr-3 font-semibold">Rubrica</th>
                     <th className="py-1.5 pr-3 text-right font-semibold">O banco cobrou</th>
-                    <th className="py-1.5 text-right font-semibold">Você recebe de volta</th>
+                    <th className="py-1.5 text-right font-semibold">Você pode receber</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -355,8 +355,10 @@ export function ApresentacaoVendasRevisional({
                 </tbody>
               </table>
               <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-                "Você recebe de volta" é maior que o cobrado porque inclui os <b>juros</b> que incidiram sobre a
-                cobrança durante o contrato, a devolução do que já foi pago e a redução das parcelas que faltam.
+                <b>Estimativa, não garantia.</b> O valor é maior que o cobrado porque considera os <b>juros</b> que
+                incidiram sobre a cobrança durante o contrato, a devolução do que já foi pago e a redução das parcelas
+                que faltam — <b>se</b> o pedido for acolhido pelo juízo. Nenhum resultado pode ser prometido
+                (art. 41 do Código de Ética e Disciplina da OAB).
               </p>
             </div>
           </Slide>
@@ -365,11 +367,11 @@ export function ApresentacaoVendasRevisional({
           <Slide>
             <SlideKicker>Os números do seu caso</SlideKicker>
             <div className="rounded-2xl bg-gradient-to-br from-[#1a1206] via-[#2a1d0a] to-[#101820] p-7 ring-1 ring-[#B7791F]/25">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[#e0b872]">O que você pode recuperar</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#e0b872]">O que se pode buscar · estimativa</p>
               <p className="mt-1 font-serif text-6xl font-bold leading-none text-white">{fmtBRL(c.P)}</p>
               <div className="mt-5 flex flex-wrap gap-x-10 gap-y-3 border-t border-white/10 pt-4">
-                <div><p className="text-[11px] uppercase tracking-wide text-white/50">Devolvido do que já pagou</p><p className="font-serif text-2xl font-bold text-white">{fmtBRL(dados.restituicao)}</p></div>
-                <div><p className="text-[11px] uppercase tracking-wide text-white/50">Economia nas parcelas que faltam</p><p className="font-serif text-2xl font-bold text-white">{fmtBRL(dados.economiaFutura)}</p></div>
+                <div><p className="text-[11px] uppercase tracking-wide text-white/50">Devolução do que já pagou</p><p className="font-serif text-2xl font-bold text-white">{fmtBRL(dados.restituicao)}</p></div>
+                <div><p className="text-[11px] uppercase tracking-wide text-white/50">Redução das parcelas que faltam</p><p className="font-serif text-2xl font-bold text-white">{fmtBRL(dados.economiaFutura)}</p></div>
               </div>
             </div>
             {dados.parcelaAtual - dados.parcelaNova > 0.5 && (
@@ -377,9 +379,9 @@ export function ApresentacaoVendasRevisional({
                 <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">A sua parcela</p>
                 <div className="mt-4 flex flex-wrap items-end gap-x-10 gap-y-4">
                   <div><p className="text-xs text-zinc-500">hoje</p><p className="font-serif text-3xl font-bold text-zinc-400 line-through">{fmtBRL(dados.parcelaAtual)}</p></div>
-                  <div><p className="text-xs text-zinc-500">com a revisão</p><p className="font-serif text-5xl font-bold leading-none text-emerald-700 dark:text-emerald-400">{fmtBRL(dados.parcelaNova)}</p></div>
+                  <div><p className="text-xs text-zinc-500">se a revisão for acolhida</p><p className="font-serif text-5xl font-bold leading-none text-emerald-700 dark:text-emerald-400">{fmtBRL(dados.parcelaNova)}</p></div>
                   <div className="ml-auto text-right">
-                    <p className="text-xs text-zinc-500">a menos, todo mês</p>
+                    <p className="text-xs text-zinc-500">a menos por mês, no cenário estimado</p>
                     <p className="font-serif text-3xl font-bold text-[#B7791F]">−{fmtBRL(dados.parcelaAtual - dados.parcelaNova)}</p>
                   </div>
                 </div>
@@ -429,11 +431,11 @@ export function ApresentacaoVendasRevisional({
                 <p className="text-[10px] font-bold uppercase tracking-widest text-[#B7791F]">Opção 1 · entrada + êxito</p>
                 <p className="mt-2 text-xs text-zinc-500">Você paga agora</p>
                 <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(entradaPadrao)}</p>
-                <p className="mt-3 text-xs text-zinc-500">E no fim, {pct(pctExitoPadrao)} do que ganhar, já abatida a entrada</p>
+                <p className="mt-3 text-xs text-zinc-500">E no fim, {pct(pctExitoPadrao)} do que vier a receber, já abatida a entrada</p>
                 <p className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.saldoPadrao)}<span className="ml-1 text-xs font-normal text-zinc-400">estimado</span></p>
                 <div className="mt-auto border-t border-[#B7791F]/20 pt-3">
                   <div className="flex items-baseline justify-between"><span className="text-xs text-zinc-500">Total estimado</span><span className="font-serif text-xl font-bold text-[#B7791F]">{fmtBRL(c.padrao)}</span></div>
-                  <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você</span><span className="font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(c.liquidoPadrao)}</span></div>
+                  <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você, do que receber</span><span className="font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(c.liquidoPadrao)}</span></div>
                 </div>
               </div>
 
@@ -452,7 +454,7 @@ export function ApresentacaoVendasRevisional({
                 </p>
                 <div className="mt-auto border-t border-zinc-200 pt-3 dark:border-zinc-600">
                   <div className="flex items-baseline justify-between"><span className="text-xs text-zinc-500">Honorários</span><span className="font-serif text-lg font-bold text-zinc-700 dark:text-zinc-200">metade do resultado</span></div>
-                  <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você</span><span className="font-serif text-lg font-bold text-emerald-700 dark:text-emerald-400">a outra metade</span></div>
+                  <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você, do que receber</span><span className="font-serif text-lg font-bold text-emerald-700 dark:text-emerald-400">a outra metade</span></div>
                 </div>
               </div>
             </div>
@@ -462,7 +464,8 @@ export function ApresentacaoVendasRevisional({
               A diferença entre as duas é só <b>quando</b> você paga. Na <b>Opção 1</b> a entrada barateia o total,
               porque divide o risco com o escritório. Na <b>Opção 2</b> você não tira nada do bolso agora e o
               escritório só recebe se você receber. Em nenhuma das duas o valor final está fechado:
-              <b> o que se divide é o resultado da ação</b>, e ele só se conhece na sentença.
+              <b> o que se divide é o resultado da ação</b>, e ele só se conhece na sentença. Os números desta
+              proposta são <b>estimativa técnica</b> — não são, e não podem ser, promessa de resultado.
             </p>
           </Slide>
 
@@ -477,7 +480,7 @@ export function ApresentacaoVendasRevisional({
                 <div className="rounded-xl border border-[#B7791F]/40 bg-white/5 p-5">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[#e0b872]">Opção 1</p>
                   <p className="mt-1 font-serif text-2xl font-bold text-white">{fmtBRL(entradaPadrao)} agora</p>
-                  <p className="text-[12px] text-white/60">+ {pct(pctExitoPadrao)} do que você receber</p>
+                  <p className="text-[12px] text-white/60">+ {pct(pctExitoPadrao)} do que vier a receber</p>
                 </div>
                 <div className="rounded-xl border border-white/20 bg-white/5 p-5">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Opção 2</p>

@@ -98,6 +98,8 @@ export interface ResultadoRevisional {
 
 // ── Auditoria do contrato (upload do PDF) ──────────────────────────────────
 export interface ExtracaoContrato {
+  /** quem CONTRATOU o crédito — a parte, não o banco */
+  cliente: string | null;
   banco: string | null;
   numeroContrato: string | null;
   modalidade: string | null;
