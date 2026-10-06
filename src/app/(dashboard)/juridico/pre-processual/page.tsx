@@ -346,7 +346,7 @@ export default function PreProcessualPage() {
         <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => { vaoK.aoIniciar(e); setActiveId(e.active.id as string); }} onDragMove={vaoK.aoMover} onDragCancel={() => { vaoK.fechar(); setActiveId(null); }} onDragEnd={onDragEnd}>
           {/* roda do mouse e borda rolam a lista durante o arraste — ver lib/kanban-dnd */}
           <RolagemNoArraste />
-          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6">
+          <div ref={dragScroll.ref} {...dragScroll.handlers} className="flex cursor-grab gap-5 overflow-x-auto pb-3 pt-2 pl-4 pr-4 lg:min-h-0 lg:flex-1 lg:pl-6 snap-x snap-mandatory lg:snap-none">
             {isLoading && <p className="px-2 text-sm text-zinc-400">Carregando…</p>}
             {!isLoading && phases.map((phase, i) => (
               <Column key={phase.key} phase={phase} items={byPhase[phase.key] ?? []} novoIds={novoIds} bulk={bulk} onOpen={setOpenCaseId} onProtocolar={setProtocolarId} onMontarPje={montarNoPje} onChanged={() => qc.invalidateQueries({ queryKey: KEY })} canRename={canRename} onRename={renamePhase} onDelete={deletePhase} phaseDrag={phaseDrag} cardOrder={data?.cardOrder?.[phase.key]} phases={phases} onMoveLeft={canRename && i > 0 ? () => reorderPhaseCol(phase, 'left') : undefined} onMoveRight={canRename && i < phases.length - 1 ? () => reorderPhaseCol(phase, 'right') : undefined} vao={vao} arrastadoId={activeId} />
@@ -385,7 +385,7 @@ function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje
   // Ids na ordem da tela — habilitam o "selecionar todos" e o shift+clique.
   const colIds = useMemo(() => sorted.map((c) => c.id), [sorted]);
   return (
-    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[280px] shrink-0 flex-col rounded-xl border transition-colors ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
+    <div ref={phaseDrag?.columnRef(phase.key)} style={phaseDrag?.columnStyle(phase.key)} className={`flex min-h-0 w-[86vw] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border transition-colors sm:w-[280px] sm:max-w-none ${isOver ? 'border-[#e11970] bg-[#e11970]/5 dark:bg-[#e11970]/10' : 'border-[#dcdfe5] bg-[#f2f2f2] dark:border-transparent dark:bg-black/55'}`}>
       <div className="flex h-10 shrink-0 items-center gap-2 px-2.5 pt-1">
         <PhaseHeader phase={phase} canRename={canRename} onRename={onRename} onDelete={() => onDelete(phase)} drag={phaseDrag?.handle(phase.key)} onMoveLeft={onMoveLeft} onMoveRight={onMoveRight} sort={sort} onSort={(s) => { setSort(s); savePhaseSort(phase.key, s); }} onSelect={(todos) => { bulk.startSelecting(); if (todos) bulk.setMany(colIds, true); }} cardIds={colIds} phases={phases} />
         <span className="ml-auto flex items-center gap-1.5">

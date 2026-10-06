@@ -217,7 +217,16 @@ export function CaseDetailDrawer({
   const inMontar = phaseKey ? MONTAR_PHASES.has(phaseKey) : false;
   // "Contratos a impugnar" + cálculo + gerar iniciais são específicos de RMC/RCC
   // (bancário). Para as demais áreas o intake usa o acelerador genérico de IA.
-  const isRmc = /RMC|RCC|CONSIGN|REVISIONAL|PORTABIL/i.test(String(c?.area ?? ''));
+  // 🚨 CHURNING ENTRA AQUI. Este teste libera "Contratos a impugnar", o
+  // desmembramento e o BOTÃO DE MONTAR A INICIAL — e "CHURNING" não contém
+  // "RMC", "RCC" nem "CONSIGN". Resultado: no card de churning o botão de
+  // montar simplesmente não existia no drawer, e a única forma de montar era
+  // pelo lote do kanban. Medido em 06/10/2026 nos cards do JOSÉ BATISTA.
+  //
+  // Lê TODAS as etiquetas, como os outros pontos da esteira: o card carrega
+  // "RMC" no produto e "Churning" na área.
+  const isRmc = /RMC|RCC|CONSIGN|REVISIONAL|PORTABIL|CHURNING|RECICLAGEM/i
+    .test(`${c?.area ?? ''} ${(c?.metadata as any)?.produto ?? ''}`);
   const inPre = phaseKey ? PRE_PHASES.has(phaseKey) : false;
   const showJuizo = pf.juizo && String(pf.juizo).trim().toLowerCase() !== String(c?.court ?? '').trim().toLowerCase();
 
@@ -227,6 +236,13 @@ export function CaseDetailDrawer({
     try {
       await legalCasesService.movePhase(c.id, phase);
       toast.success('Fase atualizada');
+      // 🚨 O DETALHE PRECISA SER RELIDO, E NA MARRA. A fase decide o que o
+      // drawer MOSTRA (botão de montar, desmembrar, pacote). Com `staleTime` de
+      // 30s e `refetchOnWindowFocus` desligado, o painel continuava desenhado
+      // pela fase ANTIGA e o advogado tinha de recarregar a página para o botão
+      // aparecer — no celular, onde não há como recarregar com o drawer aberto,
+      // ficava preso. Medido em 06/10/2026, 01h50.
+      await qc.refetchQueries({ queryKey: ['legal-cases', 'detail', c.id] });
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
     } catch { toast.error('Erro ao mover'); }
   };
