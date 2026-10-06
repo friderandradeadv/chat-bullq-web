@@ -270,8 +270,20 @@ export function ParecerInternoRevisional({
     }
 
     const veredito = proveito < 5_000 ? 'DECLINAR' : proveito < 15_000 ? 'CONDICIONAL' : 'ACEITAR';
-    const entradaMinima = Math.max(1_500, Math.round((proveito * 0.2) / 100) * 100);
-    return { todas, proveito, concentracao, fora, veredito, entradaMinima, pagas, vincendas, dobro: cfg.dobro };
+    // 🚨 REGRA DA CASA: o contratual é 40% quando o escritório assume o risco
+    // inteiro. HAVENDO ENTRADA no ato, o êxito cai para 30% — é a entrada que
+    // compra a redução, porque ela paga o trabalho ganhe ou perca.
+    const entrada = Math.max(1_500, Math.round((proveito * 0.2) / 100) * 100);
+    const PCT_EXITO_COM_ENTRADA = 0.30;
+    const PCT_EXITO_SEM_ENTRADA = 0.40;
+    const exito = Math.round(proveito * PCT_EXITO_COM_ENTRADA);
+    const receita = entrada + exito;
+    const liquidoCliente = proveito - exito - entrada;
+    const exitoSemEntrada = Math.round(proveito * PCT_EXITO_SEM_ENTRADA);
+    return {
+      todas, proveito, concentracao, fora, veredito, pagas, vincendas, dobro: cfg.dobro,
+      entrada, exito, receita, liquidoCliente, exitoSemEntrada,
+    };
   }, [res, irregs, auditoria]);
 
   const cor =
@@ -359,10 +371,17 @@ export function ParecerInternoRevisional({
       </p>
 
       <H n="04">Honorários para o caso fechar</H>
-      <Linha k="Entrada sugerida (no ato, não reembolsável)" v={brl(a.entradaMinima)} />
-      <Linha k="Êxito sugerido sobre o proveito" v="40% (contratual da casa)" />
-      <Linha k="Receita estimada do escritório" v={brl(Math.round(a.proveito * 0.4))} />
-      <Linha k="Fica com o cliente" v={brl(Math.round(a.proveito * 0.6))} forte />
+      <Linha k="Entrada (no ato, não reembolsável)" v={brl(a.entrada)} />
+      <Linha k="Êxito sobre o proveito — COM entrada" v={`30% · ${brl(a.exito)}`} />
+      <Linha k="Receita do escritório (entrada + êxito)" v={brl(a.receita)} />
+      <Linha k="Fica com o cliente" v={brl(a.liquidoCliente)} forte />
+      <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+        <p className="text-[12px] leading-relaxed text-zinc-700">
+          <b>Regra da casa:</b> o contratual é <b>40%</b> quando o escritório assume o risco inteiro, sem entrada
+          — aqui seriam {brl(a.exitoSemEntrada)}. <b>Havendo entrada no ato, o êxito cai para 30%</b>: é a entrada
+          que compra a redução, porque ela paga o trabalho ganhe ou perca.
+        </p>
+      </div>
       <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
         Art. 23 do Estatuto da OAB: a sucumbência é do advogado e não entra no cálculo do contratual.
         Custas, taxa judiciária e perícia são do cliente; o escritório não as absorve.

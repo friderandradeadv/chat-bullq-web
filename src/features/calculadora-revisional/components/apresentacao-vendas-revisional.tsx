@@ -165,7 +165,7 @@ export function ApresentacaoVendasRevisional({
       </div>
 
       {/* Controles de preço — não entram no PDF */}
-      <div className="no-print sticky top-[49px] z-10 flex shrink-0 flex-wrap items-end gap-4 border-b border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-700 dark:bg-zinc-900/60">
+      <div className="no-print sticky top-[49px] z-10 flex shrink-0 flex-wrap items-end gap-4 border-b border-zinc-200 bg-zinc-50 px-4 py-2.5 dark:border-zinc-700 dark:bg-zinc-900">
         <Campo label="Proveito econômico">{num(proveito, setProveito)}</Campo>
         <Campo label="Valor de tabela">{num(valorTabela, setValorTabela)}</Campo>
         <Campo label="Êxito tabela %">{num(pctExitoTabela, setPctExitoTabela)}</Campo>
@@ -239,19 +239,27 @@ export function ApresentacaoVendasRevisional({
           {/* 3 · OS NÚMEROS */}
           <Slide>
             <SlideKicker>Os números do seu caso</SlideKicker>
-            <div className="grid grid-cols-3 gap-3">
-              <Stat label="Restituição do já pago" value={fmtBRL(dados.restituicao)} />
-              <Stat label="Economia nas parcelas" value={fmtBRL(dados.economiaFutura)} />
-              <Stat label="Proveito total" value={fmtBRL(c.P)} good />
-            </div>
-            <div className="mt-5 rounded-2xl border border-zinc-200 p-6 dark:border-zinc-700">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">A sua parcela</p>
-              <div className="mt-3 flex flex-wrap items-end gap-6">
-                <div><p className="text-xs text-zinc-500">hoje</p><p className="font-serif text-3xl font-bold text-zinc-400 line-through">{fmtBRL(dados.parcelaAtual)}</p></div>
-                <div><p className="text-xs text-zinc-500">com a revisão</p><p className="font-serif text-4xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(dados.parcelaNova)}</p></div>
-                <div className="ml-auto text-right"><p className="text-xs text-zinc-500">a menos por mês</p><p className="font-serif text-2xl font-bold text-[#B7791F]">{fmtBRL(dados.parcelaAtual - dados.parcelaNova)}</p></div>
+            <div className="rounded-2xl bg-gradient-to-br from-[#1a1206] via-[#2a1d0a] to-[#101820] p-7 ring-1 ring-[#B7791F]/25">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#e0b872]">O que você pode recuperar</p>
+              <p className="mt-1 font-serif text-6xl font-bold leading-none text-white">{fmtBRL(c.P)}</p>
+              <div className="mt-5 flex flex-wrap gap-x-10 gap-y-3 border-t border-white/10 pt-4">
+                <div><p className="text-[11px] uppercase tracking-wide text-white/50">Devolvido do que já pagou</p><p className="font-serif text-2xl font-bold text-white">{fmtBRL(dados.restituicao)}</p></div>
+                <div><p className="text-[11px] uppercase tracking-wide text-white/50">Economia nas parcelas que faltam</p><p className="font-serif text-2xl font-bold text-white">{fmtBRL(dados.economiaFutura)}</p></div>
               </div>
             </div>
+            {dados.parcelaAtual - dados.parcelaNova > 0.5 && (
+              <div className="mt-5 rounded-2xl border-2 border-emerald-500/30 bg-emerald-50/60 p-7 dark:border-emerald-400/25 dark:bg-emerald-900/10">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">A sua parcela</p>
+                <div className="mt-4 flex flex-wrap items-end gap-x-10 gap-y-4">
+                  <div><p className="text-xs text-zinc-500">hoje</p><p className="font-serif text-3xl font-bold text-zinc-400 line-through">{fmtBRL(dados.parcelaAtual)}</p></div>
+                  <div><p className="text-xs text-zinc-500">com a revisão</p><p className="font-serif text-5xl font-bold leading-none text-emerald-700 dark:text-emerald-400">{fmtBRL(dados.parcelaNova)}</p></div>
+                  <div className="ml-auto text-right">
+                    <p className="text-xs text-zinc-500">a menos, todo mês</p>
+                    <p className="font-serif text-3xl font-bold text-[#B7791F]">−{fmtBRL(dados.parcelaAtual - dados.parcelaNova)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
             <p className="mt-3 text-[11px] leading-relaxed text-zinc-400">
               Estimativa técnica sobre o contrato e as séries oficiais do Banco Central. Não é promessa de resultado — o art. 41 do Código de Ética da OAB veda ao advogado garantir desfecho.
             </p>
@@ -283,7 +291,10 @@ export function ApresentacaoVendasRevisional({
           <Slide>
             <SlideKicker>A sua proposta</SlideKicker>
             <div className="mb-4 flex items-center justify-between rounded-lg border border-zinc-200 px-5 py-3 dark:border-zinc-700">
-              <span className="text-sm text-zinc-500">Valor de tabela + {pct(pctExitoTabela)} de êxito</span>
+              <div>
+                <span className="text-sm text-zinc-500">Valor de tabela + {pct(pctExitoTabela)} de êxito</span>
+                <p className="text-[11px] text-zinc-400">sem entrada, o escritório assume o risco inteiro</p>
+              </div>
               <span className="text-xl font-semibold text-zinc-400 line-through">{fmtBRL(c.anchor)}</span>
             </div>
             <div className="rounded-2xl border-2 border-[#B7791F]/40 bg-[#B7791F]/5 p-6">
@@ -297,7 +308,9 @@ export function ApresentacaoVendasRevisional({
                 <div>
                   <p className="text-xs text-zinc-500">+ Êxito ({pct(pctExitoPadrao)})</p>
                   <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.exitoPadrao)}</p>
-                  <p className="text-[11px] text-zinc-500">só sobre o que você ganhar</p>
+                  <p className="text-[11px] font-semibold text-[#c22e00]">
+                    de {pct(pctExitoTabela)} para {pct(pctExitoPadrao)} — é a entrada que compra a redução
+                  </p>
                 </div>
               </div>
               <ExitoExplica proveito={c.P} pctExito={pctExitoPadrao} exito={c.exitoPadrao} />
@@ -391,7 +404,7 @@ function Stat({ label, value, good }: { label: string; value: string; good?: boo
 function ExitoExplica({ proveito, pctExito, exito, dark }: { proveito: number; pctExito: number; exito: number; dark?: boolean }) {
   return (
     <div className={`mt-3 rounded-lg border p-3.5 text-[12px] leading-relaxed ${dark ? 'border-[#B7791F]/30 bg-white/5 text-white/75' : 'border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300'}`}>
-      <p>O êxito é <b>{pct(pctExito)} sobre o proveito</b> — sobre o que você efetivamente recuperar e deixar de pagar, nunca sobre o valor do contrato.</p>
+      <p>O êxito é <b>{pct(pctExito)} sobre o proveito</b> — sobre o que você efetivamente recuperar e deixar de pagar, nunca sobre o valor do contrato. O percentual é menor porque há <b>entrada</b>: ela paga o trabalho ganhe ou perca, e por isso o escritório cobra menos no fim.</p>
       <p className={`mt-1.5 font-semibold ${dark ? 'text-[#e0b872]' : 'text-[#B7791F]'}`}>Ex.: proveito de {fmtBRL(proveito)} × {pct(pctExito)} = {fmtBRL(exito)} de êxito</p>
       <p className={`mt-1.5 ${dark ? 'text-white/55' : 'text-zinc-400'}`}>É uma <b>estimativa</b> pela projeção atual e <b>varia com o resultado</b>: o fixo é o <b>percentual</b>, nunca o valor.</p>
     </div>

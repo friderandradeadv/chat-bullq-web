@@ -16,7 +16,7 @@ import {
 } from '@/features/calculadora-revisional/services/calculadora-revisional.service';
 import { DropZone } from '@/components/drop-zone';
 import type { DadosApresentacaoRevisional } from '@/features/calculadora-revisional/components/apresentacao-vendas-revisional';
-import { porTese, brlNum } from '@/features/calculadora-revisional/proveito';
+import { porTese, proveitoTotal, brlNum } from '@/features/calculadora-revisional/proveito';
 import { PREFIXO_DOC, type PayloadDocumentoRevisional } from '@/features/calculadora-revisional/documento-payload';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -184,16 +184,22 @@ export default function RevisionalPage() {
         forca: 'alta',
       });
 
-    const proveito = teses.reduce((s2, t) => s2 + t.recebe, 0);
+    // 🚨 OS TRÊS NÚMEROS TÊM DE FECHAR. Restituição + economia futura = proveito,
+    // e a parcela nova sai do principal LIMPO — não do `res.resumo`, que é só da
+    // tese de juros e, em contrato abaixo da média, devolve parcela MAIOR.
+    const principalIndevido = irregs
+      .filter((x) => x.somavel !== false)
+      .reduce((s2, x) => s2 + brlNum(x.valor), 0);
+    const tot = proveitoTotal(res, principalIndevido);
     return {
       cliente: form.nomeCalculo || 'Cliente',
       credor: extraido?.banco || res.modalidade.label,
       contrato: extraido?.numeroContrato || '—',
-      proveito,
-      parcelaAtual: res.resumo.parcelaContrato,
-      parcelaNova: res.resumo.parcelaRecalculada,
-      restituicao: res.resumo.restituicaoAtualizada,
-      economiaFutura: economiaFuturaJuros,
+      proveito: Math.round(tot.proveito),
+      parcelaAtual: tot.parcelaAtual,
+      parcelaNova: tot.parcelaNova,
+      restituicao: Math.round(tot.restituicao),
+      economiaFutura: Math.round(tot.economiaFutura),
       afastadas,
       teses,
     };
