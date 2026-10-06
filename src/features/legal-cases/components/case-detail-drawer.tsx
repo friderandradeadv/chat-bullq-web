@@ -202,7 +202,18 @@ export function CaseDetailDrawer({
   const faseData = (c?.metadata as any)?.faseData?.[faseBucket] ?? {};
 
   const isFilhote = !!(c?.metadata as any)?.desmembradoDe;
-  const inIntake = phaseKey ? INTAKE_PHASES.has(phaseKey) : false;
+  // 🚨 MONTAR INICIAL TAMBÉM DESMEMBRA. O bloco "Criar cards dos bancos réus"
+  // só aparecia nas fases de intake, e aceitar a oferta de churning MOVE o card
+  // para "montar_inicial" — ou seja, o aceite tirava o card do alcance do botão
+  // que ele próprio mandava apertar. No JOSÉ BATISTA ficaram CINCO réus na
+  // lista e nenhum card nascia, sem nada na tela explicando por quê.
+  //
+  // É seguro: `!isFilhote` continua barrando o card que já é de um réu, e um
+  // card-pai parado em MONTAR INICIAL com vários réus na lista precisa
+  // justamente disto.
+  const inIntake = phaseKey
+    ? INTAKE_PHASES.has(phaseKey) || phaseKey === 'montar_inicial'
+    : false;
   const inMontar = phaseKey ? MONTAR_PHASES.has(phaseKey) : false;
   // "Contratos a impugnar" + cálculo + gerar iniciais são específicos de RMC/RCC
   // (bancário). Para as demais áreas o intake usa o acelerador genérico de IA.
@@ -1362,7 +1373,7 @@ function ContratosImpugnar({ caseId, phaseKey, initial, docs, showDesmembrar, on
       {showDesmembrar && (
         <div className="mt-3 rounded-lg border border-dashed border-[#cfe0ed] bg-[#f8fbff] p-3 dark:border-zinc-700 dark:bg-zinc-900/40">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[#48626f]">Criar cards dos bancos réus →</p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Cria <strong>{rows.length || 0} card(s)</strong>, 1 por banco réu, e arquiva este card de intake. Escolha para onde vão os filhotes:</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Cria <strong>{rows.length || 0} card(s)</strong>, um por réu, e arquiva este card, que vira o registro do desmembramento. Escolha para onde vão os novos:</p>
           <div className="mt-2 flex gap-1.5">
             <button onClick={() => desmembrar('info_faltantes')} disabled={!!desm}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-400 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-400 dark:hover:bg-amber-900/20">
