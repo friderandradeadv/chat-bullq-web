@@ -320,21 +320,28 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     return r?.criados ?? 0;
   };
 
-  const gravarReus = async (instituicoes: string[]) => {
+  const gravarReus = async (entradas: { reu: string; grupo: string }[]) => {
     // A lista vive no metadata do caso, é de onde o próprio drawer a lê.
     const atuais: any[] = ((caso.metadata as any)?.contratos ?? []) as any[];
     const jaTem = (reu: string) =>
       atuais.some((c: any) => String(c?.reu ?? '').toUpperCase().trim() === reu.toUpperCase().trim());
     const vistos = new Set<string>();
-    const novas = instituicoes
-      .filter((reu) => {
+    const novas = entradas
+      .filter(({ reu }) => {
         const k = reu.toUpperCase().trim();
         if (!k || jaTem(reu) || vistos.has(k)) return false;
         vistos.add(k);
         return true;
       })
-      .map((reu, i) => ({
+      .map(({ reu, grupo }, i) => ({
         id: `churn${Date.now().toString(36)}${i}`,
+        // 🚨 O GRUPO VAI NA LINHA, não só na oferta. A oferta guarda UM grupo,
+        // o da conversa da vez, e o card filho herdava esse. Medido em
+        // 05/10/2026: aceitos cinco grupos de uma vez, os cinco filhos nasceram
+        // com "Itaú Unibanco" — a peça da FACTA sairia com os contratos do
+        // Itaú. Conteúdo errado, sem erro na tela. Aqui cada réu leva o grupo
+        // DELE.
+        grupo,
         // 🚨 RÉU EM CAIXA-ALTA, como o acervo inteiro. Medido em 05/10/2026:
         // 762 dos 853 réus do escritório (89,3%) estão assim. Os nomes vêm do
         // registro de instituições em caixa mista ("Itaú Unibanco S.A.") e
@@ -364,7 +371,10 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     try {
       const escolhidos = grupos.filter((g: any) =>
         marcados.has(String(g.grupo ?? (g.instituicoes ?? [])[0] ?? '')));
-      const todos = escolhidos.flatMap((g: any) => (g.instituicoes ?? []) as string[]);
+      const todos = escolhidos.flatMap((g: any) => {
+        const nome = String(g.grupo ?? (g.instituicoes ?? [])[0] ?? '');
+        return ((g.instituicoes ?? []) as string[]).map((reu) => ({ reu, grupo: nome }));
+      });
       await gravarReus(todos);
       const r = await legalCasesService.registrarOfertaChurning(caso.id, { status: 'aceita' });
       const criados = await criarCardsDosReus();
@@ -390,22 +400,9 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     setRegistrando(true);
     try {
       if (status === 'aceita' && achado?.instituicoes?.length) {
-        const atuais: any[] = ((caso.metadata as any)?.contratos ?? []) as any[];
-        const jaTem = (reu: string) =>
-          atuais.some((c: any) => String(c?.reu ?? '').toUpperCase().trim() === reu.toUpperCase().trim());
-        const novas = achado.instituicoes
-          .filter((reu) => !jaTem(reu))
-          .map((reu, i) => ({
-            id: `churn${Date.now().toString(36)}${i}`,
-            reu,
-            doc: null,
-            produto: 'CHURNING',
-            valor: null,
-            beneficio: /^(AP|PM)\b/.exec(caso.title ?? '')?.[1] ?? null,
-          }));
-        if (novas.length) {
-          await legalCasesService.saveContratos(caso.id, [...atuais, ...novas] as any);
-        }
+        // Um caminho só para gravar réu: `gravarReus` põe o grupo na linha,
+        // acumula e não duplica.
+        await gravarReus(achado.instituicoes.map((reu) => ({ reu, grupo: achado.grupo })));
       }
       const r = await legalCasesService.registrarOfertaChurning(caso.id, { status });
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
