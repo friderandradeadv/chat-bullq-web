@@ -308,23 +308,29 @@ export function ApresentacaoVendasRevisional({
                 <p className="mt-2 text-xs text-zinc-500">Você paga agora</p>
                 <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(entradaPadrao)}</p>
                 <p className="mt-3 text-xs text-zinc-500">E no fim, {pct(pctExitoPadrao)} do que ganhar, já abatida a entrada</p>
-                <p className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.saldoPadrao)}</p>
+                <p className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.saldoPadrao)}<span className="ml-1 text-xs font-normal text-zinc-400">estimado</span></p>
                 <div className="mt-auto border-t border-[#B7791F]/20 pt-3">
-                  <div className="flex items-baseline justify-between"><span className="text-xs text-zinc-500">Total de honorários</span><span className="font-serif text-xl font-bold text-[#B7791F]">{fmtBRL(c.padrao)}</span></div>
+                  <div className="flex items-baseline justify-between"><span className="text-xs text-zinc-500">Total estimado</span><span className="font-serif text-xl font-bold text-[#B7791F]">{fmtBRL(c.padrao)}</span></div>
                   <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você</span><span className="font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(c.liquidoPadrao)}</span></div>
                 </div>
               </div>
 
-              {/* OPÇÃO 2 — meio a meio, como na RMC */}
+              {/* OPÇÃO 2 — meio a meio, como na RMC.
+                  🚨 SEM VALOR LIQUIDADO. O que se divide é o RESULTADO, e ele só
+                  se conhece na sentença. Número fechado aqui vira promessa de
+                  resultado — vedada pelo art. 41 do Código de Ética — e ainda
+                  prende o escritório a uma projeção que pode não se confirmar. */}
               <div className="flex flex-col rounded-2xl border-2 border-zinc-300 bg-zinc-50 p-5 dark:border-zinc-600 dark:bg-zinc-800/40">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Opção 2 · meio a meio</p>
                 <p className="mt-2 text-xs text-zinc-500">Você paga agora</p>
                 <p className="font-serif text-3xl font-bold text-emerald-700 dark:text-emerald-400">Nada</p>
-                <p className="mt-3 text-xs text-zinc-500">E no fim, metade do que ganhar</p>
-                <p className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.meioAMeio)}</p>
+                <p className="mt-3 text-xs text-zinc-500">E no fim</p>
+                <p className="font-serif text-2xl font-bold leading-tight text-zinc-900 dark:text-zinc-100">
+                  Dividimos<br />meio a meio
+                </p>
                 <div className="mt-auto border-t border-zinc-200 pt-3 dark:border-zinc-600">
-                  <div className="flex items-baseline justify-between"><span className="text-xs text-zinc-500">Total de honorários</span><span className="font-serif text-xl font-bold text-zinc-700 dark:text-zinc-200">{fmtBRL(c.meioAMeio)}</span></div>
-                  <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você</span><span className="font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(c.meioAMeio)}</span></div>
+                  <div className="flex items-baseline justify-between"><span className="text-xs text-zinc-500">Honorários</span><span className="font-serif text-lg font-bold text-zinc-700 dark:text-zinc-200">metade do resultado</span></div>
+                  <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você</span><span className="font-serif text-lg font-bold text-emerald-700 dark:text-emerald-400">a outra metade</span></div>
                 </div>
               </div>
             </div>
@@ -333,7 +339,8 @@ export function ApresentacaoVendasRevisional({
             <p className="mt-3 text-[12px] leading-relaxed text-zinc-600 dark:text-zinc-300">
               A diferença entre as duas é só <b>quando</b> você paga. Na <b>Opção 1</b> a entrada barateia o total,
               porque divide o risco com o escritório. Na <b>Opção 2</b> você não tira nada do bolso agora e o
-              escritório só recebe se você receber.
+              escritório só recebe se você receber. Em nenhuma das duas o valor final está fechado:
+              <b> o que se divide é o resultado da ação</b>, e ele só se conhece na sentença.
             </p>
           </Slide>
 
@@ -348,12 +355,12 @@ export function ApresentacaoVendasRevisional({
                 <div className="rounded-xl border border-[#B7791F]/40 bg-white/5 p-5">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-[#e0b872]">Opção 1</p>
                   <p className="mt-1 font-serif text-2xl font-bold text-white">{fmtBRL(entradaPadrao)} agora</p>
-                  <p className="text-[12px] text-white/60">+ {pct(pctExitoPadrao)} no fim · total {fmtBRL(c.padrao)}</p>
+                  <p className="text-[12px] text-white/60">+ {pct(pctExitoPadrao)} do que você receber</p>
                 </div>
                 <div className="rounded-xl border border-white/20 bg-white/5 p-5">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Opção 2</p>
                   <p className="mt-1 font-serif text-2xl font-bold text-white">Nada agora</p>
-                  <p className="text-[12px] text-white/60">metade no fim · total {fmtBRL(c.meioAMeio)}</p>
+                  <p className="text-[12px] text-white/60">dividimos meio a meio o que você receber</p>
                 </div>
               </div>
               <p className="mt-7 text-[15px] leading-relaxed text-white/75">
