@@ -84,11 +84,18 @@ export function ApresentacaoVendasRevisional({
     const exitoTabela = Math.round((P * pctExitoTabela) / 100);
     const exitoPadrao = Math.round((P * pctExitoPadrao) / 100);
     const exitoHoje = Math.round((P * pctExitoHoje) / 100);
+    // 🚨 A ENTRADA É ADIANTAMENTO DO ÊXITO, NÃO ADICIONAL. Somando as duas, num
+    // caso pequeno o escritório ficava com MAIS que o cliente (R$ 4.520 contra
+    // R$ 3.547 num proveito de R$ 8.067 — 56%). A entrada se abate do êxito: o
+    // total é o maior dos dois, e o cliente paga a diferença só no fim.
     const anchor = valorTabela + exitoTabela;
-    const padrao = entradaPadrao + exitoPadrao;
-    const oferta = entradaHoje + exitoHoje;
+    const padrao = Math.max(entradaPadrao, exitoPadrao);
+    const oferta = Math.max(entradaHoje, exitoHoje);
+    const saldoPadrao = Math.max(0, exitoPadrao - entradaPadrao);
+    const saldoHoje = Math.max(0, exitoHoje - entradaHoje);
     return {
-      P, exitoTabela, exitoPadrao, exitoHoje, anchor, padrao, oferta,
+      P, exitoTabela, exitoPadrao, exitoHoje, anchor, padrao, oferta, saldoPadrao, saldoHoje,
+      pctEscritorio: P > 0 ? (padrao / P) * 100 : 0,
       liquidoPadrao: P - padrao,
       liquidoHoje: P - oferta,
       economizaVsPadrao: Math.max(0, padrao - oferta),
@@ -174,6 +181,11 @@ export function ApresentacaoVendasRevisional({
         <Campo label="Entrada hoje">{num(entradaHoje, setEntradaHoje)}</Campo>
         <Campo label="Parcelas">{num(parcelasHoje, setParcelasHoje)}</Campo>
         <Campo label="Êxito hoje %">{num(pctExitoHoje, setPctExitoHoje)}</Campo>
+        {c.pctEscritorio > 50 && (
+          <p className="w-full rounded-md bg-red-50 px-3 py-1.5 text-[12px] font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-400">
+            ⚠ O escritório ficaria com {pct(c.pctEscritorio)} do proveito — mais que o cliente. Baixe a entrada ou o êxito.
+          </p>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto bg-zinc-100 p-6 dark:bg-zinc-950">
@@ -306,8 +318,11 @@ export function ApresentacaoVendasRevisional({
                   <p className="text-[11px] font-semibold text-[#c22e00]">−{c.descTabela}% sobre o valor de tabela</p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500">+ Êxito ({pct(pctExitoPadrao)})</p>
+                  <p className="text-xs text-zinc-500">Êxito ({pct(pctExitoPadrao)}) — a entrada é abatida</p>
                   <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.exitoPadrao)}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    no fim você paga só o saldo: <b>{fmtBRL(c.saldoPadrao)}</b>
+                  </p>
                   <p className="text-[11px] font-semibold text-[#c22e00]">
                     de {pct(pctExitoTabela)} para {pct(pctExitoPadrao)} — é a entrada que compra a redução
                   </p>
@@ -316,8 +331,9 @@ export function ApresentacaoVendasRevisional({
               <ExitoExplica proveito={c.P} pctExito={pctExitoPadrao} exito={c.exitoPadrao} />
               <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#B7791F]/20 pt-4">
                 <div className="rounded-xl bg-[#B7791F]/10 p-4">
-                  <p className="text-xs text-zinc-500">Total de honorários (estimado)</p>
+                  <p className="text-xs text-zinc-500">Total de honorários ({pct(c.pctEscritorio)} do proveito)</p>
                   <p className="mt-0.5 font-serif text-2xl font-bold text-[#B7791F]">{fmtBRL(c.padrao)}</p>
+                  <p className="text-[11px] text-zinc-400">entrada de {fmtBRL(entradaPadrao)} + saldo de {fmtBRL(c.saldoPadrao)}</p>
                 </div>
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 p-4 dark:bg-emerald-900/15">
                   <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80">Fica com você</p>
@@ -339,9 +355,9 @@ export function ApresentacaoVendasRevisional({
                   <p className="text-[11px] text-[#e0b872]">em até {parcelasHoje}× de {fmtBRL(c.parcela)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-white/60">+ Êxito ({pct(pctExitoHoje)})</p>
+                  <p className="text-xs text-white/60">Êxito ({pct(pctExitoHoje)}) — a entrada é abatida</p>
                   <p className="font-serif text-4xl font-bold text-white">{fmtBRL(c.exitoHoje)}</p>
-                  <p className="text-[11px] text-white/50">só se você ganhar</p>
+                  <p className="text-[11px] text-white/50">no fim, só o saldo: {fmtBRL(c.saldoHoje)}</p>
                 </div>
               </div>
               <ExitoExplica proveito={c.P} pctExito={pctExitoHoje} exito={c.exitoHoje} dark />

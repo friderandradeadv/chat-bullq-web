@@ -277,12 +277,17 @@ export function ParecerInternoRevisional({
     const PCT_EXITO_COM_ENTRADA = 0.30;
     const PCT_EXITO_SEM_ENTRADA = 0.40;
     const exito = Math.round(proveito * PCT_EXITO_COM_ENTRADA);
-    const receita = entrada + exito;
-    const liquidoCliente = proveito - exito - entrada;
+    // 🚨 A ENTRADA É ADIANTAMENTO DO ÊXITO, NÃO ADICIONAL. Somadas, num caso
+    // pequeno o escritório ficava com MAIS que o cliente (56% de um proveito de
+    // R$ 8 mil). O total é o maior dos dois; no fim paga-se só o saldo.
+    const saldo = Math.max(0, exito - entrada);
+    const receita = Math.max(entrada, exito);
+    const liquidoCliente = proveito - receita;
+    const pctEscritorio = proveito > 0 ? (receita / proveito) * 100 : 0;
     const exitoSemEntrada = Math.round(proveito * PCT_EXITO_SEM_ENTRADA);
     return {
       todas, proveito, concentracao, fora, veredito, pagas, vincendas, dobro: cfg.dobro,
-      entrada, exito, receita, liquidoCliente, exitoSemEntrada,
+      entrada, exito, saldo, receita, liquidoCliente, pctEscritorio, exitoSemEntrada,
     };
   }, [res, irregs, auditoria]);
 
@@ -371,10 +376,17 @@ export function ParecerInternoRevisional({
       </p>
 
       <H n="04">Honorários para o caso fechar</H>
-      <Linha k="Entrada (no ato, não reembolsável)" v={brl(a.entrada)} />
+      <Linha k="Entrada (no ato, adiantamento do êxito)" v={brl(a.entrada)} />
       <Linha k="Êxito sobre o proveito — COM entrada" v={`30% · ${brl(a.exito)}`} />
-      <Linha k="Receita do escritório (entrada + êxito)" v={brl(a.receita)} />
+      <Linha k="Saldo a pagar no fim (êxito − entrada)" v={brl(a.saldo)} />
+      <Linha k={`Receita do escritório (${a.pctEscritorio.toFixed(0)}% do proveito)`} v={brl(a.receita)} />
       <Linha k="Fica com o cliente" v={brl(a.liquidoCliente)} forte />
+      {a.pctEscritorio > 50 && (
+        <p className="mt-2 rounded-lg border border-red-300 bg-red-50 p-3 text-[12px] font-semibold text-red-800">
+          ⚠ Nesta configuração o escritório fica com {a.pctEscritorio.toFixed(0)}% do proveito — mais que o cliente.
+          Reveja a entrada ou o percentual antes de propor.
+        </p>
+      )}
       <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
         <p className="text-[12px] leading-relaxed text-zinc-700">
           <b>Regra da casa:</b> o contratual é <b>40%</b> quando o escritório assume o risco inteiro, sem entrada
