@@ -73,9 +73,8 @@ export function ApresentacaoVendasRevisional({
   const [pctExitoTabela, setPctExitoTabela] = useState(40);
   const [entradaPadrao, setEntradaPadrao] = useState(round100(vt0 * 0.25));
   const [pctExitoPadrao, setPctExitoPadrao] = useState(30);
-  const [entradaHoje, setEntradaHoje] = useState(round100(vt0 * 0.2));
-  const [parcelasHoje, setParcelasHoje] = useState(3);
-  const [pctExitoHoje, setPctExitoHoje] = useState(25);
+  // Opção 2: meio a meio, sem entrada — o mesmo padrão da RMC.
+  const [pctMeioAMeio, setPctMeioAMeio] = useState(50);
   const [ocupado, setOcupado] = useState<'ver' | 'baixar' | null>(null);
   const slideRef = useRef<HTMLDivElement>(null);
 
@@ -83,27 +82,21 @@ export function ApresentacaoVendasRevisional({
     const P = Math.max(0, proveito);
     const exitoTabela = Math.round((P * pctExitoTabela) / 100);
     const exitoPadrao = Math.round((P * pctExitoPadrao) / 100);
-    const exitoHoje = Math.round((P * pctExitoHoje) / 100);
+    const meioAMeio = Math.round((P * pctMeioAMeio) / 100);
     // 🚨 A ENTRADA É ADIANTAMENTO DO ÊXITO, NÃO ADICIONAL. Somando as duas, num
     // caso pequeno o escritório ficava com MAIS que o cliente (R$ 4.520 contra
     // R$ 3.547 num proveito de R$ 8.067 — 56%). A entrada se abate do êxito: o
     // total é o maior dos dois, e o cliente paga a diferença só no fim.
     const anchor = valorTabela + exitoTabela;
     const padrao = Math.max(entradaPadrao, exitoPadrao);
-    const oferta = Math.max(entradaHoje, exitoHoje);
     const saldoPadrao = Math.max(0, exitoPadrao - entradaPadrao);
-    const saldoHoje = Math.max(0, exitoHoje - entradaHoje);
     return {
-      P, exitoTabela, exitoPadrao, exitoHoje, anchor, padrao, oferta, saldoPadrao, saldoHoje,
+      P, exitoTabela, exitoPadrao, anchor, padrao, saldoPadrao, meioAMeio,
       pctEscritorio: P > 0 ? (padrao / P) * 100 : 0,
       liquidoPadrao: P - padrao,
-      liquidoHoje: P - oferta,
-      economizaVsPadrao: Math.max(0, padrao - oferta),
       descTabela: valorTabela > 0 ? Math.round((1 - entradaPadrao / valorTabela) * 100) : 0,
-      descHoje: valorTabela > 0 ? Math.round((1 - entradaHoje / valorTabela) * 100) : 0,
-      parcela: parcelasHoje > 0 ? Math.round(entradaHoje / parcelasHoje) : entradaHoje,
     };
-  }, [proveito, valorTabela, pctExitoTabela, entradaPadrao, pctExitoPadrao, entradaHoje, pctExitoHoje, parcelasHoje]);
+  }, [proveito, valorTabela, pctExitoTabela, entradaPadrao, pctExitoPadrao, pctMeioAMeio]);
 
   const stack = useMemo(() => {
     const f = SERVICOS_BASE > 0 ? valorTabela / SERVICOS_BASE : 1;
@@ -178,9 +171,7 @@ export function ApresentacaoVendasRevisional({
         <Campo label="Êxito tabela %">{num(pctExitoTabela, setPctExitoTabela)}</Campo>
         <Campo label="Entrada padrão">{num(entradaPadrao, setEntradaPadrao)}</Campo>
         <Campo label="Êxito padrão %">{num(pctExitoPadrao, setPctExitoPadrao)}</Campo>
-        <Campo label="Entrada hoje">{num(entradaHoje, setEntradaHoje)}</Campo>
-        <Campo label="Parcelas">{num(parcelasHoje, setParcelasHoje)}</Campo>
-        <Campo label="Êxito hoje %">{num(pctExitoHoje, setPctExitoHoje)}</Campo>
+        <Campo label="Meio a meio %">{num(pctMeioAMeio, setPctMeioAMeio)}</Campo>
         {c.pctEscritorio > 50 && (
           <p className="w-full rounded-md bg-red-50 px-3 py-1.5 text-[12px] font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-400">
             ⚠ O escritório ficaria com {pct(c.pctEscritorio)} do proveito — mais que o cliente. Baixe a entrada ou o êxito.
@@ -299,74 +290,80 @@ export function ApresentacaoVendasRevisional({
             </div>
           </Slide>
 
-          {/* 5 · A SUA PROPOSTA (ancoragem) */}
+          {/* 5 · DUAS PORTAS — tecnica do "sim ou sim": as duas sao um sim */}
           <Slide>
-            <SlideKicker>A sua proposta</SlideKicker>
+            <SlideKicker>Duas formas de contratar</SlideKicker>
             <div className="mb-4 flex items-center justify-between rounded-lg border border-zinc-200 px-5 py-3 dark:border-zinc-700">
               <div>
-                <span className="text-sm text-zinc-500">Valor de tabela + {pct(pctExitoTabela)} de êxito</span>
-                <p className="text-[11px] text-zinc-400">sem entrada, o escritório assume o risco inteiro</p>
+                <span className="text-sm text-zinc-500">Valor de tabela dos serviços + {pct(pctExitoTabela)} de êxito</span>
+                <p className="text-[11px] text-zinc-400">é o que custaria contratado avulso, sem pacote</p>
               </div>
               <span className="text-xl font-semibold text-zinc-400 line-through">{fmtBRL(c.anchor)}</span>
             </div>
-            <div className="rounded-2xl border-2 border-[#B7791F]/40 bg-[#B7791F]/5 p-6">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[#B7791F]">Proposta para o seu caso</p>
-              <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3">
-                <div>
-                  <p className="text-xs text-zinc-500">Entrada (dá início ao trabalho)</p>
-                  <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(entradaPadrao)}</p>
-                  <p className="text-[11px] font-semibold text-[#c22e00]">−{c.descTabela}% sobre o valor de tabela</p>
-                </div>
-                <div>
-                  <p className="text-xs text-zinc-500">Êxito ({pct(pctExitoPadrao)}) — a entrada é abatida</p>
-                  <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.exitoPadrao)}</p>
-                  <p className="text-[11px] text-zinc-500">
-                    no fim você paga só o saldo: <b>{fmtBRL(c.saldoPadrao)}</b>
-                  </p>
-                  <p className="text-[11px] font-semibold text-[#c22e00]">
-                    de {pct(pctExitoTabela)} para {pct(pctExitoPadrao)} — é a entrada que compra a redução
-                  </p>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* OPÇÃO 1 */}
+              <div className="flex flex-col rounded-2xl border-2 border-[#B7791F]/40 bg-[#B7791F]/5 p-5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#B7791F]">Opção 1 · entrada + êxito</p>
+                <p className="mt-2 text-xs text-zinc-500">Você paga agora</p>
+                <p className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(entradaPadrao)}</p>
+                <p className="mt-3 text-xs text-zinc-500">E no fim, {pct(pctExitoPadrao)} do que ganhar, já abatida a entrada</p>
+                <p className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.saldoPadrao)}</p>
+                <div className="mt-auto border-t border-[#B7791F]/20 pt-3">
+                  <div className="flex items-baseline justify-between"><span className="text-xs text-zinc-500">Total de honorários</span><span className="font-serif text-xl font-bold text-[#B7791F]">{fmtBRL(c.padrao)}</span></div>
+                  <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você</span><span className="font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(c.liquidoPadrao)}</span></div>
                 </div>
               </div>
-              <ExitoExplica proveito={c.P} pctExito={pctExitoPadrao} exito={c.exitoPadrao} />
-              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#B7791F]/20 pt-4">
-                <div className="rounded-xl bg-[#B7791F]/10 p-4">
-                  <p className="text-xs text-zinc-500">Total de honorários ({pct(c.pctEscritorio)} do proveito)</p>
-                  <p className="mt-0.5 font-serif text-2xl font-bold text-[#B7791F]">{fmtBRL(c.padrao)}</p>
-                  <p className="text-[11px] text-zinc-400">entrada de {fmtBRL(entradaPadrao)} + saldo de {fmtBRL(c.saldoPadrao)}</p>
-                </div>
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 p-4 dark:bg-emerald-900/15">
-                  <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80">Fica com você</p>
-                  <p className="mt-0.5 font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(c.liquidoPadrao)}</p>
+
+              {/* OPÇÃO 2 — meio a meio, como na RMC */}
+              <div className="flex flex-col rounded-2xl border-2 border-zinc-300 bg-zinc-50 p-5 dark:border-zinc-600 dark:bg-zinc-800/40">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Opção 2 · meio a meio</p>
+                <p className="mt-2 text-xs text-zinc-500">Você paga agora</p>
+                <p className="font-serif text-3xl font-bold text-emerald-700 dark:text-emerald-400">Nada</p>
+                <p className="mt-3 text-xs text-zinc-500">E no fim, metade do que ganhar</p>
+                <p className="font-serif text-2xl font-bold text-zinc-900 dark:text-zinc-100">{fmtBRL(c.meioAMeio)}</p>
+                <div className="mt-auto border-t border-zinc-200 pt-3 dark:border-zinc-600">
+                  <div className="flex items-baseline justify-between"><span className="text-xs text-zinc-500">Total de honorários</span><span className="font-serif text-xl font-bold text-zinc-700 dark:text-zinc-200">{fmtBRL(c.meioAMeio)}</span></div>
+                  <div className="mt-1 flex items-baseline justify-between"><span className="text-xs text-emerald-700 dark:text-emerald-400">Fica com você</span><span className="font-serif text-2xl font-bold text-emerald-700 dark:text-emerald-400">{fmtBRL(c.meioAMeio)}</span></div>
                 </div>
               </div>
+            </div>
+
+            <ExitoExplica proveito={c.P} pctExito={pctExitoPadrao} exito={c.exitoPadrao} />
+            <p className="mt-3 text-[12px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+              A diferença entre as duas é só <b>quando</b> você paga. Na <b>Opção 1</b> a entrada barateia o total,
+              porque divide o risco com o escritório. Na <b>Opção 2</b> você não tira nada do bolso agora e o
+              escritório só recebe se você receber.
+            </p>
+          </Slide>
+
+          {/* 6 · O FECHAMENTO — pergunta de escolha, sem urgencia fabricada */}
+          <Slide dark>
+            <div className="flex h-full flex-col justify-center">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#e0b872]">Para seguirmos</p>
+              <h2 className="mt-3 font-serif text-4xl font-bold leading-tight text-white">
+                Qual das duas faz<br />mais sentido para você?
+              </h2>
+              <div className="mt-7 grid grid-cols-2 gap-4">
+                <div className="rounded-xl border border-[#B7791F]/40 bg-white/5 p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#e0b872]">Opção 1</p>
+                  <p className="mt-1 font-serif text-2xl font-bold text-white">{fmtBRL(entradaPadrao)} agora</p>
+                  <p className="text-[12px] text-white/60">+ {pct(pctExitoPadrao)} no fim · total {fmtBRL(c.padrao)}</p>
+                </div>
+                <div className="rounded-xl border border-white/20 bg-white/5 p-5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Opção 2</p>
+                  <p className="mt-1 font-serif text-2xl font-bold text-white">Nada agora</p>
+                  <p className="text-[12px] text-white/60">metade no fim · total {fmtBRL(c.meioAMeio)}</p>
+                </div>
+              </div>
+              <p className="mt-7 text-[15px] leading-relaxed text-white/75">
+                Me responda com <b className="text-white">1</b> ou <b className="text-white">2</b> e eu já mando o
+                contrato e a procuração para assinatura digital. Qualquer dúvida sobre os números, é só perguntar
+                por aqui mesmo.
+              </p>
             </div>
           </Slide>
 
-          {/* 6 · FECHAR HOJE */}
-          <Slide dark>
-            <span className="self-start rounded-full bg-[#c22e00] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-white">Condição válida nesta reunião</span>
-            <h2 className="mt-4 font-serif text-3xl font-bold text-white">Para começar hoje</h2>
-            <div className="mt-5 rounded-2xl border border-[#B7791F]/40 bg-white/5 p-6">
-              <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
-                <div>
-                  <p className="text-xs text-white/60">Entrada</p>
-                  <p className="font-serif text-4xl font-bold text-white">{fmtBRL(entradaHoje)}</p>
-                  <p className="text-[11px] text-[#e0b872]">em até {parcelasHoje}× de {fmtBRL(c.parcela)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-white/60">Êxito ({pct(pctExitoHoje)}) — a entrada é abatida</p>
-                  <p className="font-serif text-4xl font-bold text-white">{fmtBRL(c.exitoHoje)}</p>
-                  <p className="text-[11px] text-white/50">no fim, só o saldo: {fmtBRL(c.saldoHoje)}</p>
-                </div>
-              </div>
-              <ExitoExplica proveito={c.P} pctExito={pctExitoHoje} exito={c.exitoHoje} dark />
-              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-4">
-                <div className="rounded-xl bg-white/5 p-4"><p className="text-xs text-white/60">Economiza em relação à proposta padrão</p><p className="mt-0.5 font-serif text-2xl font-bold text-[#e0b872]">{fmtBRL(c.economizaVsPadrao)}</p></div>
-                <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4"><p className="text-xs text-emerald-300/80">Fica com você</p><p className="mt-0.5 font-serif text-2xl font-bold text-emerald-300">{fmtBRL(c.liquidoHoje)}</p></div>
-              </div>
-            </div>
-          </Slide>
 
           {/* 7 · PRÓXIMOS PASSOS */}
           <Slide>
