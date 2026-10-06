@@ -3,6 +3,9 @@
 import { useMemo, useRef, useState } from 'react';
 import { Download, Eye, Loader2, Printer, X } from 'lucide-react';
 import { toast } from 'sonner';
+// 🚨 Esta tela fica FORA do layout do dashboard, onde mora o alternador de
+// tema. Sem ele aqui, o claro/escuro some para quem abre o documento.
+import { ThemeToggle } from '@/features/auth/components/theme-toggle';
 import { porTese, brlNum } from '@/features/calculadora-revisional/proveito';
 import type {
   AuditoriaContrato,
@@ -81,6 +84,7 @@ function Folha({
             {ocupado === 'baixar' ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando…</> : <><Download className="h-4 w-4" /> Baixar</>}
           </button>
           <button onClick={() => window.print()} className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"><Printer className="h-4 w-4" /> Imprimir</button>
+          <ThemeToggle className="inline-flex items-center justify-center rounded-lg border border-zinc-300 p-2 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800" />
           {onClose && (
             <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
           )}
