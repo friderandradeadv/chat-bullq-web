@@ -1226,6 +1226,12 @@ export const legalCasesService = {
     return data?.data ?? data;
   },
 
+  /** Guarda qual foro o CLIENTE escolheu depois de avisado do risco de custas. */
+  async registrarForo(id: string, escolha: 'civel' | 'juizado'): Promise<{ ok: boolean; foro: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/foro`, { escolha });
+    return data?.data ?? data;
+  },
+
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */
