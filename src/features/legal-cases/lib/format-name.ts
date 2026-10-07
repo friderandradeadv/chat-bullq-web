@@ -55,18 +55,24 @@ export function cleanAreaLabel(raw: string | null | undefined): string {
 }
 
 /**
- * Nome do processo no padrão do escritório: "AUTOR × RÉU" em CAIXA ALTA.
+ * Nome do processo no padrão do escritório: "AUTOR x RÉU" em CAIXA ALTA.
  * (O nome do CLIENTE, na coluna Cliente/Pasta, é que fica em Title Case — use
  * properName lá; aqui o TÍTULO do processo é tudo em maiúsculas.)
+ *
+ * 🚨 O separador é ` x ` — xis minúsculo (U+0078), NÃO o sinal de multiplicação
+ * `×` (U+00D7). Esta cópia ficou para trás quando a do back foi alinhada em
+ * 19/09/2026 (`legal-cases.service.ts:197`), e as duas divergiram por 18 dias:
+ * a API gravava ` x ` e a tela desenhava ` × ` para o mesmo processo. Mexer aqui
+ * sem mexer lá, ou o contrário, recria a divergência.
  */
 export function processoNome(clienteNome: string | null | undefined, reuNome: string | null | undefined, fallbackTitle?: string | null): string {
-  const autor = (clienteNome ?? '').trim();
-  const reu = (reuNome ?? '').trim();
-  let nome: string;
-  if (autor && reu) nome = `${autor} × ${reu}`;
-  else if (autor) nome = autor;
-  else nome = (fallbackTitle ?? '').trim();
-  return nome.toUpperCase();
+  const autor = (clienteNome ?? '').trim().toUpperCase();
+  const reu = (reuNome ?? '').trim().toUpperCase();
+  // 🚨 O uppercase vai nos NOMES, nunca na string montada: `.toUpperCase()` no
+  // todo vira ` X ` e desfaz o xis minúsculo na linha seguinte à que o escreve.
+  if (autor && reu) return `${autor} x ${reu}`;
+  if (autor) return autor;
+  return (fallbackTitle ?? '').trim().toUpperCase();
 }
 
 /**
