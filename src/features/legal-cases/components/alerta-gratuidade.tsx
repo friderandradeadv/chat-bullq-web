@@ -41,7 +41,11 @@ export function AlertaGratuidade({ caso }: { caso: CaseDetail }) {
     setEnviando(true);
     try {
       await legalCasesService.avisarRiscoDeCustas(caso.id);
-      qc.invalidateQueries({ queryKey: ['legal-case', caso.id] });
+      // 🚨 A CHAVE É `['legal-cases','detail',id]`. Com `['legal-case', id]`
+      // (singular, sem 'detail') nada era invalidado: depois de enviar, o painel
+      // continuava mostrando o BOTÃO em vez de "Cliente avisado" — e o aviso
+      // sairia duas vezes no WhatsApp do cliente.
+      await qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caso.id] });
       toast.success('Aviso enviado ao cliente, com os valores da declaração dele.');
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? 'Não consegui enviar o aviso.');
@@ -67,6 +71,9 @@ export function AlertaGratuidade({ caso }: { caso: CaseDetail }) {
           </p>
           <p className="mt-1 text-[11px] leading-4 text-amber-800 dark:text-amber-300">
             A declaração não vai no pacote. Ela só é juntada se o juízo pedir.
+            {(irpf as any).herdado
+              ? ' A leitura foi feita em outro processo deste mesmo cliente, e o aviso vale para todos.'
+              : ''}
           </p>
 
           {irpf.avisadoEm ? (
