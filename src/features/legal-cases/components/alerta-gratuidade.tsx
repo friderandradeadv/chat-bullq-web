@@ -32,7 +32,7 @@ export function AlertaGratuidade({ caso }: { caso: CaseDetail }) {
   const qc = useQueryClient();
   const [enviando, setEnviando] = useState(false);
   const [gravandoForo, setGravandoForo] = useState<'civel' | 'juizado' | null>(null);
-  const foro = (caso.metadata as any)?.foro as { escolha?: string; em?: string } | undefined;
+  const foro = (caso.metadata as any)?.foro as { escolha?: string; em?: string; herdado?: boolean } | undefined;
   const irpf = (caso.metadata as any)?.irpf as
     | { ano: number; rendaAnual: number; rendaMensal: number; impostoAPagar?: number; avisadoEm?: string }
     | undefined;
@@ -117,7 +117,8 @@ export function AlertaGratuidade({ caso }: { caso: CaseDetail }) {
                 {foro.em
                   ? `, em ${new Date(foro.em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`
                   : ''}
-                . A inicial é montada para esse foro.{' '}
+                . A inicial é montada para esse foro.
+                {foro.herdado ? ' A escolha foi registrada em outro processo deste mesmo cliente, e vale para todos.' : ''}{' '}
                 <button
                   type="button"
                   onClick={() => escolherForo(foro.escolha === 'juizado' ? 'civel' : 'juizado')}
