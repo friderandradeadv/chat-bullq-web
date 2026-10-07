@@ -94,6 +94,7 @@ export function ApresentacaoVendasRevisional({
   const [conversas, setConversas] = useState<Conversation[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [escolhida, setEscolhida] = useState<Conversation | null>(null);
+  const [anexarPdf, setAnexarPdf] = useState(true);
   const [canalId, setCanalId] = useState('');
   const [enviando, setEnviando] = useState<number | null>(null); // índice em curso
 
@@ -170,6 +171,35 @@ export function ApresentacaoVendasRevisional({
     return SERVICOS.map(([n, base]) => ({ n, v: round100(base * f) }));
   }, [valorTabela]);
 
+  /** Monta o PDF numa página só, do tamanho exato dos slides. Serve aos três
+   *  usos: ver, baixar e anexar no envio pelo hub. */
+  const montarPdf = async () => {
+    const el = slideRef.current;
+    if (!el) throw new Error('sem slides');
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas-pro'),
+      import('jspdf'),
+    ]);
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+    const wmm = 210;
+    const hmm = Math.max(297, (canvas.height * wmm) / canvas.width);
+    const pdf = new jsPDF({ unit: 'mm', format: [wmm, hmm], orientation: 'portrait' });
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, wmm, hmm);
+    return pdf;
+  };
+
+  /**
+   * 🚨 NOME DE ARQUIVO SEM ESPAÇO. A Evolution reprova a URL da mídia no
+   * `isURL` antes mesmo de baixar, e a falha sai muda ("Falhou ao enviar").
+   * Ver memória `evolution-reprova-url-midia-com-espaco`.
+   */
+  const nomeArquivoPdf = () => {
+    const base = (dados.cliente || 'cliente')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return `proposta-revisional-${base || 'cliente'}.pdf`;
+  };
+
   /** Gera o PDF da apresentação. `ver` abre numa aba; senão baixa direto. */
   const gerarPdf = async (ver: boolean) => {
     const el = slideRef.current;
@@ -185,7 +215,6 @@ export function ApresentacaoVendasRevisional({
       const hmm = Math.max(297, (canvas.height * wmm) / canvas.width);
       const pdf = new jsPDF({ unit: 'mm', format: [wmm, hmm], orientation: 'portrait' });
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, wmm, hmm);
-      const safe = (nome || 'cliente').replace(/[^\p{L}\p{N} .-]/gu, '').trim() || 'cliente';
       if (ver) {
         // Abre para CONFERIR antes de decidir salvar — o visualizador do
         // navegador já traz o botão de download.
@@ -194,7 +223,7 @@ export function ApresentacaoVendasRevisional({
         if (!aba) toast.error('O navegador bloqueou a aba. Libere o pop-up para este site.');
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
       } else {
-        pdf.save(`Proposta revisional - ${safe}.pdf`);
+        pdf.save(nomeArquivoPdf());
       }
     } catch {
       toast.error('Não consegui gerar o PDF. Use "Imprimir" e salve como PDF.');
@@ -293,7 +322,17 @@ export function ApresentacaoVendasRevisional({
         });
         if (i < mensagens.length - 1) await new Promise((r) => setTimeout(r, 900));
       }
-      toast.success(`${mensagens.length} mensagens enviadas pelo hub`);
+      if (anexarPdf) {
+        setEnviando(mensagens.length + 1);
+        const pdf = await montarPdf();
+        const arquivo = new File([pdf.output('blob')], nomeArquivoPdf(), { type: 'application/pdf' });
+        await inboxService.sendMediaMessage(conversa.id, arquivo, 'A proposta completa, em PDF.');
+      }
+      toast.success(
+        anexarPdf
+          ? `${mensagens.length} mensagens + o PDF enviados pelo hub`
+          : `${mensagens.length} mensagens enviadas pelo hub`,
+      );
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       toast.error(err?.response?.data?.message || 'Não consegui enviar pelo hub. Use o botão do WhatsApp.');
@@ -676,8 +715,8 @@ export function ApresentacaoVendasRevisional({
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
             >
               {enviando !== null
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando {enviando}/{mensagens.length}…</>
-                : <><Send className="h-4 w-4" /> Enviar as {mensagens.length} {escolhida ? `para ${(escolhida.contact?.name || '').split(' ')[0] || 'o contato'}` : 'pelo hub'}</>}
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> {enviando > mensagens.length ? 'Enviando o PDF…' : `Enviando ${enviando}/${mensagens.length}…`}</>
+                : <><Send className="h-4 w-4" /> Enviar {mensagens.length}{anexarPdf ? ' + PDF' : ''} {escolhida ? `para ${(escolhida.contact?.name || '').split(' ')[0] || 'o contato'}` : 'pelo hub'}</>}
             </button>
             <button
               onClick={() => abrirWhatsapp(mensagens[0])}
@@ -685,6 +724,10 @@ export function ApresentacaoVendasRevisional({
             >
               <MessageCircle className="h-4 w-4" /> Abrir no meu WhatsApp
             </button>
+            <label className="inline-flex items-center gap-1.5 text-[12px] text-zinc-600 dark:text-zinc-300">
+              <input type="checkbox" checked={anexarPdf} onChange={(e) => setAnexarPdf(e.target.checked)} className="h-3.5 w-3.5 accent-emerald-600" />
+              Anexar o PDF ao final
+            </label>
             {msgs !== null && (
               <button onClick={() => setMsgs(null)} className="text-[12px] text-zinc-400 underline hover:text-zinc-600">
                 voltar ao texto gerado
@@ -728,7 +771,7 @@ export function ApresentacaoVendasRevisional({
             </p>
           )}
           <p className="mt-3 text-[11px] text-zinc-400">
-            Anexe o PDF da apresentação depois da última mensagem. O parecer interno NÃO vai junto.
+            Com “anexar o PDF” marcado, ele vai sozinho depois da última mensagem. O parecer interno NÃO vai junto.
           </p>
         </div>
       </div>
