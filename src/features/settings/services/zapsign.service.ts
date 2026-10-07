@@ -21,6 +21,8 @@ export interface ZapSignTemplate {
   templateType: string;
   inputs: ZapSignInput[];
   signers: Array<{ name?: string }>;
+  /** Ocultado pelo escritório: fora das listas de uso, mas restaurável. */
+  hidden?: boolean;
 }
 
 export interface ZapSignDocument {
@@ -49,9 +51,20 @@ export const zapSignService = {
     await api.delete('/zapsign/disconnect');
   },
 
-  async getTemplates(): Promise<ZapSignTemplate[]> {
-    const { data } = await api.get('/zapsign/templates');
+  /**
+   * Por padrão traz só os modelos EM USO. `includeHidden` é da tela de
+   * Configurações, a única que precisa enxergar os ocultos para restaurar.
+   */
+  async getTemplates(includeHidden = false): Promise<ZapSignTemplate[]> {
+    const { data } = await api.get('/zapsign/templates', {
+      params: includeHidden ? { all: '1' } : undefined,
+    });
     return data.data;
+  },
+
+  /** Oculta ou restaura um modelo (não apaga: o sync o traria de volta). */
+  async setTemplateHidden(templateId: string, hidden: boolean): Promise<void> {
+    await api.patch(`/zapsign/templates/${templateId}/hidden`, { hidden });
   },
 
   async syncTemplates(): Promise<{ synced: number }> {

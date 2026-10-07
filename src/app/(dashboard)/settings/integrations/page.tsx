@@ -15,6 +15,8 @@ import {
   EyeOff,
   HardDrive,
   Copy,
+  Trash2,
+  Undo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { zapSignService, type ZapSignTemplate } from '@/features/settings/services/zapsign.service';
@@ -35,9 +37,12 @@ export default function SettingsIntegrationsPage() {
     queryFn: () => zapSignService.getStatus(),
   });
 
+  // Chave PRÓPRIA: esta tela pede `includeHidden`, e o painel da conversa usa
+  // ['zapsign-templates', orgId] com a lista só dos modelos em uso. Compartilhar
+  // a chave faria os ocultos vazarem para o seletor de dentro da conversa.
   const { data: templates } = useQuery({
-    queryKey: ['zapsign-templates', orgId],
-    queryFn: () => zapSignService.getTemplates(),
+    queryKey: ['zapsign-templates-all', orgId],
+    queryFn: () => zapSignService.getTemplates(true),
     enabled: !!status?.connected,
   });
 
@@ -49,6 +54,7 @@ export default function SettingsIntegrationsPage() {
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['zapsign-status'] });
     queryClient.invalidateQueries({ queryKey: ['zapsign-templates'] });
+    queryClient.invalidateQueries({ queryKey: ['zapsign-templates-all'] });
   };
 
   // Resultado do consentimento Google (callback redireciona com ?google=...).
@@ -112,6 +118,25 @@ function ZapSignCard({
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  // id do modelo cuja ocultação/restauração está em voo (desabilita só a linha).
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const emUso = templates.filter((t) => !t.hidden);
+  const ocultos = templates.filter((t) => t.hidden);
+
+  const handleToggleHidden = async (t: ZapSignTemplate) => {
+    const esconder = !t.hidden;
+    setTogglingId(t.id);
+    try {
+      await zapSignService.setTemplateHidden(t.id, esconder);
+      toast.success(esconder ? `"${t.name}" removido da lista` : `"${t.name}" restaurado`);
+      onRefresh();
+    } catch {
+      toast.error(esconder ? 'Erro ao remover o modelo' : 'Erro ao restaurar o modelo');
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   const handleConnect = async () => {
     if (!token.trim()) return;
@@ -192,7 +217,7 @@ function ZapSignCard({
                 : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300',
             )}
           >
-            {t === 'config' ? 'Credencial' : `Modelos (${templates.length})`}
+            {t === 'config' ? 'Credencial' : `Modelos (${emUso.length})`}
           </button>
         ))}
       </div>
@@ -288,25 +313,116 @@ function ZapSignCard({
               </div>
             ) : (
               <div className="space-y-2">
-                {templates.map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{t.name}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        {(t.inputs as unknown[]).length} variável{(t.inputs as unknown[]).length !== 1 ? 'is' : ''} •{' '}
-                        {(t.signers as unknown[]).length} signatário{(t.signers as unknown[]).length !== 1 ? 's' : ''}
-                      </p>
+                <p className="text-xs text-zinc-500">
+                  Remova os modelos que o escritório não usa: eles saem do seletor da
+                  conversa, do cadastro do cliente e da ferramenta da IA. Nada é apagado
+                  no ZapSign — dá para restaurar aqui a qualquer momento.
+                </p>
+
+                {emUso.length === 0 ? (
+                  <p className="py-4 text-sm text-zinc-500">
+                    Todos os modelos estão ocultos. Restaure abaixo o que for usar.
+                  </p>
+                ) : (
+                  emUso.map((t) => (
+                    <TemplateRow
+                      key={t.id}
+                      template={t}
+                      busy={togglingId === t.id}
+                      onToggle={() => handleToggleHidden(t)}
+                    />
+                  ))
+                )}
+
+                {ocultos.length > 0 && (
+                  <div className="pt-3">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                      Ocultos ({ocultos.length})
+                    </p>
+                    <div className="space-y-2">
+                      {ocultos.map((t) => (
+                        <TemplateRow
+                          key={t.id}
+                          template={t}
+                          busy={togglingId === t.id}
+                          onToggle={() => handleToggleHidden(t)}
+                        />
+                      ))}
                     </div>
-                    <span className="text-xs text-zinc-400 uppercase font-mono">{t.templateType}</span>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Linha de modelo ZapSign ─────────────────────────────────────────────────
+
+function TemplateRow({
+  template: t,
+  busy,
+  onToggle,
+}: {
+  template: ZapSignTemplate;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  const nVars = (t.inputs as unknown[]).length;
+  const nSigners = (t.signers as unknown[]).length;
+
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-between gap-3 rounded-lg border px-4 py-3',
+        t.hidden
+          ? 'border-dashed border-zinc-200 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-800/30'
+          : 'border-zinc-200 dark:border-zinc-800',
+      )}
+    >
+      <div className="min-w-0">
+        <p
+          className={cn(
+            'truncate text-sm font-medium',
+            t.hidden
+              ? 'text-zinc-400 dark:text-zinc-500'
+              : 'text-zinc-800 dark:text-zinc-200',
+          )}
+        >
+          {t.name}
+        </p>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          {nVars} variáve{nVars !== 1 ? 'is' : 'l'} • {nSigners} signatário
+          {nSigners !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="font-mono text-xs uppercase text-zinc-400">{t.templateType}</span>
+        <button
+          onClick={onToggle}
+          disabled={busy}
+          title={t.hidden ? 'Restaurar modelo' : 'Remover da lista'}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50',
+            t.hidden
+              ? 'border-zinc-300 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'
+              : 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20',
+          )}
+        >
+          {t.hidden ? (
+            <>
+              <Undo2 className="h-3.5 w-3.5" /> Restaurar
+            </>
+          ) : (
+            <>
+              <Trash2 className="h-3.5 w-3.5" /> Remover
+            </>
+          )}
+        </button>
       </div>
     </div>
   );
