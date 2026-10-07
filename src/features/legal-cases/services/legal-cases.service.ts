@@ -228,6 +228,8 @@ export interface CreateCaseInput {
   instancia?: string;
   /** Lado do cliente na execução — separa as duas visões do quadro Execução & Repasse. */
   polo?: 'exequente' | 'executado';
+  /** Progresso do agente, vindo do metadata — a barrinha desenha sem consulta extra. */
+  progresso?: unknown;
   value?: number;
   responsibleId?: string;
   parties?: PartyInput[];
@@ -292,6 +294,8 @@ export interface KanbanCard {
   // Repasse ("o que temos a receber" × defesa). Sai de metadata.poloExecucao ou,
   // na falta dele, do "Papel do cliente" do Astrea.
   polo?: 'exequente' | 'executado';
+  /** Progresso do agente, vindo do metadata — a barrinha desenha sem consulta extra. */
+  progresso?: unknown;
   // Processos APENSADOS fundidos neste card (o cumprimento de sentença autuado
   // em apartado). O card é um só; o número dos autos do apenso viaja aqui porque
   // é NELE que o advogado peticiona.

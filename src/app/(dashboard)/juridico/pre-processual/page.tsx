@@ -388,6 +388,10 @@ export default function PreProcessualPage() {
   );
 }
 
+/** Fases em que o agente pode rodar, e portanto em que a barra de progresso
+ *  precisa existir. Espelha `MONTAR_PHASES` da ficha do processo. */
+const COM_AGENTE = new Set(['montar_inicial', 'revisao_inicial', 'para_correcao', 'revisao_final']);
+
 function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje, onChanged, canRename, onRename, onDelete, phaseDrag, cardOrder, phases, onMoveLeft, onMoveRight, vao, arrastadoId }: { phase: KanbanPhase; items: KanbanCard[]; novoIds: Set<string>; bulk: KanbanBulk; onOpen: (id: string) => void; onProtocolar: (id: string) => void; onMontarPje: (id: string) => void; onChanged: () => void; canRename: boolean; onRename: (key: string, label: string) => void; onDelete: (phase: KanbanPhase) => void; phaseDrag?: PhaseDrag; cardOrder?: string[]; phases: KanbanPhase[]; onMoveLeft?: () => void; onMoveRight?: () => void; vao?: VaoKanban | null; arrastadoId?: string | null }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.key });
   const isProtocolo = phase.key === 'protocolo';
@@ -396,7 +400,12 @@ function Column({ phase, items, novoIds, bulk, onOpen, onProtocolar, onMontarPje
   // "trabalhando" de "travado" — foi por isso que ela existe no protocolo. A
   // conta de consultas continua contida: só as colunas em que o robô trabalha,
   // não o quadro inteiro.
-  const temAgente = isProtocolo || phase.key === 'montar_inicial';
+  // 🚨 A BARRA SEGUE ONDE O AGENTE PODE RODAR, não só onde ele costuma rodar.
+  // Era `isProtocolo || montar_inicial`, e por isso quem mandava montar a partir
+  // de REVISÃO INICIAL via o lote trabalhar sem barra em card nenhum (apontado
+  // em 07/10/2026, nas cinco iniciais do JOSÉ BATISTA). O conjunto é o mesmo
+  // `MONTAR_PHASES` da ficha, que é de onde o botão de montar existe.
+  const temAgente = isProtocolo || COM_AGENTE.has(phase.key);
   // Coluna de entrada do board. Nela a bolinha vermelha segue a regra do funil
   // REPB: todo card nasce marcado e só apaga quando a pessoa CLICA nele.
   const isNovos = phase.key === 'novos_clientes';
@@ -490,7 +499,7 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
           para não fazer uma consulta por card em todo o quadro. */}
       {temAgente && !overlay && (
         <div className="mt-2">
-          <BarraProgresso caseId={c.id} compacta />
+          <BarraProgresso caseId={c.id} inicial={((c as any).progresso ?? null) as any} compacta />
         </div>
       )}
 
