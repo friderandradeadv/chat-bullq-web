@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, Download, Eye, Loader2, MessageCircle, Printer, Send, Sliders, X } from 'lucide-react';
+import { Check, Copy, Download, Eye, FileText, Loader2, MessageCircle, Printer, Send, Sliders, X } from 'lucide-react';
 import { toast } from 'sonner';
 // 🚨 Esta tela fica FORA do layout do dashboard, onde mora o alternador de
 // tema. Sem ele aqui, o claro/escuro some para quem abre o documento.
@@ -97,6 +97,7 @@ export function ApresentacaoVendasRevisional({
   const [anexarPdf, setAnexarPdf] = useState(true);
   const [canalId, setCanalId] = useState('');
   const [enviando, setEnviando] = useState<number | null>(null); // índice em curso
+  const [enviandoPdf, setEnviandoPdf] = useState(false);
 
   /**
    * Conversas do hub para escolher o destinatário.
@@ -338,6 +339,30 @@ export function ApresentacaoVendasRevisional({
       toast.error(err?.response?.data?.message || 'Não consegui enviar pelo hub. Use o botão do WhatsApp.');
     } finally {
       setEnviando(null);
+    }
+  };
+
+  /**
+   * Manda SÓ o PDF na conversa. Existe porque o envio real raramente é de uma
+   * vez: manda-se o texto, o cliente responde, e o anexo vai depois — ou as
+   * mensagens já foram pelo WhatsApp pessoal e falta só o documento.
+   */
+  const enviarSoPdf = async () => {
+    const numero = numeroLimpo();
+    if (!escolhida && !numero) return toast.error('Escolha a conversa no hub ou informe o WhatsApp com DDD.');
+    if (!escolhida && !canalId) return toast.error('Nenhum canal de WhatsApp ativo para enviar.');
+    try {
+      setEnviandoPdf(true);
+      const conversa = escolhida ?? (await inboxService.startConversation(canalId, numero!));
+      const pdf = await montarPdf();
+      const arquivo = new File([pdf.output('blob')], nomeArquivoPdf(), { type: 'application/pdf' });
+      await inboxService.sendMediaMessage(conversa.id, arquivo, 'A proposta completa, em PDF.');
+      toast.success('PDF enviado pelo hub');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || 'Não consegui enviar o PDF pelo hub.');
+    } finally {
+      setEnviandoPdf(false);
     }
   };
 
@@ -719,8 +744,18 @@ export function ApresentacaoVendasRevisional({
                 : <><Send className="h-4 w-4" /> Enviar {mensagens.length}{anexarPdf ? ' + PDF' : ''} {escolhida ? `para ${(escolhida.contact?.name || '').split(' ')[0] || 'o contato'}` : 'pelo hub'}</>}
             </button>
             <button
+              onClick={enviarSoPdf}
+              disabled={enviandoPdf || enviando !== null || (!escolhida && (!canalId || !fone))}
+              title="Para quando as mensagens já foram e falta só o anexo"
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-600/50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+            >
+              {enviandoPdf
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando o PDF…</>
+                : <><FileText className="h-4 w-4" /> Enviar só o PDF</>}
+            </button>
+            <button
               onClick={() => abrirWhatsapp(mensagens[0])}
-              className="inline-flex items-center gap-2 rounded-lg border border-emerald-600/50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               <MessageCircle className="h-4 w-4" /> Abrir no meu WhatsApp
             </button>
