@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 // 🚨 Esta tela fica FORA do layout do dashboard, onde mora o alternador de
 // tema. Sem ele aqui, o claro/escuro some para quem abre o documento.
 import { ThemeToggle } from '@/features/auth/components/theme-toggle';
-import { inboxService } from '@/features/inbox/services/inbox.service';
+import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
+import { useAuthStore } from '@/stores/auth-store';
 import { channelsService, type Channel } from '@/features/channels/services/channels.service';
 
 /**
@@ -83,9 +84,52 @@ export function ApresentacaoVendasRevisional({
   const [ocupado, setOcupado] = useState<'ver' | 'baixar' | null>(null);
   const [fone, setFone] = useState('');
   const [msgs, setMsgs] = useState<string[] | null>(null); // null = ainda não editadas à mão
+  const { user } = useAuthStore();
   const [canais, setCanais] = useState<Channel[]>([]);
+  // Escolha do destinatário: conversa do hub (padrão) ou número digitado.
+  const [modo, setModo] = useState<'hub' | 'numero'>('hub');
+  const [soMinhas, setSoMinhas] = useState(true);
+  const [status, setStatus] = useState<'ATIVAS' | 'PENDING' | 'OPEN' | 'WAITING' | 'TODAS'>('ATIVAS');
+  const [busca, setBusca] = useState('');
+  const [conversas, setConversas] = useState<Conversation[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [escolhida, setEscolhida] = useState<Conversation | null>(null);
   const [canalId, setCanalId] = useState('');
   const [enviando, setEnviando] = useState<number | null>(null); // índice em curso
+
+  /**
+   * Conversas do hub para escolher o destinatário.
+   *
+   * "ATIVAS" = PENDING + OPEN + WAITING: a conversa que está viva, de qualquer
+   * forma. CLOSED fica de fora porque mandar proposta para conversa encerrada
+   * reabre atendimento sem que ninguém esteja esperando.
+   */
+  useEffect(() => {
+    if (modo !== 'hub') return;
+    let vivo = true;
+    setCarregando(true);
+    const base: Record<string, string> = { limit: '40', archived: 'exclude', groups: 'exclude' };
+    if (soMinhas && user?.id) base.assignedToId = user.id;
+    if (busca.trim()) base.search = busca.trim();
+    const pedidos =
+      status === 'ATIVAS'
+        ? ['PENDING', 'OPEN', 'WAITING'].map((st) => inboxService.getConversations({ ...base, status: st }))
+        : [inboxService.getConversations(status === 'TODAS' ? base : { ...base, status })];
+    Promise.all(pedidos)
+      .then((rs) => {
+        if (!vivo) return;
+        const todas = rs.flatMap((r) => r.conversations ?? []);
+        const vistas = new Set<string>();
+        setConversas(
+          todas
+            .filter((c) => (vistas.has(c.id) ? false : (vistas.add(c.id), true)))
+            .sort((a, b) => (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? '')),
+        );
+      })
+      .catch(() => vivo && setConversas([]))
+      .finally(() => vivo && setCarregando(false));
+    return () => { vivo = false; };
+  }, [modo, soMinhas, status, busca, user?.id]);
 
   // Canais de WhatsApp ativos — é por um deles que a proposta sai, com o número
   // oficial do escritório, e não pelo WhatsApp pessoal de quem está na tela.
@@ -234,11 +278,12 @@ export function ApresentacaoVendasRevisional({
    */
   const enviarPeloHub = async () => {
     const numero = numeroLimpo();
-    if (!numero) return toast.error('Informe o WhatsApp do cliente com DDD.');
-    if (!canalId) return toast.error('Nenhum canal de WhatsApp ativo para enviar.');
+    if (!escolhida && !numero) return toast.error('Escolha a conversa no hub ou informe o WhatsApp com DDD.');
+    if (!escolhida && !canalId) return toast.error('Nenhum canal de WhatsApp ativo para enviar.');
     try {
       setEnviando(0);
-      const conversa = await inboxService.startConversation(canalId, numero);
+      // Conversa escolhida no hub dispensa resolver pelo telefone.
+      const conversa = escolhida ?? (await inboxService.startConversation(canalId, numero!));
       for (let i = 0; i < mensagens.length; i++) {
         setEnviando(i + 1);
         await inboxService.sendMessage({
@@ -535,31 +580,104 @@ export function ApresentacaoVendasRevisional({
             {mensagens.length} mensagens curtas, uma ideia em cada. Mande na ordem — a última é a pergunta que faz o cliente responder.
           </p>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <input
-              value={fone}
-              onChange={(e) => setFone(e.target.value)}
-              placeholder="WhatsApp do cliente com DDD"
-              inputMode="tel"
-              className="w-60 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-            {canais.length > 1 && (
-              <select
-                value={canalId}
-                onChange={(e) => setCanalId(e.target.value)}
-                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+          {/* ── DESTINATÁRIO: conversa do hub (padrão) ou número digitado ── */}
+          <div className="mt-4 flex items-center gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
+            {([['hub', 'Escolher do hub'], ['numero', 'Digitar número']] as const).map(([k, rot]) => (
+              <button
+                key={k}
+                onClick={() => { setModo(k); setEscolhida(null); }}
+                className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${modo === k ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
               >
-                {canais.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
-              </select>
-            )}
+                {rot}
+              </button>
+            ))}
+          </div>
+
+          {modo === 'hub' ? (
+            <div className="mt-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-1.5 text-[12px] text-zinc-600 dark:text-zinc-300">
+                  <input type="checkbox" checked={soMinhas} onChange={(e) => setSoMinhas(e.target.checked)} className="h-3.5 w-3.5 accent-emerald-600" />
+                  Só as minhas
+                </label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as typeof status)}
+                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-[12px] text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                >
+                  <option value="ATIVAS">Ativas (pendente + aberta + aguardando)</option>
+                  <option value="PENDING">Só pendentes</option>
+                  <option value="OPEN">Só abertas</option>
+                  <option value="WAITING">Só aguardando</option>
+                  <option value="TODAS">Todas</option>
+                </select>
+                <input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar por nome ou telefone"
+                  className="min-w-[200px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[12px] text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </div>
+
+              <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                {carregando && <p className="p-3 text-[12px] text-zinc-400">Carregando conversas…</p>}
+                {!carregando && conversas.length === 0 && (
+                  <p className="p-3 text-[12px] text-zinc-400">Nenhuma conversa com esses filtros. Tire o “só as minhas” ou mude o status.</p>
+                )}
+                {conversas.map((cv) => {
+                  const sel = escolhida?.id === cv.id;
+                  return (
+                    <button
+                      key={cv.id}
+                      onClick={() => setEscolhida(sel ? null : cv)}
+                      className={`flex w-full items-center gap-3 border-b border-zinc-100 px-3 py-2 text-left last:border-0 dark:border-zinc-800 ${sel ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}
+                    >
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_COR[cv.status] ?? 'bg-zinc-400'}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-zinc-800 dark:text-zinc-100">
+                          {cv.contact?.name || cv.contact?.phone || 'sem nome'}
+                        </span>
+                        <span className="block truncate text-[11px] text-zinc-400">
+                          {cv.contact?.phone ?? '—'} · {STATUS_ROTULO[cv.status] ?? cv.status}
+                          {cv.assignedTo?.name ? ` · ${cv.assignedTo.name}` : ' · sem responsável'}
+                        </span>
+                      </span>
+                      {sel && <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                value={fone}
+                onChange={(e) => setFone(e.target.value)}
+                placeholder="WhatsApp do cliente com DDD"
+                inputMode="tel"
+                className="w-60 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+              {canais.length > 1 && (
+                <select
+                  value={canalId}
+                  onChange={(e) => setCanalId(e.target.value)}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                >
+                  {canais.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                </select>
+              )}
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               onClick={enviarPeloHub}
-              disabled={enviando !== null || !canalId}
+              disabled={enviando !== null || (!escolhida && (!canalId || !fone))}
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
             >
               {enviando !== null
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando {enviando}/{mensagens.length}…</>
-                : <><Send className="h-4 w-4" /> Enviar as {mensagens.length} pelo hub</>}
+                : <><Send className="h-4 w-4" /> Enviar as {mensagens.length} {escolhida ? `para ${(escolhida.contact?.name || '').split(' ')[0] || 'o contato'}` : 'pelo hub'}</>}
             </button>
             <button
               onClick={() => abrirWhatsapp(mensagens[0])}
@@ -617,6 +735,13 @@ export function ApresentacaoVendasRevisional({
     </div>
   );
 }
+
+const STATUS_ROTULO: Record<string, string> = {
+  PENDING: 'pendente', OPEN: 'aberta', WAITING: 'aguardando', BOT: 'com o robô', CLOSED: 'encerrada',
+};
+const STATUS_COR: Record<string, string> = {
+  PENDING: 'bg-amber-500', OPEN: 'bg-emerald-500', WAITING: 'bg-sky-500', BOT: 'bg-violet-500', CLOSED: 'bg-zinc-400',
+};
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-zinc-500">{label}</span>{children}</label>;
