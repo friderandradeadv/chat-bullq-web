@@ -436,12 +436,22 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       // vazio". O toast é o único lugar que sobra para dizer o próximo passo.
       if (status === 'aceita') {
         const criados = await criarCardsDosReus();
-        const nomes = (achado?.instituicoes ?? []).join(' e ');
+        // 🚨 O TEXTO TEM DE DIZER O QUE ACONTECE. Ele listava as instituições
+        // com "e" e falava em "card(s) de réu", de quando cada instituição
+        // virava um card. Desde 08/10/2026 nasce UM card por AÇÃO, com os
+        // litisconsortes no polo passivo: anunciar dois réus e criar um card
+        // faria o advogado procurar o card que não existe.
+        const [principal, ...demais] = (achado?.instituicoes ?? []);
+        const alvo = principal
+          ? principal + (demais.length
+            ? ` (com ${demais.join(' e ')} no polo passivo)`
+            : '')
+          : 'Os réus';
         toast.success(
           criados
-            ? `${criados} card(s) de réu criados em Montar inicial: ${nomes}.`
+            ? `Card da ação criado em Montar inicial: ${alvo}.`
               + ' Este card foi arquivado e virou o registro do desmembramento.'
-            : `${nomes || 'Os réus'} já tinham card — nada novo foi criado.`,
+            : `${alvo} já tinha card — nada novo foi criado.`,
           { duration: 10000 },
         );
       } else {
