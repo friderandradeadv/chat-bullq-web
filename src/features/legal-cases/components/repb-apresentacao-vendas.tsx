@@ -10,6 +10,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { X, Printer, Sliders, ShieldCheck, Upload, Loader2, Check, Landmark, Clock, Scale, TrendingDown, Award, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { EnviarPropostaWhatsapp } from '@/components/enviar-proposta-whatsapp';
 import { legalCasesService, type KanbanCard } from '../services/legal-cases.service';
 import { DropZone } from '@/components/drop-zone';
 
@@ -101,6 +102,45 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
     const f = SERVICOS_BASE > 0 ? valorTabela / SERVICOS_BASE : 1;
     return SERVICOS.map(([n, base]) => ({ n, v: round100(base * f) }));
   }, [valorTabela]);
+
+  /**
+   * A proposta em mensagens curtas para o WhatsApp. Mesma disciplina da
+   * revisional: uma ideia por bolha, nada no indicativo sobre resultado, e a
+   * ultima sendo PERGUNTA — e ela que faz o cliente responder.
+   */
+  const mensagens = useMemo(() => {
+    const primeiro = (card.client ?? card.title ?? '').trim().split(/\s+/)[0] || 'tudo bem';
+    const M: string[] = [];
+    M.push(`Olá, ${primeiro}! Aqui é do escritório Frider Andrade Advogados. Terminei a análise do seu passivo bancário.`);
+    if (bancos.trim()) M.push(`O levantamento fechou em *${fmtBRL(c.D)}* de dívida, com ${bancos.trim()}.`);
+    else M.push(`O levantamento fechou em *${fmtBRL(c.D)}* de dívida.`);
+    M.push('Trabalhamos pela regra de provisionamento do próprio Banco Central (Resolução 4.966/2021): quando o banco já lançou a perda na contabilidade dele, passa a aceitar acordo bem abaixo do saldo. Não é pedir desconto — é mostrar número.');
+    M.push(`Pela projeção atual, dá para *buscar um acordo em torno de ${fmtBRL(c.acordo)}* — uma redução estimada de *${fmtBRL(c.economia)}*. É estimativa, não garantia: varia banco a banco e conforme a negociação.`);
+    M.push(`Honorários: entrada de *${fmtBRL(entradaPadrao)}* para dar início ao trabalho e, no fim, *${pct(pctExitoPadrao)} sobre a economia* que conseguirmos — nunca sobre o valor da dívida.`);
+    M.push(`Ex.: numa economia de ${fmtBRL(c.economia)}, o êxito fica em ${fmtBRL(c.exitoPadrao)}. Se a redução for maior, sobe junto; se for menor, cai junto. O que é fixo é o percentual.`);
+    M.push('Podemos começar? Me confirma por aqui e eu já mando o contrato e a procuração para assinatura digital, e abro o levantamento no Banco Central ainda esta semana.');
+    return M;
+  }, [card.client, card.title, bancos, c.D, c.acordo, c.economia, c.exitoPadrao, entradaPadrao, pctExitoPadrao]);
+
+  const nomeArquivoPdf = `proposta-repb-${(card.client ?? 'cliente')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cliente'}.pdf`;
+
+  /** O mesmo PDF do botao "Baixar", devolvido como Blob para o envio. */
+  const montarPdfBlob = async (): Promise<Blob> => {
+    const el = slideRef.current;
+    if (!el) throw new Error('sem slides');
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas-pro'),
+      import('jspdf'),
+    ]);
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+    const wmm = 210;
+    const hmm = Math.max(297, (canvas.height * wmm) / canvas.width);
+    const pdf = new jsPDF({ unit: 'mm', format: [wmm, hmm], orientation: 'portrait' });
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, wmm, hmm);
+    return pdf.output('blob');
+  };
 
   const casosList = casos.split('\n').map((s) => s.trim()).filter(Boolean);
 
@@ -405,6 +445,17 @@ export function ApresentacaoVendasRepb({ card, onClose }: { card: KanbanCard; on
               <span>Os valores desta apresentação são <b>estimativas para fins de negociação</b> e podem variar conforme o provisionamento de cada banco e o andamento das tratativas. O escritório atua com dedicação e técnica, mas <b>não promete resultado</b> (Código de Ética da OAB, art. 41). Documento de uso interno na reunião de fechamento.</span>
             </div>
           </Slide>
+        </div>
+
+        {/* ── ENVIO AO CLIENTE — bloco compartilhado, no-print ── */}
+        <div className="mx-auto mt-6 max-w-3xl">
+          <EnviarPropostaWhatsapp
+            mensagens={mensagens}
+            montarPdf={montarPdfBlob}
+            nomeArquivoPdf={nomeArquivoPdf}
+            buscaInicial={card.client ?? ''}
+            nota="O PDF da apresentação vai depois da última mensagem."
+          />
         </div>
       </div>
 

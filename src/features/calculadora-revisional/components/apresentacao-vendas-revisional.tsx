@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, Download, Eye, FileText, Loader2, MessageCircle, Printer, Send, Sliders, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Check, Download, Eye, Loader2, Printer, Sliders, X } from 'lucide-react';
 import { toast } from 'sonner';
 // 🚨 Esta tela fica FORA do layout do dashboard, onde mora o alternador de
 // tema. Sem ele aqui, o claro/escuro some para quem abre o documento.
 import { ThemeToggle } from '@/features/auth/components/theme-toggle';
-import { inboxService, type Conversation } from '@/features/inbox/services/inbox.service';
-import { useAuthStore } from '@/stores/auth-store';
-import { channelsService, type Channel } from '@/features/channels/services/channels.service';
+import { EnviarPropostaWhatsapp } from '@/components/enviar-proposta-whatsapp';
 
 /**
  * APRESENTAÇÃO DE VENDAS — REVISIONAL. Mesmo modelo da do REPB
@@ -82,69 +80,7 @@ export function ApresentacaoVendasRevisional({
   // Opção 2: meio a meio, sem entrada — o mesmo padrão da RMC.
   const [pctMeioAMeio, setPctMeioAMeio] = useState(50);
   const [ocupado, setOcupado] = useState<'ver' | 'baixar' | null>(null);
-  const [fone, setFone] = useState('');
-  const [msgs, setMsgs] = useState<string[] | null>(null); // null = ainda não editadas à mão
-  const { user } = useAuthStore();
-  const [canais, setCanais] = useState<Channel[]>([]);
-  // Escolha do destinatário: conversa do hub (padrão) ou número digitado.
-  const [modo, setModo] = useState<'hub' | 'numero'>('hub');
-  const [soMinhas, setSoMinhas] = useState(true);
-  const [status, setStatus] = useState<'ATIVAS' | 'PENDING' | 'OPEN' | 'WAITING' | 'TODAS'>('ATIVAS');
-  const [busca, setBusca] = useState('');
-  const [conversas, setConversas] = useState<Conversation[]>([]);
-  const [carregando, setCarregando] = useState(false);
-  const [escolhida, setEscolhida] = useState<Conversation | null>(null);
-  const [anexarPdf, setAnexarPdf] = useState(true);
-  const [canalId, setCanalId] = useState('');
-  const [enviando, setEnviando] = useState<number | null>(null); // índice em curso
-  const [enviandoPdf, setEnviandoPdf] = useState(false);
 
-  /**
-   * Conversas do hub para escolher o destinatário.
-   *
-   * "ATIVAS" = PENDING + OPEN + WAITING: a conversa que está viva, de qualquer
-   * forma. CLOSED fica de fora porque mandar proposta para conversa encerrada
-   * reabre atendimento sem que ninguém esteja esperando.
-   */
-  useEffect(() => {
-    if (modo !== 'hub') return;
-    let vivo = true;
-    setCarregando(true);
-    const base: Record<string, string> = { limit: '40', archived: 'exclude', groups: 'exclude' };
-    if (soMinhas && user?.id) base.assignedToId = user.id;
-    if (busca.trim()) base.search = busca.trim();
-    const pedidos =
-      status === 'ATIVAS'
-        ? ['PENDING', 'OPEN', 'WAITING'].map((st) => inboxService.getConversations({ ...base, status: st }))
-        : [inboxService.getConversations(status === 'TODAS' ? base : { ...base, status })];
-    Promise.all(pedidos)
-      .then((rs) => {
-        if (!vivo) return;
-        const todas = rs.flatMap((r) => r.conversations ?? []);
-        const vistas = new Set<string>();
-        setConversas(
-          todas
-            .filter((c) => (vistas.has(c.id) ? false : (vistas.add(c.id), true)))
-            .sort((a, b) => (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? '')),
-        );
-      })
-      .catch(() => vivo && setConversas([]))
-      .finally(() => vivo && setCarregando(false));
-    return () => { vivo = false; };
-  }, [modo, soMinhas, status, busca, user?.id]);
-
-  // Canais de WhatsApp ativos — é por um deles que a proposta sai, com o número
-  // oficial do escritório, e não pelo WhatsApp pessoal de quem está na tela.
-  useEffect(() => {
-    channelsService
-      .list()
-      .then((cs) => {
-        const wpp = cs.filter((c) => c.isActive && /whatsapp/i.test(c.type));
-        setCanais(wpp);
-        if (wpp.length) setCanalId(wpp[0].id);
-      })
-      .catch(() => { /* sem canal: sobra o wa.me */ });
-  }, []);
   const slideRef = useRef<HTMLDivElement>(null);
 
   const c = useMemo(() => {
@@ -276,99 +212,6 @@ export function ApresentacaoVendasRevisional({
     M.push('Me responde aqui: vai ser a *OPÇÃO 1* ou a *OPÇÃO 2*? Com a sua resposta eu já mando o contrato e a procuração para assinatura digital e começamos.');
     return M;
   }, [dados, c.P, entradaPadrao, pctExitoPadrao]);
-
-  const mensagens = msgs ?? mensagensPadrao;
-  const foraDeHora = (() => {
-    const h = new Date().getHours();
-    return h < 8 || h >= 19;
-  })();
-
-  const numeroLimpo = () => {
-    const d = fone.replace(/\D/g, '');
-    if (d.length < 10) return null;
-    return d.startsWith('55') ? d : `55${d}`;
-  };
-
-  /** Abre a conversa já com a PRIMEIRA mensagem; as outras vão pelo copiar. */
-  const abrirWhatsapp = (texto: string) => {
-    const numero = numeroLimpo();
-    if (!numero) return toast.error('Informe o WhatsApp do cliente com DDD.');
-    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`, '_blank');
-  };
-
-  /**
-   * Envia as mensagens pelo HUB, em ordem, pelo número oficial.
-   *
-   * 🚨 NÃO é `oneOff`. O envio ASSUME a conversa e pausa a IA de propósito: a
-   * última mensagem pede "opção 1 ou 2", e sem pausar o robô ele responderia o
-   * cliente no lugar do advogado.
-   *
-   * Pausa curta entre uma e outra: a fila do backend é FIFO, mas o provedor
-   * entrega mais confiável quando não recebe oito de uma vez.
-   */
-  const enviarPeloHub = async () => {
-    const numero = numeroLimpo();
-    if (!escolhida && !numero) return toast.error('Escolha a conversa no hub ou informe o WhatsApp com DDD.');
-    if (!escolhida && !canalId) return toast.error('Nenhum canal de WhatsApp ativo para enviar.');
-    try {
-      setEnviando(0);
-      // Conversa escolhida no hub dispensa resolver pelo telefone.
-      const conversa = escolhida ?? (await inboxService.startConversation(canalId, numero!));
-      for (let i = 0; i < mensagens.length; i++) {
-        setEnviando(i + 1);
-        await inboxService.sendMessage({
-          conversationId: conversa.id,
-          type: 'TEXT',
-          content: { text: mensagens[i] },
-        });
-        if (i < mensagens.length - 1) await new Promise((r) => setTimeout(r, 900));
-      }
-      if (anexarPdf) {
-        setEnviando(mensagens.length + 1);
-        const pdf = await montarPdf();
-        const arquivo = new File([pdf.output('blob')], nomeArquivoPdf(), { type: 'application/pdf' });
-        await inboxService.sendMediaMessage(conversa.id, arquivo, 'A proposta completa, em PDF.');
-      }
-      toast.success(
-        anexarPdf
-          ? `${mensagens.length} mensagens + o PDF enviados pelo hub`
-          : `${mensagens.length} mensagens enviadas pelo hub`,
-      );
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      toast.error(err?.response?.data?.message || 'Não consegui enviar pelo hub. Use o botão do WhatsApp.');
-    } finally {
-      setEnviando(null);
-    }
-  };
-
-  /**
-   * Manda SÓ o PDF na conversa. Existe porque o envio real raramente é de uma
-   * vez: manda-se o texto, o cliente responde, e o anexo vai depois — ou as
-   * mensagens já foram pelo WhatsApp pessoal e falta só o documento.
-   */
-  const enviarSoPdf = async () => {
-    const numero = numeroLimpo();
-    if (!escolhida && !numero) return toast.error('Escolha a conversa no hub ou informe o WhatsApp com DDD.');
-    if (!escolhida && !canalId) return toast.error('Nenhum canal de WhatsApp ativo para enviar.');
-    try {
-      setEnviandoPdf(true);
-      const conversa = escolhida ?? (await inboxService.startConversation(canalId, numero!));
-      const pdf = await montarPdf();
-      const arquivo = new File([pdf.output('blob')], nomeArquivoPdf(), { type: 'application/pdf' });
-      await inboxService.sendMediaMessage(conversa.id, arquivo, 'A proposta completa, em PDF.');
-      toast.success('PDF enviado pelo hub');
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      toast.error(err?.response?.data?.message || 'Não consegui enviar o PDF pelo hub.');
-    } finally {
-      setEnviandoPdf(false);
-    }
-  };
-
-  const copiar = (t: string, aviso = 'Mensagem copiada') => {
-    navigator.clipboard.writeText(t).then(() => toast.success(aviso)).catch(() => toast.error('Não consegui copiar'));
-  };
 
   const num = (v: number, set: (n: number) => void) => (
     <input
@@ -634,192 +477,20 @@ export function ApresentacaoVendasRevisional({
           </Slide>
         </div>
 
-        {/* ── ENVIO AO CLIENTE — no-print: não entra no PDF ── */}
-        <div className="no-print mx-auto mt-6 max-w-3xl rounded-2xl border border-emerald-500/30 bg-white p-6 dark:border-emerald-400/20 dark:bg-zinc-900">
-          <div className="flex items-center gap-2">
-            <MessageCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Mandar a proposta pelo WhatsApp</p>
-          </div>
-          <p className="mt-1 text-[12px] text-zinc-500">
-            {mensagens.length} mensagens curtas, uma ideia em cada. Mande na ordem — a última é a pergunta que faz o cliente responder.
-          </p>
-
-          {/* ── DESTINATÁRIO: conversa do hub (padrão) ou número digitado ── */}
-          <div className="mt-4 flex items-center gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
-            {([['hub', 'Escolher do hub'], ['numero', 'Digitar número']] as const).map(([k, rot]) => (
-              <button
-                key={k}
-                onClick={() => { setModo(k); setEscolhida(null); }}
-                className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${modo === k ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
-              >
-                {rot}
-              </button>
-            ))}
-          </div>
-
-          {modo === 'hub' ? (
-            <div className="mt-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex items-center gap-1.5 text-[12px] text-zinc-600 dark:text-zinc-300">
-                  <input type="checkbox" checked={soMinhas} onChange={(e) => setSoMinhas(e.target.checked)} className="h-3.5 w-3.5 accent-emerald-600" />
-                  Só as minhas
-                </label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as typeof status)}
-                  className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-[12px] text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-                >
-                  <option value="ATIVAS">Ativas (pendente + aberta + aguardando)</option>
-                  <option value="PENDING">Só pendentes</option>
-                  <option value="OPEN">Só abertas</option>
-                  <option value="WAITING">Só aguardando</option>
-                  <option value="TODAS">Todas</option>
-                </select>
-                <input
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Buscar por nome ou telefone"
-                  className="min-w-[200px] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-[12px] text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-                />
-              </div>
-
-              <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-                {carregando && <p className="p-3 text-[12px] text-zinc-400">Carregando conversas…</p>}
-                {!carregando && conversas.length === 0 && (
-                  <p className="p-3 text-[12px] text-zinc-400">Nenhuma conversa com esses filtros. Tire o “só as minhas” ou mude o status.</p>
-                )}
-                {conversas.map((cv) => {
-                  const sel = escolhida?.id === cv.id;
-                  return (
-                    <button
-                      key={cv.id}
-                      onClick={() => setEscolhida(sel ? null : cv)}
-                      className={`flex w-full items-center gap-3 border-b border-zinc-100 px-3 py-2 text-left last:border-0 dark:border-zinc-800 ${sel ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/60'}`}
-                    >
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_COR[cv.status] ?? 'bg-zinc-400'}`} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-zinc-800 dark:text-zinc-100">
-                          {cv.contact?.name || cv.contact?.phone || 'sem nome'}
-                        </span>
-                        <span className="block truncate text-[11px] text-zinc-400">
-                          {cv.contact?.phone ?? '—'} · {STATUS_ROTULO[cv.status] ?? cv.status}
-                          {cv.assignedTo?.name ? ` · ${cv.assignedTo.name}` : ' · sem responsável'}
-                        </span>
-                      </span>
-                      {sel && <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <input
-                value={fone}
-                onChange={(e) => setFone(e.target.value)}
-                placeholder="WhatsApp do cliente com DDD"
-                inputMode="tel"
-                className="w-60 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-              />
-              {canais.length > 1 && (
-                <select
-                  value={canalId}
-                  onChange={(e) => setCanalId(e.target.value)}
-                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-                >
-                  {canais.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
-                </select>
-              )}
-            </div>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
-              onClick={enviarPeloHub}
-              disabled={enviando !== null || (!escolhida && (!canalId || !fone))}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {enviando !== null
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> {enviando > mensagens.length ? 'Enviando o PDF…' : `Enviando ${enviando}/${mensagens.length}…`}</>
-                : <><Send className="h-4 w-4" /> Enviar {mensagens.length}{anexarPdf ? ' + PDF' : ''} {escolhida ? `para ${(escolhida.contact?.name || '').split(' ')[0] || 'o contato'}` : 'pelo hub'}</>}
-            </button>
-            <button
-              onClick={enviarSoPdf}
-              disabled={enviandoPdf || enviando !== null || (!escolhida && (!canalId || !fone))}
-              title="Para quando as mensagens já foram e falta só o anexo"
-              className="inline-flex items-center gap-2 rounded-lg border border-emerald-600/50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60 dark:text-emerald-400 dark:hover:bg-emerald-500/10"
-            >
-              {enviandoPdf
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando o PDF…</>
-                : <><FileText className="h-4 w-4" /> Enviar só o PDF</>}
-            </button>
-            <button
-              onClick={() => abrirWhatsapp(mensagens[0])}
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              <MessageCircle className="h-4 w-4" /> Abrir no meu WhatsApp
-            </button>
-            <label className="inline-flex items-center gap-1.5 text-[12px] text-zinc-600 dark:text-zinc-300">
-              <input type="checkbox" checked={anexarPdf} onChange={(e) => setAnexarPdf(e.target.checked)} className="h-3.5 w-3.5 accent-emerald-600" />
-              Anexar o PDF ao final
-            </label>
-            {msgs !== null && (
-              <button onClick={() => setMsgs(null)} className="text-[12px] text-zinc-400 underline hover:text-zinc-600">
-                voltar ao texto gerado
-              </button>
-            )}
-          </div>
-          <p className="mt-2 text-[11px] text-zinc-400">
-            {canais.length
-              ? 'Pelo hub as oito saem em sequência, do número oficial do escritório, e a conversa fica atribuída a você com a IA pausada — senão o robô responde o cliente no seu lugar. O botão do WhatsApp é a alternativa: abre a conversa no seu número com a 1ª mensagem, e as demais vão pelo copiar.'
-              : 'Nenhum canal de WhatsApp ativo encontrado — sobra o envio pelo seu WhatsApp: a 1ª vai pelo botão, as demais pelo copiar de cada bolha.'}
-          </p>
-
-          <div className="mt-4 flex flex-col gap-2.5">
-            {mensagens.map((m, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <span className="mt-2 w-5 shrink-0 text-right text-[11px] font-bold text-zinc-400">{i + 1}</span>
-                <textarea
-                  value={m}
-                  onChange={(e) => {
-                    const prox = [...mensagens];
-                    prox[i] = e.target.value;
-                    setMsgs(prox);
-                  }}
-                  rows={Math.min(8, m.split('\n').length + 1)}
-                  className="flex-1 rounded-xl rounded-tl-sm border border-zinc-200 bg-emerald-50/50 p-3 text-[12.5px] leading-relaxed text-zinc-800 dark:border-zinc-700 dark:bg-emerald-900/10 dark:text-zinc-200"
-                />
-                <button
-                  onClick={() => copiar(m, `Mensagem ${i + 1} copiada`)}
-                  title={`Copiar a mensagem ${i + 1}`}
-                  className="mt-1 shrink-0 rounded-lg border border-zinc-300 p-2 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {foraDeHora && (
-            <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-              Fora do horário comercial. Proposta que chega de madrugada costuma ser lida como golpe — vale enviar a partir das 8h.
-            </p>
-          )}
-          <p className="mt-3 text-[11px] text-zinc-400">
-            Com “anexar o PDF” marcado, ele vai sozinho depois da última mensagem. O parecer interno NÃO vai junto.
-          </p>
+        {/* ── ENVIO AO CLIENTE — bloco compartilhado, no-print ── */}
+        <div className="mx-auto mt-6 max-w-3xl">
+          <EnviarPropostaWhatsapp
+            mensagens={mensagensPadrao}
+            montarPdf={async () => (await montarPdf()).output('blob')}
+            nomeArquivoPdf={nomeArquivoPdf()}
+            buscaInicial={dados.cliente || ''}
+            nota="O PDF vai sozinho depois da última mensagem. O parecer interno NÃO vai junto."
+          />
         </div>
       </div>
     </div>
   );
 }
-
-const STATUS_ROTULO: Record<string, string> = {
-  PENDING: 'pendente', OPEN: 'aberta', WAITING: 'aguardando', BOT: 'com o robô', CLOSED: 'encerrada',
-};
-const STATUS_COR: Record<string, string> = {
-  PENDING: 'bg-amber-500', OPEN: 'bg-emerald-500', WAITING: 'bg-sky-500', BOT: 'bg-violet-500', CLOSED: 'bg-zinc-400',
-};
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="flex flex-col gap-1"><span className="text-[11px] font-medium text-zinc-500">{label}</span>{children}</label>;
