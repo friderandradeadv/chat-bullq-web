@@ -107,6 +107,23 @@ export interface ExtracaoSentenca {
   modulacaoStj?: boolean | null;
   /** tutela p/ suspender os descontos foi deferida? (false → descontos continuaram) */
   tutelaDeferida?: boolean | null;
+  /**
+   * Tutela e seu cumprimento, lidos do título — insumo da multa (astreinte) que
+   * se executa no mesmo cumprimento de sentença (CPC 537, §§ 2º e 4º).
+   */
+  tutela?: {
+    houve?: boolean | null;
+    deferida?: boolean | null;
+    data?: string | null;
+    prazoDias?: number | null;
+    obrigacao?: string | null;
+    multaTipo?: 'diaria' | 'fixa' | null;
+    multaValor?: number | null;
+    multaTeto?: number | null;
+    cumprida?: boolean | null;
+    dataCumprimento?: string | null;
+    multaLiquidada?: number | null;
+  } | null;
   /** data em que a sentença foi proferida */
   dataSentenca?: string | null;
   observacoes?: string;

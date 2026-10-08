@@ -134,6 +134,13 @@ export function gerarPdfCsExecucao(
     kv(`Honorários sucumbenciais — ${sucLabel}`, brl(s.valor)) +
     (cs.multa523.moratoria > 0 ? kv('Multa moratória 10% (art. 523, CPC)', brl(cs.multa523.moratoria)) : '') +
     (cs.multa523.honorarios > 0 ? kv('Honorários 10% (art. 523, CPC)', brl(cs.multa523.honorarios)) : '') +
+    ((cs.multaTutela?.valor ?? 0) > 0
+      ? kv(
+          'Multa por descumprimento da tutela (CPC 537)',
+          brl(cs.multaTutela.valor) +
+            (cs.multaTutela.descricao ? ` — ${esc(cs.multaTutela.descricao)}` : ''),
+        )
+      : '') +
     kv('TOTAL (execução)', brl(cs.total), 'total');
 
   const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -206,6 +213,12 @@ export function gerarPdfRmc(res: ResultadoRmc, meta: MetaRmc) {
     ];
     if (res.cs.multa523.moratoria > 0) rows.push(`<tr><td>Multa moratória 10% (art. 523)</td><td>${brl(res.cs.multa523.moratoria)}</td></tr>`);
     if (res.cs.multa523.honorarios > 0) rows.push(`<tr><td>Honorários 10% (art. 523)</td><td>${brl(res.cs.multa523.honorarios)}</td></tr>`);
+    if ((res.cs.multaTutela?.valor ?? 0) > 0)
+      rows.push(
+        `<tr><td>Multa por descumprimento da tutela (CPC 537)${
+          res.cs.multaTutela.descricao ? ` — ${esc(res.cs.multaTutela.descricao)}` : ''
+        }</td><td>${brl(res.cs.multaTutela.valor)}</td></tr>`,
+      );
     rows.push(`<tr class="total"><td>TOTAL (execução)</td><td>${brl(res.cs.total)}</td></tr>`);
     cs = `<h2>Cumprimento de Sentença</h2><table>${rows.join('')}</table>`;
   }

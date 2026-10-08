@@ -35,6 +35,10 @@ export interface CsInput {
   };
   multaMoratoria523?: boolean;
   honorarios523?: boolean;
+  /** multa (astreinte) por descumprimento da tutela, já valorada — CPC 537 */
+  multaTutela?: number;
+  /** memória da multa da tutela (dias × valor, período) */
+  multaTutelaDescricao?: string;
 }
 
 export interface CalcularRmcInput {
@@ -87,6 +91,7 @@ export interface ResultadoCs {
     valor: number;
   };
   multa523: { moratoria: number; honorarios: number; total: number };
+  multaTutela: { valor: number; descricao: string | null };
   total: number;
 }
 

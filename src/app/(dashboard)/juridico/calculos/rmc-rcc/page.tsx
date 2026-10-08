@@ -52,6 +52,15 @@ import {
   calculadoraCsService,
   type ResultadoCs as ResultadoCsAvulso,
 } from '@/features/calculadora-cs/services/calculadora-cs.service';
+import { astreinteComoDebito } from '@/features/calculadora-cs/lib/astreinte';
+import {
+  CardTutelaCumprimento,
+  astreinteDaTutela,
+  ateQuandoDescontos,
+  descontosContinuaram,
+  tutelaInicial,
+  type TutelaCumprimento,
+} from '@/features/calculadora-cs/components/card-tutela-cumprimento';
 import { gerarPdfRmc, gerarPdfCsExecucao } from '@/features/calculadora-rmc/lib/pdf';
 import { gerarPdfCs } from '@/features/calculadora-cs/lib/pdf';
 import { classificarPdf } from '@/features/calculadora-rmc/lib/classificar-pdf';
@@ -258,11 +267,31 @@ export default function CalculadoraRmcPage() {
         if (e.modulacaoStj === true) preenchidos.push('modulação Tema 929');
         if (e.valorCausa != null) preenchidos.push('valor da causa');
         if (e.honorarios) preenchidos.push(`sucumbência ${e.honorarios.percentual}%`);
-        // Tutela: só "deferida" se a sentença AFIRMA que suspendeu os descontos;
-        // caso contrário assume que continuaram (estende as parcelas).
-        const tutelaDeferida = e.tutelaDeferida === true;
-        setTutela((t) => ({ ...t, deferida: tutelaDeferida }));
+        // Tutela: só "deferida" se a sentença/decisão AFIRMA o deferimento; caso
+        // contrário assume que os descontos continuaram (estende as parcelas).
+        // Cumprimento NÃO se presume do silêncio: fica "não cumpriu" até o
+        // advogado conferir no HISCRE — é o que faz a multa aparecer.
+        const tut = e.tutela ?? null;
+        const tutelaDeferida = (tut?.deferida ?? e.tutelaDeferida) === true;
+        setTutela((t) => ({
+          ...t,
+          deferida: tutelaDeferida,
+          cumprida: tut ? tut.cumprida === true : t.cumprida,
+          data: tut?.data ?? t.data,
+          prazoDias: tut?.prazoDias != null ? String(tut.prazoDias) : t.prazoDias,
+          multaTipo: tut?.multaTipo ?? t.multaTipo,
+          multaValor:
+            tut?.multaValor != null ? String(tut.multaValor).replace('.', ',') : t.multaValor,
+          multaTeto: tut?.multaTeto != null ? String(tut.multaTeto).replace('.', ',') : t.multaTeto,
+          dataCumprimento: tut?.dataCumprimento ?? t.dataCumprimento,
+          multaLiquidada:
+            tut?.multaLiquidada != null
+              ? String(tut.multaLiquidada).replace('.', ',')
+              : t.multaLiquidada,
+        }));
         preenchidos.push(tutelaDeferida ? 'tutela deferida' : 'tutela NÃO deferida (parcelas estendidas)');
+        if (tutelaDeferida && tut?.cumprida === false)
+          preenchidos.push('tutela DESCUMPRIDA — multa do art. 537 a executar');
       }
       setCsSentAviso(
         (semCondenacao
@@ -295,18 +324,33 @@ export default function CalculadoraRmcPage() {
   // ── Tutela deferida? (suspensão dos descontos) ─────────────────────────────
   // Se NÃO deferida, os descontos continuaram após a inicial: estende as
   // parcelas mês a mês até a data-base, recalculando o saldo devedor.
-  const [tutela, setTutela] = useState({ deferida: true, valorMensal: '' });
+  // Conferência da tutela (deferida? cumprida? multa?) — card compartilhado com
+  // a página de Cumprimento de Sentença, para a pergunta ser a mesma nas duas.
+  const [tutela, setTutela] = useState<TutelaCumprimento>(tutelaInicial);
+  const [descontoMensal, setDescontoMensal] = useState('');
   const ultimaParcela = useMemo(
     () => (parcelas.length ? parcelas.reduce((a, b) => (a.data > b.data ? a : b)) : null),
     [parcelas],
   );
   const parcelasExtras = useMemo(() => {
-    if (fase !== 'cs' || tutela.deferida || !ultimaParcela || !form.dataBase)
+    if (fase !== 'cs' || !descontosContinuaram(tutela) || !ultimaParcela || !form.dataBase)
       return [] as ParcelaInput[];
-    const v = parseValor(tutela.valorMensal);
+    const v = parseValor(descontoMensal);
     const valor = !isNaN(v) && v > 0 ? v : ultimaParcela.valor;
-    return gerarParcelasPosteriores(ultimaParcela.data, form.dataBase, valor);
-  }, [fase, tutela, ultimaParcela, form.dataBase]);
+    // Se o réu cumpriu com atraso, os descontos param na data do cumprimento.
+    return gerarParcelasPosteriores(
+      ultimaParcela.data,
+      ateQuandoDescontos(tutela, form.dataBase),
+      valor,
+    );
+  }, [fase, tutela, descontoMensal, ultimaParcela, form.dataBase]);
+
+  // Multa (astreinte) por descumprimento da tutela — executa-se no mesmo
+  // cumprimento, junto com a condenação (CPC 537, §§ 2º e 4º).
+  const multaTutela = useMemo(
+    () => (fase === 'cs' ? astreinteDaTutela(tutela, form.dataBase) : null),
+    [fase, tutela, form.dataBase],
+  );
   // HISCON/HISCRE costumam ser da época da inicial: quantos meses as parcelas
   // estão "atrasadas" em relação à data-base (0 = em dia).
   const defasagemMeses = useMemo(() => {
@@ -406,6 +450,8 @@ export default function CalculadoraRmcPage() {
                 },
           multaMoratoria523: cs.multaMoratoria,
           honorarios523: cs.multaHonorarios,
+          multaTutela: multaTutela?.valor,
+          multaTutelaDescricao: multaTutela?.descricao,
         };
       }
       const r = await calculadoraRmcService.calcular(payload);
@@ -426,7 +472,8 @@ export default function CalculadoraRmcPage() {
             : cs.sucBase === 'principal'
               ? round2((pctSuc / 100) * condenacao)
               : round2((pctSuc / 100) * vc);
-        if (valor > 0) {
+        const debitoAstreinte = multaTutela ? [astreinteComoDebito(multaTutela)] : [];
+        if (valor > 0 || debitoAstreinte.length) {
           const csSuc = await calculadoraCsService.calcular({
             indiceCorrecao: form.indiceCorrecao,
             termoFinal: form.dataBase,
@@ -436,7 +483,9 @@ export default function CalculadoraRmcPage() {
             multaMoratoria523: cs.multaMoratoria,
             honorarios523: cs.multaHonorarios,
             debitos: [
-              {
+              ...debitoAstreinte,
+              ...(valor > 0
+              ? [{
                 descricao:
                   cs.sucBase === 'valorFixado'
                     ? 'Honorários sucumbenciais fixados'
@@ -449,7 +498,8 @@ export default function CalculadoraRmcPage() {
                     ? cs.valorCausaData
                     : form.dataBase,
                 valor,
-              },
+              }]
+              : []),
             ],
           });
           return { ...r, csSuc };
@@ -1593,80 +1643,62 @@ export default function CalculadoraRmcPage() {
               )}
             </div>
 
-            {/* Tutela / descontos continuados — só no cumprimento de sentença */}
+            {/* Conferência da tutela + multa do descumprimento — só no cumprimento
+                de sentença. Card compartilhado com a página de Cumprimento de
+                Sentença: a pergunta ("houve tutela? o réu cumpriu?") é a mesma
+                nas duas, e a multa do art. 537 entra no cálculo pelas duas. */}
             {fase === 'cs' && (
-            <div className={cardCls}>
-              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-                <ShieldAlert className="h-4 w-4 text-amber-500" /> Tutela deferida?{' '}
-                <span className="text-xs font-normal text-zinc-400">(suspensão dos descontos)</span>
-              </h2>
-              <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-                O HISCON/HISCRE costumam ser <b>da época da inicial</b> — as parcelas param lá. Se
-                a tutela <b>não</b> foi deferida, os descontos continuaram — o saldo devedor é
-                recalculado somando uma parcela por mês, da última parcela até a data-base.
-              </p>
-              {tutela.deferida && defasagemMeses >= 2 && ultimaParcela && (
-                <p className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
-                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    As parcelas param em <b>{mesBr(ultimaParcela.data)}</b> — {defasagemMeses}{' '}
-                    mês(es) antes da data-base ({mesBr(form.dataBase)}). HISCRE defasado? Se os
-                    descontos <b>não</b> foram suspensos por tutela, marque{' '}
-                    <b>"Não — descontos continuaram"</b> para completar o período.
-                  </span>
-                </p>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTutela((t) => ({ ...t, deferida: true }))}
-                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${tutela.deferida ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500/50 dark:bg-blue-500/15 dark:text-blue-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
-                >
-                  Sim — descontos suspensos
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTutela((t) => ({ ...t, deferida: false }))}
-                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${!tutela.deferida ? 'border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
-                >
-                  Não — descontos continuaram
-                </button>
-              </div>
-              {!tutela.deferida && (
-                <div className="mt-3 space-y-2">
-                  <div>
-                    <label className={labelCls}>Desconto mensal após a inicial (R$)</label>
-                    <input
-                      className={inputCls}
-                      inputMode="decimal"
-                      placeholder={
-                        ultimaParcela ? `${ultimaParcela.valor.toFixed(2).replace('.', ',')} (última parcela)` : '105,00'
-                      }
-                      value={tutela.valorMensal}
-                      onChange={(e) => setTutela((t) => ({ ...t, valorMensal: e.target.value }))}
-                    />
-                    <p className="mt-1 text-[10px] leading-tight text-zinc-400">
-                      Vazio = repete o valor da última parcela da lista.
-                    </p>
+              <CardTutelaCumprimento
+                value={tutela}
+                onChange={setTutela}
+                termoFinal={form.dataBase}
+                cardCls={cardCls}
+                blocoDescontos={
+                  <div className="mt-3 space-y-2">
+                    {defasagemMeses >= 2 && ultimaParcela && (
+                      <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                        <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span>
+                          O HISCON/HISCRE costuma ser <b>da época da inicial</b>: as parcelas param
+                          em <b>{mesBr(ultimaParcela.data)}</b>, {defasagemMeses} mês(es) antes da
+                          data-base ({mesBr(form.dataBase)}). Como os descontos continuaram, o
+                          período é completado mês a mês.
+                        </span>
+                      </p>
+                    )}
+                    <div>
+                      <label className={labelCls}>Desconto mensal após a inicial (R$)</label>
+                      <input
+                        className={inputCls}
+                        inputMode="decimal"
+                        placeholder={
+                          ultimaParcela ? `${ultimaParcela.valor.toFixed(2).replace('.', ',')} (última parcela)` : '105,00'
+                        }
+                        value={descontoMensal}
+                        onChange={(e) => setDescontoMensal(e.target.value)}
+                      />
+                      <p className="mt-1 text-[10px] leading-tight text-zinc-400">
+                        Vazio = repete o valor da última parcela da lista.
+                      </p>
+                    </div>
+                    {parcelasExtras.length > 0 ? (
+                      <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                        Serão acrescidas <b>{parcelasExtras.length} parcela(s)</b> de{' '}
+                        <b>{brl(parcelasExtras[0].valor)}</b> (
+                        {parcelasExtras[0].data.slice(0, 7).split('-').reverse().join('/')} a{' '}
+                        {parcelasExtras[parcelasExtras.length - 1].data.slice(0, 7).split('-').reverse().join('/')}
+                        ) — o saldo devedor será recalculado{' '}
+                        {tutela.cumprida && tutela.dataCumprimento ? 'até o cumprimento' : 'até a data-base'}.
+                      </p>
+                    ) : (
+                      <p className="text-[10px] leading-tight text-zinc-400">
+                        Preencha as parcelas descontadas acima — a extensão parte da última.
+                      </p>
+                    )}
                   </div>
-                  {parcelasExtras.length > 0 ? (
-                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-                      Serão acrescidas <b>{parcelasExtras.length} parcela(s)</b> de{' '}
-                      <b>{brl(parcelasExtras[0].valor)}</b> (
-                      {parcelasExtras[0].data.slice(0, 7).split('-').reverse().join('/')} a{' '}
-                      {parcelasExtras[parcelasExtras.length - 1].data.slice(0, 7).split('-').reverse().join('/')}
-                      ) — o saldo devedor será recalculado até a data-base.
-                    </p>
-                  ) : (
-                    <p className="text-[10px] leading-tight text-zinc-400">
-                      Preencha as parcelas descontadas acima — a extensão parte da última.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+                }
+              />
             )}
-
             {/* Cumprimento de Sentença — só na fase de execução */}
             {fase === 'cs' && (
             <div className={cardCls}>
@@ -1689,24 +1721,33 @@ export default function CalculadoraRmcPage() {
 
               {cs.ativar && (
                 <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                  {/* Alinhamento com o card "Tutela deferida?": no CS, o HISCON/HISCRE
-                      da época da inicial deixa as parcelas defasadas até a data-base. */}
-                  {tutela.deferida && defasagemMeses >= 2 && ultimaParcela && (
+                  {/* Alinhamento com o card "Houve tutela nos autos?": no CS, o
+                      HISCON/HISCRE da época da inicial deixa as parcelas defasadas
+                      até a data-base. */}
+                  {!descontosContinuaram(tutela) && defasagemMeses >= 2 && ultimaParcela && (
                     <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
                       <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>
-                        Para execução, confira o card <b>"Tutela deferida?"</b> acima: as parcelas
-                        (HISCRE da época da inicial?) param em <b>{mesBr(ultimaParcela.data)}</b>,{' '}
-                        {defasagemMeses} mês(es) antes da data-base. Sem tutela, os descontos
-                        continuaram e o saldo a executar está maior.
+                        Para execução, confira o card <b>"Houve tutela nos autos?"</b> acima: as
+                        parcelas (HISCRE da época da inicial?) param em{' '}
+                        <b>{mesBr(ultimaParcela.data)}</b>, {defasagemMeses} mês(es) antes da
+                        data-base. Se o réu não cumpriu a tutela — ou se ela não foi deferida — os
+                        descontos continuaram e o saldo a executar está maior.
                       </span>
                     </p>
                   )}
-                  {!tutela.deferida && parcelasExtras.length > 0 && (
+                  {descontosContinuaram(tutela) && parcelasExtras.length > 0 && (
                     <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-relaxed text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300">
-                      ✓ Tutela não deferida: {parcelasExtras.length} parcela(s) de{' '}
-                      {brl(parcelasExtras[0].valor)} somadas até a data-base — o saldo da execução
-                      já sai recalculado.
+                      ✓ Descontos continuados: {parcelasExtras.length} parcela(s) de{' '}
+                      {brl(parcelasExtras[0].valor)} somadas ao saldo — a execução já sai
+                      recalculada.
+                    </p>
+                  )}
+                  {multaTutela && (
+                    <p className="rounded-lg bg-amber-100/70 px-3 py-2 text-[11px] leading-relaxed text-amber-900 dark:bg-amber-500/15 dark:text-amber-200">
+                      ⚠ <b>Multa da tutela: {brl(multaTutela.valor)}</b> entra no total da execução
+                      (CPC 537, §§ 2º e 4º). A peça precisa pedir a execução da multa, não só da
+                      condenação.
                     </p>
                   )}
                   {/* A sentença/inicial entram pela área "Importar documentos" (sem botão duplicado aqui) */}
@@ -2087,6 +2128,14 @@ export default function CalculadoraRmcPage() {
                       )}
                       {res.cs.multa523.honorarios > 0 && (
                         <ResRow label="Honorários de 10% (art. 523, CPC)" valor={res.cs.multa523.honorarios} />
+                      )}
+                      {(res.cs.multaTutela?.valor ?? 0) > 0 && (
+                        <ResRow
+                          label={`Multa por descumprimento da tutela (CPC 537)${
+                            res.cs.multaTutela.descricao ? ` — ${res.cs.multaTutela.descricao}` : ''
+                          }`}
+                          valor={res.cs.multaTutela.valor}
+                        />
                       )}
                       <ResRow label="Total geral (execução)" valor={res.cs.total} destaque />
                     </dl>

@@ -11,7 +11,6 @@ import {
   Info,
   Loader2,
   Plus,
-  ShieldAlert,
   Sparkles,
   Trash2,
   Upload,
@@ -25,6 +24,15 @@ import {
   type IndiceCorrecao,
 } from '@/features/calculadora-cs/services/calculadora-cs.service';
 import { gerarPdfCs } from '@/features/calculadora-cs/lib/pdf';
+import { astreinteComoDebito } from '@/features/calculadora-cs/lib/astreinte';
+import {
+  CardTutelaCumprimento,
+  astreinteDaTutela,
+  ateQuandoDescontos,
+  descontosContinuaram,
+  tutelaInicial,
+  type TutelaCumprimento,
+} from '@/features/calculadora-cs/components/card-tutela-cumprimento';
 import { DropZone } from '@/components/drop-zone';
 
 const brl = (n: number | undefined) =>
@@ -101,10 +109,12 @@ export default function CumprimentoSentencaPage() {
     honValorCondenacao: '',
     multa523Mor: false,
     multa523Hon: false,
-    tutelaDeferida: true,
     descontoMensal: '',
     ultimoDesconto: '',
   });
+  // Conferência da tutela (deferida? cumprida? multa?) — card compartilhado com
+  // a calculadora de RMC/RCC, para a pergunta ser a mesma nas duas.
+  const [tutela, setTutela] = useState<TutelaCumprimento>(tutelaInicial);
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
@@ -164,20 +174,39 @@ export default function CumprimentoSentencaPage() {
           e.valorCausa != null && (semCondenacao || e.honorarios?.base === 'fixa')
             ? String(e.valorCausa).replace('.', ',')
             : f.honQuantiaFixa,
-        // Tutela: só "deferida" se a sentença AFIRMA a suspensão dos descontos;
-        // no silêncio, assume que continuaram (padrão do cumprimento).
-        tutelaDeferida: e.tutelaDeferida === true,
         honQuantiaData: f.honQuantiaData || (e.dataSentenca ?? ''),
         // Multas do art. 523 NÃO são pré-marcadas pela IA: só incidem depois de
         // esgotado o prazo de 15 dias sem pagamento — decisão do advogado.
+      }));
+      // Tutela: só "deferida" se a sentença/decisão AFIRMA o deferimento; no
+      // silêncio, assume que os descontos continuaram (padrão do cumprimento).
+      // Cumprimento NÃO se presume do silêncio: `cumprida` só vem true se o
+      // título afirmar — senão fica "não cumpriu" para o advogado conferir no
+      // HISCRE e, se cumpriu, marcar com a data.
+      const tut = e.tutela ?? null;
+      const tutDeferida = (tut?.deferida ?? e.tutelaDeferida) === true;
+      setTutela((t) => ({
+        ...t,
+        deferida: tutDeferida,
+        cumprida: tut ? tut.cumprida === true : t.cumprida,
+        data: tut?.data ?? t.data,
+        prazoDias: tut?.prazoDias != null ? String(tut.prazoDias) : t.prazoDias,
+        multaTipo: tut?.multaTipo ?? t.multaTipo,
+        multaValor: tut?.multaValor != null ? String(tut.multaValor).replace('.', ',') : t.multaValor,
+        multaTeto: tut?.multaTeto != null ? String(tut.multaTeto).replace('.', ',') : t.multaTeto,
+        dataCumprimento: tut?.dataCumprimento ?? t.dataCumprimento,
+        multaLiquidada:
+          tut?.multaLiquidada != null ? String(tut.multaLiquidada).replace('.', ',') : t.multaLiquidada,
       }));
       setIaAviso(
         (semCondenacao
           ? 'Sem condenação líquida na sentença → selecionei "Obrigação de fazer — só sucumbência" (honorários como principal). Confira antes de calcular.'
           : (r.aviso ?? `IA preencheu ${e.debitos?.length ?? 0} verba(s). Confira antes de calcular.`)) +
-          (e.tutelaDeferida !== true
+          (!tutDeferida
             ? ' Tutela NÃO deferida: os descontos continuaram — preencha o desconto mensal no card da tutela.'
-            : ''),
+            : tut?.cumprida === false
+              ? ' Tutela deferida e DESCUMPRIDA pelo réu: confira a multa no card da tutela — ela se executa junto (CPC 537).'
+              : ' Confira no card da tutela se o réu cumpriu: sem isso a multa do descumprimento fica de fora do pedido.'),
       );
     },
     onError: (err) => setIaAviso((err as Error)?.message ?? 'Erro ao ler os documentos.'),
@@ -204,13 +233,28 @@ export default function CumprimentoSentencaPage() {
     () => debitos.filter((d) => d.data && !isNaN(parseValor(d.valor)) && parseValor(d.valor) > 0),
     [debitos],
   );
-  // Tutela NÃO deferida → descontos continuaram: verbas mensais até o termo final
+  // Descontos continuaram (tutela negada, OU deferida e descumprida): verbas
+  // mensais até a cessação — ou até o termo final, se nunca cessaram.
   const descontosExtras = useMemo(() => {
-    if (form.tutelaDeferida) return [];
+    if (!descontosContinuaram(tutela)) return [];
     const v = parseValor(form.descontoMensal);
     if (!form.ultimoDesconto || !form.termoFinal || isNaN(v) || v <= 0) return [];
-    return gerarDescontosPosteriores(form.ultimoDesconto, form.termoFinal, v);
-  }, [form.tutelaDeferida, form.descontoMensal, form.ultimoDesconto, form.termoFinal]);
+    return gerarDescontosPosteriores(
+      form.ultimoDesconto,
+      ateQuandoDescontos(tutela, form.termoFinal),
+      v,
+    );
+  }, [tutela, form.descontoMensal, form.ultimoDesconto, form.termoFinal]);
+
+  // Multa por descumprimento da tutela (astreinte) — vira verba do cálculo.
+  const multaTutela = useMemo(
+    () => astreinteDaTutela(tutela, form.termoFinal),
+    [tutela, form.termoFinal],
+  );
+  const debitoAstreinte = useMemo(
+    () => (multaTutela ? [astreinteComoDebito(multaTutela)] : []),
+    [multaTutela],
+  );
 
   // Obrigação de fazer: o valor executável são os próprios honorários — eles
   // viram o único "débito" (corrigido + juros), e a multa do 523 incide sobre eles.
@@ -245,6 +289,7 @@ export default function CumprimentoSentencaPage() {
           multaMoratoria523: form.multa523Mor,
           honorarios523: form.multa523Hon,
           debitos: [
+            ...debitoAstreinte,
             {
               descricao:
                 form.honBase === 'fixa'
@@ -299,7 +344,11 @@ export default function CumprimentoSentencaPage() {
               : undefined,
         multaMoratoria523: form.multa523Mor,
         honorarios523: form.multa523Hon,
-        debitos: [...debitos.filter((d) => d.data && parseValor(d.valor) > 0).map(lin), ...descontosExtras],
+        debitos: [
+          ...debitos.filter((d) => d.data && parseValor(d.valor) > 0).map(lin),
+          ...descontosExtras,
+          ...debitoAstreinte,
+        ],
         creditos: creditos.filter((c) => c.data && parseValor(c.valor) > 0).map(lin),
       };
       setCalcInfo({ honFixado: form.honBase === 'valorFixado', descontosExtras: descontosExtras.length, modo: 'condenacao' });
@@ -430,63 +479,50 @@ export default function CumprimentoSentencaPage() {
               <ItensEditor itens={debitos} setItens={setDebitos} upd={(i, k, v) => upd(debitos, setDebitos, i, k, v)} placeholderDesc="Condenação / dano moral…" />
             </div>
 
-            {/* Tutela / descontos continuados */}
-            <div className={cardCls}>
-              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-                <ShieldAlert className="h-4 w-4 text-amber-500" /> Tutela deferida?{' '}
-                <span className="text-xs font-normal text-zinc-400">(suspensão dos descontos)</span>
-              </h2>
-              <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-                Se a tutela <b>não</b> foi deferida, os descontos continuaram depois da inicial — o
-                saldo devedor é recalculado somando um desconto por mês até o termo final.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => set('tutelaDeferida', true)}
-                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${form.tutelaDeferida ? 'border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
-                >
-                  Sim — descontos suspensos
-                </button>
-                <button
-                  type="button"
-                  onClick={() => set('tutelaDeferida', false)}
-                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition-colors ${!form.tutelaDeferida ? 'border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/15 dark:text-amber-300' : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'}`}
-                >
-                  Não — descontos continuaram
-                </button>
-              </div>
-              {!form.tutelaDeferida && (
-                <div className="mt-3 space-y-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>Desconto mensal (R$)</label>
-                      <input className={inputCls} inputMode="decimal" placeholder="105,00" value={form.descontoMensal} onChange={(e) => set('descontoMensal', e.target.value)} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Último desconto na inicial</label>
-                      <input type="date" className={inputCls} value={form.ultimoDesconto} onChange={(e) => set('ultimoDesconto', e.target.value)} />
-                    </div>
-                  </div>
-                  {descontosExtras.length > 0 ? (
-                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-                      Serão acrescidos <b>{descontosExtras.length} desconto(s)</b> de{' '}
-                      <b>{brl(parseValor(form.descontoMensal))}</b> (
-                      {descontosExtras[0].data.slice(0, 7).split('-').reverse().join('/')} a{' '}
-                      {descontosExtras[descontosExtras.length - 1].data.slice(0, 7).split('-').reverse().join('/')}
-                      ) ao saldo devedor, cada um corrigido com juros desde a própria data.
-                    </p>
-                  ) : (
-                    <p className="text-[10px] leading-tight text-zinc-400">
-                      Informe o valor do desconto mensal e a data do último desconto considerado no
-                      cálculo da inicial.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
             </>
             )}
+
+            {/* Conferência da tutela + multa do descumprimento (card compartilhado
+                com a calculadora de RMC/RCC). Fica FORA do bloco de condenação:
+                na obrigação de fazer (cancelar a RMC) é justamente onde a multa
+                costuma ser o único valor em dinheiro a executar. */}
+            <CardTutelaCumprimento
+              value={tutela}
+              onChange={setTutela}
+              termoFinal={form.termoFinal}
+              cardCls={cardCls}
+              blocoDescontos={
+                form.modo === 'condenacao' ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Desconto mensal (R$)</label>
+                        <input className={inputCls} inputMode="decimal" placeholder="105,00" value={form.descontoMensal} onChange={(e) => set('descontoMensal', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Último desconto na inicial</label>
+                        <input type="date" className={inputCls} value={form.ultimoDesconto} onChange={(e) => set('ultimoDesconto', e.target.value)} />
+                      </div>
+                    </div>
+                    {descontosExtras.length > 0 ? (
+                      <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+                        Serão acrescidos <b>{descontosExtras.length} desconto(s)</b> de{' '}
+                        <b>{brl(parseValor(form.descontoMensal))}</b> (
+                        {descontosExtras[0].data.slice(0, 7).split('-').reverse().join('/')} a{' '}
+                        {descontosExtras[descontosExtras.length - 1].data.slice(0, 7).split('-').reverse().join('/')}
+                        ) ao saldo devedor, cada um corrigido com juros desde a própria data.
+                      </p>
+                    ) : (
+                      <p className="text-[10px] leading-tight text-zinc-400">
+                        Informe o valor do desconto mensal e a data do último desconto considerado no
+                        cálculo da inicial.
+                      </p>
+                    )}
+                  </div>
+                ) : null
+              }
+            />
+
 
             {/* Parâmetros */}
             <div className={cardCls}>
