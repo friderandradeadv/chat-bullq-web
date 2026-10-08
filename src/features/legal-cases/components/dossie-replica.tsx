@@ -28,6 +28,7 @@ type Replica = {
   status?: string; cnj?: string; pedidoEm?: string; etapa?: string | null; etapaEm?: string;
   erro?: string | null; dossieEm?: string; paginas?: number; documentos?: number;
   documentId?: string; pdfCaminho?: string | null; dossieCaminho?: string | null;
+  texto?: string | null;
 };
 
 export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, sempreVisivel = false }: {
@@ -40,6 +41,7 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
 }) {
   const qc = useQueryClient();
   const [pedindo, setPedindo] = useState(false);
+  const [aberto, setAberto] = useState(true);
 
   // 🚨 O BLOCO TEM DE SE BASTAR, PORQUE ELE VIVE EM DOIS LUGARES. No drawer do
   // Processo o pai conhece o caso inteiro; no card da AGENDA — que é onde o
@@ -134,10 +136,34 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
       )}
 
       {replica?.status === 'dossie-pronto' && (
-        <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-[11px] leading-4 font-medium text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-300">
-          ✓ {replica.documentos} documentos lidos em {replica.paginas} páginas — o
-          dossiê está nos Anexos deste card.
-        </p>
+        <>
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-2 py-1 dark:bg-emerald-900/25">
+            <p className="text-[11px] leading-4 font-medium text-emerald-800 dark:text-emerald-300">
+              ✓ {replica.documentos} documentos lidos em {replica.paginas} páginas
+            </p>
+            <button
+              onClick={() => setAberto((v) => !v)}
+              className="shrink-0 text-[11px] font-semibold text-emerald-800 underline underline-offset-2 dark:text-emerald-300"
+            >
+              {aberto ? 'ocultar' : 'ver o dossiê'}
+            </button>
+          </div>
+
+          {/* 🚨 O DOSSIÊ SE LÊ AQUI. Antes esta linha dizia "está nos Anexos
+              deste card" — e era falso: o anexo nasce no PROCESSO, e os Anexos
+              da agenda são da TAREFA. O advogado leu "47 documentos lidos" e
+              não achou nada. Texto medido tem ~5 KB: cabe no card. */}
+          {aberto && replica.texto && (
+            <pre className="mt-2 max-h-80 overflow-auto whitespace-pre rounded-md border border-zinc-200 bg-zinc-50 p-2 font-mono text-[10px] leading-[1.35] text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300">
+{replica.texto}
+            </pre>
+          )}
+
+          <p className="mt-1 text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
+            O arquivo também ficou nos anexos do <strong>Processo</strong>
+            {replica.pdfCaminho ? <> · os autos completos estão no Mac, em <code className="text-[10px]">{replica.pdfCaminho.replace(/^.*\/autos\//, 'autos/')}</code></> : null}
+          </p>
+        </>
       )}
 
       {replica?.status === 'erro' && (
