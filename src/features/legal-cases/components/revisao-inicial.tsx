@@ -171,7 +171,12 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
     if (real) usados.add(real.nome);
     return { ...i, presente: i.presente || !!real, arquivo: real?.nome ?? i.arquivo, url: real?.url ?? null };
   });
-  const faltam = itens.filter((i) => i.obrigatorio && !i.presente);
+  // 🚨 PEÇA COM LACUNA CONTA COMO PENDÊNCIA. Desde 07/10/2026 o vigia gera o
+  // `01. INICIAL.pdf` SEMPRE, para que toda inicial tenha PDF — então "o arquivo
+  // existe" deixou de significar "está pronta". Sem isto a lista fecharia em
+  // verde com a peça ainda furada, que é o contrário do que o escritório
+  // determinou ("vermelho significa que não existe").
+  const faltam = itens.filter((i) => i.obrigatorio && (!i.presente || (i as any).incompleto));
   const pronta = !isLoading && !error && !pasta.isLoading && faltam.length === 0;
 
   return (
@@ -216,7 +221,8 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
             {itens.map((i) => (
               <li key={i.nome} className="flex items-start gap-1.5 text-[11px] leading-4">
                 <span className={`mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center rounded-sm border ${
-                  i.presente ? 'border-emerald-500 bg-emerald-500'
+                  (i as any).incompleto ? 'border-amber-500 bg-amber-500'
+                  : i.presente ? 'border-emerald-500 bg-emerald-500'
                   : i.obrigatorio ? 'border-red-400' : 'border-zinc-300 dark:border-zinc-600'}`}>
                   {i.presente && <Check className="h-2 w-2 text-white" />}
                 </span>
@@ -233,6 +239,12 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
                     {!i.presente && !i.obrigatorio && ' · opcional'}
                   </span>
                 )}
+                {/* Presente e ainda furada: o PDF existe, a peça não está pronta. */}
+                {(i as any).incompleto ? (
+                  <span className="shrink-0 rounded px-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                    {(i as any).lacunas} lacuna(s) a preencher
+                  </span>
+                ) : null}
               </li>
             ))}
           </ol>
