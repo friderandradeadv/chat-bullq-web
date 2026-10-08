@@ -8,6 +8,7 @@ import { FileSearch,
   X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, AlertTriangle, Loader2, ShieldCheck, Gavel,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { contactsService } from '@/features/contacts/services/contacts.service';
 import {
   legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef, type PartyDetail, type CaseDetail, type ViabilidadeAnalise,
 } from '@/features/legal-cases/services/legal-cases.service';
@@ -382,7 +383,7 @@ export function CaseDetailDrawer({
                                 </a>
                               </li>
                             )}
-                            {cliente.contact?.email && <DbField label="E-mail" value={cliente.contact.email} />}
+                            <CampoEmail contactId={cliente.contact?.id} email={cliente.contact?.email} caseId={c.id} />
                             {cad.socio && <DbField label="Sócio administrador" value={cad.socio} />}
                             {cad.login && <DbField label="Login Meu INSS / gov.br" value={cad.login} />}
                             {cad.senha && <DbField label="Senha Meu INSS / gov.br" value={cad.senha} />}
@@ -866,6 +867,110 @@ function Field({ label, value, mono, strong }: { label: string; value: string | 
       <p className="text-sm font-medium leading-5 text-[#101820] dark:text-zinc-300">{label}</p>
       <p className={`mt-1 text-xs text-[#101820] dark:text-zinc-200 ${mono ? 'font-mono' : ''} ${strong ? 'font-semibold text-emerald-600 dark:text-emerald-400' : ''}`}>{value || '—'}</p>
     </div>
+  );
+}
+
+/**
+ * O E-MAIL DO CLIENTE, editável aqui mesmo.
+ *
+ * 🚨 ELE NÃO TINHA ONDE MORAR. O montador lê `contact.email` e mais nada; o
+ * cadastro do card (`contact.metadata.cadastro`) guarda rg, cpf, nome, login,
+ * senha, endereço, profissão e estado civil, e **não tem e-mail**; e este
+ * painel apenas EXIBIA o e-mail do contato. Resultado: `[E-MAIL]` era lacuna
+ * amarela em toda inicial de cliente sem e-mail, e não havia tela onde
+ * resolver. Medido no JOSÉ BATISTA em 07/10/2026.
+ *
+ * 🚨 GRAVA NO CONTATO, não no cadastro. É de lá que o montador lê, e e-mail é
+ * dado da PESSOA: guardá-lo no cadastro criaria um segundo lugar para o mesmo
+ * dado, que é como nascem as divergências deste sistema.
+ *
+ * Sem e-mail, sai uma linha discreta de "adicionar" em vez de um campo vazio:
+ * o painel mostra só o que existe, e é isso que o mantém limpo.
+ */
+function CampoEmail({ contactId, email, caseId }: {
+  contactId: string | null | undefined;
+  email: string | null | undefined;
+  caseId: string;
+}) {
+  const qc = useQueryClient();
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState(email ?? '');
+  const [salvando, setSalvando] = useState(false);
+  useEffect(() => { if (!editando) setValor(email ?? ''); }, [email, editando]);
+
+  const salvar = async () => {
+    const v = valor.trim();
+    // Validação de e-mail não precisa ser esperta: precisa impedir o engano
+    // óbvio (espaço, falta de @) e deixar passar o resto, que o servidor valida.
+    if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) {
+      toast.error('E-mail inválido.');
+      return;
+    }
+    if (!contactId) { toast.error('Este cliente não tem contato vinculado.'); return; }
+    setSalvando(true);
+    try {
+      await contactsService.update(contactId, { email: v || null } as any);
+      await qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caseId] });
+      setEditando(false);
+      toast.success(v ? 'E-mail salvo. A próxima montagem já o usa.' : 'E-mail removido.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Não consegui salvar o e-mail.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  if (!contactId) return null;
+
+  if (editando) {
+    return (
+      <li className="col-span-2 flex flex-col">
+        <span className="text-[10px] font-semibold uppercase text-[#48626f]">E-mail</span>
+        <div className="mt-0.5 flex items-center gap-1">
+          <input
+            autoFocus
+            type="email"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); salvar(); }
+              if (e.key === 'Escape') { setValor(email ?? ''); setEditando(false); }
+            }}
+            placeholder="nome@exemplo.com"
+            className="h-7 min-w-0 flex-1 rounded-md border border-[#cfe0ed] bg-white px-2 text-xs text-[#101820] focus:border-[#4a90e2] focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+          />
+          <button type="button" onClick={salvar} disabled={salvando} title="Salvar"
+            className="rounded-md p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 dark:hover:bg-emerald-900/30">
+            {salvando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          </button>
+          <button type="button" onClick={() => { setValor(email ?? ''); setEditando(false); }} title="Cancelar"
+            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex flex-col">
+      <span className="text-[10px] font-semibold uppercase text-[#48626f]">E-mail</span>
+      {email ? (
+        <span className="group/em inline-flex items-center gap-1 text-xs text-black dark:text-zinc-200">
+          <span className="truncate">{email}</span>
+          <button type="button" onClick={() => setEditando(true)} title="Editar o e-mail"
+            className="shrink-0 text-zinc-400 opacity-0 transition group-hover/em:opacity-100 hover:text-[#1b6ec2]">
+            <Pencil className="h-3 w-3" />
+          </button>
+        </span>
+      ) : (
+        <button type="button" onClick={() => setEditando(true)}
+          title="A inicial pede o e-mail do cliente; sem ele a peça sai com lacuna amarela"
+          className="self-start text-xs text-[#1b6ec2] hover:underline dark:text-[#74c0fc]">
+          adicionar
+        </button>
+      )}
+    </li>
   );
 }
 
