@@ -320,7 +320,20 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     return r?.criados ?? 0;
   };
 
-  const gravarReus = async (entradas: { reu: string; grupo: string }[]) => {
+  /**
+   * 🚨 UMA ENTRADA POR AÇÃO, NÃO POR RÉU (08/10/2026). Até aqui cada
+   * instituição da ação virava uma linha e, portanto, um card e uma petição —
+   * e as petições impugnavam OS MESMOS contratos. `montarPlanoAcao` já decide,
+   * lendo o HISCON, quem responde junto: ela une numa cadeia só os grupos
+   * ligados pelo mesmo número de contrato (originação e cessão) e devolve
+   * âncora + litisconsortes.
+   *
+   * Medido no JOSÉ BATISTA: a análise sugeria 3 ações (Itaú com as duas
+   * empresas, Facta com o Pine, e o Pan sozinho) e nasceram 5 cards. Dois
+   * pares impugnando a mesma averbação é litispendência, e fatiar a mesma
+   * cadeia é o que o TJSP extingue por fragmentação artificial.
+   */
+  const gravarReus = async (entradas: { reu: string; litisconsortes?: string[]; grupo: string }[]) => {
     // A lista vive no metadata do caso, é de onde o próprio drawer a lê.
     const atuais: any[] = ((caso.metadata as any)?.contratos ?? []) as any[];
     const jaTem = (reu: string) =>
@@ -333,7 +346,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         vistos.add(k);
         return true;
       })
-      .map(({ reu, grupo }, i) => ({
+      .map(({ reu, litisconsortes, grupo }, i) => ({
         id: `churn${Date.now().toString(36)}${i}`,
         // 🚨 O GRUPO VAI NA LINHA, não só na oferta. A oferta guarda UM grupo,
         // o da conversa da vez, e o card filho herdava esse. Medido em
@@ -347,6 +360,9 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         // registro de instituições em caixa mista ("Itaú Unibanco S.A.") e
         // entravam assim no card, destoando de todos os outros.
         reu: reu.toUpperCase(),
+        // Os demais réus DA MESMA AÇÃO. O desmembramento os põe no polo
+        // passivo deste card em vez de criar um card para cada.
+        litisconsortes: (litisconsortes ?? []).map((x) => x.toUpperCase()),
         doc: null,
         produto: 'CHURNING',
         valor: null,
@@ -371,10 +387,13 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     try {
       const escolhidos = grupos.filter((g: any) =>
         marcados.has(String(g.grupo ?? (g.instituicoes ?? [])[0] ?? '')));
-      const todos = escolhidos.flatMap((g: any) => {
+      const todos = escolhidos.map((g: any) => {
         const nome = String(g.grupo ?? (g.instituicoes ?? [])[0] ?? '');
-        return ((g.instituicoes ?? []) as string[]).map((reu) => ({ reu, grupo: nome }));
-      });
+        // A primeira instituição é a de MAIS averbações (ordenado em
+        // `montarPlanoAcao`): é ela que dá nome à ação, à pasta e à peça.
+        const [principal, ...demais] = (g.instituicoes ?? []) as string[];
+        return { reu: principal ?? nome, litisconsortes: demais, grupo: nome };
+      }).filter((x: any) => x.reu);
       await gravarReus(todos);
       const r = await legalCasesService.registrarOfertaChurning(caso.id, { status: 'aceita' });
       const criados = await criarCardsDosReus();
@@ -384,7 +403,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       toast.success(
         `${escolhidos.length} grupo(s) aceito(s). `
         + (criados
-          ? `${criados} card(s) de réu criados em Montar inicial.`
+          ? `${criados} card(s) de AÇÃO criados em Montar inicial (os litisconsortes vão no polo passivo, não em card próprio).`
             + ' Este card foi arquivado e virou o registro do desmembramento.'
           : 'Nenhum card novo: os réus já tinham card.'),
         { duration: 10000 },
@@ -402,7 +421,8 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       if (status === 'aceita' && achado?.instituicoes?.length) {
         // Um caminho só para gravar réu: `gravarReus` põe o grupo na linha,
         // acumula e não duplica.
-        await gravarReus(achado.instituicoes.map((reu) => ({ reu, grupo: achado.grupo })));
+        const [principal, ...demais] = achado.instituicoes;
+        await gravarReus([{ reu: principal, litisconsortes: demais, grupo: achado.grupo }]);
       }
       const r = await legalCasesService.registrarOfertaChurning(caso.id, { status });
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
