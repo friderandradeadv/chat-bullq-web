@@ -670,6 +670,7 @@ export function CaseDetailDrawer({
                 caseId={c.id}
                 replica={(c.metadata as any)?.replica ?? null}
                 cnj={c.cnjNumber ?? null}
+                sempreVisivel
               />
             )}
 

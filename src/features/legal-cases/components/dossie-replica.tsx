@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { FileSearch, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
 /**
@@ -29,14 +29,36 @@ type Replica = {
   documentId?: string; pdfCaminho?: string | null; dossieCaminho?: string | null;
 };
 
-export function DossieReplica({ caseId, replica, cnj }: {
+export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, sempreVisivel = false }: {
   caseId: string;
-  /** `metadata.replica` — o estado do último pedido. */
+  /** `metadata.replica` — o estado do último pedido. Omitir faz o bloco buscar sozinho. */
   replica?: Replica | null;
   cnj?: string | null;
+  /** o pai já decidiu que é hora (ex.: o drawer do processo, que filtra por fase) */
+  sempreVisivel?: boolean;
 }) {
   const qc = useQueryClient();
   const [pedindo, setPedindo] = useState(false);
+
+  // 🚨 O BLOCO TEM DE SE BASTAR, PORQUE ELE VIVE EM DOIS LUGARES. No drawer do
+  // Processo o pai conhece o caso inteiro; no card da AGENDA — que é onde o
+  // advogado de fato trabalha o prazo — o card só sabe o `caseId`. Eu montei
+  // primeiro só no Processo e ele não viu nada, com razão: o pedido desde o
+  // começo foi "um botão no card lá na agenda". Quando não lhe dão o estado,
+  // o bloco busca. Uma query, só com o drawer aberto.
+  const precisaBuscar = replicaDada === undefined;
+  const { data: caso } = useQuery({
+    queryKey: ['legal-case', caseId],
+    queryFn: () => legalCasesService.get(caseId),
+    enabled: precisaBuscar && !!caseId,
+    staleTime: 10_000,
+  });
+  const replica: Replica | null = precisaBuscar
+    ? (((caso as any)?.metadata?.replica ?? null) as Replica | null)
+    : (replicaDada ?? null);
+  const cnj = precisaBuscar ? ((caso as any)?.cnjNumber ?? null) : cnjDado;
+  const fase = (caso as any)?.legalPhase as string | undefined;
+
   const naFila = replica?.status === 'pendente';
 
   // 🚨 ENQUANTO ESTÁ NA FILA, O CARD SE ATUALIZA SOZINHO. Sem isto o advogado
@@ -69,6 +91,11 @@ export function DossieReplica({ caseId, replica, cnj }: {
       setPedindo(false);
     }
   };
+
+  // 🚨 APARECE ONDE É ASSUNTO, E SÓ. Na fase da réplica ('08. RÉPLICA/CONTESTAÇÃO'),
+  // ou quando já houve um pedido — aí o resultado tem de continuar à vista. Fora
+  // disso o bloco some, como a coleta some depois de "montar inicial".
+  if (!sempreVisivel && !replica && fase !== 'contestacao') return null;
 
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">

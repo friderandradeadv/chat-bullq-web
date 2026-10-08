@@ -45,6 +45,7 @@ import { recursosService, type Recurso } from '@/features/recursos/services/recu
 import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { CommentsSection } from '@/features/activities/components/comments-section';
 import { AnexosSection } from '@/features/activities/components/anexos-section';
+import { DossieReplica } from '@/features/legal-cases/components/dossie-replica';
 import { ArquivarPecaModal } from '@/features/legal-cases/components/arquivar-peca-modal';
 import { MoverFaseManual } from '@/features/legal-cases/components/mover-fase-manual';
 import { DisponibilidadeModal } from '@/features/calendar/components/disponibilidade-modal';
@@ -2034,6 +2035,24 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
 
         {/* Geração de peças por IA saiu do BullQ (réplica/especificação/recurso usam
             o Cowork). No kanban pré-judicial fica só a geração de iniciais de RMC/RCC. */}
+
+        {/* 🚨 O BOTÃO DO DOSSIÊ MORA AQUI, e não só na ficha do Processo. O prazo
+            de réplica se trabalha NESTE card — foi o pedido desde o começo
+            ("um botão no card lá na agenda"), e montar só no outro drawer fez o
+            advogado abrir a agenda e não ver nada.
+
+            🚨 AQUI ELE APARECE SEMPRE QUE HÁ PROCESSO, e isso é escolha. A
+            versão anterior se escondia fora da fase "08. RÉPLICA/CONTESTAÇÃO" —
+            só que o prazo deste card se chama "Manifestar nos autos" e a fase
+            nem sempre acompanha, então o bloco sumia justamente para quem
+            precisava dele. Abrir o card e não achar o botão é pior que um bloco
+            a mais: ler os autos serve a qualquer manifestação. Na ficha do
+            Processo o filtro por fase continua, que lá o card é outro assunto. */}
+        {activity.caseId && (
+          <div className="mt-5">
+            <DossieReplica caseId={activity.caseId} sempreVisivel />
+          </div>
+        )}
 
         {/* Anexos — deixa o documento junto do prazo/tarefa pra usar depois. */}
         <div className="mt-5 border-t border-[#DEE2E6] pt-4 dark:border-zinc-800">
