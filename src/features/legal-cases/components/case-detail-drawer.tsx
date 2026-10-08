@@ -25,6 +25,7 @@ import { financeiroService } from '@/features/financeiro/services/financeiro.ser
 import { FaseFields } from './fase-fields';
 import { PendenciasPanel } from './pendencias-panel';
 import { ColetaInss } from './coleta-inss';
+import { DossieReplica } from './dossie-replica';
 import { IntakeDocumentos } from './intake-documentos';
 import { BancosReusEditor, RepbFasePorBanco, ResumoClienteRepb } from './bancos-reus-editor';
 import { GerarPecaRepb } from './gerar-inicial-superendiv';
@@ -657,6 +658,19 @@ export function CaseDetailDrawer({
               || ['aud_conciliacao', 'aud_instrucao', 'cumprimento', 'recebido_parcial'].includes(phaseKey)
             ) && (
               <AcordoPanel caseId={c.id} podeLancar={isSocio} />
+            )}
+
+            {/* 🚨 SÓ NA FASE DA RÉPLICA, e a fase se chama exatamente isso
+                ('08. RÉPLICA/CONTESTAÇÃO'). Antes dela não há contestação para
+                ler; depois dela o dossiê já foi usado, e o bloco viraria ruído
+                no card que se usa para outra coisa — mesma razão por que a
+                coleta desaparece em "montar inicial". */}
+            {c && phaseKey === 'contestacao' && (
+              <DossieReplica
+                caseId={c.id}
+                replica={(c.metadata as any)?.replica ?? null}
+                cnj={c.cnjNumber ?? null}
+              />
             )}
 
             {/* 🚨 A COLETA É DE ANTES DA PEÇA. Em "montar inicial" para diante os

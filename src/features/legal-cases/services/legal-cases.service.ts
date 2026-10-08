@@ -1106,6 +1106,17 @@ export const legalCasesService = {
     );
     return data.data ?? data;
   },
+  /**
+   * Põe o dossiê da réplica na fila do Mac: ele abre os autos no PJe, baixa o
+   * processo completo e devolve os fatos medidos no card.
+   *
+   * 🚨 RESPONDE 200 COM `ok:false` QUANDO FALTA O CNJ — é recado, não erro.
+   * Mesma escolha do cálculo automático: prefere não fazer a fazer errado.
+   */
+  async pedirDossieReplica(id: string, cnj?: string): Promise<{ ok: boolean; motivo?: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/replica/pedir`, cnj ? { cnj } : {});
+    return data.data ?? data;
+  },
   /** Gera por IA uma peça (réplica/especificação de provas/recurso) sobre o timbrado → .docx base64. */
   async gerarPeca(
     id: string,
