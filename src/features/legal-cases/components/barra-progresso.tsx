@@ -71,6 +71,8 @@ const NOME: Record<string, string> = {
   inicial: 'Montando a inicial',
   protocolo: 'Protocolando',
   coleta: 'Coletando no Meu INSS',
+  // Ler os autos é leitura, não peticionamento — o rótulo diz exatamente isso.
+  replica: 'Lendo os autos',
   // 🚨 'Protocolando' É PALAVRA SÉRIA — protocolar é ato do advogado, nunca da
   // máquina. Em 30/09/2026 a recusa de um PDF na conferência foi gravada como
   // `op: 'protocolo'` e o card exibiu "Protocolando · na cidade de" em

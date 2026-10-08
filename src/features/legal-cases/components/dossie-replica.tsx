@@ -5,6 +5,7 @@ import { FileSearch, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { BarraProgresso } from './barra-progresso';
 
 /**
  * O DOSSIÊ DA RÉPLICA — um clique, e os autos chegam lidos.
@@ -121,14 +122,15 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
         {cnj ? '' : ' Este card não tem CNJ — sem ele não há autos para baixar.'}
       </p>
 
+      {/* 🚨 A MESMA BARRA DA INICIAL. Pedido do advogado, e pela razão certa:
+          entre o clique e o dossiê passam uns 30s — mais, se o PJe tiver de
+          montar o PDF — e card imóvel não distingue trabalhando de travado.
+          A barra mostra o passo e a fração; o texto abaixo some para não dizer
+          a mesma coisa duas vezes. */}
       {replica?.status === 'pendente' && (
-        <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] leading-4 text-zinc-600 dark:text-zinc-300">
-          <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-          {/* 🚨 O PASSO, NÃO "na fila". Entre o clique e o dossiê passam uns 30s
-              (e mais, se a Área de download do PJe tiver de montar o PDF); card
-              imóvel não distingue trabalhando de travado. */}
-          {replica.etapa ?? 'Na fila — o Mac pega em segundos.'}
-        </p>
+        <div className="mt-2">
+          <BarraProgresso caseId={caseId} />
+        </div>
       )}
 
       {replica?.status === 'dossie-pronto' && (
