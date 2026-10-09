@@ -1107,6 +1107,14 @@ export const legalCasesService = {
     return data.data ?? data;
   },
   /**
+   * Monta o RASCUNHO da réplica a partir do dossiê, pela biblioteca de modelos.
+   * 🚨 `ok:false` quando ainda não há dossiê — recado, não erro.
+   */
+  async montarReplica(id: string): Promise<{ ok: boolean; motivo?: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/replica/montar`, {});
+    return data.data ?? data;
+  },
+  /**
    * Põe o dossiê da réplica na fila do Mac: ele abre os autos no PJe, baixa o
    * processo completo e devolve os fatos medidos no card.
    *

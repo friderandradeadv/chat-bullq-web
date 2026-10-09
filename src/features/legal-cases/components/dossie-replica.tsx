@@ -30,6 +30,13 @@ type Replica = {
   documentId?: string; pdfCaminho?: string | null; dossieCaminho?: string | null;
   texto?: string | null;
   kap?: { pasta?: string; imagens?: number; folhas?: string; manifesto?: string; erro?: string } | null;
+  montagem?: {
+    status?: string; erro?: string | null; nome?: string; bytes?: number; montadaEm?: string;
+    relatorio?: {
+      base?: string; preliminares_roteadas?: string[]; preliminares_SEM_peca?: string[];
+      merito?: string[]; merito_a_decidir?: string[];
+    } | null;
+  } | null;
 };
 
 export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, sempreVisivel = false }: {
@@ -44,6 +51,7 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
   const [pedindo, setPedindo] = useState(false);
   const [aberto, setAberto] = useState(true);
   const [verKap, setVerKap] = useState(false);
+  const [montando, setMontando] = useState(false);
 
   // 🚨 O BLOCO TEM DE SE BASTAR, PORQUE ELE VIVE EM DOIS LUGARES. No drawer do
   // Processo o pai conhece o caso inteiro; no card da AGENDA — que é onde o
@@ -64,7 +72,7 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
   const cnj = precisaBuscar ? ((caso as any)?.cnjNumber ?? null) : cnjDado;
   const fase = (caso as any)?.legalPhase as string | undefined;
 
-  const naFila = replica?.status === 'pendente';
+  const naFila = replica?.status === 'pendente' || replica?.montagem?.status === 'pendente';
 
   // 🚨 ENQUANTO ESTÁ NA FILA, O CARD SE ATUALIZA SOZINHO. Sem isto o advogado
   // pede e tem de fechar e reabrir o card para saber se saiu — e, pior, para
@@ -79,6 +87,20 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
     }, 6000);
     return () => clearInterval(t);
   }, [naFila, caseId, qc]);
+
+  const montar = async () => {
+    setMontando(true);
+    try {
+      const r = await legalCasesService.montarReplica(caseId);
+      if (r?.ok === false) toast.warning(r.motivo ?? 'não deu para montar');
+      else toast.success('Montagem na fila — o Mac usa a biblioteca de modelos.');
+      qc.invalidateQueries({ queryKey: ['legal-case', caseId] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'não consegui pedir a montagem');
+    } finally {
+      setMontando(false);
+    }
+  };
 
   const pedir = async () => {
     setPedindo(true);
@@ -207,6 +229,60 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
               )}
             </div>
           ) : null}
+
+          {/* ── MONTAR O RASCUNHO ──────────────────────────────────────────
+              🚨 "RASCUNHO" ESTÁ NO RÓTULO DE PROPÓSITO. O montador roteia o
+              que é mecânico — preliminar que o réu arguiu, mérito que o dossiê
+              MEDIU — e nada além disso. Chamar de "réplica pronta" faria parar
+              de conferir justamente a parte que é juízo. */}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] leading-4 text-zinc-600 dark:text-zinc-300">
+              Rascunho pela biblioteca de modelos — o mérito que é juízo fica com você.
+            </p>
+            <button
+              onClick={montar}
+              disabled={montando || replica.montagem?.status === 'pendente'}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+              style={{ background: '#7C3AED' }}
+            >
+              {montando || replica.montagem?.status === 'pendente'
+                ? <><Loader2 className="h-3 w-3 animate-spin" /> montando…</>
+                : (replica.montagem?.status === 'pronta' ? 'Montar de novo' : 'Montar a réplica')}
+            </button>
+          </div>
+
+          {replica.montagem?.status === 'pronta' && (
+            <div className="mt-2 rounded-md bg-violet-50 px-2 py-1.5 dark:bg-violet-950/40">
+              <p className="text-[11px] leading-4 font-medium text-violet-900 dark:text-violet-200">
+                ✓ Rascunho montado{replica.montagem.bytes ? ` (${(replica.montagem.bytes / 1048576).toFixed(1)} MB)` : ''} — está nos anexos do <strong>Processo</strong>
+              </p>
+              {/* 🚨 O QUE NÃO FOI ROTEADO APARECE POR NOME. Omitir em silêncio
+                  devolveria uma réplica que ignora capítulos da defesa, e ninguém
+                  notaria até a sentença. */}
+              {!!replica.montagem.relatorio?.preliminares_SEM_peca?.length && (
+                <p className="mt-1 rounded bg-amber-100 px-1.5 py-1 text-[10px] leading-4 font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                  ⚠ sem modelo na biblioteca, escreva à mão: {replica.montagem.relatorio.preliminares_SEM_peca.join(' · ')}
+                </p>
+              )}
+              {!!replica.montagem.relatorio?.merito_a_decidir?.length && (
+                <p className="mt-1 text-[10px] leading-4 text-amber-700 dark:text-amber-400">
+                  a decidir: {replica.montagem.relatorio.merito_a_decidir.join(' · ')}
+                </p>
+              )}
+              {!!replica.montagem.relatorio?.preliminares_roteadas?.length && (
+                <p className="mt-1 text-[10px] leading-4 text-violet-900/70 dark:text-violet-200/70">
+                  entraram: {[...(replica.montagem.relatorio.preliminares_roteadas ?? []),
+                              ...(replica.montagem.relatorio.merito ?? [])].join(' · ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {replica.montagem?.status === 'erro' && (
+            <p className="mt-2 rounded-md bg-rose-50 px-2 py-1 text-[11px] leading-4 font-medium text-rose-800 dark:bg-rose-900/25 dark:text-rose-300">
+              ⚠ Não montei o rascunho: {replica.montagem.erro}
+            </p>
+          )}
 
           <p className="mt-1 text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
             O arquivo também ficou nos anexos do <strong>Processo</strong>
