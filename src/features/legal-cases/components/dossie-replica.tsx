@@ -29,6 +29,7 @@ type Replica = {
   erro?: string | null; dossieEm?: string; paginas?: number; documentos?: number;
   documentId?: string; pdfCaminho?: string | null; dossieCaminho?: string | null;
   texto?: string | null;
+  kap?: { pasta?: string; imagens?: number; folhas?: string; manifesto?: string; erro?: string } | null;
 };
 
 export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, sempreVisivel = false }: {
@@ -42,6 +43,7 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
   const qc = useQueryClient();
   const [pedindo, setPedindo] = useState(false);
   const [aberto, setAberto] = useState(true);
+  const [verKap, setVerKap] = useState(false);
 
   // 🚨 O BLOCO TEM DE SE BASTAR, PORQUE ELE VIVE EM DOIS LUGARES. No drawer do
   // Processo o pai conhece o caso inteiro; no card da AGENDA — que é onde o
@@ -158,6 +160,53 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
 {replica.texto}
             </pre>
           )}
+
+          {/* ── O MATERIAL DO KAP ─────────────────────────────────────────
+              🚨 ATÉ AQUI É AUTOMÁTICO; O KAP NÃO É. O laudo pede o login do
+              advogado e GASTA COTA (15 leituras/mês no MetaExpert, 5 créditos
+              por Selfie Expert), e rotina que roda sozinha não gasta crédito —
+              regra da casa. Então o fluxo para aqui, com o material pronto.
+
+              🚨 E O MATERIAL É O CERTO: bytes ORIGINAIS extraídos de dentro do
+              PDF dos autos, nunca print. Print é PNG novo — apaga o histórico
+              de compressão, zera o EXIF, e o SHA-256 passa a ser do print. Um
+              laudo assim o banco derruba lendo o nome do arquivo na página 1. */}
+          {replica.kap?.imagens ? (
+            <div className="mt-2 rounded-md border border-sky-200 bg-sky-50 p-2 dark:border-sky-900 dark:bg-sky-950/40">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] leading-4 font-semibold text-sky-900 dark:text-sky-200">
+                  📎 {replica.kap.imagens} imagens do contrato extraídas (fls. {replica.kap.folhas})
+                </p>
+                <button
+                  onClick={() => setVerKap((v) => !v)}
+                  className="shrink-0 text-[11px] font-semibold text-sky-900 underline underline-offset-2 dark:text-sky-200"
+                >
+                  {verKap ? 'ocultar' : 'ver os hashes'}
+                </button>
+              </div>
+              <p className="mt-1 text-[10px] leading-4 text-sky-900/80 dark:text-sky-200/80">
+                Bytes originais de dentro do PDF — <strong>nunca print</strong>, que invalida o laudo.
+                O SHA-256 abaixo é o que o KAP vai calcular.
+              </p>
+              <p className="mt-1 text-[10px] leading-4 text-sky-900/80 dark:text-sky-200/80">
+                O KAP é <strong>passo conduzido</strong>: pede o seu login e gasta cota
+                (15 leituras/mês no MetaExpert · 5 créditos por Selfie Expert).
+                {' '}<a href="https://kaponline.com.br" target="_blank" rel="noreferrer"
+                   className="font-semibold underline underline-offset-2">abrir o KAP</a>
+                {' '}no Chrome logado, e peça a perícia aqui no chat.
+              </p>
+              {replica.kap.pasta && (
+                <p className="mt-1 text-[10px] leading-4 text-sky-900/70 dark:text-sky-200/70">
+                  as imagens estão no Mac, em <code className="text-[10px]">{replica.kap.pasta.replace(/^.*\/autos\//, 'autos/')}</code>
+                </p>
+              )}
+              {verKap && replica.kap.manifesto && (
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre rounded-md border border-sky-200 bg-white/70 p-2 font-mono text-[10px] leading-[1.35] text-zinc-700 dark:border-sky-900 dark:bg-zinc-900/60 dark:text-zinc-300">
+{replica.kap.manifesto}
+                </pre>
+              )}
+            </div>
+          ) : null}
 
           <p className="mt-1 text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
             O arquivo também ficou nos anexos do <strong>Processo</strong>
