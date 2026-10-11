@@ -3397,6 +3397,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                       // Unificado, o painel é do crédito inteiro — mostrar o bruto de uma linha só
                       // ao lado da condenação do grupo é o que fazia a conta parecer errada.
                       const brutoRef = grupoCalc?.unificar ? grupoCalc.brutoG : bruto;
+                      // O AJUSTE DO REPASSE É DO CRÉDITO, não da linha: em grupo, o cálculo
+                      // consolidado lê a ÂNCORA (a primeira linha). Editar numa linha secundária
+                      // gravava num campo que ninguém lia — o valor ficava na tela e o teto não
+                      // se movia. Aqui o campo e os botões escrevem sempre onde a conta olha.
+                      const ancIdx = grupoCalc ? grupoCalc.idxs[0] : i;
+                      const cliAjustado = alvara[ancIdx]?.clienteAjustado ?? '';
+                      const setCliAjustado = (v: string) => setAlvara((s) => ({ ...s, [ancIdx]: { ...(s[ancIdx] ?? { cliente: '', sucumbencia: '', honorarios: '' }), clienteAjustado: v } }));
                       const rows = a.split ?? [];
                       const setRows = (fn: (r: { userId?: string; nome: string; pct: string }[]) => { userId?: string; nome: string; pct: string }[]) => setAlvara((s) => ({ ...s, [i]: { ...(s[i] ?? { cliente: '', sucumbencia: '', honorarios: '' }), split: fn(s[i]?.split ?? []) } }));
                       const somaPct = rows.reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
@@ -3542,9 +3549,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   </div>; })()}
                                 </Field>
                                 <Field label="Parte do cliente (repasse)">
-                                  <MoneyInput value={a.clienteAjustado ?? ''} onChange={(v) => set({ clienteAjustado: v })} placeholder={brl2(calc.cli).replace('R$', '').trim()} />
+                                  <MoneyInput value={cliAjustado} onChange={(v) => setCliAjustado(v)} placeholder={brl2(calc.cli).replace('R$', '').trim()} />
                                   {calc.ajustado
-                                    ? <p className="mt-0.5 text-[10px] text-violet-600 dark:text-violet-300">ajustado — pelo contrato daria {brl2(calc.condenacao - calc.honAuto)} · <button type="button" onClick={() => set({ clienteAjustado: '' })} className="font-semibold hover:underline">voltar ao contrato</button></p>
+                                    ? <p className="mt-0.5 text-[10px] text-violet-600 dark:text-violet-300">ajustado{grupoCalc ? ' (vale para o crédito inteiro)' : ''} — pelo contrato daria {brl2(calc.condenacao - calc.honAuto)} · <button type="button" onClick={() => setCliAjustado('')} className="font-semibold hover:underline">voltar ao contrato</button></p>
                                     : <p className="mt-0.5 text-[10px] text-zinc-400">{calc.direto ? 'não há repasse a fazer — é o que ficou com ele' : '= automático pelo contrato · edite pra fixar o repasse'}</p>}
                                 </Field>
                               </div>
@@ -3584,27 +3591,46 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                   <span>Trava da OAB medida no <strong>processo</strong> ({grupoCalc.entradas} alvarás, bruto {brl2(grupoCalc.brutoG)}): escritório <strong>{brl2(grupoCalc.calcG.nosso)}</strong> × cliente <strong>{brl2(grupoCalc.calcG.cli)}</strong> ✓</span>
                                 </div>
                               )}
-                              {grupoCalc && grupoCalc.calcG.excedeCliente && (
-                                <div className="mt-1.5 flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
-                                  <span className="mt-0.5 text-sm">🛡️</span>
-                                  <span className="block">
-                                    <strong>Trava da OAB (art. 50 do Código de Ética)</strong>, somando os {grupoCalc.entradas} alvarás deste processo: o escritório fica com <strong>{brl2(grupoCalc.calcG.nosso)}</strong> e o cliente com <strong>{brl2(grupoCalc.calcG.cli)}</strong>.
-                                    Reduza o <strong>honorário contratual</strong> (a sucumbência é do escritório por lei — art. 23 EAOAB — e não cede). Não há botão de teto aqui: com o crédito repartido em vários alvarás, igualar em uma linha só não resolve.
-                                  </span>
-                                </div>
-                              )}
-                              {!grupoCalc && calc.excedeCliente && (
-                                <div className="mt-1.5 flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
-                                  <span className="mt-0.5 text-sm">🛡️</span>
-                                  <div className="space-y-1.5">
-                                    <span className="block">
-                                      <strong>Trava da OAB (art. 50 do Código de Ética):</strong> em contrato de êxito, o que fica com o escritório (<strong>{brl2(calc.nosso)}</strong>) não pode superar o que fica com o cliente (<strong>{brl2(calc.cli)}</strong>).
-                                      A sucumbência é do escritório (art. 23 EAOAB), mas <strong>somada</strong> ao contratual não pode ultrapassar o cliente — quem cede é o contratual.
-                                    </span>
-                                    <button type="button" onClick={() => set({ clienteAjustado: fmtMoney(calc.igualarCliente) })} className="inline-flex items-center gap-1 rounded bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-700">🛡️ Igualar ao teto (cliente {brl2(calc.igualarCliente)})</button>
+                              {/* TETO DO ART. 50 — um clique, e opcional. Divide 50/50 o que é divisível:
+                                  o escritório e o cliente ficam com metade cada um, contando a sucumbência
+                                  do lado do escritório (ela é dele por lei — art. 23 EAOAB — e não cede;
+                                  quem abre mão é o contratual). Em crédito repartido em vários alvarás o
+                                  ajuste é do CRÉDITO: grava na âncora e volta rateado para cada linha.
+                                  Nunca automático — quem decide ceder honorário é o advogado. */}
+                              {(() => {
+                                const cT = grupoCalc ? grupoCalc.calcG : calc;
+                                if (!cT.excedeCliente) return null;
+                                const r2 = (n: number) => Math.round(n * 100) / 100;
+                                // Teto do que ainda pode ir para o cliente: nem zerando o contratual ele
+                                // passa disso. Se metade não couber aí, a sucumbência sozinha já estourou
+                                // o art. 50 e não há repasse que resolva — aí o botão mentiria.
+                                const tetoCli = r2(cT.condenacao + cT.reembCli - cT.deducoesTotal);
+                                const alcancavel = cT.igualarCliente <= tetoCli + 0.01;
+                                const honNovo = r2(cT.igualarCliente - cT.suc);
+                                return (
+                                  <div className="mt-1.5 flex items-start gap-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-800 dark:border-rose-900/50 dark:bg-rose-900/15 dark:text-rose-300">
+                                    <span className="mt-0.5 text-sm">🛡️</span>
+                                    <div className="space-y-1.5">
+                                      <span className="block">
+                                        <strong>Trava da OAB (art. 50 do Código de Ética){grupoCalc ? `, somando os ${grupoCalc.entradas} alvarás deste processo` : ''}:</strong> em contrato de êxito, o que fica com o escritório (<strong>{brl2(cT.nosso)}</strong>) não pode superar o que fica com o cliente (<strong>{brl2(cT.cli)}</strong>).
+                                        A sucumbência é do escritório (art. 23 EAOAB), mas <strong>somada</strong> ao contratual não pode ultrapassar o cliente — quem cede é o contratual.
+                                      </span>
+                                      {alcancavel ? (
+                                        <>
+                                          <button type="button" onClick={() => setCliAjustado(fmtMoney(cT.igualarCliente))} className="inline-flex items-center gap-1 rounded bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-700">🛡️ Dividir 50/50 — {brl2(cT.igualarCliente)} para cada</button>
+                                          <p className="text-[10px] text-rose-700/80 dark:text-rose-400/80">
+                                            Opcional: só aplica se você clicar. Derruba o contratual de {brl2(cT.hon)} para {brl2(honNovo)} e fixa o repasse em {brl2(cT.igualarCliente)}{grupoCalc ? `, para o crédito inteiro — volta rateado entre os ${grupoCalc.entradas} alvarás` : ''}. Dá pra desfazer em “voltar ao contrato”, ou baixar o contratual à mão.
+                                          </p>
+                                        </>
+                                      ) : (
+                                        <p className="text-[10px] text-rose-700/80 dark:text-rose-400/80">
+                                          Aqui não há 50/50 possível: mesmo zerando o contratual, o cliente para em {brl2(tetoCli)} e só a sucumbência ({brl2(cT.suc)}) já passa disso. Confira as verbas do demonstrativo — se estiverem certas, o que se revisa é o contrato, não o repasse.
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                );
+                              })()}
                               {/* DECOMPOSIÇÃO DO CRÉDITO — um alvará raramente é só proveito: pode trazer
                                   reembolso de custas que o CLIENTE adiantou (devolução, não ganho) e a
                                   sucumbência que já é nossa por lei. Declarando cada verba, o contratual
