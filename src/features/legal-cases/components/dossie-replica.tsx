@@ -36,6 +36,10 @@ type Replica = {
       base?: string; preliminares_roteadas?: string[]; preliminares_SEM_peca?: string[];
       merito?: string[]; merito_a_decidir?: string[];
     } | null;
+    personalizacao?: {
+      genero?: string | null; idade?: number | null; erro?: string;
+      trocas?: Record<string, number>; grifos?: string[];
+    } | null;
   } | null;
 };
 
@@ -267,6 +271,30 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
               {!!replica.montagem.relatorio?.merito_a_decidir?.length && (
                 <p className="mt-1 text-[10px] leading-4 text-amber-700 dark:text-amber-400">
                   a decidir: {replica.montagem.relatorio.merito_a_decidir.join(' · ')}
+                </p>
+              )}
+              {/* 🚨 O PERFIL DOS MODELOS É DE UMA IDOSA, e isso tem de aparecer
+                  no card. Trocar "idosa" por "consumidor" mudaria o ARGUMENTO,
+                  que é juízo — então as frases ficam grifadas em amarelo na
+                  peça e listadas aqui, para o advogado decidir. */}
+              {!!replica.montagem.personalizacao?.grifos?.length && (
+                <details className="mt-1 rounded bg-amber-100 px-1.5 py-1 dark:bg-amber-900/40">
+                  <summary className="cursor-pointer text-[10px] leading-4 font-medium text-amber-900 dark:text-amber-200">
+                    ⚠ {replica.montagem.personalizacao.grifos.length} trecho(s) falam de pessoa idosa — grifados em amarelo na peça
+                  </summary>
+                  <ul className="mt-1 list-disc pl-4 text-[10px] leading-4 text-amber-900/90 dark:text-amber-200/90">
+                    {replica.montagem.personalizacao.grifos.map((g, i) => <li key={i}>{g}</li>)}
+                  </ul>
+                </details>
+              )}
+              {replica.montagem.personalizacao?.erro && (
+                <p className="mt-1 text-[10px] leading-4 text-amber-700 dark:text-amber-400">
+                  ⚠ {replica.montagem.personalizacao.erro}
+                </p>
+              )}
+              {!!replica.montagem.personalizacao?.trocas && Object.keys(replica.montagem.personalizacao.trocas).length > 0 && (
+                <p className="mt-1 text-[10px] leading-4 text-violet-900/70 dark:text-violet-200/70">
+                  gênero ajustado: {Object.values(replica.montagem.personalizacao.trocas).reduce((a, b) => a + b, 0)} troca(s)
                 </p>
               )}
               {!!replica.montagem.relatorio?.preliminares_roteadas?.length && (
