@@ -2676,6 +2676,24 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   type VerbaNat = 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' | 'abatimento';
   type VerbaLinha = { label: string; valor: string; natureza: VerbaNat };
   type DeducaoLinha = { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string };
+  // O CONTRATUAL NASCE EM %, não em R$. O contrato de êxito é escrito em percentual e é
+  // assim que a IA lê do contrato; em R$ o campo nascia com o BRUTO inteiro — o default
+  // dizia que o cliente ficava com zero. O padrão mora AQUI, numa função só, porque a
+  // entrada do alvará nasce em quatro lugares (marcar a linha, casamento automático,
+  // juntar alvarás, leitura por IA) e deixar o default em cada um é garantir divergência.
+  const ehPct = (m?: 'valor' | 'pct') => (m ?? 'pct') === 'pct';
+  // FOLGA DO RENDIMENTO DA CONTA JUDICIAL — espelho de `rendeDentroDaFolga` na api.
+  // Assimétrica: PARA CIMA 10% (o dinheiro fica depositado meses e rende), PARA BAIXO 2%
+  // (conta judicial não encolhe — alvará menor que o demonstrativo é verba faltando, e isso
+  // tem de continuar aparecendo em vez de ser dissolvido no rateio).
+  const TOL_RENDIMENTO_CIMA = 0.10;
+  const TOL_RENDIMENTO_BAIXO = 0.02;
+  const rendeDentroDaFolga = (bruto: number, somaDecl: number) => {
+    if (!(bruto > 0) || !(somaDecl > 0)) return false;
+    const dif = bruto - somaDecl;
+    if (Math.abs(dif) <= 0.01) return false;
+    return dif > 0 ? dif <= somaDecl * TOL_RENDIMENTO_CIMA + 0.02 : -dif <= somaDecl * TOL_RENDIMENTO_BAIXO + 0.02;
+  };
   // ESPELHO de `calcExito` (api/src/modules/financeiro/financeiro.service.ts) — mudou aqui, mude lá.
   // Com `verbas` declaradas o bruto deixa de ser tratado como bloco único: só o que é PROVEITO
   // entra na base do contratual. Reembolso de custas que o cliente adiantou é devolução, não
@@ -2698,9 +2716,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
       .filter((v) => Number.isFinite(v._v) && v._v !== 0 && (v._v > 0 || v.natureza === 'proveito'));
     const temVerbas = verbasDecl.length > 0;
     // ATUALIZAÇÃO ATÉ O CRÉDITO (espelho de calcExito na api): as verbas vêm do demonstrativo,
-    // que tem data-base; o dinheiro cai meses depois, corrigido. Diferença de até 2% é a
-    // correção do período — rateia proporcional, que é o que se faria à mão. Acima disso não
-    // mexe: aí é verba faltando, e tem de aparecer em vez de ser dissolvida no rateio.
+    // que tem data-base; o dinheiro fica na conta judicial e RENDE até o alvará sair. Essa
+    // diferença se rateia proporcional entre as verbas — o rendimento corre sobre o depósito
+    // inteiro, então cada parcela rendeu na mesma proporção. Folga em `rendeDentroDaFolga`.
     const somaDecl = r2(verbasDecl.reduce((acc, v) => acc + v._v, 0));
     // ÂNCORA DO CÁLCULO. Normalmente é o que caiu na conta — o extrato manda. Mas quando o
     // CLIENTE RECEBEU DIRETO, o que caiu aqui é só o honorário, e conferir as verbas do
@@ -2710,9 +2728,9 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const direto = a?.clienteRecebeuDireto === true;
     const entrouNaConta = brutoLinha;
     const bruto = direto && somaDecl > 0 ? somaDecl : brutoLinha;
-    const desvio = temVerbas && somaDecl > 0 ? Math.abs(bruto - somaDecl) / somaDecl : 0;
-    const atualizada = temVerbas && bruto > 0 && desvio > 0 && desvio <= 0.02;
+    const atualizada = temVerbas && rendeDentroDaFolga(bruto, somaDecl);
     const fatorAtual = atualizada ? bruto / somaDecl : 1;
+    const rendimento = atualizada ? r2(bruto - somaDecl) : 0;
     const verbas = verbasDecl.map((v) => ({ ...v, _n: r2(v._v * fatorAtual) }));
     const somaNat = (n: VerbaNat) => r2(verbas.filter((v) => v.natureza === n).reduce((acc, v) => acc + v._n, 0));
     let suc: number;
@@ -2732,7 +2750,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const reembCli = temVerbas ? somaNat('reembolso_cliente') : 0;   // volta inteiro ao cliente
     const reembEsc = temVerbas ? somaNat('reembolso_escritorio') : 0; // devolução de despesa nossa
     const condenacao = temVerbas ? Math.max(0, somaNat('proveito')) : r2(bruto - suc);
-    const honAuto = a?.honMode === 'pct' ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
+    const honAuto = ehPct(a?.honMode) ? r2(condenacao * (parsePct(a?.honPct) / 100)) : parseValor(a?.honorarios || '');
     // DEDUÇÕES da parte do cliente: dinheiro dele que já tem destino (sucumbência que ele deve
     // à parte contrária, guia adiantada pelo escritório). Não são honorários — ficam fora do art. 50.
     const deducoes = (a?.deducoes ?? []).filter((d) => d && parseValor(d.valor) > 0);
@@ -2758,7 +2776,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     // Com repasse direto, o que tem de fechar com o extrato é o HONORÁRIO (é só ele que caiu).
     // A sobra pertence à sucumbência, que o tribunal paga atualizada — a api ancora nela.
     const caixaBate = !direto || entrouNaConta <= 0 || Math.abs(nosso - entrouNaConta) <= Math.max(0.02, suc * 0.1);
-    return { suc, condenacao, hon, honAuto, nosso, nossoTotal, cli, cliBruto, reembCli, reembEsc, deducoes, deducoesTotal, temVerbas, somaVerbas, verbasBatem, somaDecl, atualizada, fatorAtual, ajustado, igualarCliente, excedeCliente, excedente, direto, entrouNaConta, caixaBate,
+    return { suc, condenacao, hon, honAuto, nosso, nossoTotal, cli, cliBruto, reembCli, reembEsc, deducoes, deducoesTotal, temVerbas, somaVerbas, verbasBatem, somaDecl, atualizada, fatorAtual, rendimento, ajustado, igualarCliente, excedeCliente, excedente, direto, entrouNaConta, caixaBate,
       valido: suc >= -0.01 && hon >= -0.01 && suc <= bruto + 0.01 && hon <= condenacao + 0.01 && verbasBatem && caixaBate };
   };
   // GRUPO = o mesmo crédito entrando em mais de um alvará (o cartório separa por conta
@@ -3031,7 +3049,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                 grupoId: codigo, unificar: true,
                 ...(c.beneficiario ? { beneficiarioAlvara: c.beneficiario } : {}),
                 // O default em R$ passa a valer o crédito inteiro (ver o mesmo ajuste ao juntar na mão).
-                ...(eh && cur.honMode !== 'pct' && Math.abs(parseValor(cur.honorarios || '') - Math.abs(conf.linhas[idx]?.valor || 0)) < 0.01 ? { honorarios: fmtMoney(brutoJunto) } : {}),
+                ...(eh && !ehPct(cur.honMode) && Math.abs(parseValor(cur.honorarios || '') - Math.abs(conf.linhas[idx]?.valor || 0)) < 0.01 ? { honorarios: fmtMoney(brutoJunto) } : {}),
               };
             }
             return next;
@@ -3072,7 +3090,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: a?.honMode === 'pct' ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).map((v) => ({ label: (v.label || '').trim(), valor: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor), natureza: (v.natureza === 'abatimento' ? 'proveito' : v.natureza) as 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' })).filter((v) => v.label && v.valor !== 0 && (v.valor > 0 || v.natureza === 'proveito')), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, clienteRecebeuDireto: direto || undefined, unificar: a?.unificar === true }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: ehPct(a?.honMode) ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).map((v) => ({ label: (v.label || '').trim(), valor: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor), natureza: (v.natureza === 'abatimento' ? 'proveito' : v.natureza) as 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' })).filter((v) => v.label && v.valor !== 0 && (v.valor > 0 || v.natureza === 'proveito')), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, clienteRecebeuDireto: direto || undefined, unificar: a?.unificar === true }, split };
         }
         // PAGAMENTO A PESSOA DO TIME: manda a categoria e o NOME CADASTRADO de quem recebeu —
         // é o par que o holerite dela lê. '__pessoa' é marcador de tela, nunca vertical.
@@ -3128,7 +3146,10 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     const { calc: c } = calcDaLinha(i, Math.abs(conf.linhas[i].valor));
     const somaPct = (a.split ?? []).reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
     const sucSemBase = a.sucMode === 'pct' && parsePct(a.sucPct) > 0 && (a.sucBaseTipo || 'Condenação') !== 'Condenação' && parseValor(a.sucBase || '') <= 0;
-    return !c.valido || !(a.clienteNome || '').trim() || somaPct > 100.01 || sucSemBase;
+    // Contratual em % e em branco: o honorário sairia ZERO e a condenação inteira viraria
+    // repasse — silenciosamente. Só passa se o repasse foi fixado à mão (aí a decisão é dele).
+    const honSemPct = ehPct(a.honMode) && !(parsePct(a.honPct) > 0) && !(parseValor(alvara[g ? g.idxs[0] : i]?.clienteAjustado || '') > 0);
+    return !c.valido || !(a.clienteNome || '').trim() || somaPct > 100.01 || sucSemBase || honSemPct;
   })());
 
   const toggle = (i: number) => setSel((s) => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n; });
@@ -3497,12 +3518,14 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                                 <Field label="Honorário contratual">
                                   <div className="flex items-center gap-1">
-                                    {a.honMode === 'pct'
-                                      ? <div className="flex w-full items-center gap-1"><input value={a.honPct ?? ''} onChange={(e) => set({ honPct: e.target.value })} inputMode="decimal" placeholder="0" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
+                                    {ehPct(a.honMode)
+                                      ? <div className="flex w-full items-center gap-1"><input value={a.honPct ?? ''} onChange={(e) => set({ honPct: e.target.value })} inputMode="decimal" placeholder="30" className={`w-full rounded-md border bg-white px-2 py-1.5 text-right text-sm dark:bg-zinc-900 ${parsePct(a.honPct) > 0 ? 'border-zinc-300 dark:border-zinc-700' : 'border-amber-400 dark:border-amber-600'}`} /><span className="text-xs text-zinc-400">%</span></div>
                                       : <MoneyInput value={a.honorarios} onChange={(v) => set({ honorarios: v })} />}
-                                    <button type="button" title="Alternar R$ / %" onClick={() => set({ honMode: a.honMode === 'pct' ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{a.honMode === 'pct' ? '%' : 'R$'}</button>
+                                    <button type="button" title="Alternar R$ / %" onClick={() => set({ honMode: ehPct(a.honMode) ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{ehPct(a.honMode) ? '%' : 'R$'}</button>
                                   </div>
-                                  {a.honMode === 'pct' && <p className="mt-0.5 text-[10px] text-zinc-400">= {brl2(calc.hon)} · sobre a condenação {brl2(calc.condenacao)}</p>}
+                                  {ehPct(a.honMode) && (parsePct(a.honPct) > 0
+                                    ? <p className="mt-0.5 text-[10px] text-zinc-400">= {brl2(calc.hon)} · sobre a condenação {brl2(calc.condenacao)}</p>
+                                    : <p className="mt-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">informe o % do contrato — sem ele a condenação inteira iria para o cliente</p>)}
                                 </Field>
                                 <Field label="Sucumbência">
                                   <div className="flex items-center gap-1">
@@ -3578,6 +3601,32 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                     {calc.cli > 0.01 && <p className="text-[10px] text-zinc-400">o cliente ficou com {brl2(calc.cli)}, direto na conta dele — a prestação dele sai dizendo isso, sem prometer transferência.</p>}
                                   </div>
                                 ) : null}
+                              </div>
+                              {/* O RESULTADO, EM DOIS LADOS. Antes a conta inteira vinha numa frase
+                                  corrida de cinco operações — para saber o que é nosso e o que é
+                                  dele era preciso ler até o fim e confiar. Aqui os dois lados vêm
+                                  separados e somados; a frase continua embaixo, como a memória do
+                                  cálculo de quem quiser conferir passo a passo. */}
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                                <div className="rounded-lg border border-emerald-300/70 bg-emerald-50/60 px-2.5 py-2 dark:border-emerald-900/50 dark:bg-emerald-900/10">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-400/80">Parte do escritório</p>
+                                  <p className="text-base font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{brl2(calc.nossoTotal)}</p>
+                                  <div className="mt-0.5 space-y-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                                    <p>sucumbência <span className="tabular-nums">{brl2(calc.suc)}</span> <span className="text-zinc-400">· da parte contrária, art. 23 EAOAB</span></p>
+                                    <p>contratual <span className="tabular-nums">{brl2(calc.hon)}</span> <span className="text-zinc-400">· {ehPct(a.honMode) && parsePct(a.honPct) > 0 ? `${a.honPct}% da condenação ${brl2(calc.condenacao)}` : `sobre a condenação ${brl2(calc.condenacao)}`}</span></p>
+                                    {calc.reembEsc > 0 && <p>reembolso nosso <span className="tabular-nums">{brl2(calc.reembEsc)}</span> <span className="text-zinc-400">· despesa adiantada, não é honorário</span></p>}
+                                  </div>
+                                </div>
+                                <div className="rounded-lg border border-violet-300/70 bg-violet-50/60 px-2.5 py-2 dark:border-violet-900/50 dark:bg-violet-900/10">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700/80 dark:text-violet-400/80">Parte do cliente {calc.direto ? '(recebeu direto)' : '(repasse a pagar)'}</p>
+                                  <p className="text-base font-bold tabular-nums text-violet-700 dark:text-violet-300">{brl2(calc.cli)}</p>
+                                  <div className="mt-0.5 space-y-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                                    <p>condenação <span className="tabular-nums">{brl2(calc.condenacao)}</span> − contratual <span className="tabular-nums">{brl2(calc.hon)}</span></p>
+                                    {calc.reembCli > 0 && <p>+ reembolso dele <span className="tabular-nums">{brl2(calc.reembCli)}</span> <span className="text-zinc-400">· custas que ele adiantou</span></p>}
+                                    {calc.deducoesTotal > 0 && <p>− descontos <span className="tabular-nums">{brl2(calc.deducoesTotal)}</span> <span className="text-zinc-400">· obrigações dele quitadas do alvará</span></p>}
+                                    {calc.ajustado && <p className="text-violet-600 dark:text-violet-300">repasse fixado à mão</p>}
+                                  </div>
+                                </div>
                               </div>
                               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                                 <span className="text-zinc-400">bruto {brl2(brutoRef)} − sucumbência {brl2(calc.suc)}{calc.reembCli > 0 ? ` − reembolso ao cliente ${brl2(calc.reembCli)}` : ''}{calc.reembEsc > 0 ? ` − reembolso ao escritório ${brl2(calc.reembEsc)}` : ''} = condenação <strong className="text-zinc-600 dark:text-zinc-300">{brl2(calc.condenacao)}</strong> − contratual {brl2(calc.hon)}{calc.reembCli > 0 ? ` + reembolso ${brl2(calc.reembCli)}` : ''}{calc.deducoesTotal > 0 ? ` − descontos ${brl2(calc.deducoesTotal)}` : ''} = <strong>cliente {brl2(calc.cli)}</strong> · nosso <strong className="text-emerald-600">{brl2(calc.nosso)}</strong>{calc.reembEsc > 0 ? ` + ${brl2(calc.reembEsc)} de reembolso` : ''}</span>
@@ -3660,15 +3709,23 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                     Este crédito entrou em {grupoCalc.entradas} alvarás — <strong>declare as verbas uma única vez</strong> (aqui ou em qualquer linha do grupo). A soma é conferida contra o bruto do grupo, {brl2(grupoCalc.brutoG)}, e o resultado volta rateado para cada lançamento.
                                   </p>
                                 )}
-                                {calc.temVerbas && (() => { const alvo = grupoCalc ? grupoCalc.brutoG : bruto; return (
-                                  <p className={`mt-1 text-[10px] ${calc.verbasBatem ? 'text-zinc-400' : 'font-semibold text-rose-600'}`}>
-                                    {calc.verbasBatem
-                                      ? (calc.atualizada
-                                        ? `verbas do demonstrativo somam ${brl2(calc.somaDecl)} → atualizadas para ${brl2(alvo)}, o que entrou (+${((calc.fatorAtual - 1) * 100).toFixed(2)}% de correção do período) ✓`
-                                        : `verbas somam ${brl2(calc.somaVerbas)} = ${grupoCalc ? 'bruto do grupo' : 'alvará'} ✓`)
-                                      : `verbas somam ${brl2(calc.somaDecl)} e ${grupoCalc ? 'o grupo' : 'o alvará'} é ${brl2(alvo)} — diferença de ${brl2(Math.abs(Math.round((alvo - calc.somaDecl) * 100) / 100))}, grande demais para ser correção do período. Confira se alguma verba do demonstrativo ficou de fora.`}
-                                  </p>
-                                ); })()}
+                                {calc.temVerbas && (() => {
+                                  const alvo = grupoCalc ? grupoCalc.brutoG : bruto;
+                                  const dif = Math.round((alvo - calc.somaDecl) * 100) / 100;
+                                  return (
+                                    <p className={`mt-1 text-[10px] ${calc.verbasBatem ? 'text-zinc-400' : 'font-semibold text-rose-600'}`}>
+                                      {calc.verbasBatem
+                                        ? (calc.atualizada
+                                          ? (calc.rendimento > 0
+                                            ? `verbas do demonstrativo somam ${brl2(calc.somaDecl)} e ${grupoCalc ? 'o grupo' : 'o alvará'} veio ${brl2(calc.rendimento)} maior (+${((calc.fatorAtual - 1) * 100).toFixed(2)}%): rendimento da conta judicial — já rateado entre as verbas, na proporção de cada uma ✓`
+                                            : `verbas do demonstrativo somam ${brl2(calc.somaDecl)} → ajustadas para ${brl2(alvo)}, o que entrou (${((calc.fatorAtual - 1) * 100).toFixed(2)}%) ✓`)
+                                          : `verbas somam ${brl2(calc.somaVerbas)} = ${grupoCalc ? 'bruto do grupo' : 'alvará'} ✓`)
+                                        : (dif < 0
+                                          ? `verbas somam ${brl2(calc.somaDecl)} e ${grupoCalc ? 'o grupo' : 'o alvará'} é ${brl2(alvo)} — as verbas passam do que entrou em ${brl2(Math.abs(dif))}. Conta judicial rende, não encolhe: confira se alguma parcela a abater foi lançada como positiva.`
+                                          : `verbas somam ${brl2(calc.somaDecl)} e ${grupoCalc ? 'o grupo' : 'o alvará'} é ${brl2(alvo)} — faltam ${brl2(dif)}, demais para ser rendimento da conta judicial. Confira se alguma verba do demonstrativo ficou de fora.`)}
+                                    </p>
+                                  );
+                                })()}
                               </div>
                               {/* DESCONTOS DA PARTE DO CLIENTE — dinheiro dele que já tem destino (sucumbência
                                   que ELE deve à parte contrária, guia adiantada por nós). Não são honorários:
@@ -3745,7 +3802,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                       // ele passa a valer para o crédito inteiro — sem atualizar, a conta
                                       // fica com contratual de uma linha sobre a condenação do grupo.
                                       const brutoJunto = Math.round((Math.abs(conf.linhas[i]?.valor || 0) + Math.abs(conf.linhas[k]?.valor || 0)) * 100) / 100;
-                                      const honEraDefault = cur.honMode !== 'pct' && Math.abs(parseValor(cur.honorarios || '') - Math.abs(conf.linhas[i]?.valor || 0)) < 0.01;
+                                      const honEraDefault = !ehPct(cur.honMode) && Math.abs(parseValor(cur.honorarios || '') - Math.abs(conf.linhas[i]?.valor || 0)) < 0.01;
                                       next[i] = { ...cur, grupoId: codigo, unificar: true, ...(honEraDefault ? { honorarios: fmtMoney(brutoJunto) } : {}) };
                                       // A outra linha herda cliente/processo/contratual — é o mesmo crédito.
                                       next[k] = { ...(next[k] ?? { cliente: '', sucumbencia: '', honorarios: '' }),
@@ -3860,7 +3917,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             </div>
             <div className="mt-4 flex items-center justify-end gap-2">
               {rateioIncompleto && <span className="text-xs text-amber-600">⚠️ dê uma fatia (vertical + valor) pra cada rateio antes de importar</span>}
-              {!rateioIncompleto && alvaraIncompleto && <span className="text-xs text-amber-600">⚠️ no alvará, escolha o cliente e faça cliente + sucumbência + honorário fecharem com o bruto</span>}
+              {!rateioIncompleto && alvaraIncompleto && <span className="text-xs text-amber-600">⚠️ no alvará, escolha o cliente, informe o % do honorário contratual e faça cliente + sucumbência + honorário fecharem com o bruto</span>}
               {!rateioIncompleto && !alvaraIncompleto && clienteIncompleto && <span className="text-xs text-amber-600">⚠️ escolha o cliente que pagou nas linhas marcadas como honorário</span>}
               {!rateioIncompleto && !alvaraIncompleto && !clienteIncompleto && pessoaIncompleta && <span className="text-xs text-amber-600">⚠️ escolha quem recebeu e o tipo nas linhas de pró-labore / repasse</span>}
               <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700">Cancelar</button>
