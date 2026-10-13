@@ -2676,11 +2676,13 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   type VerbaNat = 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' | 'abatimento';
   type VerbaLinha = { label: string; valor: string; natureza: VerbaNat };
   type DeducaoLinha = { label: string; valor: string; tipo: 'sucumbencia_contraria' | 'despesa_reembolsavel' | 'outro'; cnjIncidente?: string; txIdSaida?: string };
-  // O CONTRATUAL NASCE EM %, não em R$. O contrato de êxito é escrito em percentual e é
-  // assim que a IA lê do contrato; em R$ o campo nascia com o BRUTO inteiro — o default
-  // dizia que o cliente ficava com zero. O padrão mora AQUI, numa função só, porque a
-  // entrada do alvará nasce em quatro lugares (marcar a linha, casamento automático,
+  // CONTRATUAL E SUCUMBÊNCIA NASCEM EM %, não em R$. Os dois são escritos em percentual —
+  // o contratual no contrato de êxito, a sucumbência na sentença ("10% sobre a condenação") —
+  // e é assim que a IA os lê. Em R$ o contratual nascia com o BRUTO inteiro, ou seja, o
+  // default dizia que o cliente ficava com zero. O padrão mora AQUI, numa função só, porque
+  // a entrada do alvará nasce em quatro lugares (marcar a linha, casamento automático,
   // juntar alvarás, leitura por IA) e deixar o default em cada um é garantir divergência.
+  // A leitura por IA continua mandando: achou valor em R$ na sentença, grava 'valor'.
   const ehPct = (m?: 'valor' | 'pct') => (m ?? 'pct') === 'pct';
   // FOLGA DO RENDIMENTO DA CONTA JUDICIAL — espelho de `rendeDentroDaFolga` na api.
   // Assimétrica: PARA CIMA 10% (o dinheiro fica depositado meses e rende), PARA BAIXO 2%
@@ -2736,7 +2738,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     let suc: number;
     if (temVerbas) {
       suc = somaNat('sucumbencia_nossa');
-    } else if (a?.sucMode === 'pct') {
+    } else if (ehPct(a?.sucMode)) {
       const pct = parsePct(a?.sucPct);
       if ((a?.sucBaseTipo || 'Condenação') === 'Condenação') {
         const cond = pct > 0 ? r2(bruto / (1 + pct / 100)) : bruto;
@@ -3090,7 +3092,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
             .map(({ s, pct }) => ({ tipo: 'socio' as const, userId: s.userId, nome: s.nome, valor: Math.round(nosso * (pct / 100) * 100) / 100 }));
           const escr = Math.round((nosso - splitAdv.reduce((x, s) => x + s.valor, 0)) * 100) / 100;
           const split = splitAdv.length ? [...splitAdv, ...(escr > 0.01 ? [{ tipo: 'escritorio' as const, nome: 'Escritório', valor: escr }] : [])] : undefined;
-          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: a?.sucMode === 'pct' ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: a?.sucMode === 'pct' ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: ehPct(a?.honMode) ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: a?.sucMode === 'pct' ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).map((v) => ({ label: (v.label || '').trim(), valor: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor), natureza: (v.natureza === 'abatimento' ? 'proveito' : v.natureza) as 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' })).filter((v) => v.label && v.valor !== 0 && (v.valor > 0 || v.natureza === 'proveito')), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, clienteRecebeuDireto: direto || undefined, unificar: a?.unificar === true }, split };
+          return { data: l.data, valor: l.valor, descricao: l.descricao, caseId: a?.caseId || undefined, contactId: a?.contactId || undefined, clienteNome: (a?.clienteNome || '').trim() || undefined, area: (a?.vertical || '').trim() || undefined, exito: { bruto, cliente: cli, sucumbencia: suc, honorarios: hon, valorCausa: ehPct(a?.sucMode) ? ((a?.sucBaseTipo || 'Condenação') === 'Condenação' ? condenacao : parseValor(a?.sucBase || '')) || undefined : undefined, sucumbenciaPct: ehPct(a?.sucMode) ? parseFloat(String(a?.sucPct || '').replace(',', '.')) || undefined : undefined, honorariosPct: ehPct(a?.honMode) ? parseFloat(String(a?.honPct || '').replace(',', '.')) || undefined : undefined, sucumbenciaBase: ehPct(a?.sucMode) ? (a?.sucBaseTipo || 'Condenação') : undefined, parcial: a?.parcial === true, totalExecutado: a?.parcial ? (parseValor(a?.totalDevido || '') || undefined) : undefined, anexos: (a?.anexoAlvara && a.anexoAlvara.length) ? a.anexoAlvara : undefined, verbas: (a?.verbas ?? []).map((v) => ({ label: (v.label || '').trim(), valor: v.natureza === 'abatimento' ? -Math.abs(parseValor(v.valor)) : parseValor(v.valor), natureza: (v.natureza === 'abatimento' ? 'proveito' : v.natureza) as 'proveito' | 'reembolso_cliente' | 'reembolso_escritorio' | 'sucumbencia_nossa' })).filter((v) => v.label && v.valor !== 0 && (v.valor > 0 || v.natureza === 'proveito')), deducoesCliente: (a?.deducoes ?? []).filter((d) => d.label.trim() && parseValor(d.valor) > 0).map((d) => ({ label: d.label.trim(), valor: parseValor(d.valor), tipo: d.tipo, cnjIncidente: (d.cnjIncidente || '').trim() || undefined, txIdSaida: d.txIdSaida })), grupoId: (a?.grupoId || '').trim() || undefined, beneficiarioAlvara: a?.beneficiarioAlvara, clienteRecebeuDireto: direto || undefined, unificar: a?.unificar === true }, split };
         }
         // PAGAMENTO A PESSOA DO TIME: manda a categoria e o NOME CADASTRADO de quem recebeu —
         // é o par que o holerite dela lê. '__pessoa' é marcador de tela, nunca vertical.
@@ -3145,7 +3147,7 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
     if (g?.unificar && g.idxs[0] !== i) return false;
     const { calc: c } = calcDaLinha(i, Math.abs(conf.linhas[i].valor));
     const somaPct = (a.split ?? []).reduce((x, r) => x + (parseFloat(String(r.pct || '').replace(',', '.')) || 0), 0);
-    const sucSemBase = a.sucMode === 'pct' && parsePct(a.sucPct) > 0 && (a.sucBaseTipo || 'Condenação') !== 'Condenação' && parseValor(a.sucBase || '') <= 0;
+    const sucSemBase = ehPct(a.sucMode) && parsePct(a.sucPct) > 0 && (a.sucBaseTipo || 'Condenação') !== 'Condenação' && parseValor(a.sucBase || '') <= 0;
     // Contratual em % e em branco: o honorário sairia ZERO e a condenação inteira viraria
     // repasse — silenciosamente. Só passa se o repasse foi fixado à mão (aí a decisão é dele).
     const honSemPct = ehPct(a.honMode) && !(parsePct(a.honPct) > 0) && !(parseValor(alvara[g ? g.idxs[0] : i]?.clienteAjustado || '') > 0);
@@ -3529,12 +3531,12 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
                                 </Field>
                                 <Field label="Sucumbência">
                                   <div className="flex items-center gap-1">
-                                    {a.sucMode === 'pct'
+                                    {ehPct(a.sucMode)
                                       ? <div className="flex w-full items-center gap-1"><input value={a.sucPct ?? ''} onChange={(e) => set({ sucPct: e.target.value })} inputMode="decimal" placeholder="0" className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900" /><span className="text-xs text-zinc-400">%</span></div>
                                       : <MoneyInput value={a.sucumbencia} onChange={(v) => set({ sucumbencia: v })} />}
-                                    <button type="button" title="Alternar R$ / %" onClick={() => set({ sucMode: a.sucMode === 'pct' ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{a.sucMode === 'pct' ? '%' : 'R$'}</button>
+                                    <button type="button" title="Alternar R$ / %" onClick={() => set({ sucMode: ehPct(a.sucMode) ? 'valor' : 'pct' })} className="shrink-0 rounded-md border border-zinc-300 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-500 hover:border-[#7048E8] hover:text-[#7048E8] dark:border-zinc-700">{ehPct(a.sucMode) ? '%' : 'R$'}</button>
                                   </div>
-                                  {a.sucMode === 'pct' && (() => { const tipo = (a.sucBaseTipo || 'Condenação'); const tl = tipo.toLowerCase(); const embutida = tipo === 'Condenação'; return <div className="mt-1 space-y-1">
+                                  {ehPct(a.sucMode) && (() => { const tipo = (a.sucBaseTipo || 'Condenação'); const tl = tipo.toLowerCase(); const embutida = tipo === 'Condenação'; return <div className="mt-1 space-y-1">
                                     <select value={tipo} onChange={(e) => set({ sucBaseTipo: e.target.value })} className="w-full rounded-md border border-zinc-300 bg-white px-1.5 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900" title="Base da sucumbência (conforme a sentença)">
                                       <option>Condenação</option><option>Valor da causa</option><option>Proveito econômico</option>
                                     </select>
