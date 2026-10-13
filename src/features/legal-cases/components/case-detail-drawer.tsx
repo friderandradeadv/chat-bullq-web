@@ -1558,12 +1558,17 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
    * foram para a lixeira. Mover arquivo no Drive de alguém em silêncio é ruim:
    * quem abre a pasta amanhã não faz ideia de que o HISCON mudou de lugar.
    */
-  const organizarPasta = async () => {
-    try {
-      const r = await legalCasesService.organizarPastaInicial(caseId);
+  /**
+   * Mostra o que a organização da pasta fez. Separado da CHAMADA porque, desde
+   * 13/10/2026, quem organiza durante a montagem é o SERVIDOR: a ficha recebe
+   * o mesmo payload no resultado e só o apresenta. O botão avulso de organizar
+   * continua chamando a API e passando por aqui.
+   */
+  const mostrarPasta = (r: any) => {
+    if (!r) return null;
       // Card de "RMC | RCC" monta DUAS pastas: os produtos não se misturam, e
       // dizer só uma esconderia metade do trabalho de quem vai protocolar.
-      const quais = (r.pastas ?? []).map((p) => `${p.familia} › ${p.pastaBanco}`).join(' e ');
+      const quais = (r.pastas ?? []).map((p: any) => `${p.familia} › ${p.pastaBanco}`).join(' e ');
       toast.success(`Pasta ${quais ? `"${quais}"` : `"${r.pastaBanco}"`} pronta: ${r.copiados.length} doc(s) assinados + ${r.enviados.length} do caso${r.incluirRenuncia ? ' (com renúncia — hipossuficiente)' : ''}.`);
       // 🚨 Mover arquivo no Drive do cliente em silêncio é ruim: quem abre a
       // pasta amanhã não faz ideia de que o HISCON saiu da raiz. O aviso diz
@@ -1571,7 +1576,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
       if (r.arrumados?.length) {
         toast.info(
           `${r.arrumados.length} documento(s) solto(s) arquivado(s) em ${r.arrumados[0].para}: ` +
-            r.arrumados.map((a) => a.nome).join(', '),
+            r.arrumados.map((a: any) => a.nome).join(', '),
           { duration: 8000 },
         );
       }
@@ -1581,13 +1586,13 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
       if (r.arquivados?.length) {
         toast.info(
           `${r.arquivados.length} documento(s) guardado(s) no arquivo do cliente: ` +
-            r.arquivados.map((a) => `${a.nome} → ${a.para}`).join(' · '),
+            r.arquivados.map((a: any) => `${a.nome} → ${a.para}`).join(' · '),
           { duration: 8000 },
         );
       }
       // A pasta sai PRONTA PARA PROTOCOLO: as bases do modelo saem depois de
       // usadas (para a lixeira, 30 dias) e o que veio sem número ganha o dele.
-      const limpos = (r.pastas ?? []).flatMap((p) => p.modelosRemovidos ?? []);
+      const limpos = (r.pastas ?? []).flatMap((p: any) => p.modelosRemovidos ?? []);
       if (limpos.length) {
         toast.info(`${limpos.length} modelo(s) do template foram para a lixeira do Drive: ${limpos.join(', ')}`, {
           duration: 8000,
@@ -1602,7 +1607,13 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
       for (const p of r.pastas ?? []) window.open(p.webViewLink, '_blank', 'noopener');
       if (!r.pastas?.length && r.webViewLink) window.open(r.webViewLink, '_blank', 'noopener');
       onChanged();
-      return r;
+    return r;
+  };
+
+  /** O botão avulso de organizar: chama a API e passa o resultado ao mostrador. */
+  const organizarPasta = async () => {
+    try {
+      return mostrarPasta(await legalCasesService.organizarPastaInicial(caseId));
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'A inicial foi gerada, mas a pasta do Drive não.');
       return null;
@@ -1686,13 +1697,17 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
             { duration: 8000 },
           );
         },
-        organizarPasta: () => organizarPasta() as any,
       });
 
       onChanged();
 
       if (r.ok) {
-        const nome = (r.org as any)?.pastaBanco;
+        // 🚨 A PASTA JÁ FOI ORGANIZADA PELO SERVIDOR. A ficha recebe o payload
+        // inteiro em `org` e só o apresenta — antes ela mesma chamava a API,
+        // por um gancho, e era o único lugar que mostrava o que saiu da raiz
+        // do cliente e o que foi para o arquivo dele.
+        mostrarPasta((r as any).org);
+        const nome = (r.org as any)?.pastaBanco ?? (r.org as any)?.pastas?.[0]?.pastaBanco;
         toast.success(
           `Documentos recortados e inicial de ${produto} gerada${nome ? ` — pasta "${nome}" montada` : ''}. ` +
           'Card em Revisão inicial. Confira as lacunas "[ • ]" antes de protocolar.',

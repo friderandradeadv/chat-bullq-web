@@ -1251,6 +1251,38 @@ export const legalCasesService = {
     return data?.data ?? data;
   },
 
+  /**
+   * A MONTAGEM INTEIRA NO SERVIDOR: cálculo → documentos → peça → pasta → fase.
+   *
+   * 🚨 Substitui a orquestração que vivia no navegador. Enquanto os dois
+   * caminhos existiram, as travas novas só valiam para o lote do servidor e o
+   * mesmo card dava resultado diferente pelo clique.
+   */
+  async montarTudoNoServidor(
+    id: string,
+    opts: { tese?: 'rmc' | 'churning'; produto?: 'RMC' | 'RCC'; signal?: AbortSignal } = {},
+  ): Promise<{
+    ok: boolean;
+    motivo?: string;
+    detalhe?: string;
+    faltas?: string[];
+    avisos?: string[];
+    lacunas?: number | null;
+    arquivo?: string | null;
+    calculo?: any;
+    pasta?: any;
+  }> {
+    const q = new URLSearchParams();
+    if (opts.tese) q.set('tese', opts.tese);
+    if (opts.produto) q.set('produto', opts.produto);
+    const { data } = await api.post(
+      `/legal-cases/${id}/inicial/montar-tudo${q.toString() ? `?${q}` : ''}`,
+      {},
+      { signal: opts.signal, timeout: 15 * 60_000 },
+    );
+    return data?.data ?? data;
+  },
+
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */
