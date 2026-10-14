@@ -530,7 +530,11 @@ function faturaCiclo(dataBR: string, fechamento: number, vencDia: number): { key
   const dia = +m[1]; let mes = +m[2]; let ano = +m[3];
   if (fechamento > 0 && dia >= fechamento) { mes += 1; if (mes > 12) { mes = 1; ano += 1; } }
   const key = `${ano}-${String(mes).padStart(2, '0')}`;
-  let vm = mes + 1, va = ano; if (vm > 12) { vm = 1; va += 1; }
+  // Vencimento = o PRÓXIMO dia `vencDia` depois do fechamento (ver faturaCicloBR no backend):
+  // mesmo mês quando vence depois de fechar (ASAAS: fecha 5, vence 10), mês seguinte quando
+  // vence antes (Nubank: fecha 26, vence 3).
+  let vm = mes, va = ano;
+  if (!(fechamento > 0 && vencDia > fechamento)) { vm = mes + 1; if (vm > 12) { vm = 1; va += 1; } }
   const venc = vencDia > 0 ? `${String(vencDia).padStart(2, '0')}/${String(vm).padStart(2, '0')}/${va}` : '';
   return { key, venc };
 }
@@ -2425,7 +2429,9 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
     if (fechamento > 0 && dia >= fechamento) { mes += 1; if (mes > 12) { mes = 1; ano += 1; } }
     const key = `${ano}-${String(mes).padStart(2, '0')}`;
     const fecha = fechamento > 0 ? `${String(fechamento).padStart(2, '0')}/${String(mes).padStart(2, '0')}/${ano}` : '';
-    let vm = mes + 1, va = ano; if (vm > 12) { vm = 1; va += 1; }
+    // Mesma regra de faturaCiclo: vence no PRÓXIMO dia `vencDia` depois do fechamento.
+    let vm = mes, va = ano;
+    if (!(fechamento > 0 && vencDia > fechamento)) { vm = mes + 1; if (vm > 12) { vm = 1; va += 1; } }
     const venc = vencDia > 0 ? `${String(vencDia).padStart(2, '0')}/${String(vm).padStart(2, '0')}/${va}` : '';
     return { key, label: mesLabel(key), fecha, venc };
   };
