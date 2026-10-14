@@ -61,6 +61,25 @@ export function IntakeDocumentos({
 
   useEffect(() => { void conferir(); }, [conferir]);
 
+  // 🚨 RECONFERE AO VOLTAR PARA A JANELA (14/10/2026). Esta consulta vivia em
+  // `useState` local e rodava UMA vez, no mount: não tem chave de cache, então
+  // nada no sistema conseguia mandá-la reconferir. Quando a coleta do Meu INSS
+  // arquivava HISCON e HISCRE no Drive, o painel seguia dizendo que faltavam,
+  // e o conserto era recarregar a página.
+  //
+  // Foco de janela é o sinal certo, e não um relógio: o advogado sai do hub
+  // para entrar no gov.br e volta quando acabou. Enquanto ele está no card,
+  // nada é consultado.
+  useEffect(() => {
+    const aoVoltar = () => { if (!document.hidden) void conferir(); };
+    window.addEventListener('focus', aoVoltar);
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => {
+      window.removeEventListener('focus', aoVoltar);
+      document.removeEventListener('visibilitychange', aoVoltar);
+    };
+  }, [conferir]);
+
   async function enviar(files: FileList | File[] | null) {
     const lista = Array.from(files ?? []);
     if (!lista.length) return;

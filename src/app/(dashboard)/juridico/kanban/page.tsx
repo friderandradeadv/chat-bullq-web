@@ -274,8 +274,17 @@ export default function FaseJudicialKanbanPage() {
       const label = qc.getQueryData<KanbanData>(KEY)?.phases.find((p) => p.key === toPhase)?.label ?? toPhase;
       toast.success(`Movido para "${label}"`);
       qc.invalidateQueries({ queryKey: KEY });
+      // 🚨 O DETALHE TAMBÉM, SENÃO O CARD ABRE NA FASE ANTIGA (14/10/2026).
+      // Arrastar invalidava só a lista do kanban: o cache do detalhe seguia com
+      // a `legalPhase` velha, e o drawer desenhava os painéis da fase de antes.
+      // Medido no FLORISVALDO movido para "Informações faltantes": o bloco de
+      // documentos do INSS, que só existe nessa fase, não apareceu até o F5.
+      // Palavras dele: *"precisei atualizar a página para mostrar as infos do
+      // inss"*. A lista estava certa e o detalhe mentia.
+      qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', card.id] });
     } catch (err: any) {
       qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', card.id] });
       toast.error(err?.response?.data?.message || 'Erro ao mover o processo');
     }
   }, [qc]);

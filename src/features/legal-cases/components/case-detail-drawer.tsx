@@ -113,6 +113,22 @@ export function CaseDetailDrawer({
   const { data: c, isLoading } = useQuery({
     queryKey: ['legal-cases', 'detail', caseId],
     queryFn: () => legalCasesService.get(caseId),
+    // 🚨 O CARD ABERTO NÃO PODE MOSTRAR A FASE ANTIGA (14/10/2026). O default
+    // global é `staleTime: 30s` e `refetchOnWindowFocus: false`, e com ele o
+    // detalhe sobrevivia a qualquer mudança feita FORA do drawer: arrastar no
+    // kanban, mover em massa, a coleta do Mac arquivar documentos. O drawer
+    // desenhava os painéis da fase velha, e o conserto era F5.
+    //
+    // Medido no FLORISVALDO movido para "Informações faltantes": o bloco de
+    // documentos do INSS, que só existe nessa fase, não apareceu. Palavras
+    // dele: *"precisei atualizar a página para mostrar as infos do inss"*.
+    //
+    // O escopo é UM card, o que o advogado tem aberto — não é o
+    // `refetchOnWindowFocus` global, que faria o inbox e o financeiro
+    // reconsultarem a cada alt-tab. E voltar do gov.br para o hub é, por
+    // definição, um foco de janela: é justamente quando a coleta terminou.
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
   const { data: members = [] } = useQuery({ queryKey: ['org-members'], queryFn: () => membersService.list() });
 
