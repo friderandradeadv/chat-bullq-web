@@ -2499,10 +2499,22 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
         </div>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Alternador entre os cartões (Nubank, ASAAS…) — mesmo desenho das abas de cima.
+            Era um <select>: com dois cartões, o segundo ficava escondido atrás do clique. */}
         {cartoes.length > 1 ? (
-          <select value={cardId} onChange={(e) => setCardId(e.target.value)} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-            {cartoes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </select>
+          <div className="inline-flex rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+            {cartoes.map((c) => {
+              // Em aberto DESTE cartão, ao vivo — a escolha do cartão mostra onde está a dívida.
+              const aberto = data.transacoes.reduce((s, t) => (t.conta === c.id && txStatus(t) === 'a_pagar' && (t.valor < 0 || (t.valor > 0 && !!t.fonteImport)) ? s - t.valor : s), 0);
+              const on = c.id === cartao.id;
+              return (
+                <button key={c.id} onClick={() => setCardId(c.id)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition ${on ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}>
+                  <CreditCard className="h-3.5 w-3.5" style={{ color: c.cor ?? '#820AD1' }} />{c.nome}
+                  {aberto > 0.005 && <span className={`rounded px-1 py-0.5 text-[10px] tabular-nums ${on ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/20' : 'text-rose-500'}`}>{brl2(aberto)}</span>}
+                </button>
+              );
+            })}
+          </div>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200"><CreditCard className="h-4 w-4" style={{ color: cartao.cor ?? '#820AD1' }} /> {cartao.nome}</span>
         )}
