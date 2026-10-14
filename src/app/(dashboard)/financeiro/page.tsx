@@ -2388,7 +2388,9 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
 
 // ── Visão de cartão de crédito: gastos da fatura + saldo em aberto + pagar fatura ──
 function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; contas: Conta[]; onDone: () => void }) {
-  const cartoes = useMemo(() => contas.filter((c) => c.cartao), [contas]);
+  // Cartão ASAAS PRIMEIRO (e, por isso, o que abre por padrão): é o cartão do dia a dia do
+  // escritório agora. O resto segue a ordem das contas.
+  const cartoes = useMemo(() => contas.filter((c) => c.cartao).sort((a, b) => (a.id === 'asaas-cartao' ? -1 : 0) - (b.id === 'asaas-cartao' ? -1 : 0)), [contas]);
   // Pode pagar a fatura com QUALQUER conta (incl. Nubank, que é conta e cartão) — não-cartão primeiro.
   const contasPagam = useMemo(() => [...contas].sort((a, b) => (a.cartao ? 1 : 0) - (b.cartao ? 1 : 0)), [contas]);
   const [cardId, setCardId] = useState<string>(cartoes[0]?.id ?? '');
@@ -2558,7 +2560,14 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
             </div>
           );
         })}
-        {faturas.length === 0 && <p className="rounded-xl border border-zinc-200/70 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhum gasto no cartão. Suba o extrato do cartão em <strong>Importar extrato</strong> (escolha a conta do cartão).</p>}
+        {faturas.length === 0 && (
+          <div className="rounded-xl border border-zinc-200/70 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">
+            <p>Nenhum gasto em <strong>{cartao.nome}</strong>. Use <strong>Importar fatura</strong>, aqui em cima.</p>
+            {/* O botão da tela chama "Importar fatura"; o texto mandava para "Importar extrato",
+                que é outro botão, em Contas. E no ASAAS vale dizer POR QUE o import é preciso. */}
+            {cartao.id === 'asaas-cartao' && <p className="mx-auto mt-1 max-w-xl text-xs">As compras no crédito não vêm pela API (não passam pelo saldo da conta) — só a fatura importada as traz. O que o Asaas entrega sozinho (débito, taxas, cashback, pagamento da fatura) já entra pela sincronização da conta.</p>}
+          </div>
+        )}
         {faturas.length > 0 && faturasVis.length === 0 && <p className="rounded-xl border border-zinc-200/70 py-8 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhuma fatura em <strong>{mesLabel(mesFat)}</strong>. Escolha outro mês ou <button onClick={() => setMesFat('')} className="font-medium text-[#228BE6] hover:underline">ver todas</button>.</p>}
       </div>
 
@@ -5347,9 +5356,11 @@ function AsaasImport({ contas = [] }: { contas?: Conta[] }) {
   const cartao = contas.find((c) => c.id === 'asaas-cartao');
   const [fecha, setFecha] = useState(() => (cartao?.fechamento ? String(cartao.fechamento) : ''));
   const [vence, setVence] = useState(() => (cartao?.vencimento ? String(cartao.vencimento) : ''));
+  const cartaoPronto = !!cartao?.fechamento && !!cartao?.vencimento;
+  const [ajustar, setAjustar] = useState(false);
   const cartaoM = useMutation({
     mutationFn: () => financeiroService.asaasCartaoAtivar({ fechamento: fecha ? Number(fecha) : undefined, vencimento: vence ? Number(vence) : undefined }),
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(r.criada ? 'Cartão ASAAS criado — a aba "Cartão de crédito" já aparece em Lançamentos.' : 'Dias da fatura do Cartão ASAAS atualizados.'); },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); setAjustar(false); toast.success(r.criada ? 'Cartão ASAAS criado — a aba "Cartão de crédito" já aparece em Lançamentos.' : 'Dias da fatura do Cartão ASAAS atualizados.'); },
     onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao ligar o Cartão ASAAS'),
   });
 
@@ -5360,7 +5371,15 @@ function AsaasImport({ contas = [] }: { contas?: Conta[] }) {
   });
   const importM = useMutation({
     mutationFn: () => financeiroService.asaasImportar(),
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] }); setPrev(r); toast.success(`ASAAS sincronizado: ${r.novos ?? 0} novos · ${r.atualizados ?? 0} atualizados`); },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['financeiro'] });
+      setPrev(r);
+      // O cartão vem na mesma leva: dizer o que veio dele evita a dúvida de "será que pegou?".
+      const c = r.cartao;
+      const nCard = c?.tipos.reduce((s2, t) => s2 + t.n, 0) ?? 0;
+      const extra = c ? (nCard > 0 ? ` · cartão: ${nCard} linha(s)${c.faturaQuitadaItens > 0 ? `, fatura conciliada (${c.faturaQuitadaItens} itens)` : ''}` : ' · cartão: nada novo') : '';
+      toast.success(`ASAAS sincronizado: ${r.novos ?? 0} novos · ${r.atualizados ?? 0} atualizados${extra}`);
+    },
     onError: (e: any) => toast.error(e?.message || 'Erro ao sincronizar com o ASAAS'),
   });
 
@@ -5374,7 +5393,7 @@ function AsaasImport({ contas = [] }: { contas?: Conta[] }) {
   }
 
   return (
-    <Card title="ASAAS → caixa (recebimentos e a receber)" sub="sincroniza sozinho de hora em hora: cada cobrança vira um lançamento (a receber se pendente, recebido se paga); taxas e compras viram despesa. Sem duplicar.">
+    <Card title="ASAAS → caixa (recebimentos, a receber e o cartão)" sub="uma sincronização só, de hora em hora: cada cobrança vira um lançamento (a receber se pendente, recebido se paga); taxas, cartão e pagamento de fatura viram despesa. O Cartão ASAAS entra aqui — não tem botão separado. Sem duplicar.">
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => importM.mutate()} disabled={importM.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052FF] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{importM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownCircle className="h-4 w-4" />} Sincronizar agora</button>
         <button onClick={() => previewM.mutate()} disabled={previewM.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:border-[#0052FF] hover:text-[#0052FF] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{previewM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Pré-visualizar</button>
@@ -5393,19 +5412,39 @@ function AsaasImport({ contas = [] }: { contas?: Conta[] }) {
       {/* ── Cartão ASAAS (Mastercard): débito vem sozinho, crédito só o total da fatura ── */}
       <div className="mt-4 rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/[0.04] p-4 dark:border-[#0052FF]/30 dark:bg-[#0052FF]/10">
         <p className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><CreditCard className="h-4 w-4 text-[#0052FF]" /> Cartão ASAAS {cartao ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">aba ligada</span> : <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">não ligado</span>}</p>
-        <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
-          O que a sincronização traz <strong>sozinha</strong>: compra na <strong>função débito</strong> (sai do saldo, entra itemizada com o estabelecimento), taxas, IOF, cashback, estornos, transferências feitas pelo cartão, o <strong>limite do crédito garantido</strong> (saldo bloqueado — entra como transferência, não como gasto) e o <strong>pagamento da fatura</strong> do crédito. O que ela <strong>não</strong> traz: as <strong>compras do crédito</strong> — elas não passam pelo saldo da conta e a API do Asaas não tem endpoint de cartão. Para ter a fatura itemizada, use <strong>Importar fatura</strong> na aba Cartão de crédito; quando os itens fecharem com o total pago, a sincronização baixa os itens em vez de lançar a fatura como linha única.
-        </p>
-        <div className="mt-3 flex flex-wrap items-end gap-2">
-          <label className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Fecha no dia
-            <input value={fecha} onChange={(e) => setFecha(e.target.value.replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="ex.: 26" className="mt-0.5 block w-20 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
-          </label>
-          <label className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Vence no dia
-            <input value={vence} onChange={(e) => setVence(e.target.value.replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="ex.: 5" className="mt-0.5 block w-20 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
-          </label>
-          <button onClick={() => cartaoM.mutate()} disabled={cartaoM.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052FF] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">{cartaoM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />} {cartao ? 'Salvar dias da fatura' : 'Ligar a aba do cartão'}</button>
-          <span className="text-[11px] text-zinc-400">{cartao ? `${cartao.fechamento ? `fecha dia ${cartao.fechamento}` : 'sem dia de fechamento'}${cartao.vencimento ? ` · vence dia ${cartao.vencimento}` : ' · sem dia de vencimento'}` : 'os dois dias estão no app do Asaas (fatura do cartão)'}</span>
-        </div>
+        {/* Configurado já não PERGUNTA: vira uma linha de estado. Os dois dias só reaparecem
+            no "ajustar" — o bloco pedia fecha/vence para sempre, mesmo depois de salvos. */}
+        {cartaoPronto && !ajustar ? (
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+            <span>Fatura <strong>fecha dia {cartao!.fechamento}</strong> · <strong>vence dia {cartao!.vencimento}</strong>.</span>
+            <span className="text-zinc-400">Entra na sincronização da conta, aqui em cima — não tem botão separado.</span>
+            <button onClick={() => setAjustar(true)} className="font-semibold text-[#0052FF] hover:underline">ajustar dias</button>
+          </p>
+        ) : (
+          <>
+            {!cartaoPronto && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Informe os dias da fatura: sem eles, a fatura não tem ciclo nem data pra vencer. A API do Asaas não informa nenhum dos dois — estão no app do cartão.</p>}
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <label className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Fecha no dia
+                <input value={fecha} onChange={(e) => setFecha(e.target.value.replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="ex.: 5" className="mt-0.5 block w-20 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+              </label>
+              <label className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Vence no dia
+                <input value={vence} onChange={(e) => setVence(e.target.value.replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="ex.: 10" className="mt-0.5 block w-20 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+              </label>
+              <button onClick={() => cartaoM.mutate()} disabled={cartaoM.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052FF] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">{cartaoM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />} {cartao ? 'Salvar dias da fatura' : 'Ligar a aba do cartão'}</button>
+              {cartaoPronto && <button onClick={() => { setAjustar(false); setFecha(String(cartao!.fechamento ?? '')); setVence(String(cartao!.vencimento ?? '')); }} className="text-[11px] font-medium text-zinc-400 hover:text-zinc-600">cancelar</button>}
+            </div>
+          </>
+        )}
+
+        {/* O "o que vem sozinho × o que não vem" não cabe na tela toda hora, mas some de vez
+            custa caro: é ele que explica por que a fatura do crédito precisa de import. */}
+        <details className="group mt-2">
+          <summary className="cursor-pointer list-none text-[11px] font-semibold text-zinc-500 hover:text-[#0052FF] dark:text-zinc-400">O que entra sozinho, e o que não entra ▾</summary>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+            <strong>Sozinho</strong> (na sincronização da conta, de hora em hora): compra na <strong>função débito</strong> (sai do saldo, entra itemizada com o estabelecimento), taxas, IOF, cashback, estornos, transferências feitas pelo cartão, o <strong>limite do crédito garantido</strong> (saldo bloqueado — entra como transferência, não como gasto) e o <strong>pagamento da fatura</strong> do crédito. <strong>Não entra</strong>: as <strong>compras do crédito</strong> — elas não passam pelo saldo da conta, e a API do Asaas não tem endpoint de cartão. Para itemizar a fatura, use <strong>Importar fatura</strong> na aba Cartão de crédito; quando os itens fecharem com o total pago, a sincronização baixa os itens em vez de lançar a fatura como linha única.
+          </p>
+        </details>
+
         {prev?.cartao && (
           <div className="mt-3 border-t border-[#0052FF]/15 pt-3 text-xs">
             {prev.cartao.tipos.length === 0 ? (
