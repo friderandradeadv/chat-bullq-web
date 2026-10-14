@@ -5364,6 +5364,33 @@ function AsaasImport({ contas = [] }: { contas?: Conta[] }) {
   const [vence, setVence] = useState(() => (cartao?.vencimento ? String(cartao.vencimento) : ''));
   const cartaoPronto = !!cartao?.fechamento && !!cartao?.vencimento;
   const [ajustar, setAjustar] = useState(false);
+  // Vigia da pasta de faturas no Drive: a compra no CRÉDITO não vem pela API, então a fatura
+  // itemizada entra por arquivo. Com a pasta ligada, salvar o PDF lá (do celular, inclusive)
+  // basta — o servidor lança e move o arquivo para "processadas".
+  const { data: pasta, refetch: refetchPasta } = useQuery({ queryKey: ['financeiro', 'fatura-pasta'], queryFn: () => financeiroService.faturaPastaStatus(), staleTime: 300_000 });
+  const [varredura, setVarredura] = useState<import('@/features/financeiro/services/financeiro.service').FaturaPastaVarredura | null>(null);
+  const pastaLigarM = useMutation({
+    mutationFn: () => financeiroService.faturaPastaLigar({}),
+    onSuccess: (r) => { refetchPasta(); toast.success(r.criada ? `Pasta "${r.nome}" criada no Drive — salve a fatura lá que eu lanço sozinho.` : `Pasta "${r.nome}" religada.`); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao ligar a pasta'),
+  });
+  const pastaVarrerM = useMutation({
+    mutationFn: () => financeiroService.faturaPastaVarrer(false),
+    onSuccess: (r) => {
+      setVarredura(r);
+      qc.invalidateQueries({ queryKey: ['financeiro'] });
+      refetchPasta();
+      if (r.arquivos === 0) toast('Nenhum arquivo novo na pasta.');
+      else toast.success(`${r.arquivos} arquivo(s): ${r.lancados} lançamento(s) novo(s)${r.duplicados ? `, ${r.duplicados} já existiam` : ''}${r.ilegiveis ? `, ${r.ilegiveis} sem leitura` : ''}`);
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao varrer a pasta'),
+  });
+  const pastaDesligarM = useMutation({
+    mutationFn: () => financeiroService.faturaPastaDesligar(),
+    onSuccess: () => { setVarredura(null); refetchPasta(); toast.success('Vigia desligado. A pasta e os arquivos continuam no Drive.'); },
+    onError: (e: any) => toast.error(e?.message || 'Erro'),
+  });
+
   const cartaoM = useMutation({
     mutationFn: () => financeiroService.asaasCartaoAtivar({ fechamento: fecha ? Number(fecha) : undefined, vencimento: vence ? Number(vence) : undefined }),
     onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); setAjustar(false); toast.success(r.criada ? 'Cartão ASAAS criado — a aba "Cartão de crédito" já aparece em Lançamentos.' : 'Dias da fatura do Cartão ASAAS atualizados.'); },
@@ -5450,6 +5477,34 @@ function AsaasImport({ contas = [] }: { contas?: Conta[] }) {
             <strong>Sozinho</strong> (na sincronização da conta, de hora em hora): compra na <strong>função débito</strong> (sai do saldo, entra itemizada com o estabelecimento), taxas, IOF, cashback, estornos, transferências feitas pelo cartão, o <strong>limite do crédito garantido</strong> (saldo bloqueado — entra como transferência, não como gasto) e o <strong>pagamento da fatura</strong> do crédito. <strong>Não entra</strong>: as <strong>compras do crédito</strong> — elas não passam pelo saldo da conta, e a API do Asaas não tem endpoint de cartão. Para itemizar a fatura, use <strong>Importar fatura</strong> na aba Cartão de crédito; quando os itens fecharem com o total pago, a sincronização baixa os itens em vez de lançar a fatura como linha única.
           </p>
         </details>
+
+        {/* ── Pasta de faturas no Drive: o único passo manual que sobrou, reduzido a salvar um PDF ── */}
+        <div className="mt-3 border-t border-[#0052FF]/15 pt-3">
+          {pasta?.ligado ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400"><ArrowDownCircle className="h-3.5 w-3.5" /> Pasta ligada</span>
+              <a href={pasta.link} target="_blank" rel="noopener noreferrer" className="font-medium text-[#0052FF] hover:underline">{pasta.nome}</a>
+              <span className="text-zinc-500 dark:text-zinc-400">salve a fatura aí (do celular serve) — o servidor confere de 15 em 15 min, lança e move o arquivo para <strong>processadas</strong>.</span>
+              <span className="text-zinc-400">{pasta.processados ?? 0} arquivo(s) já entraram</span>
+              <button onClick={() => pastaVarrerM.mutate()} disabled={pastaVarrerM.isPending} className="inline-flex items-center gap-1 rounded-md border border-zinc-300 px-2 py-1 font-semibold text-zinc-600 hover:border-[#0052FF] hover:text-[#0052FF] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{pastaVarrerM.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />} varrer agora</button>
+              <button onClick={() => { if (confirm('Desligar o vigia da pasta? A pasta e os arquivos continuam no Drive — nada é apagado.')) pastaDesligarM.mutate(); }} className="text-zinc-400 hover:text-rose-500">desligar</button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-zinc-600 dark:text-zinc-300">As <strong>compras do crédito</strong> só entram por arquivo. Ligue uma pasta no Drive e salve a fatura lá — o resto é automático.</span>
+              <button onClick={() => pastaLigarM.mutate()} disabled={pastaLigarM.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-[#0052FF]/40 px-2.5 py-1 font-semibold text-[#0052FF] transition hover:bg-[#0052FF]/10 disabled:opacity-50">{pastaLigarM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownCircle className="h-3.5 w-3.5" />} Ligar pasta no Drive</button>
+            </div>
+          )}
+          {varredura && varredura.itens.length > 0 && (
+            <ul className="mt-2 space-y-0.5 text-[11px]">
+              {varredura.itens.map((i) => (
+                <li key={i.arquivo} className={i.ok ? 'text-zinc-500 dark:text-zinc-400' : 'text-amber-600 dark:text-amber-400'}>
+                  <strong>{i.arquivo}</strong> — {i.ok ? `${i.lidas} linha(s): ${i.novas} nova(s), ${i.duplicadas} já existia(m)` : `não entrou (${i.motivo}) — continua na pasta`}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {prev?.cartao && (
           <div className="mt-3 border-t border-[#0052FF]/15 pt-3 text-xs">

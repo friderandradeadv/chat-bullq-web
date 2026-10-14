@@ -543,6 +543,24 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/integracao/asaas/importar', {}, { timeout: 180000 });
     return data.data ?? data;
   },
+  // ── Vigia da pasta de faturas no Drive ──
+  async faturaPastaStatus(): Promise<FaturaPastaStatus> {
+    const { data } = await api.get('/financeiro/cartao/fatura-pasta');
+    return data.data ?? data;
+  },
+  async faturaPastaLigar(input: { contaId?: string; nome?: string } = {}): Promise<{ ligado: boolean; nome: string; link: string; criada: boolean }> {
+    const { data } = await api.post('/financeiro/cartao/fatura-pasta', input);
+    return data.data ?? data;
+  },
+  async faturaPastaDesligar(): Promise<{ ligado: boolean }> {
+    const { data } = await api.delete('/financeiro/cartao/fatura-pasta');
+    return data.data ?? data;
+  },
+  async faturaPastaVarrer(dryRun = false): Promise<FaturaPastaVarredura> {
+    // A varredura baixa e lê PDF com IA: pode demorar mais que o timeout padrão.
+    const { data } = await api.post('/financeiro/cartao/fatura-pasta/varrer', { dryRun }, { timeout: 180000 });
+    return data.data ?? data;
+  },
   /**
    * Liga a aba "Cartão de crédito" do Cartão ASAAS (cria a conta-cartão `asaas-cartao`).
    * Os dias de fechamento e vencimento da fatura vão à mão: a API do Asaas não os informa —
@@ -657,6 +675,18 @@ export interface ClienteResumo {
 
 export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; revisar?: boolean; baixaPendente?: boolean; liquidaId?: string | null; motivo: string | null; verticalSugerida?: string; verticalDetectada?: string | null }
 export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; baixarPendentes?: number; revisar?: number; linhas: ExtratoLinhaConf[] }
+
+/** Vigia da pasta de faturas (Drive): estado e resultado da varredura. */
+export interface FaturaPastaStatus {
+  ligado: boolean; drive?: boolean; forbidden?: boolean;
+  nome?: string; link?: string; contaId?: string;
+  processados?: number; ultimaVarredura?: string | null;
+}
+export interface FaturaPastaVarredura {
+  ligado: boolean; drive?: boolean; dryRun?: boolean;
+  arquivos: number; lancados: number; duplicados: number; ilegiveis: number;
+  itens: Array<{ arquivo: string; lidas: number; novas: number; duplicadas: number; ok: boolean; motivo?: string }>;
+}
 
 export interface AsaasPreview {
   configurado: boolean;
