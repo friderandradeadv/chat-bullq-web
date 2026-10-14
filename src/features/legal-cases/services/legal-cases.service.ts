@@ -1260,7 +1260,18 @@ export const legalCasesService = {
    */
   async montarTudoNoServidor(
     id: string,
-    opts: { tese?: 'rmc' | 'churning'; produto?: 'RMC' | 'RCC'; signal?: AbortSignal } = {},
+    opts: {
+      tese?: 'rmc' | 'churning';
+      produto?: 'RMC' | 'RCC';
+      /**
+       * Qual FUNDAMENTO a inicial de RMC carrega. `erro` é o padrão e é a peça
+       * de sempre (erro substancial); `onus` acrescenta as duas seções do ônus
+       * da prova da contratação e dois pedidos. Não alcança o churning, que tem
+       * montador próprio.
+       */
+      eixo?: 'erro' | 'onus';
+      signal?: AbortSignal;
+    } = {},
   ): Promise<{
     ok: boolean;
     motivo?: string;
@@ -1275,6 +1286,8 @@ export const legalCasesService = {
     const q = new URLSearchParams();
     if (opts.tese) q.set('tese', opts.tese);
     if (opts.produto) q.set('produto', opts.produto);
+    // Só o valor explícito liga o eixo novo; ausente é a peça de hoje.
+    if (opts.eixo === 'onus') q.set('eixo', 'onus');
     const { data } = await api.post(
       `/legal-cases/${id}/inicial/montar-tudo${q.toString() ? `?${q}` : ''}`,
       {},

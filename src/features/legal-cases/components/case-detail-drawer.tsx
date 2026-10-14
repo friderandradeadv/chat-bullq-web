@@ -1653,6 +1653,18 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
   const abortarRef = useRef<AbortController | null>(null);
   // A inicial escolhida no seletor. Começa na que a etiqueta do card oferece.
   const [teseEscolhida, setTeseEscolhida] = useState<string | null>(null);
+  /**
+   * O FUNDAMENTO da inicial de RMC. Padrão `erro`, que é a peça de sempre.
+   *
+   * 🚨 POR QUE É ESCOLHA, E NÃO PADRÃO NOVO (14/10/2026). O Tema 1.414/STJ
+   * suspendeu os processos de cartão consignado no país e vai fixar parâmetros
+   * sobre o DEVER DE INFORMAÇÃO, que é o fundamento único da nossa carteira. O
+   * eixo `onus` acrescenta um fundamento autônomo (a Ré não provou a
+   * contratação, art. 429, II, do CPC e Tema 1.061), que sobrevive a uma tese
+   * desfavorável lá. Mas é mudança de tese, e tese se escolhe por gesto do
+   * advogado, não por padrão trocado no código.
+   */
+  const [eixo, setEixo] = useState<'erro' | 'onus'>('erro');
   const oferecidas = montaveisDoCard(null, area);
   const escolhida = TODAS_AS_INICIAIS.find((m) => m.rotulo === teseEscolhida) ?? oferecidas[0];
   const montarTudo = async (escolha?: ReturnType<typeof montaveisDoCard>[number]) => {
@@ -1684,6 +1696,9 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
         // `produto` acima só sabe dizer RMC ou RCC.
         etiquetas: { produto: null, area },
         tese: alvo.tese,
+        // O eixo só existe para a RMC: o churning tem montador próprio e já se
+        // sustenta no ônus da prova por construção.
+        eixo: alvo.tese === 'rmc' ? eixo : undefined,
         signal: ac.signal,
         onEtapa: (e) => setTudoBusy(e),
         onCalculo: (c: any) => {
@@ -1826,6 +1841,43 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           );
         })}
       </div>
+      {/* 🚨 SÓ APARECE PARA RMC. Para o churning o eixo é no-op no servidor, e
+          um seletor que não muda nada é pior que seletor nenhum: ele promete uma
+          escolha que não existe. */}
+      {escolhida?.tese === 'rmc' && (
+        <div className="mb-1.5 flex w-full flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Fundamento:</span>
+          {([
+            {
+              id: 'erro' as const,
+              rotulo: 'Erro substancial',
+              dica: 'A peça de sempre: a parte Autora procurou empréstimo e lhe averbaram cartão (CC, art. 139, I), com pedido de conversão.',
+            },
+            {
+              id: 'onus' as const,
+              rotulo: 'Ônus da prova',
+              dica: 'Acrescenta duas seções e dois pedidos: a Ré não demonstrou a contratação (art. 429, II, do CPC e Tema 1.061 do STJ) e a compensação do capital recebido. NÃO remove o erro substancial, que segue como pedido principal. Cobre o acervo contra uma tese desfavorável no Tema 1.414/STJ.',
+            },
+          ]).map((o) => {
+            const ativa = eixo === o.id;
+            return (
+              <button
+                key={o.id}
+                onClick={() => setEixo(o.id)}
+                disabled={!!tudoBusy}
+                title={o.dica}
+                className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-50 ${
+                  ativa
+                    ? 'border-[#CF3B2E] bg-[#CF3B2E] text-white'
+                    : 'border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                }`}
+              >
+                {o.rotulo}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="flex w-full items-center gap-1.5">
         <button
           onClick={() => montarTudo()}
@@ -1834,7 +1886,9 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#101820] px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-50 dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-white"
         >
           <Sparkles className="h-3.5 w-3.5" /> {tudoBusy
-            || `Montar a inicial de ${escolhida?.rotulo ?? 'RMC'} e mandar para revisão`}
+            || `Montar a inicial de ${escolhida?.rotulo ?? 'RMC'}`
+              + `${escolhida?.tese === 'rmc' && eixo === 'onus' ? ' com o ônus da prova' : ''}`
+              + ' e mandar para revisão'}
         </button>
         {tudoBusy && (
           <button

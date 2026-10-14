@@ -109,6 +109,8 @@ export async function montarInicialCompleta(
     organizarPasta?: () => Promise<any>;
     etiquetas?: { produto?: string | null; area?: string | null } | null;
     tese?: 'rmc' | 'churning';
+    /** O fundamento da inicial de RMC: `erro` (padrão) ou `onus`. */
+    eixo?: 'erro' | 'onus';
   } = {},
 ): Promise<ResultadoMontagem> {
   const { signal, onEtapa, onCalculo } = opts;
@@ -118,7 +120,7 @@ export async function montarInicialCompleta(
   // começou, porque uma chamada só não tem passos para contar no cliente.
   onEtapa?.('Montando no servidor…');
   try {
-    const r = await legalCasesService.montarTudoNoServidor(caseId, { tese, produto, signal });
+    const r = await legalCasesService.montarTudoNoServidor(caseId, { tese, produto, eixo: opts.eixo, signal });
     if (signal?.aborted) return { ok: false, motivo: 'abortado' };
     if (r.calculo) onCalculo?.(r.calculo);
     if (r.ok) return { ok: true, org: r.pasta ?? null };
