@@ -543,6 +543,15 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/integracao/asaas/importar', {}, { timeout: 180000 });
     return data.data ?? data;
   },
+  /**
+   * Liga a aba "Cartão de crédito" do Cartão ASAAS (cria a conta-cartão `asaas-cartao`).
+   * Os dias de fechamento e vencimento da fatura vão à mão: a API do Asaas não os informa —
+   * ela não tem endpoint de cartão nenhum (só os tipos ASAAS_CARD_* do extrato).
+   */
+  async asaasCartaoAtivar(input: { fechamento?: number; vencimento?: number; nome?: string }): Promise<{ conta: Conta; criada: boolean }> {
+    const { data } = await api.post('/financeiro/integracao/asaas/cartao', input);
+    return data.data ?? data;
+  },
   // ── Importar extrato (PDF/CSV/OFX) como lançamentos, com dedup ──
   async prestacaoContasPdf(txId: string): Promise<{ pdfBase64: string; nome: string }> {
     const { data } = await api.get(`/financeiro/prestacao-contas/${txId}/pdf`);
@@ -654,6 +663,14 @@ export interface AsaasPreview {
   total?: number; novos?: number; atualizados?: number; removidos?: number;
   aReceber?: number; recebido?: number; despesas?: number; saldo?: number | null;
   forbidden?: boolean;
+  /** Retrato do Cartão ASAAS no extrato — o que a API deu, pra conferir contra o app do Asaas. */
+  cartao?: {
+    conta: boolean; criada: boolean;
+    faturaQuitada: number;      // fatura paga que BATEU com os itens lançados (baixou os itens)
+    faturaQuitadaItens: number; // quantos itens foram baixados
+    faturaSemItens: number;     // fatura paga sem item nenhum: entrou como linha única (total fechado)
+    tipos: { tipo: string; n: number; valor: number }[];
+  };
 }
 
 /** Previsões da carteira (sócios/admin): valor de causa × probabilidade de êxito. */

@@ -5324,10 +5324,22 @@ function parseExtrato(text: string): { data: string; valor: number; descricao: s
 }
 
 // ── Integração ASAAS: reconcilia pagamentos (a receber/recebido) + taxas/cartão ──
-function AsaasImport() {
+function AsaasImport({ contas = [] }: { contas?: Conta[] }) {
   const qc = useQueryClient();
   const [prev, setPrev] = useState<import('@/features/financeiro/services/financeiro.service').AsaasPreview | null>(null);
   const { data: status } = useQuery({ queryKey: ['asaas', 'status'], queryFn: () => financeiroService.asaasStatus(), staleTime: 600_000 });
+  // Cartão ASAAS (Mastercard, débito + crédito). A conta-cartão é quem faz aparecer a aba
+  // "Cartão de crédito" no livro-razão — e os dias da fatura vão à mão, porque a API do
+  // Asaas não tem endpoint de cartão: no extrato dela a compra no CRÉDITO não existe (ela
+  // não passa pelo saldo), só o pagamento da fatura.
+  const cartao = contas.find((c) => c.id === 'asaas-cartao');
+  const [fecha, setFecha] = useState(() => (cartao?.fechamento ? String(cartao.fechamento) : ''));
+  const [vence, setVence] = useState(() => (cartao?.vencimento ? String(cartao.vencimento) : ''));
+  const cartaoM = useMutation({
+    mutationFn: () => financeiroService.asaasCartaoAtivar({ fechamento: fecha ? Number(fecha) : undefined, vencimento: vence ? Number(vence) : undefined }),
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['financeiro'] }); toast.success(r.criada ? 'Cartão ASAAS criado — a aba "Cartão de crédito" já aparece em Lançamentos.' : 'Dias da fatura do Cartão ASAAS atualizados.'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao ligar o Cartão ASAAS'),
+  });
 
   const previewM = useMutation({
     mutationFn: () => financeiroService.asaasPreview(),
@@ -5365,6 +5377,46 @@ function AsaasImport() {
           <MiniStat label="Lançamentos" value={`${prev.novos ?? 0} novo(s)`} hint={`${prev.atualizados ?? 0} atualizado(s)${(prev.removidos ?? 0) ? ` · ${prev.removidos} removido(s)` : ''}`} accent="#0052FF" />
         </div>
       )}
+
+      {/* ── Cartão ASAAS (Mastercard): débito vem sozinho, crédito só o total da fatura ── */}
+      <div className="mt-4 rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/[0.04] p-4 dark:border-[#0052FF]/30 dark:bg-[#0052FF]/10">
+        <p className="flex items-center gap-2 text-sm font-bold text-zinc-800 dark:text-zinc-100"><CreditCard className="h-4 w-4 text-[#0052FF]" /> Cartão ASAAS {cartao ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">aba ligada</span> : <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">não ligado</span>}</p>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+          O que a sincronização traz <strong>sozinha</strong>: compra na <strong>função débito</strong> (sai do saldo, entra itemizada com o estabelecimento), taxas, IOF, cashback, estornos, transferências feitas pelo cartão, o <strong>limite do crédito garantido</strong> (saldo bloqueado — entra como transferência, não como gasto) e o <strong>pagamento da fatura</strong> do crédito. O que ela <strong>não</strong> traz: as <strong>compras do crédito</strong> — elas não passam pelo saldo da conta e a API do Asaas não tem endpoint de cartão. Para ter a fatura itemizada, use <strong>Importar fatura</strong> na aba Cartão de crédito; quando os itens fecharem com o total pago, a sincronização baixa os itens em vez de lançar a fatura como linha única.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Fecha no dia
+            <input value={fecha} onChange={(e) => setFecha(e.target.value.replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="ex.: 26" className="mt-0.5 block w-20 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+          </label>
+          <label className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Vence no dia
+            <input value={vence} onChange={(e) => setVence(e.target.value.replace(/\D/g, '').slice(0, 2))} inputMode="numeric" placeholder="ex.: 5" className="mt-0.5 block w-20 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+          </label>
+          <button onClick={() => cartaoM.mutate()} disabled={cartaoM.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052FF] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">{cartaoM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />} {cartao ? 'Salvar dias da fatura' : 'Ligar a aba do cartão'}</button>
+          <span className="text-[11px] text-zinc-400">{cartao ? `${cartao.fechamento ? `fecha dia ${cartao.fechamento}` : 'sem dia de fechamento'}${cartao.vencimento ? ` · vence dia ${cartao.vencimento}` : ' · sem dia de vencimento'}` : 'os dois dias estão no app do Asaas (fatura do cartão)'}</span>
+        </div>
+        {prev?.cartao && (
+          <div className="mt-3 border-t border-[#0052FF]/15 pt-3 text-xs">
+            {prev.cartao.tipos.length === 0 ? (
+              <p className="text-zinc-500 dark:text-zinc-400">Nenhuma movimentação de cartão no extrato do Asaas — nem compra no débito, nem fatura paga.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-zinc-600 dark:text-zinc-300">
+                  {prev.cartao.faturaQuitada > 0 && <span>Fatura conciliada: <strong className="text-emerald-600">{brl2(prev.cartao.faturaQuitada)}</strong> ({prev.cartao.faturaQuitadaItens} item(ns) baixado(s))</span>}
+                  {prev.cartao.faturaSemItens > 0 && <span className="text-amber-600 dark:text-amber-400">Fatura sem itens lançados: <strong>{brl2(prev.cartao.faturaSemItens)}</strong> — entrou fechada; importe a fatura para itemizar</span>}
+                </div>
+                <ul className="mt-2 grid gap-0.5 sm:grid-cols-2">
+                  {prev.cartao.tipos.map((t) => (
+                    <li key={t.tipo} className="flex items-center justify-between gap-2 text-zinc-500 dark:text-zinc-400">
+                      <span className="truncate font-mono text-[10px]">{t.tipo}</span>
+                      <span className="tabular-nums">{t.n}× · <strong className={t.valor >= 0 ? 'text-rose-600' : 'text-emerald-600'}>{brl2(Math.abs(t.valor))}</strong></span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
@@ -5651,7 +5703,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
         </div>
       </div>
 
-      <AsaasImport />
+      <AsaasImport contas={contas} />
 
       {/* Ferramentas de configuração inicial — recolhível (ações de uma vez só) */}
       <div className="mt-4 rounded-2xl border border-[#DEE2E6] bg-white dark:border-zinc-800 dark:bg-zinc-900">
