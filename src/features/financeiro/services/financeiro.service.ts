@@ -543,6 +543,11 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/integracao/asaas/importar', {}, { timeout: 180000 });
     return data.data ?? data;
   },
+  /** Fatura COLADA (ou arquivo em base64): lê, confere (commit=false) ou lança (commit=true). */
+  async importarFaturaTexto(input: { contaId: string; texto?: string; base64?: string; commit: boolean }): Promise<{ conta: string; lidas: number; novas: number; importadas: number; duplicadas: number; detalhe?: any }> {
+    const { data } = await api.post('/financeiro/cartao/fatura', input, { timeout: 180000 });
+    return data.data ?? data;
+  },
   // ── Vigia da pasta de faturas no Drive ──
   async faturaPastaStatus(): Promise<FaturaPastaStatus> {
     const { data } = await api.get('/financeiro/cartao/fatura-pasta');

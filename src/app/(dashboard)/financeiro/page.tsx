@@ -2457,6 +2457,34 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   // está sendo paga — não em agosto (que ainda está vazia). Sempre um mês concreto.
   const [mesFat, setMesFat] = useState<string>(() => mesAtualCompetencia());
   const [impFatura, setImpFatura] = useState(false);
+  // COLAR a fatura: o caminho sem arquivo e sem pasta. O site do banco/Asaas não pode ser
+  // lido por este site (origens diferentes — o navegador barra), e pelo servidor exigiria
+  // guardar a senha dele. Copiar a tela e colar aqui resolve sem nenhuma das duas coisas.
+  const [colar, setColar] = useState<{ texto: string; previa: any | null; busy: boolean } | null>(null);
+  const colarDaAreaDeTransferencia = async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (!t.trim()) { toast.error('A área de transferência está vazia — copie a fatura antes (Cmd+A, Cmd+C na página do cartão).'); return; }
+      setColar((c) => ({ ...(c ?? { busy: false }), texto: t, previa: null }));
+    } catch { toast.error('O navegador não deixou ler a área de transferência — cole com Cmd+V no campo.'); }
+  };
+  const conferirColado = async (commit: boolean) => {
+    if (!colar?.texto.trim()) { toast.error('Cole a fatura no campo primeiro.'); return; }
+    setColar((c) => (c ? { ...c, busy: true } : c));
+    try {
+      const r = await financeiroService.importarFaturaTexto({ contaId: cartao!.id, texto: colar.texto, commit });
+      if (commit) {
+        toast.success(`${r.novas} lançamento(s) novo(s)${r.duplicadas ? ` · ${r.duplicadas} já existia(m)` : ''}`);
+        setColar(null); onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] });
+      } else {
+        if (!r.lidas) toast.error('Não reconheci transação nenhuma nesse texto.');
+        setColar((c) => (c ? { ...c, previa: r, busy: false } : c));
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Erro ao ler a fatura');
+      setColar((c) => (c ? { ...c, busy: false } : c));
+    }
+  };
   const mesesFat = useMemo(() => [...new Set([mesFat, ...faturas.map((f) => f.info.key)])].filter((k) => /^\d{4}-\d{2}$/.test(k)).sort((a, b) => b.localeCompare(a)), [faturas, mesFat]);
   const faturasVis = mesFat ? faturas.filter((f) => f.info.key === mesFat) : faturas;
 
@@ -2533,10 +2561,48 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
             comDados={new Set(faturas.map((f) => f.info.key))}
           />
           <span className="text-xs text-zinc-400">{fechamento > 0 ? `fecha dia ${fechamento}` : 'sem dia de fechamento'}{vencDia > 0 ? ` · vence dia ${vencDia}` : ''} · em aberto <strong className="text-rose-600">{brl2(abertoTotal)}</strong></span>
+          <button onClick={() => setColar({ texto: '', previa: null, busy: false })} className="inline-flex items-center gap-1.5 rounded-lg border border-[#820AD1]/40 px-3 py-2 text-xs font-semibold text-[#820AD1] transition hover:bg-[#820AD1]/10"><Receipt className="h-3.5 w-3.5" /> Colar fatura</button>
           <button onClick={() => setImpFatura(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar fatura</button>
         </div>
       </div>
       {impFatura && <ImportExtratoModal contas={contas} contaFixa={cartao.id} onClose={() => { setImpFatura(false); onDone(); }} />}
+
+      {colar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setColar(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900">
+            <h3 className="flex items-center gap-2 text-base font-bold text-zinc-800 dark:text-zinc-100"><Receipt className="h-4 w-4 text-[#820AD1]" /> Colar fatura — {cartao.nome}</h3>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Abra a fatura no site do cartão, selecione a tela (<strong>Cmd+A</strong>) e copie (<strong>Cmd+C</strong>). Aqui, cole e confira antes de lançar. Os gastos entram como <strong>"a pagar"</strong>, fora do caixa, e <strong>não duplicam</strong> o que já existe.
+            </p>
+            <textarea
+              value={colar.texto}
+              onChange={(e) => setColar({ ...colar, texto: e.target.value, previa: null })}
+              rows={8}
+              placeholder={'14/10/2026 às 01:49\nANTHROPIC   R$ 5,44\n…ou o texto da fatura, do jeito que vier'}
+              className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button onClick={colarDaAreaDeTransferencia} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:border-[#820AD1] hover:text-[#820AD1] dark:border-zinc-700 dark:text-zinc-300">Colar da área de transferência</button>
+              <button onClick={() => conferirColado(false)} disabled={colar.busy} className="inline-flex items-center gap-1.5 rounded-lg border border-[#820AD1]/40 px-3 py-1.5 text-xs font-semibold text-[#820AD1] hover:bg-[#820AD1]/10 disabled:opacity-50">{colar.busy && !colar.previa ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />} Conferir</button>
+              {colar.previa?.lidas > 0 && (
+                <button onClick={() => conferirColado(true)} disabled={colar.busy} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">{colar.busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Banknote className="h-3.5 w-3.5" />} Lançar {colar.previa.novas} gasto(s)</button>
+              )}
+              <button onClick={() => setColar(null)} className="ml-auto text-xs font-medium text-zinc-400 hover:text-zinc-600">Cancelar</button>
+            </div>
+            {colar.previa && (
+              <div className="mt-3 max-h-56 overflow-auto rounded-lg border border-zinc-200 p-2 text-xs dark:border-zinc-800">
+                <p className="mb-1 font-semibold text-zinc-600 dark:text-zinc-300">{colar.previa.lidas} linha(s) lida(s) · <span className="text-[#02883C]">{colar.previa.novas} nova(s)</span>{colar.previa.duplicadas ? <> · <span className="text-zinc-400">{colar.previa.duplicadas} já existia(m)</span></> : null}</p>
+                {(colar.previa.detalhe?.linhas ?? []).map((l: any, i: number) => (
+                  <div key={i} className={`flex items-center justify-between gap-2 border-t border-zinc-100 py-1 dark:border-zinc-800/70 ${l.duplicado ? 'text-zinc-400 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                    <span className="truncate">{l.data} · {l.descricao}</span>
+                    <span className="tabular-nums">{brl2(Math.abs(Number(l.valor) || 0))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {semCiclo && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-400">Defina o <strong>dia de fechamento e vencimento</strong> deste cartão em <strong>Contas</strong> para separar as faturas por mês (ex.: fecha 26, vence 3).</p>}
       <p className="mt-2 text-xs text-zinc-400">Use <strong>Importar fatura</strong> pra subir o extrato do cartão aqui — os gastos entram como <strong>"a pagar"</strong> (fora do caixa). Ao clicar <strong>Pagar fatura</strong>, os próprios débitos viram <strong>liquidados</strong> na conta escolhida (sem lançar o pagamento em dobro).</p>
