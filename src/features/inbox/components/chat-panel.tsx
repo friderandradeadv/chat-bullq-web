@@ -178,10 +178,13 @@ function encaminhamento(msg: { metadata?: unknown }): 'sim' | 'frequente' | null
   if (!rp || typeof rp !== 'object') return null;
   if (rp.context?.frequently_forwarded) return 'frequente';
   if (rp.context?.forwarded) return 'sim';
-  const raiz = rp.data?.message ?? rp.message;
-  if (!raiz || typeof raiz !== 'object') return null;
   const candidatos: any[] = [];
-  for (const v of Object.values(raiz)) {
+  // Texto simples ("conversation") traz o contextInfo FORA da mensagem, em
+  // `data.contextInfo` — era o caso da Júlia em 14/10/2026.
+  const fora = rp.data?.contextInfo ?? rp.contextInfo;
+  if (fora) candidatos.push({ contextInfo: fora });
+  const raiz = rp.data?.message ?? rp.message;
+  for (const v of raiz && typeof raiz === 'object' ? Object.values(raiz) : []) {
     if (!v || typeof v !== 'object') continue;
     candidatos.push(v);
     const dentro = (v as any).message;
