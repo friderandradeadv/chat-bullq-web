@@ -9,7 +9,13 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
  * inteiro, de 82 páginas.
  */
 export type ResultadoMontagem =
-  | { ok: true; aviso?: string; org?: any }
+  /**
+   * `avisos` são os da PEÇA: o que o montador acusou de forma e o que o drafter
+   * tirou dela por falta de lastro no HISCON. Chegam do servidor e têm de ser
+   * MOSTRADOS: eram a terceira camada do mesmo furo (montador → serviço →
+   * front), e o front era a única que ainda engolia (15/10/2026).
+   */
+  | { ok: true; aviso?: string; avisos?: string[]; org?: any }
   | { ok: false; motivo: 'jg-incompleto'; faltas: string[] }
   | { ok: false; motivo: 'documento-curto'; detalhe: string }
   | { ok: false; motivo: 'sem-calculo'; detalhe: string; pastaCriada: boolean; org?: any }
@@ -123,7 +129,7 @@ export async function montarInicialCompleta(
     const r = await legalCasesService.montarTudoNoServidor(caseId, { tese, produto, eixo: opts.eixo, signal });
     if (signal?.aborted) return { ok: false, motivo: 'abortado' };
     if (r.calculo) onCalculo?.(r.calculo);
-    if (r.ok) return { ok: true, org: r.pasta ?? null };
+    if (r.ok) return { ok: true, org: r.pasta ?? null, avisos: r.avisos ?? [] };
     const motivo = r.motivo ?? 'erro';
     if (motivo === 'jg-incompleto') return { ok: false, motivo, faltas: r.faltas ?? [] };
     if (motivo === 'sem-calculo') {

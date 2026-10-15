@@ -1681,6 +1681,23 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
    * advogado, não por padrão trocado no código.
    */
   const [eixo, setEixo] = useState<'erro' | 'onus'>('erro');
+  /**
+   * Os avisos da PEÇA recém-montada, para LER na tela.
+   *
+   * 🚨 TERCEIRA CAMADA DO MESMO FURO (15/10/2026). O montador escrevia o aviso e
+   * o serviço o descartava; consertado, o serviço passou a devolvê-lo e o FRONT
+   * o engolia: o tipo tinha `aviso` no singular, nada o preenchia, e o
+   * `toast(r.aviso)` nunca disparava. Na inicial de CHURNING do JOSÉ BATISTA
+   * eram SEIS avisos, três deles substância jurídica ("renovou N vezes" saiu da
+   * peça; a comparação de taxa saiu; dois contratos do grupo também constam sob
+   * outro banco).
+   *
+   * Painel, não toast: um deles tem 380 caracteres e manda pedir horário de
+   * assinatura, vivacidade e laudo biométrico. Toast de 8 segundos não é lugar
+   * para decisão de antes do protocolo. Eles também ficam como movimentação no
+   * card, que é o registro durável; isto é a vista imediata.
+   */
+  const [avisosDaPeca, setAvisosDaPeca] = useState<string[]>([]);
   const oferecidas = montaveisDoCard(null, area);
   const escolhida = TODAS_AS_INICIAIS.find((m) => m.rotulo === teseEscolhida) ?? oferecidas[0];
   const montarTudo = async (escolha?: ReturnType<typeof montaveisDoCard>[number]) => {
@@ -1706,6 +1723,7 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
     // do cálculo (`onCalculo`) e o envoltório da pasta (`organizarPasta`), que
     // colhe os avisos do que saiu da raiz do cliente.
     setTudoBusy('Calculando…');
+    setAvisosDaPeca([]);
     try {
       const r = await montarInicialCompleta(caseId, produto, {
         // a TESE sai do seletor quando o card oferece mais de uma inicial;
@@ -1744,6 +1762,14 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           'Card em Revisão inicial. Confira as lacunas "[ • ]" antes de protocolar.',
         );
         if (r.aviso) toast(r.aviso, { duration: 12000 });
+        const daPeca = ((r as any).avisos ?? []) as string[];
+        setAvisosDaPeca(daPeca);
+        if (daPeca.length) {
+          toast.warning(
+            `${daPeca.length} aviso(s) da peça, logo abaixo do botão: leia antes de protocolar.`,
+            { duration: 10000 },
+          );
+        }
         return;
       }
       if (r.motivo === 'abortado') {
@@ -1916,6 +1942,47 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           </button>
         )}
       </div>
+
+      {/* 🚨 OS AVISOS DA PEÇA, PARA LER. Ver a nota em `avisosDaPeca`: eles
+          vinham sendo engolidos nas três camadas, e são o que decide o que
+          conferir antes de protocolar. Os que começam com 🚨 ou "ARGUMENTO
+          FORTE" sobem para o topo e saem destacados: um é litispendência em
+          potencial, o outro é pedido processual a fazer. */}
+      {avisosDaPeca.length > 0 && (
+        <div className="mt-2 w-full rounded-lg border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-800/60 dark:bg-amber-950/30">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">
+              {avisosDaPeca.length} aviso(s) da peça — leia antes de protocolar
+            </p>
+            <button
+              onClick={() => setAvisosDaPeca([])}
+              title="Fecha a lista. Os avisos continuam nas movimentações do card."
+              className="shrink-0 text-[11px] font-medium text-amber-800 hover:underline dark:text-amber-300"
+            >
+              fechar
+            </button>
+          </div>
+          <ul className="mt-1.5 space-y-1.5">
+            {[...avisosDaPeca]
+              .sort((a, b) => Number(/^(🚨|ARGUMENTO FORTE)/.test(b)) - Number(/^(🚨|ARGUMENTO FORTE)/.test(a)))
+              .map((aviso, i) => {
+                const forte = /^(🚨|ARGUMENTO FORTE)/.test(aviso);
+                return (
+                  <li
+                    key={i}
+                    className={`rounded border-l-2 pl-2 text-[11px] leading-relaxed ${
+                      forte
+                        ? 'border-amber-600 font-medium text-amber-900 dark:border-amber-500 dark:text-amber-100'
+                        : 'border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-200/90'
+                    }`}
+                  >
+                    {aviso}
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
