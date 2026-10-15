@@ -2455,7 +2455,14 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   // Seletor de mês (fatura) — igual ao livro-razão. '' = todas as faturas.
   // Abre na fatura do mês-competência atual (fecha dia 3): hoje 03/08 → julho, a fatura que
   // está sendo paga — não em agosto (que ainda está vazia). Sempre um mês concreto.
-  const [mesFat, setMesFat] = useState<string>(() => mesAtualCompetencia());
+  // Abre no ciclo ABERTO DESTE cartão, não no mês do calendário. Medido em 15/10/2026: o
+  // Cartão ASAAS fecha dia 5, então a compra de 14/10 está na fatura de NOVEMBRO — e a tela
+  // abria em outubro dizendo "nenhuma fatura", logo abaixo de "em aberto R$ 5,44". Pela
+  // regra do próprio cartão, o Nubank (fecha 26) continua abrindo no mês corrente.
+  const cicloDeHoje = () => (fechamento > 0 ? faturaCiclo(hojeBR(), fechamento, vencDia).key : mesAtualCompetencia());
+  const [mesFat, setMesFat] = useState<string>(cicloDeHoje);
+  // Trocar de cartão recalcula: cada um tem o seu ciclo.
+  useEffect(() => { setMesFat(cicloDeHoje()); }, [cartao?.id, fechamento, vencDia]);
   const [impFatura, setImpFatura] = useState(false);
   // COLAR a fatura: o caminho sem arquivo e sem pasta. O site do banco/Asaas não pode ser
   // lido por este site (origens diferentes — o navegador barra), e pelo servidor exigiria
