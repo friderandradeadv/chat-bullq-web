@@ -1253,6 +1253,32 @@ function ActivityEditForm({ activity, onCancel, onSaved }: { activity: Activity;
 }
 
 // ── Detalhe da atividade (layout estilo Astrea: checkbox+título, dados, abas) ──
+/**
+ * O card é de RÉPLICA?
+ *
+ * 🚨 QUEM SABE É O TÍTULO, não a publicação. Medido em 15/10/2026 no processo
+ * do LEANDRO: o `rawContent` da intimação NÃO contém "réplica" nem
+ * "contestação" (é um ATO ORDINATÓRIO genérico), e mesmo assim o hub cria o
+ * prazo já classificado como "Apresentar réplica". Procurar as palavras no
+ * texto da publicação não acha nada.
+ *
+ * 🚨 E POR QUE NÃO PELA FASE. Foi a primeira tentativa, e falhou: a fase nem
+ * sempre acompanha o prazo, e o bloco sumia de quem precisava. Então eu abri
+ * para TODO card com processo — e aí ele apareceu em prazo de embargos de
+ * declaração, que é o defeito oposto. O escritório cortou a dúvida em
+ * 15/10/2026: "só deve aparecer isso nos cards de Réplica".
+ *
+ * A lista é curta e explícita de propósito. Título novo que signifique réplica
+ * se acrescenta AQUI, numa linha, e não se deduz por semelhança: foi deduzir
+ * que pôs o botão no card dos embargos.
+ */
+function ehCardDeReplica(titulo?: string | null): boolean {
+  const t = String(titulo ?? '');
+  return /r[ée]plica/i.test(t)
+    || /impugna\w*\s+(a|à|a\s+)?contesta[çc][ãa]o/i.test(t)
+    || /manifest\w*\s+sobre\s+a\s+contesta[çc][ãa]o/i.test(t);
+}
+
 function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenConversation }: { activity: Activity; onClose: () => void; onRefetch: () => void; onOpenCase: (id: string) => void; onOpenConversation: (convId: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(activity.done);
@@ -2048,7 +2074,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             precisava dele. Abrir o card e não achar o botão é pior que um bloco
             a mais: ler os autos serve a qualquer manifestação. Na ficha do
             Processo o filtro por fase continua, que lá o card é outro assunto. */}
-        {activity.caseId && (
+        {activity.caseId && ehCardDeReplica(activity.title) && (
           <div className="mt-5">
             <DossieReplica caseId={activity.caseId} sempreVisivel />
           </div>
