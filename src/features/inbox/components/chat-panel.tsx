@@ -160,6 +160,80 @@ function failureText(failedReason?: string | null): string {
 const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
 const IG_CDN_HOSTS = /(lookaside\.fbsbx\.com|cdninstagram\.com|fbcdn\.net)/i;
 
+/**
+ * Mensagem ENCAMINHADA, como o WhatsApp mostra ("↠ Encaminhada"). Lê o campo
+ * gravado pela API (`metadata.isForwarded`, desde 15/10/2026) e, para as
+ * mensagens anteriores, o payload bruto que já vinha guardado:
+ *  • Evolution/Baileys: `contextInfo.isForwarded` ou `forwardingScore > 0`
+ *    dentro do xMessage — e um nível abaixo nos embrulhos
+ *    (documentWithCaption, ephemeral, viewOnce);
+ *  • Cloud API: `context.forwarded` / `context.frequently_forwarded`.
+ * `forwardingScore >= 5` é o "Encaminhada com frequência" do WhatsApp.
+ */
+function encaminhamento(msg: { metadata?: unknown }): 'sim' | 'frequente' | null {
+  const meta = (msg.metadata ?? {}) as Record<string, any>;
+  if (meta.frequentlyForwarded) return 'frequente';
+  if (meta.isForwarded === true) return 'sim';
+  const rp = meta.rawPayload as Record<string, any> | undefined;
+  if (!rp || typeof rp !== 'object') return null;
+  if (rp.context?.frequently_forwarded) return 'frequente';
+  if (rp.context?.forwarded) return 'sim';
+  const raiz = rp.data?.message ?? rp.message;
+  if (!raiz || typeof raiz !== 'object') return null;
+  const candidatos: any[] = [];
+  for (const v of Object.values(raiz)) {
+    if (!v || typeof v !== 'object') continue;
+    candidatos.push(v);
+    const dentro = (v as any).message;
+    if (dentro && typeof dentro === 'object') candidatos.push(...Object.values(dentro));
+  }
+  for (const c of candidatos) {
+    const ctx = c?.contextInfo;
+    if (!ctx) continue;
+    const score = Number(ctx.forwardingScore) || 0;
+    if (score >= 5) return 'frequente';
+    if (ctx.isForwarded || score > 0) return 'sim';
+  }
+  return null;
+}
+
+function SeloEncaminhada({ tipo }: { tipo: 'sim' | 'frequente' }) {
+  return (
+    <p className="mb-0.5 flex items-center gap-1 text-[11.5px] italic text-zinc-500 dark:text-zinc-400">
+      <Forward className="h-3.5 w-3.5 shrink-0" />
+      {tipo === 'frequente' ? 'Encaminhada com frequência' : 'Encaminhada'}
+    </p>
+  );
+}
+
+/**
+ * Reações por mensagem-alvo, no estado ATUAL. Cada reação chega como uma linha
+ * própria (type REACTION); trocar o emoji manda uma linha nova e tirar a reação
+ * manda emoji VAZIO. Somar tudo mostrava emoji que a pessoa já tirou e contagem
+ * inflada — vale a ÚLTIMA reação de cada remetente.
+ */
+function reacoesAtuais(messages: Array<Record<string, any>>): Map<string, string[]> {
+  const ultima = new Map<string, Map<string, { emoji: string; t: number }>>();
+  for (const msg of messages) {
+    if (msg.type !== 'REACTION' || !msg.content?.reaction) continue;
+    const alvo = msg.content.reaction.targetMessageId as string | undefined;
+    if (!alvo) continue;
+    const rp = (msg.metadata?.rawPayload ?? {}) as Record<string, any>;
+    const quem = `${msg.direction}:${msg.senderId ?? rp.data?.key?.participant ?? rp.key?.participant ?? rp.from ?? ''}`;
+    const t = new Date(msg.createdAt).getTime() || 0;
+    const porAlvo = ultima.get(alvo) ?? new Map();
+    const atual = porAlvo.get(quem);
+    if (!atual || t >= atual.t) porAlvo.set(quem, { emoji: (msg.content.reaction.emoji as string) || '', t });
+    ultima.set(alvo, porAlvo);
+  }
+  const out = new Map<string, string[]>();
+  for (const [alvo, porQuem] of ultima) {
+    const emojis = [...porQuem.values()].map((r) => r.emoji).filter(Boolean);
+    if (emojis.length) out.set(alvo, emojis);
+  }
+  return out;
+}
+
 function safeHostname(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
@@ -485,9 +559,19 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
   const { on, emit, onReconnect } = useSocket();
   const user = useAuthStore((s) => s.user);
 
-  const { data, isLoading } = useQuery({
+  // Quantas mensagens trazer. Começa nas 50 de sempre; "Carregar anteriores"
+  // aumenta. A chave da query NÃO muda (o socket e o resto do painel escrevem
+  // em ['messages', id]) — só o tamanho da página pedida.
+  const [limiteMsgs, setLimiteMsgs] = useState(50);
+  const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
+  const pularRolagem = useRef(false);
+  useEffect(() => {
+    setLimiteMsgs(50);
+  }, [conversation.id]);
+
+  const { data, isLoading, refetch: refetchMensagens } = useQuery({
     queryKey: ['messages', conversation.id],
-    queryFn: () => inboxService.getMessages(conversation.id),
+    queryFn: () => inboxService.getMessages(conversation.id, 1, limiteMsgs),
     // Defenses against socket gaps: refetch when the tab regains focus
     // and on browser-level reconnect. Realtime is the happy path; these
     // catch the case where a `message:new` was missed.
@@ -789,8 +873,23 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
   }, [editing, conversation.id, queryClient]);
 
   useEffect(() => {
+    // Ao carregar as anteriores, a lista cresce por CIMA: não pular para o fim.
+    if (pularRolagem.current) {
+      pularRolagem.current = false;
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
+
+  const totalMsgs = (data?.pagination?.total as number | undefined) ?? 0;
+  const haAnteriores = totalMsgs > messages.length;
+  useEffect(() => {
+    if (limiteMsgs === 50) return;
+    pularRolagem.current = true;
+    setCarregandoAnteriores(true);
+    refetchMensagens().finally(() => setCarregandoAnteriores(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limiteMsgs]);
 
   // Reply state — quando setado, próxima msg enviada vai com replyToMessageId
   // e a UI mostra a barra "respondendo a..." acima do input. Reseta ao
@@ -1276,6 +1375,19 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
           </div>
         ) : (
           <div className="mx-auto max-w-3xl space-y-2.5">
+            {haAnteriores && (
+              <div className="flex justify-center pt-1">
+                <button
+                  type="button"
+                  disabled={carregandoAnteriores}
+                  onClick={() => setLimiteMsgs((n) => n + 100)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-[11px] font-medium text-zinc-500 shadow-sm transition-colors hover:bg-white hover:text-zinc-700 disabled:opacity-60 dark:bg-zinc-800/80 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                >
+                  {carregandoAnteriores ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronUp className="h-3 w-3" />}
+                  {carregandoAnteriores ? 'Carregando…' : `Carregar mensagens anteriores (${totalMsgs - messages.length})`}
+                </button>
+              </div>
+            )}
             {auditData.length > 0 && (
               <div className="flex justify-center pt-1">
                 <button
@@ -1290,17 +1402,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
               </div>
             )}
             {(() => {
-              const reactionMap = new Map<string, string[]>();
-              for (const msg of messages) {
-                if (msg.type === 'REACTION' && msg.content?.reaction) {
-                  const targetId = msg.content.reaction.targetMessageId;
-                  if (targetId) {
-                    const existing = reactionMap.get(targetId) || [];
-                    existing.push(msg.content.reaction.emoji);
-                    reactionMap.set(targetId, existing);
-                  }
-                }
-              }
+              const reactionMap = reacoesAtuais(messages as any[]);
               // Injeta as notas internas no timeline como pseudo-mensagens
               // (reaproveita o render âmbar do branch isInternal), ordenadas
               // junto com as mensagens por createdAt.
@@ -1604,6 +1706,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                         </div>
                       ) : msg.type === 'AUDIO' ? (
                         <>
+                          {encaminhamento(msg) && <SeloEncaminhada tipo={encaminhamento(msg)!} />}
                           <AudioMessagePlayer
                             message={msg}
                             isOutbound={isOutbound}
@@ -1640,6 +1743,7 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
                               : 'rounded-bl-md bg-white text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100'
                           }`}
                         >
+                          {encaminhamento(msg) && <SeloEncaminhada tipo={encaminhamento(msg)!} />}
                           <div className={msg.type === 'TEXT' && !(editing && editing.id === msg.id) ? 'flex flex-wrap items-end justify-end gap-x-2 gap-y-0.5' : ''}>
                           <div className={msg.type === 'TEXT' && !(editing && editing.id === msg.id) ? 'min-w-0' : 'contents'}>
                           {msg.type === 'TEXT' ? (

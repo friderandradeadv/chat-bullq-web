@@ -214,6 +214,35 @@ export function MediaVideo({ message, isOutbound }: MediaProps) {
   );
 }
 
+/**
+ * Baixa o arquivo e devolve o blob com o TIPO certo e um nome com extensão.
+ * O PDF do cliente chega muitas vezes sem mimetype e sem ".pdf" no nome (o
+ * WhatsApp manda o título que a pessoa digitou), e o arquivo guardado sem
+ * extensão é servido como octet-stream: o navegador não abria a prévia e
+ * baixava "Documento" sem extensão, que o Mac não sabe abrir. Quem decide é o
+ * CONTEÚDO — PDF começa com "%PDF-" —, não o rótulo.
+ */
+async function baixarArquivoTipado(
+  u: string,
+  mimeType: string,
+  filename: string,
+): Promise<{ blob: Blob; nome: string }> {
+  const res = await fetch(u);
+  if (!res.ok) throw new Error(`O servidor recusou o arquivo (HTTP ${res.status})`);
+  const bruto = await res.blob();
+  if (bruto.size === 0) throw new Error('O arquivo veio vazio');
+  const cabeca = new Uint8Array(await bruto.slice(0, 5).arrayBuffer());
+  const pdfPeloConteudo = String.fromCharCode(...cabeca) === '%PDF-';
+  const isPdf =
+    pdfPeloConteudo ||
+    bruto.type.includes('pdf') ||
+    mimeType.includes('pdf') ||
+    /\.pdf$/i.test(filename);
+  const blob = isPdf && !bruto.type.includes('pdf') ? new Blob([bruto], { type: 'application/pdf' }) : bruto;
+  const nome = isPdf && !/\.pdf$/i.test(filename) ? `${filename}.pdf` : filename;
+  return { blob, nome };
+}
+
 export function MediaDocument({ message, isOutbound }: MediaProps) {
   const { url, loading, error, retry } = useResolvedMedia(message);
   const filename = (message.content?.fileName as string | undefined) || 'Documento';
@@ -235,17 +264,18 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
 
   // Pré-visualização em NOVA ABA via blob. Navegar direto pra URL do
   // provider não funciona (Content-Disposition vira download e a aba fecha
-  // sozinha) — então baixamos via fetch (CDN da Zappfy dá CORS `*`), criamos
-  // um blob com o mime certo e abrimos `blob:` na aba nova: o Chrome
-  // renderiza o PDF/imagem inline. A aba é aberta ANTES do await pra não
-  // cair no bloqueador de popup.
+  // sozinha) — então baixamos via fetch, criamos um blob com o mime certo e
+  // abrimos `blob:` na aba nova: o navegador renderiza o PDF/imagem inline. A
+  // aba é aberta ANTES do await pra não cair no bloqueador de popup.
   const [viewLoading, setViewLoading] = useState(false);
+  const [falhaArquivo, setFalhaArquivo] = useState<string | null>(null);
 
   const handleView = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (viewLoading) return;
     setViewLoading(true);
+    setFalhaArquivo(null);
     const w = window.open('about:blank', '_blank');
     try {
       const u = await ensureUrl();
@@ -253,18 +283,8 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
         w?.close();
         return;
       }
-      const res = await fetch(u);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const effectiveMime = blob.type || mimeType || '';
-      const isPdf = effectiveMime.includes('pdf') || /\.pdf$/i.test(filename);
-      // Alguns providers devolvem octet-stream — força o mime certo pro
-      // viewer nativo de PDF do navegador reconhecer o blob.
-      const typed =
-        isPdf && !blob.type.includes('pdf')
-          ? new Blob([blob], { type: 'application/pdf' })
-          : blob;
-      const blobUrl = URL.createObjectURL(typed);
+      const { blob } = await baixarArquivoTipado(u, mimeType, filename);
+      const blobUrl = URL.createObjectURL(blob);
       if (w) w.location.href = blobUrl;
       else window.open(blobUrl, '_blank');
       // Revoga depois — revogar imediatamente mataria o conteúdo da aba.
@@ -280,19 +300,37 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
     }
   };
 
+  // Baixar via BLOB, não via <a href=url download>: o atributo `download` só
+  // vale na MESMA origem, e o arquivo mora no domínio da API — o navegador
+  // ignorava o nome e abria/baixava "arquivo sem extensão". Com o blob o nome
+  // sai certo e o PDF sem extensão ganha ".pdf".
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setFalhaArquivo(null);
     const u = await ensureUrl();
     if (!u) return;
-    const a = document.createElement('a');
-    a.href = u;
-    a.download = filename;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    try {
+      const { blob, nome } = await baixarArquivoTipado(u, mimeType, filename);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = nome;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (err) {
+      setFalhaArquivo((err as Error)?.message || 'Não consegui baixar o arquivo.');
+      const a = document.createElement('a');
+      a.href = u;
+      a.download = filename;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
   };
 
   const iconBtn = `flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
@@ -327,7 +365,11 @@ export function MediaDocument({ message, isOutbound }: MediaProps) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{filename}</p>
           <p className={`truncate text-[11px] ${isOutbound ? 'opacity-70' : 'text-zinc-500 dark:text-zinc-400'}`}>
-            {loading ? 'Carregando…' : error ? 'Falhou — toque pra tentar de novo' : (mimeType || 'Arquivo')}
+            {loading
+              ? 'Carregando…'
+              : error || falhaArquivo
+                ? `${error || falhaArquivo} — toque pra tentar de novo. Se persistir, peça ao cliente que reenvie.`
+                : (mimeType || 'Arquivo')}
           </p>
         </div>
         {loading || viewLoading ? (
