@@ -2290,6 +2290,14 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       {pedido?.status === 'conferir' && pedido.texto && (
         <ImportExtratoModal contas={contas} contaFixa={pedido.contaId} textoInicial={pedido.texto} onClose={() => void fecharPedido()} />
       )}
+      {pedido?.status === 'pendente' && (
+        <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-[#820AD1]/10 px-3 py-2 text-xs text-[#820AD1] dark:text-[#b98aff]">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <strong>{pedido.etapa || 'na fila do agente'}</strong>
+          <span className="text-zinc-500 dark:text-zinc-400">— o agente trabalha na janela dele; esta linha se atualiza sozinha</span>
+          <button onClick={() => void fecharPedido()} className="ml-auto font-semibold underline">cancelar</button>
+        </p>
+      )}
       {pedido?.status === 'erro' && (
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-400"><strong>A coleta não deu certo:</strong> {pedido.erro} <button onClick={() => void fecharPedido()} className="ml-1 font-semibold underline">ok</button></p>
       )}
@@ -2784,6 +2792,16 @@ function usePedidoColeta(onPronto?: () => void) {
     onSuccess: (p) => { setPedido(p); toast('Pedido enviado ao agente — lendo o site na janela dele…'); },
     onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pedir'),
   });
+  // Ao abrir a tela, adota o pedido que já está de pé no servidor: sem isto, recarregar a
+  // página fazia o acompanhamento sumir — o trabalho seguia no Mac e a tela ficava muda.
+  useEffect(() => {
+    (async () => {
+      try {
+        const p: any = await financeiroService.statusPedidoFatura();
+        if (p?.status === 'pendente' || p?.status === 'conferir') setPedido(p);
+      } catch { /* sem acesso ou sem pedido: a tela segue normal */ }
+    })();
+  }, []);
   useEffect(() => {
     if (pedido?.status !== 'pendente') return;
     const t = setInterval(async () => {
