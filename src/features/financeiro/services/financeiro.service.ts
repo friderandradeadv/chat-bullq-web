@@ -553,6 +553,10 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/cartao/fatura/pedir', { contaId });
     return data.data ?? data;
   },
+  async limparPedidoFatura(): Promise<{ ok: boolean }> {
+    const { data } = await api.delete('/financeiro/cartao/fatura/pedido');
+    return data.data ?? data;
+  },
   async statusPedidoFatura(): Promise<FaturaPedido | { status: 'nenhum' }> {
     const { data } = await api.get('/financeiro/cartao/fatura/pedido');
     return data.data ?? data;
@@ -692,7 +696,8 @@ export interface ExtratoConferencia { conferido: boolean; total: number; novos: 
 
 /** Pedido de coleta da fatura: o botão registra, o vigia do Mac executa. */
 export interface FaturaPedido {
-  id?: string; status: 'pendente' | 'feito' | 'erro' | 'nenhum';
+  id?: string; status: 'pendente' | 'conferir' | 'feito' | 'erro' | 'nenhum';
+  contaId?: string; texto?: string;
   etapa?: string; pedidoEm?: string; concluidoEm?: string;
   resultado?: { lidas: number; novas: number; duplicadas: number };
   erro?: string; forbidden?: boolean;

@@ -2746,7 +2746,7 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
 }
 
 // ── Modal: importar extrato (PDF/CSV/OFX) → lançamentos, com dedup server-side ──
-function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: string; nome: string; cartao?: boolean }[]; onClose: () => void; contaFixa?: string }) {
+function ImportExtratoModal({ contas, onClose, contaFixa, textoInicial }: { contas: { id: string; nome: string; cartao?: boolean }[]; onClose: () => void; contaFixa?: string; textoInicial?: string }) {
   const qc = useQueryClient();
   const [conta, setConta] = useState(contaFixa ?? contas[0]?.id ?? '');
   const [nome, setNome] = useState('');
@@ -2783,6 +2783,25 @@ function ImportExtratoModal({ contas, onClose, contaFixa }: { contas: { id: stri
   const [dragIdx, setDragIdx] = useState<number | null>(null); // linha do alvará com PDF sendo arrastado por cima
   const { data: members = [] } = useQuery({ queryKey: ['members'], queryFn: () => membersService.list(), staleTime: 300_000 });
   const advogados = useMemo(() => members.filter((m) => m.user.isActive).map((m) => ({ id: m.user.id, name: m.user.name })), [members]);
+
+  // Texto que o AGENTE colheu da tela do banco: entra pelo mesmo caminho do arquivo, para
+  // cair na mesma conferência (novo × repetido × revisar, vertical, alvará, cliente). A
+  // coleta roda sozinha; a classificação é dele — foi o pedido de 15/10/2026.
+  const jaLeu = useRef(false);
+  useEffect(() => {
+    if (!textoInicial?.trim() || jaLeu.current) return;
+    jaLeu.current = true;
+    (async () => {
+      setNome('extrato colhido pelo agente'); setParsing(true);
+      try {
+        let linhas = lerExtrato(textoInicial);
+        if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(textoInicial);
+        await conferir(linhas, contaFixa ?? conta);
+      } catch (e: any) { toast.error(e?.message || 'Erro ao ler o que o agente trouxe'); }
+      finally { setParsing(false); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [textoInicial]);
 
   const conferir = async (linhas: { data: string; valor: number; descricao: string }[], contaArg?: string) => {
     if (!linhas.length) { toast.error('Não consegui ler lançamentos desse arquivo. Tente OFX/CSV ou cole o texto.'); return; }
@@ -5888,7 +5907,8 @@ function ContasTab({ data }: { data: FinDashboard }) {
       try {
         const p: any = await financeiroService.statusPedidoFatura();
         setPedidoConta(p);
-        if (p?.status === 'feito') {
+        if (p?.status === 'conferir') toast.success('Extrato colhido — confira o que entra.');
+        else if (p?.status === 'feito') {
           toast.success(`Extrato puxado: ${p.resultado?.novas ?? 0} novo(s)${p.resultado?.duplicadas ? ` · ${p.resultado.duplicadas} já existia(m)` : ''}`);
           qc.invalidateQueries({ queryKey: ['financeiro'] });
         } else if (p?.status === 'erro') toast.error(p.erro || 'Não deu certo.');
@@ -6054,6 +6074,15 @@ function ContasTab({ data }: { data: FinDashboard }) {
       </div>
 
       {/* Modal conciliação (importar extrato) */}
+      {pedidoConta?.status === 'conferir' && pedidoConta.texto && (
+        <ImportExtratoModal
+          contas={contas}
+          contaFixa={pedidoConta.contaId}
+          textoInicial={pedidoConta.texto}
+          onClose={async () => { setPedidoConta(null); try { await financeiroService.limparPedidoFatura(); } catch { /* já estava limpo */ } qc.invalidateQueries({ queryKey: ['financeiro'] }); }}
+        />
+      )}
+
       {conc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { setConc(null); setConcResult(null); }}>
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 scrollbar-thin" onClick={(e) => e.stopPropagation()}>
