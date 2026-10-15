@@ -991,7 +991,9 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const repassePorId = useMemo(() => new Map((repasses?.itens ?? []).map((i) => [`__repasse:${i.txId}:${i.chave}`, i])), [repasses]);
   // Atrasadas × vencendo hoje — alimenta as bolinhas da subaba e do topo da lista.
   const emAberto = useMemo(() => contasEmAberto(data, repasses?.itens), [data, repasses]);
-  const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>('ledger');
+  // #fatura na URL = o favorito do Asaas abriu esta aba para entregar a fatura. Já nasce
+  // na aba do Cartão, que é quem escuta a mensagem (ver CartaoCreditoView).
+  const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>(() => (typeof window !== 'undefined' && window.location.hash === '#fatura' ? 'cartao' : 'ledger'));
   // Verticais disponíveis para ratear uma despesa (ex.: agência 1/3 cada).
   const areasVert = useMemo(() => {
     const base = VERTICAIS_PADRAO;
@@ -2468,6 +2470,32 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   // lido por este site (origens diferentes — o navegador barra), e pelo servidor exigiria
   // guardar a senha dele. Copiar a tela e colar aqui resolve sem nenhuma das duas coisas.
   const [colar, setColar] = useState<{ texto: string; previa: any | null; busy: boolean } | null>(null);
+  // ── Recebe a fatura do favorito do Asaas, em um clique ────────────────────────────
+  // Este site NÃO pode ler o site do cartão (origens diferentes — o navegador barra). Então
+  // o favorito roda LÁ, abre esta página e empurra o texto por postMessage. Aqui só se
+  // aceita mensagem vinda de www.asaas.com, e só a primeira: o favorito repete o envio até
+  // ser confirmado (não sabe quando a página terminou de carregar), e sem essa trava a
+  // mesma fatura abriria a conferência várias vezes.
+  const recebido = useRef(false);
+  useEffect(() => {
+    const ORIGEM = 'https://www.asaas.com';
+    const ouvir = (e: MessageEvent) => {
+      if (e.origin !== ORIGEM || recebido.current) return;
+      const d: any = e.data;
+      if (!d || d.tipo !== 'fatura-cartao' || typeof d.texto !== 'string' || !d.texto.trim()) return;
+      recebido.current = true;
+      try { (e.source as Window | null)?.postMessage({ tipo: 'fatura-recebida' }, ORIGEM); } catch { /* o favorito só repete mais um pouco */ }
+      setColar({ texto: d.texto, previa: null, busy: false });
+      toast.success('Fatura recebida do Asaas — conferindo…');
+      setTimeout(() => { void conferirColado(false); }, 50);
+    };
+    window.addEventListener('message', ouvir);
+    // Avisa quem abriu esta janela (o favorito) que já dá para mandar.
+    try { window.opener?.postMessage({ tipo: 'hub-pronto' }, ORIGEM); } catch { /* aberta à mão: não há opener */ }
+    return () => window.removeEventListener('message', ouvir);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const colarDaAreaDeTransferencia = async () => {
     try {
       const t = await navigator.clipboard.readText();
