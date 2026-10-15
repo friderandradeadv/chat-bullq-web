@@ -2853,6 +2853,14 @@ function ImportExtratoModal({ contas, onClose, contaFixa, textoInicial }: { cont
     (async () => {
       setNome('extrato colhido pelo agente'); setParsing(true);
       try {
+        // 🚨 O SALDO TAMBÉM VEM, como vinha do OFX/PDF. Sem ele a âncora fica zerada e o
+        // "Total em conta" passa a mentir — medido em 15/10/2026, quando a janela abriu com
+        // "Saldo final do extrato R$ 0,00". Na tela do banco o saldo está escrito; aqui ele
+        // é lido, e a data da âncora é AGORA, porque a leitura é ao vivo (diferente do
+        // arquivo, que fala de um dia que já passou).
+        const m = textoInicial.match(/Saldo\s+(?:dispon[íi]vel|em conta)[\s\S]{0,40}?R\$\s?([\d.]+,\d{2})/i)
+          ?? textoInicial.match(/R\$\s?([\d.]+,\d{2})\s*\n?\s*Saldo\s+dispon[íi]vel/i);
+        if (m) { setSaldoFinal(m[1]); setSaldoFinalEm(new Date().toISOString()); }
         let linhas = lerExtrato(textoInicial);
         if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(textoInicial);
         await conferir(linhas, contaFixa ?? conta);
