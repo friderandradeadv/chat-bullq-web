@@ -2881,6 +2881,17 @@ function ImportExtratoModal({ contas, onClose, contaFixa, textoInicial }: { cont
         if (m) { setSaldoFinal(m[1]); setSaldoFinalEm(new Date().toISOString()); }
         let linhas = lerExtrato(textoInicial);
         if (linhas.length === 0) linhas = await financeiroService.extrairExtrato(textoInicial);
+        // 🚨 TELA DE BANCO NÃO É FONTE CONFIÁVEL DE LANÇAMENTO. O feed do Nubank é texto
+        // corrido: o parser local não o reconhece e sobra a IA, que em 15/10/2026 errou
+        // duas vezes seguidas no mesmo extrato — primeiro o ano (2024 em movimento de
+        // 2026, dedup cego), depois a natureza (sete "Saldo do dia" devolvidos como
+        // receita, R$ 49 mil que nunca entraram). As duas travas estão na api; quando
+        // elas barram tudo, o resultado honesto é ZERO — e o caminho é o OFX, que o
+        // banco assina e o hub lê sem adivinhar nada.
+        if (linhas.length === 0) {
+          toast.error('Não consegui ler esta tela com segurança — o que veio era saldo, não movimento. Peça "Extrato imediato" no app do Nubank: o OFX chega por e-mail e entra aqui sozinho, com data e valor exatos.', { duration: 10000 });
+          return;
+        }
         await conferir(linhas, contaFixa ?? conta);
       } catch (e: any) { toast.error(e?.message || 'Erro ao ler o que o agente trouxe'); }
       finally { setParsing(false); }
