@@ -5872,6 +5872,32 @@ function ContasTab({ data }: { data: FinDashboard }) {
     setLimpaRun(false);
   };
 
+  // ── "Puxar extrato": o botão pede, o vigia do Mac lê o site na janela do agente ──
+  // Só nas contas cujo portal o Mac conhece (ver PORTAIS no vigia_fatura_asaas.js). O login
+  // é dele, sempre: aqui não há senha de banco nenhuma.
+  const PORTAIS_CONHECIDOS: Record<string, string> = { nubank: 'Nubank', 'asaas-cartao': 'Cartão ASAAS' };
+  const [pedidoConta, setPedidoConta] = useState<import('@/features/financeiro/services/financeiro.service').FaturaPedido | null>(null);
+  const puxarM = useMutation({
+    mutationFn: (contaId: string) => financeiroService.pedirColetaFatura(contaId),
+    onSuccess: (p) => { setPedidoConta(p); toast('Pedido enviado ao agente — lendo o site na janela dele…'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pedir'),
+  });
+  useEffect(() => {
+    if (pedidoConta?.status !== 'pendente') return;
+    const t = setInterval(async () => {
+      try {
+        const p: any = await financeiroService.statusPedidoFatura();
+        setPedidoConta(p);
+        if (p?.status === 'feito') {
+          toast.success(`Extrato puxado: ${p.resultado?.novas ?? 0} novo(s)${p.resultado?.duplicadas ? ` · ${p.resultado.duplicadas} já existia(m)` : ''}`);
+          qc.invalidateQueries({ queryKey: ['financeiro'] });
+        } else if (p?.status === 'erro') toast.error(p.erro || 'Não deu certo.');
+      } catch { /* a próxima rodada pergunta de novo */ }
+    }, 3000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoConta?.status, pedidoConta?.id]);
+
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
     const i = { nome: form.nome.trim(), banco: form.banco, saldoInicial: parseValor(form.saldoInicial), cartao: !!form.cartao, fechamento: form.cartao && form.fechamento ? Number(form.fechamento) : undefined, vencimento: form.cartao && form.vencimento ? Number(form.vencimento) : undefined };
@@ -6104,6 +6130,20 @@ function ContasTab({ data }: { data: FinDashboard }) {
                 </span>
               </div>
               <p className={`mt-2 text-2xl font-bold tabular-nums ${s.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(s.saldo)}</p>
+              {PORTAIS_CONHECIDOS[c.id] && (
+                <button
+                  onClick={() => puxarM.mutate(c.id)}
+                  disabled={puxarM.isPending || pedidoConta?.status === 'pendente'}
+                  title="O agente abre o site na janela dele (onde você já está logado), lê o extrato e lança aqui — sem duplicar o que já existe"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#228BE6]/40 px-2.5 py-1 text-[11px] font-semibold text-[#228BE6] transition hover:bg-[#228BE6]/10 disabled:opacity-50"
+                >
+                  {pedidoConta?.status === 'pendente' ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowDownCircle className="h-3 w-3" />}
+                  {pedidoConta?.status === 'pendente' ? (pedidoConta.etapa || 'puxando…') : 'Puxar extrato agora'}
+                </button>
+              )}
+              {pedidoConta?.status === 'erro' && PORTAIS_CONHECIDOS[c.id] && (
+                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{pedidoConta.erro} <button onClick={() => setPedidoConta(null)} className="font-semibold underline">ok</button></p>
+              )}
               <p className="text-[11px] text-zinc-400">{s.real ? 'extrato + movimentos depois dele · ' : ''}{c.cartao ? 'cartão · ' : ''}{s.n} lançamento(s) nesta conta</p>
               {(() => {
                 const rc = data.reconciliacao?.[c.id];
