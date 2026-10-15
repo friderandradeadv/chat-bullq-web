@@ -994,6 +994,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // #fatura na URL = o favorito do Asaas abriu esta aba para entregar a fatura. Já nasce
   // na aba do Cartão, que é quem escuta a mensagem (ver CartaoCreditoView).
   const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>(() => (typeof window !== 'undefined' && window.location.hash === '#fatura' ? 'cartao' : 'ledger'));
+  // Pedir ao agente que leia o extrato do banco — mesmo hook do card da conta.
+  const { pedido, pedir: puxar, pedindo: puxando, fechar: fecharPedido } = usePedidoColeta();
   // Verticais disponíveis para ratear uma despesa (ex.: agência 1/3 cada).
   const areasVert = useMemo(() => {
     const base = VERTICAIS_PADRAO;
@@ -1439,6 +1441,20 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       action={<div className="flex items-center gap-2">
         <input ref={contaFileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => lerContaDoc(e.target.files?.[0])} />
         <input ref={raFileRef} type="file" accept="application/pdf,image/png,image/jpeg" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []); const id = raAlvoRef.current; if (id && fs.length) { setRaAnexos((m) => ({ ...m, [id]: [...(m[id] ?? []), ...fs] })); toast.success(`${fs.length} anexo(s) prontos — saem no PDF da prestação`); } e.currentTarget.value = ''; }} />
+        {/* Puxar é o irmão automático de Importar: um pede o arquivo a você, o outro pede a
+            leitura ao agente. Lado a lado porque a escolha entre eles é do momento, não do
+            assunto. Só aparece com a conta que o Mac sabe ler. */}
+        {contas.some((c) => c.id === 'nubank') && (
+          <button
+            onClick={() => puxar('nubank')}
+            disabled={puxando || pedido?.status === 'pendente'}
+            title="O agente lê o extrato do Nubank na janela dele (onde você já está logado) e abre esta mesma conferência"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#820AD1]/40 px-3 py-1.5 text-xs font-semibold text-[#820AD1] transition hover:bg-[#820AD1]/10 disabled:opacity-50"
+          >
+            {puxando || pedido?.status === 'pendente' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownCircle className="h-3.5 w-3.5" />}
+            {pedido?.status === 'pendente' ? (pedido.etapa || 'puxando…') : 'Puxar extrato'}
+          </button>
+        )}
         <button onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-[#02883C] hover:text-[#02883C] dark:border-zinc-700 dark:text-zinc-300"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar extrato</button>
         <button onClick={() => contaFileRef.current?.click()} disabled={lendoConta} title="A IA lê o boleto/DARF e já preenche a despesa a pagar com o vencimento" className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8]/50 bg-[#7048E8]/5 px-3 py-1.5 text-xs font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/10 disabled:opacity-60">{lendoConta ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> lendo…</> : <><Sparkles className="h-3.5 w-3.5" /> Lançar conta (IA lê boleto/DARF)</>}</button>
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>
@@ -2271,6 +2287,12 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       )}
 
       {importing && <ImportExtratoModal contas={contas} onClose={() => setImporting(false)} />}
+      {pedido?.status === 'conferir' && pedido.texto && (
+        <ImportExtratoModal contas={contas} contaFixa={pedido.contaId} textoInicial={pedido.texto} onClose={() => void fecharPedido()} />
+      )}
+      {pedido?.status === 'erro' && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-400"><strong>A coleta não deu certo:</strong> {pedido.erro} <button onClick={() => void fecharPedido()} className="ml-1 font-semibold underline">ok</button></p>
+      )}
       {vincModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setVincModal(null)}>
           <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
@@ -2746,6 +2768,43 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
 }
 
 // ── Modal: importar extrato (PDF/CSV/OFX) → lançamentos, com dedup server-side ──
+/**
+ * PEDIR AO AGENTE QUE LEIA O SITE DO BANCO — usado no livro-razão e no card da conta.
+ *
+ * Mora aqui, e não em cada tela, porque são as mesmas três coisas: pedir, acompanhar o
+ * passo e abrir a conferência quando o texto chega. Duplicar isso em dois lugares era
+ * garantir que um dia só um dos dois ganharia a correção.
+ */
+const PORTAIS_CONHECIDOS: Record<string, string> = { nubank: 'Nubank', 'asaas-cartao': 'Cartão ASAAS' };
+function usePedidoColeta(onPronto?: () => void) {
+  const qc = useQueryClient();
+  const [pedido, setPedido] = useState<import('@/features/financeiro/services/financeiro.service').FaturaPedido | null>(null);
+  const pedirM = useMutation({
+    mutationFn: (contaId: string) => financeiroService.pedirColetaFatura(contaId),
+    onSuccess: (p) => { setPedido(p); toast('Pedido enviado ao agente — lendo o site na janela dele…'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pedir'),
+  });
+  useEffect(() => {
+    if (pedido?.status !== 'pendente') return;
+    const t = setInterval(async () => {
+      try {
+        const p: any = await financeiroService.statusPedidoFatura();
+        setPedido(p);
+        if (p?.status === 'conferir') toast.success('Extrato colhido — confira o que entra.');
+        else if (p?.status === 'feito') {
+          toast.success(`Pronto: ${p.resultado?.novas ?? 0} novo(s)${p.resultado?.duplicadas ? ` · ${p.resultado.duplicadas} já existia(m)` : ''}`);
+          qc.invalidateQueries({ queryKey: ['financeiro'] });
+          onPronto?.();
+        } else if (p?.status === 'erro') toast.error(p.erro || 'Não deu certo.');
+      } catch { /* a próxima rodada pergunta de novo */ }
+    }, 3000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedido?.status, pedido?.id]);
+  const fechar = async () => { setPedido(null); try { await financeiroService.limparPedidoFatura(); } catch { /* já estava limpo */ } qc.invalidateQueries({ queryKey: ['financeiro'] }); };
+  return { pedido, pedir: (contaId: string) => pedirM.mutate(contaId), pedindo: pedirM.isPending, fechar, setPedido };
+}
+
 function ImportExtratoModal({ contas, onClose, contaFixa, textoInicial }: { contas: { id: string; nome: string; cartao?: boolean }[]; onClose: () => void; contaFixa?: string; textoInicial?: string }) {
   const qc = useQueryClient();
   const [conta, setConta] = useState(contaFixa ?? contas[0]?.id ?? '');
@@ -5891,32 +5950,9 @@ function ContasTab({ data }: { data: FinDashboard }) {
     setLimpaRun(false);
   };
 
-  // ── "Puxar extrato": o botão pede, o vigia do Mac lê o site na janela do agente ──
-  // Só nas contas cujo portal o Mac conhece (ver PORTAIS no vigia_fatura_asaas.js). O login
-  // é dele, sempre: aqui não há senha de banco nenhuma.
-  const PORTAIS_CONHECIDOS: Record<string, string> = { nubank: 'Nubank', 'asaas-cartao': 'Cartão ASAAS' };
-  const [pedidoConta, setPedidoConta] = useState<import('@/features/financeiro/services/financeiro.service').FaturaPedido | null>(null);
-  const puxarM = useMutation({
-    mutationFn: (contaId: string) => financeiroService.pedirColetaFatura(contaId),
-    onSuccess: (p) => { setPedidoConta(p); toast('Pedido enviado ao agente — lendo o site na janela dele…'); },
-    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pedir'),
-  });
-  useEffect(() => {
-    if (pedidoConta?.status !== 'pendente') return;
-    const t = setInterval(async () => {
-      try {
-        const p: any = await financeiroService.statusPedidoFatura();
-        setPedidoConta(p);
-        if (p?.status === 'conferir') toast.success('Extrato colhido — confira o que entra.');
-        else if (p?.status === 'feito') {
-          toast.success(`Extrato puxado: ${p.resultado?.novas ?? 0} novo(s)${p.resultado?.duplicadas ? ` · ${p.resultado.duplicadas} já existia(m)` : ''}`);
-          qc.invalidateQueries({ queryKey: ['financeiro'] });
-        } else if (p?.status === 'erro') toast.error(p.erro || 'Não deu certo.');
-      } catch { /* a próxima rodada pergunta de novo */ }
-    }, 3000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pedidoConta?.status, pedidoConta?.id]);
+  // "Puxar extrato": o botão pede, o vigia do Mac lê o site na janela do agente. A lógica
+  // é a mesma do livro-razão — por isso vive no hook, não aqui.
+  const { pedido: pedidoConta, pedir: puxarConta, pedindo: puxandoConta, fechar: fecharPedidoConta } = usePedidoColeta();
 
   const salvar = () => {
     if (!form || !form.nome.trim()) { toast.error('Informe o nome da conta'); return; }
@@ -6079,7 +6115,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
           contas={contas}
           contaFixa={pedidoConta.contaId}
           textoInicial={pedidoConta.texto}
-          onClose={async () => { setPedidoConta(null); try { await financeiroService.limparPedidoFatura(); } catch { /* já estava limpo */ } qc.invalidateQueries({ queryKey: ['financeiro'] }); }}
+          onClose={() => void fecharPedidoConta()}
         />
       )}
 
@@ -6161,8 +6197,8 @@ function ContasTab({ data }: { data: FinDashboard }) {
               <p className={`mt-2 text-2xl font-bold tabular-nums ${s.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(s.saldo)}</p>
               {PORTAIS_CONHECIDOS[c.id] && (
                 <button
-                  onClick={() => puxarM.mutate(c.id)}
-                  disabled={puxarM.isPending || pedidoConta?.status === 'pendente'}
+                  onClick={() => puxarConta(c.id)}
+                  disabled={puxandoConta || pedidoConta?.status === 'pendente'}
                   title="O agente abre o site na janela dele (onde você já está logado), lê o extrato e lança aqui — sem duplicar o que já existe"
                   className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#228BE6]/40 px-2.5 py-1 text-[11px] font-semibold text-[#228BE6] transition hover:bg-[#228BE6]/10 disabled:opacity-50"
                 >
@@ -6171,7 +6207,7 @@ function ContasTab({ data }: { data: FinDashboard }) {
                 </button>
               )}
               {pedidoConta?.status === 'erro' && PORTAIS_CONHECIDOS[c.id] && (
-                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{pedidoConta.erro} <button onClick={() => setPedidoConta(null)} className="font-semibold underline">ok</button></p>
+                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{pedidoConta.erro} <button onClick={() => void fecharPedidoConta()} className="font-semibold underline">ok</button></p>
               )}
               <p className="text-[11px] text-zinc-400">{s.real ? 'extrato + movimentos depois dele · ' : ''}{c.cartao ? 'cartão · ' : ''}{s.n} lançamento(s) nesta conta</p>
               {(() => {
