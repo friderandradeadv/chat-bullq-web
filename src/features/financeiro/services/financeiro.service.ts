@@ -548,6 +548,15 @@ export const financeiroService = {
     const { data } = await api.post('/financeiro/cartao/fatura', input, { timeout: 180000 });
     return data.data ?? data;
   },
+  /** Pede ao Mac que abra o Asaas na janela do agente e traga a fatura (o login é dele). */
+  async pedirColetaFatura(contaId = 'asaas-cartao'): Promise<FaturaPedido> {
+    const { data } = await api.post('/financeiro/cartao/fatura/pedir', { contaId });
+    return data.data ?? data;
+  },
+  async statusPedidoFatura(): Promise<FaturaPedido | { status: 'nenhum' }> {
+    const { data } = await api.get('/financeiro/cartao/fatura/pedido');
+    return data.data ?? data;
+  },
   // ── Vigia da pasta de faturas no Drive ──
   async faturaPastaStatus(): Promise<FaturaPastaStatus> {
     const { data } = await api.get('/financeiro/cartao/fatura-pasta');
@@ -680,6 +689,14 @@ export interface ClienteResumo {
 
 export interface ExtratoLinhaConf { data: string; valor: number; descricao: string; externalId: string; duplicado: boolean; revisar?: boolean; baixaPendente?: boolean; liquidaId?: string | null; motivo: string | null; verticalSugerida?: string; verticalDetectada?: string | null }
 export interface ExtratoConferencia { conferido: boolean; total: number; novos: number; duplicados: number; baixarPendentes?: number; revisar?: number; linhas: ExtratoLinhaConf[] }
+
+/** Pedido de coleta da fatura: o botão registra, o vigia do Mac executa. */
+export interface FaturaPedido {
+  id?: string; status: 'pendente' | 'feito' | 'erro' | 'nenhum';
+  etapa?: string; pedidoEm?: string; concluidoEm?: string;
+  resultado?: { lidas: number; novas: number; duplicadas: number };
+  erro?: string; forbidden?: boolean;
+}
 
 /** Vigia da pasta de faturas (Drive): estado e resultado da varredura. */
 export interface FaturaPastaStatus {

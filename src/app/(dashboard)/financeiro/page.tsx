@@ -2470,6 +2470,34 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
   // lido por este site (origens diferentes — o navegador barra), e pelo servidor exigiria
   // guardar a senha dele. Copiar a tela e colar aqui resolve sem nenhuma das duas coisas.
   const [colar, setColar] = useState<{ texto: string; previa: any | null; busy: boolean } | null>(null);
+  // ── Botão "Subir fatura do Asaas": o hub pede, o Mac faz ──────────────────────────
+  // Mesmo desenho da coleta do Meu INSS e do dossiê da réplica: o hub não entra na conta
+  // dele (o login e o código de verificação são dele), então registra o pedido e o vigia
+  // do Mac lê a tela na janela do agente, onde ele já está logado.
+  const [pedido, setPedido] = useState<import('@/features/financeiro/services/financeiro.service').FaturaPedido | null>(null);
+  const pedirM = useMutation({
+    mutationFn: () => financeiroService.pedirColetaFatura(cartao?.id || 'asaas-cartao'),
+    onSuccess: (p) => { setPedido(p); toast('Pedido enviado ao agente — abrindo o Asaas na janela dele…'); },
+    onError: (e: any) => toast.error(e?.response?.data?.message || e?.message || 'Erro ao pedir a coleta'),
+  });
+  // Enquanto o pedido está de pé, pergunta de 3 em 3s. Para sozinho ao terminar: nada de
+  // laço infinito batendo na API por um clique que já foi respondido.
+  useEffect(() => {
+    if (pedido?.status !== 'pendente') return;
+    const t = setInterval(async () => {
+      try {
+        const p: any = await financeiroService.statusPedidoFatura();
+        setPedido(p);
+        if (p?.status === 'feito') {
+          toast.success(`Fatura trazida do Asaas: ${p.resultado?.novas ?? 0} nova(s)${p.resultado?.duplicadas ? ` · ${p.resultado.duplicadas} já existia(m)` : ''}`);
+          onDone(); qc.invalidateQueries({ queryKey: ['financeiro'] });
+        } else if (p?.status === 'erro') toast.error(p.erro || 'A coleta não deu certo.');
+      } catch { /* rede oscilou: a próxima rodada pergunta de novo */ }
+    }, 3000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedido?.status, pedido?.id]);
+
   // ── Recebe a fatura do favorito do Asaas, em um clique ────────────────────────────
   // Este site NÃO pode ler o site do cartão (origens diferentes — o navegador barra). Então
   // o favorito roda LÁ, abre esta página e empurra o texto por postMessage. Aqui só se
@@ -2596,6 +2624,12 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
             comDados={new Set(faturas.map((f) => f.info.key))}
           />
           <span className="text-xs text-zinc-400">{fechamento > 0 ? `fecha dia ${fechamento}` : 'sem dia de fechamento'}{vencDia > 0 ? ` · vence dia ${vencDia}` : ''} · em aberto <strong className="text-rose-600">{brl2(abertoTotal)}</strong></span>
+          {cartao.id === 'asaas-cartao' && (
+            <button onClick={() => pedirM.mutate()} disabled={pedirM.isPending || pedido?.status === 'pendente'} title="O agente abre o Asaas na janela dele (onde você já está logado), lê as movimentações e lança aqui" className="inline-flex items-center gap-1.5 rounded-lg bg-[#0052FF] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60">
+              {pedirM.isPending || pedido?.status === 'pendente' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownCircle className="h-3.5 w-3.5" />}
+              {pedido?.status === 'pendente' ? (pedido.etapa || 'buscando…') : 'Subir fatura do Asaas'}
+            </button>
+          )}
           <button onClick={() => setColar({ texto: '', previa: null, busy: false })} className="inline-flex items-center gap-1.5 rounded-lg border border-[#820AD1]/40 px-3 py-2 text-xs font-semibold text-[#820AD1] transition hover:bg-[#820AD1]/10"><Receipt className="h-3.5 w-3.5" /> Colar fatura</button>
           <button onClick={() => setImpFatura(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#820AD1] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar fatura</button>
         </div>
@@ -2639,6 +2673,11 @@ function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; conta
         </div>
       )}
 
+      {pedido?.status === 'erro' && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-400">
+          <strong>A coleta não deu certo:</strong> {pedido.erro} <button onClick={() => setPedido(null)} className="ml-1 font-semibold underline">ok</button>
+        </p>
+      )}
       {semCiclo && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-400">Defina o <strong>dia de fechamento e vencimento</strong> deste cartão em <strong>Contas</strong> para separar as faturas por mês (ex.: fecha 26, vence 3).</p>}
       <p className="mt-2 text-xs text-zinc-400">Use <strong>Importar fatura</strong> pra subir o extrato do cartão aqui — os gastos entram como <strong>"a pagar"</strong> (fora do caixa). Ao clicar <strong>Pagar fatura</strong>, os próprios débitos viram <strong>liquidados</strong> na conta escolhida (sem lançar o pagamento em dobro).</p>
 
