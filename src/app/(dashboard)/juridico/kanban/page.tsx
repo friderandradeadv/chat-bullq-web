@@ -104,6 +104,8 @@ export default function FaseJudicialKanbanPage() {
   const [phaseSel, setPhaseSel] = useState<string[]>([]);
   const [tagSel, setTagSel] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortKey>('prazo');
+  // Só os cards com o selo "revisar fase" (tribunal foi à frente da fase).
+  const [soRevisar, setSoRevisar] = useState(false);
   const [showFora, setShowFora] = useState(true); // arquivados/abandonados VISÍVEIS por padrão (desmarque pra esconder)
   const [view, setView] = useState<'kanban' | 'lista'>('kanban');
   const [novo, setNovo] = useState(false);
@@ -111,8 +113,8 @@ export default function FaseJudicialKanbanPage() {
   // Seleção em massa (caixinha no card + barra de ações no rodapé).
   const bulk = useKanbanBulk();
   // Quantos filtros estão ativos (badge do botão "Filtros"). Busca e ordenação não contam.
-  const activeFilters = [area, produto, resp].filter(Boolean).length + (phaseSel.length ? 1 : 0) + (tagSel.length ? 1 : 0) + (!showFora ? 1 : 0);
-  const limparFiltros = () => { setArea(''); setProduto(''); setResp(''); setPhaseSel([]); setTagSel([]); setShowFora(true); };
+  const activeFilters = [area, produto, resp].filter(Boolean).length + (phaseSel.length ? 1 : 0) + (tagSel.length ? 1 : 0) + (!showFora ? 1 : 0) + (soRevisar ? 1 : 0);
+  const limparFiltros = () => { setArea(''); setProduto(''); setResp(''); setPhaseSel([]); setTagSel([]); setShowFora(true); setSoRevisar(false); };
   const dragScroll = useDragScroll();
   // Mouse por distância, dedo por espera — ver a nota no quadro Pré-Processual.
   const sensors = useSensoresKanban();
@@ -165,12 +167,18 @@ export default function FaseJudicialKanbanPage() {
       if (produto && c.produto !== produto) return false;
       if (resp && c.responsible?.id !== resp) return false;
       if (tagSel.length && !(c.tags ?? []).some((t) => tagSel.includes(t.id))) return false;
+      if (soRevisar && !c.revisarFase) return false;
       if (!matchesKanbanSearch(c, search, [c.title, c.cnj, c.client, c.opponent])) return false;
       if (!casesFilter.matchesCasesFilter(c.id)) return false;
       if ((c.polo === 'executado' ? 'executado' : 'exequente') !== polo) return false;
       return true;
     });
-  }, [cards, search, area, produto, resp, tagSel, casesFilter.caseIds, polo]);
+  }, [cards, search, area, produto, resp, tagSel, soRevisar, casesFilter.caseIds, polo]);
+  // Quantos do polo atual têm o selo — o número que aparece ao lado do filtro.
+  const nRevisar = useMemo(
+    () => cards.filter((c) => c.revisarFase && (c.polo === 'executado' ? 'executado' : 'exequente') === polo).length,
+    [cards, polo],
+  );
 
   const porPolo = useMemo(() => {
     const n = { exequente: 0, executado: 0 };
@@ -430,6 +438,10 @@ export default function FaseJudicialKanbanPage() {
                         {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
                       </select>
                     </div>
+                    <label className="flex cursor-pointer items-center gap-2 pt-0.5 text-sm text-zinc-600 dark:text-zinc-300">
+                      <input type="checkbox" checked={soRevisar} onChange={(e) => setSoRevisar(e.target.checked)} className="accent-[#e11970]" />
+                      Só os de 🔎 revisar fase <span className="text-xs text-zinc-400">({nRevisar})</span>
+                    </label>
                     <label className="flex cursor-pointer items-center gap-2 pt-0.5 text-sm text-zinc-600 dark:text-zinc-300">
                       <input type="checkbox" checked={showFora} onChange={(e) => setShowFora(e.target.checked)} className="accent-[#e11970]" />
                       Mostrar arquivados/abandonados
