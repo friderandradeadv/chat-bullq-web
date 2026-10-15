@@ -134,16 +134,33 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
         <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
           <FileSearch className="h-3.5 w-3.5" /> Dossiê da réplica
         </p>
-        <button
-          onClick={pedir}
-          disabled={pedindo || naFila}
-          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-          style={{ background: '#0F766E' }}
-        >
-          {pedindo || naFila
-            ? <><Loader2 className="h-3 w-3 animate-spin" /> {naFila ? 'na fila…' : 'pedindo…'}</>
-            : (replica?.status === 'dossie-pronto' ? 'Refazer o dossiê' : 'Ler os autos')}
-        </button>
+        {/* 🚨 UM BOTÃO SÓ PARA UMA INTENÇÃO SÓ (15/10/2026). Antes eram dois:
+            "Ler os autos" e, depois de esperar, "Montar a réplica". O advogado
+            não quer ler os autos — ele quer a réplica; ler os autos é meio.
+            Agora o principal é MONTAR, e ele pede o dossiê sozinho quando
+            falta. Reler os autos continua possível, mas como ação secundária,
+            que é o que ela é: só se usa quando o processo andou. */}
+        <div className="flex items-center gap-2">
+          {replica?.status === 'dossie-pronto' && (
+            <button
+              onClick={pedir}
+              disabled={pedindo || naFila}
+              className="shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-zinc-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-zinc-300"
+            >
+              {pedindo || naFila ? 'na fila…' : 'reler os autos'}
+            </button>
+          )}
+          <button
+            onClick={montar}
+            disabled={montando || naFila || !cnj}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+            style={{ background: '#7C3AED' }}
+          >
+            {montando || naFila
+              ? <><Loader2 className="h-3 w-3 animate-spin" /> {naFila ? 'trabalhando…' : 'pedindo…'}</>
+              : (replica?.montagem?.status === 'pronta' ? 'Montar de novo' : 'Montar a réplica')}
+          </button>
+        </div>
       </div>
 
       <p className="mt-1.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
@@ -157,7 +174,9 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
           montar o PDF — e card imóvel não distingue trabalhando de travado.
           A barra mostra o passo e a fração; o texto abaixo some para não dizer
           a mesma coisa duas vezes. */}
-      {replica?.status === 'pendente' && (
+      {(replica?.status === 'pendente'
+        || replica?.montagem?.status === 'pendente'
+        || replica?.montagem?.status === 'aguardando-dossie') && (
         <div className="mt-2">
           <BarraProgresso caseId={caseId} />
         </div>
@@ -243,16 +262,7 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
             <p className="text-[11px] leading-4 text-zinc-600 dark:text-zinc-300">
               Rascunho pela biblioteca de modelos — o mérito que é juízo fica com você.
             </p>
-            <button
-              onClick={montar}
-              disabled={montando || replica.montagem?.status === 'pendente'}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-              style={{ background: '#7C3AED' }}
-            >
-              {montando || replica.montagem?.status === 'pendente'
-                ? <><Loader2 className="h-3 w-3 animate-spin" /> montando…</>
-                : (replica.montagem?.status === 'pronta' ? 'Montar de novo' : 'Montar a réplica')}
-            </button>
+
           </div>
 
           {replica.montagem?.status === 'pronta' && (
