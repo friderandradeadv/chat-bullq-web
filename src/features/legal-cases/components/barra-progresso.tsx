@@ -33,7 +33,7 @@ export type Progresso = {
  * Distinguir pela OPERAÇÃO, nunca pelo texto do passo: a frase muda, e casar
  * por substring quebraria calado no dia em que alguém a reescrevesse.
  */
-const OK_QUE_ESPERA = new Set(['protocolo']);
+export const OK_QUE_ESPERA = new Set(['protocolo']);
 
 /**
  * Por quanto tempo um `ok` que não espera ninguém continua na tela.
@@ -49,7 +49,7 @@ const OK_QUE_ESPERA = new Set(['protocolo']);
  * `ok` de um card que termina e NÃO se move (a fase falhou), e é esse que a
  * janela cobre: aparece, cumpre o papel de dizer que acabou, e sai.
  */
-const JANELA_DO_OK_MS = 2 * 60 * 1000;
+export const JANELA_DO_OK_MS = 2 * 60 * 1000;
 
 /**
  * Por quanto tempo uma RECUSA fica na tela.
@@ -64,9 +64,9 @@ const JANELA_DO_OK_MS = 2 * 60 * 1000;
  * barra vermelha num card parado só mente sobre atividade — e o motivo não se
  * perde: cada recusa vira movimento no histórico do card.
  */
-const JANELA_DO_ERRO_MS = 24 * 60 * 60 * 1000;
+export const JANELA_DO_ERRO_MS = 24 * 60 * 60 * 1000;
 
-const NOME: Record<string, string> = {
+export const NOME: Record<string, string> = {
   documentos: 'Preparando documentos',
   inicial: 'Montando a inicial',
   protocolo: 'Protocolando',
@@ -135,19 +135,39 @@ export function BarraProgresso({
   });
 
   const p = data;
-  if (!p) return null;
-  // Concluído, sem ninguém esperando e já VELHO → a barra não tem o que dizer.
-  // (O erro FICA: recusa tem de sobreviver ao recarregamento, que é o motivo de
-  // ela existir em vermelho.)
+  if (!p || !aindaTemOQueDizer(p)) return null;
+  return <BarraProgressoView p={p} compacta={compacta} />;
+}
+
+/**
+ * A BARRA AINDA TEM O QUE DIZER?
+ *
+ * 🚨 ESTA REGRA ERA SOLTA DENTRO DO COMPONENTE, e o visor flutuante precisaria
+ * repeti-la — duas cópias da mesma decisão envelhecem separadas, e um dia uma
+ * mostra o que a outra esconde. Está aqui para ter um dono só.
+ */
+export function aindaTemOQueDizer(p: Progresso): boolean {
   if (p.status === 'ok' && !OK_QUE_ESPERA.has(p.op)) {
     const quando = Date.parse(p.em ?? '');
-    if (!Number.isFinite(quando) || Date.now() - quando > JANELA_DO_OK_MS) return null;
+    return Number.isFinite(quando) && Date.now() - quando <= JANELA_DO_OK_MS;
   }
   if (p.status === 'erro') {
     const quando = Date.parse(p.em ?? '');
-    if (!Number.isFinite(quando) || Date.now() - quando > JANELA_DO_ERRO_MS) return null;
+    return Number.isFinite(quando) && Date.now() - quando <= JANELA_DO_ERRO_MS;
   }
+  return true;
+}
 
+/**
+ * O DESENHO DA BARRA, SEM BUSCAR NADA.
+ *
+ * 🚨 SEPARADO DA BUSCA de propósito (19/10/2026): o visor flutuante recebe os
+ * dados de UMA consulta da organização inteira e desenha com este mesmo
+ * componente. Se ele tivesse o próprio desenho, o hub passaria a ter duas
+ * barras parecidas e diferentes — que é justo o que o comentário lá em cima
+ * manda não fazer.
+ */
+export function BarraProgressoView({ p, compacta = false }: { p: Progresso; compacta?: boolean }) {
   const titulo = NOME[p.op] ?? 'Trabalhando';
   const rodando = p.status === 'rodando';
   const erro = p.status === 'erro';

@@ -18,6 +18,7 @@ import { authService } from '@/features/auth/services/auth.service';
 import { usePermissionsSync } from '@/features/settings/hooks/use-permissions-sync';
 import { ToolFailureBanner } from '@/features/ai-agents/components/tool-failure-banner';
 import { AvisoNovaVersao } from '@/features/legal-cases/components/aviso-nova-versao';
+import { VisorProgresso } from '@/features/legal-cases/components/visor-progresso';
 import { AssinaturaBanner } from '@/features/legal-cases/components/assinatura-banner';
 import { EtiquetaCoresProvider } from '@/features/legal-cases/components/etiqueta-cores-provider';
 import { GlobalSearch } from '@/components/layout/global-search';
@@ -213,6 +214,11 @@ export default function DashboardLayout({
             <AvisoNovaVersao />
       <AssinaturaBanner />
             <ToolFailureBanner />
+            {/* 🚨 O VISOR FICA NO LAYOUT, não numa tela só. O advogado fecha a
+                tarefa na agenda e vai para outra aba; o trabalho continua, e
+                ele tem de continuar vendo. Some sozinho quando não há nada
+                rodando — não interromper é regra da casa. */}
+            <VisorProgresso />
           </div>
           {/* Container interno: novo contexto de posicionamento pra topbar glass. */}
           <div className="relative flex min-h-0 flex-1 flex-col">
