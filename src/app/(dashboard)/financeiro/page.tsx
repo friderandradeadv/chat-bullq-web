@@ -3397,11 +3397,17 @@ function ImportExtratoModal({ contas, onClose, contaFixa, textoInicial }: { cont
         return { data: l.data, valor: l.valor, descricao: l.descricao, area: rv.length ? undefined : (areas[i] || '').trim() || undefined, rateioVerticais: rv.length ? rv : undefined, contribuintes: cb.length ? cb : undefined };
       });
       const sf = saldoFinal.trim() && !contas.find((c) => c.id === conta)?.cartao ? parseValor(saldoFinal) : null;
-      return financeiroService.importarExtratoLinhas(conta || null, linhas, sf, sf != null ? saldoFinalEm : null);
+      // Linha que veio AMARELA e foi marcada à mão: diz à API que é nova de propósito. Sem a
+      // marca, a gravação recusa o que ela própria vê como possível duplicata (o caixa pode ter
+      // mudado depois da conferência — ex.: a guia baixada no ✓ do Contas a pagar).
+      const marcadas = conf.linhas.filter((_, i) => sel.has(i));
+      const linhasOk = linhas.map((x, k) => (marcadas[k]?.revisar ? { ...x, confirmarRevisar: true } : x));
+      return financeiroService.importarExtratoLinhas(conta || null, linhasOk, sf, sf != null ? saldoFinalEm : null);
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['financeiro', 'dashboard'] });
       toast.success(`${r.importados} lançamento(s) importado(s)${r.baixados ? ` · ${r.baixados} baixa(s) de pendência` : ''}${r.duplicados ? ` · ${r.duplicados} já existiam` : ''}`);
+      if (r.suspeitasPuladas) toast(`${r.suspeitasPuladas} linha(s) NÃO entraram: viraram possível duplicata de um lançamento já pago desde a conferência. Confira de novo se quiser lançar.`, { icon: '⚠️', duration: 8000 });
       // Reconciliação: se o razão não bate com o banco, avisa (sem prender o quadro aberto).
       const rec = r.reconciliacao;
       if (rec && rec.saldoReal != null && rec.diferenca != null && Math.abs(rec.diferenca) > 0.01) toast(`⚠️ Razão × banco: diferença de ${brl2(rec.diferenca)} — confira na aba Contas`, { icon: '⚠️', duration: 7000 });
