@@ -27,7 +27,7 @@ import { calculadoraCsService } from '@/features/calculadora-cs/services/calcula
 import { acordosService, type AcordoResumo } from '@/features/financeiro/services/acordos.service';
 import { useAuthStore } from '@/stores/auth-store';
 import {
-  aggregarClientes, aggregarRetiradas, achaAdvogado, ehRetirada, normNome, mesKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
+  aggregarClientes, aggregarRetiradas, achaAdvogado, ehRetirada, normNome, mesKey, mesCaixaKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
 } from '@/features/financeiro/lib/clientes';
 import { MesTicketPicker } from '@/features/financeiro/components/mes-ticket-picker';
 
@@ -145,7 +145,8 @@ export default function FinanceiroPage() {
       if (!liq(t) || ehAporte(t)) continue;
       const mk = mesKey(t);
       if (mk === sm) { if (t.valor >= 0) receita += t.valor; else despesa += -t.valor; }
-      else if (mk > sm) fluxoDepois += t.valor;
+      // posição de caixa no fim do mês: o que saiu/entrou DEPOIS pela data do dinheiro, não pela competência
+      if (mesCaixaKey(t) > sm) fluxoDepois += t.valor;
     }
     const caixa = (kk?.caixaContas ?? kk?.saldoAtual ?? 0) - fluxoDepois;
     return { sel: sm, label: mesLabel(sm), resultado: receita - despesa, receita, despesa, caixa };
@@ -1102,7 +1103,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
       if (isFaturaCartao(t)) return false;
       const iso = toISOInput(t.data);
       if (temPeriodo) { if (deISO && iso < deISO) return false; if (ateISO && iso > ateISO) return false; }
-      else if (mesSel && mesKey(t) !== mesSel) return false;
+      else if (mesSel && mesCaixaKey(t) !== mesSel) return false;
       if (aba === 'receitas' && t.valor < 0) return false;
       if (aba === 'despesas' && t.valor >= 0) return false;
       const st = txStatus(t);
@@ -1130,7 +1131,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
 
   const grupos = useMemo(() => {
     const map = new Map<string, FinTransacao[]>();
-    for (const t of txs) { const key = mesKey(t); if (!map.has(key)) map.set(key, []); map.get(key)!.push(t); }
+    for (const t of txs) { const key = mesCaixaKey(t); if (!map.has(key)) map.set(key, []); map.get(key)!.push(t); }
     return Array.from(map.entries()).map(([key, items]) => {
       // Liquidados (caixa real: pago/recebido) primeiro; depois os a receber/pagar.
       const ord = [...items].sort((a, b) => (ehLiquidado(txStatus(a)) ? 0 : 1) - (ehLiquidado(txStatus(b)) ? 0 : 1));
@@ -1160,7 +1161,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
     for (const t of data.transacoes) {
       if (!ehLiquidado(txStatus(t))) continue;
       if (t.conta && cardIds.has(t.conta)) continue;
-      const k = mesKey(t);
+      const k = mesCaixaKey(t);
       if (k < mesSel) antes += t.valor; else if (k === mesSel) mov += t.valor;
     }
     const abre = saldoIni + antes;
@@ -1729,6 +1730,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         <span className="flex min-w-0 flex-1 items-center gap-1.5">
                           <ClienteLink nome={titleCase((t.valor < 0 ? (t.recebedor || t.party || t.pagador) : (t.pagador || t.party || t.recebedor)) || '') || t.categoria} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />{t.valor < 0 && normNome(t.pagador ?? '') !== normNome(escritorioNome) && !!t.pagador && <span className="hidden shrink-0 text-[11px] text-zinc-400 lg:inline" title="quem pagou">· pago por {titleCase(t.pagador)}</span>}
                           {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
+                          {mesKey(t) !== mesCaixaKey(t) ? <span className="shrink-0 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={`Pago em ${mesLabel(mesCaixaKey(t))}, competência ${mesLabel(mesKey(t))} — no caixa conta no mês do pagamento; no resultado, na competência`}>comp. {mesCurtoKey(mesKey(t))}</span> : null}
                           {t.responsavel ? <span className="hidden shrink-0 items-center gap-0.5 rounded bg-zinc-100 px-1 text-[9px] font-medium text-zinc-500 dark:bg-zinc-800 lg:inline-flex">{t.responsavel.split(' ')[0]}</span> : null}
                           {t.conta ? <span className="hidden shrink-0 rounded px-1 text-[9px] font-medium text-white lg:inline" style={{ background: contas.find((c) => c.id === t.conta)?.cor ?? '#868E96' }}>{contaNome(t.conta)}</span> : null}
                           {t.manual ? <span className="shrink-0 rounded bg-blue-100 px-1 text-[9px] font-semibold text-blue-600 dark:bg-blue-900/30">manual</span> : null}

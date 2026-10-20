@@ -26,7 +26,16 @@ export const mesKey = (t: Pick<FinTransacao, 'mes' | 'data'>) => {
   if (/^\d{4}-(0[1-9]|1[0-2])$/.test(t.mes || '')) return t.mes as string;
   return competenciaBR(t.data || '') || '0000-00';
 };
-export const mesLabel = (mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_PT[+m[2] - 1]} de ${m[1]}` : 'Sem data'; };
+/** Mês de CAIXA (YYYY-MM): liquidado conta no mês em que o dinheiro entrou/saiu
+ *  (`dataPagamento`, senão `data`); pendente segue a competência. É o mês do livro-razão e
+ *  do saldo — a competência (`mesKey`) fica para o resultado do mês. Sem isto, o INSS de
+ *  setembro pago em 20/10 aparecia em setembro no "Liquidados (caixa)". */
+export const mesCaixaKey = (t: Pick<FinTransacao, 'mes' | 'data' | 'dataPagamento' | 'status' | 'valor'>) => {
+  const s = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
+  if (s !== 'recebido' && s !== 'pago') return mesKey(t);
+  return competenciaBR(t.dataPagamento || t.data || '') || mesKey(t);
+};
+export const mesLabel =(mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_PT[+m[2] - 1]} de ${m[1]}` : 'Sem data'; };
 export const mesCurtoKey = (mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_ABREV[+m[2] - 1]}/${m[1].slice(2)}` : mes; };
 export const diffMeses = (a: string, b: string) => { // b - a, em meses
   const ma = (a || '').match(/^(\d{4})-(\d{2})$/); const mb = (b || '').match(/^(\d{4})-(\d{2})$/);
