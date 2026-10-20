@@ -226,25 +226,41 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
                   : i.obrigatorio ? 'border-red-400' : 'border-zinc-300 dark:border-zinc-600'}`}>
                   {i.presente && <Check className="h-2 w-2 text-white" />}
                 </span>
-                {i.url ? (
-                  <a href={i.url} target="_blank" rel="noreferrer"
-                    className="text-[#1b6ec2] hover:underline dark:text-[#74c0fc]">
-                    {i.arquivo || i.nome}
-                  </a>
-                ) : (
-                  <span className={i.presente
-                    ? 'text-[#101820] dark:text-zinc-300'
-                    : i.obrigatorio ? 'font-medium text-red-600 dark:text-red-400' : 'text-[#48626f] dark:text-zinc-500'}>
-                    {i.arquivo || i.nome}
-                    {!i.presente && !i.obrigatorio && ' · opcional'}
-                  </span>
-                )}
-                {/* Presente e ainda furada: o PDF existe, a peça não está pronta. */}
-                {(i as any).incompleto ? (
-                  <span className="shrink-0 rounded px-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
-                    {(i as any).lacunas} lacuna(s) a preencher
-                  </span>
-                ) : null}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-1.5">
+                    {i.url ? (
+                      <a href={i.url} target="_blank" rel="noreferrer"
+                        className="text-[#1b6ec2] hover:underline dark:text-[#74c0fc]">
+                        {i.arquivo || i.nome}
+                      </a>
+                    ) : (
+                      <span className={i.presente
+                        ? 'text-[#101820] dark:text-zinc-300'
+                        : i.obrigatorio ? 'font-medium text-red-600 dark:text-red-400' : 'text-[#48626f] dark:text-zinc-500'}>
+                        {i.arquivo || i.nome}
+                        {!i.presente && !i.obrigatorio && ' · opcional'}
+                      </span>
+                    )}
+                    {/* Presente e ainda furada: o PDF existe, a peça não está pronta. */}
+                    {(i as any).incompleto ? (
+                      <span className="shrink-0 rounded px-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                        {(i as any).lacunas} lacuna(s) a preencher
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* 🚨 VERMELHO QUE DIZ POR QUE (20/10/2026). A renúncia ao teto
+                      não é documento que o hub produza: é declaração do CLIENTE.
+                      Sem esta linha, a mesma marca vermelha significava duas
+                      coisas de conduta OPOSTA (pedir assinatura × rodar o
+                      organizador), e a noite foi gasta procurando no lugar
+                      errado. Vai EMBAIXO, em linha própria, porque é frase e não
+                      rótulo: ao lado do nome ela quebraria a lista. */}
+                  {(i as any).motivo ? (
+                    <p className="mt-0.5 text-[10px] leading-snug text-red-600/90 dark:text-red-400/90">
+                      {(i as any).motivo}
+                    </p>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ol>
