@@ -1131,6 +1131,21 @@ export const legalCasesService = {
    * 🚨 RESPONDE 200 COM `ok:false` QUANDO FALTA O CNJ — recado, não erro,
    * igual ao dossiê da réplica.
    */
+  /**
+   * O PDF dos autos, arrastado no card.
+   *
+   * 🚨 Chegar o arquivo JÁ PÕE NA FILA, do lado do servidor: pedir que ele
+   * arraste E depois clique seria uma segunda chance de esquecer.
+   */
+  async enviarAutosCumprimento(id: string, file: File):
+      Promise<{ ok: boolean; motivo?: string; bytes?: number; naFila?: boolean }> {
+    const fd = new FormData();
+    fd.append('file', file);
+    const { data } = await api.post(`/legal-cases/${id}/cumprimento/autos`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data ?? data;
+  },
   async pedirCumprimento(id: string, opts?: { cnj?: string; reu?: string }):
       Promise<{ ok: boolean; motivo?: string }> {
     const { data } = await api.post(`/legal-cases/${id}/cumprimento/pedir`, opts ?? {});
