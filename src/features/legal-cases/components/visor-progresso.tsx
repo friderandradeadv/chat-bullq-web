@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { BarraProgressoView, aindaTemOQueDizer, type Progresso } from './barra-progresso';
+import { BarraProgressoView, aindaTemOQueDizer, useRelogio, type Progresso } from './barra-progresso';
 
 type Ativo = { caseId: string; titulo: string | null; cnj: string | null; progresso: Progresso };
 
@@ -51,6 +51,10 @@ export function VisorProgresso({ acimaDaBarra = false }: { acimaDaBarra?: boolea
     staleTime: 1500,
   });
 
+  // 🚨 O VISOR TAMBÉM PRECISA DA BATIDA. Mesmo defeito, mesma causa: o dado
+  // volta igual do servidor, o React não redesenha, e o cartão de "pronto"
+  // ficava na tela até o advogado fechar no X.
+  useRelogio((data ?? []).length > 0);
   const vivos = (data ?? []).filter((x) => x.progresso && aindaTemOQueDizer(x.progresso));
   if (!vivos.length) return null;
 

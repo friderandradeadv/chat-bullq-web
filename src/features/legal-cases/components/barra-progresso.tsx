@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Check, AlertTriangle, Square } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -158,9 +158,36 @@ export function BarraProgresso({
   });
 
   const p = data;
+  useRelogio(!!p);
   if (!p || !aindaTemOQueDizer(p)) return null;
   return <BarraProgressoView p={p} compacta={compacta} caseId={caseId} />;
 }
+
+/**
+ * UM RELÓGIO QUE REDESENHA.
+ *
+ * 🚨 SEM ELE, A BARRA NUNCA SOME SOZINHA — e foi o que ele apontou em
+ * 20/10/2026: *"o aviso ainda não some sozinho, só se eu clico no x"*.
+ *
+ * A regra de esconder depende do TEMPO (o `ok` vale 2 minutos), mas quem
+ * decide redesenhar é o React. O react-query refaz a consulta a cada 15s e,
+ * vindo o MESMO dado, ele mantém a referência (structural sharing) e **não**
+ * re-renderiza. Resultado: `aindaTemOQueDizer` só era reavaliado quando algo
+ * mudava no servidor — e um `ok` parado não muda nunca.
+ *
+ * Então o componente passa a ter batida própria enquanto tem algo na tela.
+ * Parada quando não há o que mostrar: relógio que bate em tela vazia é gasto
+ * sem dono.
+ */
+function useRelogio(ativo: boolean, ms = 15000) {
+  const [, bater] = useState(0);
+  useEffect(() => {
+    if (!ativo) return;
+    const t = setInterval(() => bater((n) => n + 1), ms);
+    return () => clearInterval(t);
+  }, [ativo, ms]);
+}
+
 
 /**
  * A BARRA AINDA TEM O QUE DIZER?
@@ -169,6 +196,8 @@ export function BarraProgresso({
  * repeti-la — duas cópias da mesma decisão envelhecem separadas, e um dia uma
  * mostra o que a outra esconde. Está aqui para ter um dono só.
  */
+export { useRelogio };
+
 export function aindaTemOQueDizer(p: Progresso): boolean {
   if (p.status === 'ok' && !OK_QUE_ESPERA.has(p.op)) {
     const quando = Date.parse(p.em ?? '');
