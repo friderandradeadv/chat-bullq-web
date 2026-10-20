@@ -1369,7 +1369,11 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // acórdão (2º grau) → REsp/RE, Embargos de Declaração, Agravo Interno.
   const isDecisaoBase = !!activity.caseId
     && (activity.source === 'prazo' || activity.source === 'tarefa');
-  const isDecisaoTitulo = /senten[çc]a|ac[óo]rd[ãa]o|decis[ãa]o/i.test(activity.title);
+  // ⚠️ Ato de EXECUÇÃO não é análise de decisão. "Iniciar cumprimento de
+  // sentença" casava /sentença/ e abria o painel de Apelação/Embargos num
+  // prazo que só existe porque NÃO houve recurso (OTAIR x BMG, 20/10/2026).
+  const isAtoDeExecucao = /cumprimento|execu[çc][ãa]o|alvar[áa]|penhora|impugna[çc][ãa]o/i.test(activity.title);
+  const isDecisaoTitulo = !isAtoDeExecucao && /senten[çc]a|ac[óo]rd[ãa]o|decis[ãa]o/i.test(activity.title);
 
   const assignResp = async (userId: string | null) => {
     setRespMenu(false);
@@ -1427,7 +1431,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   // (era o bug: acórdão da Tânia com instância 1º Grau caía nos botões de sentença).
   // O heurístico de texto (ACORDAO_MARKER) segue guardado pelo gate de 1º grau, pra
   // não dar falso-positivo casando "relator"/"acórdão" citado no recorte de sentença.
-  const isAcordao = isDecisaoBase && (
+  const isAcordao = isDecisaoBase && !isAtoDeExecucao && (
     /ac[óo]rd[ãa]o/i.test(activity.title)
     || grade === '2º Grau'
     || (grade !== '1º Grau' && ACORDAO_MARKER.test(decisaoTxt))
