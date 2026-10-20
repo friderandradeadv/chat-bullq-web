@@ -50,6 +50,7 @@ import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-m
 import { CommentsSection } from '@/features/activities/components/comments-section';
 import { AnexosSection } from '@/features/activities/components/anexos-section';
 import { DossieReplica } from '@/features/legal-cases/components/dossie-replica';
+import { CumprimentoCs } from '@/features/legal-cases/components/cumprimento-cs';
 import { ArquivarPecaModal } from '@/features/legal-cases/components/arquivar-peca-modal';
 import { MoverFaseManual } from '@/features/legal-cases/components/mover-fase-manual';
 import { DisponibilidadeModal } from '@/features/calendar/components/disponibilidade-modal';
@@ -2135,6 +2136,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         {activity.caseId && ehCardDeReplica(activity.title) && (
           <div className="mt-5">
             <DossieReplica caseId={activity.caseId} sempreVisivel />
+            <CumprimentoCs caseId={activity.caseId} />
           </div>
         )}
 

@@ -26,6 +26,7 @@ import { FaseFields } from './fase-fields';
 import { PendenciasPanel } from './pendencias-panel';
 import { ColetaInss } from './coleta-inss';
 import { DossieReplica } from './dossie-replica';
+import { CumprimentoCs } from '@/features/legal-cases/components/cumprimento-cs';
 import { IntakeDocumentos } from './intake-documentos';
 import { BancosReusEditor, RepbFasePorBanco, ResumoClienteRepb } from './bancos-reus-editor';
 import { GerarPecaRepb } from './gerar-inicial-superendiv';
@@ -686,6 +687,18 @@ export function CaseDetailDrawer({
                 caseId={c.id}
                 replica={(c.metadata as any)?.replica ?? null}
                 cnj={c.cnjNumber ?? null}
+                sempreVisivel
+              />
+            )}
+
+            {/* 🚨 O CUMPRIMENTO APARECE NA FASE DELE ('16. CUMPRIMENTO DE
+                SENTENÇA'), ou quando já houve um pedido — aí o resultado tem
+                de continuar à vista, inclusive o estado ESPERANDO, que é onde
+                o advogado lê o que só sai da leitura da sentença. */}
+            {c && (phaseKey === 'cumprimento' || (c.metadata as any)?.cumprimento) && (
+              <CumprimentoCs
+                caseId={c.id}
+                cumprimento={(c.metadata as any)?.cumprimento ?? null}
                 sempreVisivel
               />
             )}

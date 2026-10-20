@@ -1125,6 +1125,17 @@ export const legalCasesService = {
     const { data } = await api.post(`/legal-cases/${id}/replica/pedir`, cnj ? { cnj } : {});
     return data.data ?? data;
   },
+  /**
+   * Põe o cumprimento de sentença na fila do Mac.
+   *
+   * 🚨 RESPONDE 200 COM `ok:false` QUANDO FALTA O CNJ — recado, não erro,
+   * igual ao dossiê da réplica.
+   */
+  async pedirCumprimento(id: string, opts?: { cnj?: string; reu?: string }):
+      Promise<{ ok: boolean; motivo?: string }> {
+    const { data } = await api.post(`/legal-cases/${id}/cumprimento/pedir`, opts ?? {});
+    return data.data ?? data;
+  },
   /** Gera por IA uma peça (réplica/especificação de provas/recurso) sobre o timbrado → .docx base64. */
   async gerarPeca(
     id: string,
