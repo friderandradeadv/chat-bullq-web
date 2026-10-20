@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+// 🚨 `api` já é nome usado nesta página (o CalendarApi do FullCalendar), e
+// importar com o mesmo nome fez o `calRef.current.getApi()` virar o cliente
+// HTTP no meio do arquivo. Entra com apelido.
+import { api as http } from '@/lib/api';
 import { activitiesService, ENTITY_TYPE } from '@/features/activities/services/activities.service';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -296,9 +300,10 @@ function ExpandableText({ text, limit = 480 }: { text: string; limit?: number })
 // ETIQUETA, dividido igualmente; sem etiqueta usa a cor do TIPO; cumprido fica
 // cinza. Idempotente (remove a barra anterior) — assim dá pra repintar quando as
 // etiquetas, que carregam de forma assíncrona, chegam depois do mount do evento.
-function renderEventStrip(el: HTMLElement, a: Activity, isNew = false) {
+function renderEventStrip(el: HTMLElement, a: Activity, isNew = false, estaPronto = false) {
   el.querySelector(':scope > .ag-tagstrip')?.remove();
   el.querySelector(':scope > .ag-newdot')?.remove();
+  el.querySelector(':scope > .ag-okdot')?.remove();
   const segs = (a.done || a.cancelled)
     ? [{ color: '#CED4DA', name: 'Cumprido' }]
     : a.tags.length
@@ -320,6 +325,19 @@ function renderEventStrip(el: HTMLElement, a: Activity, isNew = false) {
     const dot = document.createElement('span');
     dot.className = 'ag-newdot';
     dot.title = 'Adicionado hoje';
+    el.appendChild(dot);
+  }
+  // 🚨 A BOLINHA VERDE É "A PEÇA FICOU PRONTA E VOCÊ AINDA NÃO VIU". Pedido
+  // dele em 19/10/2026: *"deixe um pontinho verde ou algo verde na agenda para
+  // saber que está ok, quando eu clicar na tarefa, a bolinha verde some"*. A
+  // barra de progresso cumpre o papel enquanto o robô trabalha e some dois
+  // minutos depois do fim — de propósito, para não mentir sobre atividade.
+  // Mas quem estava longe do computador perdia o aviso inteiro. A bolinha
+  // fica até ele abrir a tarefa.
+  if (estaPronto && !a.done && !a.cancelled) {
+    const dot = document.createElement('span');
+    dot.className = 'ag-okdot';
+    dot.title = 'A peça ficou pronta — abra a tarefa para ver';
     el.appendChild(dot);
   }
 }
@@ -631,12 +649,42 @@ export default function AgendaPage() {
   // Repinta a barra do topo de cada evento já montado quando as etiquetas/filtro
   // mudam — as tags carregam async, depois do mount, e sem isto a barra ficava
   // presa na cor do tipo (a divisão por etiqueta "não funcionava").
+  // 🚨 MESMA CHAVE DO VISOR FLUTUANTE, e isso é de propósito: o react-query
+  // junta as duas assinaturas numa requisição só. A agenda não paga nada por
+  // mostrar a bolinha.
+  const prontosQ = useQuery({
+    queryKey: ['legal-cases', 'progresso', 'ativos'],
+    queryFn: async (): Promise<Array<{ caseId: string; progresso: { status: string; em: string } }>> => {
+      const { data } = await http.get('/legal-cases/progresso/ativos');
+      const d = data?.data ?? data;
+      return (d?.itens ?? []) as Array<{ caseId: string; progresso: { status: string; em: string } }>;
+    },
+    refetchInterval: 15000,
+    staleTime: 1500,
+  });
+  // caseId → a chave do "pronto" (inclui a hora, para que um trabalho NOVO
+  // reacenda a bolinha mesmo que ele já tenha visto o anterior)
+  const prontoPorCaso = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of prontosQ.data ?? []) {
+      if (x?.progresso?.status === 'ok' && x.progresso.em) {
+        m.set(x.caseId, `pronto:${x.caseId}:${x.progresso.em}`);
+      }
+    }
+    return m;
+  }, [prontosQ.data]);
+  const chaveDoPronto = (a: Activity) => (a.caseId ? prontoPorCaso.get(a.caseId) : undefined);
+  const estaProntoNaoVisto = (a: Activity) => {
+    const k = chaveDoPronto(a);
+    return !!k && !a.done && !a.cancelled && !seenNew.has(k);
+  };
+
   useEffect(() => {
     for (const [id, el] of elMapRef.current) {
       const a = byId.get(id);
-      if (a) renderEventStrip(el, a, isCreatedToday(a) && !seenNew.has(a.id));
+      if (a) renderEventStrip(el, a, isCreatedToday(a) && !seenNew.has(a.id), estaProntoNaoVisto(a));
     }
-  }, [byId, seenNew]);
+  }, [byId, seenNew, prontoPorCaso]);
   // A bolinha de "novo" só some quando o usuário ABRE a atividade (openDetail →
   // markSeen). Nada de auto-marcar por "só ter olhado a agenda": o Matheus quer que
   // a bolinha fique até ele clicar na tarefa.
@@ -689,7 +737,13 @@ export default function AgendaPage() {
   const openCreate = (type: 'evento' | 'tarefa' | 'atendimento' | 'prazo', date?: Date) => { setChooser(null); setAddMenu(false); setDialog({ type, date }); };
   const onDateClick = (arg: DateClickArg) => setChooser({ date: arg.date });
   // Abrir a atividade = visualizá-la → tira a bolinha de "novo".
-  const openDetail = (a: Activity) => { markSeen(a.id); setDetail(a); };
+  const openDetail = (a: Activity) => {
+    markSeen(a.id);
+    // abrir a tarefa é ver o resultado: a bolinha verde sai aqui
+    const k = chaveDoPronto(a);
+    if (k) markSeen(k);
+    setDetail(a);
+  };
   const isUnseenNew = (a: Activity) => isCreatedToday(a) && !a.done && !a.cancelled && !seenNew.has(a.id);
   const onEventClick = (arg: EventClickArg) => { const a = byId.get(arg.event.id); if (a) openDetail(a); };
   // Arrastar tarefa/evento/prazo para outra data (ou horário, na semana/dia) →
@@ -855,7 +909,7 @@ export default function AgendaPage() {
           </div>
           <div className={`flex-1 p-3 ${isMonth ? 'agenda-month' : ''}`}>
             {mode === 'list' ? (
-              <ActivityList activities={filtered} onOpen={openDetail} isUnseenNew={isUnseenNew} />
+              <ActivityList activities={filtered} onOpen={openDetail} isUnseenNew={isUnseenNew} estaPronto={estaProntoNaoVisto} />
             ) : (
               <FullCalendar
                 key={mode} ref={calRef}
@@ -1032,7 +1086,7 @@ function MiniCalendar({ initial, onPick }: { initial: Date; onPick: (d: Date) =>
   );
 }
 
-function ActivityList({ activities, onOpen, isUnseenNew }: { activities: Activity[]; onOpen: (a: Activity) => void; isUnseenNew: (a: Activity) => boolean }) {
+function ActivityList({ activities, onOpen, isUnseenNew, estaPronto }: { activities: Activity[]; onOpen: (a: Activity) => void; isUnseenNew: (a: Activity) => boolean; estaPronto: (a: Activity) => boolean }) {
   const today = new Date();
   const todays = activities.filter((a) => sameDay(new Date(a.date), today));
   const list = todays.length ? todays : activities.slice(0, 40);
@@ -1046,7 +1100,7 @@ function ActivityList({ activities, onOpen, isUnseenNew }: { activities: Activit
             <span className={`mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${a.done ? 'border-emerald-500 bg-emerald-500 text-white' : a.fatal ? 'border-red-400' : 'border-zinc-300'}`}>{a.done && <Check className="h-3 w-3" />}</span>
             <div className="w-24 shrink-0 text-xs text-zinc-500">{new Date(a.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', ...(a.hasTime ? {} : { timeZone: 'UTC' as const }) })}{a.hasTime && <div className="font-medium text-zinc-700 dark:text-zinc-300">{new Date(a.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>}</div>
             <div className="min-w-0 flex-1">
-              <p className={`flex min-w-0 items-center gap-1.5 text-sm font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{isUnseenNew(a) && <span title="Adicionado hoje" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FA5252]" />}<span className="truncate">{a.title}</span></p>
+              <p className={`flex min-w-0 items-center gap-1.5 text-sm font-medium text-[#202124] dark:text-zinc-100 ${a.done ? 'text-zinc-400 line-through' : ''}`}>{isUnseenNew(a) && <span title="Adicionado hoje" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FA5252]" />}{estaPronto(a) && <span title="A peça ficou pronta — abra a tarefa para ver" className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#2F9E44]" />}<span className="truncate">{a.title}</span></p>
               {a.caseTitle && <p className="truncate text-xs text-zinc-500">{a.caseTitle}{a.cnj ? ` · ${a.cnj}` : ''}</p>}
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5"><TypeChip source={a.source} /><TagStrip tags={a.tags} /></div>
             </div>

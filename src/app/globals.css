@@ -347,6 +347,22 @@
   z-index: 4;
 }
 .dark .ag-newdot { box-shadow: 0 0 0 1.5px #15181A; }
+/* Verde: a peça ficou PRONTA e ele ainda não abriu a tarefa. Sai no clique
+   (markSeen), e volta se um trabalho NOVO terminar — a chave inclui a hora.
+   Fica à esquerda do vermelho para não se cobrirem no mesmo canto. */
+.ag-okdot {
+  position: absolute;
+  top: 1px;
+  right: 12px;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: #2f9e44;
+  box-shadow: 0 0 0 1.5px #fff;
+  pointer-events: none;
+  z-index: 4;
+}
+.dark .ag-okdot { box-shadow: 0 0 0 1.5px #15181A; }
 
 /* ── Hub / página de boas-vindas (/inicio) — "sempre uma festa" ── */
 @keyframes confetti-fall {
