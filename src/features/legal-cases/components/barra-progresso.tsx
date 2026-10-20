@@ -314,19 +314,41 @@ function BotaoParar({ caseId, travado }: { caseId: string; travado: boolean }) {
 
   const parar = useMutation({
     mutationFn: async () => {
-      const { data } = await api.post(`/legal-cases/${caseId}/progresso/parar`);
+      // 🚨 `parar-operacao`, NÃO `progresso/parar` (20/10/2026). Aquela rota
+      // vive no controller guardado por chave de API, que é a porta do agente
+      // do Mac: do navegador ela responde 401. O clique "não fazia nada", e
+      // sem o aviso de erro aqui embaixo ninguém descobriria por quê.
+      const { data } = await api.post(`/legal-cases/${caseId}/parar-operacao`);
       return data;
     },
+    onSuccess: () => setArmado(false),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['legal-cases', caseId, 'progresso'] });
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
       qc.invalidateQueries({ queryKey: ['progresso-ativos'] });
-      setArmado(false);
     },
   });
 
   if (parar.isPending) {
     return <span className="text-[11px] text-neutral-500">parando…</span>;
+  }
+
+  // 🚨 BOTÃO QUE FALHA CALADO É BOTÃO QUEBRADO. A primeira versão engolia o
+  // erro no `onSettled` e voltava a desenhar "Parar": clicar e nada acontecer
+  // é indistinguível de botão que não existe.
+  if (parar.isError) {
+    const st = (parar.error as any)?.response?.status;
+    return (
+      <button
+        type="button"
+        onClick={() => parar.reset()}
+        title={String((parar.error as any)?.message ?? '')}
+        className="flex flex-shrink-0 items-center gap-1 rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+      >
+        <AlertTriangle className="h-3 w-3" />
+        não consegui parar{st ? ` (${st})` : ''}
+      </button>
+    );
   }
 
   if (armado) {
