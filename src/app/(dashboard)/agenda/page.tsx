@@ -1334,6 +1334,26 @@ function ehCardDeReplica(titulo?: string | null): boolean {
     || /manifest\w*\s+sobre\s+a\s+contesta[çc][ãa]o/i.test(t);
 }
 
+/**
+ * O card é de CUMPRIMENTO DE SENTENÇA?
+ *
+ * Mesma disciplina do `ehCardDeReplica`: lista CURTA e EXPLÍCITA. Título novo
+ * que signifique cumprimento se acrescenta AQUI, numa linha — não se deduz por
+ * semelhança, que foi deduzir que pôs o botão da réplica no card dos embargos.
+ *
+ * 🚨 E NÃO BASTA A FASE. Medido em 20/10/2026, no card do OTAIR VIZOTTO: o
+ * prazo se chama "Iniciar cumprimento de sentença" e a fase do processo ainda
+ * é outra (a baixa chegou numa ação que o hub registra como GANHA, e a fase só
+ * anda quando alguém a move). Eu tinha montado o bloco só pela fase, e ele
+ * sumiu exatamente no card feito para ele.
+ */
+function ehCardDeCumprimento(titulo?: string | null): boolean {
+  const t = String(titulo ?? '');
+  return /cumprimento\s+de\s+senten[çc]a/i.test(t)
+    || /iniciar\s+(o\s+)?cumprimento/i.test(t)
+    || /cumprimento\s+definitivo/i.test(t);
+}
+
 function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenConversation }: { activity: Activity; onClose: () => void; onRefetch: () => void; onOpenCase: (id: string) => void; onOpenConversation: (convId: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(activity.done);
@@ -2136,7 +2156,18 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         {activity.caseId && ehCardDeReplica(activity.title) && (
           <div className="mt-5">
             <DossieReplica caseId={activity.caseId} sempreVisivel />
-            <CumprimentoCs caseId={activity.caseId} />
+          </div>
+        )}
+
+        {/* 🚨 PORTÃO PRÓPRIO, e `sempreVisivel`. O bloco do cumprimento estava
+            pendurado no portão da RÉPLICA e sem `sempreVisivel`: no card
+            "Iniciar cumprimento de sentença" ele não aparecia por dois motivos
+            ao mesmo tempo — o título não é de réplica, e a fase do processo
+            ainda não é a 16. Abrir o card feito para a tarefa e não achar o
+            botão é o pior defeito que este bloco pode ter. */}
+        {activity.caseId && ehCardDeCumprimento(activity.title) && (
+          <div className="mt-5">
+            <CumprimentoCs caseId={activity.caseId} sempreVisivel />
           </div>
         )}
 
