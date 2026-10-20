@@ -14,6 +14,12 @@ export interface ScheduledAnexo {
   url: string;
 }
 
+/** Anexo enviado ao agendar: o arquivo já está no servidor, sai por URL. */
+export interface ScheduledAnexoUpload extends ScheduledAnexo {
+  mimeType?: string;
+  tipo: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+}
+
 /**
  * Template HSM agendado. Existe porque cliente FORA da janela de 24h só recebe
  * template aprovado: agendar texto puro pra ele falha no disparo (131047).
@@ -67,13 +73,18 @@ export const scheduledMessagesService = {
     text?: string;
     scheduledAt: string;
     template?: ScheduledTemplate;
+    /** Arquivos já subidos (/messages/uploads/media); saem por URL no disparo. */
+    anexos?: ScheduledAnexoUpload[];
   }): Promise<ScheduledMessage> {
     const { data } = await api.post('/scheduled-messages', {
       conversationId: payload.conversationId,
       type: payload.template ? 'TEMPLATE' : 'TEXT',
       content: payload.template
         ? { text: payload.template.previewText, template: payload.template }
-        : { text: payload.text ?? '' },
+        : {
+            text: payload.text ?? '',
+            ...(payload.anexos?.length ? { anexos: payload.anexos } : {}),
+          },
       scheduledAt: payload.scheduledAt,
     });
     return data.data;

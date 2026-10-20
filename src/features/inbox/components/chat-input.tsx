@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon, Maximize2, Minimize2, UserRound, MessageSquareText, Star } from 'lucide-react';
+import { Send, Plus, Mic, Trash2, Square, Loader2, StickyNote, Sparkles, FileUp, PenLine, Smile, X, FileText, CalendarClock, Clock, Zap, Film, Image as ImageIcon, Maximize2, Minimize2, UserRound, MessageSquareText, Star, Paperclip } from 'lucide-react';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
 import { toast } from 'sonner';
 import { useAudioRecorder } from '../hooks/use-audio-recorder';
@@ -40,8 +40,16 @@ interface ChatInputProps {
   onSendContact?: (contacts: PickedContact[]) => Promise<void>;
   /** Abre o modal de gerar resumo da conversa. */
   onGenerateSummary?: () => void;
-  /** Agenda o texto atual para envio futuro (ISO 8601). */
-  onSchedule?: (text: string, scheduledAtISO: string) => Promise<void>;
+  /**
+   * Agenda o texto atual para envio futuro (ISO 8601). Os arquivos da caixa e
+   * os anexos da mensagem rápida vão junto — o texto sai de legenda do 1º.
+   */
+  onSchedule?: (
+    text: string,
+    scheduledAtISO: string,
+    files: File[],
+    remoteAtts: QuickReplyAttachment[],
+  ) => Promise<void>;
   /** Número/conexão de onde a mensagem é enviada (ex.: "+55 (44) 9157-4212"). */
   sendingFrom?: string | null;
   /** Nome do atendente p/ o toggle "Assinatura" (assina as mensagens). */
@@ -197,8 +205,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const doSchedule = useCallback(
     async (when: Date | null) => {
       const trimmed = text.trim();
-      if (!trimmed) {
-        toast.error('Digite a mensagem antes de agendar.');
+      if (!trimmed && pending.length === 0 && pendingAtts.length === 0) {
+        toast.error('Digite a mensagem ou anexe um arquivo antes de agendar.');
         return;
       }
       if (!when || Number.isNaN(when.getTime())) {
@@ -212,8 +220,15 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       if (!onSchedule || isScheduling) return;
       setIsScheduling(true);
       try {
-        await onSchedule(trimmed, when.toISOString());
+        await onSchedule(
+          trimmed,
+          when.toISOString(),
+          pending.map((p) => p.file),
+          pendingAtts,
+        );
         setText('');
+        clearPending();
+        setPendingAtts([]);
         setScheduleOpen(false);
         setScheduleNL('');
       } catch {
@@ -222,7 +237,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         setIsScheduling(false);
       }
     },
-    [text, onSchedule, isScheduling],
+    [text, pending, pendingAtts, onSchedule, isScheduling],
   );
 
   // ── Mensagens rápidas "/" ──────────────────────────────────────────────
@@ -546,6 +561,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   // IDLE MODE: text input + mic button.
   const canRecord = !!onSendAudio;
+  const hasScheduleContent = !!text.trim() || pending.length > 0 || pendingAtts.length > 0;
   const showMic = canRecord && !text.trim() && pending.length === 0 && pendingAtts.length === 0;
 
   return (
@@ -735,9 +751,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 </button>
               </div>
 
-              {!text.trim() && (
+              {!hasScheduleContent && (
                 <p className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-                  Digite a mensagem antes de agendar.
+                  Digite a mensagem ou anexe um arquivo antes de agendar.
+                </p>
+              )}
+              {pending.length + pendingAtts.length > 0 && (
+                <p className="mb-2 flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-[11px] text-primary">
+                  <Paperclip className="h-3 w-3 shrink-0" />
+                  <span className="truncate">
+                    Vai junto:{' '}
+                    {[...pending.map((p) => p.file.name), ...pendingAtts.map((a) => a.fileName || 'anexo')].join(', ')}
+                  </span>
                 </p>
               )}
 
@@ -785,7 +810,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                   <button
                     type="button"
                     onClick={() => doSchedule(parsedSchedule)}
-                    disabled={!text.trim() || !parsedSchedule || isScheduling}
+                    disabled={!hasScheduleContent || !parsedSchedule || isScheduling}
                     title="Agendar"
                     className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
                   >
@@ -803,7 +828,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                   <button
                     type="button"
                     onClick={() => doSchedule(parsedSchedule)}
-                    disabled={!text.trim() || !parsedSchedule || isScheduling}
+                    disabled={!hasScheduleContent || !parsedSchedule || isScheduling}
                     title="Agendar"
                     className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
                   >
@@ -987,7 +1012,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           <Smile className="h-5 w-5" />
         </button>
         {/* Relógio — agendar a mensagem digitada (estilo LíderHub) */}
-        {onSchedule && !internalMode && !!text.trim() && (
+        {onSchedule && !internalMode && hasScheduleContent && (
           <button
             type="button"
             onClick={() => (scheduleOpen ? setScheduleOpen(false) : openSchedule())}

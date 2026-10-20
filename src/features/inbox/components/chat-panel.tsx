@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
 import { PrestacaoApprovalBar } from './prestacao-approval-bar';
 import { inboxService, type Conversation, type Message } from '../services/inbox.service';
-import { scheduledMessagesService } from '../services/scheduled-messages.service';
+import { scheduledMessagesService, type ScheduledAnexoUpload } from '../services/scheduled-messages.service';
 import { ScheduledMessagesBar } from './scheduled-messages-bar';
 import { ChatInput, type ChatInputHandle } from './chat-input';
 import { useComposerDraftStore } from '../stores/composer-draft-store';
@@ -1922,12 +1922,36 @@ export function ChatPanel({ conversation, onConversationUpdate, panelOpen, onTog
             onSendMedia={handleSendMedia}
             onSendContact={handleSendContact}
             onGenerateSummary={() => setSummaryOpen(true)}
-            onSchedule={async (scheduleText, scheduledAtISO) => {
+            onSchedule={async (scheduleText, scheduledAtISO, files, remoteAtts) => {
               try {
+                // Os arquivos sobem AGORA (ficam guardados no servidor) e a
+                // agendada leva só a URL — no disparo saem como no envio
+                // imediato, com o texto de legenda do primeiro.
+                const anexos: ScheduledAnexoUpload[] = [];
+                for (const f of files) {
+                  const up = await inboxService.uploadMedia(f);
+                  const mime = up.mimeType || f.type || '';
+                  anexos.push({
+                    nome: up.filename || f.name,
+                    url: up.url,
+                    mimeType: mime,
+                    tipo: mime.startsWith('image/')
+                      ? 'IMAGE'
+                      : mime.startsWith('video/')
+                        ? 'VIDEO'
+                        : mime.startsWith('audio/')
+                          ? 'AUDIO'
+                          : 'DOCUMENT',
+                  });
+                }
+                for (const a of remoteAtts) {
+                  anexos.push({ nome: a.fileName || 'anexo', url: a.url, tipo: a.type });
+                }
                 await scheduledMessagesService.create({
                   conversationId: conversation.id,
                   text: scheduleText,
                   scheduledAt: scheduledAtISO,
+                  anexos,
                 });
                 toast.success('Mensagem agendada');
                 queryClient.invalidateQueries({
