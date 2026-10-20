@@ -218,7 +218,7 @@ export default function DashboardLayout({
                 tarefa na agenda e vai para outra aba; o trabalho continua, e
                 ele tem de continuar vendo. Some sozinho quando não há nada
                 rodando — não interromper é regra da casa. */}
-            <VisorProgresso />
+            <VisorProgresso acimaDaBarra={simples} />
           </div>
           {/* Container interno: novo contexto de posicionamento pra topbar glass. */}
           <div className="relative flex min-h-0 flex-1 flex-col">

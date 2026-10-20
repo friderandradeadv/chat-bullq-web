@@ -33,7 +33,7 @@ type Ativo = { caseId: string; titulo: string | null; cnj: string | null; progre
  * pode fechar. Fechado, só volta quando surgir um trabalho NOVO (a dispensa é
  * por chave do que está rodando, não para sempre).
  */
-export function VisorProgresso() {
+export function VisorProgresso({ acimaDaBarra = false }: { acimaDaBarra?: boolean }) {
   const [dispensado, setDispensado] = useState<string | null>(null);
 
   const { data } = useQuery({
@@ -59,11 +59,31 @@ export function VisorProgresso() {
   if (dispensado === chave) return null;
 
   return (
-    <div className="pointer-events-auto fixed bottom-4 right-4 z-40 w-[22rem] max-w-[calc(100vw-2rem)] space-y-2">
+    /* 🚨 O ÚLTIMO CARTÃO SUMIA ATRÁS DA BARRA DE ABAS (20/10/2026). O visor
+       estava em `bottom-4` (16px) e a barra inferior do hub ocupa `4rem` mais
+       o `--dock-safe` do Dock do macOS, que é a mesma conta que o layout já faz
+       no padding do conteúdo. Com três operações em curso o terceiro cartão
+       ficava cortado pela metade, e ele apontou: "está bugando aquele aviso
+       ali cortando".
+
+       No mobile a barra existe sempre (`MobileTabBar`); no desktop só no modo
+       Simples, e por isso o recuo de `lg` vem por prop em vez de ser chutado
+       aqui. As classes vão escritas por inteiro de propósito: o Tailwind não
+       enxerga nome de classe montado por interpolação.
+
+       E `max-h` com rolagem porque empilhar quatro cartões também estoura a
+       tela em janela baixa, e cortar por cima é o mesmo defeito do outro lado. */
+    <div
+      className={`pointer-events-auto fixed right-4 z-40 flex max-h-[calc(100vh-9rem)] w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+0.75rem)] ${
+        acimaDaBarra
+          ? 'lg:bottom-[calc(4rem+var(--dock-safe,0px)+0.75rem)]'
+          : 'lg:bottom-4'
+      }`}
+    >
       {vivos.slice(0, 4).map((x) => (
         <div
           key={x.caseId}
-          className="rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
+          className="shrink-0 rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-800 dark:bg-neutral-900"
         >
           <div className="flex items-start gap-2 px-2.5 pt-2">
             <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-neutral-700 dark:text-neutral-200">
