@@ -80,7 +80,7 @@ export function VisorProgresso() {
             </button>
           </div>
           <div className="px-2 pb-2 pt-1">
-            <BarraProgressoView p={x.progresso} compacta />
+            <BarraProgressoView p={x.progresso} compacta caseId={x.caseId} />
           </div>
         </div>
       ))}

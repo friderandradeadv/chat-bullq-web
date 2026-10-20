@@ -1,7 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { Loader2, Check, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, Check, AlertTriangle, Square } from 'lucide-react';
 import { api } from '@/lib/api';
 
 export type Progresso = {
@@ -65,6 +66,28 @@ export const JANELA_DO_OK_MS = 2 * 60 * 1000;
  * perde: cada recusa vira movimento no histórico do card.
  */
 export const JANELA_DO_ERRO_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * QUANTO TEMPO SEM NOTÍCIA ANTES DE CHAMAR DE TRAVADO.
+ *
+ * 🚨 "TRAVADO É INDISTINGUÍVEL DE TRABALHANDO" era o defeito que a barra veio
+ * resolver, e ela o reintroduziu por outro caminho (20/10/2026): outra sessão
+ * reiniciou a API no meio de uma montagem, o `catch` que marca erro nunca
+ * rodou, e o card do JOSÉ BATISTA ficou girando em "organizando a pasta no
+ * Drive" para sempre. Processo morto não escreve "erro": simplesmente para de
+ * escrever.
+ *
+ * Então o silêncio passa a ser o sinal. Três minutos é folgado de propósito: a
+ * cópia da pasta no Drive é o passo mais longo e narra pouco, e chamar de
+ * travado o que ainda trabalha seria o erro inverso.
+ */
+export const SEM_NOTICIA_MS = 3 * 60 * 1000;
+
+export function pareceTravado(p: Progresso): boolean {
+  if (p.status !== 'rodando') return false;
+  const quando = Date.parse(p.em ?? '');
+  return Number.isFinite(quando) && Date.now() - quando > SEM_NOTICIA_MS;
+}
 
 export const NOME: Record<string, string> = {
   documentos: 'Preparando documentos',
@@ -136,7 +159,7 @@ export function BarraProgresso({
 
   const p = data;
   if (!p || !aindaTemOQueDizer(p)) return null;
-  return <BarraProgressoView p={p} compacta={compacta} />;
+  return <BarraProgressoView p={p} compacta={compacta} caseId={caseId} />;
 }
 
 /**
@@ -167,9 +190,19 @@ export function aindaTemOQueDizer(p: Progresso): boolean {
  * barras parecidas e diferentes — que é justo o que o comentário lá em cima
  * manda não fazer.
  */
-export function BarraProgressoView({ p, compacta = false }: { p: Progresso; compacta?: boolean }) {
+export function BarraProgressoView({
+  p,
+  compacta = false,
+  caseId,
+}: {
+  p: Progresso;
+  compacta?: boolean;
+  /** Sem ele não há botão de parar: a view continua servindo para só desenhar. */
+  caseId?: string;
+}) {
   const titulo = NOME[p.op] ?? 'Trabalhando';
   const rodando = p.status === 'rodando';
+  const travado = pareceTravado(p);
   const erro = p.status === 'erro';
   const pct = typeof p.pct === 'number' ? p.pct : null;
 
@@ -219,7 +252,19 @@ export function BarraProgressoView({ p, compacta = false }: { p: Progresso; comp
         {pct == null && p.total == null && p.n != null && (
           <span className="text-[11px] tabular-nums text-neutral-500">{p.n}</span>
         )}
+
+        {rodando && caseId && <BotaoParar caseId={caseId} travado={travado} />}
       </div>
+
+      {/* 🚨 DIZER QUE PARECE TRAVADO, EM VEZ DE SEGUIR GIRANDO. Girar para
+          sempre é mentira sobre atividade, e foi o que aconteceu quando a API
+          reiniciou no meio da montagem. */}
+      {travado && (
+        <p className={`${compacta ? 'text-[11px]' : 'text-xs'} mt-1 leading-snug text-amber-700 dark:text-amber-400`}>
+          Sem notícia há alguns minutos. Pode ter parado sozinho: use Parar para
+          destravar o card e montar de novo.
+        </p>
+      )}
 
       {erro && p.erro && (
         <p className={`${compacta ? 'text-[11px]' : 'text-xs'} mt-1 whitespace-pre-line leading-snug text-red-700 dark:text-red-300`}>
@@ -246,5 +291,78 @@ export function BarraProgressoView({ p, compacta = false }: { p: Progresso; comp
       )}
 
     </div>
+  );
+}
+
+/**
+ * O BOTÃO DE PARAR.
+ *
+ * 🚨 DOIS CLIQUES, E NÃO UM MODAL. Parar no meio custa os minutos da montagem
+ * inteira, e um clique sem querer na barra de um card é fácil demais. O
+ * segundo clique confirma na própria barra, sem abrir caixa de diálogo, que no
+ * meio de uma esteira é mais atrapalho que proteção.
+ *
+ * 🚨 E O QUE ELE NÃO FAZ. Não apaga a peça anterior do card, não desfaz pasta
+ * no Drive e não mata passo pela metade: a API grava o pedido e a montagem
+ * para sozinha no próximo ponto de checagem, entre passos. Quando a operação
+ * já morreu por fora, não há quem leia o pedido, e aí o efeito é justamente o
+ * que se quer: a barra sai e o card destrava.
+ */
+function BotaoParar({ caseId, travado }: { caseId: string; travado: boolean }) {
+  const [armado, setArmado] = useState(false);
+  const qc = useQueryClient();
+
+  const parar = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/legal-cases/${caseId}/progresso/parar`);
+      return data;
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['legal-cases', caseId, 'progresso'] });
+      qc.invalidateQueries({ queryKey: ['legal-cases'] });
+      qc.invalidateQueries({ queryKey: ['progresso-ativos'] });
+      setArmado(false);
+    },
+  });
+
+  if (parar.isPending) {
+    return <span className="text-[11px] text-neutral-500">parando…</span>;
+  }
+
+  if (armado) {
+    return (
+      <span className="flex flex-shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={() => parar.mutate()}
+          className="rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+        >
+          Confirmar
+        </button>
+        <button
+          type="button"
+          onClick={() => setArmado(false)}
+          className="rounded px-1 py-0.5 text-[11px] text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+        >
+          não
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="Parar esta operação e destravar o card"
+      onClick={() => setArmado(true)}
+      className={`flex flex-shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
+        travado
+          ? 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+          : 'text-neutral-500 hover:bg-neutral-200 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
+      }`}
+    >
+      <Square className="h-3 w-3" />
+      Parar
+    </button>
   );
 }
