@@ -123,6 +123,28 @@ function textoDaOferta(nome: string | null, a: Achado): string {
 
 export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: () => void }) {
   const qc = useQueryClient();
+  /**
+   * 🚨 PEDIR O EXTRATO JÁ NA OFERTA. Ver a nota no botão: na revisão da inicial
+   * ele chega tarde. Mesma rota e as mesmas três recusas do servidor.
+   */
+  const [pedindoExtrato, setPedindoExtrato] = useState(false);
+  const pedirExtrato = async () => {
+    setPedindoExtrato(true);
+    try {
+      const r = await legalCasesService.pedirExtratoDaConta(caso.id);
+      if (r?.enviado) {
+        toast.success(`Pedido enviado: ${(r.datas ?? []).join(', ') || 'extrato da conta'}.`);
+      } else {
+        toast.info(r?.motivo ?? 'O pedido já havia sido feito.');
+      }
+      onMudou?.();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Não consegui mandar o pedido.');
+    } finally {
+      setPedindoExtrato(false);
+    }
+  };
+
   const [analisando, setAnalisando] = useState(false);
   const [achado, setAchado] = useState<Achado | null>(null);
   const [texto, setTexto] = useState('');
@@ -545,6 +567,25 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                 <button type="button" onClick={() => responder('recusada')} disabled={registrando}
                   className="inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-medium text-[#4b5863] hover:border-red-400 hover:text-red-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
                   <X className="h-3 w-3" /> Recusou
+                </button>
+                {/* 🚨 O EXTRATO SE PEDE AQUI, NA OFERTA, NÃO NA REVISÃO
+                    (21/10/2026). O botão existia só no fim da esteira, e ali o
+                    extrato chega tarde: a peça já está montada e o pacote
+                    espera por ele. Pedido dele: *"após coletarmos o HISCON e
+                    HISCRE, você faz a varredura, e, cabendo churning, avisa o
+                    cliente e pede o extrato"*. Pedindo na oferta, o documento
+                    chega enquanto a esteira ainda monta.
+
+                    Continua sendo CLIQUE, nunca automático: mensagem a cliente
+                    parte do advogado. O servidor recusa fora das 6h às 20h, sem
+                    data no HISCON e em pedido repetido. */}
+                <button type="button" onClick={pedirExtrato} disabled={pedindoExtrato}
+                  title="Manda ao cliente o pedido do extrato nas datas em que o HISCON registra as averbações deste grupo, e pergunta se ele lembra de ter entrado dinheiro."
+                  className="inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-medium text-[#4b5863] hover:border-[#2f6f8f] hover:text-[#2f6f8f] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
+                  {pedindoExtrato
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <Send className="h-3 w-3" />}
+                  Pedir o extrato
                 </button>
               </>
             )}
