@@ -45,7 +45,13 @@ export function produtoDoCard(produto?: string | null, area?: string | null): 'R
  * petição próprios. É a mesma razão pela qual o card "RMC | RCC" sempre rendeu
  * duas pastas, e não uma.
  */
-export type Montavel = { tese: 'rmc' | 'churning'; rotulo: string; produto?: 'RMC' | 'RCC' };
+export type Montavel = { tese: 'rmc' | 'churning' | 'seguro'; rotulo: string; produto?: 'RMC' | 'RCC' };
+
+/**
+ * A etiqueta do SEGURO PRESTAMISTA, espelho de `ETIQUETA_SEGURO` da API
+ * (`inicial/teses.ts`). "Seguro Social" é o INSS, não o produto.
+ */
+const ETIQUETA_SEGURO = /SEGURO(?!\s+SOCIAL)|PRESTAMISTA/;
 
 /**
  * TODAS as iniciais que o escritório sabe montar hoje.
@@ -64,6 +70,8 @@ export const TODAS_AS_INICIAIS: Montavel[] = [
   { tese: 'rmc', rotulo: 'RMC', produto: 'RMC' },
   { tese: 'rmc', rotulo: 'RCC', produto: 'RCC' },
   { tese: 'churning', rotulo: 'Churning' },
+  // 21/10/2026: seguro prestamista embutido no empréstimo (lê o CONTRATO).
+  { tese: 'seguro', rotulo: 'Seguro' },
 ];
 
 export function montaveisDoCard(produto?: string | null, area?: string | null): Montavel[] {
@@ -71,6 +79,7 @@ export function montaveisDoCard(produto?: string | null, area?: string | null): 
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
   const out: Montavel[] = [];
   if (/CHURNING|RECICLAGEM/.test(t)) out.push({ tese: 'churning', rotulo: 'Churning' });
+  if (ETIQUETA_SEGURO.test(t)) out.push({ tese: 'seguro', rotulo: 'Seguro' });
   if (/\bRMC\b|RESERVA DE MARGEM/.test(t)) out.push({ tese: 'rmc', rotulo: 'RMC', produto: 'RMC' });
   if (/\bRCC\b|CARTAO DE CREDITO CONSIGNADO|CARTAO CONSIGNADO/.test(t)) {
     out.push({ tese: 'rmc', rotulo: 'RCC', produto: 'RCC' });
@@ -78,10 +87,13 @@ export function montaveisDoCard(produto?: string | null, area?: string | null): 
   return out.length ? out : [{ tese: 'rmc', rotulo: 'RMC', produto: 'RMC' }];
 }
 
-export function teseDoCard(produto?: string | null, area?: string | null): 'rmc' | 'churning' {
+export function teseDoCard(
+  produto?: string | null, area?: string | null,
+): 'rmc' | 'churning' | 'seguro' {
   const t = `${produto ?? ''} ${area ?? ''}`
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-  return /CHURNING|RECICLAGEM/.test(t) ? 'churning' : 'rmc';
+  if (/CHURNING|RECICLAGEM/.test(t)) return 'churning';
+  return ETIQUETA_SEGURO.test(t) ? 'seguro' : 'rmc';
 }
 
 /**
@@ -114,7 +126,7 @@ export async function montarInicialCompleta(
      */
     organizarPasta?: () => Promise<any>;
     etiquetas?: { produto?: string | null; area?: string | null } | null;
-    tese?: 'rmc' | 'churning';
+    tese?: 'rmc' | 'churning' | 'seguro';
     /** O fundamento da inicial de RMC: `erro` (padrão) ou `onus`. */
     eixo?: 'erro' | 'onus';
   } = {},

@@ -244,7 +244,8 @@ export function CaseDetailDrawer({
   //
   // Lê TODAS as etiquetas, como os outros pontos da esteira: o card carrega
   // "RMC" no produto e "Churning" na área.
-  const isRmc = /RMC|RCC|CONSIGN|REVISIONAL|PORTABIL|CHURNING|RECICLAGEM/i
+  // 21/10/2026: e o SEGURO PRESTAMISTA, que tem montador próprio.
+  const isRmc = /RMC|RCC|CONSIGN|REVISIONAL|PORTABIL|CHURNING|RECICLAGEM|SEGURO(?!\s+SOCIAL)|PRESTAMISTA/i
     .test(`${c?.area ?? ''} ${(c?.metadata as any)?.produto ?? ''}`);
   const inPre = phaseKey ? PRE_PHASES.has(phaseKey) : false;
   const showJuizo = pf.juizo && String(pf.juizo).trim().toLowerCase() !== String(c?.court ?? '').trim().toLowerCase();
