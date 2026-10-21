@@ -63,7 +63,17 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
   });
 
   const familia = data?.find((f) => f.acao === acao) ?? null;
-  if (!acao || !familia) return null;
+
+  /* 🚨 SEM FAMÍLIA, O CARD FICAVA MUDO — e some justamente onde mais serve.
+     Medido em 21/10/2026 num prazo de "Manifestar nos autos": o classificador
+     emite 26 classes, o catálogo tinha 22, e `manifestacao` era uma das que
+     faltavam. Resultado: nem a sugestão nem o CAMPO DE INSTRUÇÃO apareciam na
+     peça mais aberta de todas. O serviço da API já dizia a regra certa
+     ("guarda mesmo quando a família ainda não monta"); o componente é que
+     desistia. Agora, família desconhecida vira aviso + campo, nunca silêncio:
+     o catálogo pode envelhecer de novo, e o campo não pode sumir com ele. */
+  if (!acao) return null;
+  const desconhecida = !familia;
 
   const salvar = async () => {
     setSalvando(true);
@@ -76,14 +86,19 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     } finally { setSalvando(false); }
   };
 
-  const selo = SELO[familia.estado];
-  const seloTexto = familia.selo ?? selo.texto;
+  const selo = familia ? SELO[familia.estado] : SELO['sem-base'];
+  const seloTexto = desconhecida ? 'classe sem família no catálogo' : (familia!.selo ?? selo.texto);
+  const rotulo = familia?.rotulo ?? acao;
+  const porque = desconhecida
+    ? 'esta classe de publicação ainda não tem família no catálogo de peças. O campo abaixo '
+      + 'funciona do mesmo jeito: escreva o que a peça tem de dizer e fica guardado'
+    : familia!.porque;
 
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <div className="flex items-start justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
-          <FileText className="h-3.5 w-3.5" /> A publicação sugere: {familia.rotulo}
+          <FileText className="h-3.5 w-3.5" /> A publicação sugere: {rotulo}
         </p>
         <span className={`shrink-0 text-[10px] font-medium ${selo.classe}`}>{seloTexto}</span>
       </div>
@@ -94,9 +109,9 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
         </p>
       )}
 
-      {familia.estado !== 'pronta' && familia.porque && (
+      {familia?.estado !== 'pronta' && porque && (
         <p className="mt-1.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
-          {familia.porque}.
+          {porque}.
         </p>
       )}
 
@@ -127,10 +142,10 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
         )}
       </div>
 
-      {familia.acao === 'replica' && (
+      {familia?.acao === 'replica' && (
         <div className="mt-2.5"><DossieReplica caseId={caseId} sempreVisivel /></div>
       )}
-      {familia.acao === 'cumprimento' && (
+      {familia?.acao === 'cumprimento' && (
         <div className="mt-2.5"><CumprimentoCs caseId={caseId} sempreVisivel /></div>
       )}
     </div>
