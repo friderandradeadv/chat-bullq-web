@@ -1322,6 +1322,22 @@ export const legalCasesService = {
     return data?.data ?? data;
   },
 
+  /**
+   * Pede ao cliente, pelo WhatsApp, o extrato da conta nas datas do HISCON.
+   *
+   * O servidor recusa fora das 6h-20h, sem data no extrato e quando o pedido
+   * já foi feito. Ver `pedirExtratoDaConta` no hub.
+   */
+  async pedirExtratoDaConta(id: string): Promise<{
+    ok: boolean;
+    enviado: boolean;
+    datas?: string[];
+    motivo?: string;
+  }> {
+    const { data } = await api.post(`/legal-cases/${id}/extrato-da-conta/pedir`);
+    return (data?.data ?? data) as any;
+  },
+
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */

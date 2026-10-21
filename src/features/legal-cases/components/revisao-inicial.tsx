@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save, FileText, Pencil, FolderSync } from 'lucide-react';
+import { ClipboardCheck, ExternalLink, Loader2, Check, AlertTriangle, Save, FileText, Pencil, FolderSync, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -74,6 +74,38 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
    *
    * A rota já existia (`POST :id/drive/organizar-inicial`); faltava o botão.
    */
+  /**
+   * 🚨 O PEDIDO DO EXTRATO, NUM CLIQUE (21/10/2026).
+   *
+   * No 5064750-60.2025.8.21.0010 (TJRS) o autor afirmou que nada recebera, o
+   * banco juntou 66 folhas do extrato DELE com os créditos, e a ação morreu nos
+   * dois graus. O ônus de provar a entrega é do banco e continua sendo; o que
+   * não se transfere é o risco de AFIRMAR. Daí olhar antes.
+   *
+   * O botão só aparece na linha do `08.1 EXTRATO DA CONTA` quando ela está em
+   * falta: cumprida, não há o que pedir. Quem recusa fora de hora, sem data ou
+   * em pedido repetido é o servidor, e a recusa vem escrita no toast.
+   */
+  const [pedindoExtrato, setPedindoExtrato] = useState(false);
+  const pedirExtrato = async () => {
+    setPedindoExtrato(true);
+    try {
+      const r = await legalCasesService.pedirExtratoDaConta(caso.id);
+      if (r?.enviado) {
+        toast.success(
+          `Pedido enviado ao cliente: ${(r.datas ?? []).join(', ') || 'extrato da conta'}.`,
+        );
+      } else {
+        toast.info(r?.motivo ?? 'O pedido já havia sido feito.');
+      }
+      qc.invalidateQueries({ queryKey: ['legal-case', caso.id] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Não consegui mandar o pedido.');
+    } finally {
+      setPedindoExtrato(false);
+    }
+  };
+
   const [organizando, setOrganizando] = useState(false);
   const organizar = async () => {
     setOrganizando(true);
@@ -259,6 +291,23 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
                     <p className="mt-0.5 text-[10px] leading-snug text-red-600/90 dark:text-red-400/90">
                       {(i as any).motivo}
                     </p>
+                  ) : null}
+                  {/* 🚨 Só na linha do extrato, e só enquanto ela está em falta.
+                      Ver `pedirExtrato`: é o documento que decide a perna do
+                      ônus, e o cliente o tira no aplicativo do banco. */}
+                  {!i.presente && /^08\.1/.test(i.nome) ? (
+                    <button
+                      type="button"
+                      onClick={pedirExtrato}
+                      disabled={pedindoExtrato}
+                      title="Manda ao cliente, pelo WhatsApp, o pedido do extrato nas datas em que o HISCON registra as averbações. O servidor recusa fora das 6h às 20h e não repete pedido já feito."
+                      className="mt-1 inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-1.5 py-0.5 text-[10px] font-medium text-[#48626f] transition hover:border-[#2f6f8f] hover:text-[#2f6f8f] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-400 dark:hover:text-zinc-200"
+                    >
+                      {pedindoExtrato
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <MessageSquare className="h-3 w-3" />}
+                      Pedir ao cliente
+                    </button>
                   ) : null}
                 </div>
               </li>
