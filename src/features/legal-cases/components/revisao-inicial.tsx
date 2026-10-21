@@ -270,7 +270,14 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
                         ? 'text-[#101820] dark:text-zinc-300'
                         : i.obrigatorio ? 'font-medium text-red-600 dark:text-red-400' : 'text-[#48626f] dark:text-zinc-500'}>
                         {i.arquivo || i.nome}
-                        {!i.presente && !i.obrigatorio && ' · opcional'}
+                        {/* 🚨 "opcional" diria que o escritório não precisa do
+                            documento, e não é isso: o extrato dispensado pela
+                            medição continua sendo pedido ao cliente, e o que
+                            chegar depois serve na réplica. */}
+                        {!i.presente && !i.obrigatorio
+                          && (/^08\.1/.test(i.nome) && (i as any).motivo
+                            ? ' · não segura o protocolo'
+                            : ' · opcional')}
                       </span>
                     )}
                     {/* Presente e ainda furada: o PDF existe, a peça não está pronta. */}
@@ -287,8 +294,15 @@ export function RevisaoInicial({ caso }: { caso: CaseDetail }) {
                       organizador), e a noite foi gasta procurando no lugar
                       errado. Vai EMBAIXO, em linha própria, porque é frase e não
                       rótulo: ao lado do nome ela quebraria a lista. */}
+                  {/* 🚨 E A COR SEGUE O VEREDITO (21/10/2026). O portão do
+                      extrato também escreve aqui, e quando ele ABRE a frase
+                      começa com "PODE PROTOCOLAR": em vermelho, ela diria o
+                      oposto do que diz. Vermelho é o que segura o protocolo. */}
                   {(i as any).motivo ? (
-                    <p className="mt-0.5 text-[10px] leading-snug text-red-600/90 dark:text-red-400/90">
+                    <p className={`mt-0.5 text-[10px] leading-snug ${
+                      i.obrigatorio
+                        ? 'text-red-600/90 dark:text-red-400/90'
+                        : 'text-[#48626f] dark:text-zinc-500'}`}>
                       {(i as any).motivo}
                     </p>
                   ) : null}
