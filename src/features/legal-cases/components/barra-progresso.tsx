@@ -34,7 +34,13 @@ export type Progresso = {
  * Distinguir pela OPERAÇÃO, nunca pelo texto do passo: a frase muda, e casar
  * por substring quebraria calado no dia em que alguém a reescrevesse.
  */
-export const OK_QUE_ESPERA = new Set(['protocolo']);
+export const OK_QUE_ESPERA = new Set([
+  'protocolo',
+  // 20/10/2026: o cumprimento que PAROU por lacuna do título termina em 'ok',
+  // mas espera o advogado ler a sentença. Se sumisse sozinho da tela, a lista
+  // do que falta sumiria com ele — e é ela que diz o que fazer.
+  'cumprimento-pendencia',
+]);
 
 /**
  * Por quanto tempo um `ok` que não espera ninguém continua na tela.
