@@ -38,6 +38,12 @@ import {
   Cake,
   Gift,
   Heart,
+  LayoutDashboard,
+  LayoutList,
+  BarChart3,
+  Scale,
+  Calculator,
+  Columns3,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
@@ -940,6 +946,51 @@ function Aniversariantes({ onCelebrate }: { onCelebrate: () => void }) {
   );
 }
 
+// ─── Atalhos ──────────────────────────────────────────────────────────────────
+// Portas de entrada para os painéis que se abrem todo dia. `mod` é o módulo
+// gateável (mesmo critério do moduleForPath do layout): quem tem o módulo
+// restrito não vê o atalho — clicar só renderia um redirect.
+const ATALHOS: { href: string; icon: React.ElementType; color: string; label: string; mod: string | null; soAdmin?: boolean }[] = [
+  { href: '/juridico', icon: LayoutList, color: '#7048E8', label: 'Dashboard jurídico', mod: 'juridico' },
+  { href: '/dashboard', icon: LayoutDashboard, color: '#228BE6', label: 'Dashboard comercial', mod: 'atendimento' },
+  { href: '/juridico/jurimetria', icon: BarChart3, color: '#0C8599', label: 'Jurimetria', mod: 'analise' },
+  { href: '/juridico/recursos', icon: Scale, color: '#E8590C', label: 'Recursos', mod: 'analise' },
+  { href: '/juridico/kanban', icon: Columns3, color: '#5C7CFA', label: 'Fase judicial', mod: 'juridico' },
+  { href: '/caixa-djen', icon: Newspaper, color: '#E64980', label: 'Publicações', mod: 'juridico' },
+  { href: '/juridico/calculos', icon: Calculator, color: '#02883C', label: 'Cálculos', mod: 'calculos' },
+  { href: '/financeiro', icon: CircleDollarSign, color: '#F08C00', label: 'Financeiro', mod: 'financeiro', soAdmin: true },
+];
+const MOD_PAI: Record<string, string> = { analise: 'juridico', calculos: 'juridico' };
+
+function Atalhos() {
+  const { organizations, activeOrgId } = useAuthStore();
+  const org = organizations.find((o) => o.id === activeOrgId);
+  const isAdmin = org?.role === 'OWNER' || org?.role === 'ADMIN';
+  const restritos = org?.restrictedModules ?? [];
+  const itens = ATALHOS.filter((a) => {
+    if (a.soAdmin && !isAdmin) return false;
+    if (!a.mod) return true;
+    return !restritos.includes(a.mod) && !(MOD_PAI[a.mod] && restritos.includes(MOD_PAI[a.mod]));
+  });
+  if (itens.length === 0) return null;
+  return (
+    <div className="welcome-pop mt-4 w-full text-left" style={{ animationDelay: '0.22s' }}>
+      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Atalhos</span>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {itens.map(({ href, icon: Icon, color, label }) => (
+          <Link key={href} href={href} className="group flex items-center gap-2.5 rounded-xl border border-zinc-200/70 bg-white/70 px-3 py-2.5 backdrop-blur transition hover:-translate-y-0.5 hover:border-[#228BE6]/40 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/60">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}1A` }}>
+              <Icon className="h-4 w-4" style={{ color }} />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{label}</span>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-[#228BE6]" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Conquistas (resumo) ──────────────────────────────────────────────────────
 // Cartão enxuto: o placar + a história em destaque. A aba cheia (mural,
 // sugestões da varredura, cadastro) fica em /conquistas — o Início só chama.
@@ -1145,6 +1196,9 @@ export default function InicioPage() {
             <StatCard href="/processos" icon={Briefcase} color="#7048E8" value={stats.processos} label="processos seus" on={statOn} />
           </div>
         )}
+
+        {/* Atalhos — os painéis que se abrem todo dia, a um clique do Início */}
+        {mounted && <Atalhos />}
 
         {/* Aniversariantes do escritório — confete no dia + próximos */}
         {mounted && <Aniversariantes onCelebrate={() => setBurst((b) => b + 1)} />}
