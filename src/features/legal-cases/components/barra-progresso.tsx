@@ -40,6 +40,11 @@ export const OK_QUE_ESPERA = new Set([
   // mas espera o advogado ler a sentença. Se sumisse sozinho da tela, a lista
   // do que falta sumiria com ele — e é ela que diz o que fazer.
   'cumprimento-pendencia',
+  // 21/10/2026: a triagem termina em 'ok' e o que ela produz é um RELATÓRIO
+  // PARA LER. Sumindo sozinho da tela, o advogado nunca descobre que ela
+  // rodou — e o portão que ela fechou ("não cabe REsp, não há acórdão") é
+  // justamente o que precisa chegar nele.
+  'triagem-lida',
 ]);
 
 /**
@@ -96,6 +101,10 @@ export function pareceTravado(p: Progresso): boolean {
 }
 
 export const NOME: Record<string, string> = {
+  // a triagem lê os autos e devolve relatório; sem rótulo próprio a barra
+  // diria só "Trabalhando", e o advogado não saberia o que está rodando
+  triagem: 'Triagem',
+  'triagem-lida': 'Triagem',
   documentos: 'Preparando documentos',
   inicial: 'Montando a inicial',
   protocolo: 'Protocolando',

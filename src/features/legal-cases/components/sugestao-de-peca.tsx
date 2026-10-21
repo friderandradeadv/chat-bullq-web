@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { DossieReplica } from './dossie-replica';
 import { CumprimentoCs } from './cumprimento-cs';
+import { TriagemPeca } from './triagem-peca';
 
 /**
  * O QUE A PUBLICAÇÃO PEDE, e o que dá para fazer com isso.
@@ -80,7 +81,11 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     try {
       await api.post(`/legal-cases/${caseId}/peca/instrucao`, { acao, instrucao: texto });
       setSalvo(true);
-      toast.success('Anotado. Entra na montagem desta peça.');
+      /* 🚨 NÃO PROMETA MONTAGEM: este botão só GUARDA o texto. Dizia "entra na
+         montagem desta peça" e o advogado perguntou, com razão, se a peça tinha
+         começado a ser montada — nada tinha começado. Botão que insinua
+         trabalho em curso faz procurar barra de progresso que não existe. */
+      toast.success('Guardei. Nada foi montado ainda — isto fica anotado para quando a peça for feita.');
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? 'não consegui guardar');
     } finally { setSalvando(false); }
@@ -137,11 +142,16 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
           >
             {salvando ? <Loader2 className="h-3 w-3 animate-spin" />
               : salvo ? <Check className="h-3 w-3" /> : null}
-            {salvo ? 'anotado' : 'Anotar'}
+            {salvo ? 'guardado' : 'Guardar'}
           </button>
         )}
       </div>
 
+      {/* 🚨 o botão só aparece onde HÁ triagem — e é o catálogo do hub que diz
+          quais são, não uma lista escrita aqui, que envelheceria sozinha */}
+      {familia?.estado === 'triagem' && (
+        <TriagemPeca caseId={caseId} acao={familia.acao} rotulo={familia.rotulo} />
+      )}
       {familia?.acao === 'replica' && (
         <div className="mt-2.5"><DossieReplica caseId={caseId} sempreVisivel /></div>
       )}
