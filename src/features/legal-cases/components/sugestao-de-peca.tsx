@@ -28,12 +28,13 @@ import { CumprimentoCs } from './cumprimento-cs';
  */
 type Familia = {
   acao: string; rotulo: string; skill: string | null;
-  estado: 'pronta' | 'base-sem-preenchedor' | 'sem-base' | 'nao-e-peca';
+  estado: 'pronta' | 'triagem' | 'base-sem-preenchedor' | 'sem-base' | 'nao-e-peca';
   porque?: string;
 };
 
 const SELO: Record<Familia['estado'], { texto: string; classe: string }> = {
   'pronta': { texto: 'pronta', classe: 'text-emerald-700 dark:text-emerald-400' },
+  'triagem': { texto: 'leio a decisão e aponto o vício', classe: 'text-sky-700 dark:text-sky-400' },
   'base-sem-preenchedor': { texto: 'base pronta, preenchimento pendente', classe: 'text-amber-700 dark:text-amber-400' },
   'sem-base': { texto: 'sem base', classe: 'text-zinc-500 dark:text-zinc-400' },
   'nao-e-peca': { texto: 'não produz petição', classe: 'text-zinc-500 dark:text-zinc-400' },
