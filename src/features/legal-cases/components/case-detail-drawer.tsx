@@ -2145,7 +2145,18 @@ function AcoesExistentesCard({ caseId, metadata, fase, onDone }: { caseId: strin
     // por último na lista; aqui só rotulamos. Rebaixar não é esconder.
     ufCliente?: string | null;
     deOutroEstado?: number;
-    acoes?: Array<{ numeroProcesso: string; tribunal: string; tipo: string; data: string; temCpf?: boolean; matchPor?: string | null; foraDoEstado?: boolean | null }>;
+    acoes?: Array<{
+      numeroProcesso: string; tribunal: string; tipo: string; data: string;
+      temCpf?: boolean; matchPor?: string | null; foraDoEstado?: boolean | null;
+      // 🚨 LIDO DO DJEN PELO AGENTE DO MAC (21/10/2026). A busca é por NOME, e o
+      // card parava em "pode ser homônimo": o advogado recebia uma lista para
+      // conferir processo a processo, à mão, em tribunal nenhum. Agora as partes
+      // vêm lidas do cabeçalho da publicação, e com elas o homônimo se MEDE.
+      resumoDasPartes?: string | null;
+      /** `false` = o nome do cliente NÃO está entre as partes: é outra pessoa. */
+      ehDoCliente?: boolean | null;
+      partesLidasEm?: string | null;
+    }>;
     // De onde o card foi tirado quando a verificação o parou — é para cá que o
     // botão "homônimo" o devolve.
     faseOrigem?: string | null;
@@ -2314,6 +2325,29 @@ function AcoesExistentesCard({ caseId, metadata, fase, onDone }: { caseId: strin
                 {!a.temCpf && a.matchPor && <span className="ml-1 italic text-amber-700 dark:text-amber-300">· match por {a.matchPor}</span>}
                 {a.foraDoEstado === true && (
                   <span className="ml-1 rounded bg-zinc-200 px-1 text-[10px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">fora de {ufCliente}</span>
+                )}
+                {/* 🚨 CONTRA QUEM É A AÇÃO, que é a pergunta que o advogado tem
+                    na mão. Sem isto o card mandava conferir e não dizia como: as
+                    duas ações antigas do JOSÉ BATISTA eram contra BANCO BMG e
+                    LOJAS COLOMBO, e isso só se soube perguntando ao DJEN à mão,
+                    depois de três iniciais montadas. */}
+                {a.ehDoCliente === false && (
+                  <span className="ml-1 rounded bg-zinc-200 px-1 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                    homônimo: o cliente não é parte
+                  </span>
+                )}
+                {a.resumoDasPartes && (
+                  <div className={`mt-0.5 text-[10px] leading-snug ${
+                    a.ehDoCliente === false
+                      ? 'text-zinc-500 line-through decoration-zinc-400 dark:text-zinc-500'
+                      : 'font-medium text-amber-900 dark:text-amber-200'}`}>
+                    {a.resumoDasPartes}
+                  </div>
+                )}
+                {!a.resumoDasPartes && a.partesLidasEm && (
+                  <div className="mt-0.5 text-[10px] italic text-amber-700 dark:text-amber-400">
+                    o cabeçalho das publicações não nomeia as partes
+                  </div>
                 )}
               </li>
             ))}
