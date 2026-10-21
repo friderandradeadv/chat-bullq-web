@@ -51,6 +51,7 @@ import { CommentsSection } from '@/features/activities/components/comments-secti
 import { AnexosSection } from '@/features/activities/components/anexos-section';
 import { DossieReplica } from '@/features/legal-cases/components/dossie-replica';
 import { CumprimentoCs } from '@/features/legal-cases/components/cumprimento-cs';
+import { SugestaoDePeca } from '@/features/legal-cases/components/sugestao-de-peca';
 import { ArquivarPecaModal } from '@/features/legal-cases/components/arquivar-peca-modal';
 import { MoverFaseManual } from '@/features/legal-cases/components/mover-fase-manual';
 import { DisponibilidadeModal } from '@/features/calendar/components/disponibilidade-modal';
@@ -2153,7 +2154,22 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             precisava dele. Abrir o card e não achar o botão é pior que um bloco
             a mais: ler os autos serve a qualquer manifestação. Na ficha do
             Processo o filtro por fase continua, que lá o card é outro assunto. */}
-        {activity.caseId && ehCardDeReplica(activity.title) && (
+        {/* 🚨 A SUGESTÃO VEM DA PUBLICAÇÃO, não do título do card. O
+            classificador do DJEN já gravou a `action` na tarefa, e é ela que
+            diz qual peça aquele ato pede. Os dois portões por TÍTULO abaixo
+            continuam, mas só para card SEM `djenAction` (os antigos): com
+            os dois ativos o mesmo bloco apareceria duas vezes. */}
+        {activity.caseId && activity.djenAction && (
+          <div className="mt-5">
+            <SugestaoDePeca
+              caseId={activity.caseId}
+              acao={activity.djenAction}
+              recorte={activity.recorte}
+            />
+          </div>
+        )}
+
+        {activity.caseId && !activity.djenAction && ehCardDeReplica(activity.title) && (
           <div className="mt-5">
             <DossieReplica caseId={activity.caseId} sempreVisivel />
           </div>
@@ -2165,7 +2181,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             ao mesmo tempo — o título não é de réplica, e a fase do processo
             ainda não é a 16. Abrir o card feito para a tarefa e não achar o
             botão é o pior defeito que este bloco pode ter. */}
-        {activity.caseId && ehCardDeCumprimento(activity.title) && (
+        {activity.caseId && !activity.djenAction && ehCardDeCumprimento(activity.title) && (
           <div className="mt-5">
             <CumprimentoCs caseId={activity.caseId} sempreVisivel />
           </div>
