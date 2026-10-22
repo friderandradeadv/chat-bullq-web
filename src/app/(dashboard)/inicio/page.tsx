@@ -44,6 +44,7 @@ import {
   Scale,
   Calculator,
   Columns3,
+  Workflow,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { financeiroService } from '@/features/financeiro/services/financeiro.service';
@@ -950,7 +951,7 @@ function Aniversariantes({ onCelebrate }: { onCelebrate: () => void }) {
 // Portas de entrada para os painéis que se abrem todo dia. `mod` é o módulo
 // gateável (mesmo critério do moduleForPath do layout): quem tem o módulo
 // restrito não vê o atalho — clicar só renderia um redirect.
-const ATALHOS: { href: string; icon: React.ElementType; color: string; label: string; mod: string | null; soAdmin?: boolean }[] = [
+const ATALHOS: { href: string; icon: React.ElementType; color: string; label: string; mod: string | null }[] = [
   { href: '/juridico', icon: LayoutList, color: '#7048E8', label: 'Dashboard jurídico', mod: 'juridico' },
   { href: '/dashboard', icon: LayoutDashboard, color: '#228BE6', label: 'Dashboard comercial', mod: 'atendimento' },
   { href: '/juridico/jurimetria', icon: BarChart3, color: '#0C8599', label: 'Jurimetria', mod: 'analise' },
@@ -958,17 +959,15 @@ const ATALHOS: { href: string; icon: React.ElementType; color: string; label: st
   { href: '/juridico/kanban', icon: Columns3, color: '#5C7CFA', label: 'Fase judicial', mod: 'juridico' },
   { href: '/caixa-djen', icon: Newspaper, color: '#E64980', label: 'Publicações', mod: 'juridico' },
   { href: '/juridico/calculos', icon: Calculator, color: '#02883C', label: 'Cálculos', mod: 'calculos' },
-  { href: '/financeiro', icon: CircleDollarSign, color: '#F08C00', label: 'Financeiro', mod: 'financeiro', soAdmin: true },
+  { href: '/juridico/pre-processual', icon: Workflow, color: '#F08C00', label: 'Pré-processual', mod: 'juridico' },
 ];
 const MOD_PAI: Record<string, string> = { analise: 'juridico', calculos: 'juridico' };
 
 function Atalhos() {
   const { organizations, activeOrgId } = useAuthStore();
   const org = organizations.find((o) => o.id === activeOrgId);
-  const isAdmin = org?.role === 'OWNER' || org?.role === 'ADMIN';
   const restritos = org?.restrictedModules ?? [];
   const itens = ATALHOS.filter((a) => {
-    if (a.soAdmin && !isAdmin) return false;
     if (!a.mod) return true;
     return !restritos.includes(a.mod) && !(MOD_PAI[a.mod] && restritos.includes(MOD_PAI[a.mod]));
   });
