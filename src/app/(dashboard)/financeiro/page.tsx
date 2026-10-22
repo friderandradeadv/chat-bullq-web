@@ -5207,7 +5207,7 @@ function AnunciosPorVertical() {
   return (
     <Card
       title={<span className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-[#E8590C]" /> Anúncios por vertical</span>}
-      sub="quanto cada área gastou em tráfego pago (Meta, Google…), mês a mês, e quanto custou cada caso novo que entrou nela."
+      sub="quanto cada área gastou em tráfego pago, mês a mês — o gasto real lido no Meta ao lado do que está lançado no razão — e quanto custou cada contato que o anúncio trouxe."
       action={
         <select value={meses} onChange={(e) => { setMeses(Number(e.target.value)); setMesAberto(''); }} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
           <option value={3}>3 meses</option><option value={6}>6 meses</option><option value={12}>12 meses</option><option value={24}>24 meses</option>
@@ -5245,7 +5245,7 @@ function AnunciosPorVertical() {
           {/* Quanto do gasto tem vertical MEDIDA × palpite */}
           <div>
             <div className="flex items-baseline justify-between gap-2">
-              <p className="text-xs text-zinc-500">Total em anúncio desde {mmYYYY(p.desde)}</p>
+              <p className="text-xs text-zinc-500">Lançado no razão desde {mmYYYY(p.desde)} — de onde veio a vertical de cada lançamento</p>
               <p className="text-lg font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(p.total)}</p>
             </div>
             <div className="mt-1.5 flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
