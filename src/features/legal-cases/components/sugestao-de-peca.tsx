@@ -239,9 +239,16 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
      Só semeia o que está vazio — nunca por cima do que ele escreveu. */
   useEffect(() => {
     if (!jaCarregou.current) return;
+    // 🚨 NUNCA POR CIMA DO QUE ELE ESCREVEU. Ler `texto` aqui não basta: o
+    // `setTexto` do que veio do banco é assíncrono, e esta semente lia o campo
+    // ainda vazio e escrevia por cima. Em 22/10/2026 isso apagou uma instrução
+    // inteira dele e pôs o texto do modelo no lugar — ele achou que tinha
+    // errado o prompt, e o erro era meu. A fonte de verdade é o que o SERVIDOR
+    // respondeu, não o estado da tela no instante em que o efeito rodou.
+    if (estadoSalvo.data?.instrucao?.trim()) return;
     if (situacao && !texto.trim() && !salvo) setTexto(situacao.instrucao);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [situacao?.nome]);
+  }, [situacao?.nome, estadoSalvo.data]);
 
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
