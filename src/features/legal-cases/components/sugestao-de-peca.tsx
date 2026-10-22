@@ -93,12 +93,24 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     },
     staleTime: 30_000,
   });
+  const [quandoRascunho, setQuandoRascunho] = useState<string | null>(null);
+  const [quemEscreveu, setQuemEscreveu] = useState<string | null>(null);
   const jaCarregou = useRef(false);
   useEffect(() => {
     if (jaCarregou.current || !estadoSalvo.data) return;
     jaCarregou.current = true;
     if (estadoSalvo.data.instrucao) setTexto(estadoSalvo.data.instrucao);
-    if (estadoSalvo.data.rascunho) setRascunho(estadoSalvo.data.rascunho);
+    if (estadoSalvo.data.rascunho) {
+      setRascunho(estadoSalvo.data.rascunho);
+      const em = (estadoSalvo.data as any).rascunhoEm;
+      if (em) {
+        const d = new Date(em);
+        setQuandoRascunho(d.toLocaleString('pt-BR',
+          { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
+      }
+      const m = (estadoSalvo.data as any).modelo;
+      setQuemEscreveu(m === 'gemini' ? 'Flash' : m === 'claude' ? 'Claude' : null);
+    }
     if (estadoSalvo.data.status === 'montada' && estadoSalvo.data.arquivo) {
       setMontada({ arquivo: estadoSalvo.data.arquivo, pasta: estadoSalvo.data.pasta });
     }
@@ -198,6 +210,8 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
       if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui redigir'); return; }
       setRascunho(r?.rascunho ?? '');
       setAvisos(r?.avisos ?? []);
+      setQuandoRascunho('agora');
+      setQuemEscreveu(modelo === 'gemini' ? 'Flash' : 'Claude');
       setSalvo(true);
       /* 🚨 NÃO PROMETA MONTAGEM: este botão só GUARDA o texto. Dizia "entra na
          montagem desta peça" e o advogado perguntou, com razão, se a peça tinha
@@ -326,6 +340,17 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
         <div className="mt-2.5 rounded-md border border-zinc-200 dark:border-zinc-800">
           <p className="border-b border-zinc-200 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
             Rascunho do corpo — leia e corrija antes de montar
+            {/* 🚨 RASCUNHO VELHO PARECE RASCUNHO NOVO. Desde que o card passou a
+                restaurar o texto salvo, um rascunho de uma hora atrás reabre
+                igualzinho a um recém-escrito — e em 22/10/2026 isso custou uma
+                conversa inteira: o advogado viu defeitos já corrigidos e
+                concluiu que a ferramenta não tinha mudado. A idade e quem
+                escreveu passam a ficar à vista. */}
+            {quandoRascunho && (
+              <span className="ml-1.5 font-normal text-zinc-400">
+                · escrito em {quandoRascunho}{quemEscreveu ? ` pelo ${quemEscreveu}` : ''}
+              </span>
+            )}
           </p>
           {/* 🚨 EDITÁVEL DE PROPÓSITO: o que vai para o timbrado é o que está
               aqui. Rascunho só de leitura obrigaria a refazer tudo por uma
