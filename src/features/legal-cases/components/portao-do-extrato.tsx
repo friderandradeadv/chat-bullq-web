@@ -35,8 +35,10 @@ type Portao = {
 export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
   const qc = useQueryClient();
   const [pedindo, setPedindo] = useState(false);
+  const [marcando, setMarcando] = useState(false);
   const p = (caso.metadata as any)?.portaoDoExtrato as Portao | undefined;
-  const pedido = (caso.metadata as any)?.extratoDaConta as { pedidoEm?: string } | undefined;
+  const pedido = (caso.metadata as any)?.extratoDaConta as
+    { pedidoEm?: string; recebidoEm?: string } | undefined;
 
   // Sem medição, e sem cadeia de refinanciamento, não há o que dizer.
   if (!p?.caso || p.caso === 'sem-refinanciamento') return null;
@@ -52,9 +54,28 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
       await qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caso.id] });
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? 'Não consegui mandar o pedido.');
+      toast.error(e?.response?.data?.message ?? e?.message ?? 'Não consegui mandar o pedido.');
     } finally {
       setPedindo(false);
+    }
+  };
+
+  // 🚨 QUEM FECHA A PENDÊNCIA É ELE. O hub não vê o WhatsApp, o e-mail nem o
+  // papel na mesa: sem este clique a bolinha do card ficaria acesa para sempre.
+  // E marcar recebido NÃO abre o portão: a pasta continua cobrando o arquivo.
+  const marcarRecebido = async (recebido: boolean) => {
+    setMarcando(true);
+    try {
+      await legalCasesService.marcarExtratoRecebido(caso.id, recebido);
+      await qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caso.id] });
+      qc.invalidateQueries({ queryKey: ['legal-cases'] });
+      toast.success(recebido
+        ? 'Anotado: o extrato chegou. Falta pôr o arquivo na pasta como 08.1.'
+        : 'Marca de recebido retirada.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? e?.message ?? 'Não consegui anotar.');
+    } finally {
+      setMarcando(false);
     }
   };
 
@@ -105,23 +126,50 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
           {/* 🚨 PEDIR VALE NOS DOIS CASOS. Com o portão aberto o documento deixa
               de ser condição, não de ser útil: o que chegar depois serve na
               réplica. O servidor recusa fora das 6h às 20h e no pedido repetido. */}
-          {pedido?.pedidoEm ? (
-            <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-              <Check className="h-3 w-3" /> Extrato pedido ao cliente em{' '}
-              {new Date(pedido.pedidoEm).toLocaleString('pt-BR', {
-                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-              })}
+          {pedido?.recebidoEm ? (
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1">
+                <Check className="h-3 w-3" /> Extrato recebido em{' '}
+                {new Date(pedido.recebidoEm).toLocaleString('pt-BR', {
+                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                })}
+              </span>
+              <button type="button" onClick={() => marcarRecebido(false)} disabled={marcando}
+                className="underline underline-offset-2 opacity-70 hover:opacity-100 disabled:opacity-40">
+                desfazer
+              </button>
             </p>
           ) : (
-            <button
-              type="button"
-              onClick={pedir}
-              disabled={pedindo}
-              className={`mt-2 inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium disabled:opacity-50 ${cor.botao}`}
-            >
-              {pedindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-              Pedir o extrato ao cliente
-            </button>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {pedido?.pedidoEm ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                  <Check className="h-3 w-3" /> Pedido ao cliente em{' '}
+                  {new Date(pedido.pedidoEm).toLocaleString('pt-BR', {
+                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={pedir}
+                  disabled={pedindo}
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium disabled:opacity-50 ${cor.botao}`}
+                >
+                  {pedindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  Pedir o extrato ao cliente
+                </button>
+              )}
+              {/* A bolinha do card só apaga aqui: o hub não vê o documento chegar. */}
+              <button
+                type="button"
+                onClick={() => marcarRecebido(true)}
+                disabled={marcando}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium disabled:opacity-50 ${cor.botao}`}
+              >
+                {marcando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                Já recebi o extrato
+              </button>
+            </div>
           )}
         </div>
       </div>

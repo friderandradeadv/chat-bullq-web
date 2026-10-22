@@ -65,6 +65,26 @@ api.interceptors.response.use(
       }
     }
     const message = (corpo as { message?: string | string[] })?.message || error.message;
-    return Promise.reject(new Error(Array.isArray(message) ? message[0] : message));
+    // 🚨 O ERRO CARREGA AS DUAS FORMAS (21/10/2026). Rejeitar um `new Error`
+    // seco apagava `error.response`, e o hub inteiro lê a recusa do servidor
+    // como `e?.response?.data?.message`: são **530 lugares em 286 arquivos**,
+    // todos caindo no texto genérico de reserva. Medido quando ele clicou em
+    // "Pedir o extrato ao cliente" às 21h45: o servidor recusou com "São 21h.
+    // Mensagem que parte do escritório sai das 6h às 20h, regra da casa", e a
+    // tela disse "Não consegui mandar o pedido." — o que é indistinguível de
+    // falha de rede, de card sem conversa ou de defeito no hub.
+    //
+    // Consertar nos 530 lugares seria uma varredura arriscada que amanhã outra
+    // cópia desfaz. Aqui o erro passa a trazer `message` E `response`, e as duas
+    // leituras funcionam. Os quatro lugares que testam `response?.status`
+    // (conquistas, copiloto, barra de progresso, arquivar peça) voltam a fazer
+    // o que o autor deles escreveu.
+    const erro = new Error(Array.isArray(message) ? message[0] : message) as Error & {
+      response?: unknown; status?: number; code?: string;
+    };
+    if (error.response) erro.response = { ...error.response, data: corpo };
+    erro.status = error.response?.status;
+    erro.code = error.code;
+    return Promise.reject(erro);
   },
 );

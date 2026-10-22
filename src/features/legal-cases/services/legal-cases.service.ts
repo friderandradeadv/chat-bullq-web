@@ -311,6 +311,12 @@ export interface KanbanCard {
   inssResultado: string | null; // 'deferido' | 'recurso' | 'indeferido' — abas do board do INSS
   /** ISO de quando a inicial foi montada — acende o ✓ verde no card. */
   inicialEm?: string | null;
+  /**
+   * Bolinha de pendência do extrato da conta: acende quando o portão SEGURA o
+   * protocolo e o documento ainda não foi marcado como recebido. `pedidoEm` diz
+   * se o pedido já saiu ao cliente, porque a conduta muda (pedir × cobrar).
+   */
+  extratoPendente?: { pedidoEm: string | null } | null;
   tags: { id: string; name: string; color: string }[];
   court: string | null;
   value: number | null;
@@ -1335,6 +1341,15 @@ export const legalCasesService = {
     motivo?: string;
   }> {
     const { data } = await api.post(`/legal-cases/${id}/extrato-da-conta/pedir`);
+    return (data?.data ?? data) as any;
+  },
+
+  /**
+   * Marca que o extrato chegou do cliente, e apaga a bolinha do card. Não abre
+   * o portão do protocolo: a pasta continua cobrando o `08.1` como arquivo.
+   */
+  async marcarExtratoRecebido(id: string, recebido = true): Promise<{ ok: boolean; recebidoEm: string | null }> {
+    const { data } = await api.post(`/legal-cases/${id}/extrato-da-conta/recebido`, { recebido });
     return (data?.data ?? data) as any;
   },
 

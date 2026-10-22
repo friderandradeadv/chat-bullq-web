@@ -468,6 +468,20 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
       } ${isDragging && !overlay ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}>
       {/* Cliente novo — bolinha vermelha, some ao clicar no card (igual ao funil REPB) */}
       {mostrarNovo && <span className="absolute -right-1.5 -top-1.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" title="Novo cliente — clique para ver" />}
+      {/* 🚨 BOLINHA DE PENDÊNCIA DO EXTRATO (21/10/2026), pedida por ele. Fica à
+          ESQUERDA porque a bolinha da direita já é a de cliente novo, e duas no
+          mesmo canto viram uma mancha. Âmbar quando o pedido já saiu ao cliente
+          (falta ele responder), vermelha quando ninguém pediu ainda: a conduta
+          é diferente em cada caso. Apaga com "Já recebi o extrato", no card. */}
+      {c.extratoPendente && (
+        <span
+          className={`absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full ring-2 ring-white dark:ring-[#1E2226] ${
+            c.extratoPendente.pedidoEm ? 'bg-amber-500' : 'bg-red-600'}`}
+          title={c.extratoPendente.pedidoEm
+            ? `Extrato da conta pendente — pedido ao cliente em ${fmtDate(c.extratoPendente.pedidoEm)}`
+            : 'Extrato da conta: esta ação não se protocola sem ele, e o pedido ainda não saiu'}
+        />
+      )}
       {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent="#e11970" />}
       {/* Etiquetas: produto (cor) + área (cinza) — pr-5 reserva o canto da caixinha de seleção */}
       <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
