@@ -95,10 +95,16 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
 
   /* 🚨 MONTAR É O FIM DA CORRENTE, e ele manda o rascunho COMO ESTÁ na tela:
      se o advogado corrigiu uma palavra, é a corrigida que vira documento. */
-  const montar = async () => {
+  const montar = async (situacaoDoCatalogo?: string) => {
     setMontando(true);
     try {
-      const { data } = await api.post(`/legal-cases/${caseId}/peca/montar`, { rascunho });
+      /* 🚨 COM MODELO DO CATÁLOGO NÃO VAI RASCUNHO. O corpo nasce do .txt da
+         skill, no Mac. Mandar o rascunho junto faria a peça voltar a sair de
+         IA justamente onde existe texto pronto e conferido. */
+      const corpoOuSituacao = situacaoDoCatalogo
+        ? { situacao: situacaoDoCatalogo }
+        : { rascunho };
+      const { data } = await api.post(`/legal-cases/${caseId}/peca/montar`, corpoOuSituacao);
       const r = (data?.data ?? data) as { ok?: boolean; motivo?: string };
       if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui montar'); return; }
       toast.success('Na fila do Mac. Ele monta no timbrado e entrega na PROTOCOLO.');
@@ -198,6 +204,31 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
         </p>
       )}
 
+      {/* 🚨 HAVENDO MODELO, ELE VEM PRIMEIRO — e a IA deixa de ser o caminho
+          natural. O advogado pediu assim depois de ler um rascunho de IA com
+          marca [CONFERIR: …] no meio numa peça que o catálogo já resolve:
+          "a, liga o modelo do catálogo, chega de erros". */}
+      {situacao && (
+        <div className="mt-2.5 rounded-md border border-emerald-300/60 bg-emerald-50/60 p-2.5
+                        dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
+            Modelo do catálogo: {situacao.nome}
+          </p>
+          <p className="mt-0.5 text-[11px] leading-4 text-emerald-900/70 dark:text-emerald-200/60">
+            texto pronto e conferido da skill, montado direto no timbrado. Nenhuma IA escreve esta peça.
+          </p>
+          <button
+            onClick={() => montar(situacao.nome)}
+            disabled={montando}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-2.5 py-1
+                       text-[11px] font-semibold text-white disabled:opacity-50 hover:bg-emerald-800"
+          >
+            {montando ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {montando ? 'montando…' : 'Montar pelo modelo'}
+          </button>
+        </div>
+      )}
+
       {familia?.estado !== 'pronta' && porque && (
         <p className="mt-1.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
           {porque}.
@@ -272,7 +303,7 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
               monta no timbrado oficial e entrega na pasta PROTOCOLO
             </span>
             <button
-              onClick={montar}
+              onClick={() => montar()}
               disabled={montando}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
             >
