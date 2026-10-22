@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { SenhaDoCadastro } from '@/features/contacts/components/senha-do-cadastro';
 import { produtoColor, areaColor } from '@/features/legal-cases/lib/etiqueta-cores';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -406,7 +407,15 @@ export function CaseDetailDrawer({
                             <CampoEmail contactId={cliente.contact?.id} email={cliente.contact?.email} caseId={c.id} />
                             {cad.socio && <DbField label="Sócio administrador" value={cad.socio} />}
                             {cad.login && <DbField label="Login Meu INSS / gov.br" value={cad.login} />}
-                            {cad.senha && <DbField label="Senha Meu INSS / gov.br" value={cad.senha} />}
+                            {/* 🚨 A senha não vem mais no objeto do processo (22/10/2026):
+                                vinha em texto puro em toda abertura de card. A flag diz que
+                                existe; o valor sai no clique. Ver `senha-do-cadastro`. */}
+                            {cad.temSenha && cliente.contact?.id && (
+                              <li className="flex flex-col">
+                                <span className="text-[10px] font-semibold uppercase text-[#48626f]">Senha Meu INSS / gov.br</span>
+                                <SenhaDoCadastro contactId={cliente.contact.id} temSenha compacto />
+                              </li>
+                            )}
                             {cad.representadoNome && <DbField label="Representado" value={cad.representadoNome} />}
                             {cad.representadoCpf && <DbField label="CPF do representado" value={cad.representadoCpf} />}
                             {cad.endereco && <li className="col-span-2 flex flex-col"><span className="text-[10px] font-semibold uppercase text-[#48626f]">Endereço</span><span className="text-xs text-black dark:text-zinc-200">{cad.endereco}</span></li>}

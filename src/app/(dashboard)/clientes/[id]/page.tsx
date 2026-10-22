@@ -80,6 +80,7 @@ import { titleCaseName } from '@/lib/names';
 import { StateFlag } from '@/components/ui/state-flag';
 import { AbrirConversa } from '@/components/ui/abrir-conversa';
 import { DropZone } from '@/components/drop-zone';
+import { SenhaDoCadastro } from '@/features/contacts/components/senha-do-cadastro';
 import { CnjNumber, ASTREA_BLUE, LegalTagChip } from '../../processos/page';
 
 const brlc = (n: number) => (n < 0 ? '-' : '') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -110,7 +111,10 @@ const norm = (s: string) =>
 type Cadastro = {
   cpf?: string | null; cnpj?: string | null; rg?: string | null;
   estadoCivil?: string | null; profissao?: string | null; endereco?: string | null;
-  login?: string | null; senha?: string | null;
+  login?: string | null;
+  /** 🚨 A senha NÃO vem mais no contato: só a marca de que existe uma guardada
+   *  (22/10/2026). O valor sai por `GET /contacts/:id/senha`, para sócio. */
+  temSenha?: boolean;
   /** DD/MM/AAAA — lida do RG/CNH pelo extrator. Alimenta idade e aniversário. */
   nascimento?: string | null;
 };
@@ -571,11 +575,18 @@ export default function ClienteDetailPage() {
                   propósito: é o dado mais sensível da ficha e não deve ficar
                   misturado com telefone e e-mail. */}
               <Card title="Acessos gov.br / Meu INSS" icon={KeyRound}>
-                {cadastro?.login || cadastro?.senha ? (
+                {/* 🚨 A SENHA NÃO VEM MAIS NO OBJETO DO CONTATO (22/10/2026): a
+                    listagem de contatos devolvia o metadata inteiro, e a rota é
+                    aberta a parceiro. Aqui a ficha sabe que HÁ senha pela flag
+                    `temSenha`, e o valor é buscado no clique, por sócio, com
+                    registro no log. Ver `senha-do-cadastro`. */}
+                {cadastro?.login || cadastro?.temSenha ? (
                   <dl className="space-y-3 text-sm">
                     <DataRow icon={KeyRound} label="Login" value={cadastro.login} copyable />
-                    <DataRow icon={KeyRound} label="Senha" value={cadastro.senha} copyable secret />
-                    {!cadastro?.senha && (
+                    {contact?.id && (
+                      <SenhaDoCadastro contactId={contact.id} temSenha={!!cadastro?.temSenha} />
+                    )}
+                    {!cadastro?.temSenha && (
                       <p className="text-xs text-amber-600 dark:text-amber-500">
                         Senha ainda não enviada pelo cliente.
                       </p>
@@ -2273,7 +2284,10 @@ function EditarCliente({
       endereco: cadastro?.endereco ?? '',
       nascimento: cadastro?.nascimento ?? '',
       login: cadastro?.login ?? '',
-      senha: cadastro?.senha ?? '',
+      // 🚨 Nasce VAZIO de propósito: a senha não vem mais no objeto do contato.
+      // Como o `salvar` só manda o que MUDOU, deixar em branco mantém a que
+      // está guardada; digitar aqui substitui.
+      senha: '',
     }),
     [nome, cadastro, contato],
   );
@@ -2361,7 +2375,7 @@ function EditarCliente({
           <Card title="Acessos gov.br / Meu INSS" icon={KeyRound}>
             <div className="grid gap-3 sm:grid-cols-2">
               <Campo label="Login" value={form.login} onChange={set('login')} />
-              <Campo label="Senha" value={form.senha} onChange={set('senha')} />
+              <Campo label={cadastro?.temSenha ? "Senha (há uma guardada; em branco mantém)" : "Senha"} value={form.senha} onChange={set('senha')} />
             </div>
           </Card>
         </div>

@@ -92,6 +92,19 @@ export const contactsService = {
     return data.data;
   },
 
+  /**
+   * A SENHA DO GOV.BR DO CLIENTE, pedida uma de cada vez.
+   *
+   * 🚨 Existe porque ela saía em TODA listagem de contatos (22/10/2026): o
+   * repositório devolvia o metadata inteiro e a rota da lista é aberta a
+   * parceiro. Agora as listagens trazem só `cadastro.temSenha`, e o valor vem
+   * por aqui, para sócio, com registro no log do servidor.
+   */
+  async senhaDoCadastro(id: string): Promise<{ temSenha: boolean; senha: string | null; login: string | null }> {
+    const { data } = await api.get(`/contacts/${id}/senha`);
+    return data.data ?? data;
+  },
+
   async update(id: string, payload: Partial<Contact>): Promise<Contact> {
     const { data } = await api.patch(`/contacts/${id}`, payload);
     return data.data;

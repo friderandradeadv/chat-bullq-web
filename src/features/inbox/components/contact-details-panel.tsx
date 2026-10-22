@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { SenhaDoCadastro } from '@/features/contacts/components/senha-do-cadastro';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Popover,
@@ -192,7 +193,8 @@ function ClientRegistrationSection({
 
   const cad = ((full?.metadata as any)?.cadastro ?? {}) as {
     login?: string | null;
-    senha?: string | null;
+    /** A senha em si não vem mais: só a marca de que existe uma guardada. */
+    temSenha?: boolean;
   };
 
   const copy = async (value: string, label: string) => {
@@ -213,7 +215,7 @@ function ClientRegistrationSection({
   };
 
   // Lead sem login/senha → nada aqui (painel limpo). Cliente sempre vê a seção.
-  if (!cad.login && !cad.senha && !isCliente) return null;
+  if (!cad.login && !cad.temSenha && !isCliente) return null;
 
   return (
     <div className="mt-4 w-full border-t border-zinc-100 pt-4 dark:border-zinc-800">
@@ -247,37 +249,22 @@ function ClientRegistrationSection({
             </span>
           </div>
         )}
-        {cad.senha && (
+        {/* 🚨 A senha não vem mais no contato (22/10/2026): a listagem devolvia
+            o metadata inteiro e a rota é aberta a parceiro. O painel sabe que há
+            senha pela flag, e busca o valor no clique. Ver `senha-do-cadastro`. */}
+        {cad.temSenha && (
           <div className="flex items-center justify-between gap-2">
             <span className="shrink-0 text-[11px] text-zinc-400">Senha</span>
-            <span className="inline-flex items-center gap-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              <span className="truncate">
-                {showSenha ? cad.senha : '•'.repeat(Math.min(cad.senha.length, 12))}
-              </span>
-              <button
-                onClick={() => setShowSenha((v) => !v)}
-                title={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
-                className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
-              >
-                {showSenha ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-              </button>
-              <button
-                onClick={() => copy(cad.senha!, 'Senha')}
-                title="Copiar senha"
-                className="shrink-0 text-zinc-300 transition-colors hover:text-primary"
-              >
-                <Copy className="h-3 w-3" />
-              </button>
-            </span>
+            <SenhaDoCadastro contactId={contactId} temSenha compacto />
           </div>
         )}
-        {!cad.login && !cad.senha && (
+        {!cad.login && !cad.temSenha && (
           <p className="text-[11px] leading-snug text-zinc-400">
             Sem acesso salvo. O login é o CPF; a senha entra sozinha quando o cliente
             a manda aqui no chat.
           </p>
         )}
-        {cad.login && !cad.senha && (
+        {cad.login && !cad.temSenha && (
           <p className="text-[11px] leading-snug text-amber-600 dark:text-amber-500">
             Senha ainda não enviada pelo cliente.
           </p>
