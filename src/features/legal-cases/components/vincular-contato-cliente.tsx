@@ -19,7 +19,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BadgeCheck, Loader2, MessageSquare, Phone, Search, ShieldAlert, UserCircle2, X } from 'lucide-react';
+import { BadgeCheck, Loader2, MapPin, MessageSquare, Phone, Search, ShieldAlert, UserCircle2, X } from 'lucide-react';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
 /** 558198679677 vira +55 81 9867-9677: número que não se lê não serve de conferência. */
@@ -166,8 +166,28 @@ export function VincularContatoCliente({
                           <Phone className="h-3 w-3 shrink-0 text-zinc-400" />
                           {telefoneLegivel(c.telefone)}
                         </p>
+                        {/* Pai × filho: a régua deixa passar, e tem de deixar,
+                            mas aqui vai uma ação no nome de outra pessoa. */}
+                        {c.alerta ? (
+                          <p className="mt-0.5 text-[10px] leading-3 text-amber-700 dark:text-amber-400">
+                            ⚠ {c.alerta}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
+                        {/* 🚨 A SEGUNDA PROVA, quando não há CPF: o DDD é do
+                            estado em que o processo corre? Foi ela que desempatou
+                            os três candidatos da MARLI (só o de Sorocaba batia) e
+                            que torna utilizável a lista de 43 homônimos. */}
+                        {c.local === 'bate' ? (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 dark:bg-sky-500/15 dark:text-sky-400">
+                            <MapPin className="h-3 w-3" /> DDD d{(data?.ufsDoProcesso?.length ?? 0) === 1 ? `e ${data?.ufsDoProcesso[0]}` : 'o processo'}
+                          </span>
+                        ) : c.local === 'outro-estado' ? (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                            <MapPin className="h-3 w-3" /> outro estado
+                          </span>
+                        ) : null}
                         {c.prova === 'cpf' ? (
                           <span className="inline-flex items-center gap-0.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
                             <BadgeCheck className="h-3 w-3" /> CPF confere

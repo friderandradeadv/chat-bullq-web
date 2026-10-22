@@ -1380,9 +1380,17 @@ export const legalCasesService = {
     jaVinculado: string | null;
     podeVincularDireto: boolean;
     aviso: string;
+    /** Em que estado(s) o processo corre, lido do CNJ e do foro. */
+    ufsDoProcesso: string[];
     candidatos: {
       id: string; nome: string | null; telefone: string | null; cpf: string | null;
       prova: 'cpf' | 'nome'; nomesEmComum: string[]; temConversa: boolean;
+      /** O nome do contato cabe no da parte (abreviação), sem sobrenome estranho. */
+      nomeCabeNoDaParte: boolean;
+      /** Pai × filho e outros avisos que a régua não resolve sozinha. */
+      alerta?: string;
+      /** O DDD é do estado em que o processo corre? */
+      local?: 'bate' | 'outro-estado' | 'nao-medido';
     }[];
   }> {
     const { data } = await api.get(`/legal-cases/${id}/cliente/contatos-candidatos`);
