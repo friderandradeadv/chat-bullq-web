@@ -49,8 +49,6 @@ import { recursosService, type Recurso } from '@/features/recursos/services/recu
 import { AvancoFaseModal } from '@/features/legal-cases/components/avanco-fase-modals';
 import { CommentsSection } from '@/features/activities/components/comments-section';
 import { AnexosSection } from '@/features/activities/components/anexos-section';
-import { DossieReplica } from '@/features/legal-cases/components/dossie-replica';
-import { CumprimentoCs } from '@/features/legal-cases/components/cumprimento-cs';
 import { SugestaoDePeca } from '@/features/legal-cases/components/sugestao-de-peca';
 import { ArquivarPecaModal } from '@/features/legal-cases/components/arquivar-peca-modal';
 import { MoverFaseManual } from '@/features/legal-cases/components/mover-fase-manual';
@@ -1679,13 +1677,21 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     setPrazoBusy(true);
     try {
       // ED: 5 dias úteis (CPC 1.023). Demais recursos: 15 dias úteis (CPC 1.003 §5).
-      const RECURSO: Record<typeof tipo, { dias: number; titulo: string }> = {
-        apelacao: { dias: 15, titulo: 'Apelação' },
-        resp: { dias: 15, titulo: 'Recurso Especial/Extraordinário (REsp/RE)' },
-        agravo_interno: { dias: 15, titulo: 'Agravo Interno' },
-        embargos: { dias: 5, titulo: 'Embargos de declaração' },
+      /* 🚨 `acao` É O QUE LIGA O PRAZO AO MONTADOR, e faltava aqui. Este botão
+         já SABE qual recurso decidiu — mas gravava só descrição e recorte, sem
+         a `action`. Sem ela o card nasce mudo: o bloco da peça só renderiza com
+         `djenAction`, então o prazo de recurso que este fluxo cria não oferecia
+         nem redigir nem montar. Descoberto em 22/10/2026 procurando o recurso
+         do JOÃO LÍBERO, feito na semana, e não achando onde montá-lo.
+         Os nomes à direita são as chaves de `FAMILIAS` na API — não invente
+         outras, que `familiaDaAcao` faz busca exata. */
+      const RECURSO: Record<typeof tipo, { dias: number; titulo: string; acao: string }> = {
+        apelacao: { dias: 15, titulo: 'Apelação', acao: 'apelacao' },
+        resp: { dias: 15, titulo: 'Recurso Especial/Extraordinário (REsp/RE)', acao: 'recurso' },
+        agravo_interno: { dias: 15, titulo: 'Agravo Interno', acao: 'agravo' },
+        embargos: { dias: 5, titulo: 'Embargos de declaração', acao: 'embargos' },
       };
-      const { dias, titulo } = RECURSO[tipo];
+      const { dias, titulo, acao } = RECURSO[tipo];
       // Base de contagem: disponibilização da sentença (triggerDate). Sem ela
       // (raro — só prazos não-DJEN), conta a partir da data da própria atividade.
       const base = activity.triggerDate
@@ -1700,6 +1706,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         assignedToId: activity.responsibleId ?? undefined,
         metadata: {
           djen: {
+            action: acao,
             descricao: `Prazo de ${titulo.toLowerCase()} a partir da ${isAcordao ? 'acórdão' : 'sentença'}`,
             tipoPublicacao: activity.tipoPublicacao ?? undefined,
             recorte: activity.recorte ?? undefined,
@@ -2159,19 +2166,28 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             diz qual peça aquele ato pede. Os dois portões por TÍTULO abaixo
             continuam, mas só para card SEM `djenAction` (os antigos): com
             os dois ativos o mesmo bloco apareceria duas vezes. */}
-        {activity.caseId && activity.djenAction && (
+        {/* 🚨 SEM `djenAction` O BLOCO SUMIA INTEIRO, e com ele o montador — em
+            479 prazos cumpridos, contra ~110 com família. O maior produtor
+            desses não é o formulário: é o botão de recurso do card de
+            sentença/acórdão, que criava o prazo sem gravar a `action` (já
+            consertado em `criarPrazoRecurso`). Agora o bloco aparece sempre
+            que houver processo; sem `action` ele pede a família, e o palpite
+            do título entra como pré-seleção — é o mesmo palpite que os dois
+            portões abaixo já faziam, agora dentro do bloco em vez de ao lado
+            dele, para o dossiê não aparecer duas vezes. */}
+        {activity.caseId && (
           <div className="mt-5">
             <SugestaoDePeca
               caseId={activity.caseId}
               acao={activity.djenAction}
               recorte={activity.recorte}
+              acaoInicial={
+                activity.djenAction ? null
+                  : ehCardDeReplica(activity.title) ? 'replica'
+                  : ehCardDeCumprimento(activity.title) ? 'cumprimento'
+                  : null
+              }
             />
-          </div>
-        )}
-
-        {activity.caseId && !activity.djenAction && ehCardDeReplica(activity.title) && (
-          <div className="mt-5">
-            <DossieReplica caseId={activity.caseId} sempreVisivel />
           </div>
         )}
 
@@ -2181,11 +2197,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
             ao mesmo tempo — o título não é de réplica, e a fase do processo
             ainda não é a 16. Abrir o card feito para a tarefa e não achar o
             botão é o pior defeito que este bloco pode ter. */}
-        {activity.caseId && !activity.djenAction && ehCardDeCumprimento(activity.title) && (
-          <div className="mt-5">
-            <CumprimentoCs caseId={activity.caseId} sempreVisivel />
-          </div>
-        )}
+
 
         {/* Anexos — deixa o documento junto do prazo/tarefa pra usar depois. */}
         <div className="mt-5 border-t border-[#DEE2E6] pt-4 dark:border-zinc-800">

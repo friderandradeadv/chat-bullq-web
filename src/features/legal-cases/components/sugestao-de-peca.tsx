@@ -70,11 +70,27 @@ const SELO: Record<Familia['estado'], { texto: string; classe: string }> = {
   'nao-e-peca': { texto: 'não produz petição', classe: 'text-zinc-500 dark:text-zinc-400' },
 };
 
-export function SugestaoDePeca({ caseId, acao, recorte }: {
+export function SugestaoDePeca({ caseId, acao, recorte, acaoInicial }: {
   caseId: string;
   acao: string | null;
   recorte?: string | null;
+  /* Palpite pelo TÍTULO do card, para o prazo que não veio do DJEN. Vale como
+     pré-seleção, nunca como verdade: quem confirma é o advogado no seletor. */
+  acaoInicial?: string | null;
 }) {
+  /* 🚨 PRAZO SEM `action` NÃO É SÓ PRAZO DIGITADO À MÃO — e essa foi a minha
+     leitura errada em 22/10/2026. O maior produtor deles é o PRÓPRIO HUB: do
+     card de sentença/acórdão o advogado clica, o sistema decide qual recurso
+     cabe e cria o prazo no fatal dele (`criarPrazoRecurso`, na agenda). Esse
+     prazo copiava recorte e dispositivo, mas não a `action` — então nascia
+     mudo, sem redigir e sem montar. Eram 479 dos cumpridos, contra ~110 em
+     todas as famílias somadas.
+     A origem foi consertada lá (o prazo de recurso já nasce com `action`).
+     Este seletor cobre o resto e o passado: prazo digitado no formulário,
+     prazo antigo criado antes do conserto, classe que o catálogo ainda não
+     tem. Card sem bloco não parece defeito, parece card comum — foi preciso
+     ele procurar um recurso recém-feito e não achar onde montar. */
+  const [escolhida, setEscolhida] = useState<string | null>(null);
   const qc = useQueryClient();
   const [texto, setTexto] = useState('');
   const [rascunho, setRascunho] = useState('');
@@ -184,7 +200,10 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     }
   };
 
-  const familia = data?.find((f) => f.acao === acao) ?? null;
+  /* `acao` do DJEN manda; não havendo, vale o que ele escolheu; não tendo
+     escolhido, o palpite do título. String vazia = "ainda não escolhi". */
+  const acaoEfetiva = acao ?? (escolhida !== null ? escolhida : acaoInicial) ?? null;
+  const familia = data?.find((f) => f.acao === acaoEfetiva) ?? null;
 
   /* 🚨 SEM FAMÍLIA, O CARD FICAVA MUDO — e some justamente onde mais serve.
      Medido em 21/10/2026 num prazo de "Manifestar nos autos": o classificador
@@ -194,7 +213,36 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
      ("guarda mesmo quando a família ainda não monta"); o componente é que
      desistia. Agora, família desconhecida vira aviso + campo, nunca silêncio:
      o catálogo pode envelhecer de novo, e o campo não pode sumir com ele. */
-  if (!acao) return null;
+  if (!acaoEfetiva) {
+    /* Só o que PRODUZ petição. `nao-e-peca` (analisar sentença, acórdão, baixa
+       dos autos) na lista faria escolher um caminho que não leva a lugar
+       nenhum — e o estado vem do catálogo do servidor, não de lista escrita
+       aqui, que envelheceria sozinha. */
+    const opcoes = (data ?? []).filter((f) => f.estado !== 'nao-e-peca');
+    return (
+      <div className="rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+          <FileText className="h-3.5 w-3.5" /> Montar peça neste prazo
+        </p>
+        <p className="mt-1 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
+          Este prazo não veio de uma publicação, então o sistema não sabe que peça ele pede.
+          Escolha a família e o resto funciona igual.
+        </p>
+        <select
+          value=""
+          onChange={(e) => setEscolhida(e.target.value || null)}
+          className="mt-2 w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1.5 text-[11px]
+                     text-zinc-700 outline-none focus:border-zinc-400
+                     dark:border-zinc-700 dark:text-zinc-200 dark:focus:border-zinc-500"
+        >
+          <option value="">que peça é esta?</option>
+          {opcoes.map((f) => (
+            <option key={f.acao} value={f.acao}>{f.rotulo}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
   const desconhecida = !familia;
 
   /* 🚨 ESTE BOTÃO COMEÇA A PEÇA, não guarda bilhete. Ele guardava o texto e
@@ -206,7 +254,7 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     setSalvando(true);
     try {
       const { data } = await api.post(`/legal-cases/${caseId}/peca/redigir`,
-        { acao, instrucao: texto, recorte, modelo });
+        { acao: acaoEfetiva, instrucao: texto, recorte, modelo });
       const r = (data?.data ?? data) as
         { ok?: boolean; motivo?: string; rascunho?: string; avisos?: string[] };
       if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui redigir'); return; }
@@ -229,7 +277,7 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
   const selo = familia ? SELO[familia.estado] : SELO['sem-base'];
   const seloTexto = desconhecida ? 'classe sem família no catálogo'
     : (situacao?.selo ?? familia!.selo ?? selo.texto);
-  const rotulo = situacao?.rotulo ?? familia?.rotulo ?? acao;
+  const rotulo = situacao?.rotulo ?? familia?.rotulo ?? acaoEfetiva;
   const porque = desconhecida
     ? 'esta classe de publicação ainda não tem família no catálogo de peças. O campo abaixo '
       + 'funciona do mesmo jeito: escreva o que a peça tem de dizer e fica guardado'
@@ -422,8 +470,8 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
       )}
 
       {/* o gerador por IA do hub, para os 3 tipos que o DTO aceita */}
-      {acao && tipoDaAcao(acao) && (
-        <GerarPecaIA caseId={caseId} acao={acao} instrucao={texto || undefined} />
+      {acaoEfetiva && tipoDaAcao(acaoEfetiva) && (
+        <GerarPecaIA caseId={caseId} acao={acaoEfetiva} instrucao={texto || undefined} />
       )}
 
       {/* 🚨 o botão só aparece onde HÁ triagem — e é o catálogo do hub que diz
