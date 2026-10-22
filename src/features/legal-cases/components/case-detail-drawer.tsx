@@ -37,6 +37,7 @@ import { OfertaChurning } from './oferta-churning';
 import { RevisaoInicial } from './revisao-inicial';
 import { DocumentosDaInicial } from './documentos-da-inicial';
 import { AlertaGratuidade } from './alerta-gratuidade';
+import { PortaoDoExtrato } from './portao-do-extrato';
 import { AcordoPanel } from './acordo-panel';
 import { BeneficioTag, ProdutoTags } from './kanban-card-bits';
 import { OpponentCombobox } from './opponent-combobox';
@@ -610,6 +611,12 @@ export function CaseDetailDrawer({
             <h3 className="text-base font-semibold text-black dark:text-zinc-100">Fase atual</h3>
             <p className="mt-1 text-xs font-semibold" style={{ color: MAGENTA }}>{fase?.label ?? '—'}</p>
             <AvisoAoCliente estado={c?.avisoCliente ?? null} />
+
+            {/* 🚨 O VEREDITO DO EXTRATO VEM ANTES DE TUDO (21/10/2026). Ele é o
+                que decide se esta ação pode ser protocolada, e morava no fim da
+                lista do pacote: *"Não aparece, deve aparecer bem no começo,
+                nítido"*. Card sem medição não mostra nada. */}
+            {c && <PortaoDoExtrato caso={c} />}
 
             {/* Barra das operações longas (documentos, inicial, protocolo, coleta).
                 Some sozinha quando não há nada rodando. */}
