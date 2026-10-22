@@ -12,7 +12,7 @@ import {
   useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado, RolagemNoArraste,
   pintarAgora, indiceDeQueda, yDoPonteiro, useVaoKanban, comVao, estiloDoVao, type VaoKanban,
 } from '@/features/legal-cases/lib/kanban-dnd';
-import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles } from 'lucide-react';
+import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles, Recycle } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarraProgresso } from '@/features/legal-cases/components/barra-progresso';
 import { api } from '@/lib/api';
@@ -21,6 +21,7 @@ import {
 } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
+import { ChurningBoard } from '@/features/legal-cases/components/churning-board';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn, BeneficioTag } from '@/features/legal-cases/components/kanban-card-bits';
 import { useKanbanBulk, KanbanBulkBar, KanbanColumnSelect, KanbanSelectBox, type KanbanBulk } from '@/features/legal-cases/components/kanban-bulk';
@@ -129,7 +130,12 @@ export default function PreProcessualPage() {
 
   const [search, setSearch] = useState('');
   const [resp, setResp] = useState('');
-  const [view, setView] = useState<'kanban' | 'lista'>('kanban');
+  // 🚨 CHURNING É UMA VISTA DAQUI, NÃO UM KANBAN NOVO (22/10/2026). Eu tinha
+  // criado uma aba própria no menu e ele cortou: *"acho que deve ficar em pré
+  // processual, mais um kanban, coisa demais"*. O quadro das ofertas entra como
+  // terceira vista, ao lado de Kanban e Lista, e o menu continua do tamanho que
+  // era.
+  const [view, setView] = useState<'kanban' | 'lista' | 'churning'>('kanban');
   const [novo, setNovo] = useState(false);
   // Seleção em massa (caixinha no card + barra de ações no rodapé).
   const bulk = useKanbanBulk();
@@ -346,11 +352,14 @@ export default function PreProcessualPage() {
           <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
             <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
             <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
+            <button onClick={() => setView('churning')} title="Ofertas de reciclagem de contratos medidas no HISCON" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'churning' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Recycle className="h-4 w-4" /> Churning</button>
           </div>
         </div>
       </div>
 
-      {view === 'lista' ? (
+      {view === 'churning' ? (
+        <ChurningBoard />
+      ) : view === 'lista' ? (
         <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (
         <DndContext sensors={sensors} collisionDetection={colisaoKanban} measuring={medicaoKanban} onDragStart={(e: DragStartEvent) => { vaoK.aoIniciar(e); setActiveId(e.active.id as string); }} onDragMove={vaoK.aoMover} onDragCancel={() => { vaoK.fechar(); setActiveId(null); }} onDragEnd={onDragEnd}>

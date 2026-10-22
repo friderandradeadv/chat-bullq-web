@@ -47,7 +47,6 @@ import {
   Handshake,
   FileSearch,
   HandCoins,
-  Recycle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -416,7 +415,6 @@ export function AppSidebar() {
                   <NavItem href="/juridico/board/exec" icon={Gavel} label="Execução" />
                   <NavItem href="/juridico/planejamento" icon={TrendingUp} label="Planejamento Previdenciário" />
                   <NavItem href="/juridico/inss-administrativo" icon={Stethoscope} label="INSS Administrativo" />
-                  <NavItem href="/juridico/churning" icon={Recycle} label="Churning" />
                   <NavItem href="/juridico/quadros" icon={LayoutGrid} label="Quadros personalizados" />
                 </NavSection>
               </div>
