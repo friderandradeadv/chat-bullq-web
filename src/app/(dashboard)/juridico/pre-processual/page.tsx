@@ -160,6 +160,39 @@ export default function PreProcessualPage() {
     return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [cards]);
 
+  /**
+   * 🚨 FILTRO POR ÁREA, EM VEZ DE UM QUADRO POR ÁREA (22/10/2026). Ele
+   * perguntou se valia separar o Pré-Processual por área, como o Churning.
+   * Medido antes de responder: o quadro inteiro tem 12 cards, em 5 etiquetas, e
+   * separá-lo daria vistas de 1 a 4 cards cada. A diferença é de EIXO: o
+   * Churning mostra o estado da OFERTA, que não é fase e cujos cards vivem em
+   * outros quadros; "RMC" é recorte do mesmo eixo, com as mesmas colunas e o
+   * mesmo trabalho. Recorte do mesmo eixo é filtro.
+   *
+   * As etiquetas saem dos cards que estão no quadro, nunca de uma lista fixa:
+   * etiqueta nova aparece sozinha, e a que ninguém usa não ocupa espaço.
+   *
+   * 🚨 E "CHURNING" e "Churning" SÃO A MESMA COISA. O acervo tem as duas
+   * grafias (medido: 3 cards numa, 1 na outra), e dois chips para o mesmo
+   * produto fariam o advogado clicar num e achar que o resto não existe.
+   */
+  const [area, setArea] = useState<string | null>(null);
+  const preKeysParaEtiqueta = useMemo(() => new Set(phases.map((p) => p.key)), [phases]);
+  const etiquetas = useMemo(() => {
+    const vistas = new Map<string, string>(); // CHAVE EM CAIXA-ALTA → rótulo exibido
+    for (const c of cards) {
+      if (!preKeysParaEtiqueta.has(c.phase)) continue;
+      for (const parte of String(cleanProduto(c.produto) ?? '').split(/[|·/]+/)) {
+        const rotulo = parte.trim();
+        if (!rotulo) continue;
+        const chave = rotulo.toUpperCase();
+        if (!vistas.has(chave)) vistas.set(chave, rotulo);
+      }
+    }
+    return Array.from(vistas, ([chave, rotulo]) => ({ chave, rotulo }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo));
+  }, [cards, preKeysParaEtiqueta]);
+
   // Recorte "só os processos deste cliente" (?cases=… vindo do chat).
   const casesFilter = useCasesFilter();
   const preKeys = new Set(phases.map((p) => p.key));
@@ -169,9 +202,13 @@ export default function PreProcessualPage() {
       if (resp && c.responsible?.id !== resp) return false;
       if (!matchesKanbanSearch(c, search, [c.title, c.client])) return false;
       if (!casesFilter.matchesCasesFilter(c.id)) return false;
+      // O card de "RMC | RCC" responde tanto por RMC quanto por RCC: a etiqueta
+      // carrega dois produtos, e esconder esse card de ambos seria pior do que
+      // mostrá-lo nos dois.
+      if (area && !String(cleanProduto(c.produto) ?? '').toUpperCase().includes(area)) return false;
       return true;
     });
-  }, [cards, search, resp, phases, casesFilter.caseIds]);
+  }, [cards, search, resp, phases, area, casesFilter.caseIds]);
 
   const byPhase = useMemo(() => {
     const map: Record<string, KanbanCard[]> = {};
@@ -356,6 +393,31 @@ export default function PreProcessualPage() {
           </div>
         </div>
       </div>
+
+      {/* Chips de área: só aparecem quando há mais de uma etiqueta no quadro. */}
+      {etiquetas.length > 1 && view !== 'churning' ? (
+        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
+          <button
+            onClick={() => setArea(null)}
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${area === null
+              ? 'bg-[#e11970] text-white'
+              : 'bg-white text-zinc-600 ring-1 ring-[#cfe0ed] hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700'}`}
+          >
+            Todos
+          </button>
+          {etiquetas.map((e) => (
+            <button
+              key={e.chave}
+              onClick={() => setArea(area === e.chave ? null : e.chave)}
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${area === e.chave
+                ? 'bg-[#e11970] text-white'
+                : 'bg-white text-zinc-600 ring-1 ring-[#cfe0ed] hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700'}`}
+            >
+              {e.rotulo}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {view === 'churning' ? (
         <ChurningBoard />
