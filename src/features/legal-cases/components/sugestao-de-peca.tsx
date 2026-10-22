@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { DossieReplica } from './dossie-replica';
 import { CumprimentoCs } from './cumprimento-cs';
@@ -75,6 +75,7 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
   acao: string | null;
   recorte?: string | null;
 }) {
+  const qc = useQueryClient();
   const [texto, setTexto] = useState('');
   const [rascunho, setRascunho] = useState('');
   const [modelo, setModelo] = useState<'claude' | 'gemini'>('claude');
@@ -122,7 +123,14 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
           if (e?.status === 'montada') {
             clearInterval(t); setMontando(false); setDemorando(false);
             setMontada({ arquivo: e.arquivo, pasta: e.pasta });
-            toast.success('Peça pronta na PROTOCOLO.');
+            // 🚨 O CARD TINHA DE SABER QUE O ANEXO MUDOU. A peça montada SUBSTITUI
+            // a anterior nos ANEXOS, com arquivo novo e link novo. A seção de
+            // anexos tem consulta própria, que não sabia disso, e seguia mostrando
+            // o link da versão passada — clicar dava erro, porque aquele arquivo já
+            // não existia. Medido em 22/10/2026, e eu cheguei a culpar o cache do
+            // navegador antes de ir ao servidor olhar.
+            qc.invalidateQueries({ queryKey: ['activity-anexos'] });
+            toast.success('Peça pronta na PROTOCOLO, e nos anexos deste prazo.');
           } else if (e?.status === 'erro') {
             clearInterval(t); setMontando(false); toast.error(e.erro ?? 'a montagem parou');
           }
