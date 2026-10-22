@@ -100,6 +100,8 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     if (jaCarregou.current || !estadoSalvo.data) return;
     jaCarregou.current = true;
     if (estadoSalvo.data.instrucao) setTexto(estadoSalvo.data.instrucao);
+    const avs = (estadoSalvo.data as any).avisos;
+    if (Array.isArray(avs) && avs.length) setAvisos(avs);
     if (estadoSalvo.data.rascunho) {
       setRascunho(estadoSalvo.data.rascunho);
       const em = (estadoSalvo.data as any).rascunhoEm;
