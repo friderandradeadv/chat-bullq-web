@@ -311,6 +311,21 @@ export interface GuiaContabil {
     faltando: string[]; texto: string;
 }
 
+// ─── Gasto em anúncio por vertical (painel) — ver chat-bullq-api meta-ads.service.ts ───
+export type AnuncioOrigem = 'meta' | 'mao' | 'igual' | 'sem';
+export interface AnuncioLinha { campanha: string; conjunto: string; anuncio: string; gasto: number; vertical: string | null }
+export interface AnuncioCobranca { id: string; data: string; mes: string; valor: number; quem: string; origem: AnuncioOrigem; partes: { area: string; valor: number }[]; semVertical: number; anuncios?: AnuncioLinha[]; janela?: [string, string] }
+export interface AnunciosPainel {
+  forbidden?: boolean;
+  desde: string;
+  total: number;
+  porOrigem: Record<AnuncioOrigem, number>;
+  verticais: { area: string; valor: number; casosNovos: number; custoPorCaso: number | null; pct: number }[];
+  porMes: { mes: string; total: number; semVertical: number; verticais: { area: string; valor: number; meta: number; mao: number; igual: number; casosNovos: number; custoPorCaso: number | null }[] }[];
+  cobrancas: AnuncioCobranca[];
+  status: { configurado: boolean; contas: string[]; ligadoEm: string | null; ultimaVarredura: string | null; ultimoErro: string | null; campanhasSemVertical: string[] };
+}
+
 export const financeiroService = {
   async dashboard(): Promise<FinDashboard> {
     const { data } = await api.get('/financeiro/dashboard');
@@ -496,6 +511,10 @@ export const financeiroService = {
     return data.data ?? data;
   },
   // ── Participação por vertical (Fase B) ──
+  async getAnunciosPainel(meses = 12): Promise<AnunciosPainel> {
+    const { data } = await api.get('/financeiro/meta-ads/painel', { params: { meses } });
+    return data.data ?? data;
+  },
   async getRemunVertical(): Promise<{ remunVertical: Record<string, { area: string; pct: number }[]> }> {
     const { data } = await api.get('/financeiro/remun-vertical');
     return data.data ?? data;

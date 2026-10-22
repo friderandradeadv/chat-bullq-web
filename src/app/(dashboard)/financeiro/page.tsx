@@ -11,10 +11,10 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, Scale, ArrowUpCircle, ArrowDownCircle, AlertTriangle,
   CheckCircle2, Info, Target, Users, Sparkles, Loader2, Plus, Trash2, X, Search, Receipt, Save,
   ChevronDown, ChevronRight, ChevronLeft, Table2, Rocket, HeartHandshake, Scissors, Phone, Trophy, Flame, Calendar,
-  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip, ReceiptText, Send, FileDown,
+  Pencil, Check, Layers, Gavel, Landmark, ExternalLink, Wallet, UserCircle2, Banknote, CreditCard, AlertCircle, CalendarClock, Gem, RefreshCw, FileText, Paperclip, ReceiptText, Send, FileDown, Megaphone,
 } from 'lucide-react';
 import { extractPdfText } from '@/features/knowledge/lib/extract-text';
-import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type RepassePendenteItem, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo } from '@/features/financeiro/services/financeiro.service';
+import { financeiroService, anexoHref, type FinDashboard, type FinTransacao, type FinAnexo, type TxStatus, type AddTransacaoInput, type UpdateTransacaoInput, type Cobranca, type RepassePendenteItem, type CrescimentoCarteira, type VerticalCusto, type Conta, type FinMes, type CadastroTipo, type AnuncioOrigem } from '@/features/financeiro/services/financeiro.service';
 import { DropZone } from '@/components/drop-zone';
 import { APORTES } from '@/features/financeiro/data/astrea-despesas';
 import { legalCasesService, type CumprimentoFinanceiro } from '@/features/legal-cases/services/legal-cases.service';
@@ -5175,6 +5175,181 @@ const CORES_AREA: Record<string, string> = {
 };
 const corArea = (a: string) => CORES_AREA[a] ?? '#15AABF';
 
+// ═══════════════ ANÚNCIOS POR VERTICAL (gasto em anúncio de cada área) ═══════════════
+// Lê o Tráfego pago do razão e diz DE ONDE veio a vertical de cada cobrança: medido pela API do
+// Meta, posto à mão, ou "dividido igual" (palpite que o razão carregou até out/2026). Sem isso o
+// card "Cada vertical se paga?" soma medida e palpite como se fossem a mesma coisa.
+const ORIGEM_ANUNCIO: Record<AnuncioOrigem, { label: string; cor: string; dica: string }> = {
+  meta: { label: 'Medido pelo Meta', cor: '#2F9E44', dica: 'repartido pela API do Meta, pelo gasto real de cada anúncio' },
+  mao: { label: 'Posto à mão', cor: '#228BE6', dica: 'alguém escolheu a vertical no lançamento' },
+  igual: { label: 'Dividido igual', cor: '#F08C00', dica: 'rateio em partes iguais entre verticais — palpite, não medida' },
+  sem: { label: 'Sem vertical', cor: '#ADB5BD', dica: 'fica no custo comum do escritório' },
+};
+
+function AnunciosPorVertical() {
+  const [meses, setMeses] = useState(12);
+  const [mesAberto, setMesAberto] = useState('');
+  const [cobAberta, setCobAberta] = useState('');
+  const { data: p, isLoading, isError } = useQuery({ queryKey: ['financeiro', 'anuncios-painel', meses], queryFn: () => financeiroService.getAnunciosPainel(meses), staleTime: 120_000 });
+  const colunas = useMemo(() => (p?.verticais ?? []).map((v) => v.area), [p]);
+  if (p?.forbidden) return null;
+
+  const st = p?.status;
+  const dataBR = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
+  const origens = (['meta', 'mao', 'igual', 'sem'] as AnuncioOrigem[]).filter((o) => (p?.porOrigem?.[o] ?? 0) > 0);
+
+  return (
+    <Card
+      title={<span className="flex items-center gap-2"><Megaphone className="h-4 w-4 text-[#E8590C]" /> Anúncios por vertical</span>}
+      sub="quanto cada área gastou em tráfego pago (Meta, Google…), mês a mês, e quanto custou cada caso novo que entrou nela."
+      action={
+        <select value={meses} onChange={(e) => { setMeses(Number(e.target.value)); setMesAberto(''); }} className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+          <option value={3}>3 meses</option><option value={6}>6 meses</option><option value={12}>12 meses</option><option value={24}>24 meses</option>
+        </select>
+      }>
+      {/* Situação da leitura automática */}
+      {st && (
+        <div className={`mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 text-xs ${st.ultimoErro ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300' : st.configurado ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-zinc-50 text-zinc-500 dark:bg-zinc-800/60 dark:text-zinc-400'}`}>
+          {st.configurado ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <Info className="h-3.5 w-3.5 shrink-0" />}
+          <span>
+            {st.configurado
+              ? <>API do Meta <strong>ligada</strong>{st.ligadoEm ? ` desde ${dataBR(st.ligadoEm)}` : ' — começa na próxima leitura (todo dia às 07:10)'} · conta{st.contas.length > 1 ? 's' : ''} {st.contas.join(', ')}{st.ultimaVarredura ? ` · última leitura ${new Date(st.ultimaVarredura).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}</>
+              : <>A leitura automática do Meta não está configurada — as verticais abaixo vêm só do que foi lançado à mão.</>}
+          </span>
+          {st.ultimoErro && <span className="w-full font-medium">Último erro: {st.ultimoErro}</span>}
+          {st.campanhasSemVertical.length > 0 && (
+            <span className="w-full text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />Campanha{st.campanhasSemVertical.length > 1 ? 's' : ''} sem vertical pelo nome: <strong>{st.campanhasSemVertical.join(' · ')}</strong> — ponha RMC, REPB, BPC/Previdenciário, Trabalhista ou Superendividamento no nome.
+            </span>
+          )}
+        </div>
+      )}
+
+      {isLoading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>
+        : isError || !p ? <p className="py-6 text-center text-sm text-zinc-400">Não consegui carregar o gasto em anúncio.</p>
+        : p.total <= 0 ? <p className="py-6 text-center text-sm text-zinc-400">Nenhum tráfego pago pago nos últimos {meses} meses.</p>
+        : (<>
+          {/* Quanto do gasto tem vertical MEDIDA × palpite */}
+          <div>
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-xs text-zinc-500">Total em anúncio desde {mmYYYY(p.desde)}</p>
+              <p className="text-lg font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(p.total)}</p>
+            </div>
+            <div className="mt-1.5 flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+              {origens.map((o) => <div key={o} title={`${ORIGEM_ANUNCIO[o].label}: ${brl2(p.porOrigem[o])}`} style={{ width: `${(p.porOrigem[o] / p.total) * 100}%`, background: ORIGEM_ANUNCIO[o].cor }} />)}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+              {origens.map((o) => (
+                <span key={o} className="flex items-center gap-1.5 text-[11px] text-zinc-500" title={ORIGEM_ANUNCIO[o].dica}>
+                  <span className="h-2 w-2 rounded-full" style={{ background: ORIGEM_ANUNCIO[o].cor }} />{ORIGEM_ANUNCIO[o].label} <strong className="tabular-nums text-zinc-700 dark:text-zinc-200">{brl2(p.porOrigem[o])}</strong>
+                </span>
+              ))}
+            </div>
+            {(p.porOrigem.igual ?? 0) > 0 && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                {brl2(p.porOrigem.igual)} foram <strong>divididos em partes iguais</strong> entre verticais — isso é palpite, não diz qual área anunciou. Daqui para frente a API do Meta reparte pelo gasto real de cada campanha.
+              </p>
+            )}
+          </div>
+
+          {/* Por vertical: gasto, fatia e custo por caso novo */}
+          <div className="mt-4 overflow-x-auto scrollbar-thin">
+            <table className="w-full min-w-[460px] text-sm">
+              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 text-right font-medium">Gasto</th><th className="px-2 py-1.5 text-right font-medium">Fatia</th><th className="px-2 py-1.5 text-right font-medium" title="casos criados no hub nessa vertical, no período">Casos novos</th><th className="px-2 py-1.5 text-right font-medium">Custo por caso</th></tr></thead>
+              <tbody>
+                {p.verticais.map((v) => (
+                  <tr key={v.area} className="border-t border-zinc-100 dark:border-zinc-800">
+                    <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span></td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-rose-600">{brl2(v.valor)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{v.pct}%</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{v.casosNovos || '—'}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{v.custoPorCaso != null ? brl2(v.custoPorCaso) : '—'}</td>
+                  </tr>
+                ))}
+                {(p.porOrigem.sem ?? 0) > 0 && (
+                  <tr className="border-t border-zinc-100 dark:border-zinc-800">
+                    <td className="px-2 py-1.5 text-zinc-400"><span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-zinc-300" />Sem vertical</span></td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{brl2(p.porOrigem.sem)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{Math.round((p.porOrigem.sem / p.total) * 1000) / 10}%</td>
+                    <td colSpan={2} className="px-2 py-1.5 text-right text-[11px] text-zinc-400">fica no custo comum</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mês a mês, com as cobranças e os anúncios de cada uma */}
+          <div className="mt-4 overflow-x-auto scrollbar-thin">
+            <table className="w-full text-sm" style={{ minWidth: 220 + 96 * (colunas.length + 2) }}>
+              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400">
+                <th className="px-2 py-1.5 font-medium">Mês</th>
+                {colunas.map((a) => <th key={a} className="px-2 py-1.5 text-right font-medium"><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: corArea(a) }} />{a}</span></th>)}
+                <th className="px-2 py-1.5 text-right font-medium">Sem vertical</th>
+                <th className="px-2 py-1.5 text-right font-medium">Total</th>
+              </tr></thead>
+              <tbody>
+                {p.porMes.map((m) => {
+                  const aberto = mesAberto === m.mes;
+                  const cobs = p.cobrancas.filter((c) => c.mes === m.mes);
+                  return (
+                    <Fragment key={m.mes}>
+                      <tr className={`cursor-pointer border-t border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50 ${aberto ? 'bg-orange-50/60 dark:bg-orange-900/10' : ''}`} onClick={() => { setMesAberto(aberto ? '' : m.mes); setCobAberta(''); }}>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-zinc-600 dark:text-zinc-300"><ChevronRight className={`mr-1 inline h-3.5 w-3.5 transition ${aberto ? 'rotate-90' : ''}`} />{mmYYYY(m.mes)}</td>
+                        {colunas.map((a) => { const v = m.verticais.find((x) => x.area === a); return (
+                          <td key={a} className="px-2 py-1.5 text-right tabular-nums" title={v?.custoPorCaso != null ? `${v.casosNovos} caso(s) novo(s) · ${brl2(v.custoPorCaso)} por caso` : undefined}>
+                            {v ? <span className={v.igual > v.valor / 2 ? 'text-amber-600' : 'text-zinc-700 dark:text-zinc-200'}>{brlN(v.valor)}</span> : <span className="text-zinc-300">—</span>}
+                          </td>
+                        ); })}
+                        <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{m.semVertical ? brlN(m.semVertical) : '—'}</td>
+                        <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{brlN(m.total)}</td>
+                      </tr>
+                      {aberto && (
+                        <tr className="bg-orange-50/40 dark:bg-orange-900/5"><td colSpan={colunas.length + 3} className="px-2 pb-3 pt-1">
+                          <div className="space-y-1.5">
+                            {cobs.map((c) => (
+                              <div key={c.id || c.data + c.valor} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                  <span className="tabular-nums text-zinc-500">{c.data}</span>
+                                  <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-200">{c.quem}</span>
+                                  <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: ORIGEM_ANUNCIO[c.origem].cor }} title={ORIGEM_ANUNCIO[c.origem].dica}>{ORIGEM_ANUNCIO[c.origem].label}</span>
+                                  <span className="font-semibold tabular-nums text-rose-600">{brl2(c.valor)}</span>
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-zinc-500">
+                                  {c.partes.map((x) => <span key={x.area}><span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: corArea(x.area) }} />{x.area} {brl2(x.valor)}</span>)}
+                                  {c.semVertical > 0 && <span className="text-zinc-400">sem vertical {brl2(c.semVertical)}</span>}
+                                  {c.anuncios && c.anuncios.length > 0 && (
+                                    <button onClick={() => setCobAberta(cobAberta === c.id ? '' : c.id)} className="font-medium text-[#228BE6] hover:underline">{cobAberta === c.id ? 'ocultar anúncios' : `ver ${c.anuncios.length} anúncio(s)`}</button>
+                                  )}
+                                </div>
+                                {cobAberta === c.id && c.anuncios && (
+                                  <div className="mt-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                                    {c.janela && <p className="mb-1 text-[10px] text-zinc-400">gasto no Meta de {dataBR(c.janela[0] + 'T12:00:00')} a {dataBR(c.janela[1] + 'T12:00:00')} (sem impostos) — a cobrança foi repartida nessa proporção</p>}
+                                    {c.anuncios.slice().sort((a, b) => b.gasto - a.gasto).map((a, i) => (
+                                      <div key={i} className="flex items-center gap-2 py-0.5 text-[11px]">
+                                        <span className="min-w-0 flex-1"><span className="block truncate text-zinc-700 dark:text-zinc-200">{a.anuncio || '—'}</span><span className="block truncate text-[10px] text-zinc-400">{a.campanha}</span></span>
+                                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px]" style={{ background: a.vertical ? `${corArea(a.vertical)}22` : '#F1F3F5', color: a.vertical ? corArea(a.vertical) : '#868E96' }}>{a.vertical ?? 'sem vertical'}</span>
+                                        <span className="w-20 shrink-0 text-right tabular-nums text-zinc-600 dark:text-zinc-300">{brl2(a.gasto)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </td></tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-zinc-400">Valor em laranja = a maior parte daquele mês foi dividida igual (palpite). Clique num mês para ver cada cobrança e, quando vier do Meta, os anúncios dela.</p>
+        </>)}
+    </Card>
+  );
+}
+
 function VerticaisTab({ data }: { data: FinDashboard }) {
   const [sel, setSel] = useState('');
   const [exp, setExp] = useState(''); // vertical com o livro-razão mensal aberto
@@ -5284,6 +5459,8 @@ function VerticaisTab({ data }: { data: FinDashboard }) {
           {verticais.length === 0 && <p className="col-span-full py-8 text-center text-sm text-zinc-400">Sem verticais ainda. Lance honorários (casam pelo cliente) e marque a vertical nas despesas.</p>}
         </div>
       </Card>
+
+      <AnunciosPorVertical />
 
       {mesesFora.length > 0 && (
         <Card title={<span className="flex items-center gap-2"><Banknote className="h-4 w-4 text-[#228BE6]" /> Fora das verticais (escritório)</span>}
