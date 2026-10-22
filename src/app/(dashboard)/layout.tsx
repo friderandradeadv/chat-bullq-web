@@ -149,9 +149,22 @@ export default function DashboardLayout({
   }, [router, user, setAuth, setActiveOrg]);
 
   if (isLoading) {
+    // Este círculo já vem pronto do SERVIDOR e só some quando o JavaScript roda
+    // no aparelho. Se algo travar (app da tela de início no iPhone ficava
+    // girando para sempre), após 8s aparece uma saída — em HTML/CSS puro, para
+    // funcionar mesmo sem JS — e o código diz ONDE parou: "sem-js" = o app nem
+    // iniciou; "aguardando-servidor" = iniciou e o /auth/me não respondeu.
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-screen flex-col items-center justify-center gap-5 px-6 text-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="carregando-demorou flex flex-col items-center gap-3 text-sm text-zinc-500">
+          <span>Está demorando para abrir.</span>
+          <div className="flex gap-2">
+            <a href={pathname || '/inicio'} className="rounded-full bg-[#228BE6] px-4 py-2 font-semibold text-white">Tentar de novo</a>
+            <a href="/login" className="rounded-full border border-zinc-300 px-4 py-2 font-semibold text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">Entrar de novo</a>
+          </div>
+          <span className="text-[11px] text-zinc-400">código: {themeMounted ? 'aguardando-servidor' : 'sem-js'}</span>
+        </div>
       </div>
     );
   }
