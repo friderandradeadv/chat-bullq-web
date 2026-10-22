@@ -383,6 +383,24 @@ export default function PreProcessualPage() {
             <option value="">Todos os responsáveis</option>
             {resps.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
+          {/* 🚨 SELETOR, NÃO FAIXA DE CHIPS (22/10/2026). A primeira versão pôs
+              os chips numa linha própria sobre o quadro, e com NOVE etiquetas no
+              acervo ela virou uma terceira linha de cabeçalho que empurra as
+              colunas para baixo: *"está visualmente feio, com as linhas
+              quebrando"*. Aqui o filtro ocupa zero linha nova e usa o mesmo
+              controle que já existe ao lado, o de responsável. */}
+          {etiquetas.length > 1 && view !== 'churning' ? (
+            <select
+              value={area ?? ''}
+              onChange={(e) => setArea(e.target.value || null)}
+              className={`h-9 max-w-[190px] rounded-lg border px-2 text-sm dark:bg-zinc-900 ${area
+                ? 'border-[#e11970] font-semibold text-[#e11970]'
+                : 'border-[#cfe0ed] text-[#101820] dark:border-zinc-700 dark:text-zinc-300'}`}
+            >
+              <option value="">Todas as áreas</option>
+              {etiquetas.map((e2) => <option key={e2.chave} value={e2.chave}>{e2.rotulo}</option>)}
+            </select>
+          ) : null}
           <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
             <Plus className="h-4 w-4" /> Novo processo
           </button>
@@ -393,31 +411,6 @@ export default function PreProcessualPage() {
           </div>
         </div>
       </div>
-
-      {/* Chips de área: só aparecem quando há mais de uma etiqueta no quadro. */}
-      {etiquetas.length > 1 && view !== 'churning' ? (
-        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
-          <button
-            onClick={() => setArea(null)}
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${area === null
-              ? 'bg-[#e11970] text-white'
-              : 'bg-white text-zinc-600 ring-1 ring-[#cfe0ed] hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700'}`}
-          >
-            Todos
-          </button>
-          {etiquetas.map((e) => (
-            <button
-              key={e.chave}
-              onClick={() => setArea(area === e.chave ? null : e.chave)}
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${area === e.chave
-                ? 'bg-[#e11970] text-white'
-                : 'bg-white text-zinc-600 ring-1 ring-[#cfe0ed] hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700'}`}
-            >
-              {e.rotulo}
-            </button>
-          ))}
-        </div>
-      ) : null}
 
       {view === 'churning' ? (
         <ChurningBoard />
