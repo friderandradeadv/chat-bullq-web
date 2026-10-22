@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { DossieReplica } from './dossie-replica';
 import { CumprimentoCs } from './cumprimento-cs';
 import { TriagemPeca } from './triagem-peca';
+import { BarraProgresso } from './barra-progresso';
 import { GerarPecaIA, tipoDaAcao } from './gerar-peca-ia';
 
 /**
@@ -188,6 +189,13 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
           </button>
         )}
       </div>
+
+      {/* 🚨 A BARRA TEM DE ESTAR NO CARD, não só no visor flutuante. Ele
+          clicou em montar, viu o aviso no canto da tela e perguntou se ainda
+          estava montando: dentro do card, onde ele está olhando, o passo e a
+          porcentagem ficam à vista. É a mesma barra do resto do hub, não uma
+          segunda. */}
+      <div className="mt-2.5"><BarraProgresso caseId={caseId} compacta /></div>
 
       {rascunho && (
         <div className="mt-2.5 rounded-md border border-zinc-200 dark:border-zinc-800">
