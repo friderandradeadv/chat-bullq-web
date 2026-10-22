@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { DossieReplica } from './dossie-replica';
 import { CumprimentoCs } from './cumprimento-cs';
 import { TriagemPeca } from './triagem-peca';
+import { GerarPecaIA, tipoDaAcao } from './gerar-peca-ia';
 
 /**
  * O QUE A PUBLICAÇÃO PEDE, e o que dá para fazer com isso.
@@ -52,6 +53,8 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
 }) {
   const [texto, setTexto] = useState('');
   const [rascunho, setRascunho] = useState('');
+  const [montando, setMontando] = useState(false);
+  const [montada, setMontada] = useState<{ arquivo?: string; pasta?: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
 
@@ -63,6 +66,35 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     },
     staleTime: 10 * 60_000,
   });
+
+  /* 🚨 MONTAR É O FIM DA CORRENTE, e ele manda o rascunho COMO ESTÁ na tela:
+     se o advogado corrigiu uma palavra, é a corrigida que vira documento. */
+  const montar = async () => {
+    setMontando(true);
+    try {
+      const { data } = await api.post(`/legal-cases/${caseId}/peca/montar`, { rascunho });
+      const r = (data?.data ?? data) as { ok?: boolean; motivo?: string };
+      if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui montar'); return; }
+      toast.success('Na fila do Mac. Ele monta no timbrado e entrega na PROTOCOLO.');
+      const t = setInterval(async () => {
+        try {
+          const { data: d } = await api.get(`/legal-cases/${caseId}/peca/rascunho`);
+          const e = (d?.data ?? d) as { status?: string; arquivo?: string; pasta?: string; erro?: string };
+          if (e?.status === 'montada') {
+            clearInterval(t); setMontando(false);
+            setMontada({ arquivo: e.arquivo, pasta: e.pasta });
+            toast.success('Peça pronta na PROTOCOLO.');
+          } else if (e?.status === 'erro') {
+            clearInterval(t); setMontando(false); toast.error(e.erro ?? 'a montagem parou');
+          }
+        } catch { /* seguir tentando */ }
+      }, 5000);
+      setTimeout(() => { clearInterval(t); setMontando(false); }, 240_000);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'não consegui montar');
+      setMontando(false);
+    }
+  };
 
   const familia = data?.find((f) => f.acao === acao) ?? null;
 
@@ -160,11 +192,37 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
       {rascunho && (
         <div className="mt-2.5 rounded-md border border-zinc-200 dark:border-zinc-800">
           <p className="border-b border-zinc-200 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
-            Rascunho do corpo — leia antes de virar documento
+            Rascunho do corpo — leia e corrija antes de montar
           </p>
-          <pre className="max-h-80 overflow-auto whitespace-pre-wrap px-2.5 py-2 text-[11px] leading-[1.45] text-zinc-700 dark:text-zinc-300">
-            {rascunho}
-          </pre>
+          {/* 🚨 EDITÁVEL DE PROPÓSITO: o que vai para o timbrado é o que está
+              aqui. Rascunho só de leitura obrigaria a refazer tudo por uma
+              palavra trocada, e a palavra trocada é o normal. */}
+          <textarea
+            value={rascunho}
+            onChange={(e) => setRascunho(e.target.value)}
+            rows={Math.min(18, Math.max(6, rascunho.split('\n').length + 1))}
+            className="w-full resize-y bg-transparent px-2.5 py-2 text-[11px] leading-[1.45] text-zinc-700 outline-none dark:text-zinc-300"
+          />
+          <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-2.5 py-1.5 dark:border-zinc-800">
+            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+              monta no timbrado oficial e entrega na pasta PROTOCOLO
+            </span>
+            <button
+              onClick={montar}
+              disabled={montando}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-zinc-900 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+            >
+              {montando && <Loader2 className="h-3 w-3 animate-spin" />}
+              {montando ? 'montando…' : 'Montar no timbrado'}
+            </button>
+          </div>
+          {montada && (
+            <p className="border-t border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] leading-4 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
+              Pronta: <b>{montada.arquivo}</b>
+              {montada.pasta ? <> em <span className="font-mono">{montada.pasta}</span></> : null}.
+              O PDF saiu do Word, ao lado do .docx.
+            </p>
+          )}
           {/* 🚨 a lacuna é marca de conferência, não defeito: o redator põe
               [CONFERIR: ...] onde faltou dado, em vez de inventar o fato */}
           {rascunho.includes('[CONFERIR:') && (
@@ -174,6 +232,11 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
             </p>
           )}
         </div>
+      )}
+
+      {/* o gerador por IA do hub, para os 3 tipos que o DTO aceita */}
+      {acao && tipoDaAcao(acao) && (
+        <GerarPecaIA caseId={caseId} acao={acao} instrucao={texto || undefined} />
       )}
 
       {/* 🚨 o botão só aparece onde HÁ triagem — e é o catálogo do hub que diz
