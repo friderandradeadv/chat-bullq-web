@@ -54,7 +54,9 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
 }) {
   const [texto, setTexto] = useState('');
   const [rascunho, setRascunho] = useState('');
+  const [modelo, setModelo] = useState<'claude' | 'gemini'>('claude');
   const [montando, setMontando] = useState(false);
+  const [demorando, setDemorando] = useState(false);
   const [montada, setMontada] = useState<{ arquivo?: string; pasta?: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
@@ -77,12 +79,19 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
       const r = (data?.data ?? data) as { ok?: boolean; motivo?: string };
       if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui montar'); return; }
       toast.success('Na fila do Mac. Ele monta no timbrado e entrega na PROTOCOLO.');
+      /* 🚨 "NA FILA DO MAC" SOA COMO "O MAC ESTÁ TRABALHANDO", e pode ser que
+         não esteja: o vigia roda por launchd, e o launchd pode estar
+         desligado. Parado dois minutos, o card diz o que fazer em vez de
+         girar para sempre. Foi exatamente o que aconteceu. */
+      let voltas = 0;
+      setDemorando(false);
       const t = setInterval(async () => {
+        if (++voltas === 24) setDemorando(true);
         try {
           const { data: d } = await api.get(`/legal-cases/${caseId}/peca/rascunho`);
           const e = (d?.data ?? d) as { status?: string; arquivo?: string; pasta?: string; erro?: string };
           if (e?.status === 'montada') {
-            clearInterval(t); setMontando(false);
+            clearInterval(t); setMontando(false); setDemorando(false);
             setMontada({ arquivo: e.arquivo, pasta: e.pasta });
             toast.success('Peça pronta na PROTOCOLO.');
           } else if (e?.status === 'erro') {
@@ -119,7 +128,7 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     setSalvando(true);
     try {
       const { data } = await api.post(`/legal-cases/${caseId}/peca/redigir`,
-        { acao, instrucao: texto, recorte });
+        { acao, instrucao: texto, recorte, modelo });
       const r = (data?.data ?? data) as { ok?: boolean; motivo?: string; rascunho?: string };
       if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui redigir'); return; }
       setRascunho(r?.rascunho ?? '');
@@ -177,16 +186,31 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
                      dark:border-zinc-700 dark:placeholder:text-zinc-600 dark:focus:border-zinc-500"
         />
         {texto.trim() && (
+          <div className="mt-1.5 flex items-center gap-2">
           <button
             onClick={salvar}
             disabled={salvando || salvo}
-            className="mt-1.5 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
             style={{ background: '#7C3AED' }}
           >
             {salvando ? <Loader2 className="h-3 w-3 animate-spin" />
               : salvo ? <Check className="h-3 w-3" /> : null}
             {salvo ? 'redigido' : 'Redigir'}
           </button>
+          {/* 🚨 QUEM REDIGE SE ESCOLHE, e o padrão é o bom. O Flash fica como
+              opção explícita para peça mecânica; foi ele que misturou Autor
+              com Exequente, e isso não se descobre relendo o código, só a
+              peça. */}
+          <select
+            value={modelo}
+            onChange={(e) => setModelo(e.target.value as 'claude' | 'gemini')}
+            title="quem redige o rascunho"
+            className="shrink-0 rounded-md border border-zinc-300 bg-transparent px-1.5 py-1 text-[10px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+          >
+            <option value="claude">Claude (padrão)</option>
+            <option value="gemini">Flash (rápido)</option>
+          </select>
+          </div>
         )}
       </div>
 
@@ -224,6 +248,14 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
               {montando ? 'montando…' : 'Montar no timbrado'}
             </button>
           </div>
+          {demorando && !montada && (
+            <p className="border-t border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] leading-4 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+              Dois minutos na fila e o Mac não pegou. Ele só trabalha quando o vigia roda:
+              no terminal, <span className="font-mono">node ~/frider-protocolo/vigia_triagem.js</span>.
+              O pedido continua na fila, não se perdeu.
+            </p>
+          )}
+
           {montada && (
             <p className="border-t border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] leading-4 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
               Pronta: <b>{montada.arquivo}</b>
