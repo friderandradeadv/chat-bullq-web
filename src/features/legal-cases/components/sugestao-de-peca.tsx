@@ -103,7 +103,9 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
       setMontada({ arquivo: estadoSalvo.data.arquivo, pasta: estadoSalvo.data.pasta });
     }
   }, [estadoSalvo.data]);
-  const [modelo, setModelo] = useState<'claude' | 'gemini'>('claude');
+  /* 🚨 FLASH É O PADRÃO (22/10/2026, decisão do escritório). O Claude fica a
+     um clique: a troca existe para quando o texto pedir mais cuidado. */
+  const [modelo, setModelo] = useState<'claude' | 'gemini'>('gemini');
   const [montando, setMontando] = useState(false);
   const [demorando, setDemorando] = useState(false);
   const [montada, setMontada] = useState<{ arquivo?: string; pasta?: string } | null>(null);
@@ -306,8 +308,8 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
             title="quem redige o rascunho"
             className="shrink-0 rounded-md border border-zinc-300 bg-transparent px-1.5 py-1 text-[10px] text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
           >
-            <option value="claude">Claude (padrão)</option>
-            <option value="gemini">Flash (rápido)</option>
+            <option value="gemini">Flash (padrão)</option>
+            <option value="claude">Claude (mais caro)</option>
           </select>
           </div>
         )}
