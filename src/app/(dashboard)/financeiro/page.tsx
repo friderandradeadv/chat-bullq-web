@@ -5268,7 +5268,9 @@ function AnunciosPorVertical() {
           {/* Por vertical: gasto, fatia e custo por caso novo */}
           <div className="mt-4 overflow-x-auto scrollbar-thin">
             <table className="w-full min-w-[460px] text-sm">
-              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Vertical</th>{p.realMeta && <th className="px-2 py-1.5 text-right font-medium" title="gasto real lido no Meta, com impostos">Real no Meta</th>}<th className="px-2 py-1.5 text-right font-medium">No razão</th><th className="px-2 py-1.5 text-right font-medium">Fatia</th><th className="px-2 py-1.5 text-right font-medium" title="casos criados no hub nessa vertical, no período">Casos novos</th><th className="px-2 py-1.5 text-right font-medium">Custo por caso</th></tr></thead>
+              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Vertical</th>{p.realMeta && <th className="px-2 py-1.5 text-right font-medium" title="gasto real lido no Meta, com impostos">Real no Meta</th>}<th className="px-2 py-1.5 text-right font-medium">No razão</th><th className="px-2 py-1.5 text-right font-medium">Fatia</th>{p.realMeta?.temResultados
+                ? <><th className="px-2 py-1.5 text-right font-medium" title="conversas no WhatsApp + cadastros que o Meta atribui às campanhas da vertical">Contatos (Meta)</th><th className="px-2 py-1.5 text-right font-medium" title="gasto real no Meta ÷ contatos">Custo por contato</th></>
+                : <><th className="px-2 py-1.5 text-right font-medium" title="casos criados no hub nessa vertical, no período">Casos novos</th><th className="px-2 py-1.5 text-right font-medium">Custo por caso</th></>}</tr></thead>
               <tbody>
                 {p.verticais.map((v) => (
                   <tr key={v.area} className="border-t border-zinc-100 dark:border-zinc-800">
@@ -5276,8 +5278,13 @@ function AnunciosPorVertical() {
                     {p.realMeta && <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(p.realMeta.porVertical.find((x) => x.area === v.area)?.valor ?? 0)}</td>}
                     <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-rose-600">{brl2(v.valor)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{v.pct}%</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{v.casosNovos || '—'}</td>
-                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{v.custoPorCaso != null ? brl2(v.custoPorCaso) : '—'}</td>
+                    {p.realMeta?.temResultados ? (() => { const r = p.realMeta.porVertical.find((x) => x.area === v.area); const n = (r?.conversas ?? 0) + (r?.leads ?? 0); return (<>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500" title={r ? `${r.conversas ?? 0} conversa(s) · ${r.leads ?? 0} cadastro(s)` : undefined}>{n || '—'}</td>
+                      <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{r?.custoPorContato != null ? brl2(r.custoPorContato) : '—'}</td>
+                    </>); })() : (<>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{v.casosNovos || '—'}</td>
+                      <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{v.custoPorCaso != null ? brl2(v.custoPorCaso) : '—'}</td>
+                    </>)}
                   </tr>
                 ))}
                 {(p.porOrigem.sem ?? 0) > 0 && (

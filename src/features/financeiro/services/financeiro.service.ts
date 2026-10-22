@@ -319,7 +319,7 @@ export interface AnunciosPainel {
   forbidden?: boolean;
   desde: string;
   /** gasto REAL no Meta (levantamento histórico), com impostos — '' = sem vertical */
-  realMeta: { levantadoEm: string | null; total: number; porMes: Record<string, Record<string, number>>; porVertical: { area: string; valor: number }[] } | null;
+  realMeta: { levantadoEm: string | null; temResultados?: boolean; total: number; conversas?: number; leads?: number; porMes: Record<string, Record<string, number>>; porVertical: { area: string; valor: number; conversas?: number; leads?: number; custoPorContato?: number | null }[]; contas?: { id: string; nome: string; atualizadoEm: string | null }[] } | null;
   total: number;
   porOrigem: Record<AnuncioOrigem, number>;
   verticais: { area: string; valor: number; casosNovos: number; custoPorCaso: number | null; pct: number }[];
