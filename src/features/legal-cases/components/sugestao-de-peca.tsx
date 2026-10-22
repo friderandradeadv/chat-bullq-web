@@ -51,6 +51,7 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
   recorte?: string | null;
 }) {
   const [texto, setTexto] = useState('');
+  const [rascunho, setRascunho] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
 
@@ -76,18 +77,27 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
   if (!acao) return null;
   const desconhecida = !familia;
 
+  /* 🚨 ESTE BOTÃO COMEÇA A PEÇA, não guarda bilhete. Ele guardava o texto e
+     dizia "anotado", e o advogado perguntou por que escrever ali se nada
+     acontecia. Agora redige o corpo a partir da instrução e do recorte, e
+     devolve o rascunho aqui embaixo para ele ler ANTES de virar documento:
+     a regra da casa é não inserir texto criado do zero sem o aval dele. */
   const salvar = async () => {
     setSalvando(true);
     try {
-      await api.post(`/legal-cases/${caseId}/peca/instrucao`, { acao, instrucao: texto });
+      const { data } = await api.post(`/legal-cases/${caseId}/peca/redigir`,
+        { acao, instrucao: texto, recorte });
+      const r = (data?.data ?? data) as { ok?: boolean; motivo?: string; rascunho?: string };
+      if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui redigir'); return; }
+      setRascunho(r?.rascunho ?? '');
       setSalvo(true);
       /* 🚨 NÃO PROMETA MONTAGEM: este botão só GUARDA o texto. Dizia "entra na
          montagem desta peça" e o advogado perguntou, com razão, se a peça tinha
          começado a ser montada — nada tinha começado. Botão que insinua
          trabalho em curso faz procurar barra de progresso que não existe. */
-      toast.success('Guardei. Nada foi montado ainda — isto fica anotado para quando a peça for feita.');
+      toast.success('Redigi o rascunho. Leia abaixo antes de virar documento.');
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? 'não consegui guardar');
+      toast.error(e?.response?.data?.message ?? 'não consegui redigir');
     } finally { setSalvando(false); }
   };
 
@@ -142,10 +152,29 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
           >
             {salvando ? <Loader2 className="h-3 w-3 animate-spin" />
               : salvo ? <Check className="h-3 w-3" /> : null}
-            {salvo ? 'guardado' : 'Guardar'}
+            {salvo ? 'redigido' : 'Redigir'}
           </button>
         )}
       </div>
+
+      {rascunho && (
+        <div className="mt-2.5 rounded-md border border-zinc-200 dark:border-zinc-800">
+          <p className="border-b border-zinc-200 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
+            Rascunho do corpo — leia antes de virar documento
+          </p>
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap px-2.5 py-2 text-[11px] leading-[1.45] text-zinc-700 dark:text-zinc-300">
+            {rascunho}
+          </pre>
+          {/* 🚨 a lacuna é marca de conferência, não defeito: o redator põe
+              [CONFERIR: ...] onde faltou dado, em vez de inventar o fato */}
+          {rascunho.includes('[CONFERIR:') && (
+            <p className="border-t border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+              Há marcas <span className="font-mono">[CONFERIR: …]</span>: são dados que não
+              estavam no recorte nem na sua instrução. Resolva antes de protocolar.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 🚨 o botão só aparece onde HÁ triagem — e é o catálogo do hub que diz
           quais são, não uma lista escrita aqui, que envelheceria sozinha */}
