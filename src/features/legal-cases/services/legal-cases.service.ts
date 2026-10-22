@@ -1361,6 +1361,12 @@ export const legalCasesService = {
     return (data?.data ?? data) as any;
   },
 
+  /** O quadro das ofertas de churning: tudo que já foi medido, num lugar só. */
+  async quadroDeOfertasChurning(): Promise<{ total: number; itens: any[] }> {
+    const { data } = await api.get('/legal-cases/churning/ofertas');
+    return (data?.data ?? data) as any;
+  },
+
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */
