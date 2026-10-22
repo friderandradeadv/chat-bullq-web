@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -33,8 +33,38 @@ type Ativo = { caseId: string; titulo: string | null; cnj: string | null; progre
  * pode fechar. Fechado, só volta quando surgir um trabalho NOVO (a dispensa é
  * por chave do que está rodando, não para sempre).
  */
+/**
+ * DISPENSAR É POR ITEM, E SOBREVIVE À RECARGA.
+ *
+ * 🚨 ERA POR CONJUNTO, e por isso o cartão fechado voltava. A chave somava
+ * TODOS os itens vivos: bastava uma montagem começar ou terminar para a chave
+ * mudar e a dispensa valer para outro conjunto. Na noite de 22/10/2026 rodamos
+ * várias montagens seguidas e o cartão do OTAIR — que é de leitura e por regra
+ * não some sozinho — voltou a cada uma. Ele: *"o tempo todo fica aparecendo
+ * aquele do otair vizotto"*, e depois *"esse banner do otair ainda dando azia"*.
+ *
+ * Agora a chave é do ITEM (caso + operação + instante). Fechar um não mexe nos
+ * outros, e um avanço real daquele caso muda o `em` e volta a aparecer — que é
+ * o certo: dispensar é "já li isto", não "cale-se".
+ *
+ * Guardado em localStorage, porque recarregar a página não desfaz uma leitura.
+ */
+const GAVETA = 'visor-progresso:dispensados';
+
+function lerGaveta(): string[] {
+  try { return JSON.parse(localStorage.getItem(GAVETA) || '[]'); } catch { return []; }
+}
+
 export function VisorProgresso({ acimaDaBarra = false }: { acimaDaBarra?: boolean }) {
-  const [dispensado, setDispensado] = useState<string | null>(null);
+  const [dispensados, setDispensados] = useState<string[]>([]);
+  // só depois de montar, para o render do servidor não tocar em localStorage
+  useEffect(() => { setDispensados(lerGaveta()); }, []);
+  const dispensar = (k: string) => {
+    // guarda os últimos 60: a gaveta não pode crescer para sempre
+    const nova = [...lerGaveta().filter((x) => x !== k), k].slice(-60);
+    try { localStorage.setItem(GAVETA, JSON.stringify(nova)); } catch { /* sem gaveta, vale a sessão */ }
+    setDispensados(nova);
+  };
 
   const { data } = useQuery({
     queryKey: ['legal-cases', 'progresso', 'ativos'],
@@ -55,12 +85,11 @@ export function VisorProgresso({ acimaDaBarra = false }: { acimaDaBarra?: boolea
   // volta igual do servidor, o React não redesenha, e o cartão de "pronto"
   // ficava na tela até o advogado fechar no X.
   useRelogio((data ?? []).length > 0);
-  const vivos = (data ?? []).filter((x) => x.progresso && aindaTemOQueDizer(x.progresso));
+  const chaveDe = (x: Ativo) => `${x.caseId}:${x.progresso.op}:${x.progresso.em}`;
+  const vivos = (data ?? [])
+    .filter((x) => x.progresso && aindaTemOQueDizer(x.progresso))
+    .filter((x) => !dispensados.includes(chaveDe(x)));
   if (!vivos.length) return null;
-
-  // a chave muda quando entra ou sai trabalho: dispensar não esconde o próximo
-  const chave = vivos.map((x) => `${x.caseId}:${x.progresso.op}:${x.progresso.em}`).join('|');
-  if (dispensado === chave) return null;
 
   return (
     /* 🚨 O ÚLTIMO CARTÃO SUMIA ATRÁS DA BARRA DE ABAS (20/10/2026). O visor
@@ -96,7 +125,7 @@ export function VisorProgresso({ acimaDaBarra = false }: { acimaDaBarra?: boolea
             </p>
             <button
               type="button"
-              onClick={() => setDispensado(chave)}
+              onClick={() => dispensar(chaveDe(x))}
               aria-label="Esconder o visor"
               className="shrink-0 rounded p-0.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800"
             >
