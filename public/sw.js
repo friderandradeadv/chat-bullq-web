@@ -1,13 +1,13 @@
 // Service worker mínimo do Hub (BullQ).
-// Objetivo: tornar o app INSTALÁVEL (PWA) e servir de base para push no futuro.
+// Objetivo: tornar o app INSTALÁVEL (PWA) e receber Web Push.
 // NÃO faz cache do app — o conteúdo é autenticado/dinâmico, então cachear
-// serviria página velha ou de outra sessão. O handler de 'fetch' existe só
-// porque o Chrome exige um para considerar o app instalável; ele apenas repassa.
+// serviria página velha ou de outra sessão.
+// SEM handler de 'fetch' (22/10/2026): o passthrough vazio interceptava todo
+// pedido e, no atalho da tela de início do iPhone, o JS do app nunca rodava
+// (tela "carregando" com código sem-js), enquanto no Chrome abria normal. O
+// Chrome já não exige handler de fetch para instalar; o push não depende dele.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
-self.addEventListener('fetch', () => {
-  /* passthrough — sem cache (necessário para instalabilidade) */
-});
 
 // ── Web Push ──────────────────────────────────────────────────────────
 // Recebe o payload JSON do backend e mostra a notificação nativa.

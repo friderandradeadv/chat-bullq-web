@@ -62,6 +62,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
       className={`${playfair.variable} bg-white lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950`}
     >
+      <head>
+        {/* Diagnóstico de inicialização: script INLINE (roda mesmo quando os
+            arquivos do app não carregam). Anota arquivo que falhou e erro de JS
+            e escreve na tela de "carregando" (#diag-carregando) — foi assim que
+            se viu que o atalho do iPhone nunca iniciava o app (código sem-js). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var d=[];function w(){var e=document.getElementById('diag-carregando');if(e&&d.length)e.textContent=d.slice(-4).join(' | ')}window.addEventListener('error',function(e){var t=e.target;d.push(t&&t!==window&&(t.src||t.href)?'falhou: '+(t.src||t.href).replace(location.origin,''):'erro: '+(e.message||'?'));w()},true);window.addEventListener('unhandledrejection',function(e){d.push('rejeição: '+String(e.reason&&e.reason.message||e.reason).slice(0,120));w()});var i=setInterval(w,1000);setTimeout(function(){clearInterval(i)},30000);d.push(navigator.serviceWorker&&navigator.serviceWorker.controller?'sw:ativo':'sw:nenhum');})();`,
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <PwaRegister />
         <Providers>{children}</Providers>

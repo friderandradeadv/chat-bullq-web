@@ -164,6 +164,8 @@ export default function DashboardLayout({
             <a href="/login" className="rounded-full border border-zinc-300 px-4 py-2 font-semibold text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">Entrar de novo</a>
           </div>
           <span className="text-[11px] text-zinc-400">código: {themeMounted ? 'aguardando-servidor' : 'sem-js'}</span>
+          {/* Preenchido pelo script de diagnóstico embutido no <head> (layout raiz). */}
+          <span id="diag-carregando" className="max-w-full break-all text-[11px] text-zinc-400" suppressHydrationWarning />
         </div>
       </div>
     );
