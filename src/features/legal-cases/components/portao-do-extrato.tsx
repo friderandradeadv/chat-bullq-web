@@ -67,6 +67,10 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
       titulo: 'text-red-900 dark:text-red-100',
       texto: 'text-red-900 dark:text-red-200',
       fraco: 'text-red-800 dark:text-red-300',
+      // 🚨 Cor explícita no botão: `border-current/30` não vira regra nenhuma,
+      // porque o modificador de opacidade não se aplica a `currentColor` — o
+      // botão sairia sem borda, parecendo texto solto.
+      botao: 'border-red-300 text-red-900 hover:bg-red-100 dark:border-red-800/60 dark:text-red-200 dark:hover:bg-red-900/40',
     }
     : {
       caixa: 'border-emerald-300 bg-emerald-50 dark:border-emerald-800/60 dark:bg-emerald-900/20',
@@ -74,6 +78,7 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
       titulo: 'text-emerald-900 dark:text-emerald-100',
       texto: 'text-emerald-900 dark:text-emerald-200',
       fraco: 'text-emerald-800 dark:text-emerald-300',
+      botao: 'border-emerald-300 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800/60 dark:text-emerald-200 dark:hover:bg-emerald-900/40',
     };
 
   const Icone = segura ? AlertTriangle : ShieldCheck;
@@ -112,7 +117,7 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
               type="button"
               onClick={pedir}
               disabled={pedindo}
-              className="mt-2 inline-flex items-center gap-1 rounded-lg border border-current/30 px-2 py-1 text-[11px] font-medium hover:bg-white/50 disabled:opacity-50 dark:hover:bg-white/5"
+              className={`mt-2 inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium disabled:opacity-50 ${cor.botao}`}
             >
               {pedindo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
               Pedir o extrato ao cliente
