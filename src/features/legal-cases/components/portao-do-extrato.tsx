@@ -16,7 +16,7 @@
  */
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, Loader2, Send, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Loader2, Send, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
 
@@ -38,7 +38,7 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
   const [marcando, setMarcando] = useState(false);
   const p = (caso.metadata as any)?.portaoDoExtrato as Portao | undefined;
   const pedido = (caso.metadata as any)?.extratoDaConta as
-    { pedidoEm?: string; recebidoEm?: string } | undefined;
+    { pedidoEm?: string; recebidoEm?: string; agendadoPara?: string; ultimoMotivo?: string } | undefined;
 
   // Sem medição, e sem cadeia de refinanciamento, não há o que dizer.
   if (!p?.caso || p.caso === 'sem-refinanciamento') return null;
@@ -50,6 +50,10 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
     try {
       const r = await legalCasesService.pedirExtratoDaConta(caso.id);
       if (r?.enviado) toast.success(`Pedido enviado: ${(r.datas ?? []).join(', ') || 'extrato da conta'}.`);
+      // 🚨 Fora de hora o pedido NÃO é recusado: fica agendado, e a tela tem de
+      // dizer isso com todas as letras. Agendar em silêncio foi o motivo de a
+      // primeira versão recusar.
+      else if (r?.agendadoPara) toast.success(r.motivo ?? 'Pedido agendado para a próxima hora útil.');
       else toast.info(r?.motivo ?? 'O pedido já havia sido feito.');
       await qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caso.id] });
       qc.invalidateQueries({ queryKey: ['legal-cases'] });
@@ -57,6 +61,20 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
       toast.error(e?.response?.data?.message ?? e?.message ?? 'Não consegui mandar o pedido.');
     } finally {
       setPedindo(false);
+    }
+  };
+
+  const cancelarAgendamento = async () => {
+    setMarcando(true);
+    try {
+      await legalCasesService.cancelarExtratoAgendado(caso.id);
+      await qc.invalidateQueries({ queryKey: ['legal-cases', 'detail', caso.id] });
+      qc.invalidateQueries({ queryKey: ['legal-cases'] });
+      toast.success('Pedido cancelado. Nada será enviado ao cliente.');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? e?.message ?? 'Não consegui cancelar.');
+    } finally {
+      setMarcando(false);
     }
   };
 
@@ -147,6 +165,24 @@ export function PortaoDoExtrato({ caso }: { caso: CaseDetail }) {
                   {new Date(pedido.pedidoEm).toLocaleString('pt-BR', {
                     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
                   })}
+                </span>
+              ) : pedido?.agendadoPara ? (
+                /* 🚨 AGENDADO SE DIZ, com hora e com saída. Agendar calado foi o
+                   que fez a primeira versão preferir recusar. E o hub reconfere
+                   o card antes de soltar: card arquivado, portão aberto ou
+                   extrato já recebido cancelam sozinhos. */
+                <span className="inline-flex flex-wrap items-center gap-2 text-[11px] font-medium">
+                  <span className={`inline-flex items-center gap-1 ${cor.fraco}`}>
+                    <Clock className="h-3 w-3" /> Pedido agendado para{' '}
+                    {new Date(pedido.agendadoPara).toLocaleString('pt-BR', {
+                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                    })}
+                    , com reconferência do card antes de sair
+                  </span>
+                  <button type="button" onClick={cancelarAgendamento} disabled={marcando}
+                    className="underline underline-offset-2 opacity-70 hover:opacity-100 disabled:opacity-40">
+                    cancelar
+                  </button>
                 </span>
               ) : (
                 <button

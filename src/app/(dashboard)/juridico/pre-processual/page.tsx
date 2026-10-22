@@ -476,10 +476,12 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
       {c.extratoPendente && (
         <span
           className={`absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full ring-2 ring-white dark:ring-[#1E2226] ${
-            c.extratoPendente.pedidoEm ? 'bg-amber-500' : 'bg-red-600'}`}
+            c.extratoPendente.pedidoEm || c.extratoPendente.agendadoPara ? 'bg-amber-500' : 'bg-red-600'}`}
           title={c.extratoPendente.pedidoEm
             ? `Extrato da conta pendente — pedido ao cliente em ${fmtDate(c.extratoPendente.pedidoEm)}`
-            : 'Extrato da conta: esta ação não se protocola sem ele, e o pedido ainda não saiu'}
+            : c.extratoPendente.agendadoPara
+              ? `Extrato da conta — pedido agendado para ${fmtDate(c.extratoPendente.agendadoPara)}, na primeira hora útil`
+              : 'Extrato da conta: esta ação não se protocola sem ele, e o pedido ainda não saiu'}
         />
       )}
       {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent="#e11970" />}

@@ -316,7 +316,7 @@ export interface KanbanCard {
    * protocolo e o documento ainda não foi marcado como recebido. `pedidoEm` diz
    * se o pedido já saiu ao cliente, porque a conduta muda (pedir × cobrar).
    */
-  extratoPendente?: { pedidoEm: string | null } | null;
+  extratoPendente?: { pedidoEm: string | null; agendadoPara?: string | null } | null;
   tags: { id: string; name: string; color: string }[];
   court: string | null;
   value: number | null;
@@ -1339,6 +1339,8 @@ export const legalCasesService = {
     enviado: boolean;
     datas?: string[];
     motivo?: string;
+    /** Fora de hora o pedido não é recusado: fica agendado para cá. */
+    agendadoPara?: string;
   }> {
     const { data } = await api.post(`/legal-cases/${id}/extrato-da-conta/pedir`);
     return (data?.data ?? data) as any;
@@ -1348,6 +1350,12 @@ export const legalCasesService = {
    * Marca que o extrato chegou do cliente, e apaga a bolinha do card. Não abre
    * o portão do protocolo: a pasta continua cobrando o `08.1` como arquivo.
    */
+  /** Cancela o pedido agendado antes de ele sair ao cliente. */
+  async cancelarExtratoAgendado(id: string): Promise<{ ok: boolean }> {
+    const { data } = await api.post(`/legal-cases/${id}/extrato-da-conta/cancelar-agendamento`);
+    return (data?.data ?? data) as any;
+  },
+
   async marcarExtratoRecebido(id: string, recebido = true): Promise<{ ok: boolean; recebidoEm: string | null }> {
     const { data } = await api.post(`/legal-cases/${id}/extrato-da-conta/recebido`, { recebido });
     return (data?.data ?? data) as any;
