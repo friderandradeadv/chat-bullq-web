@@ -5191,7 +5191,13 @@ function AnunciosPorVertical() {
   const [mesAberto, setMesAberto] = useState('');
   const [cobAberta, setCobAberta] = useState('');
   const { data: p, isLoading, isError } = useQuery({ queryKey: ['financeiro', 'anuncios-painel', meses], queryFn: () => financeiroService.getAnunciosPainel(meses), staleTime: 120_000 });
-  const colunas = useMemo(() => (p?.verticais ?? []).map((v) => v.area), [p]);
+  const colunas = useMemo(() => [...new Set([...(p?.verticais ?? []).map((v) => v.area), ...(p?.realMeta?.porVertical ?? []).map((v) => v.area).filter(Boolean)])], [p]);
+  // Meses: os do razão + os que só existem no Meta (gasto que nunca foi lançado).
+  const mesesTab = useMemo(() => {
+    const ms = new Set([...(p?.porMes ?? []).map((m) => m.mes), ...Object.keys(p?.realMeta?.porMes ?? {})]);
+    return [...ms].sort((a, b) => b.localeCompare(a)).map((mes) => ({ mes, razao: p?.porMes.find((m) => m.mes === mes), meta: p?.realMeta?.porMes?.[mes] }));
+  }, [p]);
+  const somaMeta = (o?: Record<string, number>) => Object.values(o ?? {}).reduce((s, x) => s + x, 0);
   if (p?.forbidden) return null;
 
   const st = p?.status;
@@ -5227,8 +5233,15 @@ function AnunciosPorVertical() {
 
       {isLoading ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>
         : isError || !p ? <p className="py-6 text-center text-sm text-zinc-400">Não consegui carregar o gasto em anúncio.</p>
-        : p.total <= 0 ? <p className="py-6 text-center text-sm text-zinc-400">Nenhum tráfego pago pago nos últimos {meses} meses.</p>
+        : p.total <= 0 && !p.realMeta?.total ? <p className="py-6 text-center text-sm text-zinc-400">Nenhum tráfego pago nos últimos {meses} meses.</p>
         : (<>
+          {p.realMeta && p.realMeta.total > 0 && (
+            <div className="mb-4 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Gasto real no Meta</p><p className="text-lg font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(p.realMeta.total)}</p><p className="text-[10px] text-zinc-400">lido nas contas de anúncio, com impostos</p></div>
+              <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"><p className="text-[11px] uppercase tracking-wide text-zinc-400">Lançado no razão</p><p className="text-lg font-bold tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(p.total)}</p><p className="text-[10px] text-zinc-400">Tráfego pago nos lançamentos</p></div>
+              <div className={`rounded-xl border p-3 ${p.realMeta.total - p.total > 1 ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20' : 'border-zinc-200 dark:border-zinc-800'}`}><p className="text-[11px] uppercase tracking-wide text-zinc-400">Fora do razão</p><p className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">{brl2(Math.max(0, p.realMeta.total - p.total))}</p><p className="text-[10px] text-zinc-400">gasto no Meta sem lançamento — pago por outro meio?</p></div>
+            </div>
+          )}
           {/* Quanto do gasto tem vertical MEDIDA × palpite */}
           <div>
             <div className="flex items-baseline justify-between gap-2">
@@ -5255,11 +5268,12 @@ function AnunciosPorVertical() {
           {/* Por vertical: gasto, fatia e custo por caso novo */}
           <div className="mt-4 overflow-x-auto scrollbar-thin">
             <table className="w-full min-w-[460px] text-sm">
-              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Vertical</th><th className="px-2 py-1.5 text-right font-medium">Gasto</th><th className="px-2 py-1.5 text-right font-medium">Fatia</th><th className="px-2 py-1.5 text-right font-medium" title="casos criados no hub nessa vertical, no período">Casos novos</th><th className="px-2 py-1.5 text-right font-medium">Custo por caso</th></tr></thead>
+              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400"><th className="px-2 py-1.5 font-medium">Vertical</th>{p.realMeta && <th className="px-2 py-1.5 text-right font-medium" title="gasto real lido no Meta, com impostos">Real no Meta</th>}<th className="px-2 py-1.5 text-right font-medium">No razão</th><th className="px-2 py-1.5 text-right font-medium">Fatia</th><th className="px-2 py-1.5 text-right font-medium" title="casos criados no hub nessa vertical, no período">Casos novos</th><th className="px-2 py-1.5 text-right font-medium">Custo por caso</th></tr></thead>
               <tbody>
                 {p.verticais.map((v) => (
                   <tr key={v.area} className="border-t border-zinc-100 dark:border-zinc-800">
                     <td className="px-2 py-1.5"><span className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-200"><span className="h-2.5 w-2.5 rounded-full" style={{ background: corArea(v.area) }} />{v.area}</span></td>
+                    {p.realMeta && <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{brl2(p.realMeta.porVertical.find((x) => x.area === v.area)?.valor ?? 0)}</td>}
                     <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-rose-600">{brl2(v.valor)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{v.pct}%</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-zinc-500">{v.casosNovos || '—'}</td>
@@ -5269,6 +5283,7 @@ function AnunciosPorVertical() {
                 {(p.porOrigem.sem ?? 0) > 0 && (
                   <tr className="border-t border-zinc-100 dark:border-zinc-800">
                     <td className="px-2 py-1.5 text-zinc-400"><span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-zinc-300" />Sem vertical</span></td>
+                    {p.realMeta && <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{brl2(p.realMeta.porVertical.find((x) => !x.area)?.valor ?? 0)}</td>}
                     <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{brl2(p.porOrigem.sem)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{Math.round((p.porOrigem.sem / p.total) * 1000) / 10}%</td>
                     <td colSpan={2} className="px-2 py-1.5 text-right text-[11px] text-zinc-400">fica no custo comum</td>
@@ -5280,32 +5295,38 @@ function AnunciosPorVertical() {
 
           {/* Mês a mês, com as cobranças e os anúncios de cada uma */}
           <div className="mt-4 overflow-x-auto scrollbar-thin">
-            <table className="w-full text-sm" style={{ minWidth: 220 + 96 * (colunas.length + 2) }}>
+            <table className="w-full text-sm" style={{ minWidth: 220 + 96 * (colunas.length + 3) }}>
               <thead><tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400">
                 <th className="px-2 py-1.5 font-medium">Mês</th>
                 {colunas.map((a) => <th key={a} className="px-2 py-1.5 text-right font-medium"><span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: corArea(a) }} />{a}</span></th>)}
                 <th className="px-2 py-1.5 text-right font-medium">Sem vertical</th>
-                <th className="px-2 py-1.5 text-right font-medium">Total</th>
+                <th className="px-2 py-1.5 text-right font-medium">No razão</th>
+                {p.realMeta && <th className="px-2 py-1.5 text-right font-medium" title="gasto real lido no Meta, com impostos">No Meta</th>}
               </tr></thead>
               <tbody>
-                {p.porMes.map((m) => {
+                {mesesTab.map(({ mes, razao, meta }) => {
+                  const m = razao ?? { mes, total: 0, semVertical: 0, verticais: [] as NonNullable<typeof razao>['verticais'] };
                   const aberto = mesAberto === m.mes;
                   const cobs = p.cobrancas.filter((c) => c.mes === m.mes);
+                  const tMeta = somaMeta(meta);
                   return (
                     <Fragment key={m.mes}>
                       <tr className={`cursor-pointer border-t border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50 ${aberto ? 'bg-orange-50/60 dark:bg-orange-900/10' : ''}`} onClick={() => { setMesAberto(aberto ? '' : m.mes); setCobAberta(''); }}>
                         <td className="whitespace-nowrap px-2 py-1.5 text-zinc-600 dark:text-zinc-300"><ChevronRight className={`mr-1 inline h-3.5 w-3.5 transition ${aberto ? 'rotate-90' : ''}`} />{mmYYYY(m.mes)}</td>
-                        {colunas.map((a) => { const v = m.verticais.find((x) => x.area === a); return (
+                        {colunas.map((a) => { const v = m.verticais.find((x) => x.area === a); const r = meta?.[a]; return (
                           <td key={a} className="px-2 py-1.5 text-right tabular-nums" title={v?.custoPorCaso != null ? `${v.casosNovos} caso(s) novo(s) · ${brl2(v.custoPorCaso)} por caso` : undefined}>
                             {v ? <span className={v.igual > v.valor / 2 ? 'text-amber-600' : 'text-zinc-700 dark:text-zinc-200'}>{brlN(v.valor)}</span> : <span className="text-zinc-300">—</span>}
+                            {r ? <span className="block text-[10px] text-zinc-400" title="gasto real no Meta">Meta {brlN(r)}</span> : null}
                           </td>
                         ); })}
-                        <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{m.semVertical ? brlN(m.semVertical) : '—'}</td>
-                        <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{brlN(m.total)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-zinc-400">{m.semVertical ? brlN(m.semVertical) : '—'}{meta?.[''] ? <span className="block text-[10px]">Meta {brlN(meta[''])}</span> : null}</td>
+                        <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{m.total ? brlN(m.total) : <span className="font-normal text-zinc-300">—</span>}</td>
+                        {p.realMeta && <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${tMeta - m.total > 50 ? 'text-amber-600' : 'text-zinc-500'}`} title={tMeta - m.total > 50 ? `${brl2(tMeta - m.total)} gastos no Meta sem lançamento no razão` : undefined}>{tMeta ? brlN(tMeta) : '—'}</td>}
                       </tr>
                       {aberto && (
-                        <tr className="bg-orange-50/40 dark:bg-orange-900/5"><td colSpan={colunas.length + 3} className="px-2 pb-3 pt-1">
+                        <tr className="bg-orange-50/40 dark:bg-orange-900/5"><td colSpan={colunas.length + (p.realMeta ? 4 : 3)} className="px-2 pb-3 pt-1">
                           <div className="space-y-1.5">
+                            {!cobs.length && <p className="text-[11px] text-zinc-500">Nenhum lançamento de Tráfego pago neste mês no razão{tMeta ? ` — mas o Meta gastou ${brl2(tMeta)}. Foi pago por outro meio (agência, outro cartão)?` : '.'}</p>}
                             {cobs.map((c) => (
                               <div key={c.id || c.data + c.valor} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900">
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -5344,7 +5365,7 @@ function AnunciosPorVertical() {
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-[11px] text-zinc-400">Valor em laranja = a maior parte daquele mês foi dividida igual (palpite). Clique num mês para ver cada cobrança e, quando vier do Meta, os anúncios dela.</p>
+          <p className="mt-2 text-[11px] text-zinc-400">"Meta" embaixo de cada valor = gasto real lido nas contas de anúncio. "No Meta" em laranja = gastou mais do que está lançado. Valor em laranja na vertical = a maior parte daquele mês foi dividida igual (palpite). Clique num mês para ver cada cobrança e, quando vier do Meta, os anúncios dela.</p>
         </>)}
     </Card>
   );

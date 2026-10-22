@@ -318,6 +318,8 @@ export interface AnuncioCobranca { id: string; data: string; mes: string; valor:
 export interface AnunciosPainel {
   forbidden?: boolean;
   desde: string;
+  /** gasto REAL no Meta (levantamento histórico), com impostos — '' = sem vertical */
+  realMeta: { levantadoEm: string | null; total: number; porMes: Record<string, Record<string, number>>; porVertical: { area: string; valor: number }[] } | null;
   total: number;
   porOrigem: Record<AnuncioOrigem, number>;
   verticais: { area: string; valor: number; casosNovos: number; custoPorCaso: number | null; pct: number }[];
