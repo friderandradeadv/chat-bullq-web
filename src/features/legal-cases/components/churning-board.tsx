@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, RefreshCw, Search, ShieldAlert, ShieldCheck, Users } from 'lucide-react';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
+import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 const ACCENT = '#e8590c';
@@ -45,6 +46,7 @@ const dia = (iso: string | null) =>
 export function ChurningBoard() {
   const [busca, setBusca] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
+  const [vincular, setVincular] = useState<{ caseId: string; cliente: string } | null>(null);
 
   // As fases existem para o seletor do card; o quadro em si não as usa.
   const { data: kanban } = useQuery({
@@ -120,10 +122,16 @@ export function ChurningBoard() {
                       Vazio
                     </div>
                   ) : lista.map((o) => (
-                    <button
+                    // 🚨 NÃO é <button>: dentro do card há o botão de vincular o
+                    // WhatsApp, e botão dentro de botão é HTML inválido (o
+                    // navegador descarta o de dentro, e o clique vai para o card).
+                    <div
                       key={o.caseId}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setAberto(o.caseId)}
-                      className="rounded-lg border border-[#cfe0ed] bg-white p-3 text-left shadow-sm transition hover:shadow-md dark:border-transparent dark:bg-[#1E2226]"
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAberto(o.caseId); } }}
+                      className="cursor-pointer rounded-lg border border-[#cfe0ed] bg-white p-3 text-left shadow-sm transition hover:shadow-md dark:border-transparent dark:bg-[#1E2226]"
                     >
                       <p className="line-clamp-2 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">
                         {o.cliente}
@@ -168,12 +176,18 @@ export function ChurningBoard() {
                       <p className="mt-0.5 flex items-center gap-2 text-[10px] text-[#48626f] dark:text-zinc-500">
                         {dia(o.enviadaEm) ? `enviada ${dia(o.enviadaEm)}` : dia(o.analisadaEm) ? `medida ${dia(o.analisadaEm)}` : ''}
                         {!o.temConversa && (
-                          <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-400">
-                            <Users className="h-3 w-3" /> sem WhatsApp vinculado
-                          </span>
+                          // 🚨 CLICÁVEL de propósito: a oferta existe e não há
+                          // por onde falar com o cliente, então o aviso é o
+                          // próprio caminho do conserto, não um rótulo.
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setVincular({ caseId: o.caseId, cliente: o.cliente }); }}
+                            className="inline-flex items-center gap-0.5 rounded px-1 font-semibold text-amber-700 underline decoration-dotted hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+                          >
+                            <Users className="h-3 w-3" /> vincular WhatsApp
+                          </button>
                         )}
                       </p>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -185,6 +199,15 @@ export function ChurningBoard() {
       {/* 🚨 O DRAWER PRECISA DAS FASES para o seletor de fase funcionar: aqui
           vão as da trilha judicial e as do pré-processual juntas, porque a
           oferta vive tanto num card em recurso quanto num card em montagem. */}
+      {vincular && (
+        <VincularContatoCliente
+          caseId={vincular.caseId}
+          clienteNome={vincular.cliente}
+          onClose={() => setVincular(null)}
+          onVinculado={() => refetch()}
+        />
+      )}
+
       {aberto && (
         <CaseDetailDrawer
           caseId={aberto}

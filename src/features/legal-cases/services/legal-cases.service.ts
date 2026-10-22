@@ -1367,6 +1367,34 @@ export const legalCasesService = {
     return (data?.data ?? data) as any;
   },
 
+  /**
+   * Mede quais contatos do WhatsApp podem ser o cliente deste processo.
+   *
+   * 🚨 Não vincula nada: devolve CPF conferido, nomes em comum, TELEFONE e se há
+   * conversa, para o advogado escolher olhando o número. A regra é do próprio
+   * hub: nunca automático por nome, pra não cair em homônimo.
+   */
+  async contatosCandidatosDoCliente(id: string): Promise<{
+    cliente: string;
+    documento: string | null;
+    jaVinculado: string | null;
+    podeVincularDireto: boolean;
+    aviso: string;
+    candidatos: {
+      id: string; nome: string | null; telefone: string | null; cpf: string | null;
+      prova: 'cpf' | 'nome'; nomesEmComum: string[]; temConversa: boolean;
+    }[];
+  }> {
+    const { data } = await api.get(`/legal-cases/${id}/cliente/contatos-candidatos`);
+    return (data?.data ?? data) as any;
+  },
+
+  /** Grava o contato escolhido na parte CLIENTE (o clique de confirmação é do advogado). */
+  async vincularContatoCliente(id: string, contactId: string): Promise<{ ok: boolean; motivo?: string }> {
+    const { data } = await api.patch(`/legal-cases/${id}/cliente/contato`, { contactId });
+    return (data?.data ?? data) as any;
+  },
+
   async organizarPastaInicial(id: string): Promise<{
     ok: boolean;
     /** uma por família: card de "RMC | RCC" monta a pasta de RMC E a de RCC */
