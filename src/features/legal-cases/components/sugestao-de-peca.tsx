@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FileText, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -79,6 +79,30 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
   const [texto, setTexto] = useState('');
   const [rascunho, setRascunho] = useState('');
   const [avisos, setAvisos] = useState<string[]>([]);
+
+  /* 🚨 O QUE ELE DIGITOU TEM DE SOBREVIVER A FECHAR O CARD. A instrução e o
+     rascunho são gravados no processo, mas o card nunca os lia de volta: ele
+     reabria em branco e o texto parecia perdido. Aconteceu em 22/10/2026 —
+     *"fui refazer, sumiu meu texto"* — e o texto estava no banco o tempo todo. */
+  const estadoSalvo = useQuery({
+    queryKey: ['peca-estado', caseId],
+    queryFn: async () => {
+      const { data } = await api.get(`/legal-cases/${caseId}/peca/rascunho`);
+      return (data?.data ?? data) as
+        { instrucao?: string; rascunho?: string; status?: string; arquivo?: string; pasta?: string };
+    },
+    staleTime: 30_000,
+  });
+  const jaCarregou = useRef(false);
+  useEffect(() => {
+    if (jaCarregou.current || !estadoSalvo.data) return;
+    jaCarregou.current = true;
+    if (estadoSalvo.data.instrucao) setTexto(estadoSalvo.data.instrucao);
+    if (estadoSalvo.data.rascunho) setRascunho(estadoSalvo.data.rascunho);
+    if (estadoSalvo.data.status === 'montada' && estadoSalvo.data.arquivo) {
+      setMontada({ arquivo: estadoSalvo.data.arquivo, pasta: estadoSalvo.data.pasta });
+    }
+  }, [estadoSalvo.data]);
   const [modelo, setModelo] = useState<'claude' | 'gemini'>('claude');
   const [montando, setMontando] = useState(false);
   const [demorando, setDemorando] = useState(false);
@@ -196,6 +220,7 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
   /* reconhecida a situação, o campo nasce escrito: ele CONFERE em vez de digitar.
      Só semeia o que está vazio — nunca por cima do que ele escreveu. */
   useEffect(() => {
+    if (!jaCarregou.current) return;
     if (situacao && !texto.trim() && !salvo) setTexto(situacao.instrucao);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [situacao?.nome]);
