@@ -1724,10 +1724,13 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                   const escrit = Math.abs(t.valor) - sp.reduce((a, s) => a + (Number(s.valor) || 0), 0);
                   return (
                     <div key={t.id} className="border-t border-zinc-100 dark:border-zinc-800/70">
-                      <div className="group flex items-center gap-2 px-3 py-1.5 text-sm">
+                      {/* No celular a linha quebra em duas: data + nome em cima, valor + botões embaixo.
+                          Numa linha só, as larguras fixas do valor (w-24) e dos botões (w-40) comiam
+                          o nome inteiro e os selos "manual"/"comp." caíam por cima do valor. */}
+                      <div className="group flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-1.5 text-sm sm:flex-nowrap">
                         <span className="w-10 shrink-0 text-xs tabular-nums text-zinc-400">{((!ehLiquidado(st) && t.vencimento) ? t.vencimento : t.data).slice(0, 5)}</span>
                         {t.valor >= 0 ? <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <ArrowDownCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />}
-                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <span className="flex min-w-0 flex-1 basis-[calc(100%_-_4.5rem)] items-center gap-1.5 overflow-hidden sm:basis-0">
                           <ClienteLink nome={titleCase((t.valor < 0 ? (t.recebedor || t.party || t.pagador) : (t.pagador || t.party || t.recebedor)) || '') || t.categoria} ficha={ficha} className="truncate text-zinc-700 dark:text-zinc-300" />{t.valor < 0 && normNome(t.pagador ?? '') !== normNome(escritorioNome) && !!t.pagador && <span className="hidden shrink-0 text-[11px] text-zinc-400 lg:inline" title="quem pagou">· pago por {titleCase(t.pagador)}</span>}
                           {t.parcelaNum ? <span className="shrink-0 text-[11px] text-zinc-400">{t.parcelaNum}/{t.parcelaTot}</span> : null}
                           {mesKey(t) !== mesCaixaKey(t) ? <span className="shrink-0 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={`Pago em ${mesLabel(mesCaixaKey(t))}, competência ${mesLabel(mesKey(t))} — no caixa conta no mês do pagamento; no resultado, na competência`}>comp. {mesCurtoKey(mesKey(t))}</span> : null}
@@ -1741,11 +1744,11 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                         </span>
                         <span className="hidden w-40 shrink-0 items-center gap-1.5 text-xs text-zinc-500 sm:flex"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: catColor(data, t.categoria) }} /><span className="hidden truncate md:inline">{t.categoria}</span></span>
                         <span className="hidden w-20 shrink-0 text-center sm:block"><span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_TX[st].badge}`}>{STATUS_TX[st].label}</span></span>
-                        <span className={`w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
+                        <span className={`ml-[4.375rem] shrink-0 whitespace-nowrap font-semibold tabular-nums sm:ml-0 sm:w-24 sm:text-right ${t.valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{brl2(t.valor)}</span>
                         {/* Largura FIXA e alinhada à direita: as linhas de êxito/repasse têm mais ícones
                             (prestação + enviar) que as comuns — sem a largura fixa, valor/status/categoria
                             dançavam horizontalmente de linha pra linha. */}
-                        <span className="flex w-40 shrink-0 items-center justify-end gap-0.5">
+                        <span className="ml-auto flex shrink-0 items-center justify-end gap-0.5 sm:ml-0 sm:w-40">
                           {!ehLiquidado(st) && <button onClick={() => quickReceber(t)} title={t.valor >= 0 ? 'Marcar como recebido' : 'Marcar como pago'} className="rounded p-1 text-zinc-300 transition hover:text-emerald-600"><Check className="h-3.5 w-3.5" /></button>}
                           {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => abrirGuiaContabil(t)} disabled={guiaLoad === t.id} title="Guia para o contador (emissão da nota)" className="rounded-md bg-sky-500/12 p-1 text-sky-600 ring-1 ring-inset ring-sky-500/25 transition hover:bg-sky-500/20 disabled:opacity-50 dark:bg-sky-500/20 dark:text-sky-300">{guiaLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}</button>}
                           {((t.subtipo === 'exito' && t.rateio) || t.categoria === 'Repasse ao cliente') && <button onClick={() => abrirPrestacao(t)} disabled={pcLoad === t.id} title="Prestação de contas (PDF)" className="rounded-md bg-[#7048E8]/12 p-1 text-[#7048E8] ring-1 ring-inset ring-[#7048E8]/25 transition hover:bg-[#7048E8]/20 disabled:opacity-50 dark:bg-[#7048E8]/20">{pcLoad === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />}</button>}
