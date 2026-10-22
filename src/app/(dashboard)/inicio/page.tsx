@@ -42,7 +42,6 @@ import {
   LayoutList,
   BarChart3,
   Scale,
-  Calculator,
   Columns3,
   Workflow,
 } from 'lucide-react';
@@ -958,7 +957,7 @@ const ATALHOS: { href: string; icon: React.ElementType; color: string; label: st
   { href: '/juridico/recursos', icon: Scale, color: '#E8590C', label: 'Recursos', mod: 'analise' },
   { href: '/juridico/kanban', icon: Columns3, color: '#5C7CFA', label: 'Fase judicial', mod: 'juridico' },
   { href: '/caixa-djen', icon: Newspaper, color: '#E64980', label: 'Publicações', mod: 'juridico' },
-  { href: '/juridico/calculos', icon: Calculator, color: '#02883C', label: 'Cálculos', mod: 'calculos' },
+  { href: '/juridico/board/execucao', icon: HandCoins, color: '#02883C', label: 'CS e Repasse', mod: 'juridico' },
   { href: '/juridico/pre-processual', icon: Workflow, color: '#F08C00', label: 'Pré-processual', mod: 'juridico' },
 ];
 const MOD_PAI: Record<string, string> = { analise: 'juridico', calculos: 'juridico' };
