@@ -78,6 +78,7 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
   const qc = useQueryClient();
   const [texto, setTexto] = useState('');
   const [rascunho, setRascunho] = useState('');
+  const [avisos, setAvisos] = useState<string[]>([]);
   const [modelo, setModelo] = useState<'claude' | 'gemini'>('claude');
   const [montando, setMontando] = useState(false);
   const [demorando, setDemorando] = useState(false);
@@ -166,9 +167,11 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     try {
       const { data } = await api.post(`/legal-cases/${caseId}/peca/redigir`,
         { acao, instrucao: texto, recorte, modelo });
-      const r = (data?.data ?? data) as { ok?: boolean; motivo?: string; rascunho?: string };
+      const r = (data?.data ?? data) as
+        { ok?: boolean; motivo?: string; rascunho?: string; avisos?: string[] };
       if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui redigir'); return; }
       setRascunho(r?.rascunho ?? '');
+      setAvisos(r?.avisos ?? []);
       setSalvo(true);
       /* 🚨 NÃO PROMETA MONTAGEM: este botão só GUARDA o texto. Dizia "entra na
          montagem desta peça" e o advogado perguntou, com razão, se a peça tinha
@@ -336,6 +339,18 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
           )}
           {/* 🚨 a lacuna é marca de conferência, não defeito: o redator põe
               [CONFERIR: ...] onde faltou dado, em vez de inventar o fato */}
+          {/* 🚨 O QUE A FERRAMENTA CORRIGIU, E O QUE ELA SO PODE AVISAR.
+              Letra digitada no pedido e topico de tempestividade em peca
+              intermediaria a API conserta sozinha; titulo que nao cabe em uma
+              linha e escolha de redacao, e cortar no meio daria portugues
+              torto — entao aparece aqui, antes de montar, com o numero
+              medido. 22/10/2026. */}
+          {!!avisos.length && (
+            <ul className="border-t border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900
+                           dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200">
+              {avisos.map((a, i) => <li key={i}>· {a}</li>)}
+            </ul>
+          )}
           {rascunho.includes('[CONFERIR:') && (
             <p className="border-t border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
               Há marcas <span className="font-mono">[CONFERIR: …]</span>: são dados que não
