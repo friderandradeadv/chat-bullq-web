@@ -468,25 +468,28 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
       } ${isDragging && !overlay ? 'opacity-40' : ''} ${terminal ? terminalCardClass : ''} ${bulk?.has(c.id) ? 'ring-2 ring-[#e11970]' : ''}`}>
       {/* Cliente novo — bolinha vermelha, some ao clicar no card (igual ao funil REPB) */}
       {mostrarNovo && <span className="absolute -right-1.5 -top-1.5 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1E2226]" title="Novo cliente — clique para ver" />}
-      {/* 🚨 BOLINHA DE PENDÊNCIA DO EXTRATO (21/10/2026), pedida por ele. Fica à
-          ESQUERDA porque a bolinha da direita já é a de cliente novo, e duas no
-          mesmo canto viram uma mancha. Âmbar quando o pedido já saiu ao cliente
-          (falta ele responder), vermelha quando ninguém pediu ainda: a conduta
-          é diferente em cada caso. Apaga com "Já recebi o extrato", no card. */}
-      {c.extratoPendente && (
-        <span
-          className={`absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full ring-2 ring-white dark:ring-[#1E2226] ${
-            c.extratoPendente.pedidoEm || c.extratoPendente.agendadoPara ? 'bg-amber-500' : 'bg-red-600'}`}
-          title={c.extratoPendente.pedidoEm
-            ? `Extrato da conta pendente — pedido ao cliente em ${fmtDate(c.extratoPendente.pedidoEm)}`
-            : c.extratoPendente.agendadoPara
-              ? `Extrato da conta — pedido agendado para ${fmtDate(c.extratoPendente.agendadoPara)}, na primeira hora útil`
-              : 'Extrato da conta: esta ação não se protocola sem ele, e o pedido ainda não saiu'}
-        />
-      )}
       {bulk && <KanbanSelectBox bulk={bulk} id={c.id} colIds={colIds} accent="#e11970" />}
       {/* Etiquetas: produto (cor) + área (cinza) — pr-5 reserva o canto da caixinha de seleção */}
       <div className="-ml-1 flex flex-wrap items-center gap-1 pr-5">
+        {/* 🚨 BOLINHA DE PENDÊNCIA DO EXTRATO (21/10/2026), pedida por ele.
+            Nasceu no canto do card, em `absolute -left-1.5`, e ele devolveu:
+            *"A bolinha está cortando"*. A coluna recorta o que passa da borda,
+            então o canto de fora não serve — o da direita só não corta porque
+            tem a calha da caixa de seleção. Aqui ela entra NA FILA das
+            etiquetas: nunca é cortada, e fica onde o olho já passa para ler o
+            produto. Âmbar quando o pedido saiu ou está agendado, vermelha
+            quando ninguém pediu. Apaga com "Já recebi o extrato", no card. */}
+        {c.extratoPendente && (
+          <span
+            className={`ml-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+              c.extratoPendente.pedidoEm || c.extratoPendente.agendadoPara ? 'bg-amber-500' : 'bg-red-600'}`}
+            title={c.extratoPendente.pedidoEm
+              ? `Extrato da conta pendente — pedido ao cliente em ${fmtDate(c.extratoPendente.pedidoEm)}`
+              : c.extratoPendente.agendadoPara
+                ? `Extrato da conta — pedido agendado para ${fmtDate(c.extratoPendente.agendadoPara)}, na primeira hora útil`
+                : 'Extrato da conta: esta ação não se protocola sem ele, e o pedido ainda não saiu'}
+          />
+        )}
         <BeneficioTag title={c.title} />
         {c.produto && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: prod.bg, color: prod.fg }}>{cleanProduto(c.produto)}</span>}
         {c.areaJuridica && (cleanProduto(c.produto) ?? '').toLowerCase().trim() !== c.areaJuridica.toLowerCase().trim() && <span className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-3" style={{ background: areaColor(c.areaJuridica).bg, color: areaColor(c.areaJuridica).fg }}>{c.areaJuridica}</span>}
