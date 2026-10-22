@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { membersService } from '@/features/settings/services/members.service';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, KeyRound, Copy, Check, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,6 +13,18 @@ export default function SettingsApiKeysPage() {
   const orgId = useOrgId();
 
   const [newName, setNewName] = useState('');
+  /* 🚨 A CHAVE CARREGA A IDENTIDADE DE QUEM ELA DIZ SER, e a fila de peças
+     roteia por isso: o item vai para a máquina do responsável pelo prazo.
+     Criadas todas pelo mesmo administrador, as máquinas pareceriam a MESMA
+     pessoa e o roteamento desligaria sem erro nenhum aparecer. Por isso o
+     seletor existe: a advogada tem conta no hub, mas não é admin e não emite
+     a própria chave. 22/10/2026. */
+  const [paraQuem, setParaQuem] = useState('');
+  const membros = useQuery({
+    queryKey: ['org-members-para-chave'],
+    queryFn: () => membersService.list(),
+    staleTime: 60_000,
+  });
   const [creating, setCreating] = useState(false);
   const [createdKey, setCreatedKey] = useState<CreatedApiKey | null>(null);
   const [copied, setCopied] = useState(false);
@@ -27,7 +40,10 @@ export default function SettingsApiKeysPage() {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const created = await apiKeysService.create({ name: newName.trim() });
+      const created = await apiKeysService.create({
+        name: newName.trim(),
+        ...(paraQuem ? { userId: paraQuem } : {}),
+      });
       setCreatedKey(created);
       setNewName('');
       refresh();
@@ -80,6 +96,21 @@ export default function SettingsApiKeysPage() {
             placeholder="Ex: Claude Code MCP, Backup Script, Zapier..."
             className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           />
+        </div>
+        <div className="w-64">
+          <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            Para quem é a chave
+          </label>
+          <select
+            value={paraQuem}
+            onChange={(e) => setParaQuem(e.target.value)}
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          >
+            <option value="">Para mim</option>
+            {(membros.data ?? []).filter((m) => m.user?.isActive).map((m) => (
+              <option key={m.userId} value={m.userId}>{m.user.name}</option>
+            ))}
+          </select>
         </div>
         <button
           onClick={handleCreate}

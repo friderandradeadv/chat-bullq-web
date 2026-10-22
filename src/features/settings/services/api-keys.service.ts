@@ -24,7 +24,8 @@ export const apiKeysService = {
     const { data } = await api.get('/api-keys');
     return data.data;
   },
-  async create(payload: { name: string; expiresAt?: string }): Promise<CreatedApiKey> {
+  async create(payload: { name: string; expiresAt?: string; userId?: string })
+    : Promise<CreatedApiKey> {
     const { data } = await api.post('/api-keys', payload);
     return data.data;
   },
