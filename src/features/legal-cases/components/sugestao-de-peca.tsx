@@ -213,36 +213,6 @@ export function SugestaoDePeca({ caseId, acao, recorte, acaoInicial }: {
      ("guarda mesmo quando a família ainda não monta"); o componente é que
      desistia. Agora, família desconhecida vira aviso + campo, nunca silêncio:
      o catálogo pode envelhecer de novo, e o campo não pode sumir com ele. */
-  if (!acaoEfetiva) {
-    /* Só o que PRODUZ petição. `nao-e-peca` (analisar sentença, acórdão, baixa
-       dos autos) na lista faria escolher um caminho que não leva a lugar
-       nenhum — e o estado vem do catálogo do servidor, não de lista escrita
-       aqui, que envelheceria sozinha. */
-    const opcoes = (data ?? []).filter((f) => f.estado !== 'nao-e-peca');
-    return (
-      <div className="rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
-        <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
-          <FileText className="h-3.5 w-3.5" /> Montar peça neste prazo
-        </p>
-        <p className="mt-1 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
-          Este prazo não veio de uma publicação, então o sistema não sabe que peça ele pede.
-          Escolha a família e o resto funciona igual.
-        </p>
-        <select
-          value=""
-          onChange={(e) => setEscolhida(e.target.value || null)}
-          className="mt-2 w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1.5 text-[11px]
-                     text-zinc-700 outline-none focus:border-zinc-400
-                     dark:border-zinc-700 dark:text-zinc-200 dark:focus:border-zinc-500"
-        >
-          <option value="">que peça é esta?</option>
-          {opcoes.map((f) => (
-            <option key={f.acao} value={f.acao}>{f.rotulo}</option>
-          ))}
-        </select>
-      </div>
-    );
-  }
   const desconhecida = !familia;
 
   /* 🚨 ESTE BOTÃO COMEÇA A PEÇA, não guarda bilhete. Ele guardava o texto e
@@ -297,6 +267,44 @@ export function SugestaoDePeca({ caseId, acao, recorte, acaoInicial }: {
     if (situacao && !texto.trim() && !salvo) setTexto(situacao.instrucao);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [situacao?.nome, estadoSalvo.data]);
+
+  /* 🚨 ESTE RETORNO FICA ABAIXO DE TODOS OS HOOKS, e não lá em cima junto do
+     cálculo. Eu o escrevi acima do `useEffect` da semente e DEPLOYEI assim em
+     22/10/2026: enquanto `acao` era prop fixa dava certo por sorte, mas agora
+     a condição depende de ESTADO (`escolhida`), e ao escolher a família o
+     número de hooks mudava entre um render e outro. O React aborta o render
+     inteiro — e a tela não se mexe, sem erro à vista. Cliquei no seletor três
+     vezes achando que o evento é que não chegava. */
+  if (!acaoEfetiva) {
+    /* Só o que PRODUZ petição. `nao-e-peca` (analisar sentença, acórdão, baixa
+       dos autos) na lista faria escolher um caminho que não leva a lugar
+       nenhum — e o estado vem do catálogo do servidor, não de lista escrita
+       aqui, que envelheceria sozinha. */
+    const opcoes = (data ?? []).filter((f) => f.estado !== 'nao-e-peca');
+    return (
+      <div className="rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+          <FileText className="h-3.5 w-3.5" /> Montar peça neste prazo
+        </p>
+        <p className="mt-1 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
+          Este prazo não veio de uma publicação, então o sistema não sabe que peça ele pede.
+          Escolha a família e o resto funciona igual.
+        </p>
+        <select
+          value=""
+          onChange={(e) => setEscolhida(e.target.value || null)}
+          className="mt-2 w-full rounded-md border border-zinc-300 bg-transparent px-2 py-1.5 text-[11px]
+                     text-zinc-700 outline-none focus:border-zinc-400
+                     dark:border-zinc-700 dark:text-zinc-200 dark:focus:border-zinc-500"
+        >
+          <option value="">que peça é esta?</option>
+          {opcoes.map((f) => (
+            <option key={f.acao} value={f.acao}>{f.rotulo}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">

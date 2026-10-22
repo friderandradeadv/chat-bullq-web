@@ -16,10 +16,10 @@
  * homônimo: aqui o número aparece em cada linha, e quem tem CPF conferido vem
  * marcado e em primeiro lugar.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BadgeCheck, Loader2, MessageSquare, Phone, ShieldAlert, UserCircle2, X } from 'lucide-react';
+import { BadgeCheck, Loader2, MessageSquare, Phone, Search, ShieldAlert, UserCircle2, X } from 'lucide-react';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 
 /** 558198679677 vira +55 81 9867-9677: número que não se lê não serve de conferência. */
@@ -32,6 +32,18 @@ function telefoneLegivel(t: string | null): string {
   return `+${d.startsWith('55') ? '55 ' : ''}${ddd} ${resto.slice(0, -4)}-${resto.slice(-4)}`;
 }
 
+/**
+ * Quantos candidatos a tela mostra antes de pedir para abrir o resto.
+ *
+ * 🚨 MEDIDO EM 22/10/2026, e o número não é estético. Nas 26 ofertas que
+ * sobraram, 17 clientes têm de 1 a 3 candidatos (clique fácil) e 7 passam de 8:
+ * "MARIA APARECIDA PEREIRA DE SOUZA" casa **43 contatos**. Apertar a RÉGUA para
+ * limpar essas 7 telas deixaria **13 dos 26 sem candidato nenhum**, escondendo o
+ * contato certo de 12 clientes — a porta negativa de sempre. Então quem aperta é
+ * a tela: ordem por força da coincidência, corte, e o resto a um clique.
+ */
+const MOSTRAR_DE_INICIO = 8;
+
 export function VincularContatoCliente({
   caseId, clienteNome, onClose, onVinculado,
 }: {
@@ -41,6 +53,8 @@ export function VincularContatoCliente({
   onVinculado?: () => void;
 }) {
   const [escolhido, setEscolhido] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState('');
+  const [verTodos, setVerTodos] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['cliente-contatos-candidatos', caseId],
@@ -60,6 +74,18 @@ export function VincularContatoCliente({
   });
 
   const candidatos = data?.candidatos ?? [];
+  /* O filtro casa nome E telefone, porque num homônimo o que ele reconhece é o
+     DDD: digitar "81" ou "Souza" corta 43 linhas em duas. Dobra acento para
+     "Antonio" achar "Antônio". */
+  const dobrar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const filtrados = useMemo(() => {
+    const q = dobrar(filtro.trim());
+    if (!q) return candidatos;
+    return candidatos.filter((c) =>
+      dobrar(c.nome ?? '').includes(q) || String(c.telefone ?? '').includes(q));
+  }, [candidatos, filtro]);
+  const visiveis = verTodos || filtro.trim() ? filtrados : filtrados.slice(0, MOSTRAR_DE_INICIO);
+  const escondidos = filtrados.length - visiveis.length;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -94,13 +120,31 @@ export function VincularContatoCliente({
               <span>{data?.aviso}</span>
             </p>
 
+            {/* Busca só quando a lista é grande: em três candidatos ela é mais
+                um campo para ler, e em 43 é o que resolve. */}
+            {candidatos.length > MOSTRAR_DE_INICIO && (
+              <div className="relative mb-2">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                <input
+                  value={filtro}
+                  onChange={(e) => setFiltro(e.target.value)}
+                  placeholder="filtrar por nome ou DDD…"
+                  className="h-8 w-full rounded-lg border border-zinc-300 bg-white pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </div>
+            )}
+
             {candidatos.length === 0 ? (
               <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-center text-xs text-zinc-500 dark:border-zinc-700">
                 Nenhum contato para escolher.
               </p>
+            ) : filtrados.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-center text-xs text-zinc-500 dark:border-zinc-700">
+                Nenhum dos {candidatos.length} candidatos casa com “{filtro}”.
+              </p>
             ) : (
-              <div className="flex flex-col gap-1.5">
-                {candidatos.map((c) => {
+              <div className="flex max-h-[46vh] flex-col gap-1.5 overflow-y-auto">
+                {visiveis.map((c) => {
                   const ativo = escolhido === c.id;
                   return (
                     <button
@@ -145,6 +189,15 @@ export function VincularContatoCliente({
                   );
                 })}
               </div>
+            )}
+
+            {escondidos > 0 && (
+              <button
+                onClick={() => setVerTodos(true)}
+                className="mt-1.5 w-full rounded-lg border border-dashed border-zinc-300 py-1.5 text-xs font-semibold text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              >
+                mostrar os outros {escondidos}
+              </button>
             )}
 
             <div className="mt-4 flex items-center justify-between gap-2">
