@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -37,7 +37,30 @@ type Familia = {
      DECISÃO e mede o vício, em contrarrazões lê o RECURSO ADVERSO e escolhe
      entre cinco modelos. Quando a família manda o seu, é o dela que vale. */
   selo?: string;
+  situacoes?: Situacao[];
 };
+
+/* 🚨 A CLASSE ABERTA PODE TER SITUAÇÃO RECONHECIDA, e ignorá-la fazia o card
+   responder "sem base, escreva o que a peça tem de dizer" a um despacho que o
+   catálogo cobre palavra por palavra (MARTINHO, 22/10/2026). A regra vem da
+   API; aqui só se aplica ao recorte que o card já tem — o texto da publicação
+   não vai para URL nenhuma, porque leva o nome do cliente dentro. */
+type Situacao = {
+  nome: string; quando: string; rotulo: string; selo: string;
+  porque: string; skill: string; modelo: string; instrucao: string;
+};
+
+const semAcento = (t: string) =>
+  t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+
+function situacaoDoDespacho(familia: Familia | null, recorte?: string | null): Situacao | null {
+  if (!familia?.situacoes?.length || !recorte) return null;
+  const alvo = semAcento(recorte);
+  for (const s of familia.situacoes) {
+    try { if (new RegExp(s.quando, 's').test(alvo)) return s; } catch { /* regex ruim não derruba o card */ }
+  }
+  return null;
+}
 
 const SELO: Record<Familia['estado'], { texto: string; classe: string }> = {
   'pronta': { texto: 'pronta', classe: 'text-emerald-700 dark:text-emerald-400' },
@@ -143,13 +166,22 @@ export function SugestaoDePeca({ caseId, acao, recorte }: {
     } finally { setSalvando(false); }
   };
 
+  const situacao = situacaoDoDespacho(familia, recorte);
   const selo = familia ? SELO[familia.estado] : SELO['sem-base'];
-  const seloTexto = desconhecida ? 'classe sem família no catálogo' : (familia!.selo ?? selo.texto);
-  const rotulo = familia?.rotulo ?? acao;
+  const seloTexto = desconhecida ? 'classe sem família no catálogo'
+    : (situacao?.selo ?? familia!.selo ?? selo.texto);
+  const rotulo = situacao?.rotulo ?? familia?.rotulo ?? acao;
   const porque = desconhecida
     ? 'esta classe de publicação ainda não tem família no catálogo de peças. O campo abaixo '
       + 'funciona do mesmo jeito: escreva o que a peça tem de dizer e fica guardado'
-    : familia!.porque;
+    : (situacao?.porque ?? familia!.porque);
+
+  /* reconhecida a situação, o campo nasce escrito: ele CONFERE em vez de digitar.
+     Só semeia o que está vazio — nunca por cima do que ele escreveu. */
+  useEffect(() => {
+    if (situacao && !texto.trim() && !salvo) setTexto(situacao.instrucao);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [situacao?.nome]);
 
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
