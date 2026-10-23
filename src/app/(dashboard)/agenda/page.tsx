@@ -287,7 +287,8 @@ function ExpandableText({ text, limit = 480 }: { text: string; limit?: number })
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="ml-1 whitespace-nowrap font-medium text-[#005efc] hover:underline dark:text-[#4a90e2]"
+          // py/-my: área de toque maior no celular sem mexer na altura da linha.
+          className="-my-2 ml-1 inline-block whitespace-nowrap px-1 py-2 font-medium text-[#005efc] hover:underline dark:text-[#4a90e2]"
         >
           {open ? 'ver menos' : 'ver mais'}
         </button>
