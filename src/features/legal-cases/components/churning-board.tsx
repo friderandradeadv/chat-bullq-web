@@ -14,9 +14,9 @@
  * "enviada" significa falar com o cliente. Mensagem ao cliente sai de um clique
  * dentro do card, na conversa que já existe, nunca de um gesto no quadro.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, RefreshCw, Search, ShieldAlert, ShieldCheck, Users } from 'lucide-react';
+import { LayoutGrid, List, Loader2, RefreshCw, Search, ShieldAlert, ShieldCheck, Users } from 'lucide-react';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
@@ -47,6 +47,24 @@ export function ChurningBoard() {
   const [busca, setBusca] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
   const [vincular, setVincular] = useState<{ caseId: string; cliente: string } | null>(null);
+  /* 🚨 QUADRO PARA TRABALHAR UM CASO, LISTA PARA PERCORRER CEM (22/10/2026).
+     A varredura deixou 103 ofertas na coluna A REVISAR, e card em coluna é
+     bom para abrir um caso e ruim para descer por cem: a mesma informação em
+     linha lê muito mais rápido. Pergunta dele: "é pra ler no kanban mesmo?".
+     A escolha fica lembrada no navegador porque é preferência de quem lê, não
+     estado do trabalho; se o storage falhar (aba anônima, dado bloqueado), cai
+     no quadro e nada quebra. */
+  const [modo, setModo] = useState<'quadro' | 'lista'>('quadro');
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem('churning-modo');
+      if (v === 'lista' || v === 'quadro') setModo(v);
+    } catch { /* sem storage: fica no quadro */ }
+  }, []);
+  const trocarModo = (v: 'quadro' | 'lista') => {
+    setModo(v);
+    try { window.localStorage.setItem('churning-modo', v); } catch { /* idem */ }
+  };
 
   // As fases existem para o seletor do card; o quadro em si não as usa.
   const { data: kanban } = useQuery({
@@ -92,6 +110,22 @@ export function ChurningBoard() {
               className="h-8 w-56 rounded-lg border border-[#cfe0ed] bg-white pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
             />
           </div>
+          {/* Quadro × lista: a mesma ordem e o mesmo clique, formatos diferentes. */}
+          <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
+            {([['quadro', LayoutGrid, 'Quadro'], ['lista', List, 'Lista']] as const).map(([v, Icone, rotulo]) => (
+              <button
+                key={v}
+                onClick={() => trocarModo(v)}
+                title={rotulo}
+                className={`inline-flex h-8 items-center gap-1 px-2 text-xs font-semibold ${
+                  modo === v
+                    ? 'bg-[#101820] text-white dark:bg-zinc-200 dark:text-zinc-900'
+                    : 'bg-white text-[#48626f] hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}
+              >
+                <Icone className="h-3.5 w-3.5" /> {rotulo}
+              </button>
+            ))}
+          </div>
           <button onClick={() => refetch()} disabled={isFetching}
             className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs text-[#48626f] hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
             {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
@@ -102,6 +136,12 @@ export function ChurningBoard() {
 
       {isLoading ? (
         <p className="p-4 text-sm text-[#48626f] dark:text-zinc-400">Lendo as ofertas…</p>
+      ) : modo === 'lista' ? (
+        <ListaDeOfertas
+          itens={itens}
+          onAbrir={setAberto}
+          onVincular={(caseId, cliente) => setVincular({ caseId, cliente })}
+        />
       ) : (
         <div className="flex flex-1 gap-3 overflow-x-auto p-4">
           {COLUNAS.map((col) => {
@@ -218,6 +258,106 @@ export function ChurningBoard() {
           onClose={() => { setAberto(null); refetch(); }}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * A MESMA OFERTA EM LINHA.
+ *
+ * 🚨 POR QUE EXISTE (22/10/2026). A varredura do acervo deixou **103 ofertas**
+ * na coluna A REVISAR. Card é bom para trabalhar um caso e ruim para percorrer
+ * cem: cada um ocupa seis linhas de tela, e o olho reconstrói a comparação a
+ * cada rolagem. Em linha, as quatro colunas que decidem ficam alinhadas, e dá
+ * para descer de cima para baixo.
+ *
+ * Mesma ordem do quadro (cadeia maior primeiro), mesmo clique para abrir, mesmo
+ * botão de vincular WhatsApp. O que muda é só a forma.
+ */
+function ListaDeOfertas({
+  itens, onAbrir, onVincular,
+}: {
+  itens: Oferta[];
+  onAbrir: (id: string) => void;
+  onVincular: (caseId: string, cliente: string) => void;
+}) {
+  if (!itens.length) {
+    return (
+      <p className="p-4 text-sm text-[#48626f] dark:text-zinc-400">
+        Nenhuma oferta para mostrar.
+      </p>
+    );
+  }
+  const rotulo = (chave: string) =>
+    COLUNAS.find((c) => c.chave === chave)?.titulo ?? chave.toUpperCase();
+
+  return (
+    <div className="flex-1 overflow-auto px-4 pb-4">
+      <table className="w-full border-separate border-spacing-0 text-sm">
+        <thead className="sticky top-0 z-10">
+          <tr className="bg-[#f3f7fa] text-left text-[10px] font-bold uppercase tracking-wide text-[#48626f] dark:bg-zinc-900 dark:text-zinc-400">
+            <th className="rounded-l-lg px-2.5 py-2">Cliente</th>
+            <th className="px-2.5 py-2">Banco</th>
+            <th className="px-2.5 py-2 text-right" title="Refinanciamentos na cadeia">Refis</th>
+            <th className="px-2.5 py-2 text-right" title="Refinanciamentos em que o banco declara ter liberado dinheiro">Declarados</th>
+            <th className="px-2.5 py-2">Extrato</th>
+            <th className="px-2.5 py-2">Estado</th>
+            <th className="rounded-r-lg px-2.5 py-2">WhatsApp</th>
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map((o) => (
+            <tr
+              key={o.caseId}
+              onClick={() => onAbrir(o.caseId)}
+              className="cursor-pointer border-b border-[#eef3f7] hover:bg-[#f8fbfd] dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+            >
+              <td className="px-2.5 py-2">
+                <p className="font-semibold uppercase leading-4 text-[#101820] dark:text-zinc-100">{o.cliente}</p>
+                <p className="truncate text-[10px] text-[#48626f] dark:text-zinc-500">{o.card}</p>
+              </td>
+              <td className="px-2.5 py-2 text-[#48626f] dark:text-zinc-300">{o.grupo}</td>
+              <td className="px-2.5 py-2 text-right font-semibold tabular-nums text-[#101820] dark:text-zinc-100">{o.refis}</td>
+              {/* 🚨 ZERO DECLARADO É O NÚMERO BOM, e por isso ele sai em verde:
+                  é a cadeia que gira sem liberar dinheiro. Vermelho é o banco
+                  dizendo que pagou, que é onde o extrato passa a decidir. */}
+              <td className={`px-2.5 py-2 text-right font-semibold tabular-nums ${
+                o.declarados > 0
+                  ? 'text-red-700 dark:text-red-400'
+                  : 'text-emerald-700 dark:text-emerald-400'}`}>
+                {o.declarados}
+              </td>
+              <td className="whitespace-nowrap px-2.5 py-2">
+                {o.portao ? (
+                  <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${
+                    o.protocolaSemExtrato
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : 'text-amber-700 dark:text-amber-400'}`}>
+                    {o.protocolaSemExtrato
+                      ? <><ShieldCheck className="h-3 w-3" /> não depende</>
+                      : <><ShieldAlert className="h-3 w-3" /> depende</>}
+                  </span>
+                ) : <span className="text-[11px] text-zinc-400">não medido</span>}
+              </td>
+              <td className="whitespace-nowrap px-2.5 py-2 text-[11px] text-[#48626f] dark:text-zinc-400">
+                {rotulo(o.status || 'analisada')}
+              </td>
+              <td className="whitespace-nowrap px-2.5 py-2">
+                {o.temConversa ? (
+                  <span className="text-[11px] text-[#48626f] dark:text-zinc-500">ligado</span>
+                ) : (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onVincular(o.caseId, o.cliente); }}
+                    className="inline-flex items-center gap-0.5 rounded px-1 text-[11px] font-semibold text-amber-700 underline decoration-dotted hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+                  >
+                    <Users className="h-3 w-3" /> vincular
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
