@@ -337,8 +337,22 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    * 🚨 Não arquiva quando NADA nasce: a API devolve cedo, sem tocar no pai, se
    * todos os réus já tiverem card.
    */
+  /**
+   * 🚨 NASCEM EM "02. INFORMAÇÕES FALTANTES", NÃO EM MONTAR INICIAL
+   * (22/10/2026). Pedido do escritório: *"os clientes que toparem, você joga
+   * para o kanban pré processual base, para informações faltantes, para
+   * revisarmos os docs do cliente"*. E a razão não é só de arrumação: é essa a
+   * fase em que o AGENTE de churning assume. O `agent-runner` procura card do
+   * cliente ali com `metadata.intake` e conduz a conversa — procuração nova,
+   * comprovante atualizado, confirmação da senha do Meu INSS — até a
+   * assinatura. Quando não sobra pendência, o card sobe sozinho para montar
+   * inicial (ver `anexarResposta`).
+   *
+   * Aceitar e cair direto em MONTAR INICIAL pulava a coleta: a peça seria
+   * montada com a procuração velha e sem o comprovante do ano.
+   */
   const criarCardsDosReus = async () => {
-    const r = await legalCasesService.gerarIniciais(caso.id, 'montar_inicial');
+    const r = await legalCasesService.gerarIniciais(caso.id, 'info_faltantes');
     return r?.criados ?? 0;
   };
 
@@ -425,7 +439,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       toast.success(
         `${escolhidos.length} grupo(s) aceito(s). `
         + (criados
-          ? `${criados} card(s) de AÇÃO criados em Montar inicial (os litisconsortes vão no polo passivo, não em card próprio).`
+          ? `${criados} card(s) de AÇÃO criados em INFORMAÇÕES FALTANTES, com o dossiê do caso — o agente assume a coleta dos documentos (os litisconsortes vão no polo passivo, não em card próprio).`
             + ' Este card foi arquivado e virou o registro do desmembramento.'
           : 'Nenhum card novo: os réus já tinham card.'),
         { duration: 10000 },
