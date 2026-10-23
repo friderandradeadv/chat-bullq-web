@@ -25,14 +25,15 @@ export function ModalPortal({ children }: { children: React.ReactNode }) {
 export function Modal({ title, children, onClose, wide, headerRight }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean; headerRight?: React.ReactNode }) {
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
       <div className={`relative z-50 w-full ${wide ? 'max-w-xl' : 'max-w-md'} max-h-[90dvh] overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900`}>
-        <div className="mb-4 flex items-center justify-between">
+        {/* Cabeçalho fixo: o X continua alcançável com o modal rolado. */}
+        <div className="sticky -top-6 z-30 -mx-6 -mt-6 mb-4 flex items-center justify-between rounded-t-2xl bg-white px-6 pb-2 pt-4 dark:bg-zinc-900">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
           <div className="flex items-center gap-1">
             {headerRight}
-            <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700"><X className="h-5 w-5" /></button>
+            <button type="button" onClick={onClose} aria-label="Fechar" className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
           </div>
         </div>
         {children}

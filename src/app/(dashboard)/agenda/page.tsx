@@ -1772,11 +1772,12 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
       <div className="relative z-50 max-h-[90dvh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
-        {/* Header */}
-        <div className="mb-3 flex items-center justify-between">
+        {/* Header FIXO no topo do modal: o X fica sempre à mão no celular, sem
+            precisar rolar de volta até o início da tarefa para fechar. */}
+        <div className="sticky -top-6 z-30 -mx-6 -mt-6 mb-3 flex items-center justify-between rounded-t-2xl bg-white px-6 pb-2 pt-4 dark:bg-zinc-900">
           <h2 className="text-xl font-medium text-[#202124] dark:text-zinc-100">{headerType}</h2>
           <div className="flex items-center gap-0.5 text-zinc-400">
             {clientConv && <button onClick={() => onOpenConversation(clientConv.id)} title="Abrir conversa do cliente" className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><MessageCircle className="h-4 w-4 text-[#25D366]" /></button>}
@@ -1784,7 +1785,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
               <button onClick={() => setOptMenu((v) => !v)} title="Opções" className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><MoreVertical className="h-4 w-4" /></button>
               {optMenu && (<><div className="fixed inset-0 z-10" onClick={() => setOptMenu(false)} /><div className="absolute right-0 top-9 z-20 w-40 rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"><button onClick={() => { setEditing(true); setOptMenu(false); }} className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">Editar</button><button disabled={busy} onClick={del} className="block w-full px-4 py-2 text-left text-sm text-[#CE0000] hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800">{activity.source === 'prazo' ? 'Cancelar prazo' : 'Excluir'}</button></div></>)}
             </div>
-            <button onClick={onClose} className="rounded p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
+            <button type="button" onClick={onClose} aria-label="Fechar" className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
           </div>
         </div>
 
@@ -2316,7 +2317,7 @@ function AvancarPrazoModal({ activity, avanco, onClose, onSoConcluir, onDone }: 
   };
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
       <div className="relative z-[60] max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         <div className="mb-1 flex items-center justify-between">
@@ -2410,7 +2411,7 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
       <div className="relative z-[60] max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         <div className="mb-1 flex items-center justify-between">
