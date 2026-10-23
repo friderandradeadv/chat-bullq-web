@@ -57,7 +57,7 @@ import { preferencesService } from '@/features/inbox/services/preferences.servic
 import { useAuthStore } from '@/stores/auth-store';
 import { usePermissions } from '@/hooks/use-permissions';
 import { inputCls, Field, ASTREA_BLUE, CnjNumber } from '../processos/page';
-import { Modal } from '@/components/ui/modal';
+import { Modal, ModalPortal } from '@/components/ui/modal';
 import { TagSelector, TAG_PALETTE } from '@/features/activities/components/tag-selector';
 import { CaseSearch } from '@/features/legal-cases/components/case-search';
 import { CreateDeadlineDialog } from '@/features/deadlines/components/create-deadline-dialog';
@@ -1771,9 +1771,10 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
   const mItem = 'block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800';
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-50 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
+      <div className="relative z-50 max-h-[90dvh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         {/* Header */}
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xl font-medium text-[#202124] dark:text-zinc-100">{headerType}</h2>
@@ -2291,6 +2292,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
         />
       )}
     </div>
+    </ModalPortal>
   );
 }
 
@@ -2313,9 +2315,10 @@ function AvancarPrazoModal({ activity, avanco, onClose, onSoConcluir, onDone }: 
     } finally { setBusy(false); }
   };
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-[60] w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
+      <div className="relative z-[60] max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-[#202124] dark:text-zinc-100">{avanco.title}</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
@@ -2337,6 +2340,7 @@ function AvancarPrazoModal({ activity, avanco, onClose, onSoConcluir, onDone }: 
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
@@ -2405,9 +2409,10 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
   };
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-[60] w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
+      <div className="relative z-[60] max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-[#202124] dark:text-zinc-100">Registrar recurso</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
@@ -2468,6 +2473,7 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
