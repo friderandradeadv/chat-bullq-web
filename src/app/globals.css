@@ -97,6 +97,12 @@
   body {
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
+    /* Toque de app: sem zoom por duplo-toque e sem o atraso de clique que ele
+       impõe. A pinça é barrada no PwaRegister (gesturestart). */
+    touch-action: manipulation;
+  }
+  html {
+    overflow-x: hidden;
   }
   body {
     overflow-x: hidden;
@@ -460,3 +466,14 @@
 /* Tela de "carregando" do painel: a saída só aparece se travar (ver layout). */
 .carregando-demorou { opacity: 0; pointer-events: none; animation: carregando-demorou 0.3s ease-out 8s forwards; }
 @keyframes carregando-demorou { to { opacity: 1; pointer-events: auto; } }
+
+/* iPhone: campo com fonte < 16px dá ZOOM automático ao focar (o comentário, a
+   busca…), e a tela fica "solta" para os lados. 16px no celular evita isso.
+   Fora de @layer de propósito: precisa vencer o text-sm dos utilitários. */
+@media (max-width: 1023px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

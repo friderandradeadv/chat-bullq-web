@@ -15,12 +15,17 @@ export function PwaRegister() {
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
+    // Comportamento de app: o Safari do iPhone ignora o userScalable do
+    // viewport e deixa dar zoom de pinça, o que solta a tela para os lados.
+    const semPinca = (e: Event) => e.preventDefault();
+    document.addEventListener('gesturestart', semPinca, { passive: false });
     // Não persiste storage automaticamente em todo navegador; pedir não custa.
     if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
       navigator.storage.persisted?.().then((already) => {
         if (!already) navigator.storage.persist().catch(() => {});
       });
     }
+    return () => document.removeEventListener('gesturestart', semPinca);
   }, []);
   return null;
 }
