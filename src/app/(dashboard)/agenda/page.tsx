@@ -1775,7 +1775,7 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
     <ModalPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
-      <div className="relative z-50 max-h-[90dvh] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div className="relative z-50 max-h-[90dvh] w-full max-w-2xl overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         {/* Header FIXO no topo do modal: o X fica sempre à mão no celular, sem
             precisar rolar de volta até o início da tarefa para fechar. */}
         <div className="sticky -top-6 z-30 -mx-6 -mt-6 mb-3 flex items-center justify-between rounded-t-2xl bg-white px-6 pb-2 pt-4 dark:bg-zinc-900">
@@ -2214,7 +2214,8 @@ function ActivityDetailModal({ activity, onClose, onRefetch, onOpenCase, onOpenC
           <CommentsSection entityType={entityType} entityId={activity.rawId} activityId={activity.id} meId={meId} />
         </div>
 
-        <div className="mt-4 flex justify-end">
+        {/* Rodapé FIXO na base do modal: Concluir sempre à mão, sem rolar até o fim. */}
+        <div className="sticky -bottom-6 z-30 -mx-6 -mb-6 mt-4 flex flex-wrap justify-end gap-y-2 rounded-b-2xl border-t border-[#DEE2E6] bg-white px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900">
           {done || cancelled
             ? <button disabled={busy} onClick={toggleDone} className="inline-flex items-center gap-1.5 rounded-md border border-[#DEE2E6] px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">{cancelled ? 'Reabrir prazo' : 'Reabrir'}</button>
             : <>
@@ -2320,7 +2321,7 @@ function AvancarPrazoModal({ activity, avanco, onClose, onSoConcluir, onDone }: 
     <ModalPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
-      <div className="relative z-[60] max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div className="relative z-[60] max-h-[90dvh] w-full max-w-md overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-[#202124] dark:text-zinc-100">{avanco.title}</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
@@ -2414,7 +2415,7 @@ function RegistrarRecursoModal({ activity, onClose, onSoConcluir, onDone }: {
     <ModalPortal>
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="fixed inset-0 touch-none bg-black/50" onClick={onClose} />
-      <div className="relative z-[60] max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
+      <div className="relative z-[60] max-h-[90dvh] w-full max-w-md overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900">
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-[#202124] dark:text-zinc-100">Registrar recurso</h3>
           <button onClick={onClose} className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"><X className="h-5 w-5" /></button>
