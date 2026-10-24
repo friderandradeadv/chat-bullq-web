@@ -308,11 +308,14 @@ export function SugestaoDePeca({ caseId, acao, recorte, acaoInicial }: {
 
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-      <div className="flex items-start justify-between gap-2">
-        <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
-          <FileText className="h-3.5 w-3.5" /> A publicação sugere: {rotulo}
+      {/* flex-wrap: no celular o selo longo ("não produz petição — mas há
+          modelo…") desce para a linha de baixo. Com shrink-0 ele espremia o
+          título numa coluna estreita e vazava para fora do modal. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5">
+        <p className="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+          <FileText className="h-3.5 w-3.5 shrink-0" /> A publicação sugere: {rotulo}
         </p>
-        <span className={`shrink-0 text-[10px] font-medium ${selo.classe}`}>{seloTexto}</span>
+        <span className={`text-[10px] font-medium ${selo.classe}`}>{seloTexto}</span>
       </div>
 
       {recorte && (
