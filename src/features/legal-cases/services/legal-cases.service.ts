@@ -1096,7 +1096,7 @@ export const legalCasesService = {
     produto?: string,
     signal?: AbortSignal,
     /** Tese escolhida no seletor do card; vence a etiqueta na API. */
-    tese?: 'rmc' | 'churning' | 'seguro',
+    tese?: 'rmc' | 'churning' | 'seguro' | 'refin',
   ): Promise<{ base: string; fileName: string; valorCausa: number; documentId: string; docxBase64: string }> {
     // 🚨 240s: desde 21/09 esta rota roda o `montar_peca_no_timbrado.py` — brasão
     // na jurisprudência, keepNext, respiros, fecho da comarca —, e cirurgia de
@@ -1293,7 +1293,7 @@ export const legalCasesService = {
   async montarTudoNoServidor(
     id: string,
     opts: {
-      tese?: 'rmc' | 'churning' | 'seguro';
+      tese?: 'rmc' | 'churning' | 'seguro' | 'refin';
       produto?: 'RMC' | 'RCC';
       /**
        * Qual FUNDAMENTO a inicial de RMC carrega. `erro` é o padrão e é a peça

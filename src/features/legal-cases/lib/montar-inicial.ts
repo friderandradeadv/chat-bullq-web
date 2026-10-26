@@ -45,13 +45,16 @@ export function produtoDoCard(produto?: string | null, area?: string | null): 'R
  * petição próprios. É a mesma razão pela qual o card "RMC | RCC" sempre rendeu
  * duas pastas, e não uma.
  */
-export type Montavel = { tese: 'rmc' | 'churning' | 'seguro'; rotulo: string; produto?: 'RMC' | 'RCC' };
+export type Montavel = { tese: 'rmc' | 'churning' | 'seguro' | 'refin'; rotulo: string; produto?: 'RMC' | 'RCC' };
 
 /**
  * A etiqueta do SEGURO PRESTAMISTA, espelho de `ETIQUETA_SEGURO` da API
  * (`inicial/teses.ts`). "Seguro Social" é o INSS, não o produto.
  */
 const ETIQUETA_SEGURO = /SEGURO(?!\s+SOCIAL)|PRESTAMISTA/;
+
+/** Refinanciamento compulsório do cartão, espelho de `ETIQUETA_REFIN` da API. */
+const ETIQUETA_REFIN = /REFIN\w*\s+(?:COMPULS|UNILATERAL|D[OE]\s+(?:SALDO|CARTAO)|CARTAO)/;
 
 /**
  * TODAS as iniciais que o escritório sabe montar hoje.
@@ -72,6 +75,8 @@ export const TODAS_AS_INICIAIS: Montavel[] = [
   { tese: 'churning', rotulo: 'Churning' },
   // 21/10/2026: seguro prestamista embutido no empréstimo (lê o CONTRATO).
   { tese: 'seguro', rotulo: 'Seguro' },
+  // 27/10/2026: refinanciamento compulsório do saldo do cartão (lê o HISCON).
+  { tese: 'refin', rotulo: 'Refin compulsório' },
 ];
 
 export function montaveisDoCard(produto?: string | null, area?: string | null): Montavel[] {
@@ -80,6 +85,7 @@ export function montaveisDoCard(produto?: string | null, area?: string | null): 
   const out: Montavel[] = [];
   if (/CHURNING|RECICLAGEM/.test(t)) out.push({ tese: 'churning', rotulo: 'Churning' });
   if (ETIQUETA_SEGURO.test(t)) out.push({ tese: 'seguro', rotulo: 'Seguro' });
+  if (ETIQUETA_REFIN.test(t)) out.push({ tese: 'refin', rotulo: 'Refin compulsório' });
   if (/\bRMC\b|RESERVA DE MARGEM/.test(t)) out.push({ tese: 'rmc', rotulo: 'RMC', produto: 'RMC' });
   if (/\bRCC\b|CARTAO DE CREDITO CONSIGNADO|CARTAO CONSIGNADO/.test(t)) {
     out.push({ tese: 'rmc', rotulo: 'RCC', produto: 'RCC' });
@@ -89,10 +95,11 @@ export function montaveisDoCard(produto?: string | null, area?: string | null): 
 
 export function teseDoCard(
   produto?: string | null, area?: string | null,
-): 'rmc' | 'churning' | 'seguro' {
+): 'rmc' | 'churning' | 'seguro' | 'refin' {
   const t = `${produto ?? ''} ${area ?? ''}`
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
   if (/CHURNING|RECICLAGEM/.test(t)) return 'churning';
+  if (ETIQUETA_REFIN.test(t)) return 'refin';
   return ETIQUETA_SEGURO.test(t) ? 'seguro' : 'rmc';
 }
 
@@ -126,7 +133,7 @@ export async function montarInicialCompleta(
      */
     organizarPasta?: () => Promise<any>;
     etiquetas?: { produto?: string | null; area?: string | null } | null;
-    tese?: 'rmc' | 'churning' | 'seguro';
+    tese?: 'rmc' | 'churning' | 'seguro' | 'refin';
     /** O fundamento da inicial de RMC: `erro` (padrão) ou `onus`. */
     eixo?: 'erro' | 'onus';
   } = {},
@@ -195,7 +202,7 @@ export function porqueNaoMontou(nome: string, r: ResultadoMontagem): string | nu
       'montar de novo — a pasta já está pronta.';
   }
   if (r.motivo === 'sem-tese') {
-    return `${nome}: não montei — ${r.detalhe}. Esta ferramenta monta RMC/RCC e churning; `
+    return `${nome}: não montei — ${r.detalhe}. Esta ferramenta monta RMC/RCC, churning, seguro e refin compulsório; `
       + 'para outro produto a inicial é de outra família.';
   }
   if (r.motivo === 'preparo-sem-resposta') {
