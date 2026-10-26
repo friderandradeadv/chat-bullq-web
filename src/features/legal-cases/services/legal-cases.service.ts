@@ -1361,6 +1361,21 @@ export const legalCasesService = {
     return (data?.data ?? data) as any;
   },
 
+  /** Clientes com contrato assinado, para marcar a opção de honorários fechada. */
+  async clientesParaMarcarHonorarios(): Promise<{ total: number; itens: any[] }> {
+    const { data } = await api.get('/legal-cases/honorarios/clientes');
+    return (data?.data ?? data) as any;
+  },
+
+  /** Marca à mão a opção fechada no card. `null` apaga a marcação. */
+  async marcarHonorariosDoCard(
+    id: string,
+    opcao: 'entrada' | 'meio-a-meio' | null,
+  ): Promise<{ ok: boolean; honorarios: any }> {
+    const { data } = await api.post(`/legal-cases/${id}/honorarios`, { opcao });
+    return (data?.data ?? data) as any;
+  },
+
   /** O quadro das ofertas de churning: tudo que já foi medido, num lugar só. */
   async quadroDeOfertasChurning(): Promise<{ total: number; itens: any[] }> {
     const { data } = await api.get('/legal-cases/churning/ofertas');
