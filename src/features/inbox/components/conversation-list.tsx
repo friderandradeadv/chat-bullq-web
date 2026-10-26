@@ -349,11 +349,19 @@ export function ConversationList({ activeId, onSelect, viewId, hiddenOnMobile }:
   });
 
   // Título da aba com a contagem de pendentes, igual LíderHub: "(12) Chat | Frider Andrade"
+  // 🚨 Nunca `document.title = ...`: isso TROCA o nó de texto que o React pôs no
+  // <title> (vem do metadata do layout), e a próxima troca de página quebrava o
+  // React (removeChild de null) — a URL mudava e a tela ficava em Conversas,
+  // "tenho que clicar duas vezes" (26/10/2026). Mexe-se só no texto do MESMO nó,
+  // e na saída devolve o título que estava lá.
   useEffect(() => {
+    const texto = document.querySelector('head > title')?.firstChild;
+    if (!texto || texto.nodeType !== Node.TEXT_NODE) return;
+    const original = texto.nodeValue;
     const pending = statusCounts?.['PENDING'] ?? 0;
-    document.title = pending > 0 ? `(${pending}) Chat | Frider Andrade` : 'Chat | Frider Andrade';
+    texto.nodeValue = pending > 0 ? `(${pending}) Chat | Frider Andrade` : 'Chat | Frider Andrade';
     return () => {
-      document.title = 'Chat | Frider Andrade';
+      texto.nodeValue = original;
     };
   }, [statusCounts]);
 
