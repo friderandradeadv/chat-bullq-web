@@ -71,6 +71,10 @@ export function produtoColor(p: string | null | undefined): CorEtiqueta {
   if (/HONOR[ÁA]RIO/.test(s)) return { bg: 'rgb(0,121,107)', fg: '#fff' };
   if (/MONIT[ÓO]RIA/.test(s)) return { bg: 'rgb(121,85,72)', fg: '#fff' };
   // ── bancário ────────────────────────────────────────────────────────────
+  // 🚨 ANTES de RMC/RCC: a etiqueta é "Refin RMC"/"Refin RCC" e sairia no
+  // vermelho do RMC. Refinanciamento compulsório do cartão é ação própria,
+  // com cor própria: azul, pedido do escritório em 27/10/2026.
+  if (/REFIN/.test(s)) return { bg: 'rgb(25,118,210)', fg: '#fff' };
   if (/RMC/.test(s)) return { bg: 'rgb(208,2,27)', fg: '#fff' };
   if (/RCC/.test(s)) return { bg: 'rgb(155,28,63)', fg: '#fff' };
   if (/REPB|REESTRUT|PASSIVO/.test(s)) return { bg: 'rgb(183,121,31)', fg: '#fff' };

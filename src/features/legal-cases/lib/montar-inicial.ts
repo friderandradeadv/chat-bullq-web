@@ -54,7 +54,7 @@ export type Montavel = { tese: 'rmc' | 'churning' | 'seguro' | 'refin'; rotulo: 
 const ETIQUETA_SEGURO = /SEGURO(?!\s+SOCIAL)|PRESTAMISTA/;
 
 /** Refinanciamento compulsório do cartão, espelho de `ETIQUETA_REFIN` da API. */
-const ETIQUETA_REFIN = /REFIN\w*\s+(?:COMPULS|UNILATERAL|D[OE]\s+(?:SALDO|CARTAO)|CARTAO)/;
+const ETIQUETA_REFIN = /REFIN\w*\s+(?:COMPULS|UNILATERAL|D[OE]\s+(?:SALDO|CARTAO)|CARTAO|RMC\b|RCC\b)/;
 
 /**
  * TODAS as iniciais que o escritório sabe montar hoje.
@@ -76,7 +76,9 @@ export const TODAS_AS_INICIAIS: Montavel[] = [
   // 21/10/2026: seguro prestamista embutido no empréstimo (lê o CONTRATO).
   { tese: 'seguro', rotulo: 'Seguro' },
   // 27/10/2026: refinanciamento compulsório do saldo do cartão (lê o HISCON).
-  { tese: 'refin', rotulo: 'Refin compulsório' },
+  // Um por cartão, como RMC e RCC: a etiqueta do card é "Refin RMC"/"Refin RCC".
+  { tese: 'refin', rotulo: 'Refin RMC', produto: 'RMC' },
+  { tese: 'refin', rotulo: 'Refin RCC', produto: 'RCC' },
 ];
 
 export function montaveisDoCard(produto?: string | null, area?: string | null): Montavel[] {
@@ -85,7 +87,10 @@ export function montaveisDoCard(produto?: string | null, area?: string | null): 
   const out: Montavel[] = [];
   if (/CHURNING|RECICLAGEM/.test(t)) out.push({ tese: 'churning', rotulo: 'Churning' });
   if (ETIQUETA_SEGURO.test(t)) out.push({ tese: 'seguro', rotulo: 'Seguro' });
-  if (ETIQUETA_REFIN.test(t)) out.push({ tese: 'refin', rotulo: 'Refin compulsório' });
+  if (ETIQUETA_REFIN.test(t)) {
+    const cartao = /\bRCC\b/.test(t) ? 'RCC' : 'RMC';
+    out.push({ tese: 'refin', rotulo: `Refin ${cartao}`, produto: cartao });
+  }
   if (/\bRMC\b|RESERVA DE MARGEM/.test(t)) out.push({ tese: 'rmc', rotulo: 'RMC', produto: 'RMC' });
   if (/\bRCC\b|CARTAO DE CREDITO CONSIGNADO|CARTAO CONSIGNADO/.test(t)) {
     out.push({ tese: 'rmc', rotulo: 'RCC', produto: 'RCC' });
