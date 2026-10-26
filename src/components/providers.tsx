@@ -9,17 +9,27 @@ import { makeQueryClient } from '@/lib/query-client';
 /** A barra de status do iPhone (PWA) pinta com o `theme-color`. O layout declara
  *  as cores por `prefers-color-scheme` — o tema do SISTEMA —, mas o hub escolhe o
  *  tema pelo botão sol/lua (`enableSystem={false}`): iPhone no claro + hub no
- *  escuro dava uma faixa branca no topo. Aqui a meta passa a seguir o tema do hub. */
+ *  escuro dava uma faixa branca no topo. Aqui a meta passa a seguir o tema do hub.
+ *
+ *  🚨 NUNCA remover as metas: elas são do React (vêm do `themeColor` do layout).
+ *  Arrancar uma fazia o React quebrar (`removeChild` de null) na 1ª troca de
+ *  página, e a navegação abortava: a URL mudava e a tela ficava a antiga —
+ *  "tenho que clicar duas vezes" em todo o hub (26/10/2026). Só se mexe nos
+ *  atributos, em todas elas. */
 function ThemeColorSync() {
   const { resolvedTheme } = useTheme();
   useEffect(() => {
     if (!resolvedTheme) return;
     const cor = resolvedTheme === 'dark' ? '#15181A' : '#ffffff';
     const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
-    metas.forEach((m, i) => { if (i > 0) m.remove(); });
-    const meta = metas[0] ?? document.head.appendChild(Object.assign(document.createElement('meta'), { name: 'theme-color' }));
-    meta.removeAttribute('media');
-    meta.content = cor;
+    if (metas.length === 0) {
+      document.head.appendChild(Object.assign(document.createElement('meta'), { name: 'theme-color', content: cor }));
+      return;
+    }
+    metas.forEach((m) => {
+      m.removeAttribute('media');
+      m.content = cor;
+    });
   }, [resolvedTheme]);
   return null;
 }

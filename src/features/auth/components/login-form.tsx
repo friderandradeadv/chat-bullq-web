@@ -51,7 +51,10 @@ export function LoginForm() {
         </p>
       </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      {/* method="post": se o clique em "Entrar" chega antes de o JS carregar, o
+          navegador envia o formulário sozinho — e em GET a SENHA ia para a URL
+          (histórico, logs do proxy). Visto em 26/10/2026. */}
+      <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="email" className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             Email
