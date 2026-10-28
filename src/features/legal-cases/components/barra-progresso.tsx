@@ -322,6 +322,11 @@ export function BarraProgressoView({
             className={`h-full rounded-full ${cor} transition-[width] duration-500 ease-out`}
             style={{ width: `${pct}%` }}
           />
+        ) : p.status === 'ok' && !OK_QUE_ESPERA.has(p.op) ? (
+          // 28/10/2026: terminada sem `pct`, a faixa de 1/3 ficava parada com o
+          // "✓" ao lado, e o escritório leu "travado na metade do caminho".
+          // Terminou, enche: 100% aqui é fato, não número inventado.
+          <div className={`h-full w-full rounded-full ${cor}`} />
         ) : (
           // sem total conhecido: faixa pulsando, sem número inventado
           <div className={`h-full w-1/3 rounded-full ${cor} ${rodando ? 'animate-pulse' : ''}`} />
