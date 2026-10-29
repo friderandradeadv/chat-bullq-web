@@ -1090,7 +1090,7 @@ export default function AgendaPage() {
           <Modal title="Compromisso do Google" onClose={() => setGDetalhe(null)}>
             <div className="space-y-3">
               <p className={`text-lg font-medium text-[#202124] dark:text-zinc-100 ${feito ? 'text-zinc-400 line-through' : ''}`}>{g.titulo}</p>
-              <p className="text-sm capitalize text-zinc-600 dark:text-zinc-300">{quando}</p>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">{quando.charAt(0).toUpperCase() + quando.slice(1)}</p>
               {g.local && <p className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-300"><MapPin className="h-4 w-4" />{g.local}</p>}
               <p className="flex items-center gap-1.5 text-xs text-zinc-500"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: g.cor ?? '#4285F4' }} />{g.agenda}</p>
               <p className="text-xs text-zinc-400">Concluir aqui só risca no hub. No Google ele continua como está.</p>
