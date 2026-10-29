@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ContasPessoaisNoFinanceiro } from '@/features/financeiro-pessoal/contas-pessoais-no-financeiro';
+import { ContasPessoaisNoFinanceiro, usePessoaisEmAberto } from '@/features/financeiro-pessoal/contas-pessoais-no-financeiro';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   AreaChart, Area, ReferenceLine, Cell,
@@ -157,6 +157,8 @@ export default function FinanceiroPage() {
   // subaba "Contas a pagar" diz outro, que é o bug que a fonte única existe para impedir.
   // AQUI, junto dos outros hooks: abaixo há quatro `return` condicionais, e hook depois de
   // return condicional derruba a página inteira (tsc e servidor ficam limpos, só o browser acusa).
+  // Contas PESSOAIS do usuário acendem a bolinha também (só a bolinha: os totais são do escritório).
+  const { data: pessoaisTop } = usePessoaisEmAberto();
   const { data: repassesTop } = useQuery({ queryKey: ['financeiro', 'repasses-pendentes'], queryFn: () => financeiroService.repassesPendentes(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
@@ -263,7 +265,7 @@ export default function FinanceiroPage() {
         {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} aPagarTotal={aPagarGeral} aPagarRepasses={aPagarRepasses} aPagarRepassesAdv={aPagarRepassesAdv} aReceberTotal={aReceberTotal} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
-        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={contasEmAberto(data, repassesTop?.itens)} />
+        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={somarPessoais(contasEmAberto(data, repassesTop?.itens), pessoaisTop)} />
 
         {view === 'lancamentos' && <LancamentosTab data={data} mesSel={mesSel} setMesSel={setMesSel} />}
         {(view === 'honorarios' || view === 'cobrancas' || view === 'retiradas') && (
@@ -578,6 +580,11 @@ function cardBillsDe(data: FinDashboard): FinTransacao[] {
  * quando só vence hoje — mesmo código de cor da barra de baixo e dos avisos de
  * vencimento (🟠 hoje / 🔴 vencido).
  */
+/** Soma as contas PESSOAIS só nas contagens que acendem a bolinha. */
+function somarPessoais<T extends { atrasadas: number; hoje: number }>(base: T, p?: { atrasadas: number; hoje: number }): T {
+  return p ? { ...base, atrasadas: base.atrasadas + p.atrasadas, hoje: base.hoje + p.hoje } : base;
+}
+
 function DotPendencia({ atrasadas, hoje, className = '' }: { atrasadas: number; hoje: number; className?: string }) {
   const n = atrasadas + hoje;
   if (n <= 0) return null;
@@ -993,6 +1000,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const repassePorId = useMemo(() => new Map((repasses?.itens ?? []).map((i) => [`__repasse:${i.txId}:${i.chave}`, i])), [repasses]);
   // Atrasadas × vencendo hoje — alimenta as bolinhas da subaba e do topo da lista.
   const emAberto = useMemo(() => contasEmAberto(data, repasses?.itens), [data, repasses]);
+  const { data: pessoaisAbertas } = usePessoaisEmAberto();
   // #fatura na URL = o favorito do Asaas abriu esta aba para entregar a fatura. Já nasce
   // na aba do Cartão, que é quem escuta a mensagem (ver CartaoCreditoView).
   const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>(() => (typeof window !== 'undefined' && window.location.hash === '#fatura' ? 'cartao' : 'ledger'));
@@ -1479,7 +1487,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
             {tabs.map(({ k, l, Icon }) => (
               <button key={k} onClick={() => setModo(k)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition ${modo === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>
                 {Icon && <Icon className="h-3.5 w-3.5" />}{l}
-                {k === 'apagar' && <DotPendencia atrasadas={emAberto.atrasadas} hoje={emAberto.hoje} />}
+                {k === 'apagar' && <DotPendencia atrasadas={emAberto.atrasadas + (pessoaisAbertas?.atrasadas ?? 0)} hoje={emAberto.hoje + (pessoaisAbertas?.hoje ?? 0)} />}
               </button>
             ))}
           </div>

@@ -63,7 +63,8 @@ export const financeiroPessoalService = {
   async archive(id: string): Promise<void> {
     await api.delete(`/financeiro-pessoal/contas/${id}`);
   },
-  async updateMonth(id: string, body: { competencia: string; paid?: boolean; amountCents?: number | null }) {
+  /** Sem competência: o servidor paga a ocorrência em aberto mais antiga. */
+  async updateMonth(id: string, body: { competencia?: string; paid?: boolean; amountCents?: number | null }) {
     const { data } = await api.patch(`/financeiro-pessoal/contas/${id}/mes`, body);
     return un(data);
   },

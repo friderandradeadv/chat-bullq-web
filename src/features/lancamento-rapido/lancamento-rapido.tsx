@@ -184,15 +184,15 @@ function ContaConfirma({ r, onClose, onSaved }: { r: Rascunho; onClose: () => vo
   const [salvando, setSalvando] = useState(false);
   const comp = c.competencia ?? '';
   const mesLabel = comp ? `${comp.slice(5, 7)}/${comp.slice(0, 4)}` : '';
-  const titulo = c.acao === 'pagar' ? `Marcar "${c.nome}" como paga` : c.acao === 'valor' ? `Valor de "${c.nome}" em ${mesLabel}` : 'Nova conta pessoal';
+  const titulo = c.acao === 'pagar' ? `Marcar "${c.nome}" como paga${mesLabel ? ` (${mesLabel})` : ''}` : c.acao === 'valor' ? `Valor de "${c.nome}" em ${mesLabel}` : 'Nova conta pessoal';
 
   async function salvar() {
     setSalvando(true);
     try {
       if (c.acao === 'pagar') {
         const v = parseCents(valor);
-        await financeiroPessoalService.updateMonth(c.contaId!, { competencia: comp, paid: true, ...(v != null ? { amountCents: v } : {}) });
-        toast.success(`${c.nome}: paga em ${mesLabel}`);
+        await financeiroPessoalService.updateMonth(c.contaId!, { ...(comp ? { competencia: comp } : {}), paid: true, ...(v != null ? { amountCents: v } : {}) });
+        toast.success(`${c.nome}: paga`);
       } else if (c.acao === 'valor') {
         await financeiroPessoalService.updateMonth(c.contaId!, { competencia: comp, amountCents: parseCents(valor) });
         toast.success(`${c.nome}: valor de ${mesLabel} salvo`);

@@ -12,6 +12,8 @@ import { financeiroPessoalService as svc, type BillMonthItem } from './financeir
 
 const brl = (c: number | null) => (c == null ? 'valor a definir' : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const nomeMes = (comp: string) => MESES[Number(comp.slice(5, 7)) - 1];
 function somaMes(comp: string, n: number) {
   const [a, m] = comp.split('-').map(Number);
   const t = a * 12 + (m - 1) + n;
@@ -19,30 +21,47 @@ function somaMes(comp: string, n: number) {
 }
 const diasAte = (de: string, ate: string) => Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86_400_000);
 
-/** Janela do que interessa aqui: tudo em aberto já vencido + o que vence nos próximos 10 dias. */
-const JANELA_DIAS = 10;
+type Item = BillMonthItem & { competencia: string };
+
+/**
+ * Fonte única do bloco e das bolinhas: a PRÓXIMA ocorrência em aberto de cada
+ * conta (a vencida mais antiga, ou a próxima a vencer), olhando de dois meses
+ * atrás ao mês seguinte. Cartão: a competência é o mês de referência da fatura.
+ */
+export function usePessoaisEmAberto() {
+  const hoje = new Date();
+  const comp = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  return useQuery({
+    queryKey: ['financeiro-pessoal', 'a-pagar', comp],
+    queryFn: async () => {
+      const meses = await Promise.all([-2, -1, 0, 1].map((n) => svc.month(somaMes(comp, n))));
+      const hojeISO = meses[2].hoje;
+      const porConta = new Map<string, Item>();
+      for (const m of meses) {
+        for (const i of m.items) {
+          if (i.status === 'paga') continue;
+          const atual = porConta.get(i.billId);
+          if (!atual || i.vencimento < atual.vencimento) porConta.set(i.billId, { ...i, competencia: m.competencia });
+        }
+      }
+      const itens = [...porConta.values()].sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+      return {
+        hojeISO,
+        itens,
+        atrasadas: itens.filter((i) => i.vencimento < hojeISO).length,
+        hoje: itens.filter((i) => i.vencimento === hojeISO).length,
+      };
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+}
 
 export function ContasPessoaisNoFinanceiro() {
   const qc = useQueryClient();
-  const hoje = new Date();
-  const comp = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
-  const q = useQuery({
-    queryKey: ['financeiro-pessoal', 'a-pagar', comp],
-    queryFn: async () => {
-      const meses = await Promise.all([somaMes(comp, -1), comp, somaMes(comp, 1)].map((c) => svc.month(c)));
-      const hojeISO = meses[1].hoje;
-      const itens = meses.flatMap((m) => m.items.map((i) => ({ ...i, competencia: m.competencia })));
-      return {
-        hojeISO,
-        itens: itens
-          .filter((i) => i.status !== 'paga' && (i.vencimento <= hojeISO || diasAte(hojeISO, i.vencimento) <= JANELA_DIAS))
-          .sort((a, b) => a.vencimento.localeCompare(b.vencimento)),
-      };
-    },
-    retry: false,
-  });
+  const q = usePessoaisEmAberto();
 
-  async function paguei(i: BillMonthItem & { competencia: string }) {
+  async function paguei(i: Item) {
     try {
       await svc.updateMonth(i.billId, { competencia: i.competencia, paid: true });
       toast.success(`${i.name}: marcada como paga`);
@@ -52,7 +71,7 @@ export function ContasPessoaisNoFinanceiro() {
     }
   }
 
-  // Sem conta pessoal (ou sem nada na janela), o bloco nem aparece: a aba é do escritório.
+  // Sem conta pessoal em aberto, o bloco nem aparece: a aba é do escritório.
   if (!q.data || q.data.itens.length === 0) return null;
   const { itens, hojeISO } = q.data;
 
@@ -75,7 +94,9 @@ export function ContasPessoaisNoFinanceiro() {
           <div key={`${i.billId}|${i.competencia}`} className="flex flex-wrap items-center gap-3 border-t border-violet-100 px-4 py-2.5 dark:border-violet-900/30">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{i.name}</p>
-              <p className="text-xs text-zinc-500">Vence {ddmm(i.vencimento)} · {brl(i.amountCents)}</p>
+              <p className="text-xs text-zinc-500">
+                {i.kind === 'cartao' && <>Fatura de {nomeMes(i.competencia)} · </>}Vence {ddmm(i.vencimento)} · {brl(i.amountCents)}
+              </p>
             </div>
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${selo.c}`}>{selo.t}</span>
             <button onClick={() => paguei(i)} className="inline-flex items-center gap-1 rounded-md border border-emerald-600 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10">

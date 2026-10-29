@@ -176,7 +176,7 @@ function Linha({ it, busy, onPay, onValor, onEdit }: {
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{it.name}</p>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Vence {ddmm(it.vencimento)}
+          {it.kind === 'cartao' && <>Fatura do mês · </>}Vence {ddmm(it.vencimento)}
           {it.fechamento && <> · fecha {ddmm(it.fechamento)}</>}
           {it.category && <> · {it.category}</>}
           {!it.recurring && <> · avulsa</>}
