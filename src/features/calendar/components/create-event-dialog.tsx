@@ -6,6 +6,7 @@ import { MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { activitiesService, ENTITY_TYPE } from '@/features/activities/services/activities.service';
 import { calendarService, type EventKind } from '@/features/calendar/services/calendar.service';
+import { googleAgendaService } from '@/features/google-agenda/google-agenda.service';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { membersService } from '@/features/settings/services/members.service';
 import { CaseField } from '@/features/legal-cases/components/case-search';
@@ -40,6 +41,9 @@ export function CreateEventDialog({
   const [reminders, setReminders] = useState<number[]>([1440, 60]);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [pessoal, setPessoal] = useState(false);
+  // '' = padrão (escritório/pessoal pelo tipo); 'nenhuma' = não envia; senão, o id da agenda.
+  const [agendaGoogle, setAgendaGoogle] = useState('');
+  const { data: destinos = [] } = useQuery({ queryKey: ['google-agenda', 'destinos'], queryFn: () => googleAgendaService.destinos(), staleTime: 5 * 60_000, retry: false });
   const [saving, setSaving] = useState(false);
   // Dentro do processo o caso já está decidido: não busca a lista inteira.
   const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }), enabled: !fixedCase });
@@ -49,7 +53,7 @@ export function CreateEventDialog({
     if (!startsAt) return toast.error('Informe a data/hora');
     setSaving(true);
     try {
-      const ev = await calendarService.create({ title: title.trim(), kind, startsAt: new Date(startsAt).toISOString(), location: location || undefined, caseId: caseId || undefined, assignedToId: assignedToId || undefined, reminders, ...(pessoal ? { pessoal: true } : {}) });
+      const ev = await calendarService.create({ title: title.trim(), kind, startsAt: new Date(startsAt).toISOString(), location: location || undefined, caseId: caseId || undefined, assignedToId: assignedToId || undefined, reminders, ...(pessoal ? { pessoal: true } : {}), ...(agendaGoogle ? { googleCalendarId: agendaGoogle } : {}) });
       if (tagIds.length) await Promise.all(tagIds.map((id) => activitiesService.attachTag(ENTITY_TYPE.evento, ev.id, id).catch(() => {})));
       toast.success('Evento criado'); onSaved();
     } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setSaving(false); }
@@ -68,6 +72,16 @@ export function CreateEventDialog({
         </div>
         <Field label="Local"><div className="relative"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><input value={location} onChange={(e) => setLocation(e.target.value)} className={`${inputCls} pl-9`} placeholder="Fórum, sala, link…" /></div></Field>
         <Field label="Lembretes"><RemindersField value={reminders} onChange={setReminders} /></Field>
+        {/* Agenda do Google: só aparece para quem ligou conta com agenda em que o hub pode escrever. */}
+        {destinos.length > 0 && (
+          <Field label="Agenda do Google">
+            <select value={agendaGoogle} onChange={(e) => setAgendaGoogle(e.target.value)} className={inputCls}>
+              <option value="">Padrão ({destinos.some((d) => d.papel === (pessoal ? 'pessoal' : 'escritorio')) ? `vai para ${destinos.find((d) => d.papel === (pessoal ? 'pessoal' : 'escritorio'))!.summary}` : 'não envia'})</option>
+              <option value="nenhuma">Não enviar ao Google</option>
+              {destinos.map((d) => <option key={`${d.email}|${d.calendarId}`} value={d.calendarId}>{d.summary === d.email ? d.summary : `${d.summary} · ${d.email}`}</option>)}
+            </select>
+          </Field>
+        )}
         {/* Pessoal: a equipe vê só "Ocupado" (nem sócio vê o título) e, com o Google ligado, vai para a agenda pessoal. */}
         <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
           <input type="checkbox" checked={pessoal} onChange={(e) => setPessoal(e.target.checked)} className="mt-0.5" />

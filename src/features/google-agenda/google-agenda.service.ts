@@ -42,6 +42,14 @@ export interface EventoGoogle {
   link: string | null;
 }
 
+export interface DestinoGoogle {
+  calendarId: string;
+  summary: string;
+  email: string;
+  color: string | null;
+  papel: PapelAgenda | null;
+}
+
 const un = <T,>(data: any): T => (data?.data ?? data) as T;
 const BASE = '/integrations/google-agenda';
 
@@ -64,6 +72,10 @@ export const googleAgendaService = {
   },
   async desconectar(contaId: string): Promise<void> {
     await api.delete(`${BASE}/contas/${contaId}`);
+  },
+  async destinos(): Promise<DestinoGoogle[]> {
+    const { data } = await api.get(`${BASE}/destinos`);
+    return un(data);
   },
   async eventos(from: string, to: string): Promise<{ eventos: EventoGoogle[]; erros: string[] }> {
     const { data } = await api.get(`${BASE}/eventos`, { params: { from, to } });

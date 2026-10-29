@@ -46,6 +46,8 @@ export interface CreateEventInput {
   reminders?: number[];
   /** Pessoal: só o responsável vê; a equipe recebe "Ocupado". */
   pessoal?: boolean;
+  /** Agenda do Google deste evento: id, "nenhuma", ou omitido (padrão pelo tipo). */
+  googleCalendarId?: string;
 }
 
 export interface ListEventsQuery {
