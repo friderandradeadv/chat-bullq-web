@@ -24,6 +24,7 @@ import {
   googleDriveService,
   type GoogleDriveStatus,
 } from '@/features/settings/services/google-drive.service';
+import { GoogleAgendaCard } from '@/features/google-agenda/google-agenda-card';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { cn } from '@/lib/utils';
 
@@ -95,6 +96,8 @@ export default function SettingsIntegrationsPage() {
           queryClient.invalidateQueries({ queryKey: ['google-drive-status'] })
         }
       />
+
+      <GoogleAgendaCard />
     </div>
   );
 }

@@ -39,6 +39,7 @@ export function CreateEventDialog({
   const [assignedToId, setAssignedToId] = useState(meId);
   const [reminders, setReminders] = useState<number[]>([1440, 60]);
   const [tagIds, setTagIds] = useState<string[]>([]);
+  const [pessoal, setPessoal] = useState(false);
   const [saving, setSaving] = useState(false);
   // Dentro do processo o caso já está decidido: não busca a lista inteira.
   const { data: cases = [] } = useQuery({ queryKey: ['legal-cases', 'select'], queryFn: () => legalCasesService.list({ status: 'ACTIVE' }), enabled: !fixedCase });
@@ -48,7 +49,7 @@ export function CreateEventDialog({
     if (!startsAt) return toast.error('Informe a data/hora');
     setSaving(true);
     try {
-      const ev = await calendarService.create({ title: title.trim(), kind, startsAt: new Date(startsAt).toISOString(), location: location || undefined, caseId: caseId || undefined, assignedToId: assignedToId || undefined, reminders });
+      const ev = await calendarService.create({ title: title.trim(), kind, startsAt: new Date(startsAt).toISOString(), location: location || undefined, caseId: caseId || undefined, assignedToId: assignedToId || undefined, reminders, ...(pessoal ? { pessoal: true } : {}) });
       if (tagIds.length) await Promise.all(tagIds.map((id) => activitiesService.attachTag(ENTITY_TYPE.evento, ev.id, id).catch(() => {})));
       toast.success('Evento criado'); onSaved();
     } catch (e: any) { toast.error(e?.message || 'Erro'); } finally { setSaving(false); }
@@ -67,6 +68,11 @@ export function CreateEventDialog({
         </div>
         <Field label="Local"><div className="relative"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" /><input value={location} onChange={(e) => setLocation(e.target.value)} className={`${inputCls} pl-9`} placeholder="Fórum, sala, link…" /></div></Field>
         <Field label="Lembretes"><RemindersField value={reminders} onChange={setReminders} /></Field>
+        {/* Pessoal: a equipe vê só "Ocupado" (nem sócio vê o título) e, com o Google ligado, vai para a agenda pessoal. */}
+        <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+          <input type="checkbox" checked={pessoal} onChange={(e) => setPessoal(e.target.checked)} className="mt-0.5" />
+          <span>Compromisso pessoal<span className="block text-xs text-zinc-400">A equipe vê só “Ocupado” neste horário.</span></span>
+        </label>
       </div>
       <div className="mt-6 flex items-center justify-end gap-1"><button onClick={onClose} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancelar</button><button onClick={submit} disabled={saving} className="rounded px-4 py-2 text-sm font-bold uppercase tracking-wide text-[#228BE6] hover:bg-[#228BE6]/10 disabled:opacity-40">{saving ? 'Salvando…' : 'Salvar'}</button></div>
     </Modal>

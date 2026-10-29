@@ -30,6 +30,7 @@ export interface CalendarEvent {
     coResponsibleIds?: string[];
     /** Antecedências dos lembretes, em MINUTOS (ex.: [1440, 60]). */
     reminders?: number[];
+    pessoal?: boolean;
   } & Record<string, unknown>;
 }
 
@@ -43,6 +44,8 @@ export interface CreateEventInput {
   assignedToId?: string;
   /** Antecedências dos lembretes, em MINUTOS. Omitir = padrão (1 dia + 1 hora). */
   reminders?: number[];
+  /** Pessoal: só o responsável vê; a equipe recebe "Ocupado". */
+  pessoal?: boolean;
 }
 
 export interface ListEventsQuery {

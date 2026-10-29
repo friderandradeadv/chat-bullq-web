@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { calendarService, type CalendarEvent, type EventKind } from '@/features/calendar/services/calendar.service';
+import { googleAgendaService } from '@/features/google-agenda/google-agenda.service';
 import { deadlinesService, type Deadline } from '@/features/deadlines/services/deadlines.service';
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
@@ -138,6 +139,8 @@ interface Activity {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | null; // tarefa
   deadlineType: 'FATAL' | 'ORDINARY' | 'INTERNAL' | null; // prazo
   kind: EventKind | null; // evento
+  // Compromisso pessoal de OUTRA pessoa: o servidor já mandou como "Ocupado"; aqui só trava a edição.
+  ocupadoDeOutro?: boolean;
   prazoFatal: string | null; recorte: string | null; tipoPublicacao: string | null;
   faseMovida: { de: string; para: string } | null; dispositivo: string | null;
   // Ação DJEN + sugestão de recurso (espécie/quem/motivo) já extraída pela IA —
@@ -524,6 +527,14 @@ export default function AgendaPage() {
   // assignedToId aqui pra não estreitar demais (perderia os itens de co-responsável
   // do calendar). O filtro client-side abaixo trava a visão do AGENT em si mesmo.
   const evQ = useQuery({ queryKey: ['calendar', 'agenda'], queryFn: () => calendarService.list({ from, to }) });
+  // Google Agenda: leitura na hora (o servidor não guarda nada do Google). Sem
+  // conta ligada volta vazio; falha do Google não derruba a agenda do hub.
+  const gQ = useQuery({
+    queryKey: ['google-agenda', 'eventos', from, to],
+    queryFn: () => googleAgendaService.eventos(from, to),
+    staleTime: 2 * 60_000,
+    retry: false,
+  });
   const dlQ = useQuery({ queryKey: ['deadlines', 'agenda'], queryFn: () => deadlinesService.list({}) });
   const tkQ = useQuery({ queryKey: ['tasks', 'agenda'], queryFn: () => tasksService.list() });
   const mbQ = useQuery({ queryKey: ['members', 'agenda'], queryFn: () => membersService.list() });
@@ -614,13 +625,14 @@ export default function AgendaPage() {
         responsibleId: e.assignedTo?.id ?? null, responsibleName: e.assignedTo?.name ?? null,
         createdName: null, priorityLabel: null, completedAt: (e.metadata?.completedAt as string) ?? null, description: e.location,
         priority: null, deadlineType: null, kind: e.kind,
+        ocupadoDeOutro: e.metadata?.pessoal === true && e.assignedTo?.id !== meId,
         prazoFatal: null, recorte: null, tipoPublicacao: null,
         faseMovida: null, dispositivo: null,
         djenAction: null, recursoSugestao: null, processosRelacionados: null,
       });
     }
     return out.sort((a, b) => +new Date(a.date) - +new Date(b.date));
-  }, [tkQ.data, dlQ.data, evQ.data, userMap, tagMap]);
+  }, [tkQ.data, dlQ.data, evQ.data, userMap, tagMap, meId]);
 
   // O painel de detalhe recebe SEMPRE a versão FRESCA da atividade — `detail` é só
   // um snapshot do clique. Sem isto, editar (processo, prioridade, descrição…) só
@@ -689,7 +701,7 @@ export default function AgendaPage() {
   // A bolinha de "novo" só some quando o usuário ABRE a atividade (openDetail →
   // markSeen). Nada de auto-marcar por "só ter olhado a agenda": o Matheus quer que
   // a bolinha fique até ele clicar na tarefa.
-  const fcEvents = useMemo<EventInput[]>(() => filtered.map((a) => {
+  const fcEvents = useMemo<EventInput[]>(() => filtered.map((a): EventInput => {
     const c = a.done || a.cancelled ? EV_DONE : a.source === 'evento' ? EV_TIMED : EV_PENDING;
     // Eventos com hora precisam de FIM pra ter altura no timeGrid — sem isso o
     // FullCalendar dá altura mínima e corta o horário + título. Usa o fim real do
@@ -703,13 +715,35 @@ export default function AgendaPage() {
       id: a.id, title: personId === 'all' ? `${initials(a.responsibleName)} · ${a.title}` : a.title, start: a.hasTime ? a.date : a.date.slice(0, 10), end, allDay: !a.hasTime,
       backgroundColor: c.bg, borderColor: c.bg, textColor: c.text,
       classNames: [`ag-${a.source}`, (a.done || a.cancelled) ? 'ag-done' : ''].filter(Boolean),
-      startEditable: !a.cancelled, // tarefas/eventos/prazos arrastáveis (no prazo move a data de execução; a fatal é legal e fica na ficha)
+      startEditable: !a.cancelled && !a.ocupadoDeOutro, // tarefas/eventos/prazos arrastáveis (no prazo move a data de execução; a fatal é legal e fica na ficha)
       // ordSort define a ordem no card do dia/popover (ver eventOrder):
       //   0 = COMPROMISSO em aberto (audiência/evento c/ hora) → sempre primeiro, por horário;
       //   1 = tarefa/prazo em aberto (dia todo); 2 = cumprido/cancelado → por último.
       extendedProps: { ordSort: (a.done || a.cancelled) ? 2 : (a.hasTime ? 0 : 1) },
     };
-  }), [filtered, personId]);
+  }).concat(
+    // Eventos do Google: só leitura (editar é no Google). Seguem o filtro de
+    // pessoa e o "exibir eventos"; a busca por texto também vale para eles.
+    exibir.eventos && status !== 'concluidas' && status !== 'canceladas'
+      ? (gQ.data?.eventos ?? [])
+          .filter((g) => personId === 'all' || g.donoId === personId)
+          .filter((g) => !q || g.titulo.toLowerCase().includes(q))
+          .map((g): EventInput => ({
+            id: `g_${g.contaId}_${g.calendarId}_${g.id}`,
+            title: `${personId === 'all' ? `${initials(userMap.get(g.donoId) ?? null)} · ` : ''}${g.titulo}`,
+            start: g.inicio,
+            end: g.fim ?? undefined,
+            allDay: g.diaInteiro,
+            backgroundColor: g.oculto ? '#a1a1aa' : g.cor ?? '#4285F4',
+            borderColor: g.oculto ? '#a1a1aa' : g.cor ?? '#4285F4',
+            textColor: '#ffffff',
+            classNames: ['ag-google'],
+            startEditable: false,
+            durationEditable: false,
+            extendedProps: { ordSort: g.diaInteiro ? 1 : 0, google: g },
+          }))
+      : [],
+  ), [filtered, personId, gQ.data, exibir.eventos, status, q, userMap]);
 
   const pickMode = (m: ViewMode) => {
     setMode(m); setViewMenu(false);
@@ -746,7 +780,18 @@ export default function AgendaPage() {
     setDetail(a);
   };
   const isUnseenNew = (a: Activity) => isCreatedToday(a) && !a.done && !a.cancelled && !seenNew.has(a.id);
-  const onEventClick = (arg: EventClickArg) => { const a = byId.get(arg.event.id); if (a) openDetail(a); };
+  const onEventClick = (arg: EventClickArg) => {
+    const g = arg.event.extendedProps?.google as import('@/features/google-agenda/google-agenda.service').EventoGoogle | undefined;
+    if (g) {
+      // Do Google: abre lá, que é onde se edita. "Ocupado" de colega não tem link.
+      if (g.link) window.open(g.link, '_blank', 'noopener');
+      else toast.info('Horário ocupado na agenda de um colega.');
+      return;
+    }
+    const a = byId.get(arg.event.id);
+    if (a?.ocupadoDeOutro) { toast.info('Compromisso pessoal de um colega: só ele vê os detalhes.'); return; }
+    if (a) openDetail(a);
+  };
   // Arrastar tarefa/evento/prazo para outra data (ou horário, na semana/dia) →
   // reagenda. No PRAZO movemos a data de EXECUÇÃO (safeDate); a data FATAL é
   // legal e permanece intacta (só editável na ficha do prazo).
