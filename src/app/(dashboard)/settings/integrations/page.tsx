@@ -25,6 +25,7 @@ import {
   type GoogleDriveStatus,
 } from '@/features/settings/services/google-drive.service';
 import { GoogleAgendaCard } from '@/features/google-agenda/google-agenda-card';
+import { AssistenteWhatsappCard } from '@/features/assistente-whatsapp/assistente-card';
 import { useOrgId } from '@/hooks/use-org-query-key';
 import { cn } from '@/lib/utils';
 
@@ -98,6 +99,8 @@ export default function SettingsIntegrationsPage() {
       />
 
       <GoogleAgendaCard />
+
+      <AssistenteWhatsappCard />
     </div>
   );
 }
