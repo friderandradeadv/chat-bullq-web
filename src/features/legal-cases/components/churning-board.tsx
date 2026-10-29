@@ -38,6 +38,8 @@ type Oferta = {
   refis: number; emBranco: number; declarados: number;
   portao: string | null; protocolaSemExtrato: boolean;
   analisadaEm: string | null; enviadaEm: string | null; temConversa: boolean;
+  /** A cadeia sai pela mensagem única da campanha da carteira (quadro Refin). */
+  naCampanhaRefin?: boolean;
 };
 
 const dia = (iso: string | null) =>
@@ -177,6 +179,12 @@ export function ChurningBoard() {
                         {o.cliente}
                       </p>
                       <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {o.grupo}</p>
+                      {o.naCampanhaRefin && (
+                        <p className="mt-1 inline-block rounded bg-[#e3f0fb] px-1.5 py-0.5 text-[10px] font-semibold text-[#1565c0] dark:bg-sky-500/15 dark:text-sky-300"
+                          title="Este cliente perdeu a RMC: a oferta vai junto com a do refin, numa mensagem só, pelo quadro Refin.">
+                          na campanha Refin: envie por lá
+                        </p>
+                      )}
 
                       {/* 🚨 O NÚMERO QUE DECIDE, no próprio card: quantos
                           refinanciamentos e em quantos o banco declarou ter
@@ -316,7 +324,14 @@ function ListaDeOfertas({
                 <p className="font-semibold uppercase leading-4 text-[#101820] dark:text-zinc-100">{o.cliente}</p>
                 <p className="truncate text-[10px] text-[#48626f] dark:text-zinc-500">{o.card}</p>
               </td>
-              <td className="px-2.5 py-2 text-[#48626f] dark:text-zinc-300">{o.grupo}</td>
+              <td className="px-2.5 py-2 text-[#48626f] dark:text-zinc-300">
+                {o.grupo}
+                {o.naCampanhaRefin && (
+                  <span className="ml-1.5 rounded bg-[#e3f0fb] px-1 py-0.5 text-[10px] font-semibold text-[#1565c0] dark:bg-sky-500/15 dark:text-sky-300">
+                    via Refin
+                  </span>
+                )}
+              </td>
               <td className="px-2.5 py-2 text-right font-semibold tabular-nums text-[#101820] dark:text-zinc-100">{o.refis}</td>
               {/* 🚨 ZERO DECLARADO É O NÚMERO BOM, e por isso ele sai em verde:
                   é a cadeia que gira sem liberar dinheiro. Vermelho é o banco

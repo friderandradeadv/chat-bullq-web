@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * A CAMPANHA DO REFINANCIAMENTO DO CARTÃO (28/10/2026).
+ * A CAMPANHA DA CARTEIRA QUE PERDEU A RMC (28/10/2026).
  *
  * Pedido do escritório: oferecer a ação de refin aos clientes da base cuja RMC
  * foi improcedente ou extinta sem mérito. A tese é fato distinto: não se
@@ -14,20 +14,28 @@
  *
  * Desde 29/10/2026 a mesma leitura mede também o CHURNING do cliente, e quem
  * tem as duas teses recebe uma mensagem só com as duas. O churning só entra com
- * o veredito AJUIZAR do HISCON.
+ * o veredito AJUIZAR do HISCON, e não entra quando já saiu ao cliente por outro
+ * card (o cruzamento com o quadro do Churning é feito no servidor).
+ *
+ * O formato é o do quadro do Churning, a pedido: *"uma visualização parecida,
+ * pelo menos"*. Quadro para trabalhar um caso, lista para percorrer cem.
  *
  * 🚨 O ENVIO É CLIQUE, UM CLIENTE POR VEZ, na conversa que já existe. O botão
  * "analisar" lê documentos; nenhum botão deste quadro fala com mais de um
  * cliente. A inicial contra a Meta afirma ao juízo que os scripts de envio em
- * lote saíram de operação.
+ * lote saíram de operação. E não se arrasta card: passar de coluna aqui é falar
+ * com o cliente.
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronDown, ChevronRight, Loader2, RefreshCw, ScanSearch, Search, Send, Square, X } from 'lucide-react';
+import {
+  Check, ExternalLink, LayoutGrid, List, Loader2, RefreshCw, ScanSearch, Search, Send, Square, Users, X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
+import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 const ACCENT = 'rgb(25,118,210)';
@@ -41,25 +49,27 @@ type Item = {
   churning: { ofertado: boolean; grupo: string | null; contratos: number; veredito: string | null;
     statusNoChurning: string | null; motivo: string | null } | null;
   oferecivel: boolean;
+  /** O churning da mensagem saiu ao cliente por outro card depois da análise. */
+  reanalisar?: boolean;
 };
 
-/** As seções, na ordem em que o trabalho anda. */
-const SECOES: { chave: string; titulo: string; ajuda: string; de: (i: Item) => boolean }[] = [
-  { chave: 'pronta', titulo: 'Oferta pronta', ajuda: 'refin e/ou churning medidos no HISCON: leia a mensagem e envie',
-    de: (i) => i.oferecivel && (i.status === 'analisada' || i.status === 'nova') },
-  { chave: 'enviada', titulo: 'Enviada', ajuda: 'aguardando a resposta do cliente',
-    de: (i) => i.oferecivel && i.status === 'enviada' },
-  { chave: 'aceita', titulo: 'Aceita', ajuda: 'o card de refin foi para "montar inicial"',
+const aberta = (i: Item) => i.status === 'analisada' || i.status === 'nova';
+const semDocumento = (i: Item) => !i.caixa || i.caixa === 'hiscon-antigo' || i.caixa === 'sem-hiscon';
+
+/** As colunas, na ordem em que o trabalho anda. */
+const COLUNAS: { chave: string; titulo: string; ajuda: string; de: (i: Item) => boolean }[] = [
+  { chave: 'pronta', titulo: 'OFERTA PRONTA', ajuda: 'refin e/ou churning medidos no HISCON: leia a mensagem e envie',
+    de: (i) => i.oferecivel && aberta(i) },
+  { chave: 'enviada', titulo: 'ENVIADA', ajuda: 'a oferta foi ao cliente, aguardando resposta',
+    de: (i) => i.status === 'enviada' },
+  { chave: 'aceita', titulo: 'ACEITA', ajuda: 'o cliente topou; o card de refin vai para "montar inicial"',
     de: (i) => i.status === 'aceita' },
-  { chave: 'hiscon-antigo', titulo: 'Pedir HISCON novo', ajuda: 'o extrato arquivado termina antes de 11/2023',
-    de: (i) => i.caixa === 'hiscon-antigo' && !i.oferecivel },
-  { chave: 'nova', titulo: 'Não analisada', ajuda: 'o hub ainda não leu o HISCON deste cliente',
-    de: (i) => !i.caixa },
-  { chave: 'sem-hiscon', titulo: 'Sem HISCON na pasta', ajuda: 'colete o extrato antes',
-    de: (i) => i.caixa === 'sem-hiscon' },
-  { chave: 'fora', titulo: 'Fora da campanha', ajuda: 'sem refin nem churning viável, refin depois da IN 158, já tem card ou recusou',
-    de: (i) => (['sem-refin', 'posterior-in158', 'ja-tem-card'].includes(i.caixa ?? '') && !i.oferecivel)
-      || i.status === 'recusada' },
+  { chave: 'recusada', titulo: 'RECUSADA', ajuda: 'o cliente disse não',
+    de: (i) => i.status === 'recusada' },
+  { chave: 'documento', titulo: 'FALTA HISCON', ajuda: 'não analisado, sem HISCON na pasta ou extrato antes de 11/2023',
+    de: (i) => !i.oferecivel && aberta(i) && semDocumento(i) },
+  { chave: 'fora', titulo: 'FORA', ajuda: 'sem refin nem churning viável, refin depois da IN 158 ou já tem card',
+    de: (i) => !i.oferecivel && aberta(i) && !semDocumento(i) },
 ];
 
 const reais = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -69,9 +79,23 @@ const dia = (iso: string | null) =>
 export function RefinBoard() {
   const [busca, setBusca] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
-  const [expandido, setExpandido] = useState<string | null>(null);
+  const [oferta, setOferta] = useState<string | null>(null);
+  const [vincular, setVincular] = useState<{ caseId: string; cliente: string } | null>(null);
   const [analisando, setAnalisando] = useState<{ feitos: number; total: number } | null>(null);
   const parar = useRef(false);
+
+  // Quadro × lista, lembrado no navegador como no quadro do Churning.
+  const [modo, setModo] = useState<'quadro' | 'lista'>('quadro');
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem('refin-modo');
+      if (v === 'lista' || v === 'quadro') setModo(v);
+    } catch { /* sem storage: fica no quadro */ }
+  }, []);
+  const trocarModo = (v: 'quadro' | 'lista') => {
+    setModo(v);
+    try { window.localStorage.setItem('refin-modo', v); } catch { /* idem */ }
+  };
 
   const { data: kanban } = useQuery({
     queryKey: ['legal-cases', 'kanban', 'judicial'],
@@ -89,10 +113,13 @@ export function RefinBoard() {
   const itens: Item[] = useMemo(() => {
     const todos = (data?.itens ?? []) as Item[];
     const q = busca.trim().toLowerCase();
-    return q ? todos.filter((o) => `${o.cliente} ${o.reu ?? ''} ${o.card}`.toLowerCase().includes(q)) : todos;
+    return q
+      ? todos.filter((o) => `${o.cliente} ${o.reu ?? ''} ${o.card} ${o.churning?.grupo ?? ''}`.toLowerCase().includes(q))
+      : todos;
   }, [data, busca]);
 
   const naoAnalisados = itens.filter((i) => !i.caixa);
+  const emOferta = oferta ? itens.find((i) => i.caseId === oferta) ?? null : null;
 
   /**
    * Lê o HISCON de cada um, UM DE CADA VEZ, e mostra o andamento. Só lê
@@ -149,6 +176,21 @@ export function RefinBoard() {
               <ScanSearch className="h-3.5 w-3.5" /> Analisar {naoAnalisados.length} pendente{naoAnalisados.length === 1 ? '' : 's'}
             </button>
           ) : null}
+          <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
+            {([['quadro', LayoutGrid, 'Quadro'], ['lista', List, 'Lista']] as const).map(([v, Icone, rotulo]) => (
+              <button
+                key={v}
+                onClick={() => trocarModo(v)}
+                title={rotulo}
+                className={`inline-flex h-8 items-center gap-1 px-2 text-xs font-semibold ${
+                  modo === v
+                    ? 'bg-[#101820] text-white dark:bg-zinc-200 dark:text-zinc-900'
+                    : 'bg-white text-[#48626f] hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}
+              >
+                <Icone className="h-3.5 w-3.5" /> {rotulo}
+              </button>
+            ))}
+          </div>
           <button onClick={() => refetch()} disabled={isFetching}
             className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs text-[#48626f] hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
             {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
@@ -159,37 +201,59 @@ export function RefinBoard() {
 
       {isLoading ? (
         <p className="p-4 text-sm text-[#48626f] dark:text-zinc-400">Lendo a carteira…</p>
+      ) : modo === 'lista' ? (
+        <ListaDeOfertas
+          itens={itens}
+          onAbrir={setOferta}
+          onVincular={(caseId, cliente) => setVincular({ caseId, cliente })}
+        />
       ) : (
-        <div className="flex-1 overflow-auto px-4 pb-6">
-          {SECOES.map((s) => {
-            const lista = itens.filter(s.de);
-            if (!lista.length) return null;
+        <div className="flex flex-1 gap-3 overflow-x-auto p-4">
+          {COLUNAS.map((col) => {
+            const lista = itens.filter(col.de);
             return (
-              <section key={s.chave} className="mt-4">
-                <div className="flex items-baseline gap-2 pb-1.5">
-                  <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: ACCENT }}>{s.titulo}</h2>
+              <div key={col.chave} className="flex w-[310px] shrink-0 flex-col">
+                <div className="flex items-center gap-1.5 px-1 pb-2">
+                  <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: ACCENT }}>{col.titulo}</h2>
                   <span className="text-xs font-semibold text-[#48626f] dark:text-zinc-400">{lista.length}</span>
-                  <span className="text-[11px] text-[#48626f] dark:text-zinc-500">{s.ajuda}</span>
                 </div>
-                <div className="overflow-hidden rounded-lg border border-[#e3ecf3] dark:border-zinc-800">
-                  {lista.map((o) => (
-                    <Linha
+                <p className="px-1 pb-2 text-[10px] leading-3 text-[#48626f] dark:text-zinc-500">{col.ajuda}</p>
+                <div className="flex flex-1 flex-col gap-2 overflow-y-auto pb-2">
+                  {lista.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-[#cfe0ed] p-4 text-center text-xs text-[#48626f] dark:border-zinc-700 dark:text-zinc-500">
+                      Vazio
+                    </div>
+                  ) : lista.map((o) => (
+                    <CardDaOferta
                       key={o.caseId}
                       o={o}
-                      expandido={expandido === o.caseId}
-                      onExpandir={() => setExpandido(expandido === o.caseId ? null : o.caseId)}
-                      onAbrir={() => setAberto(o.caseId)}
-                      onMudou={() => refetch()}
+                      onAbrir={() => setOferta(o.caseId)}
+                      onVincular={() => setVincular({ caseId: o.caseId, cliente: o.cliente })}
                     />
                   ))}
                 </div>
-              </section>
+              </div>
             );
           })}
-          {!itens.length && (
-            <p className="p-4 text-sm text-[#48626f] dark:text-zinc-400">Nenhum card de RMC/RCC perdida ou extinta.</p>
-          )}
         </div>
+      )}
+
+      {emOferta && (
+        <PainelDaOferta
+          o={emOferta}
+          onFechar={() => setOferta(null)}
+          onAbrirCard={() => setAberto(emOferta.caseId)}
+          onMudou={() => refetch()}
+        />
+      )}
+
+      {vincular && (
+        <VincularContatoCliente
+          caseId={vincular.caseId}
+          clienteNome={vincular.cliente}
+          onClose={() => setVincular(null)}
+          onVinculado={() => refetch()}
+        />
       )}
 
       {aberto && (
@@ -203,21 +267,155 @@ export function RefinBoard() {
   );
 }
 
-/** Uma linha do quadro. Com oferta pronta, abre a mensagem e os botões. */
-function Linha({ o, expandido, onExpandir, onAbrir, onMudou }: {
-  o: Item; expandido: boolean; onExpandir: () => void; onAbrir: () => void; onMudou: () => void;
+/** As teses do cliente, em etiquetas: o que a mensagem vai oferecer. */
+function Teses({ o }: { o: Item }) {
+  return (
+    <>
+      {o.caixa === 'pronta' && (
+        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: ACCENT }}>REFIN</span>
+      )}
+      {o.churning?.ofertado && (
+        <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white"
+          title={`${o.churning.contratos} contratos no ${o.churning.grupo}: veredito ${o.churning.veredito}`}>
+          CHURNING · {o.churning.grupo}
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
+ * Extinta sem mérito não faz coisa julgada material; improcedente faz, e o
+ * banco vai alegá-la (art. 508 do CPC). Por isso a cor: verde é o caso limpo.
+ */
+function Acao({ o }: { o: Item }) {
+  return o.resultado === 'extinto'
+    ? <span className="text-emerald-700 dark:text-emerald-400">ação extinta</span>
+    : <span className="text-amber-700 dark:text-amber-400">ação perdida</span>;
+}
+
+function CardDaOferta({ o, onAbrir, onVincular }: { o: Item; onAbrir: () => void; onVincular: () => void }) {
+  return (
+    // NÃO é <button>: dentro há o botão de vincular o WhatsApp.
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onAbrir}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } }}
+      className="cursor-pointer rounded-lg border border-[#cfe0ed] bg-white p-3 text-left shadow-sm transition hover:shadow-md dark:border-transparent dark:bg-[#1E2226]"
+    >
+      <p className="line-clamp-2 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{o.cliente}</p>
+      <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {o.reu ?? 'sem réu'} · <Acao o={o} /></p>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <Teses o={o} />
+        {o.caixa === 'pronta' && o.estimativa ? (
+          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+            title={`Refin: dobro dos descontos até ${o.estimativa.ate ?? '?'} + dano moral. Não soma o churning.`}>
+            {reais(o.estimativa.total)}
+          </span>
+        ) : null}
+      </div>
+      {o.reanalisar && (
+        <p className="mt-1.5 text-[10px] font-semibold text-red-700 dark:text-red-400">
+          o churning já saiu por outro card: leia o HISCON de novo
+        </p>
+      )}
+      {!o.oferecivel && (o.churning?.motivo || o.caixa) ? (
+        <p className="mt-1.5 line-clamp-2 text-[10px] text-[#48626f] dark:text-zinc-500">
+          {o.rotulo}{o.churning?.motivo ? ` · churning: ${o.churning.motivo}` : ''}
+        </p>
+      ) : null}
+      <p className="mt-1.5 flex items-center gap-2 text-[10px] text-[#48626f] dark:text-zinc-500">
+        {dia(o.enviadaEm) ? `enviada ${dia(o.enviadaEm)}` : dia(o.analisadaEm) ? `lida ${dia(o.analisadaEm)}` : 'não lida'}
+        {!o.temConversa && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onVincular(); }}
+            className="inline-flex items-center gap-0.5 rounded px-1 font-semibold text-amber-700 underline decoration-dotted hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+          >
+            <Users className="h-3 w-3" /> vincular WhatsApp
+          </button>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** A mesma oferta em linha, para percorrer cem. */
+function ListaDeOfertas({ itens, onAbrir, onVincular }: {
+  itens: Item[]; onAbrir: (id: string) => void; onVincular: (caseId: string, cliente: string) => void;
+}) {
+  if (!itens.length) {
+    return <p className="p-4 text-sm text-[#48626f] dark:text-zinc-400">Nenhum card de RMC/RCC perdida ou extinta.</p>;
+  }
+  const coluna = (o: Item) => COLUNAS.find((c) => c.de(o))?.titulo ?? '—';
+  return (
+    <div className="flex-1 overflow-auto px-4 pb-4 pt-3">
+      <table className="w-full border-separate border-spacing-0 text-sm">
+        <thead className="sticky top-0 z-10">
+          <tr className="bg-[#f3f7fa] text-left text-[10px] font-bold uppercase tracking-wide text-[#48626f] dark:bg-zinc-900 dark:text-zinc-400">
+            <th className="rounded-l-lg px-2.5 py-2">Cliente</th>
+            <th className="px-2.5 py-2">Ação perdida</th>
+            <th className="px-2.5 py-2">Teses</th>
+            <th className="px-2.5 py-2 text-right" title="Refin: dobro dos descontos + dano moral. Não soma o churning.">Refin</th>
+            <th className="px-2.5 py-2">Estado</th>
+            <th className="rounded-r-lg px-2.5 py-2">WhatsApp</th>
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map((o) => (
+            <tr key={o.caseId} onClick={() => onAbrir(o.caseId)}
+              className="cursor-pointer border-b border-[#eef3f7] hover:bg-[#f8fbfd] dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+              <td className="px-2.5 py-2">
+                <p className="font-semibold uppercase leading-4 text-[#101820] dark:text-zinc-100">{o.cliente}</p>
+                {o.reanalisar && <p className="text-[10px] font-semibold text-red-700 dark:text-red-400">churning já saiu por outro card</p>}
+              </td>
+              <td className="whitespace-nowrap px-2.5 py-2 text-[11px] text-[#48626f] dark:text-zinc-300">
+                {o.reu ?? 'sem réu'} · <Acao o={o} />
+              </td>
+              <td className="px-2.5 py-2"><span className="flex flex-wrap gap-1"><Teses o={o} /></span></td>
+              <td className="whitespace-nowrap px-2.5 py-2 text-right font-semibold tabular-nums text-[#101820] dark:text-zinc-100">
+                {o.caixa === 'pronta' && o.estimativa ? reais(o.estimativa.total) : ''}
+              </td>
+              <td className="whitespace-nowrap px-2.5 py-2 text-[11px] text-[#48626f] dark:text-zinc-400">{coluna(o)}</td>
+              <td className="whitespace-nowrap px-2.5 py-2">
+                {o.temConversa ? (
+                  <span className="text-[11px] text-[#48626f] dark:text-zinc-500">ligado</span>
+                ) : (
+                  <button onClick={(e) => { e.stopPropagation(); onVincular(o.caseId, o.cliente); }}
+                    className="inline-flex items-center gap-0.5 rounded px-1 text-[11px] font-semibold text-amber-700 underline decoration-dotted hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10">
+                    <Users className="h-3 w-3" /> vincular
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * A OFERTA DE UM CLIENTE: o que foi medido, a mensagem (editável) e os botões.
+ * Abre ao clicar no card ou na linha.
+ */
+function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
+  o: Item; onFechar: () => void; onAbrirCard: () => void; onMudou: () => void;
 }) {
   const [texto, setTexto] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const temOferta = o.oferecivel;
   const temRefin = o.caixa === 'pronta';
   const temChurning = o.churning?.ofertado === true;
+  const podeEnviar = o.oferecivel && aberta(o) && !o.reanalisar;
 
-  const carregarTexto = async () => {
-    if (texto !== null) return;
-    const c: any = await legalCasesService.get(o.caseId);
-    setTexto(String(c?.metadata?.ofertaRefin?.mensagem ?? ''));
-  };
+  useEffect(() => {
+    let vivo = true;
+    setTexto(null);
+    legalCasesService.get(o.caseId)
+      .then((c: any) => { if (vivo) setTexto(String(c?.metadata?.ofertaRefin?.mensagem ?? '')); })
+      .catch(() => { if (vivo) setTexto(''); });
+    return () => { vivo = false; };
+  }, [o.caseId, o.analisadaEm]);
 
   const analisar = async () => {
     setOcupado(true);
@@ -242,7 +440,7 @@ function Linha({ o, expandido, onExpandir, onAbrir, onMudou }: {
       const c: any = await legalCasesService.get(o.caseId);
       const conversa = c?.clienteConversa;
       if (!conversa?.conversationId) {
-        toast.error('Sem conversa vinculada a este cliente: abra o card e vincule o WhatsApp antes.');
+        toast.error('Sem conversa vinculada a este cliente: vincule o WhatsApp antes.');
         return;
       }
       await inboxService.sendMessage({
@@ -279,94 +477,95 @@ function Linha({ o, expandido, onExpandir, onAbrir, onMudou }: {
   };
 
   return (
-    <div className="border-b border-[#eef3f7] last:border-b-0 dark:border-zinc-800">
-      <div className="flex items-center gap-3 px-3 py-2 hover:bg-[#f8fbfd] dark:hover:bg-zinc-800/40">
-        <button
-          onClick={() => { if (temOferta) { onExpandir(); carregarTexto().catch(() => setTexto('')); } }}
-          className={`shrink-0 text-zinc-400 ${temOferta ? '' : 'invisible'}`}
-          aria-label="Abrir a oferta"
-        >
-          {expandido ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </button>
-        <div className="min-w-0 flex-1 cursor-pointer" onClick={onAbrir}>
-          <p className="truncate text-sm font-semibold uppercase text-[#101820] dark:text-zinc-100">{o.cliente}</p>
-          <p className="truncate text-[11px] text-[#48626f] dark:text-zinc-500">
-            × {o.reu ?? 'sem réu'} · ação {o.resultado === 'extinto' ? 'extinta' : 'perdida'}
-            {temRefin && o.resumo ? ` · ${o.resumo}` : ''}
-            {o.churning && !temChurning && o.churning.motivo ? ` · churning: ${o.churning.motivo}` : ''}
-            {o.caixa === 'hiscon-antigo' && o.ultimaCompetencia ? ` · HISCON até ${o.ultimaCompetencia.split('-').reverse().join('/')}` : ''}
-          </p>
-        </div>
-        {temRefin && (
-          <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: ACCENT }}>
-            REFIN
-          </span>
-        )}
-        {temChurning && (
-          <span className="shrink-0 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-bold text-white"
-            title={`${o.churning?.contratos} contratos no ${o.churning?.grupo}: veredito ${o.churning?.veredito}`}>
-            CHURNING · {o.churning?.grupo}
-          </span>
-        )}
-        {temRefin && o.estimativa ? (
-          <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-[#101820] dark:text-zinc-100"
-            title={`Dobro dos descontos até ${o.estimativa.ate ?? '?'} + dano moral. Piso: o HISCON termina na emissão.`}>
-            {reais(o.estimativa.total)}
-          </span>
-        ) : null}
-        <span className="w-24 shrink-0 text-right text-[11px] text-[#48626f] dark:text-zinc-500">
-          {dia(o.enviadaEm) ? `enviada ${dia(o.enviadaEm)}` : dia(o.analisadaEm) ? `lida ${dia(o.analisadaEm)}` : o.rotulo}
-        </span>
-        {!o.temConversa && <span className="shrink-0 text-[11px] font-semibold text-amber-700 dark:text-amber-400">sem WhatsApp</span>}
-        {o.status === 'enviada' ? (
-          <span className="flex shrink-0 gap-1">
-            <button disabled={ocupado} onClick={() => responder('aceita')}
-              className="inline-flex h-7 items-center gap-1 rounded-md bg-emerald-600 px-2 text-xs font-semibold text-white disabled:opacity-50">
-              <Check className="h-3 w-3" /> aceitou
-            </button>
-            <button disabled={ocupado} onClick={() => responder('recusada')}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-zinc-300 px-2 text-xs font-semibold text-zinc-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
-              <X className="h-3 w-3" /> recusou
-            </button>
-          </span>
-        ) : !o.caixa || o.caixa === 'hiscon-antigo' || o.caixa === 'sem-hiscon' ? (
-          <button disabled={ocupado} onClick={analisar} title="Lê de novo o HISCON da pasta"
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-[#cfe0ed] px-2 text-xs text-[#48626f] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
-            {ocupado ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanSearch className="h-3 w-3" />} ler HISCON
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onFechar}>
+      <div className="flex h-full w-full max-w-xl flex-col bg-white shadow-xl dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-2 border-b border-[#eef3f7] p-4 dark:border-zinc-800">
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold uppercase text-[#101820] dark:text-zinc-100">{o.cliente}</p>
+            <p className="text-xs text-[#48626f] dark:text-zinc-400">× {o.reu ?? 'sem réu'} · <Acao o={o} /></p>
+            <div className="mt-2 flex flex-wrap gap-1.5"><Teses o={o} /></div>
+          </div>
+          <button onClick={onAbrirCard} title="Abrir o card da ação"
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs text-[#48626f] dark:border-zinc-700 dark:text-zinc-300">
+            <ExternalLink className="h-3 w-3" /> card
           </button>
-        ) : null}
-      </div>
+          <button onClick={onFechar} className="h-8 w-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Fechar">
+            <X className="mx-auto h-4 w-4" />
+          </button>
+        </div>
 
-      {expandido && temOferta && (
-        <div className="space-y-2 bg-[#f8fbfd] px-10 pb-3 pt-1 dark:bg-zinc-900/60">
-          {texto === null ? (
-            <p className="text-xs text-[#48626f]">Carregando a mensagem…</p>
-          ) : (
-            <textarea
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              disabled={o.status !== 'analisada' && o.status !== 'nova'}
-              rows={10}
-              className="w-full rounded-lg border border-[#cfe0ed] bg-white p-2 text-sm leading-5 text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-            />
+        <div className="flex-1 space-y-3 overflow-y-auto p-4 text-xs text-[#48626f] dark:text-zinc-400">
+          <div className="space-y-1">
+            {temRefin && o.resumo && <p><b className="text-[#101820] dark:text-zinc-200">Refin:</b> {o.resumo}</p>}
+            {temRefin && o.estimativa && (
+              <p>Estimativa do refin: {reais(o.estimativa.total)} (dobro {reais(o.estimativa.dobro)} até {o.estimativa.ate ?? '?'} + dano moral {reais(o.estimativa.danoMoral)})</p>
+            )}
+            {!temRefin && <p><b className="text-[#101820] dark:text-zinc-200">Refin:</b> {o.rotulo}</p>}
+            {o.churning && (
+              <p><b className="text-[#101820] dark:text-zinc-200">Churning:</b>{' '}
+                {temChurning
+                  ? `${o.churning.contratos} contratos no ${o.churning.grupo} (veredito ${o.churning.veredito})`
+                  : o.churning.motivo ?? 'fora'}
+              </p>
+            )}
+            {o.reanalisar && (
+              <p className="font-semibold text-red-700 dark:text-red-400">
+                O churning deste cliente saiu por outro card depois da análise. Leia o HISCON de novo para a mensagem sair sem ele.
+              </p>
+            )}
+          </div>
+
+          {o.oferecivel && (
+            texto === null ? (
+              <p>Carregando a mensagem…</p>
+            ) : (
+              <textarea
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                disabled={!podeEnviar}
+                rows={16}
+                className="w-full rounded-lg border border-[#cfe0ed] bg-white p-2 text-sm leading-5 text-[#101820] disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              />
+            )
           )}
-          {(o.status === 'analisada' || o.status === 'nova') && (
-            <div className="flex items-center gap-2">
-              <button disabled={ocupado || !texto?.trim()} onClick={enviar}
-                className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-semibold text-white disabled:opacity-50"
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-[#eef3f7] p-4 dark:border-zinc-800">
+          {podeEnviar && (
+            <>
+              <button disabled={ocupado || !texto?.trim() || !o.temConversa} onClick={enviar}
+                className="inline-flex h-9 items-center gap-1 rounded-lg px-3 text-xs font-semibold text-white disabled:opacity-50"
                 style={{ background: ACCENT }}>
                 {ocupado ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                 Enviar a {o.cliente.split(' ')[0]} pelo WhatsApp
               </button>
               <span className="text-[11px] text-[#48626f] dark:text-zinc-500">
-                vai pela conversa dele
+                {!o.temConversa ? 'vincule o WhatsApp antes' : 'vai pela conversa dele'}
                 {temRefin ? '; nasce o card de refin em "informações faltantes"' : ''}
-                {temChurning ? '; a oferta de churning do card passa a "enviada"' : ''}
+                {temChurning ? '; o churning passa a "enviada" no quadro do Churning' : ''}
               </span>
-            </div>
+            </>
+          )}
+          {o.status === 'enviada' && (
+            <>
+              <button disabled={ocupado} onClick={() => responder('aceita')}
+                className="inline-flex h-9 items-center gap-1 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white disabled:opacity-50">
+                <Check className="h-3 w-3" /> aceitou
+              </button>
+              <button disabled={ocupado} onClick={() => responder('recusada')}
+                className="inline-flex h-9 items-center gap-1 rounded-lg border border-zinc-300 px-3 text-xs font-semibold text-zinc-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
+                <X className="h-3 w-3" /> recusou
+              </button>
+            </>
+          )}
+          {aberta(o) && (
+            <button disabled={ocupado} onClick={analisar} title="Lê de novo o HISCON da pasta"
+              className="ml-auto inline-flex h-9 items-center gap-1 rounded-lg border border-[#cfe0ed] px-3 text-xs text-[#48626f] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
+              {ocupado ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanSearch className="h-3 w-3" />} ler HISCON de novo
+            </button>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
