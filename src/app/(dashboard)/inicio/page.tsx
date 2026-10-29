@@ -58,6 +58,7 @@ import { dashboardService, type HubNewsItem } from '@/features/dashboard/service
 import { depoimentosService } from '@/features/depoimentos/services/depoimentos.service';
 import { trechoDeGratidao } from '@/features/depoimentos/lib/trecho-gratidao';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
+import { LancamentoRapido } from '@/features/lancamento-rapido/lancamento-rapido';
 import { formatPhone } from '@/lib/brazil-states';
 
 // ── Honorífico (Dr./Dra.) por heurística de nome — sem campo de gênero no banco ──
@@ -1039,6 +1040,7 @@ function ConquistasResumo() {
 
 export default function InicioPage() {
   const { user } = useAuthStore();
+  const qcInicio = useQueryClient();
   const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [msgIdx, setMsgIdx] = useState(0);
@@ -1184,6 +1186,13 @@ export default function InicioPage() {
           <PartyPopper className="h-4 w-4" />
           Me motiva de novo
         </button>
+
+        {/* Lançamento rápido: texto, áudio ou print → formulário preenchido */}
+        {mounted && (
+          <div className="welcome-pop mx-auto mt-6 w-full max-w-2xl text-left" style={{ animationDelay: '0.18s' }}>
+            <LancamentoRapido onCriado={() => qcInicio.invalidateQueries({ queryKey: ['hub'] })} />
+          </div>
+        )}
 
         {/* Seus números (com count-up) */}
         {mounted && (

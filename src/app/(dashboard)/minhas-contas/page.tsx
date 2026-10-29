@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Check, ChevronLeft, ChevronRight, CreditCard, Lock, Pencil, Plus, Receipt, Undo2 } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
-import { LancamentoRapido } from '@/features/lancamento-rapido/lancamento-rapido';
 import {
   financeiroPessoalService as svc,
   type BillInput,
@@ -87,8 +86,6 @@ export default function MinhasContasPage() {
           <Plus className="h-4 w-4" /> Nova conta
         </button>
       </div>
-
-      <div className="mt-4"><LancamentoRapido onCriado={refresh} /></div>
 
       <div className="mt-6 flex items-center justify-between">
         <button onClick={() => setComp((c) => somaMes(c, -1))} aria-label="Mês anterior" className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">

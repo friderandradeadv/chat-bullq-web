@@ -42,7 +42,6 @@ import {
 import { toast } from 'sonner';
 import { calendarService, type CalendarEvent, type EventKind } from '@/features/calendar/services/calendar.service';
 import { googleAgendaService, type EventoGoogle } from '@/features/google-agenda/google-agenda.service';
-import { LancamentoRapido } from '@/features/lancamento-rapido/lancamento-rapido';
 import { deadlinesService, type Deadline } from '@/features/deadlines/services/deadlines.service';
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
@@ -922,9 +921,6 @@ export default function AgendaPage() {
           </div>
         </div>
       </div>
-
-      {/* Lançamento rápido: texto, áudio ou print → formulário já preenchido */}
-      <div className="mt-4"><LancamentoRapido onCriado={refetchAll} /></div>
 
       {/* Barra de filtros */}
       <div className="mt-5 flex flex-wrap items-center gap-3">
