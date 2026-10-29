@@ -15,6 +15,7 @@ import {
   Search,
   ChevronLeft,
   UserCheck,
+  Download,
 } from 'lucide-react';
 import { formatPhone } from '@/lib/brazil-states';
 import { avatarColor, avatarInitials } from '@/lib/avatar';
@@ -23,6 +24,7 @@ import { AssignmentPopover } from './assignment-popover';
 import { AgentPinPopover } from './agent-pin-popover';
 import { PipelinePopover } from './pipeline-popover';
 import { ArchiveModal } from './archive-modal';
+import { ExportConversationModal } from './export-conversation-modal';
 import { inboxService, type Conversation } from '../services/inbox.service';
 
 interface ConversationHeaderProps {
@@ -62,6 +64,7 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -139,6 +142,12 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
 
   return (
     <>
+    {showExportModal && (
+      <ExportConversationModal
+        conversationId={conversation.id}
+        onClose={() => setShowExportModal(false)}
+      />
+    )}
     {showArchiveModal && (
       <ArchiveModal
         onConfirm={handleArchiveConfirm}
@@ -296,6 +305,16 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
                   <AssignmentPopover conversation={conversation} onChanged={onUpdate} />
                 )}
                 <PipelinePopover conversation={conversation} onChanged={onUpdate} />
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setShowExportModal(true);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exportar conversa
+                </button>
                 <div className="my-0.5 border-t border-zinc-100 dark:border-zinc-800" />
                 {conversation.status !== 'CLOSED' ? (
                   <button
