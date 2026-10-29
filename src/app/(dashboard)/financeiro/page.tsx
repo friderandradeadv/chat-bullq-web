@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { ContasPessoaisNoFinanceiro } from '@/features/financeiro-pessoal/contas-pessoais-no-financeiro';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   AreaChart, Area, ReferenceLine, Cell,
@@ -1512,6 +1513,8 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
               </div>
               <div className={`text-lg font-bold tabular-nums ${emAberto.atrasadas > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'}`}>{brl(total)}</div>
             </div>
+            {/* Contas PESSOAIS do usuário (Minhas contas): só aviso e "Paguei", fora do livro-razão e do total acima. */}
+            <ContasPessoaisNoFinanceiro />
             <p className="mb-2 text-xs text-zinc-400">Boletos, DARF, repasses e demais saídas em aberto — do cartão você cuida na aba "Cartão de crédito". Ordenado por vencimento; anexe o comprovante no clipe e baixe no ✓ quando pagar.</p>
             {bills.length === 0 ? (
               <div className="rounded-xl border border-zinc-200/70 py-10 text-center text-sm text-zinc-400 dark:border-zinc-800">Nenhuma conta a pagar em aberto. 🎉</div>
