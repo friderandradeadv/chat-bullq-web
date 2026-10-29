@@ -102,16 +102,19 @@ export function RefinBoard() {
     parar.current = false;
     const fila = [...naoAnalisados];
     setAnalisando({ feitos: 0, total: fila.length });
-    let erros = 0;
+    const erros: string[] = [];
     for (let i = 0; i < fila.length; i++) {
       if (parar.current) break;
-      await legalCasesService.analisarOfertaRefin(fila[i].caseId).catch(() => { erros += 1; });
+      await legalCasesService.analisarOfertaRefin(fila[i].caseId).catch((e: any) => {
+        erros.push(`${fila[i].cliente.split(' ')[0]}: ${e?.response?.data?.message || 'não consegui ler o HISCON'}`);
+      });
       setAnalisando({ feitos: i + 1, total: fila.length });
       if ((i + 1) % 5 === 0) refetch();
     }
     setAnalisando(null);
     refetch();
-    if (erros) toast.error(`${erros} card(s) não puderam ser lidos: veja a pasta do cliente.`);
+    // O motivo de cada um: "veja a pasta" não serve quando falta o réu no card.
+    if (erros.length) toast.error(erros.join(' · '), { duration: 15000 });
   };
 
   return (
