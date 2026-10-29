@@ -1,7 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { AlertTriangle, FileText, Loader2, MapPin, Mic, Printer, UserRound, Video } from 'lucide-react';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Download, FileText, Loader2, MapPin, Mic, Printer, Share2, UserRound, Video } from 'lucide-react';
+import { formatPhone } from '@/lib/brazil-states';
 import {
   buscarConversaExportada,
   dataHora,
@@ -59,11 +60,178 @@ function Conteudo() {
   return <Conversa c={conversa} />;
 }
 
+function plural(n: number, um: string, varios: string) {
+  return `${n} ${n === 1 ? um : varios}`;
+}
+
+/** Imagem guardada no hub (API) libera CORS: só ela pode ir com
+ *  `crossOrigin`, senão o canvas do PDF fica "contaminado" e falha. URL de
+ *  CDN de provedor sem CORS deixaria de carregar até na tela. */
+const ORIGEM_API = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').origin;
+  } catch {
+    return '';
+  }
+})();
+function corsDaImagem(url: string) {
+  return url.startsWith(ORIGEM_API) ? ('anonymous' as const) : undefined;
+}
+
+/** Gera o PDF em A4 a partir da página, um pedaço por vez: um canvas único da
+ *  conversa inteira passa do limite do Safari no iPhone (~16 milhões de
+ *  pixels) e sai em branco. Os cortes caem entre as mensagens, nunca no meio
+ *  de um balão — só um balão maior que a folha inteira é fatiado. */
+async function gerarPdf(
+  conteudo: HTMLElement,
+  aoAvancar: (feitas: number, total: number) => void,
+): Promise<Blob> {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import('html2canvas-pro'),
+    import('jspdf'),
+  ]);
+  const MARGEM = 8;
+  const larguraMm = 210 - MARGEM * 2;
+  const alturaMm = 297 - MARGEM * 2;
+  const largura = conteudo.offsetWidth;
+  const alturaFolha = Math.floor((largura * alturaMm) / larguraMm);
+
+  // Fatias [início, fim) em px dentro do conteúdo, cortando entre blocos.
+  const topo = conteudo.getBoundingClientRect().top;
+  const blocos = [...conteudo.querySelectorAll<HTMLElement>('[data-bloco]')].map((el) => {
+    const r = el.getBoundingClientRect();
+    return { ini: r.top - topo, fim: r.bottom - topo };
+  });
+  const fatias: Array<[number, number]> = [];
+  let ini = 0;
+  for (const b of blocos) {
+    if (b.fim - ini <= alturaFolha) continue;
+    if (b.ini > ini) {
+      fatias.push([ini, b.ini]);
+      ini = b.ini;
+    }
+    while (b.fim - ini > alturaFolha) {
+      fatias.push([ini, ini + alturaFolha]);
+      ini += alturaFolha;
+    }
+  }
+  const total = conteudo.scrollHeight;
+  if (total > ini) fatias.push([ini, total]);
+
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  for (let i = 0; i < fatias.length; i++) {
+    const [a, b] = fatias[i];
+    const canvas = await html2canvas(conteudo, {
+      // x/y do recorte são relativos ao próprio elemento.
+      x: 0,
+      y: a,
+      width: largura,
+      height: Math.ceil(b - a),
+      scale: 2,
+      backgroundColor: '#efeae2',
+      useCORS: true,
+      logging: false,
+    });
+    if (i > 0) pdf.addPage();
+    pdf.setFillColor(239, 234, 226);
+    pdf.rect(0, 0, 210, 297, 'F');
+    pdf.addImage(
+      canvas.toDataURL('image/jpeg', 0.9),
+      'JPEG',
+      MARGEM,
+      MARGEM,
+      larguraMm,
+      ((b - a) * larguraMm) / largura,
+    );
+    aoAvancar(i + 1, fatias.length);
+  }
+  return pdf.output('blob');
+}
+
+function BotaoPdf({ c, conteudo }: { c: ConversaExportada; conteudo: React.RefObject<HTMLDivElement | null> }) {
+  const [progresso, setProgresso] = useState<string | null>(null);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const nome = `Conversa do WhatsApp com ${c.contact.name.replace(/[\\/:*?"<>|]+/g, ' ').trim()}.pdf`;
+
+  // No celular o "baixar" de um blob não funciona dentro do app instalado na
+  // tela inicial; a folha de compartilhar funciona (Salvar em Arquivos,
+  // WhatsApp, e-mail). Ela exige toque recente — por isso gerar e compartilhar
+  // são dois toques: o PDF demora mais que a janela de permissão do Safari.
+  const podeCompartilhar = (f: File) =>
+    typeof navigator !== 'undefined' && !!navigator.canShare?.({ files: [f] }) && /iPhone|iPad|Android/i.test(navigator.userAgent);
+
+  const baixar = (f: File) => {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = f.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const gerar = async () => {
+    if (!conteudo.current) return;
+    setErro(null);
+    setProgresso('Preparando…');
+    try {
+      await Promise.all(
+        [...conteudo.current.querySelectorAll('img')].map((img) =>
+          img.complete ? null : new Promise((r) => { img.onload = img.onerror = r; }),
+        ),
+      );
+      const blob = await gerarPdf(conteudo.current, (f, t) => setProgresso(`Página ${f} de ${t}…`));
+      const f = new File([blob], nome, { type: 'application/pdf' });
+      if (podeCompartilhar(f)) setArquivo(f);
+      else baixar(f);
+    } catch (e) {
+      console.error(e);
+      setErro('Não consegui gerar o PDF.');
+    } finally {
+      setProgresso(null);
+    }
+  };
+
+  const compartilhar = async () => {
+    if (!arquivo) return;
+    try {
+      await navigator.share({ files: [arquivo], title: arquivo.name });
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') baixar(arquivo);
+    }
+  };
+
+  if (arquivo) {
+    return (
+      <button
+        onClick={compartilhar}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+      >
+        <Share2 className="h-4 w-4" /> PDF pronto — salvar / enviar
+      </button>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      {erro && <span className="text-xs text-red-600">{erro}</span>}
+      <button
+        onClick={gerar}
+        disabled={progresso !== null}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-70"
+      >
+        {progresso ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+        {progresso ?? 'Baixar PDF'}
+      </button>
+    </span>
+  );
+}
+
 function Conversa({ c }: { c: ConversaExportada }) {
   const primeira = c.messages[0];
   const ultima = c.messages[c.messages.length - 1];
   const gerada = dataHora(c.generatedAt);
   const faltam = c.stats.audios - c.stats.audiosTranscribed;
+  const conteudo = useRef<HTMLDivElement>(null);
 
   let diaAnterior = '';
   let canalAnterior = '';
@@ -82,27 +250,31 @@ function Conversa({ c }: { c: ConversaExportada }) {
 
       <div className="nao-imprime sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white/95 px-4 py-2.5 backdrop-blur">
         <p className="text-sm text-zinc-600">
-          {c.stats.messages} mensagens
+          {plural(c.stats.messages, 'mensagem', 'mensagens')}
           {faltam > 0 && <span className="ml-2 text-amber-700">· {faltam} áudio(s) sem transcrição</span>}
           {c.stats.mediaMissing > 0 && (
             <span className="ml-2 text-amber-700">· {c.stats.mediaMissing} mídia(s) não recuperada(s)</span>
           )}
         </p>
-        <button
-          onClick={() => window.print()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-        >
-          <Printer className="h-4 w-4" /> Imprimir / salvar em PDF
-        </button>
+        <span className="inline-flex items-center gap-2">
+          <button
+            onClick={() => window.print()}
+            title="Imprimir"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+          >
+            <Printer className="h-4 w-4" /> <span className="hidden sm:inline">Imprimir</span>
+          </button>
+          <BotaoPdf c={c} conteudo={conteudo} />
+        </span>
       </div>
 
-      <div className="mx-auto max-w-[760px] px-4 py-6">
-        <header className="bolha mb-5 rounded-xl bg-white px-5 py-4 shadow-sm">
+      <div ref={conteudo} className="mx-auto max-w-[760px] px-4 py-6" style={{ background: '#efeae2' }}>
+        <header data-bloco className="bolha mb-5 rounded-xl bg-white px-5 py-4 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Conversa do WhatsApp</p>
               <h1 className="mt-0.5 text-xl font-bold">{c.contact.name}</h1>
-              {c.contact.phone && <p className="text-sm text-zinc-600">{c.contact.phone}</p>}
+              {c.contact.phone && <p className="text-sm text-zinc-600">{formatPhone(c.contact.phone) || c.contact.phone}</p>}
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/frider-andrade-logo.png" alt="Frider Andrade Advogados" className="h-10 w-auto" />
@@ -119,13 +291,14 @@ function Conversa({ c }: { c: ConversaExportada }) {
             <div>
               <dt className="inline font-medium text-zinc-800">Mensagens: </dt>
               <dd className="inline">
-                {c.stats.messages} · {c.stats.audios} áudios ({c.stats.audiosTranscribed} transcritos)
+                {c.stats.messages} · {plural(c.stats.audios, 'áudio', 'áudios')}
+                {c.stats.audios > 0 && ` (${plural(c.stats.audiosTranscribed, 'transcrito', 'transcritos')})`}
               </dd>
             </div>
             <div>
               <dt className="inline font-medium text-zinc-800">Número(s) do escritório: </dt>
               <dd className="inline">
-                {c.channels.map((ch) => ch.phoneNumber || ch.name).join(', ')}
+                {c.channels.map((ch) => (ch.phoneNumber ? formatPhone(ch.phoneNumber) || ch.phoneNumber : ch.name)).join(', ')}
               </dd>
             </div>
             <div>
@@ -148,7 +321,7 @@ function Conversa({ c }: { c: ConversaExportada }) {
           canalAnterior = m.channelName;
           autorAnterior = m.author;
           return (
-            <div key={m.id}>
+            <div key={m.id} data-bloco>
               {novoCanal && (
                 <Separador texto={`Conversa pelo número ${m.channelName}`} />
               )}
@@ -239,6 +412,7 @@ function Corpo({ m }: { m: MensagemExportada }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={m.mediaUrl}
+              crossOrigin={corsDaImagem(m.mediaUrl)}
               alt={m.caption || 'Imagem'}
               className={`rounded-md ${m.type === 'STICKER' ? 'max-h-32' : 'max-h-[420px]'} max-w-full`}
             />
