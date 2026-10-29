@@ -47,6 +47,7 @@ import {
   Handshake,
   FileSearch,
   HandCoins,
+  Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -476,6 +477,10 @@ export function AppSidebar() {
         {/* Ajuda — assistente que ensina a usar o BullQ, aberto a todos os usuários */}
         <div className="mb-1">
           <NavItem href="/ajuda" icon={HelpCircle} label="Ajuda" />
+        </div>
+        {/* Minhas contas — financeiro PESSOAL; o servidor só devolve as do próprio usuário */}
+        <div className="mb-1">
+          <NavItem href="/minhas-contas" icon={Wallet} label="Minhas contas" />
         </div>
         {/* Meu Espaço — fixa, acima de Configurações (perfil, organograma, cargos, cultura, manuais) */}
         <div className="mb-1">
