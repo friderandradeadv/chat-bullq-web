@@ -22,25 +22,30 @@ import { inputCls, Field } from '@/app/(dashboard)/processos/page';
 export function CreateEventDialog({
   date,
   fixedCase,
+  inicial,
+  aviso,
   onClose,
   onSaved,
 }: {
   date?: Date;
   fixedCase?: { id: string; title: string; cnjNumber: string | null };
+  /** Pré-preenchimento (lançamento rápido): o usuário confere e salva. startsAt em "YYYY-MM-DDTHH:MM". */
+  inicial?: { title?: string; kind?: EventKind; startsAt?: string; location?: string | null; caseId?: string; pessoal?: boolean };
+  aviso?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   // Responsável, via de regra, é QUEM ESTÁ CRIANDO — vem preenchido e pode trocar.
   const meId = useAuthStore((s) => s.user?.id) ?? '';
-  const [title, setTitle] = useState('');
-  const [kind, setKind] = useState<EventKind>('audiencia');
-  const [startsAt, setStartsAt] = useState(date ? toDatetimeLocal(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0)) : '');
-  const [location, setLocation] = useState('');
-  const [caseId, setCaseId] = useState(fixedCase?.id ?? '');
+  const [title, setTitle] = useState(inicial?.title ?? '');
+  const [kind, setKind] = useState<EventKind>(inicial?.kind ?? 'audiencia');
+  const [startsAt, setStartsAt] = useState(inicial?.startsAt ? inicial.startsAt : date ? toDatetimeLocal(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0)) : '');
+  const [location, setLocation] = useState(inicial?.location ?? '');
+  const [caseId, setCaseId] = useState(fixedCase?.id ?? inicial?.caseId ?? '');
   const [assignedToId, setAssignedToId] = useState(meId);
   const [reminders, setReminders] = useState<number[]>([1440, 60]);
   const [tagIds, setTagIds] = useState<string[]>([]);
-  const [pessoal, setPessoal] = useState(false);
+  const [pessoal, setPessoal] = useState(inicial?.pessoal ?? false);
   // '' = padrão (escritório/pessoal pelo tipo); 'nenhuma' = não envia; senão, o id da agenda.
   const [agendaGoogle, setAgendaGoogle] = useState('');
   const { data: destinos = [] } = useQuery({ queryKey: ['google-agenda', 'destinos'], queryFn: () => googleAgendaService.destinos(), staleTime: 5 * 60_000, retry: false });
@@ -61,6 +66,12 @@ export function CreateEventDialog({
   return (
     <Modal title="Adicionar evento" onClose={onClose} wide headerRight={<TagSelector selected={tagIds} onChange={setTagIds} />}>
       <div className="space-y-4">
+        {aviso && (
+          <div className="rounded-md bg-[#228BE6]/10 px-3 py-2 text-xs text-[#1c7ed6] dark:text-[#74c0fc]">
+            <p className="font-semibold">Preenchido pela IA — confira antes de salvar.</p>
+            <p className="mt-0.5 whitespace-pre-line">{aviso}</p>
+          </div>
+        )}
         <Field label={<>Título <span className="text-rose-500">*</span></>}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} autoFocus /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Tipo"><select value={kind} onChange={(e) => setKind(e.target.value as EventKind)} className={inputCls}>{(Object.keys(KIND_LABEL) as EventKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></Field>
