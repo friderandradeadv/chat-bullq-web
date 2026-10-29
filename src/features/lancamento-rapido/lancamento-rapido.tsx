@@ -124,7 +124,9 @@ export function LancamentoRapido({ onCriado }: { onCriado?: () => void }) {
           onPaste={onPaste}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void ler(); } }}
           rows={1}
-          placeholder={gravando ? 'Gravando… toque no quadrado para parar' : 'Lançar rápido: "audiência do José dia 12 às 14h", "paguei a luz"… (ou cole um print)'}
+          // Curto de propósito: placeholder de textarea quebra linha e dobra a altura do campo.
+          placeholder={gravando ? 'Gravando… toque no quadrado para parar' : 'Lançar rápido: digite, grave um áudio ou cole um print'}
+          title='Ex.: "audiência do José dia 12 às 14h", "paguei a luz", "fatura do Nubank 1.890"'
           className="max-h-32 min-h-[38px] flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
         />
         <input ref={fileRef} type="file" accept="image/*,audio/*" className="hidden" onChange={(e) => { setArquivo(e.target.files?.[0] ?? null); e.target.value = ''; }} />
