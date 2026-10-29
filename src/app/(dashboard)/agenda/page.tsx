@@ -95,6 +95,12 @@ const FONTE_LABEL: Record<FonteAgenda, string> = { ambos: 'Hub + Google', hub: '
 // conta|agenda|evento — o id de cada ocorrência de evento repetido é próprio.
 const GFEITOS_KEY = 'agenda:googleFeitos';
 const chaveGoogle = (g: { contaId: string; calendarId: string; id: string }) => `${g.contaId}|${g.calendarId}|${g.id}`;
+// Já terminou? Com hora: o fim (ou o início, se não houver fim) ficou para trás.
+// Dia inteiro: o Google manda o fim como o dia SEGUINTE, exclusivo — passou
+// quando hoje já chegou nesse dia. Passado conta como feito sem ninguém clicar.
+const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const googlePassou = (g: { inicio: string; fim: string | null; diaInteiro: boolean }) =>
+  g.diaInteiro ? (g.fim ?? g.inicio) <= hojeISO() : new Date(g.fim ?? g.inicio).getTime() < Date.now();
 const EXIBIR_KEY = 'agenda:exibir';
 // Só aceita o que tem a forma certa (localStorage/prefs podem vir de versão antiga).
 const parseExibir = (v: unknown): ExibirFilter | null =>
@@ -782,11 +788,11 @@ export default function AgendaPage() {
           .filter((g) => personId === 'all' || g.donoId === personId)
           .filter((g) => !q || g.titulo.toLowerCase().includes(q))
           .filter((g) => {
-            const feito = googleFeitos.has(chaveGoogle(g));
+            const feito = googleFeitos.has(chaveGoogle(g)) || googlePassou(g);
             return status === 'aconcluir' ? !feito : status === 'concluidas' ? feito : true;
           })
           .map((g): EventInput => {
-            const feito = googleFeitos.has(chaveGoogle(g));
+            const feito = googleFeitos.has(chaveGoogle(g)) || googlePassou(g);
             const cor = feito ? EV_DONE.bg : g.oculto ? '#a1a1aa' : g.cor ?? '#4285F4';
             return {
               id: `g_${g.contaId}_${g.calendarId}_${g.id}`,
@@ -1081,7 +1087,8 @@ export default function AgendaPage() {
       {dialog?.type === 'evento' && <CreateEventDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {gDetalhe && (() => {
         const g = gDetalhe;
-        const feito = googleFeitos.has(chaveGoogle(g));
+        const passou = googlePassou(g);
+        const feito = googleFeitos.has(chaveGoogle(g)) || passou;
         const ini = new Date(g.diaInteiro ? `${g.inicio}T12:00:00` : g.inicio);
         const quando = g.diaInteiro
           ? `${ini.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} · dia inteiro`
@@ -1093,13 +1100,13 @@ export default function AgendaPage() {
               <p className="text-sm text-zinc-600 dark:text-zinc-300">{quando.charAt(0).toUpperCase() + quando.slice(1)}</p>
               {g.local && <p className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-300"><MapPin className="h-4 w-4" />{g.local}</p>}
               <p className="flex items-center gap-1.5 text-xs text-zinc-500"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: g.cor ?? '#4285F4' }} />{g.agenda}</p>
-              <p className="text-xs text-zinc-400">Concluir aqui só risca no hub. No Google ele continua como está.</p>
+              <p className="text-xs text-zinc-400">{passou ? 'Já passou: aparece como feito no hub.' : 'Concluir aqui só risca no hub. No Google ele continua como está.'}</p>
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
               {g.link && <a href={g.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"><ExternalLink className="h-4 w-4" />Abrir no Google</a>}
-              <button onClick={() => { riscarGoogle(g, !feito); setGDetalhe(null); }} className={`inline-flex items-center gap-1 rounded px-4 py-2 text-sm font-bold uppercase tracking-wide ${feito ? 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800' : 'text-[#2F9E44] hover:bg-[#2F9E44]/10'}`}>
+              {!passou && <button onClick={() => { riscarGoogle(g, !feito); setGDetalhe(null); }} className={`inline-flex items-center gap-1 rounded px-4 py-2 text-sm font-bold uppercase tracking-wide ${feito ? 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800' : 'text-[#2F9E44] hover:bg-[#2F9E44]/10'}`}>
                 {feito ? 'Reabrir' : <><Check className="h-4 w-4" />Concluir</>}
-              </button>
+              </button>}
             </div>
           </Modal>
         );
