@@ -44,6 +44,9 @@ type Item = {
   caseId: string; cliente: string; card: string; reu: string | null; resultado: string;
   caixa: string | null; rotulo: string; status: string; resumo: string | null;
   estimativa: { dobro: number; danoMoral: number; total: number; ate: string | null } | null;
+  /** O foro da inicial pelo pagador do benefício (29/10/2026); null antes de ler de novo o HISCON. */
+  foro?: 'jef' | 'jec' | 'estadual' | null;
+  pagador?: string | null;
   ultimaCompetencia: string | null; temConversa: boolean;
   analisadaEm: string | null; enviadaEm: string | null; cardRefin: string | null;
   churning: { ofertado: boolean; grupo: string | null; contratos: number; veredito: string | null;
@@ -267,6 +270,24 @@ export function RefinBoard() {
   );
 }
 
+const ROTULO_DO_FORO: Record<string, { curto: string; longo: string }> = {
+  jef: { curto: 'JEF', longo: 'Juizado Especial Federal, contra o banco e o INSS (pagador do benefício é outro banco)' },
+  jec: { curto: 'JEC', longo: 'Juizado Especial Cível estadual, só contra o banco (pagador do benefício é a própria Ré)' },
+  estadual: { curto: 'VARA', longo: 'Vara cível estadual' },
+};
+
+/** Onde a inicial do refin vai sair. Some antes de o HISCON ser lido de novo. */
+function Foro({ o }: { o: Item }) {
+  const r = o.caixa === 'pronta' && o.foro ? ROTULO_DO_FORO[o.foro] : null;
+  if (!r) return null;
+  return (
+    <span className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-bold text-zinc-600 dark:border-zinc-600 dark:text-zinc-300"
+      title={`${r.longo}${o.pagador ? `. Pago em: ${o.pagador}` : ''}`}>
+      {r.curto}
+    </span>
+  );
+}
+
 /** As teses do cliente, em etiquetas: o que a mensagem vai oferecer. */
 function Teses({ o }: { o: Item }) {
   return (
@@ -308,6 +329,7 @@ function CardDaOferta({ o, onAbrir, onVincular }: { o: Item; onAbrir: () => void
       <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {o.reu ?? 'sem réu'} · <Acao o={o} /></p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Teses o={o} />
+        <Foro o={o} />
         {o.caixa === 'pronta' && o.estimativa ? (
           <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
             title={`Refin: dobro dos descontos até ${o.estimativa.ate ?? '?'} + dano moral. Não soma o churning.`}>
@@ -372,7 +394,7 @@ function ListaDeOfertas({ itens, onAbrir, onVincular }: {
               <td className="whitespace-nowrap px-2.5 py-2 text-[11px] text-[#48626f] dark:text-zinc-300">
                 {o.reu ?? 'sem réu'} · <Acao o={o} />
               </td>
-              <td className="px-2.5 py-2"><span className="flex flex-wrap gap-1"><Teses o={o} /></span></td>
+              <td className="px-2.5 py-2"><span className="flex flex-wrap gap-1"><Teses o={o} /><Foro o={o} /></span></td>
               <td className="whitespace-nowrap px-2.5 py-2 text-right font-semibold tabular-nums text-[#101820] dark:text-zinc-100">
                 {o.caixa === 'pronta' && o.estimativa ? reais(o.estimativa.total) : ''}
               </td>
@@ -499,6 +521,9 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
             {temRefin && o.resumo && <p><b className="text-[#101820] dark:text-zinc-200">Refin:</b> {o.resumo}</p>}
             {temRefin && o.estimativa && (
               <p>Estimativa do refin: {reais(o.estimativa.total)} (dobro {reais(o.estimativa.dobro)} até {o.estimativa.ate ?? '?'} + dano moral {reais(o.estimativa.danoMoral)})</p>
+            )}
+            {temRefin && o.foro && ROTULO_DO_FORO[o.foro] && (
+              <p>Foro da inicial: {ROTULO_DO_FORO[o.foro].longo}{o.pagador ? `. Pago em: ${o.pagador}` : ''}</p>
             )}
             {!temRefin && <p><b className="text-[#101820] dark:text-zinc-200">Refin:</b> {o.rotulo}</p>}
             {o.churning && (
