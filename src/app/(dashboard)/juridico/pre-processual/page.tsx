@@ -12,7 +12,7 @@ import {
   useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado, RolagemNoArraste,
   pintarAgora, indiceDeQueda, yDoPonteiro, useVaoKanban, comVao, estiloDoVao, type VaoKanban,
 } from '@/features/legal-cases/lib/kanban-dnd';
-import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles, Recycle, Wallet } from 'lucide-react';
+import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles, Recycle, Wallet, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarraProgresso } from '@/features/legal-cases/components/barra-progresso';
 import { api } from '@/lib/api';
@@ -22,6 +22,7 @@ import {
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { CasesListView } from '@/features/legal-cases/components/cases-list-view';
 import { ChurningBoard } from '@/features/legal-cases/components/churning-board';
+import { RefinBoard } from '@/features/legal-cases/components/refin-board';
 import { HonorariosDosClientes } from '@/features/legal-cases/components/honorarios-dos-clientes';
 import { NovoCasoDialog } from '@/features/legal-cases/components/novo-caso-dialog';
 import { PhaseHeader, AddPhaseColumn, BeneficioTag } from '@/features/legal-cases/components/kanban-card-bits';
@@ -136,7 +137,7 @@ export default function PreProcessualPage() {
   // processual, mais um kanban, coisa demais"*. O quadro das ofertas entra como
   // terceira vista, ao lado de Kanban e Lista, e o menu continua do tamanho que
   // era.
-  const [view, setView] = useState<'kanban' | 'lista' | 'churning' | 'honorarios'>('kanban');
+  const [view, setView] = useState<'kanban' | 'lista' | 'churning' | 'refin' | 'honorarios'>('kanban');
   const [novo, setNovo] = useState(false);
   // Seleção em massa (caixinha no card + barra de ações no rodapé).
   const bulk = useKanbanBulk();
@@ -390,7 +391,7 @@ export default function PreProcessualPage() {
               colunas para baixo: *"está visualmente feio, com as linhas
               quebrando"*. Aqui o filtro ocupa zero linha nova e usa o mesmo
               controle que já existe ao lado, o de responsável. */}
-          {etiquetas.length > 1 && view !== 'churning' && view !== 'honorarios' ? (
+          {etiquetas.length > 1 && view !== 'churning' && view !== 'refin' && view !== 'honorarios' ? (
             <select
               value={area ?? ''}
               onChange={(e) => setArea(e.target.value || null)}
@@ -409,6 +410,7 @@ export default function PreProcessualPage() {
             <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
             <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
             <button onClick={() => setView('churning')} title="Ofertas de reciclagem de contratos medidas no HISCON" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'churning' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Recycle className="h-4 w-4" /> Churning</button>
+            <button onClick={() => setView('refin')} title="Campanha do refinanciamento do cartão para quem perdeu a RMC" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'refin' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><CreditCard className="h-4 w-4" /> Refin</button>
             {/* 🚨 Fica ao lado do Churning porque é o mesmo trabalho: a opção
                 marcada aqui é a que a próxima oferta vai usar para abrir. */}
             <button onClick={() => setView('honorarios')} title="Em qual opção de honorários cada cliente fechou — é por ela que a próxima proposta abre" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'honorarios' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Wallet className="h-4 w-4" /> Honorários</button>
@@ -420,6 +422,8 @@ export default function PreProcessualPage() {
         <HonorariosDosClientes />
       ) : view === 'churning' ? (
         <ChurningBoard />
+      ) : view === 'refin' ? (
+        <RefinBoard />
       ) : view === 'lista' ? (
         <CasesListView byPhase={byPhase} phases={phases} onOpen={setOpenCaseId} accent="#e11970" />
       ) : (

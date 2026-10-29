@@ -1376,6 +1376,27 @@ export const legalCasesService = {
     return (data?.data ?? data) as any;
   },
 
+  /** A campanha do refin: RMC/RCC perdida ou extinta, com a caixa de cada cliente. */
+  async quadroDeOfertasRefin(): Promise<{ total: number; itens: any[] }> {
+    const { data } = await api.get('/legal-cases/refin/ofertas');
+    return (data?.data ?? data) as any;
+  },
+
+  /** Lê o HISCON da pasta do cliente e põe o card na caixa da campanha. */
+  async analisarOfertaRefin(id: string): Promise<{ ok: boolean; oferta: any }> {
+    const { data } = await api.post(`/legal-cases/${id}/oferta-refin/analisar`);
+    return (data?.data ?? data) as any;
+  },
+
+  /** Andamento da oferta. NÃO envia mensagem: o envio é feito antes, na conversa. */
+  async registrarOfertaRefin(
+    id: string,
+    body: { status: 'enviada' | 'aceita' | 'recusada'; mensagem?: string },
+  ): Promise<{ ok: boolean; oferta: any }> {
+    const { data } = await api.post(`/legal-cases/${id}/oferta-refin`, body);
+    return (data?.data ?? data) as any;
+  },
+
   /** O quadro das ofertas de churning: tudo que já foi medido, num lugar só. */
   async quadroDeOfertasChurning(): Promise<{ total: number; itens: any[] }> {
     const { data } = await api.get('/legal-cases/churning/ofertas');
