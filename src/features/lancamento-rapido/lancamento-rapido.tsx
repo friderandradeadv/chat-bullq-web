@@ -124,10 +124,11 @@ export function LancamentoRapido({ onCriado }: { onCriado?: () => void }) {
           onPaste={onPaste}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void ler(); } }}
           rows={1}
-          // Curto de propósito: placeholder de textarea quebra linha e dobra a altura do campo.
+          // Curto, e `placeholder-shown:truncate`: vazio, o exemplo fica numa linha com
+          // "…" em tela estreita (quebrado, ele dobrava a altura do campo).
           placeholder={gravando ? 'Gravando… toque no quadrado para parar' : 'Lançar rápido: digite, grave um áudio ou cole um print'}
           title='Ex.: "audiência do José dia 12 às 14h", "paguei a luz", "fatura do Nubank 1.890"'
-          className="max-h-32 min-h-[38px] flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-zinc-400 dark:text-zinc-100"
+          className="max-h-32 min-h-[38px] min-w-0 flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none placeholder:text-zinc-400 placeholder-shown:truncate dark:text-zinc-100"
         />
         <input ref={fileRef} type="file" accept="image/*,audio/*" className="hidden" onChange={(e) => { setArquivo(e.target.files?.[0] ?? null); e.target.value = ''; }} />
         <button type="button" onClick={() => fileRef.current?.click()} title="Anexar print ou áudio" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
