@@ -465,7 +465,7 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
       await legalCasesService.registrarOfertaRefin(o.caseId, { status });
       toast.success(status === 'aceita'
         ? (temChurning
-          ? 'Aceita. O aceite do churning se registra no painel de churning do card (é lá que nascem os cards dos réus).'
+          ? 'Aceita no refin. O churning segue pela escada do robô no card de campanha do cliente.'
           : 'Aceita: o card de refin foi para "montar inicial"')
         : 'Recusa registrada');
       onMudou();
@@ -542,7 +542,7 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
               <span className="text-[11px] text-[#48626f] dark:text-zinc-500">
                 {!o.temConversa ? 'vincule o WhatsApp antes' : 'vai pela conversa dele'}
                 {temRefin ? '; nasce o card de refin em "informações faltantes"' : ''}
-                {temChurning ? '; o churning passa a "enviada" no quadro do Churning' : ''}
+                {temChurning ? "; o churning entra na escada do robô pelo card de campanha do cliente" : ""}
               </span>
             </>
           )}

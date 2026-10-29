@@ -40,6 +40,8 @@ type Oferta = {
   analisadaEm: string | null; enviadaEm: string | null; temConversa: boolean;
   /** A cadeia sai pela mensagem única da campanha da carteira (quadro Refin). */
   naCampanhaRefin?: boolean;
+  /** O churning deste cliente já saiu por outro card: esta oferta sobrou. */
+  jaOfertadoEmOutroCard?: boolean;
 };
 
 const dia = (iso: string | null) =>
@@ -183,6 +185,12 @@ export function ChurningBoard() {
                         <p className="mt-1 inline-block rounded bg-[#e3f0fb] px-1.5 py-0.5 text-[10px] font-semibold text-[#1565c0] dark:bg-sky-500/15 dark:text-sky-300"
                           title="Este cliente perdeu a RMC: a oferta vai junto com a do refin, numa mensagem só, pelo quadro Refin.">
                           na campanha Refin: envie por lá
+                        </p>
+                      )}
+                      {o.jaOfertadoEmOutroCard && (
+                        <p className="mt-1 inline-block rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                          title="A oferta de churning deste cliente já saiu por outro card. Não envie esta.">
+                          já ofertado por outro card
                         </p>
                       )}
 
@@ -329,6 +337,11 @@ function ListaDeOfertas({
                 {o.naCampanhaRefin && (
                   <span className="ml-1.5 rounded bg-[#e3f0fb] px-1 py-0.5 text-[10px] font-semibold text-[#1565c0] dark:bg-sky-500/15 dark:text-sky-300">
                     via Refin
+                  </span>
+                )}
+                {o.jaOfertadoEmOutroCard && (
+                  <span className="ml-1.5 rounded bg-red-100 px-1 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-400">
+                    já ofertado
                   </span>
                 )}
               </td>
