@@ -41,7 +41,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { calendarService, type CalendarEvent, type EventKind } from '@/features/calendar/services/calendar.service';
-import { googleAgendaService } from '@/features/google-agenda/google-agenda.service';
+import { googleAgendaService, type EventoGoogle } from '@/features/google-agenda/google-agenda.service';
 import { deadlinesService, type Deadline } from '@/features/deadlines/services/deadlines.service';
 import { tasksService, type Task } from '@/features/tasks/services/tasks.service';
 import { membersService } from '@/features/settings/services/members.service';
@@ -87,6 +87,14 @@ type StatusFilter = 'todas' | 'aconcluir' | 'concluidas' | 'canceladas';
 const STATUS_VALUES: StatusFilter[] = ['todas', 'aconcluir', 'concluidas', 'canceladas'];
 const STATUS_KEY = 'agenda:status';
 type ExibirFilter = { tarefas: boolean; eventos: boolean };
+// De onde vêm os itens: o hub, o Google Agenda ou os dois juntos.
+type FonteAgenda = 'ambos' | 'hub' | 'google';
+const FONTE_KEY = 'agenda:fonte';
+const FONTE_LABEL: Record<FonteAgenda, string> = { ambos: 'Hub + Google', hub: 'Só o hub', google: 'Só o Google' };
+// Eventos do Google que ele riscou NO HUB (no Google nada muda). Chave estável:
+// conta|agenda|evento — o id de cada ocorrência de evento repetido é próprio.
+const GFEITOS_KEY = 'agenda:googleFeitos';
+const chaveGoogle = (g: { contaId: string; calendarId: string; id: string }) => `${g.contaId}|${g.calendarId}|${g.id}`;
 const EXIBIR_KEY = 'agenda:exibir';
 // Só aceita o que tem a forma certa (localStorage/prefs podem vir de versão antiga).
 const parseExibir = (v: unknown): ExibirFilter | null =>
@@ -368,6 +376,10 @@ export default function AgendaPage() {
   const [fAtrib, setFAtrib] = useState(false);
   const [dispOpen, setDispOpen] = useState(false);
   const [exibir, setExibir] = useState<ExibirFilter>({ tarefas: true, eventos: true });
+  const [fonte, setFonte] = useState<FonteAgenda>('ambos');
+  const [fonteMenu, setFonteMenu] = useState(false);
+  const [googleFeitos, setGoogleFeitos] = useState<Set<string>>(new Set());
+  const [gDetalhe, setGDetalhe] = useState<EventoGoogle | null>(null);
   // Padrão "A concluir" só para quem NUNCA escolheu: agenda é lista do que FALTA
   // fazer. Com "todas", prazo concluído e prazo CANCELADO seguiam ocupando o dia
   // (riscados, e com a bolinha de "adicionado hoje" se tivessem nascido no dia) —
@@ -396,7 +408,7 @@ export default function AgendaPage() {
   // Grava o objeto `agenda` INTEIRO nas preferências do usuário. O merge do
   // backend é RASO no topo, então mandar só um campo (view OU seenNew) apagaria
   // o outro — por isso sempre reenviamos o objeto completo.
-  const patchAgendaPrefs = (partial: { view?: ViewMode; seenNew?: string[]; status?: StatusFilter; exibir?: ExibirFilter }) => {
+  const patchAgendaPrefs = (partial: { view?: ViewMode; seenNew?: string[]; status?: StatusFilter; exibir?: ExibirFilter; fonte?: FonteAgenda; googleFeitos?: string[] }) => {
     const cur =
       (qcPrefs.getQueryData(['user-preferences']) as { agenda?: Record<string, unknown> } | undefined)
         ?.agenda ?? {};
@@ -407,6 +419,14 @@ export default function AgendaPage() {
     }));
     preferencesService.patch({ agenda: nextAgenda }).catch(() => { /* best-effort */ });
   };
+  useEffect(() => {
+    try {
+      const f = localStorage.getItem(FONTE_KEY) as FonteAgenda | null;
+      if (f && f in FONTE_LABEL) setFonte(f);
+      const gf = localStorage.getItem(GFEITOS_KEY);
+      if (gf) setGoogleFeitos(new Set<string>(JSON.parse(gf)));
+    } catch { /* */ }
+  }, []);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SEEN_NEW_KEY);
@@ -518,6 +538,37 @@ export default function AgendaPage() {
       try { localStorage.setItem(SEEN_NEW_KEY, JSON.stringify([...merged].slice(-500))); } catch { /* */ }
     }
   }, [prefsQ.isSuccess, prefsQ.data]);
+
+  // Fonte e riscados do Google: o servidor é a verdade (segue entre aparelhos).
+  // Os riscados se SOMAM aos locais — riscar no celular e no desktop não se apagam.
+  const didApplyServerFonte = useRef(false);
+  useEffect(() => {
+    if (didApplyServerFonte.current || !prefsQ.isSuccess) return;
+    didApplyServerFonte.current = true;
+    const ag = prefsQ.data?.agenda as { fonte?: FonteAgenda; googleFeitos?: string[] } | undefined;
+    if (ag?.fonte && ag.fonte in FONTE_LABEL) {
+      setFonte(ag.fonte);
+      try { localStorage.setItem(FONTE_KEY, ag.fonte); } catch { /* */ }
+    }
+    const doServidor = Array.isArray(ag?.googleFeitos) ? ag!.googleFeitos! : [];
+    if (doServidor.length) setGoogleFeitos((cur) => new Set<string>([...cur, ...doServidor]));
+  }, [prefsQ.isSuccess, prefsQ.data]);
+  const pickFonte = (f: FonteAgenda) => {
+    setFonte(f); setFonteMenu(false);
+    didApplyServerFonte.current = true;
+    try { localStorage.setItem(FONTE_KEY, f); } catch { /* */ }
+    patchAgendaPrefs({ fonte: f });
+  };
+  const riscarGoogle = (g: EventoGoogle, feito: boolean) => {
+    const next = new Set(googleFeitos);
+    if (feito) next.add(chaveGoogle(g)); else next.delete(chaveGoogle(g));
+    setGoogleFeitos(next);
+    // Teto: ficam os mais recentes; riscado de meses atrás não pesa nas prefs.
+    const arr = [...next].slice(-1000);
+    try { localStorage.setItem(GFEITOS_KEY, JSON.stringify(arr)); } catch { /* */ }
+    patchAgendaPrefs({ googleFeitos: arr });
+    toast.success(feito ? 'Compromisso concluído no hub' : 'Compromisso reaberto');
+  };
 
   const from = useMemo(() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString(); }, []);
   const to = useMemo(() => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString(); }, []);
@@ -642,6 +693,7 @@ export default function AgendaPage() {
   const q = searchQuery.trim().toLowerCase();
   const qDigits = q.replace(/\D/g, '');
   const filtered = useMemo(() => activities.filter((a) => {
+    if (fonte === 'google') return false;
     if (a.source === 'evento' ? !exibir.eventos : !exibir.tarefas) return false;
     if (status === 'aconcluir' && (a.done || a.cancelled)) return false;
     if (status === 'concluidas' && !a.done) return false;
@@ -656,7 +708,7 @@ export default function AgendaPage() {
       if (!byText && !byCnj) return false;
     }
     return true;
-  }), [activities, exibir, status, personId, tagFilter, q, qDigits]);
+  }), [activities, exibir, status, personId, tagFilter, q, qDigits, fonte]);
 
   const byId = useMemo(() => new Map(filtered.map((a) => [a.id, a])), [filtered]);
   // Repinta a barra do topo de cada evento já montado quando as etiquetas/filtro
@@ -724,26 +776,35 @@ export default function AgendaPage() {
   }).concat(
     // Eventos do Google: só leitura (editar é no Google). Seguem o filtro de
     // pessoa e o "exibir eventos"; a busca por texto também vale para eles.
-    exibir.eventos && status !== 'concluidas' && status !== 'canceladas'
+    // O status vale para eles também: riscado no hub conta como concluído.
+    fonte !== 'hub' && exibir.eventos && status !== 'canceladas'
       ? (gQ.data?.eventos ?? [])
           .filter((g) => personId === 'all' || g.donoId === personId)
           .filter((g) => !q || g.titulo.toLowerCase().includes(q))
-          .map((g): EventInput => ({
-            id: `g_${g.contaId}_${g.calendarId}_${g.id}`,
-            title: `${personId === 'all' ? `${initials(userMap.get(g.donoId) ?? null)} · ` : ''}${g.titulo}`,
-            start: g.inicio,
-            end: g.fim ?? undefined,
-            allDay: g.diaInteiro,
-            backgroundColor: g.oculto ? '#a1a1aa' : g.cor ?? '#4285F4',
-            borderColor: g.oculto ? '#a1a1aa' : g.cor ?? '#4285F4',
-            textColor: '#ffffff',
-            classNames: ['ag-google'],
-            startEditable: false,
-            durationEditable: false,
-            extendedProps: { ordSort: g.diaInteiro ? 1 : 0, google: g },
-          }))
+          .filter((g) => {
+            const feito = googleFeitos.has(chaveGoogle(g));
+            return status === 'aconcluir' ? !feito : status === 'concluidas' ? feito : true;
+          })
+          .map((g): EventInput => {
+            const feito = googleFeitos.has(chaveGoogle(g));
+            const cor = feito ? EV_DONE.bg : g.oculto ? '#a1a1aa' : g.cor ?? '#4285F4';
+            return {
+              id: `g_${g.contaId}_${g.calendarId}_${g.id}`,
+              title: `${personId === 'all' ? `${initials(userMap.get(g.donoId) ?? null)} · ` : ''}${g.titulo}`,
+              start: g.inicio,
+              end: g.fim ?? undefined,
+              allDay: g.diaInteiro,
+              backgroundColor: cor,
+              borderColor: cor,
+              textColor: feito ? EV_DONE.text : '#ffffff',
+              classNames: ['ag-google', feito ? 'ag-done' : ''].filter(Boolean),
+              startEditable: false,
+              durationEditable: false,
+              extendedProps: { ordSort: feito ? 2 : g.diaInteiro ? 1 : 0, google: g },
+            };
+          })
       : [],
-  ), [filtered, personId, gQ.data, exibir.eventos, status, q, userMap]);
+  ), [filtered, personId, gQ.data, exibir.eventos, status, q, userMap, fonte, googleFeitos]);
 
   const pickMode = (m: ViewMode) => {
     setMode(m); setViewMenu(false);
@@ -783,9 +844,9 @@ export default function AgendaPage() {
   const onEventClick = (arg: EventClickArg) => {
     const g = arg.event.extendedProps?.google as import('@/features/google-agenda/google-agenda.service').EventoGoogle | undefined;
     if (g) {
-      // Do Google: abre lá, que é onde se edita. "Ocupado" de colega não tem link.
-      if (g.link) window.open(g.link, '_blank', 'noopener');
-      else toast.info('Horário ocupado na agenda de um colega.');
+      // "Ocupado" de colega não tem detalhe nem botão: não é dele para riscar.
+      if (g.oculto || g.donoId !== meId) { toast.info('Horário ocupado na agenda de um colega.'); return; }
+      setGDetalhe(g);
       return;
     }
     const a = byId.get(arg.event.id);
@@ -899,6 +960,17 @@ export default function AgendaPage() {
         </div>
         )}
 
+        {/* Fonte: hub, Google ou os dois */}
+        <div className="relative">
+          <FilterBtn onClick={() => setFonteMenu((v) => !v)} active={fonte !== 'ambos'}>{FONTE_LABEL[fonte]}<ChevronDown className="h-3.5 w-3.5" /></FilterBtn>
+          {fonteMenu && (<><div className="fixed inset-0 z-10" onClick={() => setFonteMenu(false)} />
+            <div className="absolute left-0 top-11 z-20 w-48 overflow-hidden rounded-lg border border-[#DEE2E6] bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+              {(Object.keys(FONTE_LABEL) as FonteAgenda[]).map((f) => (
+                <button key={f} onClick={() => pickFonte(f)} className={`block w-full px-4 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${fonte === f ? 'font-semibold text-[#228BE6]' : 'text-zinc-700 dark:text-zinc-300'}`}>{FONTE_LABEL[f]}</button>
+              ))}
+            </div></>)}
+        </div>
+
         {/* Todas as atividades */}
         <div className="relative">
           <FilterBtn onClick={() => { setDExibir(exibir); setDStatus(status); setFAtiv((v) => !v); }} active={!exibir.tarefas || !exibir.eventos || status !== 'todas'}>Todas as atividades<ChevronDown className="h-3.5 w-3.5" /></FilterBtn>
@@ -955,7 +1027,9 @@ export default function AgendaPage() {
           </div>
           <div className={`flex-1 p-3 ${isMonth ? 'agenda-month' : ''}`}>
             {mode === 'list' ? (
-              <ActivityList activities={filtered} onOpen={openDetail} isUnseenNew={isUnseenNew} estaPronto={estaProntoNaoVisto} />
+              fonte === 'google'
+                ? <p className="px-2 py-10 text-center text-sm text-zinc-500">Os eventos do Google aparecem nas visões por dia, por semana e por mês.</p>
+                : <ActivityList activities={filtered} onOpen={openDetail} isUnseenNew={isUnseenNew} estaPronto={estaProntoNaoVisto} />
             ) : (
               <FullCalendar
                 key={mode} ref={calRef}
@@ -1005,6 +1079,31 @@ export default function AgendaPage() {
         </Modal>
       )}
       {dialog?.type === 'evento' && <CreateEventDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
+      {gDetalhe && (() => {
+        const g = gDetalhe;
+        const feito = googleFeitos.has(chaveGoogle(g));
+        const ini = new Date(g.diaInteiro ? `${g.inicio}T12:00:00` : g.inicio);
+        const quando = g.diaInteiro
+          ? `${ini.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} · dia inteiro`
+          : `${ini.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} · ${ini.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}${g.fim ? `–${new Date(g.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}`;
+        return (
+          <Modal title="Compromisso do Google" onClose={() => setGDetalhe(null)}>
+            <div className="space-y-3">
+              <p className={`text-lg font-medium text-[#202124] dark:text-zinc-100 ${feito ? 'text-zinc-400 line-through' : ''}`}>{g.titulo}</p>
+              <p className="text-sm capitalize text-zinc-600 dark:text-zinc-300">{quando}</p>
+              {g.local && <p className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-300"><MapPin className="h-4 w-4" />{g.local}</p>}
+              <p className="flex items-center gap-1.5 text-xs text-zinc-500"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: g.cor ?? '#4285F4' }} />{g.agenda}</p>
+              <p className="text-xs text-zinc-400">Concluir aqui só risca no hub. No Google ele continua como está.</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+              {g.link && <a href={g.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"><ExternalLink className="h-4 w-4" />Abrir no Google</a>}
+              <button onClick={() => { riscarGoogle(g, !feito); setGDetalhe(null); }} className={`inline-flex items-center gap-1 rounded px-4 py-2 text-sm font-bold uppercase tracking-wide ${feito ? 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800' : 'text-[#2F9E44] hover:bg-[#2F9E44]/10'}`}>
+                {feito ? 'Reabrir' : <><Check className="h-4 w-4" />Concluir</>}
+              </button>
+            </div>
+          </Modal>
+        );
+      })()}
       {dialog?.type === 'tarefa' && <CreateTaskDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {dialog?.type === 'atendimento' && <CreateAtendimentoDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
       {dialog?.type === 'prazo' && <CreateDeadlineDialog date={dialog.date} onClose={() => setDialog(null)} onSaved={() => { refetchAll(); setDialog(null); }} />}
