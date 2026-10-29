@@ -12,6 +12,10 @@
  * caixa depois que o hub lê o HISCON da pasta: oferta pronta, HISCON antigo
  * (que não alcança 11/2023), sem HISCON, sem refin.
  *
+ * Desde 29/10/2026 a mesma leitura mede também o CHURNING do cliente, e quem
+ * tem as duas teses recebe uma mensagem só com as duas. O churning só entra com
+ * o veredito AJUIZAR do HISCON.
+ *
  * 🚨 O ENVIO É CLIQUE, UM CLIENTE POR VEZ, na conversa que já existe. O botão
  * "analisar" lê documentos; nenhum botão deste quadro fala com mais de um
  * cliente. A inicial contra a Meta afirma ao juízo que os scripts de envio em
@@ -34,24 +38,28 @@ type Item = {
   estimativa: { dobro: number; danoMoral: number; total: number; ate: string | null } | null;
   ultimaCompetencia: string | null; temConversa: boolean;
   analisadaEm: string | null; enviadaEm: string | null; cardRefin: string | null;
+  churning: { ofertado: boolean; grupo: string | null; contratos: number; veredito: string | null;
+    statusNoChurning: string | null; motivo: string | null } | null;
+  oferecivel: boolean;
 };
 
 /** As seções, na ordem em que o trabalho anda. */
 const SECOES: { chave: string; titulo: string; ajuda: string; de: (i: Item) => boolean }[] = [
-  { chave: 'pronta', titulo: 'Oferta pronta', ajuda: 'refin medido no HISCON: leia a mensagem e envie',
-    de: (i) => i.caixa === 'pronta' && (i.status === 'analisada' || i.status === 'nova') },
+  { chave: 'pronta', titulo: 'Oferta pronta', ajuda: 'refin e/ou churning medidos no HISCON: leia a mensagem e envie',
+    de: (i) => i.oferecivel && (i.status === 'analisada' || i.status === 'nova') },
   { chave: 'enviada', titulo: 'Enviada', ajuda: 'aguardando a resposta do cliente',
-    de: (i) => i.caixa === 'pronta' && i.status === 'enviada' },
+    de: (i) => i.oferecivel && i.status === 'enviada' },
   { chave: 'aceita', titulo: 'Aceita', ajuda: 'o card de refin foi para "montar inicial"',
     de: (i) => i.status === 'aceita' },
   { chave: 'hiscon-antigo', titulo: 'Pedir HISCON novo', ajuda: 'o extrato arquivado termina antes de 11/2023',
-    de: (i) => i.caixa === 'hiscon-antigo' },
+    de: (i) => i.caixa === 'hiscon-antigo' && !i.oferecivel },
   { chave: 'nova', titulo: 'Não analisada', ajuda: 'o hub ainda não leu o HISCON deste cliente',
     de: (i) => !i.caixa },
   { chave: 'sem-hiscon', titulo: 'Sem HISCON na pasta', ajuda: 'colete o extrato antes',
     de: (i) => i.caixa === 'sem-hiscon' },
-  { chave: 'fora', titulo: 'Fora da campanha', ajuda: 'sem refin, refin depois da IN 158, já tem card ou recusou',
-    de: (i) => ['sem-refin', 'posterior-in158', 'ja-tem-card'].includes(i.caixa ?? '') || i.status === 'recusada' },
+  { chave: 'fora', titulo: 'Fora da campanha', ajuda: 'sem refin nem churning viável, refin depois da IN 158, já tem card ou recusou',
+    de: (i) => (['sem-refin', 'posterior-in158', 'ja-tem-card'].includes(i.caixa ?? '') && !i.oferecivel)
+      || i.status === 'recusada' },
 ];
 
 const reais = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -114,7 +122,7 @@ export function RefinBoard() {
           {itens.length}
         </span>
         <p className="text-xs text-[#48626f] dark:text-zinc-400">
-          RMC/RCC perdida ou extinta: o refinanciamento do saldo do cartão como ação nova
+          RMC/RCC perdida ou extinta: refin do cartão e churning dos empréstimos como ações novas
         </p>
         <div className="ml-auto flex items-center gap-2">
           <div className="relative">
@@ -198,7 +206,9 @@ function Linha({ o, expandido, onExpandir, onAbrir, onMudou }: {
 }) {
   const [texto, setTexto] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const temOferta = o.caixa === 'pronta';
+  const temOferta = o.oferecivel;
+  const temRefin = o.caixa === 'pronta';
+  const temChurning = o.churning?.ofertado === true;
 
   const carregarTexto = async () => {
     if (texto !== null) return;
@@ -252,7 +262,11 @@ function Linha({ o, expandido, onExpandir, onAbrir, onMudou }: {
     setOcupado(true);
     try {
       await legalCasesService.registrarOfertaRefin(o.caseId, { status });
-      toast.success(status === 'aceita' ? 'Aceita: o card de refin foi para "montar inicial"' : 'Recusa registrada');
+      toast.success(status === 'aceita'
+        ? (temChurning
+          ? 'Aceita. O aceite do churning se registra no painel de churning do card (é lá que nascem os cards dos réus).'
+          : 'Aceita: o card de refin foi para "montar inicial"')
+        : 'Recusa registrada');
       onMudou();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Não consegui registrar a resposta.');
@@ -275,11 +289,23 @@ function Linha({ o, expandido, onExpandir, onAbrir, onMudou }: {
           <p className="truncate text-sm font-semibold uppercase text-[#101820] dark:text-zinc-100">{o.cliente}</p>
           <p className="truncate text-[11px] text-[#48626f] dark:text-zinc-500">
             × {o.reu ?? 'sem réu'} · ação {o.resultado === 'extinto' ? 'extinta' : 'perdida'}
-            {o.resumo ? ` · ${o.resumo}` : ''}
+            {temRefin && o.resumo ? ` · ${o.resumo}` : ''}
+            {o.churning && !temChurning && o.churning.motivo ? ` · churning: ${o.churning.motivo}` : ''}
             {o.caixa === 'hiscon-antigo' && o.ultimaCompetencia ? ` · HISCON até ${o.ultimaCompetencia.split('-').reverse().join('/')}` : ''}
           </p>
         </div>
-        {o.estimativa ? (
+        {temRefin && (
+          <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: ACCENT }}>
+            REFIN
+          </span>
+        )}
+        {temChurning && (
+          <span className="shrink-0 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-bold text-white"
+            title={`${o.churning?.contratos} contratos no ${o.churning?.grupo}: veredito ${o.churning?.veredito}`}>
+            CHURNING · {o.churning?.grupo}
+          </span>
+        )}
+        {temRefin && o.estimativa ? (
           <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-[#101820] dark:text-zinc-100"
             title={`Dobro dos descontos até ${o.estimativa.ate ?? '?'} + dano moral. Piso: o HISCON termina na emissão.`}>
             {reais(o.estimativa.total)}
@@ -330,7 +356,9 @@ function Linha({ o, expandido, onExpandir, onAbrir, onMudou }: {
                 Enviar a {o.cliente.split(' ')[0]} pelo WhatsApp
               </button>
               <span className="text-[11px] text-[#48626f] dark:text-zinc-500">
-                vai pela conversa dele; ao enviar, nasce o card de refin em "informações faltantes"
+                vai pela conversa dele
+                {temRefin ? '; nasce o card de refin em "informações faltantes"' : ''}
+                {temChurning ? '; a oferta de churning do card passa a "enviada"' : ''}
               </span>
             </div>
           )}
