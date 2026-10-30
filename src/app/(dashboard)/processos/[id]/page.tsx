@@ -61,6 +61,10 @@ import {
   PARTE_RECORRENTE_LABEL,
 } from '@/features/recursos/services/recursos.service';
 import { CreateDeadlineDialog } from '@/features/deadlines/components/create-deadline-dialog';
+// 🚨 A MESMA modal da agenda, não uma parecida. Ela saiu de dentro da página
+// da agenda para cá justamente para que estas duas telas não divirjam.
+import { ActivityDetailModal, prazoParaActivity } from '@/features/deadlines/components/activity-detail-modal';
+import type { Activity } from '@/features/deadlines/components/activity-detail-modal';
 import { CreateTaskDialog } from '@/features/tasks/components/create-task-dialog';
 import { CreateEventDialog } from '@/features/calendar/components/create-event-dialog';
 import { CreateAtendimentoDialog } from '@/features/calendar/components/create-atendimento-dialog';
@@ -1249,6 +1253,10 @@ function AtividadesTab({
   const done = deadlines.filter((d) => d.status !== 'OPEN');
   const shown = showDone ? done : open;
 
+  // o prazo que está aberto na modal (null = nenhuma aberta)
+  const [aberto, setAberto] = useState<Activity | null>(null);
+  const router = useRouter();
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['case-deadlines', caseId] });
     onChange();
@@ -1313,7 +1321,14 @@ function AtividadesTab({
                   <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                     Prazo
                   </span>
-                  <div className="min-w-0 flex-1">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setAberto(prazoParaActivity(d))}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAberto(prazoParaActivity(d)); } }}
+                    title="Abrir o prazo"
+                    className="min-w-0 flex-1 cursor-pointer rounded px-1 -mx-1 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                  >
                     <p className={`text-sm ${isDone ? 'text-zinc-400 line-through' : 'text-zinc-800 dark:text-zinc-200'}`}>
                       {d.title}
                       {d.type === 'FATAL' && (
@@ -1335,6 +1350,16 @@ function AtividadesTab({
           </ul>
         )}
       </Card>
+
+      {aberto && (
+        <ActivityDetailModal
+          activity={aberto}
+          onClose={() => setAberto(null)}
+          onRefetch={refresh}
+          onOpenCase={(id) => router.push(`/processos/${id}`)}
+          onOpenConversation={(convId) => router.push(`/conversas?c=${convId}`)}
+        />
+      )}
 
       <Card title="Eventos e audiências" icon={CalendarClock} action={<AddCardBtn label="Adicionar evento" onClick={() => onNovo('evento')} />}>
         {events.length === 0 ? (
