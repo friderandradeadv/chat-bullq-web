@@ -148,6 +148,25 @@ export default function DashboardLayout({
       });
   }, [router, user, setAuth, setActiveOrg]);
 
+  /**
+   * 🚨 O MODO DA NAVEGAÇÃO, LEGÍVEL PELO CSS. Painel sobreposto (`fixed`) não
+   * enxerga o `padding-bottom` que o conteúdo recebe mais abaixo: ele vai até a
+   * borda da janela e some sob a barra de atalhos. Quem desenha painel reserva
+   * `var(--dock-h)`, e é esta marca que diz ao CSS se a barra existe no desktop.
+   * Ver a definição em `globals.css`.
+   *
+   * 🚨 E ELE FICA AQUI, COM OS OUTROS HOOKS (30/10/2026). Eu o havia posto logo
+   * antes do `return` final — que vem DEPOIS do `return` condicional do
+   * `isLoading`. Nos renders que tomam aquele atalho o hook não roda, nos outros
+   * roda, e o React derruba a aplicação inteira com o erro #310 ("rendered more
+   * hooks than during the previous render"). O site respondia 200 no `curl` e
+   * não abria em navegador nenhum: HTML servido, JavaScript morto na hidratação.
+   * Hook NÃO vai depois de return condicional, nem o mais inofensivo.
+   */
+  useEffect(() => {
+    document.body.dataset.nav = simples ? 'simples' : 'completo';
+  }, [simples]);
+
   if (isLoading) {
     // Este círculo já vem pronto do SERVIDOR e só some quando o JavaScript roda
     // no aparelho. Se algo travar (app da tela de início no iPhone ficava
@@ -173,15 +192,6 @@ export default function DashboardLayout({
 
   const bellBtnCls =
     'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800';
-
-  // 🚨 O MODO DA NAVEGAÇÃO, LEGÍVEL PELO CSS (30/10/2026). Painel sobreposto
-  // (`fixed`) não enxerga o `padding-bottom` que o conteúdo recebe aqui embaixo:
-  // ele vai até a borda e some sob a barra de atalhos. Quem desenha painel
-  // reserva `var(--dock-h)`, e é esta marca que diz ao CSS se a barra existe no
-  // desktop. Ver a definição em `globals.css`.
-  useEffect(() => {
-    document.body.dataset.nav = simples ? 'simples' : 'completo';
-  }, [simples]);
 
   return (
     // Provider ENVOLVE o SidebarLayout: assim o sino (no app bar do topo, que o
