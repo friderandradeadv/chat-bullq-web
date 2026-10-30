@@ -134,11 +134,23 @@ export function EnviarPropostaWhatsapp({
       setEnviando(0);
       const conversa = await resolverConversa();
       if (!conversa) return;
-      for (let i = 0; i < mensagens.length; i++) {
-        setEnviando(i + 1);
-        await inboxService.sendMessage({ conversationId: conversa.id, type: 'TEXT', content: { text: mensagens[i] } });
-        if (i < mensagens.length - 1) await new Promise((r) => setTimeout(r, 900));
-      }
+      // 🚨 O RITMO É DO SERVIDOR, NÃO DO NAVEGADOR (30/10/2026). Este laço
+      // mandava uma por uma com 900ms de `setTimeout` aqui: se uma requisição
+      // demorasse mais que a seguinte, as mensagens INVERTIAM — o "rol de
+      // perguntas embaralhadas" que o escritório viu —, e fechar a aba no meio
+      // deixava o cliente com meia proposta. Agora vai uma chamada só, com as
+      // partes prontas, e o servidor as espaça no mesmo compasso dos ensaios.
+      const enviada: any = await inboxService.sendMessage({
+        conversationId: conversa.id,
+        type: 'TEXT',
+        content: { text: mensagens[0] },
+        partes: mensagens,
+      });
+      setEnviando(mensagens.length);
+      // O PDF espera a última bolha: o servidor diz quanto falta, para não
+      // existir uma segunda cópia da fórmula do ritmo aqui.
+      const esperar = Number(enviada?.atrasoTotalMs ?? 0) || 0;
+      if (esperar > 0) await new Promise((r) => setTimeout(r, esperar + 400));
       if (anexar && montarPdf) {
         setEnviando(mensagens.length + 1);
         await anexarPdf(conversa.id);

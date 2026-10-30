@@ -234,6 +234,12 @@ export const inboxService = {
      * de tudo que foi ensaiado.
      */
     emBolhas?: boolean;
+    /**
+     * As bolhas JÁ prontas, para quem é dono do corte — a proposta de
+     * honorários, cuja mensagem das opções tem linha em branco dentro. O ritmo
+     * entre elas é do servidor, como nos ensaios.
+     */
+    partes?: string[];
   }): Promise<Message> {
     const { data } = await api.post('/messages', payload);
     return data.data;
