@@ -291,6 +291,8 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         type: 'text',
         content: { text: texto.trim() },
         oneOff: true,
+        // Igual aos ensaios: ver a nota no quadro do churning.
+        emBolhas: true,
       });
       await legalCasesService.registrarOfertaChurning(caso.id, { status: 'enviada', mensagem: texto.trim() });
       qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });

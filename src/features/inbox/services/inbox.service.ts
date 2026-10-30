@@ -227,6 +227,13 @@ export const inboxService = {
     isInternal?: boolean;
     /** Intervenção pontual — envia sem assumir a conversa (não reatribui nem pausa IA). */
     oneOff?: boolean;
+    /**
+     * 🚨 MANDA EM BOLHAS, COMO NOS ENSAIOS (30/10/2026). Corta o texto nos
+     * parágrafos que o autor escreveu; o ritmo entre elas é do servidor, o mesmo
+     * da automação. Sem isto a oferta chega como um muro de texto — diferente
+     * de tudo que foi ensaiado.
+     */
+    emBolhas?: boolean;
   }): Promise<Message> {
     const { data } = await api.post('/messages', payload);
     return data.data;

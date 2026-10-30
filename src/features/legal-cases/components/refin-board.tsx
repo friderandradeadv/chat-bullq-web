@@ -471,6 +471,8 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
         type: 'text',
         content: { text: texto.trim() },
         oneOff: true,
+        // Igual aos ensaios: uma bolha por parágrafo, no ritmo do servidor.
+        emBolhas: true,
       });
       await legalCasesService.registrarOfertaRefin(o.caseId, { status: 'enviada', mensagem: texto.trim() });
       toast.success('Oferta enviada ao cliente');
