@@ -20,6 +20,7 @@ import { Check, LayoutGrid, List, Loader2, Recycle, RefreshCw, Search, Send, Shi
 import { toast } from 'sonner';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { LinhaDoTempoDaOferta } from './linha-do-tempo-da-oferta';
+import { PreviaEmBolhas } from './previa-em-bolhas';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
@@ -582,6 +583,12 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
 }) {
   const [texto, setTexto] = useState<string>(String(o.mensagem ?? ''));
   const [ocupado, setOcupado] = useState(false);
+  /**
+   * 🚨 A PRÉVIA ABRE EM BOLHAS (30/10/2026). Aprovar num campo de texto e mandar
+   * em seis bolhas é aprovar uma coisa e enviar outra. O campo continua a um
+   * clique, porque revisar o texto é trabalho do advogado.
+   */
+  const [vendo, setVendo] = useState<'bolhas' | 'texto'>('bolhas');
   const enviada = String(o.status ?? 'analisada') === 'enviada';
   const respondida = ['aceita', 'recusada'].includes(String(o.status ?? ''));
 
@@ -700,15 +707,28 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
 
         {texto.trim() ? (
           <>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f] dark:text-zinc-400">
-              a mensagem {enviada || respondida ? 'enviada' : 'que vai ao cliente'}
-            </p>
-            <textarea
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              rows={14}
-              className="w-full rounded-lg border border-[#cfe0ed] p-2 text-xs leading-5 text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-            />
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f] dark:text-zinc-400">
+                a mensagem {enviada || respondida ? 'enviada' : 'que vai ao cliente'}
+              </p>
+              <button
+                type="button"
+                onClick={() => setVendo(vendo === 'bolhas' ? 'texto' : 'bolhas')}
+                className="rounded-md border border-[#cfe0ed] px-2 py-0.5 text-[10px] font-semibold text-[#4b5863] hover:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-300"
+              >
+                {vendo === 'bolhas' ? 'editar o texto' : 'ver como vai chegar'}
+              </button>
+            </div>
+            {vendo === 'bolhas' ? (
+              <PreviaEmBolhas texto={texto} />
+            ) : (
+              <textarea
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                rows={14}
+                className="w-full rounded-lg border border-[#cfe0ed] p-2 text-xs leading-5 text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              />
+            )}
           </>
         ) : (
           /* Oferta medida antes de 30/10/2026: o texto não foi guardado. O botão

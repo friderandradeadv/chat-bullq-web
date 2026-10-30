@@ -37,6 +37,7 @@ import { inboxService } from '@/features/inbox/services/inbox.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
 import { LinhaDoTempoDaOferta } from './linha-do-tempo-da-oferta';
+import { PreviaEmBolhas } from './previa-em-bolhas';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 const ACCENT = 'rgb(25,118,210)';
@@ -426,6 +427,7 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
   o: Item; onFechar: () => void; onAbrirCard: () => void; onMudou: () => void;
 }) {
   const [texto, setTexto] = useState<string | null>(null);
+  const [vendoBolhas, setVendoBolhas] = useState(true);
   const [ocupado, setOcupado] = useState(false);
   const temRefin = o.caixa === 'pronta';
   const temChurning = o.churning?.ofertado === true;
@@ -564,13 +566,30 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
             texto === null ? (
               <p>Carregando a mensagem…</p>
             ) : (
-              <textarea
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                disabled={!podeEnviar}
-                rows={16}
-                className="w-full rounded-lg border border-[#cfe0ed] bg-white p-2 text-sm leading-5 text-[#101820] disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-              />
+              <>
+                {/* 🚨 ABRE EM BOLHAS (30/10/2026): o que o cliente lê é a bolha,
+                    não o campo. O texto continua a um clique, para revisar. */}
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setVendoBolhas(!vendoBolhas)}
+                    className="rounded-md border border-[#cfe0ed] px-2 py-0.5 text-[10px] font-semibold text-[#4b5863] hover:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    {vendoBolhas ? 'editar o texto' : 'ver como vai chegar'}
+                  </button>
+                </div>
+                {vendoBolhas ? (
+                  <PreviaEmBolhas texto={texto} />
+                ) : (
+                  <textarea
+                    value={texto}
+                    onChange={(e) => setTexto(e.target.value)}
+                    disabled={!podeEnviar}
+                    rows={16}
+                    className="w-full rounded-lg border border-[#cfe0ed] bg-white p-2 text-sm leading-5 text-[#101820] disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  />
+                )}
+              </>
             )
           )}
         </div>
