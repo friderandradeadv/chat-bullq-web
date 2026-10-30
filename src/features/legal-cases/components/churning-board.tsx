@@ -599,7 +599,20 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
        baixo passava POR CIMA: o botão de enviar saía cortado. *"parece meio
        bugado, cortado, incompleto"*. Copiar a casca que já funciona é mais
        barato e mais seguro que descobrir o z-index certo. */
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onFechar}>
+    /* 🚨 RESERVA A BARRA DE BAIXO (30/10/2026). Sem isto o painel vai até a
+       borda da janela e o botão de enviar some sob a barra de atalhos. A altura
+       mora em `--dock-h` (globals.css), porque muda com o modo de navegação e
+       com a safe-area do aparelho.
+       ⚠️ Comentário de BLOCO. Comentário de JSX entre chaves, antes do elemento
+       raiz e dentro do `return (`, NÃO é comentário: é expressão, e o build
+       quebra com "Property assignment expected". E não se escreve a sequência
+       de fechar comentário dentro de um comentário — ela o encerra ali mesmo,
+       que foi o segundo erro desta mesma correção. */
+    <div
+      className="fixed inset-0 z-40 flex justify-end bg-black/30"
+      style={{ paddingBottom: 'var(--dock-h, 0px)' }}
+      onClick={onFechar}
+    >
       <div
         className="flex h-full w-full max-w-xl flex-col bg-white shadow-xl dark:bg-zinc-900"
         onClick={(e) => e.stopPropagation()}

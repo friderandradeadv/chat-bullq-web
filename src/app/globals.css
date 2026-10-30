@@ -119,6 +119,20 @@
   /* Sobe o conteúdo acima da barra de abas mobile + a safe-area inferior. */
   .pb-tabbar { padding-bottom: calc(3.5rem + env(safe-area-inset-bottom)); }
 
+  /**
+   * 🚨 A ALTURA DA BARRA DE BAIXO, EM UM LUGAR SÓ (30/10/2026).
+   *
+   * Painel sobreposto (`fixed`) não enxerga o `padding-bottom` que o layout dá
+   * ao conteúdo: ele vai até a borda da janela e some por baixo da barra de
+   * atalhos. Foi o que aconteceu com o painel da oferta de churning — o botão
+   * de enviar ficava cortado: *"parece meio bugado, cortado, incompleto"*.
+   *
+   * Quem desenhar painel sobreposto reserva `var(--dock-h)` embaixo. O valor
+   * muda com o modo de navegação e com a safe-area do aparelho, e é por isso
+   * que ele mora aqui, e não cravado em cada tela.
+   */
+  :root { --dock-h: calc(3.5rem + env(safe-area-inset-bottom)); }
+
   .scrollbar-none {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -476,4 +490,10 @@
   select {
     font-size: 16px;
   }
+}
+
+/* A barra de baixo no desktop só existe no modo "simples" — ver o layout. */
+@media (min-width: 1024px) {
+  :root { --dock-h: 0px; }
+  [data-nav='simples'] { --dock-h: calc(4rem + var(--dock-safe, 0px)); }
 }

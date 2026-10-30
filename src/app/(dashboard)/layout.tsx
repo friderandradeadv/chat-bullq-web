@@ -174,6 +174,15 @@ export default function DashboardLayout({
   const bellBtnCls =
     'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800';
 
+  // 🚨 O MODO DA NAVEGAÇÃO, LEGÍVEL PELO CSS (30/10/2026). Painel sobreposto
+  // (`fixed`) não enxerga o `padding-bottom` que o conteúdo recebe aqui embaixo:
+  // ele vai até a borda e some sob a barra de atalhos. Quem desenha painel
+  // reserva `var(--dock-h)`, e é esta marca que diz ao CSS se a barra existe no
+  // desktop. Ver a definição em `globals.css`.
+  useEffect(() => {
+    document.body.dataset.nav = simples ? 'simples' : 'completo';
+  }, [simples]);
+
   return (
     // Provider ENVOLVE o SidebarLayout: assim o sino (no app bar do topo, que o
     // SidebarLayout renderiza) e o painel de notificações compartilham o contexto.
