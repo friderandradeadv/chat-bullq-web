@@ -14,9 +14,10 @@
  * "enviada" significa falar com o cliente. Mensagem ao cliente sai de um clique
  * dentro do card, na conversa que já existe, nunca de um gesto no quadro.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutGrid, List, Loader2, RefreshCw, Search, ShieldAlert, ShieldCheck, Users } from 'lucide-react';
+import { LayoutGrid, List, Loader2, Recycle, RefreshCw, Search, ShieldAlert, ShieldCheck, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
@@ -53,6 +54,8 @@ type Oferta = {
    * faz. `null` nas ofertas analisadas antes desta marca.
    */
   dinheiro?: { recebido: number; parcelaMensal: number; jaDescontado: number; aindaFalta: number } | null;
+  /** O texto já composto pelo servidor. Sem ele, o painel ainda manda reanalisar. */
+  mensagem?: string | null;
   /** A cadeia sai pela mensagem única da campanha da carteira (quadro Refin). */
   naCampanhaRefin?: boolean;
   /** O churning deste cliente já saiu por outro card: esta oferta sobrou. */
@@ -65,6 +68,42 @@ const dia = (iso: string | null) =>
 export function ChurningBoard() {
   const [busca, setBusca] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
+  /**
+   * 🚨 O VARREDOR DAS OFERTAS SEM TEXTO (30/10/2026). As analisadas ANTES desta
+   * data não guardam dinheiro nem mensagem: abrir cada card e clicar "Analisar
+   * cadeia" seriam 138 cliques e 138 leituras de HISCON para ver o que o hub já
+   * tinha medido. Aqui o servidor faz tudo — mede e compõe —, e isto só pede,
+   * UM DE CADA VEZ, para não afogar a VPS (o build simultâneo de três sessões já
+   * derrubou o site por horas).
+   *
+   * Não fala com cliente nenhum: só relê documento e grava no card.
+   */
+  const [completando, setCompletando] = useState<{ feitos: number; total: number } | null>(null);
+  const pararRef = useRef(false);
+
+  /**
+   * Relê e completa as ofertas de "A REVISAR" que ainda não têm a mensagem
+   * guardada. Uma por vez; dá para parar no meio. O erro de cada uma aparece
+   * nominalmente — "veja a pasta" não serve quando falta o HISCON de um só.
+   */
+  const completarPendentes = async (fila: Oferta[]) => {
+    pararRef.current = false;
+    setCompletando({ feitos: 0, total: fila.length });
+    const erros: string[] = [];
+    for (let i = 0; i < fila.length; i++) {
+      if (pararRef.current) break;
+      await legalCasesService
+        .registrarOfertaChurning(fila[i].caseId, { status: 'analisada', grupo: fila[i].grupo })
+        .catch((e: any) => {
+          erros.push(`${fila[i].cliente.split(' ')[0]}: ${e?.response?.data?.message || 'não consegui ler o HISCON'}`);
+        });
+      setCompletando({ feitos: i + 1, total: fila.length });
+      if ((i + 1) % 5 === 0) refetch();
+    }
+    setCompletando(null);
+    refetch();
+    if (erros.length) toast.error(erros.join(' · '), { duration: 15000 });
+  };
   const [vincular, setVincular] = useState<{ caseId: string; cliente: string } | null>(null);
   /* 🚨 QUADRO PARA TRABALHAR UM CASO, LISTA PARA PERCORRER CEM (22/10/2026).
      A varredura deixou 103 ofertas na coluna A REVISAR, e card em coluna é
@@ -109,6 +148,19 @@ export function ChurningBoard() {
 
   const porColuna = (chave: string) => itens.filter((o) => (o.status || 'analisada') === chave);
 
+  /**
+   * As que ainda não têm a mensagem guardada — analisadas antes de 30/10/2026.
+   * Conta sobre TODAS, não sobre o filtro da busca: o botão diz quantas faltam
+   * no acervo, não quantas aparecem na tela agora.
+   */
+  const semMensagem = useMemo(
+    () => ((data?.itens ?? []) as Oferta[])
+      .filter((o) => (o.status || 'analisada') === 'analisada'
+        && !String(o.mensagem ?? '').trim()
+        && !!String(o.grupo ?? '').trim()),
+    [data],
+  );
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
@@ -145,6 +197,23 @@ export function ChurningBoard() {
               </button>
             ))}
           </div>
+          {/* 🚨 COMPLETAR AS ANTIGAS. As ofertas analisadas antes de 30/10/2026 não
+              guardam dinheiro nem mensagem: o painel delas ainda manda reanalisar,
+              uma a uma. Isto relê e completa, UMA DE CADA VEZ, e não fala com
+              cliente nenhum. Some quando não há mais nenhuma. */}
+          {completando ? (
+            <button onClick={() => { pararRef.current = true; }}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 text-xs font-semibold text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {completando.feitos}/{completando.total} — parar
+            </button>
+          ) : semMensagem.length > 0 ? (
+            <button onClick={() => completarPendentes(semMensagem)}
+              title="Relê o HISCON de cada oferta que ainda não tem a mensagem guardada, uma de cada vez. Não envia nada a ninguém."
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs font-semibold text-[#1b6ec2] hover:bg-zinc-50 dark:border-zinc-700 dark:text-sky-300 dark:hover:bg-zinc-800">
+              <Recycle className="h-3 w-3" /> completar {semMensagem.length}
+            </button>
+          ) : null}
           <button onClick={() => refetch()} disabled={isFetching}
             className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs text-[#48626f] hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
             {isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}

@@ -403,9 +403,13 @@ export default function PreProcessualPage() {
               {etiquetas.map((e2) => <option key={e2.chave} value={e2.chave}>{e2.rotulo}</option>)}
             </select>
           ) : null}
-          <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
-            <Plus className="h-4 w-4" /> Novo processo
-          </button>
+          {/* 🚨 AS ABAS FICAM À ESQUERDA, SEMPRE (30/10/2026). Elas vinham DEPOIS
+              do "Novo processo", que carrega `ml-auto`: numa tela estreita a barra
+              quebra e o grupo cai para a segunda linha, à esquerda; numa larga ele
+              fica à direita do botão. Abrir o card muda a largura útil e, com ela, o
+              lugar dos ícones — *"quando abro, move o lugar dos ícones"*. Pondo as
+              abas primeiro e deixando o `ml-auto` só no botão, o grupo é sempre o
+              primeiro item da linha e não se mexe. */}
           <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
             <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
             <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
@@ -415,6 +419,9 @@ export default function PreProcessualPage() {
                 marcada aqui é a que a próxima oferta vai usar para abrir. */}
             <button onClick={() => setView('honorarios')} title="Em qual opção de honorários cada cliente fechou — é por ela que a próxima proposta abre" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'honorarios' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Wallet className="h-4 w-4" /> Honorários</button>
           </div>
+          <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
+            <Plus className="h-4 w-4" /> Novo processo
+          </button>
         </div>
       </div>
 

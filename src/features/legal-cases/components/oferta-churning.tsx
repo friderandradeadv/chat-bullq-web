@@ -62,64 +62,14 @@ type Achado = {
 };
 
 /**
- * O texto que vai ao cliente.
+ * 🚨 O TEXTO DA OFERTA SAIU DAQUI (30/10/2026). Ele agora é composto e guardado
+ * pelo servidor, em `legal-cases/cliente/texto-da-oferta-de-churning.ts`, junto
+ * de quem mede os números — e com teste. Aqui ele só existia na memória da tela:
+ * para ver a mensagem de um card era preciso reler o HISCON, e eram 138 cards.
  *
- * Regras que não são de estilo: fala em dinheiro (ele não sabe o que é
- * "churning" nem "averbação"), não promete resultado — Código de Ética da OAB,
- * art. 41 — e termina com uma pergunta de resposta simples, porque é dela que
- * sai o "sim" que move o card.
+ * Não volte a compor nesta tela. Duas versões do mesmo texto envelhecem em datas
+ * diferentes, e a que o cliente lê passa a ser a sorteada.
  */
-function textoDaOferta(nome: string | null, a: Achado): string {
-  const primeiro = (nome ?? '').trim().split(/\s+/)[0] || 'Olá';
-  // Uma instituição: diz o nome. Várias do mesmo grupo: diz o grupo e quantas,
-  // porque despejar onze nomes numa mensagem de WhatsApp não informa ninguém.
-  const banco =
-    a.instituicoes.length === 1 ? ` no ${a.instituicoes[0]}`
-    : a.instituicoes.length > 1 ? ` no ${a.grupo} (${a.instituicoes.length} instituições do mesmo grupo)`
-    : '';
-  const d = a.dinheiro;
-  const linhas: string[] = [];
-
-  linhas.push(`${primeiro}, terminei de analisar o histórico dos seus empréstimos no INSS.`);
-  linhas.push('');
-  linhas.push(
-    `Além do cartão que já vamos discutir, apareceu outra coisa: ${a.contratos} empréstimos${banco} ` +
-      `foram trocados uns pelos outros, um refinanciando o anterior. A cada troca entrou pouco ` +
-      `dinheiro na sua conta e a dívida foi esticada de novo.`,
-  );
-
-  if (d) {
-    linhas.push('');
-    linhas.push('Pelo que o próprio INSS registra:');
-    if (d.recebido > 0) linhas.push(`• entrou na sua conta: ${brl(d.recebido)}`);
-    if (d.parcelaMensal > 0) linhas.push(`• sai do seu benefício por mês: ${brl(d.parcelaMensal)}`);
-    if (d.jaDescontado > 0) linhas.push(`• já descontado até aqui: ${brl(d.jaDescontado)}`);
-    if (d.aindaFalta > 0) linhas.push(`• ainda falta pagar: ${brl(d.aindaFalta)}`);
-  }
-
-  linhas.push('');
-  linhas.push(
-    'Isso pode ser discutido em uma ação separada, junto com a do cartão. ' +
-      'Não posso garantir resultado, isso ninguém honesto garante, mas posso dizer que o caso tem do que tratar.',
-  );
-  linhas.push('');
-  // Honorários no padrão do escritório: quota litis meio a meio. Dito em uma
-  // linha e sem percentual escondido — é a parte que o cliente mais releva e a
-  // que mais gera briga depois.
-  // 🚨 SEGUNDA PESSOA, SEM TRATAMENTO DE GÊNERO. Esta linha dizia "a senhora",
-  // cravado — foi escrita para uma cliente e nunca parametrizada. Saiu assim
-  // numa mensagem para o JOSÉ BATISTA ("josé e chamando de senhora"), e já
-  // destoava do resto do próprio texto, que trata por "sua conta", "seu
-  // benefício", "seus empréstimos". "Você" resolve sem adivinhar gênero.
-  linhas.push(
-    'Os honorários são os mesmos do seu contrato: meio a meio. Do que você ' +
-      'receber, 50% fica com você e 50% com o escritório. Se não houver ' +
-      'recebimento, você não paga nada.',
-  );
-  linhas.push('');
-  linhas.push('Quer que eu inclua essa parte? Responda SIM ou NÃO que eu sigo daqui.');
-  return linhas.join('\n');
-}
 
 export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: () => void }) {
   const qc = useQueryClient();
@@ -190,15 +140,23 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       outrosGrupos: Math.max(0, quantosGrupos - 1),
     };
     setAchado(a);
-    setTexto(textoDaOferta(cliente?.name ?? null, a));
-    await legalCasesService.registrarOfertaChurning(caso.id, {
+    // 🚨 O TEXTO VEM DA RESPOSTA, não daqui. Compor aqui para "mostrar logo" era
+    // manter um segundo compositor vivo: hoje idêntico ao do servidor, amanhã
+    // não. O registro devolve a oferta já com a mensagem composta por quem mediu.
+    const reg: any = await legalCasesService.registrarOfertaChurning(caso.id, {
       status: 'analisada',
+      // 🚨 A TELA NÃO MANDA MAIS O TEXTO (30/10/2026, segunda correção na mesma
+      // madrugada). Eu a tinha feito gravar o texto que ela compunha — e isso
+      // criava DOIS compositores para a mesma mensagem, o desta tela e o do
+      // servidor, envelhecendo em datas diferentes. Quem compõe é quem mede:
+      // ver `textoDaOfertaDeChurning`, no back. A tela mostra e deixa revisar.
       resumo: `${a.grupo || 'grupo'}: ${a.indicios.length} indício(s) em ${contratos} contrato(s)`,
       indicios: a.indicios.map((i) => i.id),
       // O grupo vai como CAMPO, não só dentro do resumo: é ele que o montador
       // de churning lê para saber contra quem é a ação.
       grupo: a.grupo || undefined,
     });
+    setTexto(String(reg?.oferta?.mensagem ?? ''));
     qc.invalidateQueries({ queryKey: ['oferta-churning', caso.id] });
   };
 
@@ -234,19 +192,25 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    */
   useEffect(() => {
     if (achado || !oferta) return;
-    const d = (oferta as any).dinheiro ?? null;
     const guardada = String((oferta as any).mensagem ?? '').trim();
-    if (!d && !guardada) return;
+    // 🚨 SÓ O TEXTO GUARDADO — NUNCA RECOMPOR AQUI (30/10/2026, achado ao revisar).
+    // A primeira versão disto caía no `textoDaOferta` quando havia dinheiro e
+    // não havia texto. Só que o compositor usa `contratos` e `instituicoes`, que
+    // a oferta NÃO guarda: a mensagem sairia *"apareceu outra coisa: 0
+    // empréstimos"*, errada na tela e a um clique de ir para um cliente.
+    // Mensagem remontada pela metade é pior que mensagem ausente — sem o texto
+    // guardado, o painel segue o caminho de antes ("Analisar cadeia").
+    if (!guardada) return;
     const doBanco: Achado = {
       grupo: String((oferta as any).grupo ?? ''),
       instituicoes: [],
       indicios: [],
-      dinheiro: d,
+      dinheiro: (oferta as any).dinheiro ?? null,
       contratos: 0,
       outrosGrupos: 0,
     };
     setAchado(doBanco);
-    setTexto(guardada || textoDaOferta(cliente?.name ?? null, doBanco));
+    setTexto(guardada);
   }, [oferta, achado, cliente?.name]);
 
   /**
