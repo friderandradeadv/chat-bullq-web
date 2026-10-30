@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Recycle, Send, Check, X, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
@@ -214,6 +214,40 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     refetchOnWindowFocus: false,
   });
   const oferta = data?.oferta ?? null;
+
+  /**
+   * 🚨 O PAINEL ABRE COM A MENSAGEM PRONTA (30/10/2026). Ordem do escritório,
+   * com os dois quadros lado a lado: *"do churning preciso dessa tela igual ao
+   * refin"*. A diferença não era de layout: no refin o texto chega guardado, e
+   * aqui ele só existia depois de clicar "Analisar cadeia" naquela sessão — o
+   * `achado` morava na memória da tela. Com 138 cards em A REVISAR, isso eram
+   * 138 cliques e 138 leituras de HISCON para ver o que o hub já tinha medido.
+   *
+   * Desde hoje a análise GUARDA o dinheiro e a mensagem (ver
+   * `registrarOfertaChurning`), então o painel hidrata o que já foi medido e
+   * mostra o texto e o botão de enviar na hora.
+   *
+   * ⚠️ O que NÃO volta por aqui são os indícios em detalhe: a oferta guarda só
+   * os ids deles, não os títulos. Quem quiser a lista clica em "Analisar
+   * cadeia", que é o caminho de antes e segue intacto. Preferi isto a inventar
+   * título a partir de id: lista errada na tela é pior que lista ausente.
+   */
+  useEffect(() => {
+    if (achado || !oferta) return;
+    const d = (oferta as any).dinheiro ?? null;
+    const guardada = String((oferta as any).mensagem ?? '').trim();
+    if (!d && !guardada) return;
+    const doBanco: Achado = {
+      grupo: String((oferta as any).grupo ?? ''),
+      instituicoes: [],
+      indicios: [],
+      dinheiro: d,
+      contratos: 0,
+      outrosGrupos: 0,
+    };
+    setAchado(doBanco);
+    setTexto(guardada || textoDaOferta(cliente?.name ?? null, doBanco));
+  }, [oferta, achado, cliente?.name]);
 
   /**
    * Lê o HISCON que já está na pasta do cliente e separa só o que interessa aqui.

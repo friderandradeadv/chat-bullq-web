@@ -32,12 +32,27 @@ const COLUNAS: { chave: string; titulo: string; ajuda: string }[] = [
   { chave: 'recusada', titulo: 'RECUSADA', ajuda: 'o cliente disse não' },
 ];
 
+/**
+ * ⚠️ QUINTA CÓPIA DESTE FORMATADOR no mesmo diretório (acordo-panel,
+ * avanco-fase-modals, case-detail-drawer, bancos-reus-editor). Fica local para
+ * não misturar faxina com o conserto que o escritório está esperando; vale uma
+ * limpeza à luz do dia, num commit só dela.
+ */
+const brl = (n: number | null | undefined) =>
+  (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 type Oferta = {
   caseId: string; cliente: string; card: string; fase: string | null;
   grupo: string; status: string; resumo: string | null; indicios: number;
   refis: number; emBranco: number; declarados: number;
   portao: string | null; protocolaSemExtrato: boolean;
   analisadaEm: string | null; enviadaEm: string | null; temConversa: boolean;
+  /**
+   * 🚨 O CASO EM DINHEIRO, guardado desde a análise (30/10/2026). É o que deixa
+   * este card dizer de quanto se trata sem abrir nada — como o card do Refin já
+   * faz. `null` nas ofertas analisadas antes desta marca.
+   */
+  dinheiro?: { recebido: number; parcelaMensal: number; jaDescontado: number; aindaFalta: number } | null;
   /** A cadeia sai pela mensagem única da campanha da carteira (quadro Refin). */
   naCampanhaRefin?: boolean;
   /** O churning deste cliente já saiu por outro card: esta oferta sobrou. */
@@ -211,6 +226,17 @@ export function ChurningBoard() {
                             nada liberado
                           </span>
                         ) : null}
+                        {/* 🚨 O QUE O CLIENTE SENTIU, em dinheiro: é por ele que o
+                            advogado decide por onde começar, e é o que o card do
+                            Refin já mostrava. Só aparece quando a análise o mediu. */}
+                        {o.dinheiro && (
+                          <span
+                            title={`entrou na conta ${brl(o.dinheiro.recebido)} · sai ${brl(o.dinheiro.parcelaMensal)}/mês · já descontado ${brl(o.dinheiro.jaDescontado)} · ainda falta ${brl(o.dinheiro.aindaFalta)}`}
+                            className="rounded bg-[#eaf3fb] px-1.5 py-0.5 font-semibold text-[#1b6ec2] dark:bg-sky-500/15 dark:text-sky-300"
+                          >
+                            {brl(o.dinheiro.aindaFalta)} a pagar
+                          </span>
+                        )}
                       </div>
 
                       {/* O portão do extrato, que decide se a ação espera documento. */}
