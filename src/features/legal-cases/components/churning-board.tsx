@@ -16,8 +16,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutGrid, List, Loader2, Recycle, RefreshCw, Search, ShieldAlert, ShieldCheck, Users } from 'lucide-react';
+import { Check, LayoutGrid, List, Loader2, Recycle, RefreshCw, Search, Send, ShieldAlert, ShieldCheck, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { inboxService } from '@/features/inbox/services/inbox.service';
+import { LinhaDoTempoDaOferta } from './linha-do-tempo-da-oferta';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
@@ -47,7 +49,7 @@ type Oferta = {
   grupo: string; status: string; resumo: string | null; indicios: number;
   refis: number; emBranco: number; declarados: number;
   portao: string | null; protocolaSemExtrato: boolean;
-  analisadaEm: string | null; enviadaEm: string | null; temConversa: boolean;
+  analisadaEm: string | null; enviadaEm: string | null; respondidaEm?: string | null; temConversa: boolean;
   /**
    * 🚨 O CASO EM DINHEIRO, guardado desde a análise (30/10/2026). É o que deixa
    * este card dizer de quanto se trata sem abrir nada — como o card do Refin já
@@ -68,6 +70,14 @@ const dia = (iso: string | null) =>
 export function ChurningBoard() {
   const [busca, setBusca] = useState('');
   const [aberto, setAberto] = useState<string | null>(null);
+  /**
+   * 🚨 O CARD ABRE O PAINEL, NÃO O PROCESSO INTEIRO (30/10/2026). Ordem do
+   * escritório, com os dois quadros lado a lado: *"quero os cards de churning
+   * igual do refin, com a prévia de mensagem"*. Abrir o card inteiro obrigava a
+   * procurar o bloco "Ação adicional" lá embaixo para ver a mensagem e enviar.
+   * O processo continua a um clique, no botão "card" do painel.
+   */
+  const [oferta, setOferta] = useState<string | null>(null);
   /**
    * 🚨 O VARREDOR DAS OFERTAS SEM TEXTO (30/10/2026). As analisadas ANTES desta
    * data não guardam dinheiro nem mensagem: abrir cada card e clicar "Analisar
@@ -153,6 +163,8 @@ export function ChurningBoard() {
    * Conta sobre TODAS, não sobre o filtro da busca: o botão diz quantas faltam
    * no acervo, não quantas aparecem na tela agora.
    */
+  const emOferta = oferta ? itens.find((i) => i.caseId === oferta) ?? null : null;
+
   const semMensagem = useMemo(
     () => ((data?.itens ?? []) as Oferta[])
       .filter((o) => (o.status || 'analisada') === 'analisada'
@@ -227,7 +239,7 @@ export function ChurningBoard() {
       ) : modo === 'lista' ? (
         <ListaDeOfertas
           itens={itens}
-          onAbrir={setAberto}
+          onAbrir={setOferta}
           onVincular={(caseId, cliente) => setVincular({ caseId, cliente })}
         />
       ) : (
@@ -257,8 +269,8 @@ export function ChurningBoard() {
                       key={o.caseId}
                       role="button"
                       tabIndex={0}
-                      onClick={() => setAberto(o.caseId)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAberto(o.caseId); } }}
+                      onClick={() => setOferta(o.caseId)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOferta(o.caseId); } }}
                       className="cursor-pointer rounded-lg border border-[#cfe0ed] bg-white p-3 text-left shadow-sm transition hover:shadow-md dark:border-transparent dark:bg-[#1E2226]"
                     >
                       <p className="line-clamp-2 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">
@@ -356,6 +368,15 @@ export function ChurningBoard() {
           clienteNome={vincular.cliente}
           onClose={() => setVincular(null)}
           onVinculado={() => refetch()}
+        />
+      )}
+
+      {emOferta && (
+        <PainelDaOfertaChurning
+          o={emOferta}
+          onFechar={() => setOferta(null)}
+          onAbrirCard={() => setAberto(emOferta.caseId)}
+          onMudou={() => refetch()}
         />
       )}
 
@@ -481,6 +502,151 @@ function ListaDeOfertas({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * O PAINEL DA OFERTA DE CHURNING — o gêmeo do `PainelDaOferta` do refin.
+ *
+ * 🚨 POR QUE EXISTE (30/10/2026). Pedido do escritório: *"quero os cards de
+ * churning igual do refin, com a prévia de mensagem"*. Até aqui o card abria o
+ * processo inteiro e a mensagem ficava num bloco lá embaixo, que só aparecia
+ * depois de reanalisar. Agora o painel mostra onde o cliente está, o texto
+ * pronto e o botão — e o processo continua a um clique, no botão "card".
+ *
+ * ⚠️ O ENVIO É O MESMO do bloco da ficha (`oferta-churning.tsx`): primeiro a
+ * mensagem vai pela conversa do cliente, depois registra-se o andamento. Mudou
+ * um, muda o outro — e, antes de uma terceira tela precisar disto, vale extrair
+ * o envio para um lugar só.
+ */
+function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
+  o: Oferta; onFechar: () => void; onAbrirCard: () => void; onMudou: () => void;
+}) {
+  const [texto, setTexto] = useState<string>(String(o.mensagem ?? ''));
+  const [ocupado, setOcupado] = useState(false);
+  const enviada = String(o.status ?? 'analisada') === 'enviada';
+  const respondida = ['aceita', 'recusada'].includes(String(o.status ?? ''));
+
+  const enviar = async () => {
+    if (!texto.trim()) return;
+    setOcupado(true);
+    try {
+      const c: any = await legalCasesService.get(o.caseId);
+      const conversa = c?.clienteConversa;
+      if (!conversa?.conversationId) {
+        toast.error('Sem conversa vinculada a este cliente: vincule o WhatsApp antes.');
+        return;
+      }
+      await inboxService.sendMessage({
+        conversationId: conversa.conversationId,
+        type: 'text',
+        content: { text: texto.trim() },
+        oneOff: true,
+      });
+      await legalCasesService.registrarOfertaChurning(o.caseId, { status: 'enviada', mensagem: texto.trim() });
+      toast.success('Oferta enviada ao cliente');
+      onMudou();
+      onFechar();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui enviar a mensagem.');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const responder = async (status: 'aceita' | 'recusada') => {
+    setOcupado(true);
+    try {
+      await legalCasesService.registrarOfertaChurning(o.caseId, { status });
+      toast.success(status === 'aceita'
+        ? 'Aceita: os réus entraram em "contratos a impugnar" e o card foi para "montar inicial".'
+        : 'Recusa registrada.');
+      onMudou();
+      onFechar();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui registrar a resposta.');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[560px] flex-col border-l border-[#cfe0ed] bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-950">
+      <div className="flex items-start justify-between gap-2 border-b border-[#e3eef7] p-4 dark:border-zinc-800">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-bold text-[#101820] dark:text-zinc-100">{o.cliente}</h3>
+          <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">
+            {o.grupo}{o.dinheiro ? ` · ${brl(o.dinheiro.aindaFalta)} a pagar` : ''}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button onClick={onAbrirCard} title="Abrir o card do processo"
+            className="rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-medium text-[#4b5863] hover:border-[#4a90e2] dark:border-zinc-700 dark:text-zinc-300">
+            card
+          </button>
+          <button onClick={onFechar} title="Fechar"
+            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+        <LinhaDoTempoDaOferta o={o} />
+
+        {texto.trim() ? (
+          <>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f] dark:text-zinc-400">
+              a mensagem {enviada || respondida ? 'enviada' : 'que vai ao cliente'}
+            </p>
+            <textarea
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              rows={14}
+              className="w-full rounded-lg border border-[#cfe0ed] p-2 text-xs leading-5 text-[#101820] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+            />
+          </>
+        ) : (
+          /* Oferta medida antes de 30/10/2026: o texto não foi guardado. O botão
+             "completar" do cabeçalho resolve todas de uma vez. */
+          <p className="rounded-lg border border-dashed border-[#cfe0ed] p-3 text-[11px] leading-4 text-[#48626f] dark:border-zinc-700 dark:text-zinc-400">
+            Esta oferta foi medida antes de a mensagem passar a ser guardada. Use o
+            botão <b>completar</b>, no alto do quadro, ou abra o card e clique em
+            “Analisar cadeia”.
+          </p>
+        )}
+      </div>
+
+      <div className="border-t border-[#e3eef7] p-3 dark:border-zinc-800">
+        {respondida ? (
+          <p className="text-[11px] text-[#48626f] dark:text-zinc-400">
+            Resposta registrada. Reabra pelo card se precisar ofertar outro grupo.
+          </p>
+        ) : enviada ? (
+          <div className="flex items-center gap-2">
+            <button onClick={() => responder('aceita')} disabled={ocupado}
+              className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
+              <Check className="h-3.5 w-3.5" /> cliente aceitou
+            </button>
+            <button onClick={() => responder('recusada')} disabled={ocupado}
+              className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-[#cfe0ed] px-3 py-2 text-xs font-semibold text-[#4b5863] hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300">
+              <X className="h-3.5 w-3.5" /> recusou
+            </button>
+          </div>
+        ) : (
+          <>
+            <button onClick={enviar} disabled={ocupado || !texto.trim() || !o.temConversa}
+              className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-[#005efc] px-3 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
+              {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Enviar a {o.cliente.split(' ')[0]} pelo WhatsApp
+            </button>
+            <p className="mt-1 text-center text-[10px] text-[#48626f] dark:text-zinc-400">
+              {!o.temConversa ? 'vincule o WhatsApp antes' : 'vai pela conversa dele'}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

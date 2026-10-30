@@ -36,6 +36,7 @@ import { legalCasesService } from '@/features/legal-cases/services/legal-cases.s
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
+import { LinhaDoTempoDaOferta } from './linha-do-tempo-da-oferta';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 const ACCENT = 'rgb(25,118,210)';
@@ -517,6 +518,10 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-4 text-xs text-[#48626f] dark:text-zinc-400">
+          {/* 🚨 ONDE ESTE CLIENTE ESTÁ (30/10/2026). O estado vivia espalhado —
+              selo no card, data em cinza no rodapé — e "em que pé está?" exigia
+              deduzir. O componente é o MESMO do quadro do churning. */}
+          <LinhaDoTempoDaOferta o={o} />
           <div className="space-y-1">
             {temRefin && o.resumo && <p><b className="text-[#101820] dark:text-zinc-200">Refin:</b> {o.resumo}</p>}
             {temRefin && o.estimativa && (
