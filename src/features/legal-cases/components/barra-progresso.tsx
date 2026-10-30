@@ -11,7 +11,10 @@ export type Progresso = {
   n: number | null;
   total: number | null;
   pct: number | null;
-  status: 'rodando' | 'ok' | 'erro' | string;
+  // 'atencao': TERMINOU, e o resultado exige leitura — não é sucesso nem falha.
+  // Ver o bloco de cor abaixo: barra verde com ✓ dizendo "NÃO cabe" é a forma
+  // contradizendo o conteúdo, e num relance se lê "deu certo".
+  status: 'rodando' | 'ok' | 'erro' | 'atencao' | string;
   erro: string | null;
   em: string;
 };
@@ -214,6 +217,9 @@ function useRelogio(ativo: boolean, ms = 15000) {
 export { useRelogio };
 
 export function aindaTemOQueDizer(p: Progresso): boolean {
+  // 🚨 'atencao' NÃO SOME SOZINHO. Some antes de lido é como não ter rodado —
+  // e aqui o que some é justamente a resposta ("não cabe, e por quê").
+  if (p.status === 'atencao') return true;
   if (p.status === 'ok' && !OK_QUE_ESPERA.has(p.op)) {
     const quando = Date.parse(p.em ?? '');
     return Number.isFinite(quando) && Date.now() - quando <= JANELA_DO_OK_MS;
@@ -250,11 +256,19 @@ export function BarraProgressoView({
   const erro = p.status === 'erro';
   const pct = typeof p.pct === 'number' ? p.pct : null;
 
+  // 🚨 VERDE COM ✓ DIZENDO "NÃO CABE" É MENTIRA VISUAL (30/10/2026). A
+  // triagem que para no cabimento terminou bem — ela fez o trabalho e a
+  // resposta é "não há o que montar". Isso não é sucesso (não há peça) nem
+  // falha (nada quebrou): é RESULTADO QUE PEDE LEITURA. Âmbar, com triângulo,
+  // e o texto inteiro embaixo, como já se faz com o erro desde 01/10.
+  const atencao = p.status === 'atencao';
   const cor = erro
     ? 'bg-red-500'
-    : p.status === 'ok'
-      ? 'bg-emerald-500'
-      : 'bg-blue-500';
+    : atencao
+      ? 'bg-amber-500'
+      : p.status === 'ok'
+        ? 'bg-emerald-500'
+        : 'bg-blue-500';
 
   return (
     <div
@@ -267,6 +281,8 @@ export function BarraProgressoView({
       <div className="flex items-center gap-2">
         {erro ? (
           <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-red-500" />
+        ) : atencao ? (
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" />
         ) : p.status === 'ok' ? (
           <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
         ) : (
@@ -285,7 +301,7 @@ export function BarraProgressoView({
             O passo normal continua truncado (é uma linha de progresso); o ERRO
             sai inteiro, abaixo, com espaço para a instrução. */}
         <span className={`${compacta ? 'text-[11px]' : 'text-xs'} flex-1 truncate text-neutral-600 dark:text-neutral-400`}>
-          · {erro ? 'o agente parou' : p.passo}
+          · {erro ? 'o agente parou' : atencao ? 'leia o resultado' : p.passo}
         </span>
 
         {pct != null && (
@@ -316,13 +332,23 @@ export function BarraProgressoView({
         </p>
       )}
 
+      {/* 🚨 INTEIRO, NÃO CORTADO. "Contrarrazões — NÃO cabe: quem interpôs o
+          recurso foi o AUTOR, o nosso cliente (o …" truncado não ensina nada —
+          é a mesma queixa de 01/10, noutro lugar. O motivo é justamente o que
+          decide se há algo a fazer. */}
+      {atencao && p.passo && (
+        <p className={`${compacta ? 'text-[11px]' : 'text-xs'} mt-1 whitespace-pre-line leading-snug text-amber-800 dark:text-amber-300`}>
+          {p.passo}
+        </p>
+      )}
+
       <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
         {pct != null ? (
           <div
             className={`h-full rounded-full ${cor} transition-[width] duration-500 ease-out`}
             style={{ width: `${pct}%` }}
           />
-        ) : p.status === 'ok' && !OK_QUE_ESPERA.has(p.op) ? (
+        ) : atencao || (p.status === 'ok' && !OK_QUE_ESPERA.has(p.op)) ? (
           // 28/10/2026: terminada sem `pct`, a faixa de 1/3 ficava parada com o
           // "✓" ao lado, e o escritório leu "travado na metade do caminho".
           // Terminou, enche: 100% aqui é fato, não número inventado.
