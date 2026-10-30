@@ -555,6 +555,28 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
     }
   };
 
+  /** Relê o HISCON desta oferta e grava dinheiro e mensagem. Não envia nada. */
+  const completarEsta = async () => {
+    setOcupado(true);
+    try {
+      const r: any = await legalCasesService.registrarOfertaChurning(o.caseId, {
+        status: 'analisada', grupo: o.grupo,
+      });
+      const nova = String(r?.oferta?.mensagem ?? '').trim();
+      if (!nova) {
+        toast.error('Li o HISCON e não consegui montar a mensagem — abra o card e veja a pasta.');
+        return;
+      }
+      setTexto(nova);
+      toast.success('Mensagem pronta.');
+      onMudou();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Não consegui ler o HISCON da pasta.');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
   const responder = async (status: 'aceita' | 'recusada') => {
     setOcupado(true);
     try {
@@ -572,7 +594,16 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[560px] flex-col border-l border-[#cfe0ed] bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-950">
+    /* 🚨 A CASCA É A MESMA DO REFIN (30/10/2026). Eu a tinha inventado —
+       `fixed inset-y-0 right-0` sem sobreposição — e a barra de navegação de
+       baixo passava POR CIMA: o botão de enviar saía cortado. *"parece meio
+       bugado, cortado, incompleto"*. Copiar a casca que já funciona é mais
+       barato e mais seguro que descobrir o z-index certo. */
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onFechar}>
+      <div
+        className="flex h-full w-full max-w-xl flex-col bg-white shadow-xl dark:bg-zinc-900"
+        onClick={(e) => e.stopPropagation()}
+      >
       <div className="flex items-start justify-between gap-2 border-b border-[#e3eef7] p-4 dark:border-zinc-800">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-bold text-[#101820] dark:text-zinc-100">{o.cliente}</h3>
@@ -610,11 +641,20 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
         ) : (
           /* Oferta medida antes de 30/10/2026: o texto não foi guardado. O botão
              "completar" do cabeçalho resolve todas de uma vez. */
-          <p className="rounded-lg border border-dashed border-[#cfe0ed] p-3 text-[11px] leading-4 text-[#48626f] dark:border-zinc-700 dark:text-zinc-400">
-            Esta oferta foi medida antes de a mensagem passar a ser guardada. Use o
-            botão <b>completar</b>, no alto do quadro, ou abra o card e clique em
-            “Analisar cadeia”.
-          </p>
+          /* 🚨 COMPLETAR SEM SAIR DAQUI (30/10/2026). Mandar o advogado ao botão
+             do cabeçalho — ou pior, ao card — quando ele já está com a oferta
+             aberta é obrigá-lo a sair para voltar. Relê o HISCON desta e só
+             desta; não fala com cliente nenhum. */
+          <div className="rounded-lg border border-dashed border-[#cfe0ed] p-3 dark:border-zinc-700">
+            <p className="text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
+              Esta oferta foi medida antes de a mensagem passar a ser guardada.
+            </p>
+            <button onClick={completarEsta} disabled={ocupado}
+              className="mt-2 inline-flex items-center gap-1 rounded-md border border-[#cfe0ed] px-2 py-1 text-[11px] font-semibold text-[#1b6ec2] hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-sky-300 dark:hover:bg-zinc-800">
+              {ocupado ? <Loader2 className="h-3 w-3 animate-spin" /> : <Recycle className="h-3 w-3" />}
+              {ocupado ? 'lendo o HISCON…' : 'completar esta oferta'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -646,6 +686,7 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
             </p>
           </>
         )}
+      </div>
       </div>
     </div>
   );
