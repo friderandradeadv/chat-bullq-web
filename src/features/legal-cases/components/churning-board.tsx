@@ -78,6 +78,20 @@ export function ChurningBoard() {
    * O processo continua a um clique, no botão "card" do painel.
    */
   const [oferta, setOferta] = useState<string | null>(null);
+
+  /**
+   * 🚨 O RECORTE DA FILA (30/10/2026). Pedido do escritório com 138 cards na
+   * coluna A REVISAR: *"quero a opção de filtrar os clientes, que dependem de
+   * extrato, que não dependem, etc"*. Com a fila inteira à frente, o que decide
+   * por onde começar não é o nome — é se a ação anda sem esperar documento, se
+   * falta WhatsApp para poder enviar, e se aquela oferta sai por outro lugar.
+   *
+   * Os recortes usam EXATAMENTE os campos que os selos do card já mostram. Se o
+   * filtro usasse outra conta, o card diria uma coisa e a lista outra.
+   */
+  const [recorte, setRecorte] = useState<
+    'todos' | 'sem-extrato' | 'com-extrato' | 'sem-whatsapp' | 'no-refin' | 'ja-ofertado'
+  >('todos');
   /**
    * 🚨 O VARREDOR DAS OFERTAS SEM TEXTO (30/10/2026). As analisadas ANTES desta
    * data não guardam dinheiro nem mensagem: abrir cada card e clicar "Analisar
@@ -151,10 +165,19 @@ export function ChurningBoard() {
   const itens: Oferta[] = useMemo(() => {
     const todos = (data?.itens ?? []) as Oferta[];
     const q = busca.trim().toLowerCase();
-    if (!q) return todos;
-    return todos.filter((o) =>
+    const peneira = (o: Oferta) => {
+      if (recorte === 'sem-extrato') return o.protocolaSemExtrato === true;
+      if (recorte === 'com-extrato') return o.protocolaSemExtrato !== true;
+      if (recorte === 'sem-whatsapp') return !o.temConversa;
+      if (recorte === 'no-refin') return o.naCampanhaRefin === true;
+      if (recorte === 'ja-ofertado') return o.jaOfertadoEmOutroCard === true;
+      return true;
+    };
+    const recortados = todos.filter(peneira);
+    if (!q) return recortados;
+    return recortados.filter((o) =>
       `${o.cliente} ${o.grupo} ${o.card}`.toLowerCase().includes(q));
-  }, [data, busca]);
+  }, [data, busca, recorte]);
 
   const porColuna = (chave: string) => itens.filter((o) => (o.status || 'analisada') === chave);
 
@@ -164,6 +187,23 @@ export function ChurningBoard() {
    * no acervo, não quantas aparecem na tela agora.
    */
   const emOferta = oferta ? itens.find((i) => i.caseId === oferta) ?? null : null;
+
+  /**
+   * Quantas caem em cada recorte. Sai de TODOS os itens, não do filtro em vigor:
+   * o número ao lado da opção tem de dizer quantas existem, não quantas sobraram
+   * do recorte anterior.
+   */
+  const quantos = useMemo(() => {
+    const t = (data?.itens ?? []) as Oferta[];
+    return {
+      todos: t.length,
+      'sem-extrato': t.filter((o) => o.protocolaSemExtrato === true).length,
+      'com-extrato': t.filter((o) => o.protocolaSemExtrato !== true).length,
+      'sem-whatsapp': t.filter((o) => !o.temConversa).length,
+      'no-refin': t.filter((o) => o.naCampanhaRefin === true).length,
+      'ja-ofertado': t.filter((o) => o.jaOfertadoEmOutroCard === true).length,
+    } as Record<string, number>;
+  }, [data]);
 
   const semMensagem = useMemo(
     () => ((data?.itens ?? []) as Oferta[])
@@ -193,6 +233,23 @@ export function ChurningBoard() {
               className="h-8 w-56 rounded-lg border border-[#cfe0ed] bg-white pl-7 pr-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
             />
           </div>
+          {/* O recorte da fila: ver o comentário em `recorte`. O contador de cada
+              opção sai da MESMA peneira, para o número bater com a lista. */}
+          <select
+            value={recorte}
+            onChange={(e) => setRecorte(e.target.value as typeof recorte)}
+            title="Recortar a fila pelo que decide por onde começar"
+            className={`h-8 rounded-lg border px-2 text-xs dark:bg-zinc-900 ${recorte === 'todos'
+              ? 'border-[#cfe0ed] text-[#48626f] dark:border-zinc-700 dark:text-zinc-300'
+              : 'border-[#e11970] font-semibold text-[#e11970]'}`}
+          >
+            <option value="todos">todas as ofertas ({quantos['todos'] ?? 0})</option>
+            <option value="sem-extrato">não depende do extrato ({quantos['sem-extrato'] ?? 0})</option>
+            <option value="com-extrato">depende do extrato ({quantos['com-extrato'] ?? 0})</option>
+            <option value="sem-whatsapp">sem WhatsApp vinculado ({quantos['sem-whatsapp'] ?? 0})</option>
+            <option value="no-refin">na campanha Refin ({quantos['no-refin'] ?? 0})</option>
+            <option value="ja-ofertado">já ofertado em outro card ({quantos['ja-ofertado'] ?? 0})</option>
+          </select>
           {/* Quadro × lista: a mesma ordem e o mesmo clique, formatos diferentes. */}
           <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
             {([['quadro', LayoutGrid, 'Quadro'], ['lista', List, 'Lista']] as const).map(([v, Icone, rotulo]) => (
