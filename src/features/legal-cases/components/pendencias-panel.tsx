@@ -189,7 +189,7 @@ export function PendenciasPanel({
     try {
       await inboxService.sendMessage({
         conversationId: conversa.conversationId,
-        type: 'text',
+        type: 'TEXT', // 🚨 MAIÚSCULA: o DTO é @IsEnum(['TEXT',...]) e 'text' leva 400 (02/11/2026)
         content: { text: textoDoPedido(doCliente) },
         oneOff: true,
       });

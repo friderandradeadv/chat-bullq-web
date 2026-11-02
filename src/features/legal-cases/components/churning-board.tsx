@@ -604,7 +604,7 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
       }
       await inboxService.sendMessage({
         conversationId: conversa.conversationId,
-        type: 'text',
+        type: 'TEXT', // 🚨 MAIÚSCULA: o DTO é @IsEnum(['TEXT',...]) e 'text' leva 400 (02/11/2026)
         content: { text: texto.trim() },
         oneOff: true,
         // Igual aos ensaios: uma bolha por parágrafo, no ritmo do servidor.

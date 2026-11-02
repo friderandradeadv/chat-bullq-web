@@ -288,7 +288,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     try {
       await inboxService.sendMessage({
         conversationId: conversa.conversationId,
-        type: 'text',
+        type: 'TEXT', // 🚨 MAIÚSCULA: o DTO é @IsEnum(['TEXT',...]) e 'text' leva 400 (02/11/2026)
         content: { text: texto.trim() },
         oneOff: true,
         // Igual aos ensaios: ver a nota no quadro do churning.
