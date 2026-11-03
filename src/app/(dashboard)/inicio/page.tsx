@@ -1026,6 +1026,9 @@ function ConquistasResumo() {
       <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <span className="text-sm text-zinc-600 dark:text-zinc-300"><strong className="text-zinc-900 dark:text-zinc-50">{st.vidas}</strong> vidas alcançadas</span>
         <span className="text-sm text-zinc-600 dark:text-zinc-300"><strong className="text-emerald-600 dark:text-emerald-400">{brlc(st.repassadoAosClientes)}</strong> devolvidos aos clientes</span>
+        {(st.garantidoEmAcordos?.valor ?? 0) > 0 && (
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">+ <strong className="font-semibold text-emerald-600/80 dark:text-emerald-400/80">{brlc(st.garantidoEmAcordos!.valor)}</strong> garantidos em acordos</span>
+        )}
       </div>
 
       {d && (

@@ -43,8 +43,10 @@ export interface DepoimentoStats {
   noMes: number;
   /** Soma dos valores citados pelos próprios clientes nos depoimentos. */
   valorCitado: number;
-  /** Soma do que já foi repassado aos clientes na prestação de contas. */
+  /** Soma do que já foi repassado aos clientes (repasses pagos no Financeiro). */
   repassadoAosClientes: number;
+  /** Parte do cliente nas parcelas em aberto dos acordos vivos — ainda não paga. */
+  garantidoEmAcordos?: { valor: number; acordos: number };
   porArea: { nome: string; total: number }[];
 }
 

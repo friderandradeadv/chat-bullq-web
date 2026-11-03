@@ -604,7 +604,9 @@ export default function ConquistasPage() {
             color="#02883C"
             value={brl(stats?.repassadoAosClientes ?? 0) ?? 'R$ 0,00'}
             label="devolvido aos clientes"
-            hint="prestações de contas dos processos"
+            hint={(stats?.garantidoEmAcordos?.valor ?? 0) > 0
+              ? `+ ${brl(stats!.garantidoEmAcordos!.valor)} garantidos em acordos`
+              : 'repasses pagos aos clientes'}
           />
           <Placar
             erro={statsErro}
