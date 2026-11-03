@@ -61,9 +61,16 @@ type Item = {
 const aberta = (i: Item) => i.status === 'analisada' || i.status === 'nova';
 const semDocumento = (i: Item) => !i.caixa || i.caixa === 'hiscon-antigo' || i.caixa === 'sem-hiscon';
 
-/** As colunas, na ordem em que o trabalho anda. */
+/**
+ * As colunas, na ordem em que o trabalho anda.
+ *
+ * 🚨 A campanha começa pelo REFIN (02/11/2026): o churning saiu do texto desta
+ * oferta e por isso saiu também das ajudas das colunas. Quem decide é
+ * `CHURNING_NA_MENSAGEM_DO_REFIN`, na API; religada a chave, estes dois textos
+ * voltam a falar de churning.
+ */
 const COLUNAS: { chave: string; titulo: string; ajuda: string; de: (i: Item) => boolean }[] = [
-  { chave: 'pronta', titulo: 'OFERTA PRONTA', ajuda: 'refin e/ou churning medidos no HISCON: leia a mensagem e envie',
+  { chave: 'pronta', titulo: 'OFERTA PRONTA', ajuda: 'refin medido no HISCON: leia a mensagem e envie',
     de: (i) => i.oferecivel && aberta(i) },
   { chave: 'enviada', titulo: 'ENVIADA', ajuda: 'a oferta foi ao cliente, aguardando resposta',
     de: (i) => i.status === 'enviada' },
@@ -73,7 +80,7 @@ const COLUNAS: { chave: string; titulo: string; ajuda: string; de: (i: Item) => 
     de: (i) => i.status === 'recusada' },
   { chave: 'documento', titulo: 'FALTA HISCON', ajuda: 'não analisado, sem HISCON na pasta ou extrato antes de 11/2023',
     de: (i) => !i.oferecivel && aberta(i) && semDocumento(i) },
-  { chave: 'fora', titulo: 'FORA', ajuda: 'sem refin nem churning viável, refin depois da IN 158 ou já tem card',
+  { chave: 'fora', titulo: 'FORA', ajuda: 'sem refin medido, refin depois da IN 158 ou já tem card',
     de: (i) => !i.oferecivel && aberta(i) && !semDocumento(i) },
 ];
 
