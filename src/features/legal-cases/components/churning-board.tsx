@@ -20,6 +20,7 @@ import { Check, LayoutGrid, List, Loader2, Recycle, RefreshCw, Search, Send, Shi
 import { toast } from 'sonner';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { LinhaDoTempoDaOferta } from './linha-do-tempo-da-oferta';
+import { ConversaAoVivo } from './conversa-ao-vivo';
 import { PreviaEmBolhas } from './previa-em-bolhas';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
@@ -28,11 +29,30 @@ import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 const ACCENT = '#e8590c';
 
-/** As colunas são o estado da oferta, na ordem em que o trabalho anda. */
+/** Fechou o PREÇO — não a ação. A prova é o registro de honorários do card. */
+const fechouHonorarios = (o: { honorarios?: { opcao?: string | null } | null }) =>
+  !!o.honorarios?.opcao;
+/** Como o escritório chama cada opção, em uma palavra. */
+const ROTULO_DA_OPCAO: Record<string, string> = {
+  entrada: 'entrada + 30%',
+  'meio-a-meio': 'meio a meio (50%)',
+};
+
+/**
+ * As colunas são o estado da oferta, na ordem em que o trabalho anda.
+ *
+ * 🚨 DUAS ACEITAÇÕES, DUAS COLUNAS (03/11/2026). Ordem do escritório, no
+ * primeiro teste de ponta a ponta do refin: *"aceitar a revisão é uma coisa,
+ * aceitar os honorários é outra, separe bem isso, deixe visível"*. Vale igual
+ * nos dois quadros, porque a escada é a mesma: o "sim" aceita a AÇÃO, e o preço
+ * vem depois — e pode não vir. Numa coluna só, quem disse sim e sumiu ficava
+ * igual a quem assinou e pagou a entrada.
+ */
 const COLUNAS: { chave: string; titulo: string; ajuda: string }[] = [
   { chave: 'analisada', titulo: 'A REVISAR', ajuda: 'o hub mediu a cadeia; falta você ler e decidir' },
   { chave: 'enviada', titulo: 'ENVIADA', ajuda: 'a oferta foi ao cliente, aguardando resposta' },
-  { chave: 'aceita', titulo: 'ACEITA', ajuda: 'o cliente topou; os cards dos réus nascem daqui' },
+  { chave: 'aceita', titulo: 'ACEITOU A REVISÃO', ajuda: 'topou a ação; os honorários ainda não fecharam' },
+  { chave: 'honorarios', titulo: 'FECHOU OS HONORÁRIOS', ajuda: 'aceitou o preço: contrato assinado ou entrada cobrada' },
   { chave: 'recusada', titulo: 'RECUSADA', ajuda: 'o cliente disse não' },
 ];
 
@@ -51,6 +71,9 @@ type Oferta = {
   refis: number; emBranco: number; declarados: number;
   portao: string | null; protocolaSemExtrato: boolean;
   analisadaEm: string | null; enviadaEm: string | null; respondidaEm?: string | null; temConversa: boolean;
+  /** Os honorários FECHADOS: `null` enquanto o preço não fechou. Ver `COLUNAS`. */
+  honorarios?: { opcao: 'entrada' | 'meio-a-meio' | null; fonte: string; em: string;
+    entradaCobrada?: boolean; modelo?: string | null } | null;
   /**
    * 🚨 O CASO EM DINHEIRO, guardado desde a análise (30/10/2026). É o que deixa
    * este card dizer de quanto se trata sem abrir nada — como o card do Refin já
@@ -180,7 +203,12 @@ export function ChurningBoard() {
       `${o.cliente} ${o.grupo} ${o.card}`.toLowerCase().includes(q));
   }, [data, busca, recorte]);
 
-  const porColuna = (chave: string) => itens.filter((o) => (o.status || 'analisada') === chave);
+  // A coluna dos honorários não é um STATUS da oferta: é o registro do card.
+  // Por isso ela intercepta antes, e tira de 'aceita'/'recusada' quem já fechou.
+  const porColuna = (chave: string) =>
+    chave === 'honorarios'
+      ? itens.filter((o) => fechouHonorarios(o))
+      : itens.filter((o) => (o.status || 'analisada') === chave && !fechouHonorarios(o));
 
   /**
    * As que ainda não têm a mensagem guardada — analisadas antes de 30/10/2026.
@@ -353,6 +381,21 @@ export function ChurningBoard() {
                           liberado dinheiro. Zero declarado é o cenário em que a
                           tese anda. */}
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
+                        {/* 🚨 O PREÇO FECHADO SE VÊ NO CARD (03/11/2026): sem
+                            isto, "aceitou" e "fechou honorários" voltam a
+                            parecer a mesma coisa de longe. */}
+                        {fechouHonorarios(o) && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                            title={`Honorários fechados: ${o.honorarios?.fonte ?? ''}`}>
+                            {ROTULO_DA_OPCAO[String(o.honorarios?.opcao)] ?? 'honorários fechados'}
+                          </span>
+                        )}
+                        {o.status === 'aceita' && !fechouHonorarios(o) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                            title="Topou a ação. Os honorários ainda não fecharam.">
+                            honorários em aberto
+                          </span>
+                        )}
                         <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                           {o.refis} refi{o.refis === 1 ? '' : 's'}
                         </span>
@@ -704,6 +747,26 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         <LinhaDoTempoDaOferta o={o} />
+
+        {/* As duas aceitações, separadas — ver `COLUNAS`. */}
+        {o.status === 'aceita' && (
+          <p className="text-xs text-[#48626f] dark:text-zinc-400">
+            <b className="text-[#101820] dark:text-zinc-200">Honorários:</b>{' '}
+            {fechouHonorarios(o) ? (
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                fechados em {ROTULO_DA_OPCAO[String(o.honorarios?.opcao)] ?? String(o.honorarios?.opcao)}
+                {o.honorarios?.fonte ? ` · ${o.honorarios.fonte}` : ''}
+              </span>
+            ) : (
+              <span className="font-semibold text-amber-700 dark:text-amber-400">
+                em aberto. Ele topou a ação; o preço ainda não fechou.
+              </span>
+            )}
+          </p>
+        )}
+
+        {/* A conversa ao vivo, igual ao quadro do refin. */}
+        {o.enviadaEm && <ConversaAoVivo caseId={o.caseId} desde={o.enviadaEm} />}
 
         {texto.trim() ? (
           <>

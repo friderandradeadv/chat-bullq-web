@@ -38,6 +38,7 @@ import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-
 import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
 import { LinhaDoTempoDaOferta } from './linha-do-tempo-da-oferta';
 import { PreviaEmBolhas } from './previa-em-bolhas';
+import { ConversaAoVivo } from './conversa-ao-vivo';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
 
 const ACCENT = 'rgb(25,118,210)';
@@ -51,6 +52,16 @@ type Item = {
   pagador?: string | null;
   ultimaCompetencia: string | null; temConversa: boolean;
   analisadaEm: string | null; enviadaEm: string | null; cardRefin: string | null;
+  /**
+   * Os honorários FECHADOS deste cliente, lidos do card de refin.
+   *
+   * 🚨 ACEITAR A REVISÃO NÃO É ACEITAR OS HONORÁRIOS (03/11/2026). Ordem do
+   * escritório: *"aceitar a revisão é uma coisa, aceitar os honorários é
+   * outra, separe bem isso, deixe visível"*. `null` enquanto o preço não
+   * fechou — e é essa a diferença entre as duas colunas.
+   */
+  honorarios: { opcao: 'entrada' | 'meio-a-meio' | null; fonte: string; em: string;
+    entradaCobrada?: boolean; modelo?: string | null } | null;
   churning: { ofertado: boolean; grupo: string | null; contratos: number; veredito: string | null;
     statusNoChurning: string | null; motivo: string | null } | null;
   oferecivel: boolean;
@@ -59,6 +70,13 @@ type Item = {
 };
 
 const aberta = (i: Item) => i.status === 'analisada' || i.status === 'nova';
+/** Fechou o PREÇO — não a ação. A prova é o registro de honorários do card. */
+const fechouHonorarios = (i: Item) => !!i.honorarios?.opcao;
+/** Como o escritório chama cada opção, em uma palavra. */
+const ROTULO_DA_OPCAO: Record<string, string> = {
+  entrada: 'entrada + 30%',
+  'meio-a-meio': 'meio a meio (50%)',
+};
 const semDocumento = (i: Item) => !i.caixa || i.caixa === 'hiscon-antigo' || i.caixa === 'sem-hiscon';
 
 /**
@@ -74,10 +92,16 @@ const COLUNAS: { chave: string; titulo: string; ajuda: string; de: (i: Item) => 
     de: (i) => i.oferecivel && aberta(i) },
   { chave: 'enviada', titulo: 'ENVIADA', ajuda: 'a oferta foi ao cliente, aguardando resposta',
     de: (i) => i.status === 'enviada' },
-  { chave: 'aceita', titulo: 'ACEITA', ajuda: 'o cliente topou; o card de refin vai para "montar inicial"',
-    de: (i) => i.status === 'aceita' },
+  // 🚨 DUAS ACEITAÇÕES, DUAS COLUNAS (03/11/2026). O "Sim" do cliente aceita a
+  // AÇÃO; o preço vem depois e pode ser recusado. Numa coluna só, quem disse
+  // sim e sumiu ficava igual a quem assinou e pagou a entrada — e é exatamente
+  // entre os dois que está o trabalho de vender.
+  { chave: 'aceita', titulo: 'ACEITOU A REVISÃO', ajuda: 'topou a ação; os honorários ainda não fecharam',
+    de: (i) => i.status === 'aceita' && !fechouHonorarios(i) },
+  { chave: 'honorarios', titulo: 'FECHOU OS HONORÁRIOS', ajuda: 'aceitou o preço: contrato assinado ou entrada cobrada',
+    de: (i) => fechouHonorarios(i) },
   { chave: 'recusada', titulo: 'RECUSADA', ajuda: 'o cliente disse não',
-    de: (i) => i.status === 'recusada' },
+    de: (i) => i.status === 'recusada' && !fechouHonorarios(i) },
   { chave: 'documento', titulo: 'FALTA HISCON', ajuda: 'não analisado, sem HISCON na pasta ou extrato antes de 11/2023',
     de: (i) => !i.oferecivel && aberta(i) && semDocumento(i) },
   { chave: 'fora', titulo: 'FORA', ajuda: 'sem refin medido, refin depois da IN 158 ou já tem card',
@@ -339,6 +363,20 @@ function CardDaOferta({ o, onAbrir, onVincular }: { o: Item; onAbrir: () => void
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Teses o={o} />
         <Foro o={o} />
+        {/* 🚨 O PREÇO FECHADO SE VÊ NO CARD (03/11/2026): sem isto, "aceitou"
+            e "fechou honorários" voltam a parecer a mesma coisa de longe. */}
+        {fechouHonorarios(o) && (
+          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+            title={`Honorários fechados: ${o.honorarios?.fonte ?? ''}`}>
+            {ROTULO_DA_OPCAO[String(o.honorarios?.opcao)] ?? 'honorários fechados'}
+          </span>
+        )}
+        {o.status === 'aceita' && !fechouHonorarios(o) && (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            title="Topou a ação. Os honorários ainda não fecharam.">
+            honorários em aberto
+          </span>
+        )}
         {o.caixa === 'pronta' && o.estimativa ? (
           <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
             title={`Refin: dobro dos descontos até ${o.estimativa.ate ?? '?'} + dano moral. Não soma o churning.`}>
@@ -546,6 +584,14 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
               selo no card, data em cinza no rodapé — e "em que pé está?" exigia
               deduzir. O componente é o MESMO do quadro do churning. */}
           <LinhaDoTempoDaOferta o={o} />
+
+          {/* 🚨 A CONVERSA, AO VIVO (03/11/2026). Pedido do escritório no
+              primeiro teste de ponta a ponta: *"consegue deixar a conversa em
+              tempo real ali no kanban? Para sabermos como está"*. Enquanto a
+              oferta não saiu, o que vale é a prévia logo abaixo; depois dela, o
+              que vale é o que o cliente respondeu — e isso estava em outra tela.
+              Recortada na OFERTA: o que veio antes é outra venda. */}
+          {o.enviadaEm && <ConversaAoVivo caseId={o.caseId} desde={o.enviadaEm} />}
           <div className="space-y-1">
             {temRefin && o.resumo && <p><b className="text-[#101820] dark:text-zinc-200">Refin:</b> {o.resumo}</p>}
             {temRefin && o.estimativa && (
@@ -555,6 +601,25 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
               <p>Foro da inicial: {ROTULO_DO_FORO[o.foro].longo}{o.pagador ? `. Pago em: ${o.pagador}` : ''}</p>
             )}
             {!temRefin && <p><b className="text-[#101820] dark:text-zinc-200">Refin:</b> {o.rotulo}</p>}
+            {/* 🚨 AS DUAS ACEITAÇÕES, SEPARADAS (03/11/2026). */}
+            {o.status === 'aceita' && (
+              <p>
+                <b className="text-[#101820] dark:text-zinc-200">Honorários:</b>{' '}
+                {fechouHonorarios(o) ? (
+                  <>
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                      fechados em {ROTULO_DA_OPCAO[String(o.honorarios?.opcao)] ?? String(o.honorarios?.opcao)}
+                    </span>
+                    {o.honorarios?.em ? ` · ${dia(o.honorarios.em)}` : ''}
+                    {o.honorarios?.fonte ? ` · ${o.honorarios.fonte}` : ''}
+                  </>
+                ) : (
+                  <span className="font-semibold text-amber-700 dark:text-amber-400">
+                    em aberto. Ele topou a ação; o preço ainda não fechou.
+                  </span>
+                )}
+              </p>
+            )}
             {o.churning && (
               <p><b className="text-[#101820] dark:text-zinc-200">Churning:</b>{' '}
                 {temChurning
