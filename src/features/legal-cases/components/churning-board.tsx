@@ -768,7 +768,14 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
         {/* A conversa ao vivo, igual ao quadro do refin. */}
         {o.enviadaEm && <ConversaAoVivo caseId={o.caseId} desde={o.enviadaEm} />}
 
-        {texto.trim() ? (
+        {/* 🚨 DEPOIS DE ENVIADA, A PRÉVIA SOBRA (03/11/2026). Pedido do
+            escritório: *"depois que iniciou, não precisa mais dessa 'como vai
+            chegar' né?"*. O que vale dali em diante é a conversa ao vivo, logo
+            acima.
+            ⚠️ E some o bloco INTEIRO, não só a prévia: o `else` dele é o aviso
+            de oferta antiga sem texto guardado, que numa oferta JÁ ENVIADA
+            seria mentira na tela. */}
+        {o.enviadaEm ? null : texto.trim() ? (
           <>
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f] dark:text-zinc-400">

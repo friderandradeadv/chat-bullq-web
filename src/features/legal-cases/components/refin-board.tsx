@@ -634,7 +634,12 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
             )}
           </div>
 
-          {o.oferecivel && (
+          {/* 🚨 DEPOIS DE ENVIADA, A PRÉVIA SOBRA (03/11/2026). Pedido do
+              escritório olhando o painel: *"depois que iniciou, não precisa
+              mais dessa 'como vai chegar' né?"*. Ela mostra o que VAI chegar —
+              e já chegou. O que vale dali em diante é a conversa ao vivo,
+              logo acima, que mostra o que de fato aconteceu. */}
+          {o.oferecivel && !o.enviadaEm && (
             texto === null ? (
               <p>Carregando a mensagem…</p>
             ) : (
