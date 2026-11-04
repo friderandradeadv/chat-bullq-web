@@ -575,7 +575,16 @@ export function ArquivarPecaModal({
    * quem sabe a fase, a letra e a numeração) e sai da Mesa aqui — **só depois
    * que o Drive confirmar, e só pelo nome que ele devolveu**.
    */
-  const podeLimpar = suportaMoverNoDisco() && !!mesa && !clientesDir && todosNaMesa;
+  //
+  // Basta UM item estar na Mesa, e não todos. A regra "sem mistura" é do MOVER
+  // (meio movido, meio subido = duas `c) DD.MM.AAAA`); aqui tudo sobe pela API
+  // numa pasta só, então misturar não parte nada. O laço de limpeza já pula o
+  // que não sai da Mesa (`origemNaMesa === undefined`) e o que o Drive não
+  // confirmou. Exigir `todosNaMesa` — e exigir `!clientesDir` — fazia um único
+  // anexo da tarefa ausente da Mesa segurar a pasta inteira: OTAIR VIZOTTO,
+  // 03 e 04/11/2026, arquivado DUAS vezes e a Mesa intacta nas duas.
+  const podeLimpar =
+    suportaMoverNoDisco() && !!mesa && !podeMover && itens.some(estaNaMesa);
 
   /** Arrastar da Mesa para cá é o gesto natural — e cai na mesma lista. */
   const receber = (lista: FileList | File[] | null) => {
@@ -1211,7 +1220,7 @@ export function ArquivarPecaModal({
                         className="mt-0.5 accent-[#228BE6]"
                       />
                       <span>
-                        Tirar de {mesaNome} ({itens.length}).{' '}
+                        Tirar de {mesaNome} ({itens.filter(estaNaMesa).length}).{' '}
                         <span className="text-amber-600 dark:text-amber-400">
                           Sai de vez, sem passar pela Lixeira
                         </span>{' '}
