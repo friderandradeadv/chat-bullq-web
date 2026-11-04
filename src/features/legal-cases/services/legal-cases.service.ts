@@ -855,7 +855,8 @@ export const legalCasesService = {
   async lerCadastroDoc(
     arquivos: { nome: string; mime: string; base64: string }[],
   ): Promise<CadastroDocLeitura> {
-    const { data } = await api.post('/legal-cases/cadastro-doc/ler', { arquivos });
+    // IA (visão) + DataJud em vários PDFs passa fácil dos 15 s padrão do cliente.
+    const { data } = await api.post('/legal-cases/cadastro-doc/ler', { arquivos }, { timeout: 300000 });
     return data.data ?? data;
   },
   /** Protocolos que chegaram pelo WhatsApp e esperam conferência. */
