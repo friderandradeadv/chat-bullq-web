@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CadastroPorDocumento } from '@/features/legal-cases/components/cadastro-por-documento';
+import { DropZone } from '@/components/drop-zone';
 import { PendentesCadastroDoc } from '@/features/legal-cases/components/pendentes-cadastro-doc';
 import {
   legalCasesService,
@@ -195,6 +196,7 @@ export default function ProcessosPage() {
   const [creating, setCreating] = useState(false);
   // Cadastro lendo a inicial / o comprovante de protocolo / o print do tribunal.
   const [lendoDoc, setLendoDoc] = useState(false);
+  const [docsSoltos, setDocsSoltos] = useState<File[] | undefined>(undefined);
   // Pré-preenchimento do cadastro (ex.: veio da notificação "processo fora do hub").
   const [createInitial, setCreateInitial] = useState<{ cnjNumber?: string; parte?: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -329,7 +331,7 @@ export default function ProcessosPage() {
           <IconBtn title="Atualizar" onClick={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })}>
             <RefreshCw className="h-4 w-4" />
           </IconBtn>
-          <IconBtn title="Cadastrar por documento (inicial, comprovante de protocolo, print do tribunal)" onClick={() => setLendoDoc(true)}>
+          <IconBtn title="Cadastrar por documento (inicial, comprovante de protocolo, print do tribunal)" onClick={() => { setDocsSoltos(undefined); setLendoDoc(true); }}>
             <ScanLine className="h-4 w-4" />
           </IconBtn>
           <button
@@ -496,10 +498,12 @@ export default function ProcessosPage() {
 
       {lendoDoc && (
         <CadastroPorDocumento
-          onClose={() => setLendoDoc(false)}
+          arquivosIniciais={docsSoltos}
+          onClose={() => { setLendoDoc(false); setDocsSoltos(undefined); }}
           onDone={() => {
             qc.invalidateQueries({ queryKey: ['legal-cases'] });
             setLendoDoc(false);
+            setDocsSoltos(undefined);
           }}
         />
       )}
@@ -508,7 +512,7 @@ export default function ProcessosPage() {
         <CreateCaseDialog
           initial={createInitial ?? undefined}
           onClose={() => { setCreating(false); setCreateInitial(null); }}
-          onLerDocumento={() => { setCreating(false); setCreateInitial(null); setLendoDoc(true); }}
+          onLerDocumento={(arquivos) => { setCreating(false); setCreateInitial(null); setDocsSoltos(arquivos); setLendoDoc(true); }}
           onCreated={() => {
             qc.invalidateQueries({ queryKey: ['legal-cases'] });
             setCreating(false);
@@ -885,7 +889,7 @@ function CreateCaseDialog({
   initial?: { cnjNumber?: string; title?: string; parte?: string };
   onClose: () => void;
   /** Troca este formulário pelo "Cadastrar por documento" (IA lê inicial/protocolo/print). */
-  onLerDocumento?: () => void;
+  onLerDocumento?: (arquivos?: File[]) => void;
   onCreated: () => void;
 }) {
   const [form, setForm] = useState<CreateCaseInput>({ title: initial?.title ?? '', cnjNumber: initial?.cnjNumber });
@@ -979,6 +983,13 @@ function CreateCaseDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <DropZone
+        onFiles={(arquivos) => { if (arquivos.length) onLerDocumento?.(arquivos); }}
+        accept="application/pdf,.pdf,image/*,.png,.jpg,.jpeg,.webp"
+        disabled={!onLerDocumento}
+        className="z-50 w-full max-w-lg"
+        overlayLabel="Solte aqui — a IA lê e preenche"
+      >
       <div className="relative z-50 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 text-zinc-800 shadow-2xl scrollbar-thin dark:bg-zinc-900 dark:text-zinc-100">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium text-zinc-700">Novo processo</h2>
@@ -989,13 +1000,13 @@ function CreateCaseDialog({
         {onLerDocumento && (
           <button
             type="button"
-            onClick={onLerDocumento}
+            onClick={() => onLerDocumento()}
             className="mt-4 flex w-full items-center gap-3 rounded-md border border-dashed border-[#228BE6] bg-[#228BE6]/5 px-4 py-3 text-left hover:bg-[#228BE6]/10"
           >
             <ScanLine className="h-5 w-5 shrink-0 text-[#228BE6]" />
             <span className="text-sm">
               <span className="font-medium text-[#228BE6]">Preencher sozinho a partir de um documento</span>
-              <span className="block text-xs text-zinc-500">Suba a inicial, o recibo do protocolo ou o print do tribunal — a IA lê e você só confere.</span>
+              <span className="block text-xs text-zinc-500">Arraste para cá (ou clique) a inicial, o recibo do protocolo ou o print do tribunal — a IA lê e você só confere.</span>
             </span>
           </button>
         )}
@@ -1154,6 +1165,7 @@ function CreateCaseDialog({
           </button>
         </div>
       </div>
+      </DropZone>
     </div>
   );
 }

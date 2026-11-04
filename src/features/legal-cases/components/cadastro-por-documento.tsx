@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   X,
@@ -55,9 +55,12 @@ export function CadastroPorDocumento({
   onClose,
   onDone,
   pendente,
+  arquivosIniciais,
 }: {
   onClose: () => void;
   onDone: () => void;
+  /** Arquivos soltos no "Novo processo": já entram na lista e a leitura começa sozinha. */
+  arquivosIniciais?: File[];
   /**
    * Pendência do recebedor de WhatsApp: a leitura JÁ foi feita quando o
    * documento chegou, então o modal abre direto na conferência — o advogado
@@ -66,7 +69,7 @@ export function CadastroPorDocumento({
   pendente?: { messageId: string; arquivo: string | null; remetente: string | null; leitura: CadastroDocLeitura };
 }) {
   const router = useRouter();
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<File[]>(() => (arquivosIniciais ?? []).slice(0, MAX_ARQUIVOS));
   const [lendo, setLendo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [leitura, setLeitura] = useState<CadastroDocLeitura | null>(pendente?.leitura ?? null);
@@ -98,6 +101,15 @@ export function CadastroPorDocumento({
       setLendo(false);
     }
   };
+
+  // Veio arquivo arrastado para o "Novo processo": lê de uma vez, sem pedir outro clique.
+  const autoLido = useRef(false);
+  useEffect(() => {
+    if (autoLido.current || pendente || !arquivosIniciais?.length) return;
+    autoLido.current = true;
+    void ler();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const gravar = async () => {
     if (!ficha || !leitura) return;
