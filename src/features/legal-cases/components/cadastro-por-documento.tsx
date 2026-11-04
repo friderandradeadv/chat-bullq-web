@@ -330,7 +330,9 @@ export function CadastroPorDocumento({
                           <option value="OUTRO">Terceiro</option>
                         </select>
                         <input
-                          className={INPUT}
+                          className={`${INPUT} min-w-0 flex-1`}
+                          placeholder="Nome"
+                          title={p.nome}
                           value={p.nome}
                           onChange={(e) => {
                             const partes = [...ficha.partes];
@@ -339,7 +341,7 @@ export function CadastroPorDocumento({
                           }}
                         />
                         <input
-                          className={`${INPUT} w-44 shrink-0`}
+                          className={`${INPUT.replace('w-full', '')} w-40 shrink-0`}
                           placeholder="CPF/CNPJ"
                           value={p.documento ?? ''}
                           onChange={(e) => {
