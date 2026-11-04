@@ -508,6 +508,7 @@ export default function ProcessosPage() {
         <CreateCaseDialog
           initial={createInitial ?? undefined}
           onClose={() => { setCreating(false); setCreateInitial(null); }}
+          onLerDocumento={() => { setCreating(false); setCreateInitial(null); setLendoDoc(true); }}
           onCreated={() => {
             qc.invalidateQueries({ queryKey: ['legal-cases'] });
             setCreating(false);
@@ -877,11 +878,14 @@ function IconBtn({
 function CreateCaseDialog({
   initial,
   onClose,
+  onLerDocumento,
   onCreated,
 }: {
   /** Pré-preenchimento (ex.: veio da notificação "processo fora do hub" com o nº CNJ + parte). */
   initial?: { cnjNumber?: string; title?: string; parte?: string };
   onClose: () => void;
+  /** Troca este formulário pelo "Cadastrar por documento" (IA lê inicial/protocolo/print). */
+  onLerDocumento?: () => void;
   onCreated: () => void;
 }) {
   const [form, setForm] = useState<CreateCaseInput>({ title: initial?.title ?? '', cnjNumber: initial?.cnjNumber });
@@ -982,6 +986,19 @@ function CreateCaseDialog({
             <X className="h-5 w-5" />
           </button>
         </div>
+        {onLerDocumento && (
+          <button
+            type="button"
+            onClick={onLerDocumento}
+            className="mt-4 flex w-full items-center gap-3 rounded-md border border-dashed border-[#228BE6] bg-[#228BE6]/5 px-4 py-3 text-left hover:bg-[#228BE6]/10"
+          >
+            <ScanLine className="h-5 w-5 shrink-0 text-[#228BE6]" />
+            <span className="text-sm">
+              <span className="font-medium text-[#228BE6]">Preencher sozinho a partir de um documento</span>
+              <span className="block text-xs text-zinc-500">Suba a inicial, o recibo do protocolo ou o print do tribunal — a IA lê e você só confere.</span>
+            </span>
+          </button>
+        )}
         <div className="mt-5 space-y-4">
           <Field label="Título *">
             <input
