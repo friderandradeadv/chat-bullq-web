@@ -155,15 +155,31 @@ export function RefinBoard() {
   }, [data, busca]);
 
   const naoAnalisados = itens.filter((i) => !i.caixa);
+  /**
+   * 🚨 OS JÁ ANALISADOS TAMBÉM PRECISAM SER RELIDOS, ÀS VEZES (04/11/2026).
+   *
+   * No 3º ensaio o escritório religou o churning na mensagem do refin
+   * (`CHURNING_NA_MENSAGEM_DO_REFIN`) e o quadro continuou todo "só refin":
+   * *"agora vi, os refins estão todos só refin, sem churning....."*. A chave
+   * não reescreve nada — quem escreve `ofertado` e o texto é
+   * `analisarOfertaRefin`, card a card. E não havia como chamá-la em massa:
+   * "Analisar N pendentes" só alcança quem nunca foi analisado (`!caixa`) e o
+   * "Reler" é um refetch da tela.
+   *
+   * Medido no mesmo minuto: dos 106 cards da campanha, 28 ganhariam a 2ª tese
+   * e 51 voltariam a ser oferta. Setenta e nove cards parados por falta de um
+   * botão.
+   */
+  const jaAnalisados = itens.filter((i) => !!i.caixa);
   const emOferta = oferta ? itens.find((i) => i.caseId === oferta) ?? null : null;
 
   /**
    * Lê o HISCON de cada um, UM DE CADA VEZ, e mostra o andamento. Só lê
    * documentos: não fala com cliente nenhum.
    */
-  const analisarPendentes = async () => {
+  const analisarFila = async (alvos: Item[]) => {
     parar.current = false;
-    const fila = [...naoAnalisados];
+    const fila = [...alvos];
     setAnalisando({ feitos: 0, total: fila.length });
     const erros: string[] = [];
     for (let i = 0; i < fila.length; i++) {
@@ -207,9 +223,35 @@ export function RefinBoard() {
               <Square className="ml-1 h-3 w-3" /> parar
             </button>
           ) : naoAnalisados.length ? (
-            <button onClick={analisarPendentes} title="Lê o HISCON de cada cliente ainda não analisado, um de cada vez. Não envia nada."
+            <button onClick={() => analisarFila(naoAnalisados)} title="Lê o HISCON de cada cliente ainda não analisado, um de cada vez. Não envia nada."
               className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-white" style={{ background: ACCENT }}>
               <ScanSearch className="h-3.5 w-3.5" /> Analisar {naoAnalisados.length} pendente{naoAnalisados.length === 1 ? '' : 's'}
+            </button>
+          ) : null}
+          {/*
+            🚨 RELER OS JÁ ANALISADOS. Pede confirmação, e a frase diz as duas
+            consequências que o advogado precisa aceitar antes: é lento (um
+            HISCON por cliente, no Drive) e PODE TIRAR oferta do quadro, se o
+            documento saiu da pasta. Sem a confirmação, um clique sem querer
+            mexe em cem cards.
+          */}
+          {!analisando && jaAnalisados.length ? (
+            <button
+              onClick={() => {
+                const ok = window.confirm(
+                  `Reler o HISCON de ${jaAnalisados.length} cliente(s) já analisado(s)?\n\n`
+                  + 'Serve para o quadro incorporar uma mudança de regra — por exemplo o churning '
+                  + 'passar a entrar na mensagem.\n\n'
+                  + 'Demora: um documento por cliente, um de cada vez (dá para parar no meio).\n'
+                  + 'Atenção: quem tiver perdido o HISCON da pasta SAI da oferta.\n\n'
+                  + 'Não envia nada a cliente nenhum.',
+                );
+                if (ok) analisarFila(jaAnalisados);
+              }}
+              title="Relê o HISCON de quem JÁ foi analisado, para o quadro pegar mudança de regra. Não envia nada."
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs font-semibold text-[#48626f] hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <ScanSearch className="h-3.5 w-3.5" /> Reler {jaAnalisados.length} analisado{jaAnalisados.length === 1 ? '' : 's'}
             </button>
           ) : null}
           <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
