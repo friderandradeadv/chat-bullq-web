@@ -879,7 +879,8 @@ export const legalCasesService = {
     arquivos?: string[];
     messageId?: string | null;
   }): Promise<{ ok: boolean; id: string; criado: boolean; completou: string[] }> {
-    const { data } = await api.post('/legal-cases/cadastro-doc/confirmar', payload);
+    // Cria/completa, apensa e herda dados do principal: com a API ocupada passa dos 15 s.
+    const { data } = await api.post('/legal-cases/cadastro-doc/confirmar', payload, { timeout: 120000 });
     return data.data ?? data;
   },
   /** Ações em massa na aba Processos (seleção). 'delete' = arquivar (lixeira). */
