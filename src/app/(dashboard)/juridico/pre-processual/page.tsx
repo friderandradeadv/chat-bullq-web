@@ -137,7 +137,32 @@ export default function PreProcessualPage() {
   // processual, mais um kanban, coisa demais"*. O quadro das ofertas entra como
   // terceira vista, ao lado de Kanban e Lista, e o menu continua do tamanho que
   // era.
-  const [view, setView] = useState<'kanban' | 'lista' | 'churning' | 'refin' | 'honorarios'>('kanban');
+  type Vista = 'kanban' | 'lista' | 'churning' | 'refin' | 'honorarios';
+  const VISTAS: Vista[] = ['kanban', 'lista', 'churning', 'refin', 'honorarios'];
+  const [view, setView] = useState<Vista>('kanban');
+
+  /**
+   * 🚨 A ABA ESCOLHIDA SOBREVIVE AO F5 (04/11/2026). Ordem do escritório, no
+   * meio de um ensaio: *"se eu estiver em refin e atualizar, deve permanecer
+   * em refin"*. Atualizar a página no meio de uma campanha jogava de volta no
+   * Kanban, e quem acompanha uma venda atualiza o tempo todo.
+   *
+   * Mesmo padrão do modo quadro/lista do próprio quadro do Refin: lembrado no
+   * navegador, lido depois da montagem para não brigar com a hidratação do
+   * Next. Sem storage, fica no Kanban, como era.
+   */
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem('pre-processual-view') as Vista | null;
+      if (v && VISTAS.includes(v)) setView(v);
+    } catch { /* sem storage: fica no kanban */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const trocarView = (v: Vista) => {
+    setView(v);
+    try { window.localStorage.setItem('pre-processual-view', v); } catch { /* idem */ }
+  };
   const [novo, setNovo] = useState(false);
   // Seleção em massa (caixinha no card + barra de ações no rodapé).
   const bulk = useKanbanBulk();
@@ -411,13 +436,13 @@ export default function PreProcessualPage() {
               abas primeiro e deixando o `ml-auto` só no botão, o grupo é sempre o
               primeiro item da linha e não se mexe. */}
           <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
-            <button onClick={() => setView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
-            <button onClick={() => setView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
-            <button onClick={() => setView('churning')} title="Ofertas de reciclagem de contratos medidas no HISCON" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'churning' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Recycle className="h-4 w-4" /> Churning</button>
-            <button onClick={() => setView('refin')} title="Campanha do refinanciamento do cartão para quem perdeu a RMC" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'refin' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><CreditCard className="h-4 w-4" /> Refin</button>
+            <button onClick={() => trocarView('kanban')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'kanban' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><LayoutGrid className="h-4 w-4" /> Kanban</button>
+            <button onClick={() => trocarView('lista')} className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'lista' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><List className="h-4 w-4" /> Lista</button>
+            <button onClick={() => trocarView('churning')} title="Ofertas de reciclagem de contratos medidas no HISCON" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'churning' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Recycle className="h-4 w-4" /> Churning</button>
+            <button onClick={() => trocarView('refin')} title="Campanha do refinanciamento do cartão para quem perdeu a RMC" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'refin' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><CreditCard className="h-4 w-4" /> Refin</button>
             {/* 🚨 Fica ao lado do Churning porque é o mesmo trabalho: a opção
                 marcada aqui é a que a próxima oferta vai usar para abrir. */}
-            <button onClick={() => setView('honorarios')} title="Em qual opção de honorários cada cliente fechou — é por ela que a próxima proposta abre" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'honorarios' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Wallet className="h-4 w-4" /> Honorários</button>
+            <button onClick={() => trocarView('honorarios')} title="Em qual opção de honorários cada cliente fechou — é por ela que a próxima proposta abre" className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium ${view === 'honorarios' ? 'bg-[#e11970] text-white' : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300'}`}><Wallet className="h-4 w-4" /> Honorários</button>
           </div>
           <button onClick={() => setNovo(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg bg-[#005efc] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
             <Plus className="h-4 w-4" /> Novo processo
