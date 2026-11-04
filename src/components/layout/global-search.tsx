@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Search, X, Briefcase, User, CornerDownLeft } from 'lucide-react';
+import { Search, X, Briefcase, User, CornerDownLeft, Copy, Check } from 'lucide-react';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
 
 type Result =
-  | { kind: 'case'; id: string; title: string; subtitle: string | null; href: string }
+  | { kind: 'case'; id: string; title: string; subtitle: string | null; href: string; cnj: string | null }
   | { kind: 'client'; id: string; title: string; subtitle: string | null; href: string };
 
 const onlyDigits = (s: string) => s.replace(/\D/g, '');
@@ -25,6 +25,7 @@ export function GlobalSearch() {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
@@ -66,7 +67,7 @@ export function GlobalSearch() {
         return byText || byCnj;
       })
       .slice(0, 6)
-      .map((c) => ({ kind: 'case', id: c.id, title: c.title, subtitle: c.cnjNumber ?? c.area ?? null, href: `/processos/${c.id}` }));
+      .map((c) => ({ kind: 'case', id: c.id, title: c.title, subtitle: c.cnjNumber ?? c.area ?? null, href: `/processos/${c.id}`, cnj: c.cnjNumber ?? null }));
     const clientHits: Result[] = (clientsQ.data ?? [])
       .filter((c) => {
         const byText = c.name.toLowerCase().includes(q);
@@ -84,6 +85,26 @@ export function GlobalSearch() {
     setOpen(false);
     setQuery('');
     router.push(r.href);
+  };
+
+  // Copia o nº dos autos sem abrir o processo (o clique não navega).
+  const copyCnj = async (e: React.MouseEvent, r: Result) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (r.kind !== 'case' || !r.cnj) return;
+    try {
+      await navigator.clipboard.writeText(r.cnj);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = r.cnj;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    setCopiedId(r.id);
+    setTimeout(() => setCopiedId((cur) => (cur === r.id ? null : cur)), 1500);
+    inputRef.current?.focus();
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -130,10 +151,12 @@ export function GlobalSearch() {
               {results.map((r, i) => (
                 <div key={`${r.kind}-${r.id}`}>
                   {firstClientIdx === i && <p className="px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Clientes</p>}
-                  <button
+                  <div
+                    role="button"
+                    tabIndex={-1}
                     onMouseEnter={() => setActive(i)}
                     onClick={() => go(r)}
-                    className={`flex w-full items-center gap-3 px-4 py-2 text-left ${active === i ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
+                    className={`flex w-full cursor-pointer items-center gap-3 px-4 py-2 text-left ${active === i ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
                   >
                     <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${r.kind === 'case' ? 'bg-[#228BE6]/10 text-[#228BE6]' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
                       {r.kind === 'case' ? <Briefcase className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
@@ -142,8 +165,20 @@ export function GlobalSearch() {
                       <span className="block truncate text-sm text-zinc-800 dark:text-zinc-100">{r.title}</span>
                       {r.subtitle && <span className="block truncate text-xs text-zinc-400">{r.subtitle}</span>}
                     </span>
+                    {r.kind === 'case' && r.cnj && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => copyCnj(e, r)}
+                        title="Copiar nº dos autos"
+                        className={`flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs transition-colors ${copiedId === r.id ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200'}`}
+                      >
+                        {copiedId === r.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        <span>{copiedId === r.id ? 'Copiado' : 'Copiar nº'}</span>
+                      </button>
+                    )}
                     {active === i && <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-zinc-300" />}
-                  </button>
+                  </div>
                 </div>
               ))}
             </div>
