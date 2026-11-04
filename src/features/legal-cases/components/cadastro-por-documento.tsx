@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { maskCpfCnpj, maskCurrencyBR, parseCurrencyBR, currencyToInput } from '@/lib/masks';
+import { activitiesService } from '@/features/activities/services/activities.service';
 import {
   X,
   FileSearch,
@@ -11,6 +14,7 @@ import {
   ShieldCheck,
   ScanLine,
   Trash2,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DropZone } from '@/components/drop-zone';
@@ -77,6 +81,9 @@ export function CadastroPorDocumento({
   const [vincularCliente, setVincularCliente] = useState(true);
   const [apensar, setApensar] = useState(true);
   const [completarExistente, setCompletarExistente] = useState(true);
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  const { data: allTags = [] } = useQuery({ queryKey: ['tags-available'], queryFn: () => activitiesService.listAvailableTags() });
+  const toggleTag = (id: string) => setTagIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
 
   const addFiles = (novos: File[]) =>
     setFiles((atual) => [...atual, ...novos].slice(0, MAX_ARQUIVOS));
@@ -128,6 +135,11 @@ export function CadastroPorDocumento({
         arquivos: pendente ? [pendente.arquivo ?? 'documento'] : files.map((f) => f.name),
         messageId: pendente?.messageId ?? null,
       });
+      // Mesmo caminho do "Novo processo": as etiquetas entram depois que o processo existe.
+      if (tagIds.length && r.id) {
+        const res = await Promise.allSettled(tagIds.map((tid) => activitiesService.attachTag('case', r.id, tid)));
+        if (res.some((x) => x.status === 'rejected')) toast.error('Processo gravado, mas alguma etiqueta não entrou — confira na ficha.');
+      }
       toast.success(
         r.criado
           ? 'Processo cadastrado'
@@ -288,12 +300,10 @@ export function CadastroPorDocumento({
                   <Campo label="Valor da causa" origem={leitura.origem.value}>
                     <input
                       className={INPUT}
-                      inputMode="decimal"
-                      value={ficha.value ?? ''}
-                      onChange={(e) => {
-                        const n = parseFloat(e.target.value.replace(',', '.'));
-                        set('value', Number.isFinite(n) ? n : null);
-                      }}
+                      inputMode="numeric"
+                      placeholder="R$ 0,00"
+                      value={ficha.value != null ? `R$ ${currencyToInput(ficha.value)}` : ''}
+                      onChange={(e) => set('value', parseCurrencyBR(maskCurrencyBR(e.target.value)))}
                     />
                   </Campo>
                   <Campo label="Distribuído em" origem={leitura.origem.distributedAt}>
@@ -343,10 +353,12 @@ export function CadastroPorDocumento({
                         <input
                           className={`${INPUT.replace('w-full', '')} w-40 shrink-0`}
                           placeholder="CPF/CNPJ"
-                          value={p.documento ?? ''}
+                          inputMode="numeric"
+                          value={maskCpfCnpj(p.documento ?? '')}
                           onChange={(e) => {
                             const partes = [...ficha.partes];
-                            partes[i] = { ...p, documento: e.target.value || null };
+                            const digitos = e.target.value.replace(/\D/g, '').slice(0, 14);
+                            partes[i] = { ...p, documento: digitos || null };
                             set('partes', partes);
                           }}
                         />
@@ -360,6 +372,32 @@ export function CadastroPorDocumento({
                       </li>
                     ))}
                   </ul>
+                </div>
+
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Etiquetas</p>
+                  {allTags.length === 0 ? (
+                    <p className="text-xs text-zinc-400">Nenhuma etiqueta cadastrada.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {allTags.map((t) => {
+                        const on = tagIds.includes(t.id);
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => toggleTag(t.id)}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${on ? 'border-transparent text-white' : 'border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'}`}
+                            style={on ? { backgroundColor: t.color } : undefined}
+                          >
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: on ? 'rgba(255,255,255,.85)' : t.color }} />
+                            {t.name}
+                            {on && <Check className="h-3 w-3" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <details className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
