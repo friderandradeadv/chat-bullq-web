@@ -65,6 +65,8 @@ type Item = {
   churning: { ofertado: boolean; grupo: string | null; contratos: number; veredito: string | null;
     statusNoChurning: string | null; motivo: string | null } | null;
   oferecivel: boolean;
+  /** Card de ENSAIO: fica fora de qualquer varredura em massa. */
+  ensaio?: boolean;
   /** O churning da mensagem saiu ao cliente por outro card depois da análise. */
   reanalisar?: boolean;
 };
@@ -170,6 +172,21 @@ export function RefinBoard() {
    * e 51 voltariam a ser oferta. Setenta e nove cards parados por falta de um
    * botão.
    */
+  /**
+   * 🚨 A VARREDURA VIROU DUAS, POR RISCO (04/11/2026).
+   *
+   * Medido antes de rodar, em modo seco: dos 103 analisados, **29 estão em
+   * "oferta pronta"** — esses têm o que PERDER, porque quem perdeu o HISCON da
+   * pasta cai para "sem hiscon" na releitura, e 13 já estão nesse estado. Os
+   * outros só podem melhorar.
+   *
+   * Um botão só é tudo-ou-nada, e tudo-ou-nada em cima de 29 ofertas que já
+   * valem dinheiro não é escolha que o quadro deva tomar pelo escritório.
+   *
+   * Card de ENSAIO fica fora dos dois: reler apaga a oferta semeada.
+   */
+  const semNadaAPerder = itens.filter((i) => !!i.caixa && aberta(i) && !i.ensaio && i.caixa !== 'pronta');
+  const comOfertaPronta = itens.filter((i) => !!i.caixa && aberta(i) && !i.ensaio && i.caixa === 'pronta');
   const jaAnalisados = itens.filter((i) => !!i.caixa);
   const emOferta = oferta ? itens.find((i) => i.caseId === oferta) ?? null : null;
 
@@ -235,23 +252,41 @@ export function RefinBoard() {
             documento saiu da pasta. Sem a confirmação, um clique sem querer
             mexe em cem cards.
           */}
-          {!analisando && jaAnalisados.length ? (
+          {!analisando && semNadaAPerder.length ? (
             <button
               onClick={() => {
                 const ok = window.confirm(
-                  `Reler o HISCON de ${jaAnalisados.length} cliente(s) já analisado(s)?\n\n`
-                  + 'Serve para o quadro incorporar uma mudança de regra — por exemplo o churning '
-                  + 'passar a entrar na mensagem.\n\n'
+                  `Reler o HISCON de ${semNadaAPerder.length} cliente(s) que HOJE não têm oferta?\n\n`
+                  + 'São os que estão em "sem refin", "sem hiscon", "hiscon antigo" ou '
+                  + '"posterior à IN 158". Eles só podem MELHORAR: não há oferta a perder.\n\n'
                   + 'Demora: um documento por cliente, um de cada vez (dá para parar no meio).\n'
-                  + 'Atenção: quem tiver perdido o HISCON da pasta SAI da oferta.\n\n'
                   + 'Não envia nada a cliente nenhum.',
                 );
-                if (ok) analisarFila(jaAnalisados);
+                if (ok) analisarFila(semNadaAPerder);
               }}
-              title="Relê o HISCON de quem JÁ foi analisado, para o quadro pegar mudança de regra. Não envia nada."
+              title="Relê só quem não tem oferta hoje. Não há o que perder, e não envia nada."
               className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs font-semibold text-[#48626f] hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
-              <ScanSearch className="h-3.5 w-3.5" /> Reler {jaAnalisados.length} analisado{jaAnalisados.length === 1 ? '' : 's'}
+              <ScanSearch className="h-3.5 w-3.5" /> Reler {semNadaAPerder.length} sem oferta
+            </button>
+          ) : null}
+          {!analisando && comOfertaPronta.length ? (
+            <button
+              onClick={() => {
+                const ok = window.confirm(
+                  `⚠️ Reler ${comOfertaPronta.length} cliente(s) que JÁ ESTÃO EM OFERTA PRONTA?\n\n`
+                  + 'Estes têm o que PERDER: quem tiver perdido o HISCON da pasta cai para '
+                  + '"sem hiscon" e SAI da oferta.\n\n'
+                  + 'Rode isto quando a regra da oferta mudar e você quiser a mudança '
+                  + 'também nos que já estão prontos.\n\n'
+                  + 'Não envia nada a cliente nenhum.',
+                );
+                if (ok) analisarFila(comOfertaPronta);
+              }}
+              title="Relê quem JÁ tem oferta pronta. Pode fazer card sair da oferta se o HISCON sumiu da pasta."
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-amber-300 px-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
+            >
+              <ScanSearch className="h-3.5 w-3.5" /> Reler {comOfertaPronta.length} em oferta
             </button>
           ) : null}
           <div className="inline-flex overflow-hidden rounded-lg border border-[#cfe0ed] dark:border-zinc-700">
