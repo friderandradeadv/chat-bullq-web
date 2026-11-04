@@ -163,20 +163,23 @@ export function GlobalSearch() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-zinc-800 dark:text-zinc-100">{r.title}</span>
-                      {r.subtitle && <span className="block truncate text-xs text-zinc-400">{r.subtitle}</span>}
+                      {r.subtitle && (
+                        <span className="flex min-w-0 items-center gap-1 text-xs text-zinc-400">
+                          <span className="truncate">{r.subtitle}</span>
+                          {r.kind === 'case' && r.cnj && (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={(e) => copyCnj(e, r)}
+                              title={copiedId === r.id ? 'Copiado' : 'Copiar nº dos autos'}
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors ${copiedId === r.id ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200'}`}
+                            >
+                              {copiedId === r.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            </button>
+                          )}
+                        </span>
+                      )}
                     </span>
-                    {r.kind === 'case' && r.cnj && (
-                      <button
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={(e) => copyCnj(e, r)}
-                        title="Copiar nº dos autos"
-                        className={`flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs transition-colors ${copiedId === r.id ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200'}`}
-                      >
-                        {copiedId === r.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        <span>{copiedId === r.id ? 'Copiado' : 'Copiar nº'}</span>
-                      </button>
-                    )}
                     {active === i && <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-zinc-300" />}
                   </div>
                 </div>
