@@ -425,6 +425,31 @@ function montarRelacaoDeProcessos(cases: ClientCaseRow[]): string | null {
   return `${cab}\n\n${linhas.join('\n\n')}`;
 }
 
+/** Título do processo INTEIRO no card, sem reticências. "AUTOR x RÉU" vira
+ *  duas camadas: o autor (quase sempre o próprio cliente, já no topo do painel)
+ *  em linha miúda e apagada; o RÉU — o que distingue um processo do outro — em
+ *  destaque, quebrando linha o quanto precisar. Título sem " x " sai inteiro. */
+function CaseTitle({ title }: { title: string }) {
+  const m = title.match(/^(.*?)\s+x\s+(.+)$/i);
+  if (!m) {
+    return (
+      <p className="mt-1 break-words text-[13px] font-medium leading-snug text-zinc-800 dark:text-zinc-200">
+        {title}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-1 leading-snug" title={title}>
+      <p className="break-words text-[10.5px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+        {m[1].trim()} <span className="normal-case text-zinc-300 dark:text-zinc-600">×</span>
+      </p>
+      <p className="break-words text-[13px] font-medium text-zinc-800 dark:text-zinc-200">
+        {m[2].trim()}
+      </p>
+    </div>
+  );
+}
+
 function ClientCasesSection({
   contactId,
   clienteNome,
@@ -554,9 +579,7 @@ function ClientCasesSection({
                 </span>
               )}
             </div>
-            <p className="mt-1 truncate text-[13px] font-medium text-zinc-800 dark:text-zinc-200">
-              {c.title}
-            </p>
+            <CaseTitle title={c.title} />
             <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400">
               <span className="truncate font-mono">{c.cnjNumber || (c.lane === 'pre' ? 'pré-processual' : 'sem nº')}</span>
               {c.cnjNumber && (
