@@ -143,6 +143,63 @@ export interface AcordoResumo {
   proximoVencimento: string | null;
   proximoValor: number | null;
   status: AcordoEstado['status'];
+  /** Parcelas ainda abertas (vem vazio de API antiga — trate como opcional). */
+  parcelasAbertas?: Array<{ num: number; vencimento: string; valor: number; entrada?: boolean }>;
+  /** Quem paga — o nome a procurar no extrato. */
+  pagador?: string | null;
+  multaAtraso?: number | null;
+  vencimentoAntecipado?: boolean;
+}
+
+/** Uma parcela de acordo em aberto, achatada para a lista "Acordos a receber". */
+export interface ParcelaAReceber {
+  caseId: string;
+  cliente: string;
+  pagador: string | null;
+  cnj: string | null;
+  num: number;
+  nTotal: number;
+  entrada: boolean;
+  vencimento: string; // DD/MM/YYYY
+  vencISO: string;    // YYYY-MM-DD ('' sem data)
+  valor: number;
+  multaAtraso: number | null;
+  vencimentoAntecipado: boolean;
+}
+
+const isoDeBR = (br: string) => { const m = (br || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+/** Hoje no relógio de Brasília — o mesmo critério da bolinha das contas a pagar. */
+export const hojeISOBrasil = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+
+/** Todas as parcelas em aberto dos acordos vivos, ordenadas por vencimento. */
+export function parcelasAReceber(acordos: AcordoResumo[] | undefined): ParcelaAReceber[] {
+  const out: ParcelaAReceber[] = [];
+  for (const a of acordos ?? []) {
+    if (a.status === 'cancelado') continue;
+    for (const p of a.parcelasAbertas ?? []) {
+      out.push({
+        caseId: a.caseId, cliente: a.cliente || a.title, pagador: a.pagador ?? a.reu ?? null, cnj: a.cnj,
+        num: p.num, nTotal: a.nParcelas, entrada: !!p.entrada, vencimento: p.vencimento, vencISO: isoDeBR(p.vencimento),
+        valor: p.valor, multaAtraso: a.multaAtraso ?? null, vencimentoAntecipado: !!a.vencimentoAntecipado,
+      });
+    }
+  }
+  return out.sort((x, y) => (x.vencISO || '9999').localeCompare(y.vencISO || '9999') || x.cliente.localeCompare(y.cliente));
+}
+
+/**
+ * Parcelas que VENCEM HOJE ou JÁ VENCERAM sem baixa — o que acende a bolinha.
+ * Vencida continua contando até alguém dar "Recebi" (igual conta a pagar atrasada):
+ * quem zera é a conferência do extrato, nunca a virada do dia.
+ */
+export function acordosVencendo(acordos: AcordoResumo[] | undefined) {
+  const hoje = hojeISOBrasil();
+  let atrasadas = 0, hojeN = 0, totalAtrasadas = 0, totalHoje = 0;
+  for (const p of parcelasAReceber(acordos)) {
+    if (!p.vencISO || p.vencISO > hoje) continue;
+    if (p.vencISO < hoje) { atrasadas++; totalAtrasadas += p.valor; } else { hojeN++; totalHoje += p.valor; }
+  }
+  return { atrasadas, hoje: hojeN, count: atrasadas + hojeN, totalAtrasadas, totalHoje };
 }
 
 export interface AcordoTotais {

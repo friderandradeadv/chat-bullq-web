@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
+import { acordosService, acordosVencendo } from '@/features/financeiro/services/acordos.service';
 
 type ContaAPagar = { id: string; nome: string; valor: number; vencimento: string; categoria: string | null };
 type Bloco = { count: number; total: number; itens: ContaAPagar[] };
@@ -44,6 +45,22 @@ export function useContasVencendo(): { count: number; hoje: number; vencidas: nu
     staleTime: 15_000,
   });
 
+  // Parcelas de ACORDO a receber que venceram (ou vencem hoje) sem baixa também acendem a
+  // bolinha: é o aviso para conferir no extrato se o réu pagou. Mesma queryKey da tela do
+  // Financeiro — o "Recebi" lá invalida e a bolinha cai junto.
+  const acordos = useQuery({
+    queryKey: ['financeiro', 'acordos'],
+    queryFn: () => acordosService.listar(),
+    enabled: !!user && !!activeOrgId && isAdmin,
+    refetchInterval: 5 * 60_000,
+    staleTime: 60_000,
+  });
+  const ac = acordosVencendo(acordos.data?.acordos);
+
   const d = query.data;
-  return { count: d?.count ?? 0, hoje: d?.hoje?.count ?? 0, vencidas: d?.vencidas?.count ?? 0 };
+  return {
+    count: (d?.count ?? 0) + ac.count,
+    hoje: (d?.hoje?.count ?? 0) + ac.hoje,
+    vencidas: (d?.vencidas?.count ?? 0) + ac.atrasadas,
+  };
 }

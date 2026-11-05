@@ -25,7 +25,7 @@ import { MeuFinanceiroConteudo, BuscaCliente, BuscaProcesso } from '@/features/f
 import { ComboBox } from '@/features/financeiro/components/combo-box';
 import { VERTICAIS_PADRAO } from '@/features/financeiro/lib/verticais';
 import { calculadoraCsService } from '@/features/calculadora-cs/services/calculadora-cs.service';
-import { acordosService, type AcordoResumo } from '@/features/financeiro/services/acordos.service';
+import { acordosService, acordosVencendo, parcelasAReceber, hojeISOBrasil, type AcordoResumo } from '@/features/financeiro/services/acordos.service';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   aggregarClientes, aggregarRetiradas, achaAdvogado, ehRetirada, normNome, mesKey, mesCaixaKey, mesLabel, mesCurtoKey, mesAtualCompetencia, MESES_PT, STATUS_FIN, type StatusFin, type ClienteFin,
@@ -160,6 +160,8 @@ export default function FinanceiroPage() {
   // Contas PESSOAIS do usuário acendem a bolinha também (só a bolinha: os totais são do escritório).
   const { data: pessoaisTop } = usePessoaisEmAberto();
   const { data: repassesTop } = useQuery({ queryKey: ['financeiro', 'repasses-pendentes'], queryFn: () => financeiroService.repassesPendentes(), staleTime: 30_000, refetchInterval: 60_000, refetchOnWindowFocus: true });
+  // Parcela de acordo vencida sem baixa acende a mesma bolinha (aviso para conferir o extrato).
+  const { data: acordosTop } = useAcordosFin();
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>;
 
@@ -265,7 +267,7 @@ export default function FinanceiroPage() {
         {showSaldo && <SaldoDetalheModal meses={data.meses ?? []} saldoAtual={k.saldoAtual} saldoOperacional={k.saldoOperacional ?? k.saldoAtual} caixaContas={k.caixaContas ?? k.saldoAtual} aPagarTotal={aPagarGeral} aPagarRepasses={aPagarRepasses} aPagarRepassesAdv={aPagarRepassesAdv} aReceberTotal={aReceberTotal} onClose={() => setShowSaldo(false)} />}
 
         {/* Menu de seções — dropdown agrupado (compacto, não espalha) */}
-        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={somarPessoais(contasEmAberto(data, repassesTop?.itens), pessoaisTop)} />
+        <TabsMenu view={view} setView={setView} lancCount={data.resumoLancamentos?.total} aPagar={somarPessoais(somarPessoais(contasEmAberto(data, repassesTop?.itens), pessoaisTop), acordosVencendo(acordosTop?.acordos))} />
 
         {view === 'lancamentos' && <LancamentosTab data={data} mesSel={mesSel} setMesSel={setMesSel} />}
         {(view === 'honorarios' || view === 'cobrancas' || view === 'retiradas') && (
@@ -1001,9 +1003,11 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   // Atrasadas × vencendo hoje — alimenta as bolinhas da subaba e do topo da lista.
   const emAberto = useMemo(() => contasEmAberto(data, repasses?.itens), [data, repasses]);
   const { data: pessoaisAbertas } = usePessoaisEmAberto();
+  const { data: acordosLanc } = useAcordosFin();
+  const acordosAbertos = useMemo(() => acordosVencendo(acordosLanc?.acordos), [acordosLanc]);
   // #fatura na URL = o favorito do Asaas abriu esta aba para entregar a fatura. Já nasce
   // na aba do Cartão, que é quem escuta a mensagem (ver CartaoCreditoView).
-  const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar'>(() => (typeof window !== 'undefined' && window.location.hash === '#fatura' ? 'cartao' : 'ledger'));
+  const [modo, setModo] = useState<'ledger' | 'cartao' | 'apagar' | 'areceber'>(() => (typeof window !== 'undefined' && window.location.hash === '#fatura' ? 'cartao' : 'ledger'));
   // Pedir ao agente que leia o extrato do banco — mesmo hook do card da conta.
   const { pedido, pedir: puxar, pedindo: puxando, fechar: fecharPedido } = usePedidoColeta();
   // Verticais disponíveis para ratear uma despesa (ex.: agência 1/3 cada).
@@ -1477,9 +1481,10 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
 
       {/* Alternador: caixa (livro-razão) × cartão de crédito */}
       {(() => {
-        const tabs: Array<{ k: 'ledger' | 'apagar' | 'cartao'; l: string; Icon?: any }> = [
+        const tabs: Array<{ k: 'ledger' | 'apagar' | 'areceber' | 'cartao'; l: string; Icon?: any }> = [
           { k: 'ledger', l: 'Livro-razão' },
           { k: 'apagar', l: 'Contas a pagar', Icon: CalendarClock },
+          { k: 'areceber', l: 'Acordos a receber', Icon: HeartHandshake },
           ...(cardIds.size > 0 ? [{ k: 'cartao' as const, l: 'Cartão de crédito', Icon: CreditCard }] : []),
         ];
         return (
@@ -1488,13 +1493,14 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
               <button key={k} onClick={() => setModo(k)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition ${modo === k ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-zinc-100' : 'text-zinc-500'}`}>
                 {Icon && <Icon className="h-3.5 w-3.5" />}{l}
                 {k === 'apagar' && <DotPendencia atrasadas={emAberto.atrasadas + (pessoaisAbertas?.atrasadas ?? 0)} hoje={emAberto.hoje + (pessoaisAbertas?.hoje ?? 0)} />}
+                {k === 'areceber' && <DotPendencia atrasadas={acordosAbertos.atrasadas} hoje={acordosAbertos.hoje} />}
               </button>
             ))}
           </div>
         );
       })()}
 
-      {modo === 'cartao' && cardIds.size > 0 ? <CartaoCreditoView data={data} contas={contas} onDone={invalidate} /> : modo === 'apagar' ? (() => {
+      {modo === 'areceber' ? <AcordosAReceberView ficha={ficha} /> : modo === 'cartao' && cardIds.size > 0 ? <CartaoCreditoView data={data} contas={contas} onDone={invalidate} /> : modo === 'apagar' ? (() => {
         const bills = [
           ...data.transacoes.filter((t) => txStatus(t) === 'a_pagar' && t.valor < 0 && !isFaturaCartao(t)),
           ...cardBills, // saldo do cartão por fatura (ao vivo)
@@ -2439,6 +2445,134 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
 }
 
 // ── Visão de cartão de crédito: gastos da fatura + saldo em aberto + pagar fatura ──
+/**
+ * ACORDOS A RECEBER — uma linha por PARCELA em aberto, por vencimento (o espelho de
+ * "Contas a pagar" do lado da entrada). Existe para responder uma pergunta só: o réu
+ * pagou no dia? O hub não lê o depósito sozinho; a linha vencida fica vermelha (e acende
+ * a bolinha) até o advogado conferir o extrato e dar "Recebi" com a data do crédito —
+ * aí a parcela vira lançamento no razão pelo mesmo caminho do painel do card.
+ * Não atrasada não é "não pagou": é "ninguém conferiu ainda".
+ */
+function AcordosAReceberView({ ficha }: { ficha: Ficha }) {
+  const qc = useQueryClient();
+  const { data: acd, isLoading } = useAcordosFin();
+  const [todas, setTodas] = useState(false);
+  const [abrir, setAbrir] = useState<string | null>(null); // `${caseId}:${num}` com o "Recebi" aberto
+  const [dataISO, setDataISO] = useState('');
+  const [valorStr, setValorStr] = useState('');
+  const receberM = useMutation({
+    mutationFn: (v: { caseId: string; num: number; dataBR: string; valor: number }) => acordosService.receberParcela(v.caseId, v.num, { dataPagamento: v.dataBR, valor: v.valor }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['financeiro'] });
+      qc.invalidateQueries({ queryKey: ['legal-cases'] });
+      setAbrir(null);
+      toast.success(r.quitado ? 'Parcela recebida — acordo QUITADO. Lançada no livro-razão.' : 'Parcela recebida e lançada no livro-razão.');
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message || 'Não consegui dar baixa na parcela.'),
+  });
+
+  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-zinc-400" /></div>;
+  const hojeISO = hojeISOBrasil();
+  const todasParcelas = parcelasAReceber(acd?.acordos);
+  const st = acordosVencendo(acd?.acordos);
+  // Por padrão: o que já venceu + os próximos 45 dias. O resto do cronograma fica a um clique.
+  const lim = new Date(Date.parse(hojeISO) + 45 * 86400000).toISOString().slice(0, 10);
+  const lista = todas ? todasParcelas : todasParcelas.filter((p) => !p.vencISO || p.vencISO <= lim);
+  const totalAberto = todasParcelas.reduce((s2, p) => s2 + p.valor, 0);
+  const temAtraso = st.atrasadas > 0;
+  const brDeISO = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+
+  return (
+    <div>
+      <div className={`mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 ${temAtraso ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-900/15' : 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/40 dark:bg-emerald-900/15'}`}>
+        <div className={`flex flex-wrap items-center gap-2 text-sm font-semibold ${temAtraso ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
+          <HeartHandshake className="h-4 w-4" /> Acordos a receber · {todasParcelas.length} parcela{todasParcelas.length === 1 ? '' : 's'}
+          {st.atrasadas > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white">
+              {st.atrasadas} vencida{st.atrasadas > 1 ? 's' : ''} sem baixa · {brl(st.totalAtrasadas)}
+            </span>
+          )}
+          {st.hoje > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
+              {st.hoje} vence{st.hoje > 1 ? 'm' : ''} hoje · {brl(st.totalHoje)}
+            </span>
+          )}
+        </div>
+        <div className={`text-lg font-bold tabular-nums ${temAtraso ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{brl(totalAberto)}</div>
+      </div>
+      <p className="mb-2 text-xs text-zinc-400">
+        Parcelas de acordo em aberto, por vencimento. Venceu e ficou <strong className="text-rose-500">vermelha</strong>? Confira no extrato se a parte pagou: se entrou, clique <strong>Recebi</strong> com a data do crédito (vira lançamento no livro-razão, com o rateio e o repasse ao cliente); se não entrou, é descumprimento — a multa e o vencimento antecipado estão no card do processo.
+      </p>
+      {lista.length === 0 ? (
+        <div className="rounded-xl border border-zinc-200/70 py-10 text-center text-sm text-zinc-400 dark:border-zinc-800">
+          {todasParcelas.length === 0 ? 'Nenhuma parcela de acordo em aberto. O acordo se cadastra no card do processo (fase Acordo).' : 'Nada vencendo nos próximos 45 dias.'}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+          {lista.map((p) => {
+            const key = `${p.caseId}:${p.num}`;
+            const atrasada = !!p.vencISO && p.vencISO < hojeISO;
+            const venceHoje = !!p.vencISO && p.vencISO === hojeISO;
+            const dias = p.vencISO ? diasAtraso(p.vencISO, hojeISO) : 0;
+            const aberto = abrir === key;
+            return (
+              <div key={key} className={`border-b border-zinc-100 last:border-0 dark:border-zinc-800/70 ${atrasada ? 'bg-rose-50/40 dark:bg-rose-900/10' : ''}`}>
+                <div className="flex items-center gap-2 px-3 py-2 text-sm">
+                  <span className={`-ml-1 h-5 w-1 shrink-0 rounded-full ${atrasada ? 'bg-rose-500' : venceHoje ? 'bg-orange-500' : 'bg-transparent'}`} />
+                  <span className={`w-12 shrink-0 rounded px-1 py-0.5 text-center text-[11px] font-semibold tabular-nums ${atrasada ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : venceHoje ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'}`} title={p.vencimento}>{p.vencimento.slice(0, 5)}</span>
+                  {atrasada && <span className="hidden shrink-0 rounded bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white sm:inline">{dias}d atrás</span>}
+                  {venceHoje && <span className="hidden shrink-0 rounded bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white sm:inline">hoje</span>}
+                  {!atrasada && !venceHoje && p.vencISO && <span className="hidden shrink-0 text-[10px] text-zinc-400 sm:inline">em {-dias}d</span>}
+                  <ArrowUpCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span role="button" tabIndex={0} onClick={() => ficha.setOpenCaseId(p.caseId)} className="cursor-pointer truncate font-medium text-[#228BE6] hover:underline" title="Abrir o card do processo (painel do acordo)">{titleCase(p.cliente)}</span>
+                    <span className="shrink-0 rounded bg-[#0CA678]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#0CA678]">{p.entrada ? 'entrada' : `parcela ${p.num}/${p.nTotal}`}</span>
+                    {p.pagador && <span className="hidden truncate text-[11px] text-zinc-400 md:inline" title="Quem paga — o nome a procurar no extrato">· paga {p.pagador}</span>}
+                    {atrasada && (p.multaAtraso ?? 0) > 0 && <span className="hidden shrink-0 text-[10px] font-semibold text-rose-600 lg:inline" title="Cláusula penal do acordo">multa {p.multaAtraso}%{p.vencimentoAntecipado ? ' · venc. antecipado' : ''}</span>}
+                  </span>
+                  <span className="w-24 shrink-0 whitespace-nowrap text-right font-semibold tabular-nums text-emerald-600">{brl2(p.valor)}</span>
+                  <span className="flex w-28 shrink-0 items-center justify-end gap-1">
+                    <button
+                      onClick={() => { if (aberto) { setAbrir(null); return; } setAbrir(key); setDataISO(atrasada || venceHoje ? hojeISO : p.vencISO || hojeISO); setValorStr(String(p.valor.toFixed(2)).replace('.', ',')); }}
+                      title="Conferi no extrato e o dinheiro entrou — dar baixa e lançar no livro-razão"
+                      className="inline-flex items-center gap-1 rounded-md bg-[#02883C] px-2 py-1 text-[11px] font-semibold text-white transition hover:opacity-90"
+                    ><Check className="h-3.5 w-3.5" /> Recebi</button>
+                  </span>
+                </div>
+                {aberto && (
+                  <div className="flex flex-wrap items-end gap-2 bg-emerald-50/50 px-3 pb-2.5 pl-10 pt-1.5 text-xs dark:bg-emerald-900/10">
+                    <label className="flex flex-col gap-0.5 text-zinc-500">Data do crédito no extrato
+                      <input type="date" value={dataISO} max={hojeISO} onChange={(e) => setDataISO(e.target.value)} className="rounded border border-zinc-300 bg-white px-1.5 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900" />
+                    </label>
+                    <label className="flex flex-col gap-0.5 text-zinc-500">Valor que entrou
+                      <input value={valorStr} onChange={(e) => setValorStr(e.target.value)} className="w-28 rounded border border-zinc-300 bg-white px-1.5 py-1 text-right text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-900" />
+                    </label>
+                    <button
+                      disabled={receberM.isPending || !dataISO}
+                      onClick={() => {
+                        const v = Number(valorStr.replace(/\./g, '').replace(',', '.'));
+                        if (!(v > 0)) { toast.error('Valor inválido.'); return; }
+                        receberM.mutate({ caseId: p.caseId, num: p.num, dataBR: brDeISO(dataISO), valor: Math.round(v * 100) / 100 });
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md bg-[#02883C] px-3 py-1.5 text-[11px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                    >{receberM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Confirmar recebimento</button>
+                    <button onClick={() => setAbrir(null)} className="px-2 py-1.5 text-[11px] text-zinc-500 hover:text-zinc-700">cancelar</button>
+                    <span className="basis-full text-[11px] text-zinc-400">Lança o honorário, a parte do cliente e o repasse a pagar — o mesmo que o botão do painel do acordo no card. Errou? Estorna pelo card.</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!todas && todasParcelas.length > lista.length && (
+        <button onClick={() => setTodas(true)} className="mt-2 text-xs font-medium text-[#228BE6] hover:underline">Ver o cronograma inteiro ({todasParcelas.length - lista.length} parcela(s) depois de 45 dias)</button>
+      )}
+      {todas && <button onClick={() => setTodas(false)} className="mt-2 text-xs font-medium text-[#228BE6] hover:underline">Mostrar só o que vence nos próximos 45 dias</button>}
+    </div>
+  );
+}
+
 function CartaoCreditoView({ data, contas, onDone }: { data: FinDashboard; contas: Conta[]; onDone: () => void }) {
   // Cartão ASAAS PRIMEIRO (e, por isso, o que abre por padrão): é o cartão do dia a dia do
   // escritório agora. O resto segue a ordem das contas.
