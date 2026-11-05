@@ -1164,22 +1164,35 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
     return { recebido, aReceber, despesas, aPagar, saldo: recebido - despesas };
   }, [txs]);
 
-  // Saldo GERAL (acumulado/running): abre com o que sobrou até o fim do mês anterior e fecha
-  // com + o movimento do mês. Global (ignora filtros de responsável/vertical) — é o caixa do
-  // escritório; bate com o "em caixa" do topo. Cartão não é caixa (saldo do cartão fora).
+  // Saldo GERAL = o dinheiro nas CONTAS no começo e no fim do mês. Global (ignora filtros de
+  // responsável/vertical).
+  //
+  // ⚠️ 05/11/2026: antes era saldoInicial + TODO o razão liquidado anterior ao mês, desde 2025.
+  // Isso somava os 121 lançamentos do import do Astrea SEM CONTA (−R$ 104.757,94, período em que
+  // PF/PJ/conta do pai se misturavam e que nunca concilia) e não via os aportes do sócio que
+  // cobriram aqueles déficits — "abre com −R$ 28.866,60" com dinheiro positivo no banco.
+  //
+  // Agora é ANCORADO no caixa real (`kpis.caixaContas` = Nubank + ASAAS, o mesmo "Total em conta"
+  // do topo) e anda para trás só com o que passou PELAS CONTAS: fecha = caixa de hoje − o que
+  // entrou/saiu das contas depois do mês; abre = fecha − movimento do mês. Lançamento sem conta
+  // não mexe em conta nenhuma, então não entra. Cartão não é caixa (só a fatura paga, que sai da conta).
+  // Aporte fica fora, como em `saldoCalculadoConta` no backend.
   const saldoGeral = useMemo(() => {
     if (!mesSel) return null;
-    const saldoIni = (data.contas ?? []).reduce((s, c) => s + (Number((c as { saldoInicial?: number }).saldoInicial) || 0), 0);
-    let antes = 0, mov = 0;
+    const caixaHoje = data.kpis?.caixaContas;
+    if (caixaHoje == null) return null;
+    const contasCaixa = new Set((data.contas ?? []).filter((c) => !c.cartao).map((c) => c.id));
+    const ehAporte = (t: FinTransacao) => t.valor >= 0 && /aporte/i.test(t.categoria || '');
+    let depois = 0, mov = 0;
     for (const t of data.transacoes) {
-      if (!ehLiquidado(txStatus(t))) continue;
-      if (t.conta && cardIds.has(t.conta)) continue;
+      if (!ehLiquidado(txStatus(t)) || ehAporte(t)) continue;
+      if (!t.conta || !contasCaixa.has(t.conta)) continue;
       const k = mesCaixaKey(t);
-      if (k < mesSel) antes += t.valor; else if (k === mesSel) mov += t.valor;
+      if (k > mesSel) depois += t.valor; else if (k === mesSel) mov += t.valor;
     }
-    const abre = saldoIni + antes;
-    return { abre, mov, fecha: abre + mov };
-  }, [mesSel, data.transacoes, data.contas, cardIds]);
+    const fecha = caixaHoje - depois;
+    return { abre: fecha - mov, mov, fecha };
+  }, [mesSel, data.transacoes, data.contas, data.kpis?.caixaContas]);
 
   const toggle = (key: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   // Lançamentos com o rateio (verticais/honorários) expandido no livro-razão.
