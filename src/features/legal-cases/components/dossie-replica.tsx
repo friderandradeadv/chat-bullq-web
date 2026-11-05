@@ -10,7 +10,8 @@ import { BarraProgresso } from './barra-progresso';
 /**
  * O DOSSIÊ DA RÉPLICA — um clique, e os autos chegam lidos.
  *
- * O Mac abre os autos no PJe (na janela em que o advogado já está logado), baixa
+ * O Mac abre os autos no TRIBUNAL (no PJe, eproc e e-SAJ pela janela em que o
+ * advogado já está logado; no Projudi quem entra é o hub), baixa
  * o processo completo e devolve os fatos MEDIDOS: quem contestou e em que
  * folhas, natureza do contrato, trilha de aceites com os intervalos, faturas
  * cruzadas com o HISCON mês a mês, preliminares na ordem em que vieram.
@@ -21,6 +22,7 @@ import { BarraProgresso } from './barra-progresso';
  * que é justamente a parte que é juízo.
  *
  * 🚨 O HUB NÃO SABE ENTRAR NO PJe, DE PROPÓSITO: o certificado é do advogado.
+ * (No Projudi é diferente: ali o hub entra com credencial do `.env`.)
  * Por isso o trabalho é do Mac, e por isso "esperando a janela logada" é um
  * estado NORMAL deste bloco — não é falha.
  */
@@ -114,7 +116,7 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
       // baixar — e pintar isso de vermelho faria parecer defeito o que é
       // cadastro incompleto.
       if (r?.ok === false) toast.warning(r.motivo ?? 'não deu para pedir o dossiê');
-      else toast.success('Pedido na fila — o Mac abre os autos no PJe.');
+      else toast.success('Pedido na fila — o Mac abre os autos no tribunal.');
       qc.invalidateQueries({ queryKey: ['legal-case', caseId] });
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? 'não consegui pedir o dossiê');
@@ -137,9 +139,12 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
         {/* 🚨 UM BOTÃO SÓ PARA UMA INTENÇÃO SÓ (15/10/2026). Antes eram dois:
             "Ler os autos" e, depois de esperar, "Montar a réplica". O advogado
             não quer ler os autos — ele quer a réplica; ler os autos é meio.
-            Agora o principal é MONTAR, e ele pede o dossiê sozinho quando
-            falta. Reler os autos continua possível, mas como ação secundária,
-            que é o que ela é: só se usa quando o processo andou. */}
+            Agora o principal é MONTAR, e ele pede o dossiê SEMPRE — desde
+            04/11/2026 o botão relê os autos a cada clique, porque quem aperta
+            "montar de novo" aperta por algo ter mudado nos autos, e montar do
+            dossiê de ontem devolve peça impecável sobre material velho.
+            O link secundário sobrou para a outra intenção, que é real: reler
+            os autos SEM produzir peça, só para ver os fatos medidos. */}
         <div className="flex items-center gap-2">
           {replica?.status === 'dossie-pronto' && (
             <button
@@ -164,13 +169,13 @@ export function DossieReplica({ caseId, replica: replicaDada, cnj: cnjDado, semp
       </div>
 
       <p className="mt-1.5 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
-        O Mac baixa o processo completo do PJe e devolve os fatos medidos. A
+        O Mac baixa o processo completo do tribunal e devolve os fatos medidos. A
         escolha das peças continua sua.
         {cnj ? '' : ' Este card não tem CNJ — sem ele não há autos para baixar.'}
       </p>
 
       {/* 🚨 A MESMA BARRA DA INICIAL. Pedido do advogado, e pela razão certa:
-          entre o clique e o dossiê passam uns 30s — mais, se o PJe tiver de
+          entre o clique e o dossiê passam uns 30s — mais, se o tribunal tiver de
           montar o PDF — e card imóvel não distingue trabalhando de travado.
           A barra mostra o passo e a fração; o texto abaixo some para não dizer
           a mesma coisa duas vezes. */}
