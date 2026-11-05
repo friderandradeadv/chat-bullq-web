@@ -59,8 +59,8 @@ export function MobileTabBar() {
   // Bolinha do Financeiro: holerite + repasses + contas (hoje e vencidas). Fica
   // LARANJA só quando tudo que ela mostra vence hoje; qualquer atraso a põe em
   // vermelho — holerite e repasse pendente também são coisa atrasada.
-  const finCount = payslipUnread + repassesPend + contas.count;
-  const finTone = contas.vencidas + payslipUnread + repassesPend > 0 ? 'red' : 'orange';
+  const finCount = repassesPend + contas.count;
+  const finTone = contas.vencidas + repassesPend > 0 ? 'red' : 'orange';
   const role = organizations.find((o) => o.id === activeOrgId)?.role;
   const isAdmin = role === 'OWNER' || role === 'ADMIN';
   const iniciais = (user?.name ?? '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();

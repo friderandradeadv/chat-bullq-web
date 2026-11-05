@@ -451,7 +451,7 @@ export function AppSidebar() {
           {isAdmin && (
             <div className="mt-3">
               <NavSection label="Administrativo" defaultOpen={false}>
-                <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" badge={payslipUnread + repassesPend} badgeTone={repassesPend > 0 ? 'danger' : 'default'} />
+                <NavItem href="/financeiro" icon={CircleDollarSign} label="Financeiro" badge={repassesPend} badgeTone={repassesPend > 0 ? 'danger' : 'default'} />
                 <NavItem href="/rh" icon={Users} label="RH & Seleção" />
                 <NavItem href="/contabilidade" icon={Calculator} label="Contabilidade" />
               </NavSection>

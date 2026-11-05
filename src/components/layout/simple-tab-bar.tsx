@@ -94,7 +94,8 @@ export function SimpleTabBar() {
       {items.map((it) => {
         const Icon = it.icon;
         // Contagem do badge por atalho: conversas (não lidas), agenda (tarefas a
-        // concluir hoje), financeiro (holerite + repasses + contas vencendo/vencidas),
+        // concluir hoje), financeiro (repasses + contas vencendo/vencidas — SÓ pendência;
+        // o holerite fica em "Você": 05/11/2026, "não há pendências a serem pagas hoje"),
         // espaço (movimentações do holerite).
         const count =
           it.id === 'conversas' ? unread :
@@ -102,12 +103,12 @@ export function SimpleTabBar() {
           it.id === 'pre-processual' ? preUnseen :
           it.id === 'repb' ? repbNew :
           it.id === 'config' ? disconnected + (creditAlert ? 1 : 0) :
-          it.id === 'financeiro' ? payslipUnread + repassesPend + contas.count :
+          it.id === 'financeiro' ? repassesPend + contas.count :
           it.id === 'espaco' ? payslipUnread : 0;
         // Financeiro fica LARANJA só quando tudo que a bolinha mostra vence hoje;
-        // qualquer atraso (conta vencida, holerite, repasse) a põe em vermelho.
+        // qualquer atraso (conta vencida, repasse) a põe em vermelho.
         const tone: 'red' | 'orange' =
-          it.id === 'financeiro' && contas.vencidas + payslipUnread + repassesPend === 0 ? 'orange' : 'red';
+          it.id === 'financeiro' && contas.vencidas + repassesPend === 0 ? 'orange' : 'red';
         const baseIcon = it.id === 'espaco' ? avatarEl(isActive('/escritorio')) : <Icon className="h-5 w-5" />;
         const iconEl = <span className="relative">{baseIcon}<Badge count={count} tone={tone} /></span>;
         if (it.action === 'menu') {
