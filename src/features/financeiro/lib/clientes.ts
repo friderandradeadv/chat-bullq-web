@@ -30,10 +30,18 @@ export const mesKey = (t: Pick<FinTransacao, 'mes' | 'data'>) => {
  *  (`dataPagamento`, senão `data`); pendente segue a competência. É o mês do livro-razão e
  *  do saldo — a competência (`mesKey`) fica para o resultado do mês. Sem isto, o INSS de
  *  setembro pago em 20/10 aparecia em setembro no "Liquidados (caixa)". */
-export const mesCaixaKey = (t: Pick<FinTransacao, 'mes' | 'data' | 'dataPagamento' | 'status' | 'valor'>) => {
+/** FATURA DO CARTÃO (05/11/2026, regra do advogado): a fatura vence dia 3 e é REFERENTE AO MÊS
+ *  ANTERIOR — "não pode contar como desse mês". Compra de fatura paga (`faturaDe` preenchido)
+ *  conta no mês ANTERIOR ao do pagamento, em todos os meses: a de 03/11 cai em outubro. */
+export const mesCaixaKey = (t: Pick<FinTransacao, 'mes' | 'data' | 'dataPagamento' | 'status' | 'valor' | 'faturaDe'>) => {
   const s = t.status ?? (t.valor >= 0 ? 'recebido' : 'pago');
   if (s !== 'recebido' && s !== 'pago') return mesKey(t);
-  return competenciaBR(t.dataPagamento || t.data || '') || mesKey(t);
+  const k = competenciaBR(t.dataPagamento || t.data || '') || mesKey(t);
+  if (!t.faturaDe) return k;
+  const m = k.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return k;
+  const y = +m[1], mo = +m[2];
+  return mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
 };
 export const mesLabel =(mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_PT[+m[2] - 1]} de ${m[1]}` : 'Sem data'; };
 export const mesCurtoKey = (mes: string) => { const m = (mes || '').match(/^(\d{4})-(\d{2})$/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${MESES_ABREV[+m[2] - 1]}/${m[1].slice(2)}` : mes; };
