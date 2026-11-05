@@ -408,8 +408,34 @@ function OpenClientRecordButton({ contactId }: { contactId: string }) {
   );
 }
 
-function ClientCasesSection({ contactId, clienteNome }: { contactId: string; clienteNome: string | null }) {
+/** Texto da relação de processos que vai para o cliente no WhatsApp. Só entra
+ *  processo COM número (é o que o cliente pede para conferir); o réu sai do
+ *  título "AUTOR x RÉU". Rótulos internos de fase ficam de fora — "Suspenso/
+ *  Sobrestado" para o cliente vira pergunta, não informação. */
+function montarRelacaoDeProcessos(cases: ClientCaseRow[]): string | null {
+  const comNumero = cases.filter((c) => c.cnjNumber);
+  if (!comNumero.length) return null;
+  const linhas = comNumero.map((c) => {
+    const tipo = c.produto || c.area || 'Processo';
+    const partes = c.title.split(/\s+x\s+/i);
+    const reu = partes.length > 1 ? partes.slice(1).join(' x ').trim() : '';
+    return `*${tipo}*${reu ? ` contra ${reu}` : ''}\n${c.cnjNumber}`;
+  });
+  const cab = comNumero.length === 1 ? 'Segue o número do seu processo:' : 'Segue a relação dos seus processos:';
+  return `${cab}\n\n${linhas.join('\n\n')}`;
+}
+
+function ClientCasesSection({
+  contactId,
+  clienteNome,
+  conversationId,
+}: {
+  contactId: string;
+  clienteNome: string | null;
+  conversationId: string;
+}) {
   const router = useRouter();
+  const setDraft = useComposerDraftStore((s) => s.setDraft);
   const { data, isLoading } = useQuery({
     queryKey: ['cases-by-contact', contactId],
     queryFn: () => legalCasesService.casesByContact(contactId),
@@ -446,6 +472,18 @@ function ClientCasesSection({ contactId, clienteNome }: { contactId: string; cli
     window.open(`${board}?${q.toString()}`, '_blank', 'noopener');
   };
 
+  /** Joga a relação na caixa de mensagem — o advogado confere e aperta enviar.
+   *  Não envia sozinho: mensagem a cliente não tem volta. */
+  const enviarRelacao = () => {
+    const texto = montarRelacaoDeProcessos(cases);
+    if (!texto) {
+      toast.error('Nenhum processo deste cliente tem número ainda.');
+      return;
+    }
+    setDraft(conversationId, texto);
+    toast.success('Relação de processos na caixa de mensagem — confira e envie.');
+  };
+
   const copyCnj = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -477,6 +515,15 @@ function ClientCasesSection({ contactId, clienteNome }: { contactId: string; cli
         <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
           {cases.length}
         </span>
+        <button
+          type="button"
+          onClick={enviarRelacao}
+          title="Pôr a relação dos processos (tipo, réu e número) na caixa de mensagem, para enviar ao cliente"
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-0.5 text-[11px] font-medium text-zinc-500 transition-colors hover:border-primary/40 hover:text-primary dark:border-zinc-700 dark:text-zinc-400"
+        >
+          <Send className="h-3 w-3" />
+          Enviar ao cliente
+        </button>
       </div>
       <div className="space-y-1.5">
         {cases.map((c: ClientCaseRow) => (
@@ -1687,7 +1734,7 @@ function ProfileTab({ conversation }: { conversation: Conversation }) {
       </div>
 
       {/* Processos do cliente — vínculo chat ↔ jurídico */}
-      <ClientCasesSection contactId={contact.id} clienteNome={contact.name} />
+      <ClientCasesSection contactId={contact.id} clienteNome={contact.name} conversationId={conversation.id} />
 
       {/* Criar tarefa na agenda direto daqui (opcionalmente ligada a um processo) */}
       <QuickTaskSection contactId={contact.id} conversationId={conversation.id} />
