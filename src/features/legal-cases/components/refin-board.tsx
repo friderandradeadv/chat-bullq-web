@@ -84,13 +84,21 @@ const semDocumento = (i: Item) => !i.caixa || i.caixa === 'hiscon-antigo' || i.c
 /**
  * As colunas, na ordem em que o trabalho anda.
  *
- * 🚨 A campanha começa pelo REFIN (02/11/2026): o churning saiu do texto desta
- * oferta e por isso saiu também das ajudas das colunas. Quem decide é
- * `CHURNING_NA_MENSAGEM_DO_REFIN`, na API; religada a chave, estes dois textos
- * voltam a falar de churning.
+ * 🚨 A campanha começou pelo REFIN (02/11/2026) e voltou a ser REFIN +
+ * CHURNING. A chave `CHURNING_NA_MENSAGEM_DO_REFIN` (API) está em `true`
+ * desde o 3º ensaio, e estes textos ficaram para trás — foi o que o
+ * escritório viu em 06/11: *"corrija o kanban, não está certo ainda, refin +
+ * churning"*.
+ *
+ * ⚠️ E O TEXTO NÃO CONSERTA O DADO. Medido em 06/11: das 102 ofertas reais
+ * analisadas, **zero** tinham churning ofertado, e 79 carregavam o motivo
+ * *"a campanha começa pelo refin: o churning não entra nesta mensagem"* —
+ * gravado quando a chave estava desligada. A mensagem é congelada na
+ * análise; religar a chave só alcança análise nova. Quem reescreve é a
+ * varredura de releitura, nos dois botões abaixo.
  */
 const COLUNAS: { chave: string; titulo: string; ajuda: string; de: (i: Item) => boolean }[] = [
-  { chave: 'pronta', titulo: 'OFERTA PRONTA', ajuda: 'refin medido no HISCON: leia a mensagem e envie',
+  { chave: 'pronta', titulo: 'OFERTA PRONTA', ajuda: 'refin do cartão e/ou churning dos empréstimos medidos no HISCON: leia a mensagem e envie',
     de: (i) => i.oferecivel && aberta(i) },
   { chave: 'enviada', titulo: 'ENVIADA', ajuda: 'a oferta foi ao cliente, aguardando resposta',
     de: (i) => i.status === 'enviada' },
@@ -106,7 +114,7 @@ const COLUNAS: { chave: string; titulo: string; ajuda: string; de: (i: Item) => 
     de: (i) => i.status === 'recusada' && !fechouHonorarios(i) },
   { chave: 'documento', titulo: 'FALTA HISCON', ajuda: 'não analisado, sem HISCON na pasta ou extrato antes de 11/2023',
     de: (i) => !i.oferecivel && aberta(i) && semDocumento(i) },
-  { chave: 'fora', titulo: 'FORA', ajuda: 'sem refin medido, refin depois da IN 158 ou já tem card',
+  { chave: 'fora', titulo: 'FORA', ajuda: 'sem refin nem churning medidos, refin depois da IN 158 ou já tem card',
     de: (i) => !i.oferecivel && aberta(i) && !semDocumento(i) },
 ];
 
