@@ -139,6 +139,27 @@ export function ChurningBoard() {
    */
   const [completando, setCompletando] = useState<{ feitos: number; total: number } | null>(null);
   const [disparando, setDisparando] = useState<AndamentoDoDisparo | null>(null);
+  /**
+   * 🚨 O TETO DO DIA DA CAMPANHA, EDITÁVEL AQUI (09/11/2026). Ordem do
+   * escritório: *"deixa configurável e começa em 10"*. Fica ao lado do botão,
+   * não numa tela de configuração: quem decide quantas conversas reabrir hoje
+   * é quem está olhando a fila agora.
+   */
+  const [teto, setTeto] = useState<number | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    legalCasesService.regimeDoDisparo()
+      .then((r) => { if (vivo) setTeto(r.tetoDaCampanha); })
+      .catch(() => undefined);
+    return () => { vivo = false; };
+  }, []);
+  const salvarTeto = async (n: number) => {
+    const limpo = Math.max(0, Math.min(500, Math.floor(n || 0)));
+    setTeto(limpo);
+    await legalCasesService.salvarTetoDaCampanha(limpo)
+      .then(() => toast.success(`Teto da campanha: ${limpo} conversa(s) por dia`))
+      .catch(() => toast.error('Não consegui gravar o teto.'));
+  };
   const pararRef = useRef(false);
 
   /**
@@ -267,8 +288,8 @@ export function ChurningBoard() {
     const cabem = Math.max(0, Math.min(regime.sobra, emOrdem.length));
     if (cabem === 0) {
       toast.error(
-        `O teto do dia já foi gasto: ${regime.escada + regime.campanha} de ${regime.teto} conversas `
-        + 'tocadas hoje (escada de follow-up + campanha). Amanhã o contador zera.',
+        `O teto da campanha já foi gasto hoje: ${regime.campanha} de ${regime.tetoDaCampanha} conversas. `
+        + 'Amanhã o contador zera — ou mude o teto ali no quadro, se quiser mandar mais hoje.',
         { duration: 15000 },
       );
       return;
@@ -279,8 +300,9 @@ export function ChurningBoard() {
       `Disparar a oferta de churning para ${cabem} cliente${cabem === 1 ? '' : 's'}, agora?\n\n`
       + `RITMO: um cliente a cada ${Math.round(regime.pausaMinMs / 1000)}–`
       + `${Math.round(regime.pausaMaxMs / 1000)} segundos, sorteado. Leva cerca de ${minutos} min.\n`
-      + `TETO DO DIA: ${regime.teto} conversas, das quais ${regime.escada + regime.campanha} já foram `
-      + `gastas hoje. ${disparaveis.length - cabem > 0 ? `${disparaveis.length - cabem} ficam para amanhã.` : 'Cabem todos.'}\n\n`
+      + `TETO DA CAMPANHA: ${regime.tetoDaCampanha} conversas por dia (já foram ${regime.campanha} hoje). `
+      + `${emOrdem.length - cabem > 0 ? `${emOrdem.length - cabem} ficam para os próximos dias.` : 'Cabem todos.'}\n`
+      + 'É o p75 de conversas que este WhatsApp toca num dia normal. Muda no quadro.\n\n'
       + `TEMPERATURA: sai do mais quente para o mais frio. ${fila.faixas.quentes} falaram `
       + `com você nos últimos 30 dias, ${fila.faixas.mornos} entre 31 e 90, e `
       + `${fila.faixas.frios} estão calados há mais de 90 dias ou nunca falaram neste número.\n\n`
@@ -432,6 +454,21 @@ export function ChurningBoard() {
               className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs font-semibold text-[#1b6ec2] hover:bg-zinc-50 dark:border-zinc-700 dark:text-sky-300 dark:hover:bg-zinc-800">
               <Recycle className="h-3 w-3" /> completar {semMensagem.length}
             </button>
+          ) : null}
+          {!disparando && disparaveis.length ? (
+            <label
+              title="Quantas conversas a campanha pode reabrir por dia. O padrão, 10, é o p75 de conversas que este WhatsApp toca num dia normal — medido em 30 dias. Subir isto sem medir a taxa de bloqueio do lote anterior é apostar o número."
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-[11px] text-[#48626f] dark:border-zinc-700 dark:text-zinc-300"
+            >
+              teto/dia
+              <input
+                type="number" min={0} max={500}
+                value={teto ?? ''}
+                onChange={(e) => setTeto(e.target.value === '' ? null : Number(e.target.value))}
+                onBlur={(e) => salvarTeto(Number(e.target.value))}
+                className="w-11 rounded border border-[#cfe0ed] bg-white px-1 py-0.5 text-center text-[11px] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              />
+            </label>
           ) : null}
           {disparando ? (
             <button onClick={() => { pararRef.current = true; }}

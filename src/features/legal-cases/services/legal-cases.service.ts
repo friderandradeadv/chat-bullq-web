@@ -1403,9 +1403,15 @@ export const legalCasesService = {
     return (data?.data ?? data) as any;
   },
 
+  /** Muda o teto de conversas que a campanha pode reabrir por dia. */
+  async salvarTetoDaCampanha(teto: number): Promise<{ ok: boolean; tetoDaCampanha: number }> {
+    const { data } = await api.patch('/legal-cases/campanha/teto-do-dia', { teto });
+    return (data?.data ?? data) as any;
+  },
+
   /** Teto do dia e ritmo do disparo em lote. Medido no servidor. */
   async regimeDoDisparo(): Promise<{
-    teto: number; escada: number; campanha: number; sobra: number;
+    teto: number; tetoDaCampanha: number; escada: number; campanha: number; sobra: number;
     pausaMinMs: number; pausaMaxMs: number;
   }> {
     const { data } = await api.get('/legal-cases/campanha/regime-do-disparo');
