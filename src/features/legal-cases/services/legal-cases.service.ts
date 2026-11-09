@@ -1390,6 +1390,34 @@ export const legalCasesService = {
     return (data?.data ?? data) as any;
   },
 
+  /** Teto do dia e ritmo do disparo em lote. Medido no servidor. */
+  async regimeDoDisparo(): Promise<{
+    teto: number; escada: number; campanha: number; sobra: number;
+    pausaMinMs: number; pausaMaxMs: number;
+  }> {
+    const { data } = await api.get('/legal-cases/campanha/regime-do-disparo');
+    return (data?.data ?? data) as any;
+  },
+
+  /**
+   * 🚨 PERGUNTA AO PORTÃO ANTES DE MANDAR (09/11/2026). O envio acontece ANTES
+   * do registro, então sem isto a recusa chegaria depois da mensagem. Não grava
+   * nada: é o mesmo código do portão respondendo.
+   */
+  async conferirOfertaRefin(id: string): Promise<{ ok: boolean; motivo: string | null }> {
+    const { data } = await api.post(`/legal-cases/${id}/oferta-refin`, {
+      status: 'enviada', conferir: true,
+    });
+    return (data?.data ?? data) as any;
+  },
+
+  async conferirOfertaChurning(id: string, grupo?: string): Promise<{ ok: boolean; motivo: string | null }> {
+    const { data } = await api.post(`/legal-cases/${id}/oferta-churning`, {
+      status: 'enviada', conferir: true, ...(grupo ? { grupo } : {}),
+    });
+    return (data?.data ?? data) as any;
+  },
+
   /** Andamento da oferta. NÃO envia mensagem: o envio é feito antes, na conversa. */
   async registrarOfertaRefin(
     id: string,

@@ -13,16 +13,26 @@
  * de fase; aqui a coluna é o estado da OFERTA, e passar de "a revisar" para
  * "enviada" significa falar com o cliente. Mensagem ao cliente sai de um clique
  * dentro do card, na conversa que já existe, nunca de um gesto no quadro.
+ *
+ * 🚨🚨 09/11/2026: ENTROU O "DISPARAR N", e a regra acima fica de propósito.
+ * Ordem do escritório: *"faz o botão, propõe o ritmo e o teto"*. Arrastar
+ * continua proibido; o que existe agora é UM botão, vermelho, que manda a
+ * oferta já gravada de N cards, no ritmo e no teto do servidor, e para na hora
+ * que mandarem parar. Ver `lib/disparar-em-lote.ts`, inclusive a nota sobre a
+ * afirmação que a inicial contra a Meta faz ao juízo sobre envio em lote.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, LayoutGrid, List, Loader2, Recycle, RefreshCw, Search, Send, ShieldAlert, ShieldCheck, Users, X } from 'lucide-react';
+import { Check, LayoutGrid, List, Loader2, Recycle, RefreshCw, Search, Send, ShieldAlert, ShieldCheck, Square, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { inboxService } from '@/features/inbox/services/inbox.service';
 import { LinhaDoTempoDaOferta } from './linha-do-tempo-da-oferta';
 import { ConversaAoVivo } from './conversa-ao-vivo';
 import { PreviaEmBolhas } from './previa-em-bolhas';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import {
+  dispararEmLote, type AndamentoDoDisparo,
+} from '@/features/legal-cases/lib/disparar-em-lote';
 import { CaseDetailDrawer } from '@/features/legal-cases/components/case-detail-drawer';
 import { VincularContatoCliente } from '@/features/legal-cases/components/vincular-contato-cliente';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
@@ -127,6 +137,7 @@ export function ChurningBoard() {
    * Não fala com cliente nenhum: só relê documento e grava no card.
    */
   const [completando, setCompletando] = useState<{ feitos: number; total: number } | null>(null);
+  const [disparando, setDisparando] = useState<AndamentoDoDisparo | null>(null);
   const pararRef = useRef(false);
 
   /**
@@ -205,6 +216,87 @@ export function ChurningBoard() {
 
   // A coluna dos honorários não é um STATUS da oferta: é o registro do card.
   // Por isso ela intercepta antes, e tira de 'aceita'/'recusada' quem já fechou.
+  /**
+   * 🚨 O ÚNICO BOTÃO DESTE QUADRO QUE FALA COM N CLIENTES (09/11/2026). Ordem
+   * do escritório: *"faz o botão, propõe o ritmo e o teto"*. Ver
+   * `lib/disparar-em-lote.ts` — inclusive a nota sobre a afirmação que a
+   * inicial contra a Meta faz ao juízo sobre envio em lote.
+   *
+   * Tira daqui quem o portão de 04/11 vai recusar de qualquer jeito (sai pelo
+   * Refin, ou já saiu por outro card): enfileirar 75 recusas só faria o
+   * advogado olhar uma lista de erro. O portão ainda é consultado no servidor,
+   * um a um — esta peneira é cortesia, não é a regra.
+   */
+  const disparaveis = itens.filter(
+    (o) => (o.status || 'analisada') === 'analisada'
+      && o.temConversa
+      && !!o.mensagem
+      && !o.naCampanhaRefin
+      && !o.jaOfertadoEmOutroCard,
+  );
+
+  const dispararFila = async () => {
+    const regime = await legalCasesService.regimeDoDisparo().catch(() => null);
+    if (!regime) {
+      toast.error('Não consegui medir o teto do dia no servidor. Sem isso eu não disparo.');
+      return;
+    }
+    const cabem = Math.max(0, Math.min(regime.sobra, disparaveis.length));
+    if (cabem === 0) {
+      toast.error(
+        `O teto do dia já foi gasto: ${regime.escada + regime.campanha} de ${regime.teto} conversas `
+        + 'tocadas hoje (escada de follow-up + campanha). Amanhã o contador zera.',
+        { duration: 15000 },
+      );
+      return;
+    }
+    const seg = Math.round((regime.pausaMinMs + regime.pausaMaxMs) / 2000);
+    const minutos = Math.max(1, Math.round((cabem * seg) / 60));
+    const ok = window.confirm(
+      `Disparar a oferta de churning para ${cabem} cliente${cabem === 1 ? '' : 's'}, agora?\n\n`
+      + `RITMO: um cliente a cada ${Math.round(regime.pausaMinMs / 1000)}–`
+      + `${Math.round(regime.pausaMaxMs / 1000)} segundos, sorteado. Leva cerca de ${minutos} min.\n`
+      + `TETO DO DIA: ${regime.teto} conversas, das quais ${regime.escada + regime.campanha} já foram `
+      + `gastas hoje. ${disparaveis.length - cabem > 0 ? `${disparaveis.length - cabem} ficam para amanhã.` : 'Cabem todos.'}\n\n`
+      + 'Manda o texto que JÁ está gravado em cada card. Dá para parar no meio, '
+      + 'e retomar depois sem repetir ninguém.\n\n'
+      + '⚠️ Isto é envio em lote. A inicial do escritório contra a Meta afirma ao '
+      + 'juízo que os scripts de envio em lote saíram de operação.',
+    );
+    if (!ok) return;
+
+    pararRef.current = false;
+    setDisparando({ feitos: 0, total: cabem, pulados: 0, esperandoMs: null, cliente: null });
+    const r = await dispararEmLote({
+      alvos: disparaveis.map((o) => ({ caseId: o.caseId, cliente: o.cliente })),
+      regime,
+      conferir: (id) => legalCasesService.conferirOfertaChurning(
+        id, disparaveis.find((x) => x.caseId === id)?.grupo),
+      lerTexto: (caso) => String(caso?.metadata?.ofertaChurning?.mensagem ?? ''),
+      registrar: (id, mensagem) => legalCasesService.registrarOfertaChurning(id, {
+        status: 'enviada', mensagem,
+        grupo: disparaveis.find((x) => x.caseId === id)?.grupo,
+      }),
+      onAndamento: setDisparando,
+      parar: pararRef,
+    });
+    setDisparando(null);
+    refetch();
+    toast.success(
+      `${r.enviados} oferta(s) enviada(s)${r.parado ? ' — parado por você' : ''}`
+      + `${r.foraDoTeto ? `; ${r.foraDoTeto} ficaram para amanhã pelo teto` : ''}`,
+      { duration: 12000 },
+    );
+    if (r.pulados.length) {
+      toast.error(
+        `${r.pulados.length} pulado(s): `
+        + r.pulados.slice(0, 6).map((pp) => `${pp.cliente.split(' ')[0]} (${pp.motivo})`).join(' · ')
+        + (r.pulados.length > 6 ? ` …e mais ${r.pulados.length - 6}` : ''),
+        { duration: 20000 },
+      );
+    }
+  };
+
   const porColuna = (chave: string) =>
     chave === 'honorarios'
       ? itens.filter((o) => fechouHonorarios(o))
@@ -310,6 +402,25 @@ export function ChurningBoard() {
               title="Relê o HISCON de cada oferta que ainda não tem a mensagem guardada, uma de cada vez. Não envia nada a ninguém."
               className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#cfe0ed] px-2 text-xs font-semibold text-[#1b6ec2] hover:bg-zinc-50 dark:border-zinc-700 dark:text-sky-300 dark:hover:bg-zinc-800">
               <Recycle className="h-3 w-3" /> completar {semMensagem.length}
+            </button>
+          ) : null}
+          {disparando ? (
+            <button onClick={() => { pararRef.current = true; }}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-300 px-2 text-xs font-semibold text-red-700 dark:border-red-800 dark:text-red-400">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              enviando {disparando.feitos}/{disparando.total}
+              {disparando.esperandoMs
+                ? ` · próxima em ${Math.ceil(disparando.esperandoMs / 1000)}s`
+                : disparando.cliente ? ` · ${disparando.cliente.split(' ')[0]}` : ''}
+              <Square className="ml-1 h-3 w-3" /> parar
+            </button>
+          ) : !completando && disparaveis.length ? (
+            <button
+              onClick={dispararFila}
+              title="Manda a oferta já gravada em cada card, um cliente de cada vez, no ritmo e no teto do dia. Dá para parar no meio."
+              className="inline-flex h-8 items-center gap-1 rounded-lg bg-red-600 px-2 text-xs font-semibold text-white hover:bg-red-700"
+            >
+              <Send className="h-3.5 w-3.5" /> Disparar {disparaveis.length}
             </button>
           ) : null}
           <button onClick={() => refetch()} disabled={isFetching}
@@ -639,6 +750,14 @@ function PainelDaOfertaChurning({ o, onFechar, onAbrirCard, onMudou }: {
     if (!texto.trim()) return;
     setOcupado(true);
     try {
+      // 🚨 O PORTÃO ANTES DO ENVIO (09/11/2026). O `sendMessage` vem antes do
+      // registro: sem perguntar aqui, a recusa do portão de 04/11 chegaria
+      // DEPOIS de a mensagem já estar no celular do cliente.
+      const veredito = await legalCasesService.conferirOfertaChurning(o.caseId, o.grupo);
+      if (!veredito.ok) {
+        toast.error(veredito.motivo ?? 'Esta oferta não pode ser enviada.', { duration: 15000 });
+        return;
+      }
       const c: any = await legalCasesService.get(o.caseId);
       const conversa = c?.clienteConversa;
       if (!conversa?.conversationId) {

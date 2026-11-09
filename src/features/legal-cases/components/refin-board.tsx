@@ -25,6 +25,23 @@
  * cliente. A inicial contra a Meta afirma ao juízo que os scripts de envio em
  * lote saíram de operação. E não se arrasta card: passar de coluna aqui é falar
  * com o cliente.
+ *
+ * 🚨🚨 09/11/2026: ENTROU O "DISPARAR N", E A REGRA ACIMA FICA DE PROPÓSITO.
+ *
+ * Ordem do escritório, na véspera do primeiro disparo: *"faz o botão, propõe o
+ * ritmo e o teto"*, depois de medido que são 107 ofertas, cada uma em 6 ou 7
+ * bolhas — cerca de 650 saídas de um número só, se tudo for clicado no mesmo
+ * dia, e de um número cujo canal irmão (4212) já foi banido pela Meta.
+ *
+ * ⚠️ **A afirmação processual do parágrafo acima continua de pé**, e quem
+ * ampliar isto precisa vê-la: ela está também na confirmação que o advogado lê
+ * antes de cada disparo, e em `lib/disparar-em-lote.ts`. Regra que só vive em
+ * comentário não protege ninguém.
+ *
+ * O que mudou: um clique dele passa a valer por N envios, no ritmo do servidor
+ * e com o teto do dia do próprio escritório. O que NÃO mudou: cada rodada
+ * começa num clique dele, na sessão dele; nada fala com quem não é cliente da
+ * casa; e o texto é o que já estava gravado no card.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -40,6 +57,9 @@ import { LinhaDoTempoDaOferta } from './linha-do-tempo-da-oferta';
 import { PreviaEmBolhas } from './previa-em-bolhas';
 import { ConversaAoVivo } from './conversa-ao-vivo';
 import { phasesOfBoard } from '@/features/legal-cases/lib/phase-board';
+import {
+  dispararEmLote, type AndamentoDoDisparo,
+} from '@/features/legal-cases/lib/disparar-em-lote';
 
 const ACCENT = 'rgb(25,118,210)';
 
@@ -128,6 +148,7 @@ export function RefinBoard() {
   const [oferta, setOferta] = useState<string | null>(null);
   const [vincular, setVincular] = useState<{ caseId: string; cliente: string } | null>(null);
   const [analisando, setAnalisando] = useState<{ feitos: number; total: number } | null>(null);
+  const [disparando, setDisparando] = useState<AndamentoDoDisparo | null>(null);
   const parar = useRef(false);
 
   // Quadro × lista, lembrado no navegador como no quadro do Churning.
@@ -221,6 +242,75 @@ export function RefinBoard() {
     if (erros.length) toast.error(erros.join(' · '), { duration: 15000 });
   };
 
+  /** Os que o botão "Disparar" alcança: oferta viva, com WhatsApp, fora do ensaio. */
+  const disparaveis = itens.filter(
+    (i) => i.oferecivel && aberta(i) && !i.reanalisar && i.temConversa && !i.ensaio,
+  );
+
+  /**
+   * 🚨 FALA COM N CLIENTES. Ver o cabeçalho deste arquivo: é o único botão do
+   * quadro que faz isso, entrou por ordem expressa, e a confirmação abaixo diz
+   * ao advogado tudo o que ele precisa aceitar antes — inclusive a afirmação
+   * que a inicial contra a Meta faz ao juízo.
+   */
+  const dispararFila = async () => {
+    const regime = await legalCasesService.regimeDoDisparo().catch(() => null);
+    if (!regime) {
+      toast.error('Não consegui medir o teto do dia no servidor. Sem isso eu não disparo.');
+      return;
+    }
+    const cabem = Math.max(0, Math.min(regime.sobra, disparaveis.length));
+    if (cabem === 0) {
+      toast.error(
+        `O teto do dia já foi gasto: ${regime.escada + regime.campanha} de ${regime.teto} conversas `
+        + 'tocadas hoje (escada de follow-up + campanha). Amanhã o contador zera.',
+        { duration: 15000 },
+      );
+      return;
+    }
+    const seg = Math.round((regime.pausaMinMs + regime.pausaMaxMs) / 2000);
+    const minutos = Math.max(1, Math.round((cabem * seg) / 60));
+    const ok = window.confirm(
+      `Disparar a oferta para ${cabem} cliente${cabem === 1 ? '' : 's'}, agora?\n\n`
+      + `RITMO: um cliente a cada ${Math.round(regime.pausaMinMs / 1000)}–`
+      + `${Math.round(regime.pausaMaxMs / 1000)} segundos, sorteado. Leva cerca de ${minutos} min.\n`
+      + `TETO DO DIA: ${regime.teto} conversas, das quais ${regime.escada + regime.campanha} já foram `
+      + `gastas hoje. ${disparaveis.length - cabem > 0 ? `${disparaveis.length - cabem} ficam para amanhã.` : 'Cabem todos.'}\n\n`
+      + 'Manda o texto que JÁ está gravado em cada card. Dá para parar no meio, '
+      + 'e retomar depois sem repetir ninguém.\n\n'
+      + '⚠️ Isto é envio em lote. A inicial do escritório contra a Meta afirma ao '
+      + 'juízo que os scripts de envio em lote saíram de operação.',
+    );
+    if (!ok) return;
+
+    parar.current = false;
+    setDisparando({ feitos: 0, total: cabem, pulados: 0, esperandoMs: null, cliente: null });
+    const r = await dispararEmLote({
+      alvos: disparaveis.map((i) => ({ caseId: i.caseId, cliente: i.cliente })),
+      regime,
+      conferir: (id) => legalCasesService.conferirOfertaRefin(id),
+      lerTexto: (caso) => String(caso?.metadata?.ofertaRefin?.mensagem ?? ''),
+      registrar: (id, mensagem) => legalCasesService.registrarOfertaRefin(id, { status: 'enviada', mensagem }),
+      onAndamento: setDisparando,
+      parar,
+    });
+    setDisparando(null);
+    refetch();
+    toast.success(
+      `${r.enviados} oferta(s) enviada(s)${r.parado ? ' — parado por você' : ''}`
+      + `${r.foraDoTeto ? `; ${r.foraDoTeto} ficaram para amanhã pelo teto` : ''}`,
+      { duration: 12000 },
+    );
+    if (r.pulados.length) {
+      toast.error(
+        `${r.pulados.length} pulado(s): `
+        + r.pulados.slice(0, 6).map((p) => `${p.cliente.split(' ')[0]} (${p.motivo})`).join(' · ')
+        + (r.pulados.length > 6 ? ` …e mais ${r.pulados.length - 6}` : ''),
+        { duration: 20000 },
+      );
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
@@ -247,10 +337,35 @@ export function RefinBoard() {
               <Loader2 className="h-3 w-3 animate-spin" /> lendo {analisando.feitos}/{analisando.total}
               <Square className="ml-1 h-3 w-3" /> parar
             </button>
-          ) : naoAnalisados.length ? (
+          ) : !disparando && naoAnalisados.length ? (
             <button onClick={() => analisarFila(naoAnalisados)} title="Lê o HISCON de cada cliente ainda não analisado, um de cada vez. Não envia nada."
               className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-white" style={{ background: ACCENT }}>
               <ScanSearch className="h-3.5 w-3.5" /> Analisar {naoAnalisados.length} pendente{naoAnalisados.length === 1 ? '' : 's'}
+            </button>
+          ) : null}
+          {/*
+            🚨 O ÚNICO BOTÃO DESTE QUADRO QUE FALA COM N CLIENTES (09/11/2026).
+            Fica em vermelho e com o número na frente, de propósito: um clique
+            aqui não é como os outros. A confirmação diz o ritmo, o teto e a
+            afirmação da inicial contra a Meta.
+          */}
+          {disparando ? (
+            <button onClick={() => { parar.current = true; }}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-300 px-2 text-xs font-semibold text-red-700 dark:border-red-800 dark:text-red-400">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              enviando {disparando.feitos}/{disparando.total}
+              {disparando.esperandoMs
+                ? ` · próxima em ${Math.ceil(disparando.esperandoMs / 1000)}s`
+                : disparando.cliente ? ` · ${disparando.cliente.split(' ')[0]}` : ''}
+              <Square className="ml-1 h-3 w-3" /> parar
+            </button>
+          ) : !analisando && disparaveis.length ? (
+            <button
+              onClick={dispararFila}
+              title="Manda a oferta já gravada em cada card, um cliente de cada vez, no ritmo e no teto do dia. Dá para parar no meio."
+              className="inline-flex h-8 items-center gap-1 rounded-lg bg-red-600 px-2 text-xs font-semibold text-white hover:bg-red-700"
+            >
+              <Send className="h-3.5 w-3.5" /> Disparar {disparaveis.length}
             </button>
           ) : null}
           {/*
@@ -260,7 +375,7 @@ export function RefinBoard() {
             documento saiu da pasta. Sem a confirmação, um clique sem querer
             mexe em cem cards.
           */}
-          {!analisando && semNadaAPerder.length ? (
+          {!analisando && !disparando && semNadaAPerder.length ? (
             <button
               onClick={() => {
                 const ok = window.confirm(
@@ -278,7 +393,7 @@ export function RefinBoard() {
               <ScanSearch className="h-3.5 w-3.5" /> Reler {semNadaAPerder.length} sem oferta
             </button>
           ) : null}
-          {!analisando && comOfertaPronta.length ? (
+          {!analisando && !disparando && comOfertaPronta.length ? (
             <button
               onClick={() => {
                 const ok = window.confirm(
@@ -592,6 +707,14 @@ function PainelDaOferta({ o, onFechar, onAbrirCard, onMudou }: {
     if (!texto?.trim()) return;
     setOcupado(true);
     try {
+      // 🚨 O PORTÃO ANTES DO ENVIO (09/11/2026). O `sendMessage` vem antes do
+      // registro, então sem perguntar aqui a recusa da oferta repetida chegaria
+      // DEPOIS de a mensagem já estar no celular do cliente.
+      const veredito = await legalCasesService.conferirOfertaRefin(o.caseId);
+      if (!veredito.ok) {
+        toast.error(veredito.motivo ?? 'Esta oferta não pode ser enviada.', { duration: 15000 });
+        return;
+      }
       const c: any = await legalCasesService.get(o.caseId);
       const conversa = c?.clienteConversa;
       if (!conversa?.conversationId) {
