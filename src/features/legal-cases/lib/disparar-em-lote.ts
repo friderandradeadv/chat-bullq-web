@@ -5,13 +5,25 @@
  * medido que são 107 ofertas e que cada uma sai em 6 a 7 bolhas — cerca de 650
  * saídas de um número só, se tudo for clicado no mesmo dia.
  *
- * ⚠️⚠️ LEIA ANTES DE MEXER: **a inicial do escritório contra a Meta afirma ao
- * juízo que os scripts de envio em lote saíram de operação** (está no cabeçalho
- * do `refin-board.tsx`, de 28/10/2026). Este laço é envio em lote. Ele foi
- * pedido expressamente, e por isso existe; mas quem for ampliá-lo precisa saber
- * que há uma afirmação processual do lado de lá. O aviso também está na
- * confirmação que o advogado lê antes de cada disparo, de propósito: regra que
- * só vive em comentário não protege ninguém.
+ * ⚠️⚠️ LEIA ANTES DE MEXER — E A VERSÃO CURTA JÁ CORRIGIDA (09/11/2026).
+ *
+ * O cabeçalho do `refin-board.tsx`, de 28/10/2026, dizia que "a inicial contra
+ * a Meta afirma ao juízo que os scripts de envio em lote saíram de operação".
+ * **Conferido nas peças: a inicial não afirma isso.** O que a réplica de
+ * 03/11/2026 afirma, rebatendo a hipótese "envio de mensagens em massa não
+ * autorizadas", é: *"conversas iniciadas pelo cliente em 86,3% e 89,6% dos
+ * casos; 45 iniciadas pela Autora ao todo"* — números do painel da própria
+ * Meta, das contas da API oficial (portfólio 417858283638509, número
+ * (44) 99157-4212, `quality_rating` GREEN).
+ *
+ * Este laço dispara pelo canal **RMC/RCC, número 554491747315**, em Evolution,
+ * sem `appId` e sem `accessToken`: não é conta da plataforma da Meta e não
+ * gera registro no painel dela. O risco de disparar aqui não é processual — é
+ * perder esse número, que é o que a base de clientes tem salvo, e que é
+ * exatamente o perfil que a Meta derruba. Daí o teto e a pausa.
+ *
+ * O aviso também está na confirmação que o advogado lê antes de cada disparo,
+ * de propósito: regra que só vive em comentário não protege ninguém.
  *
  * O que este laço NÃO é, e isso importa para a diferença:
  *   • não é robô: cada rodada começa num clique do advogado, na sessão dele;

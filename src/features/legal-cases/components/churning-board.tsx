@@ -18,8 +18,9 @@
  * Ordem do escritório: *"faz o botão, propõe o ritmo e o teto"*. Arrastar
  * continua proibido; o que existe agora é UM botão, vermelho, que manda a
  * oferta já gravada de N cards, no ritmo e no teto do servidor, e para na hora
- * que mandarem parar. Ver `lib/disparar-em-lote.ts`, inclusive a nota sobre a
- * afirmação que a inicial contra a Meta faz ao juízo sobre envio em lote.
+ * que mandarem parar. Ver `lib/disparar-em-lote.ts`, inclusive a nota que
+ * CONFERE nas peças o que a ação contra a Meta afirma — e o que ela não
+ * afirma: o disparo sai pelo 7315, que não é conta da plataforma dela.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -260,8 +261,9 @@ export function ChurningBoard() {
       + `gastas hoje. ${disparaveis.length - cabem > 0 ? `${disparaveis.length - cabem} ficam para amanhã.` : 'Cabem todos.'}\n\n`
       + 'Manda o texto que JÁ está gravado em cada card. Dá para parar no meio, '
       + 'e retomar depois sem repetir ninguém.\n\n'
-      + '⚠️ Isto é envio em lote. A inicial do escritório contra a Meta afirma ao '
-      + 'juízo que os scripts de envio em lote saíram de operação.',
+      + '⚠️ Envio em lote, pelo 7315 — Evolution, fora da plataforma da Meta e fora '
+      + 'das contas da ação contra ela. O risco aqui não é processual: é perder o 7315, '
+      + 'que é o número que seus clientes têm salvo.',
     );
     if (!ok) return;
 

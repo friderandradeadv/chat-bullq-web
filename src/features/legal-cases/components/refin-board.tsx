@@ -33,10 +33,47 @@
  * bolhas — cerca de 650 saídas de um número só, se tudo for clicado no mesmo
  * dia, e de um número cujo canal irmão (4212) já foi banido pela Meta.
  *
- * ⚠️ **A afirmação processual do parágrafo acima continua de pé**, e quem
- * ampliar isto precisa vê-la: ela está também na confirmação que o advogado lê
- * antes de cada disparo, e em `lib/disparar-em-lote.ts`. Regra que só vive em
- * comentário não protege ninguém.
+ * 🚨🚨 A FRASE DO 1º PARÁGRAFO — "a inicial contra a Meta afirma ao juízo que
+ * os scripts de envio em lote saíram de operação" — FOI CONFERIDA NAS PEÇAS
+ * E ESTÁ ERRADA (09/11/2026). Fica escrita lá de propósito, para quem vier
+ * depois não reescrevê-la de memória.
+ *
+ * Procurado "lote", "script", "automação", "massa" e "disparo" nos 36.008
+ * caracteres da inicial (`INICIAL - META - OBRIGACAO DE FAZER.docx`) e nos
+ * 24.504 da réplica de 03/11/2026: **a inicial não afirma nada sobre scripts
+ * de envio em lote**. A afirmação simplesmente não existe nos autos.
+ *
+ * O que EXISTE é uma linha da tabela da réplica, que rebate as hipóteses da
+ * Meta uma a uma:
+ *
+ *   Hipótese da Ré        | "Envio de mensagens em massa não autorizadas"
+ *   Resposta da Autora    | "Conversas iniciadas pelo cliente em 86,3% e
+ *                         |  89,6% dos casos; 45 iniciadas pela Autora ao todo"
+ *
+ * E a réplica lista, entre os fatos que a Meta NÃO impugnou e que por isso se
+ * tornaram incontroversos (art. 341 do CPC), "a predominância de conversas
+ * iniciadas pelos próprios clientes".
+ *
+ * 🚨 ESSES NÚMEROS SÃO DAS CONTAS DA API OFICIAL, não deste canal. Saem do
+ * painel da própria Meta: portfólio 417858283638509, conta 1745617789779330,
+ * número (44) 99157-4212, `quality_rating` GREEN. São duas porcentagens
+ * porque são dois portfólios.
+ *
+ * 🚨 A CAMPANHA NÃO CORRE POR LÁ. Medido no banco em 09/11/2026:
+ *
+ *   4212 (aposentado — Meta)  554491574212  appId + accessToken Cloud API  INATIVO
+ *   ESCRITÓRIO                554491645394  Evolution                      INATIVO
+ *   RMC/RCC                   554491747315  Evolution, instância COMERCIAL  ATIVO
+ *
+ * O disparo sai pelo **7315**, que não é conta da plataforma da Meta: sem
+ * portfólio, sem `appId`, sem `accessToken`. Não gera registro no painel dela,
+ * e os "registros de envio" que a Autora pediu ao juízo (arts. 396 a 400 do
+ * CPC) são os registros DA RÉ, das contas DELA.
+ *
+ * ⚠️ O RISCO REAL NÃO É PROCESSUAL: é perder o 7315. Ele roda em Evolution,
+ * não oficial, que é o perfil que a Meta derruba — e este escritório já perdeu
+ * seis contas. O 7315 é o número que a base de clientes tem salvo. É para isso
+ * que existem o teto de 60 e a pausa sorteada, não para a ação.
  *
  * O que mudou: um clique dele passa a valer por N envios, no ritmo do servidor
  * e com o teto do dia do próprio escritório. O que NÃO mudou: cada rodada
@@ -278,8 +315,9 @@ export function RefinBoard() {
       + `gastas hoje. ${disparaveis.length - cabem > 0 ? `${disparaveis.length - cabem} ficam para amanhã.` : 'Cabem todos.'}\n\n`
       + 'Manda o texto que JÁ está gravado em cada card. Dá para parar no meio, '
       + 'e retomar depois sem repetir ninguém.\n\n'
-      + '⚠️ Isto é envio em lote. A inicial do escritório contra a Meta afirma ao '
-      + 'juízo que os scripts de envio em lote saíram de operação.',
+      + '⚠️ Envio em lote, pelo 7315 — Evolution, fora da plataforma da Meta e fora '
+      + 'das contas da ação contra ela. O risco aqui não é processual: é perder o 7315, '
+      + 'que é o número que seus clientes têm salvo.',
     );
     if (!ok) return;
 
