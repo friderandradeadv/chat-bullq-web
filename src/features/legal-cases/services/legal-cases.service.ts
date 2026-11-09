@@ -1390,6 +1390,19 @@ export const legalCasesService = {
     return (data?.data ?? data) as any;
   },
 
+  /**
+   * A fila do lote JÁ ORDENADA do mais quente para o mais frio, medida no
+   * canal que vai enviar. Quem ordena é o servidor: a régua de temperatura
+   * vive em `ordem-por-temperatura.ts` e não se copia para cá.
+   */
+  async filaPorTemperatura(caseIds: string[]): Promise<{
+    ordem: string[];
+    faixas: { quentes: number; mornos: number; frios: number };
+  }> {
+    const { data } = await api.post('/legal-cases/campanha/temperatura', { caseIds });
+    return (data?.data ?? data) as any;
+  },
+
   /** Teto do dia e ritmo do disparo em lote. Medido no servidor. */
   async regimeDoDisparo(): Promise<{
     teto: number; escada: number; campanha: number; sobra: number;

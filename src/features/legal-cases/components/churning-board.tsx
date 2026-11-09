@@ -242,7 +242,29 @@ export function ChurningBoard() {
       toast.error('Não consegui medir o teto do dia no servidor. Sem isso eu não disparo.');
       return;
     }
-    const cabem = Math.max(0, Math.min(regime.sobra, disparaveis.length));
+    // 🚨 DO MAIS QUENTE PARA O MAIS FRIO (09/11/2026). Ordem do escritório:
+    // *"faz, ordena por temperatura"*. Medido antes de pedir: 59% dos alvos
+    // estão calados há mais de 90 dias ou nunca falaram NESTE número, e o
+    // número é Evolution, não oficial, já em 2,9 saídas por entrada. O que
+    // derruba número é bloqueio, e bloqueio vem de conversa dormente.
+    //
+    // Mandando o quente primeiro, as primeiras dezenas são as de menor risco e
+    // maior chance de resposta — e a rodada termina com a taxa real de bloqueio
+    // e de aceite MEDIDA, antes de encostar nos frios. Parou no meio? Queimou
+    // os mais seguros, não os frágeis.
+    const fila = await legalCasesService
+      .filaPorTemperatura(disparaveis.map((i) => i.caseId))
+      .catch(() => null);
+    if (!fila) {
+      toast.error('Não consegui medir a temperatura das conversas. Sem isso eu não ordeno o lote.');
+      return;
+    }
+    const posicao = new Map(fila.ordem.map((id, i) => [id, i]));
+    const emOrdem = [...disparaveis].sort(
+      (a, b) => (posicao.get(a.caseId) ?? 1e9) - (posicao.get(b.caseId) ?? 1e9),
+    );
+
+    const cabem = Math.max(0, Math.min(regime.sobra, emOrdem.length));
     if (cabem === 0) {
       toast.error(
         `O teto do dia já foi gasto: ${regime.escada + regime.campanha} de ${regime.teto} conversas `
@@ -259,6 +281,9 @@ export function ChurningBoard() {
       + `${Math.round(regime.pausaMaxMs / 1000)} segundos, sorteado. Leva cerca de ${minutos} min.\n`
       + `TETO DO DIA: ${regime.teto} conversas, das quais ${regime.escada + regime.campanha} já foram `
       + `gastas hoje. ${disparaveis.length - cabem > 0 ? `${disparaveis.length - cabem} ficam para amanhã.` : 'Cabem todos.'}\n\n`
+      + `TEMPERATURA: sai do mais quente para o mais frio. ${fila.faixas.quentes} falaram `
+      + `com você nos últimos 30 dias, ${fila.faixas.mornos} entre 31 e 90, e `
+      + `${fila.faixas.frios} estão calados há mais de 90 dias ou nunca falaram neste número.\n\n`
       + 'Manda o texto que JÁ está gravado em cada card. Dá para parar no meio, '
       + 'e retomar depois sem repetir ninguém.\n\n'
       + '⚠️ Envio em lote, pelo 7315 — Evolution, fora da plataforma da Meta e fora '
@@ -270,7 +295,9 @@ export function ChurningBoard() {
     pararRef.current = false;
     setDisparando({ feitos: 0, total: cabem, pulados: 0, esperandoMs: null, cliente: null });
     const r = await dispararEmLote({
-      alvos: disparaveis.map((o) => ({ caseId: o.caseId, cliente: o.cliente })),
+      // A fila INTEIRA, já ordenada: quem corta pelo teto é o laço, e é ele
+      // que sabe dizer quantos ficaram para amanhã.
+      alvos: emOrdem.map((i) => ({ caseId: i.caseId, cliente: i.cliente })),
       regime,
       conferir: (id) => legalCasesService.conferirOfertaChurning(
         id, disparaveis.find((x) => x.caseId === id)?.grupo),
