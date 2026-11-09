@@ -105,12 +105,24 @@ export function VisorProgresso({ acimaDaBarra = false }: { acimaDaBarra?: boolea
        enxerga nome de classe montado por interpolação.
 
        E `max-h` com rolagem porque empilhar quatro cartões também estoura a
-       tela em janela baixa, e cortar por cima é o mesmo defeito do outro lado. */
+       tela em janela baixa, e cortar por cima é o mesmo defeito do outro lado.
+
+       🚨 E AGORA DESCONTA TAMBÉM O RODAPÉ DA TELA (09/11/2026). O cartão caía
+       em cima do botão "Enviar mensagem" do Inbox e ENGOLIA O CLIQUE, sem erro
+       nenhum: três cliques perdidos respondendo cliente. Quem mede e publica
+       `--rodape-ocupado` é a tela que toma o canto (`use-rodape-ocupado.ts`),
+       pelo mesmo desenho do `--dock-safe`: o visor não precisa saber que o
+       Inbox existe, e qualquer tela futura com barra inferior própria entra
+       sozinha. Fora dessas telas a variável é `0px` e nada muda.
+
+       ⚠️ Subir o compositor por z-index resolveria o clique e traria de volta o
+       cartão cortado de 20/10 — *"está bugando aquele aviso ali cortando"*. O
+       cartão tem de ficar INTEIRO, acima do que já ocupa o canto. */
     <div
-      className={`pointer-events-auto fixed right-4 z-40 flex max-h-[calc(100vh-9rem)] w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+0.75rem)] ${
+      className={`pointer-events-auto fixed right-4 z-40 flex max-h-[calc(100vh-9rem-var(--rodape-ocupado,0px))] w-[22rem] max-w-[calc(100vw-2rem)] flex-col gap-2 overflow-y-auto bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+var(--rodape-ocupado,0px)+0.75rem)] ${
         acimaDaBarra
-          ? 'lg:bottom-[calc(4rem+var(--dock-safe,0px)+0.75rem)]'
-          : 'lg:bottom-4'
+          ? 'lg:bottom-[calc(4rem+var(--dock-safe,0px)+var(--rodape-ocupado,0px)+0.75rem)]'
+          : 'lg:bottom-[calc(1rem+var(--rodape-ocupado,0px))]'
       }`}
     >
       {vivos.slice(0, 4).map((x) => (

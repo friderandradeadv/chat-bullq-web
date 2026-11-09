@@ -14,6 +14,7 @@ import type {
   QuickReplyAttachment,
 } from '@/features/settings/services/quick-replies.service';
 import { parseNaturalDate, formatScheduledPreview } from '../lib/parse-natural-date';
+import { useRodapeOcupado } from '@/components/layout/use-rodape-ocupado';
 
 const QR_ATT_ICON: Record<QuickReplyAttachment['type'], typeof FileText> = {
   DOCUMENT: FileText,
@@ -99,6 +100,15 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   { onSend, onSendAudio, onSendInternal, onSendMedia, onSendContact, onGenerateSummary, onSchedule, sendingFrom, signatureName, quickReplies, contactName, onSendRemoteAttachment, channelId, onSendTemplate, onScheduleTemplate, disabled },
   ref,
 ) {
+  /**
+   * 🚨 O COMPOSITOR AVISA QUE OCUPA O CANTO DE BAIXO (09/11/2026). Sem isto o
+   * `VisorProgresso` (`fixed right-4 bottom-4 z-40`) cai em cima do botão
+   * "Enviar mensagem" e ENGOLE O CLIQUE, sem erro nenhum. Medido: três cliques
+   * perdidos respondendo cliente. Ver `use-rodape-ocupado.ts`.
+   */
+  const [rodape, setRodape] = useState<HTMLDivElement | null>(null);
+  useRodapeOcupado(rodape);
+
   const [text, setText] = useState('');
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
@@ -486,7 +496,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   if (disabled) {
     return (
-      <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-3 text-center text-sm text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50">
+      <div
+        ref={setRodape}
+        className="border-t border-zinc-200 bg-zinc-50 px-4 py-3 text-center text-sm text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50"
+      >
         Conversa encerrada — reabra para enviar mensagens
       </div>
     );
@@ -495,7 +508,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   // RECORDING MODE: shows a big bar with a pulsing red dot and the timer.
   if (recorder.state === 'recording') {
     return (
-      <div className="border-t border-zinc-200 bg-white px-5 py-3.5 dark:border-zinc-800 dark:bg-zinc-950">
+      <div ref={setRodape} className="border-t border-zinc-200 bg-white px-5 py-3.5 dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 dark:border-red-900/40 dark:bg-red-500/10">
           <button
             onClick={recorder.cancel}
@@ -528,7 +541,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   if (recorder.state === 'stopped' && recorder.blob) {
     const audioSrc = URL.createObjectURL(recorder.blob);
     return (
-      <div className="border-t border-zinc-200 bg-white px-5 py-3.5 dark:border-zinc-800 dark:bg-zinc-950">
+      <div ref={setRodape} className="border-t border-zinc-200 bg-white px-5 py-3.5 dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900">
           <button
             onClick={recorder.cancel}
@@ -565,7 +578,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const showMic = canRecord && !text.trim() && pending.length === 0 && pendingAtts.length === 0;
 
   return (
-    <div className={`border-t px-5 py-3 transition-colors ${internalMode ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-900/10' : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950'}`}>
+    <div
+      ref={setRodape}
+      className={`border-t px-5 py-3 transition-colors ${internalMode ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-900/10' : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950'}`}
+    >
       {contactPickerOpen && onSendContact && (
         <ContactPickerModal
           onClose={() => setContactPickerOpen(false)}
