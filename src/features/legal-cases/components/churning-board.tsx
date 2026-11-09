@@ -146,19 +146,26 @@ export function ChurningBoard() {
    * é quem está olhando a fila agora.
    */
   const [teto, setTeto] = useState<number | null>(null);
-  useEffect(() => {
-    let vivo = true;
-    legalCasesService.regimeDoDisparo()
-      .then((r) => { if (vivo) setTeto(r.tetoDaCampanha); })
+  /**
+   * 🚨 O RÓTULO DO BOTÃO NÃO PODE MENTIR (09/11/2026). Ordem do escritório:
+   * *"muda o rótulo pra Disparar 10 (de 62)"*. Para isso o quadro precisa da
+   * SOBRA do dia, não do teto: teto 10 com 4 já enviados hoje são 6, e um botão
+   * escrito "Disparar 10" prometeria dez.
+   */
+  const [regime, setRegime] = useState<{ tetoDaCampanha: number; sobra: number } | null>(null);
+  const lerRegime = async () => {
+    await legalCasesService.regimeDoDisparo()
+      .then((r) => { setRegime(r); setTeto(r.tetoDaCampanha); })
       .catch(() => undefined);
-    return () => { vivo = false; };
-  }, []);
+  };
+  useEffect(() => { void lerRegime(); }, []);
   const salvarTeto = async (n: number) => {
     const limpo = Math.max(0, Math.min(500, Math.floor(n || 0)));
     setTeto(limpo);
     await legalCasesService.salvarTetoDaCampanha(limpo)
       .then(() => toast.success(`Teto da campanha: ${limpo} conversa(s) por dia`))
       .catch(() => toast.error('Não consegui gravar o teto.'));
+    await lerRegime();
   };
   const pararRef = useRef(false);
 
@@ -256,6 +263,13 @@ export function ChurningBoard() {
       && !o.naCampanhaRefin
       && !o.jaOfertadoEmOutroCard,
   );
+  /**
+   * Quantos REALMENTE saem neste clique: a fila, cortada pela sobra do dia.
+   * É esta a conta que o rótulo mostra — o teto sozinho prometeria demais
+   * quando parte do dia já foi gasta.
+   */
+  const vaoSair = Math.max(0, Math.min(regime?.sobra ?? disparaveis.length, disparaveis.length));
+
 
   const dispararFila = async () => {
     const regime = await legalCasesService.regimeDoDisparo().catch(() => null);
@@ -333,6 +347,7 @@ export function ChurningBoard() {
     });
     setDisparando(null);
     refetch();
+    void lerRegime();
     toast.success(
       `${r.enviados} oferta(s) enviada(s)${r.parado ? ' — parado por você' : ''}`
       + `${r.foraDoTeto ? `; ${r.foraDoTeto} ficaram para amanhã pelo teto` : ''}`,
@@ -483,10 +498,18 @@ export function ChurningBoard() {
           ) : !completando && disparaveis.length ? (
             <button
               onClick={dispararFila}
-              title="Manda a oferta já gravada em cada card, um cliente de cada vez, no ritmo e no teto do dia. Dá para parar no meio."
-              className="inline-flex h-8 items-center gap-1 rounded-lg bg-red-600 px-2 text-xs font-semibold text-white hover:bg-red-700"
+              disabled={vaoSair === 0}
+              title={vaoSair === 0
+                ? 'O teto do dia já foi gasto. Mude o teto ao lado, ou volte amanhã.'
+                : 'Manda a oferta já gravada em cada card, um cliente de cada vez, no ritmo e no teto do dia. Dá para parar no meio.'}
+              className="inline-flex h-8 items-center gap-1 rounded-lg bg-red-600 px-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
             >
-              <Send className="h-3.5 w-3.5" /> Disparar {disparaveis.length}
+              <Send className="h-3.5 w-3.5" />
+              {vaoSair === 0
+                ? 'teto do dia gasto'
+                : vaoSair < disparaveis.length
+                  ? `Disparar ${vaoSair} (de ${disparaveis.length})`
+                  : `Disparar ${vaoSair}`}
             </button>
           ) : null}
           <button onClick={() => refetch()} disabled={isFetching}
