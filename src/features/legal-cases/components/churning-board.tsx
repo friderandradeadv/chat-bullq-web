@@ -345,6 +345,12 @@ export function ChurningBoard() {
       + `${fila.faixas.frios} estão calados há mais de 90 dias ou nunca falaram neste número.\n\n`
       + 'Manda o texto que JÁ está gravado em cada card. Dá para parar no meio, '
       + 'e retomar depois sem repetir ninguém.\n\n'
+      // 🚨 MEDIDO EM PRODUÇÃO (09/11/2026): o lote de 10 saiu 3 porque a aba foi
+      // para o fundo e o Chrome congelou o relógio dela. O laço agora para e
+      // diz, mas quem evita a parada é esta linha, lida ANTES do clique.
+      + '⚠️ O DISPARO RODA NESTA ABA: deixe-a na frente até terminar. Se ela for '
+      + 'para o fundo, o navegador congela o relógio e o lote para sozinho — '
+      + 'avisando, e sem repetir quem já saiu.\n\n'
       + '⚠️ Envio em lote, pelo 7315 — Evolution, fora da plataforma da Meta e fora '
       + 'das contas da ação contra ela. O risco aqui não é processual: é perder o 7315, '
       + 'que é o número que seus clientes têm salvo.',
@@ -371,11 +377,26 @@ export function ChurningBoard() {
     setDisparando(null);
     refetch();
     void lerRegime();
-    toast.success(
-      `${r.enviados} oferta(s) enviada(s)${r.parado ? ' — parado por você' : ''}`
-      + `${r.foraDoTeto ? `; ${r.foraDoTeto} ficaram para amanhã pelo teto` : ''}`,
-      { duration: 12000 },
-    );
+    // 🚨 PAROU SOZINHO É ERRO, NÃO SUCESSO. Antes isto dizia "parado por você"
+    // em qualquer parada, e no lote de 09/11 o laço morreu calado com 7 ofertas
+    // por sair. Quando há motivo, ele vem em vermelho, com o que falta e o que
+    // fazer — e o verde fica só para a fila que terminou.
+    if (r.motivoDaParada) {
+      const faltaram = Math.max(0, cabem - r.enviados - r.pulados.length);
+      toast.error(
+        `O DISPARO PAROU: ${r.motivoDaParada}. `
+        + `Saíram ${r.enviados}${faltaram ? `, faltaram ${faltaram}` : ''}. `
+        + 'Deixe esta aba na frente e clique em Disparar de novo: '
+        + 'quem já saiu não sai de novo.',
+        { duration: 30000 },
+      );
+    } else {
+      toast.success(
+        `${r.enviados} oferta(s) enviada(s)${r.parado ? ' — parado por você' : ''}`
+        + `${r.foraDoTeto ? `; ${r.foraDoTeto} ficaram para amanhã pelo teto` : ''}`,
+        { duration: 12000 },
+      );
+    }
     if (r.pulados.length) {
       toast.error(
         `${r.pulados.length} pulado(s): `
