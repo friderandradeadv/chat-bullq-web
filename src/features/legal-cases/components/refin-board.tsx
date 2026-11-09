@@ -206,13 +206,36 @@ export function RefinBoard() {
       .catch(() => undefined);
   };
   useEffect(() => { void lerRegime(); }, []);
+  /**
+   * 🚨 O RÓTULO SEGUE O CAMPO ENQUANTO SE DIGITA (09/11/2026). Ordem do
+   * escritório, com o campo em 9 e o botão ainda dizendo 10: *"o disparar tem
+   * que ser de acordo com os selecionados ali"*.
+   *
+   * Grava com um respiro de meio segundo e RELÊ o regime, em vez de recalcular
+   * a sobra aqui. A conta do teto (o menor entre o da campanha e o que sobra do
+   * canal, descontado o que já saiu hoje) mora em `regime-do-disparo.ts`,
+   * testada. Reproduzi-la no navegador para "ir mais rápido" é a mesma regra em
+   * duas pontas — e a ponta que fala com o cliente é a que decide.
+   */
+  const respiroDoTeto = useRef<ReturnType<typeof setTimeout> | null>(null);
   const salvarTeto = async (n: number) => {
+    if (respiroDoTeto.current) clearTimeout(respiroDoTeto.current);
     const limpo = Math.max(0, Math.min(500, Math.floor(n || 0)));
     setTeto(limpo);
     await legalCasesService.salvarTetoDaCampanha(limpo)
       .then(() => toast.success(`Teto da campanha: ${limpo} conversa(s) por dia`))
       .catch(() => toast.error('Não consegui gravar o teto.'));
     await lerRegime();
+  };
+  /** Enquanto digita: grava sem avisar, só para o rótulo acompanhar. */
+  const tetoDigitado = (n: number | null) => {
+    setTeto(n);
+    if (respiroDoTeto.current) clearTimeout(respiroDoTeto.current);
+    if (n === null || !Number.isFinite(n)) return;
+    const limpo = Math.max(0, Math.min(500, Math.floor(n)));
+    respiroDoTeto.current = setTimeout(() => {
+      void legalCasesService.salvarTetoDaCampanha(limpo).then(lerRegime).catch(() => undefined);
+    }, 500);
   };
   const parar = useRef(false);
 
@@ -460,7 +483,7 @@ export function RefinBoard() {
               <input
                 type="number" min={0} max={500}
                 value={teto ?? ''}
-                onChange={(e) => setTeto(e.target.value === '' ? null : Number(e.target.value))}
+                onChange={(e) => tetoDigitado(e.target.value === '' ? null : Number(e.target.value))}
                 onBlur={(e) => salvarTeto(Number(e.target.value))}
                 className="w-11 rounded border border-[#cfe0ed] bg-white px-1 py-0.5 text-center text-[11px] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
               />
