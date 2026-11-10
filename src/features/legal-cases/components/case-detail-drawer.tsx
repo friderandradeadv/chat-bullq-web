@@ -659,6 +659,31 @@ export function CaseDetailDrawer({
             {/* 🚨 O BOTÃO DA FASE FICA NA FASE. Ele vivia na aba Dados, atrás de um
                 dobrável de cálculo: quem estava em MONTAR INICIAL tinha de sair do
                 painel para achar o que apertar. Aqui é a primeira coisa da fase. */}
+            {/* 🚨🚨 VOLTAR PARA MONTAR OUTRA, EM UM CLIQUE (10/11/2026).
+                Ordem do escritório, depois de fechar com o BRAZ: *"tive que
+                fazer gambiarra, mandar montar a inicial de churning, voltar
+                para info faltantes e mandar montar a de refin rmc"*.
+
+                O bloco de montar só existe em `montar_inicial`, e a esteira
+                manda o card para a revisão assim que a primeira peça sai. Quem
+                precisa da SEGUNDA ação — e são 8 dos 49 cards com oferta em pé
+                — tinha de arrastar o card de volta pelo seletor de fase.
+
+                O servidor já segura o card quando a ETIQUETA diz que faltam
+                duas (ver `iniciais-montadas.ts`). Este botão cobre o resto: a
+                segunda ação escolhida à mão, que etiqueta nenhuma prevê. */}
+            {c && ['revisao_inicial', 'para_correcao'].includes(phaseKey ?? '') && (
+              <div className="mt-5">
+                <button
+                  onClick={() => onMove('montar_inicial')}
+                  title="Volta o card para MONTAR INICIAL para montar outra ação deste mesmo cliente (churning, refin, RMC/RCC). Cada tese é uma ação, com réu, pasta e petição próprios — a peça já montada não se perde."
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#cfe0ed] px-3 py-1.5 text-xs font-semibold text-[#48626f] hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Montar outra inicial
+                </button>
+              </div>
+            )}
+
             {c && phaseKey === 'montar_inicial' && (
               <div className="mt-5">
                 <InicialActions
