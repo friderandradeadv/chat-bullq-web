@@ -120,6 +120,7 @@ export interface FinTransacao {
   manual?: boolean;
   fonteImport?: string | null; // 'extrato' | 'asaas' | 'mercadopago' — veio de import (não é lançamento manual)
   faturaDe?: string | null; // id do cartão de origem (débito que migrou pra conta ao pagar a fatura)
+  transferenciaId?: string | null; // transferência entre contas: as duas pernas têm o mesmo id
   area?: string | null; // vertical direta do lançamento (centro de custos)
   rateioVerticais?: { area: string; valor: number; label?: string }[] | null; // rateio de despesa entre verticais
   contribuintes?: { userId?: string | null; nome: string; valor: number }[] | null; // contribuição pessoal (quem ajudou a pagar) — informativo, independente do rateio por vertical
@@ -340,6 +341,11 @@ export const financeiroService = {
   // Financeiro de uma vertical inteira (todos os casos da área) — visão do dono.
   async vertical(area: string): Promise<FinDashboard> {
     const { data } = await api.get('/financeiro/vertical', { params: { area } });
+    return data.data ?? data;
+  },
+  /** Transferência entre contas do escritório: saída na origem + entrada no destino, neutras no resultado. */
+  async lancarTransferencia(input: { origem: string; destino: string; valor: number; data: string; descricao?: string }): Promise<{ transferenciaId: string; transacoes: FinTransacao[] }> {
+    const { data } = await api.post('/financeiro/transferencias', input);
     return data.data ?? data;
   },
   async addTransacao(input: AddTransacaoInput): Promise<{ criados: number; transacoes: FinTransacao[] }> {
