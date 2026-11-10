@@ -12,7 +12,7 @@ import {
   PARTE_RECORRENTE_LABEL,
 } from '@/features/recursos/services/recursos.service';
 import { RecursosInsightsPanel } from '@/features/recursos/components/recursos-insights-panel';
-import { titleCaseName } from '@/lib/names';
+import { titleCaseName, dobraParaBusca } from '@/lib/names';
 
 type SortKey = 'recente' | 'antigo' | 'cliente';
 const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
@@ -52,11 +52,11 @@ export default function RecursosPage() {
   const especies = useMemo(() => Array.from(new Set(rows.map((r) => r.especie).filter(Boolean))).sort() as string[], [rows]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = dobraParaBusca(search.trim());
     const list = rows.filter((r) => {
       if (especie && r.especie !== especie) return false;
       if (julg && r.julgamento !== julg) return false;
-      if (q && !`${r.clienteNome ?? ''} ${r.parteAdversa ?? ''} ${r.cnjNumber ?? ''}`.toLowerCase().includes(q)) return false;
+      if (q && !dobraParaBusca(`${r.clienteNome ?? ''} ${r.parteAdversa ?? ''} ${r.cnjNumber ?? ''}`).includes(q)) return false;
       return true;
     });
     return list.sort((a, b) =>

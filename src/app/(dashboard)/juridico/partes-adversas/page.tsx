@@ -9,7 +9,7 @@ import {
   Gavel, Search, Scale, ChevronDown, ChevronRight, Building2, Users, Wallet, Trophy, Layers,
 } from 'lucide-react';
 import { legalCasesService, type OpponentRow } from '@/features/legal-cases/services/legal-cases.service';
-import { titleCaseName } from '@/lib/names';
+import { titleCaseName, dobraParaBusca } from '@/lib/names';
 
 const COLORS = ['#228BE6', '#7C3AED', '#0D9488', '#E11970', '#F59E0B', '#10B981', '#EF4444', '#6366F1'];
 const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -58,10 +58,10 @@ export default function PartesAdversasPage() {
   }, [enriched]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = dobraParaBusca(search.trim());
     const list = enriched.filter((r) => {
       if (areaFilter && !r.buckets.includes(areaFilter)) return false;
-      if (q && !`${r.name} ${r.document ?? ''}`.toLowerCase().includes(q)) return false;
+      if (q && !dobraParaBusca(`${r.name} ${r.document ?? ''}`).includes(q)) return false;
       return true;
     });
     return [...list].sort((a, b) =>

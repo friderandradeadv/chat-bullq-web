@@ -52,3 +52,23 @@ export function titleCaseName(raw?: string | null): string {
   const leadAcr = dashNext && lead.length >= 2 && lead.length <= 7 && !NAME_MINOR.has(tokens[0].toLowerCase());
   return tokens.map((w, i) => (i === 0 && leadAcr ? w.toUpperCase() : fmtToken(w, i === 0))).join(' ');
 }
+
+/**
+ * 🚨 DOBRA O TEXTO PARA BUSCA: minúsculas e SEM ACENTO (10/11/2026).
+ *
+ * Nasceu de uma busca que falhou na cara do advogado: ele digitou
+ * "jose carlos alves" e o hub respondeu *"Nenhum processo ou cliente
+ * encontrado"* — com o José Carlos Alves Lima cadastrado, com processo e com
+ * conversa aberta. A comparação era `toLowerCase().includes(q)`, sensível a
+ * acento, e quem procura cliente digita corrido.
+ *
+ * ⚠️ MORA AQUI, e não em cada tela, porque o mesmo `toLowerCase()` está em mais
+ * de uma dúzia de buscas do hub. Copiar a correção em todas seria a mesma regra
+ * em doze pontas — e, no dia em que uma mudar, as outras onze divergem calado.
+ * Quem precisar de busca que ignora acento importa daqui.
+ *
+ * NFD separa a letra do acento e a faixa ̀-ͯ apaga só os acentos,
+ * preservando ç → c, que é o que espera quem digita "goncalves".
+ */
+export const dobraParaBusca = (s: string | null | undefined): string =>
+  String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

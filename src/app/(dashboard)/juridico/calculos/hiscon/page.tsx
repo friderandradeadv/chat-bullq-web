@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { DropZone } from '@/components/drop-zone';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
+import { dobraParaBusca } from '@/lib/names';
 import {
   calculadoraRmcService,
   BASES_INICIAL,
@@ -103,10 +104,10 @@ export default function HisconPage() {
   }, [clientes, cliente]);
 
   const sugestoes = useMemo(() => {
-    const t = buscaCliente.trim().toLowerCase();
+    const t = dobraParaBusca(buscaCliente.trim());
     if (!t) return clientes.slice(0, 8);
     return clientes
-      .filter((c) => c.name.toLowerCase().includes(t) || (c.document ?? '').includes(t))
+      .filter((c) => dobraParaBusca(c.name).includes(t) || (c.document ?? '').includes(t))
       .slice(0, 8);
   }, [clientes, buscaCliente]);
 

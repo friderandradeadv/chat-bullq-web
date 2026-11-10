@@ -6,12 +6,16 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, X, Briefcase, User, CornerDownLeft, Copy, Check } from 'lucide-react';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
 import { clientsService } from '@/features/legal-cases/services/clients.service';
+import { dobraParaBusca } from '@/lib/names';
 
 type Result =
   | { kind: 'case'; id: string; title: string; subtitle: string | null; href: string; cnj: string | null }
   | { kind: 'client'; id: string; title: string; subtitle: string | null; href: string };
 
 const onlyDigits = (s: string) => s.replace(/\D/g, '');
+
+// Busca sem acento: a regra mora em `lib/names`, não aqui. Ver `dobraParaBusca`.
+const dobra = dobraParaBusca;
 
 /**
  * Busca global central (estilo Astrea): barra fixa no topo de todas as telas.
@@ -56,13 +60,13 @@ export function GlobalSearch() {
   }, []);
 
   const results = useMemo<Result[]>(() => {
-    const q = query.trim().toLowerCase();
+    const q = dobra(query.trim());
     if (q.length < 2) return [];
     const qd = onlyDigits(q);
     const caseHits: Result[] = (casesQ.data ?? [])
       .filter((c) => {
-        const byText = c.title.toLowerCase().includes(q)
-          || (c.parties ?? []).some((p) => p.name.toLowerCase().includes(q));
+        const byText = dobra(c.title).includes(q)
+          || (c.parties ?? []).some((p) => dobra(p.name).includes(q));
         const byCnj = qd.length >= 3 && onlyDigits(c.cnjNumber ?? '').includes(qd);
         return byText || byCnj;
       })
@@ -70,7 +74,7 @@ export function GlobalSearch() {
       .map((c) => ({ kind: 'case', id: c.id, title: c.title, subtitle: c.cnjNumber ?? c.area ?? null, href: `/processos/${c.id}`, cnj: c.cnjNumber ?? null }));
     const clientHits: Result[] = (clientsQ.data ?? [])
       .filter((c) => {
-        const byText = c.name.toLowerCase().includes(q);
+        const byText = dobra(c.name).includes(q);
         const byDoc = qd.length >= 3 && onlyDigits(c.document ?? '').includes(qd);
         return byText || byDoc;
       })
