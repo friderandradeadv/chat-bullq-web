@@ -42,6 +42,36 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
   });
 
   const naFila = est?.status === 'pendente';
+  const [montando, setMontando] = useState(false);
+
+  /**
+   * 🚨 A TRIAGEM DE CONTRARRAZÕES TEM UM SEGUNDO PASSO, E ELE NÃO TINHA BOTÃO.
+   *
+   * O Mac já sabe montar a contrarrazão inteira: base da skill, blocos de
+   * mérito roteados pelas teses que esta triagem mediu, timbrado e entrega na
+   * Mesa. Faltava a porta — o advogado clicava em "Rodar triagem" três vezes
+   * seguidas, ela respondia "cabe" nas três, e a fila de montagem nunca
+   * recebia pedido nenhum. Medido em 10/11/2026, no caso da MARIA JOSÉ.
+   *
+   * O botão só aparece quando a triagem FECHOU e disse que CABE: montar o que
+   * não cabe é gastar prazo com peça que não existe.
+   */
+  const ehContrarrazoes = String(acao ?? '').toLowerCase().includes('contrarraz');
+
+  const montarContrarrazao = async () => {
+    setMontando(true);
+    try {
+      const { data } = await api.post(`/legal-cases/${caseId}/peca/montar`, {});
+      const r = (data?.data ?? data) as { ok?: boolean; motivo?: string };
+      if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui pedir a montagem'); return; }
+      toast.success('Na fila do Mac. Ele monta a contrarrazão e entrega na Mesa.');
+      qc.invalidateQueries({ queryKey: ['peca', caseId] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'não consegui pedir a montagem');
+    } finally {
+      setMontando(false);
+    }
+  };
 
   /* enquanto o Mac trabalha, o card acompanha — e para de perguntar quando
      termina, para não ficar batendo no hub para sempre */
@@ -108,6 +138,29 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
             {mostra?.cabe ? 'Cabe — li os autos' : 'Parou no cabimento'}
           </p>
           {mostra?.resumo && <p className="mt-0.5">{mostra.resumo}</p>}
+
+          {ehContrarrazoes && mostra?.cabe && (
+            <>
+              <button
+                onClick={montarContrarrazao}
+                disabled={montando}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-700
+                           px-2.5 py-1 text-[11px] font-semibold text-white
+                           disabled:opacity-50 hover:bg-emerald-800"
+              >
+                {montando ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                {montando ? 'pedindo…' : 'Montar a contrarrazão'}
+              </button>
+              {/* 🚨 o que o Mac NÃO faz tem de estar escrito aqui, não só no
+                  relatório: ele repõe as teses que têm bloco na prateleira, e
+                  hoje são 6 das 10. As outras continuam sendo do advogado. */}
+              <p className="mt-1 text-[10px] leading-4 opacity-80">
+                Ele monta os capítulos que têm bloco na biblioteca e diz, no card, quais
+                teses ficaram sem. O que você escreveu em “O que você quer nesta peça?”
+                só tira capítulo, nunca escreve texto.
+              </p>
+            </>
+          )}
         </div>
       )}
 
