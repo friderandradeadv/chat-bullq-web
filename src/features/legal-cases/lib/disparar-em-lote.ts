@@ -87,7 +87,96 @@ export type ResultadoDoDisparo = {
   motivoDaParada: string | null;
 };
 
-const dorme = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const dormeNaThread = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms); });
+
+/**
+ * 🚨🚨 O RELÓGIO DO LOTE MORA FORA DA THREAD DA ABA (10/11/2026).
+ *
+ * Ordem do escritório, depois de TRÊS lotes seguidos morrerem no primeiro
+ * cliente: *"não pode ser assim, deve deixar enviar mesmo com a aba de lado,
+ * eu cliquei, estou te respondendo pelo celular"*.
+ *
+ * Medido no dia, todas com o mesmo aviso na tela ("a aba saiu da frente"):
+ *
+ *   15:00:50  Vilma     → parou
+ *   15:20:47  Fernando  → parou
+ *   15:31:03  Dirceu    → parou
+ *
+ * Em nenhuma delas o advogado fez nada errado: clicou e foi responder no
+ * celular. O Chromium marca a aba como oculta quando a janela fica coberta ou
+ * quando se troca de aba, e a partir daí estrangula `setTimeout` na thread
+ * principal. A parada de 09/11 protegia contra ESSE estrangulamento — mas
+ * cobrava dele dez minutos de vigília por lote, e três lotes foram perdidos
+ * justamente porque ele precisou usar o próprio computador.
+ *
+ * ⚠️ `setTimeout` DENTRO DE UM WEB WORKER não sofre o estrangulamento de aba
+ * de fundo: quem é estrangulado é o laço de tarefas da página. O worker aqui
+ * não faz mais nada além de contar tempo e avisar — nenhuma mensagem sai dele,
+ * nenhuma decisão mora nele. Os envios continuam todos na aba, na sessão do
+ * advogado.
+ *
+ * 🚨 A CORRIDA COM O RELÓGIO DA THREAD É DELIBERADA, e é o cinto de segurança:
+ * se o worker não nascer, nascer quebrado ou morrer no meio, o `setTimeout`
+ * comum resolve a espera do mesmo jeito — tarde, porque estrangulado, e aí a
+ * trava do jejum mede o atraso e para o lote dizendo, que é o comportamento
+ * de 09/11 de volta. Sem a corrida, worker morto deixaria o laço pendurado
+ * para sempre, mostrando "enviando" com o lote parado: exatamente o defeito
+ * que esta campanha já pagou uma vez.
+ *
+ * 🚨 O QUE **NÃO** MUDA: a rodada começa num clique dele, na aba dele; o teto,
+ * o ritmo e a lista vêm do servidor; fechar a aba mata o laço. Isto não move
+ * nada para o servidor — não vira robô falando com cliente sem ninguém atrás.
+ */
+const FONTE_DO_RELOGIO = `self.onmessage = function (e) {
+  var d = e.data || {};
+  setTimeout(function () { self.postMessage({ id: d.id }); }, Math.max(0, Number(d.ms) || 0));
+};`;
+
+export type RelogioDoDisparo = {
+  dorme: (ms: number) => Promise<void>;
+  /** Sobrevive à aba no fundo? Decide se `escondido` ainda para o laço. */
+  foraDaThread: boolean;
+  encerrar: () => void;
+};
+
+export function criarRelogio(): RelogioDoDisparo {
+  const naThread: RelogioDoDisparo = {
+    dorme: dormeNaThread, foraDaThread: false, encerrar: () => { /* nada a fechar */ },
+  };
+  if (typeof Worker === 'undefined' || typeof Blob === 'undefined'
+    || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return naThread;
+  let url = '';
+  try {
+    url = URL.createObjectURL(new Blob([FONTE_DO_RELOGIO], { type: 'text/javascript' }));
+    const w = new Worker(url);
+    const pendentes = new Map<number, () => void>();
+    let proximo = 0;
+    const acordar = (id: number) => {
+      const r = pendentes.get(id);
+      if (r) { pendentes.delete(id); r(); }
+    };
+    w.onmessage = (e: MessageEvent) => acordar(Number((e.data as any)?.id));
+    return {
+      foraDaThread: true,
+      dorme: (ms: number) => new Promise<void>((resolve) => {
+        const id = ++proximo;
+        pendentes.set(id, resolve);
+        // A corrida: o que chegar primeiro acorda a espera. Ver o cabeçalho.
+        dormeNaThread(ms).then(() => acordar(id));
+        try { w.postMessage({ id, ms }); } catch { acordar(id); }
+      }),
+      encerrar: () => {
+        try { w.terminate(); } catch { /* já morto */ }
+        try { if (url) URL.revokeObjectURL(url); } catch { /* idem */ }
+        for (const r of [...pendentes.values()]) r();
+        pendentes.clear();
+      },
+    };
+  } catch {
+    try { if (url) URL.revokeObjectURL(url); } catch { /* idem */ }
+    return naThread;
+  }
+}
 
 /** A pausa desta volta. Sorteada: intervalo fixo é assinatura de robô. */
 function pausa(regime: RegimeDoDisparo): number {
@@ -125,8 +214,14 @@ function decidirParada(e: {
   pedidoMs: number;
   gastoMs: number;
   jejunsSeguidos: number;
+  /** O relógio desta rodada sobrevive à aba no fundo? Ver `criarRelogio`. */
+  relogioForaDaThread: boolean;
 }): { parar: boolean; jejunsSeguidos: number; motivo: string | null } {
-  if (abaEscondida()) {
+  // 🚨 ESCONDIDO SÓ PARA QUANDO O RELÓGIO É O DA THREAD (10/11/2026). Com o
+  // relógio no worker o tempo passa certo com a aba no fundo, e parar aí só
+  // cobra do advogado uma vigília que não serve para nada. A regra é a do
+  // servidor, `decidirParadaPorJejum` — aqui só mora a cópia que o laço usa.
+  if (abaEscondida() && !e.relogioForaDaThread) {
     return { parar: true, jejunsSeguidos: e.jejunsSeguidos, motivo: 'a aba saiu da frente' };
   }
   const fator = e.regime.jejumFator;
@@ -167,6 +262,11 @@ export async function dispararEmLote(opcoes: {
   onAndamento: (a: AndamentoDoDisparo) => void;
   /** O advogado mandou parar. Lido a cada volta, inclusive durante a pausa. */
   parar: { current: boolean };
+  /**
+   * O relógio da espera. Ausente, o laço cria o dele (`criarRelogio`) e o
+   * fecha no fim. Entra como argumento só para poder ser medido sem navegador.
+   */
+  relogio?: RelogioDoDisparo;
 }): Promise<ResultadoDoDisparo> {
   const cabem = Number.isFinite(opcoes.regime.sobra)
     ? Math.max(0, Math.min(Math.floor(opcoes.regime.sobra), opcoes.alvos.length))
@@ -177,13 +277,20 @@ export async function dispararEmLote(opcoes: {
   const pulados: Array<{ cliente: string; motivo: string }> = [];
   let enviados = 0;
 
+  // 🚨 O relógio nasce aqui e morre no `finally`: worker vivo depois do lote é
+  // thread pendurada no navegador do advogado por nada.
+  const relogio = opcoes.relogio ?? criarRelogio();
+  const meuRelogio = !opcoes.relogio;
+  try {
   for (let i = 0; i < fila.length; i++) {
     if (opcoes.parar.current) {
       return { enviados, pulados, parado: true, foraDoTeto, motivoDaParada: null };
     }
     // A aba saiu da frente entre um card e outro: para AQUI, na fronteira
-    // segura, antes de qualquer coisa chegar ao cliente.
-    if (abaEscondida()) {
+    // segura, antes de qualquer coisa chegar ao cliente. 🚨 Só quando o
+    // relógio é o da thread — com o worker, aba no fundo não é problema, e
+    // parar aqui era o que matava o lote no primeiro cliente (10/11/2026).
+    if (abaEscondida() && !relogio.foraDaThread) {
       return {
         enviados, pulados, parado: true, foraDoTeto,
         motivoDaParada: 'a aba saiu da frente',
@@ -252,12 +359,13 @@ export async function dispararEmLote(opcoes: {
           // descontar o tempo que de fato passou: quando o navegador estica um
           // passo de 1s para 60s, descontar 1s faria a espera durar horas.
           const antes = Date.now();
-          await dorme(passo);
+          await relogio.dorme(passo);
           const gastoMs = Math.max(0, Date.now() - antes);
           resta -= Math.max(passo, gastoMs);
 
           const d = decidirParada({
             regime: opcoes.regime, pedidoMs: passo, gastoMs, jejunsSeguidos,
+            relogioForaDaThread: relogio.foraDaThread,
           });
           jejunsSeguidos = d.jejunsSeguidos;
           if (d.parar) {
@@ -281,4 +389,7 @@ export async function dispararEmLote(opcoes: {
     pulados: pulados.length, esperandoMs: null, cliente: null,
   });
   return { enviados, pulados, parado: false, foraDoTeto, motivoDaParada: null };
+  } finally {
+    if (meuRelogio) relogio.encerrar();
+  }
 }

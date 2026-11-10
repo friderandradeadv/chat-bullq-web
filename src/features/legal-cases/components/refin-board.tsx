@@ -402,9 +402,16 @@ export function RefinBoard() {
       // 🚨 MEDIDO EM PRODUÇÃO (09/11/2026): o lote de 10 saiu 3 porque a aba foi
       // para o fundo e o Chrome congelou o relógio dela. O laço agora para e
       // diz, mas quem evita a parada é esta linha, lida ANTES do clique.
-      + '⚠️ O DISPARO RODA NESTA ABA: deixe-a na frente até terminar. Se ela for '
-      + 'para o fundo, o navegador congela o relógio e o lote para sozinho — '
-      + 'avisando, e sem repetir quem já saiu.\n\n'
+      // 🚨 O TEXTO MUDOU EM 10/11/2026, junto com o relógio no Web Worker. O
+      // aviso anterior mandava "deixe esta aba na frente até terminar", e era
+      // verdade: três lotes do dia morreram no primeiro cliente porque o
+      // advogado foi responder no celular. Agora a espera não depende mais da
+      // aba, e o aviso não pode continuar pedindo uma vigília que não existe.
+      + '⚠️ O DISPARO RODA NESTA ABA, mas não precisa dela na frente: o relógio '
+      + 'da espera roda fora da thread da página. Pode trocar de aba e usar o '
+      + 'computador. O que para o lote é FECHAR esta aba ou o navegador — e se '
+      + 'ainda assim o relógio for estrangulado, ele para avisando, sem repetir '
+      + 'quem já saiu.\n\n'
       + '⚠️ Envio em lote, pelo 7315 — Evolution, fora da plataforma da Meta e fora '
       + 'das contas da ação contra ela. O risco aqui não é processual: é perder o 7315, '
       + 'que é o número que seus clientes têm salvo.',
