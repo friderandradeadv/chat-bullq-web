@@ -22,6 +22,8 @@ type Estado = {
   etapa?: string | null; erro?: string | null; cabe?: boolean | null;
   resumo?: string | null; relatorio?: string | null;
   concluidoEm?: string | null; temAutos?: boolean;
+  /* o segundo passo, decidido no servidor pela família (familias-de-peca.ts) */
+  podeMontar?: boolean | null; rotuloMontagem?: string | null;
 };
 
 export function TriagemPeca({ caseId, acao, rotulo }: {
@@ -55,10 +57,17 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
    *
    * O botão só aparece quando a triagem FECHOU e disse que CABE: montar o que
    * não cabe é gastar prazo com peça que não existe.
+   *
+   * 🚨 E QUEM DECIDE NÃO É ESTE ARQUIVO (10/11/2026). A primeira versão testava
+   * aqui o nome da ação (`acao.includes('contrarraz')`), e isso punha a regra
+   * em dois donos: a API dizendo quem monta e o navegador dizendo quem ganha
+   * botão. O preço é calado — o botão some e o advogado volta a clicar em
+   * "Rodar de novo", que é como o caso da MARIA JOSÉ rodou quatro triagens sem
+   * produzir peça nenhuma. Agora a família declara `monta` no catálogo da API,
+   * o estado da triagem traz `podeMontar` e `rotuloMontagem`, e o card só
+   * pergunta. Família nova ganha o botão sem tocar no front.
    */
-  const ehContrarrazoes = String(acao ?? '').toLowerCase().includes('contrarraz');
-
-  const montarContrarrazao = async () => {
+  const montarPeca = async () => {
     setMontando(true);
     try {
       const { data } = await api.post(`/legal-cases/${caseId}/peca/montar`, {});
@@ -139,17 +148,17 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
           </p>
           {mostra?.resumo && <p className="mt-0.5">{mostra.resumo}</p>}
 
-          {ehContrarrazoes && mostra?.cabe && (
+          {mostra?.podeMontar && (
             <>
               <button
-                onClick={montarContrarrazao}
+                onClick={montarPeca}
                 disabled={montando}
                 className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-700
                            px-2.5 py-1 text-[11px] font-semibold text-white
                            disabled:opacity-50 hover:bg-emerald-800"
               >
                 {montando ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                {montando ? 'pedindo…' : 'Montar a contrarrazão'}
+                {montando ? 'pedindo…' : (mostra.rotuloMontagem ?? 'Montar a peça')}
               </button>
               {/* 🚨 o que o Mac NÃO faz tem de estar escrito aqui, não só no
                   relatório: ele repõe as teses que têm bloco na prateleira, e
