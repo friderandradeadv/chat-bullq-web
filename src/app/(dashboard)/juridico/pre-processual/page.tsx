@@ -178,7 +178,15 @@ export default function PreProcessualPage() {
   // a prefixo) evita que uma trilha nova volte a vazar no Pré-Processual — foi o que
   // aconteceu com o REPB, cujas fases (03. FASE BANCÁRIA INVESTIGATIVA / 04. EM
   // PROVISIONAMENTO) apareciam repetidas depois do protocolo.
-  const phases = (data?.phases ?? []).filter((p) => boardOfPhase(p.key, p.lane) === 'pre');
+  // 🚨 O `board` DA API MANDA, E ESTA CHAMADA O JOGAVA FORA (09/11/2026).
+  // `boardOfPhase` tem três argumentos e o terceiro é o quadro que o backend já
+  // calculou; sem ele, a função cai na derivação por `lane` e qualquer família
+  // nova de fases com raia 'pre' aparece aqui. Medido na hora em que a fase
+  // PROPOSTA nasceu: o escritório pediu *"só na aba Refin/Churning"*, a API
+  // respondeu `board: 'campanha'`, e a coluna apareceu no Pré-Processual assim
+  // mesmo — com os dois cards de oferta em aberto dentro.
+  const phases = (data?.phases ?? [])
+    .filter((p) => boardOfPhase(p.key, p.lane, (p as any).board) === 'pre');
   const cards = data?.cards ?? [];
 
   const resps = useMemo(() => {
