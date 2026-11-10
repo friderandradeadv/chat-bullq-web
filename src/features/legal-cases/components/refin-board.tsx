@@ -484,14 +484,14 @@ export function RefinBoard() {
           O advogado tinha o lote parado na mão e nenhum jeito de retomar.
           `flex-wrap` + a busca encolhendo resolvem sem mexer em nada no largo.
         */}
-        <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-          <div className="relative min-w-0 flex-1 sm:flex-none">
+        <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 [&>*]:shrink-0 sm:w-auto">
+          <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
             <input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Cliente ou banco…"
-              className="h-8 w-full min-w-[8rem] rounded-lg border border-[#cfe0ed] bg-white pl-7 pr-2 text-sm sm:w-56 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              className="h-8 w-full rounded-lg border border-[#cfe0ed] bg-white pl-7 pr-2 text-sm sm:w-56 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
             />
           </div>
           {analisando ? (
