@@ -1206,10 +1206,18 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
   const [transf, setTransf] = useState<{ origem: string; destino: string; valor: string; dataISO: string; descricao: string } | null>(null);
   const [salvandoTransf, setSalvandoTransf] = useState(false);
   const contasTransf = contas.filter((c) => !c.cartao && c.ativa !== false);
-  const abrirTransf = () => {
+  const abrirTransf = (pre?: { valor?: string; dataISO?: string }) => {
     const nu = contasTransf.find((c) => c.id === 'nubank') ?? contasTransf[0];
     const as = contasTransf.find((c) => c.id === 'asaas' && c.id !== nu?.id) ?? contasTransf.find((c) => c.id !== nu?.id);
-    setTransf({ origem: nu?.id ?? '', destino: as?.id ?? '', valor: '', dataISO: toISOInput(hojeBR()), descricao: '' });
+    setTransf({ origem: nu?.id ?? '', destino: as?.id ?? '', valor: pre?.valor ?? '', dataISO: pre?.dataISO || toISOInput(hojeBR()), descricao: '' });
+  };
+  // Do modal de transferência de volta ao lançamento comum, levando valor e data.
+  const transfParaLancamento = (tp: 'receita' | 'despesa') => {
+    const v = transf?.valor ?? ''; const d = transf?.dataISO || toISOInput(hojeBR());
+    setTransf(null);
+    openNew();
+    setEditor((e) => e ? { ...e, valor: v, dataISO: d, pagtoISO: d, competencia: d.slice(0, 7),
+      ...(tp === 'despesa' ? { tipo: 'despesa', categoria: 'Aluguel', status: 'pago', pagador: escritorioNome, recebedor: '', contactId: undefined } : {}) } : e);
   };
   const salvarTransf = async () => {
     if (!transf) return;
@@ -1511,7 +1519,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
         )}
         <button onClick={() => setImporting(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-[#02883C] hover:text-[#02883C] dark:border-zinc-700 dark:text-zinc-300"><ArrowDownCircle className="h-3.5 w-3.5" /> Importar extrato</button>
         <button onClick={() => contaFileRef.current?.click()} disabled={lendoConta} title="A IA lê o boleto/DARF e já preenche a despesa a pagar com o vencimento" className="inline-flex items-center gap-1.5 rounded-lg border border-[#7048E8]/50 bg-[#7048E8]/5 px-3 py-1.5 text-xs font-semibold text-[#7048E8] transition hover:bg-[#7048E8]/10 disabled:opacity-60">{lendoConta ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> lendo…</> : <><Sparkles className="h-3.5 w-3.5" /> Lançar conta (IA lê boleto/DARF)</>}</button>
-        {contasTransf.length >= 2 && <button onClick={abrirTransf} title="Dinheiro que muda de conta (ex.: Pix do Nubank para o ASAAS): sai de uma, entra na outra, fora de receita e despesa" className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:border-[#02883C] hover:text-[#02883C] dark:border-zinc-700 dark:text-zinc-300"><ArrowLeftRight className="h-3.5 w-3.5" /> Transferência</button>}
+        {contasTransf.length >= 2 && <button onClick={() => abrirTransf()} title="Dinheiro que muda de conta (ex.: Pix do Nubank para o ASAAS): sai de uma, entra na outra, fora de receita e despesa" className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-300"><ArrowLeftRight className="h-3.5 w-3.5" /> Transferência</button>}
         <button onClick={openNew} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"><Plus className="h-3.5 w-3.5" /> Novo lançamento</button>
       </div>}>
 
@@ -1936,20 +1944,25 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Transferência entre contas</h3>
+              <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Novo lançamento</h3>
               <button onClick={() => setTransf(null)} className="rounded p-1 text-zinc-400 hover:text-zinc-700"><X className="h-4 w-4" /></button>
             </div>
             <div className="space-y-3">
+              <div className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
+                <button onClick={() => transfParaLancamento('receita')} className="bg-white px-4 py-1.5 text-sm font-semibold text-zinc-500 dark:bg-zinc-900">Receita</button>
+                <button onClick={() => transfParaLancamento('despesa')} className="bg-white px-4 py-1.5 text-sm font-semibold text-zinc-500 dark:bg-zinc-900">Despesa</button>
+                <button className="bg-amber-400 px-4 py-1.5 text-sm font-semibold text-zinc-900">Transferência</button>
+              </div>
               <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-                <label className="block text-xs font-semibold text-zinc-500">Sai de
-                  <select value={transf.origem} onChange={(e) => setTransf({ ...transf, origem: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                <label className="block text-xs font-semibold text-zinc-500">De onde sai
+                  <select value={transf.origem} onChange={(e) => { const o = e.target.value; setTransf({ ...transf, origem: o, destino: o === transf.destino ? transf.origem : transf.destino }); }} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
                     {contasTransf.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
                 </label>
                 <button type="button" title="Inverter" onClick={() => setTransf({ ...transf, origem: transf.destino, destino: transf.origem })} className="mb-1 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-[#02883C] dark:hover:bg-zinc-800"><ArrowLeftRight className="h-4 w-4" /></button>
-                <label className="block text-xs font-semibold text-zinc-500">Entra em
+                <label className="block text-xs font-semibold text-zinc-500">Para onde vai
                   <select value={transf.destino} onChange={(e) => setTransf({ ...transf, destino: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-800 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
-                    {contasTransf.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    {contasTransf.filter((c) => c.id !== transf.origem).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                   </select>
                 </label>
               </div>
@@ -1967,7 +1980,7 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
               <p className="text-[11px] text-zinc-400">Lança <strong>duas</strong> linhas: a saída na conta de origem e a entrada na de destino, ambas na categoria <strong>Transferência</strong>, fora de receita e despesa. Apagar ou corrigir valor/data de uma corrige a outra. Para quitar o cartão, use <strong>Pagar fatura</strong>.</p>
               <div className="flex justify-end gap-2 pt-1">
                 <button onClick={() => setTransf(null)} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">Cancelar</button>
-                <button onClick={salvarTransf} disabled={salvandoTransf} className="inline-flex items-center gap-1.5 rounded-lg bg-[#02883C] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60">{salvandoTransf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowLeftRight className="h-3.5 w-3.5" />} Lançar transferência</button>
+                <button onClick={salvarTransf} disabled={salvandoTransf} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-zinc-900 hover:bg-amber-300 disabled:opacity-60">{salvandoTransf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowLeftRight className="h-3.5 w-3.5" />} Lançar transferência</button>
               </div>
             </div>
           </div>
@@ -1993,6 +2006,12 @@ function LancamentosTab({ data, mesSel, setMesSel }: { data: FinDashboard; mesSe
                     recebedor: tp === 'receita' ? escritorioNome : (editor.recebedor === escritorioNome ? '' : editor.recebedor),
                     contactId: tp === 'despesa' ? undefined : editor.contactId })} className={`px-4 py-1.5 text-sm font-semibold capitalize ${editor.tipo === tp ? (tp === 'receita' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : 'bg-white text-zinc-500 dark:bg-zinc-900'}`}>{tp}</button>
                 ))}
+                {/* Transferência só no lançamento NOVO: editar uma receita/despesa existente e
+                    "virar" transferência criaria duas linhas novas sem apagar a antiga. */}
+                {!editor.id && contasTransf.length >= 2 && (
+                  <button onClick={() => { const v = editor.valor; const d = editor.dataISO; setContaDoc(null); setEditor(null); abrirTransf({ valor: v, dataISO: d }); }}
+                    className="bg-white px-4 py-1.5 text-sm font-semibold text-zinc-500 dark:bg-zinc-900">Transferência</button>
+                )}
               </div>
 
               {(() => {
