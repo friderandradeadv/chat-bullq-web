@@ -699,6 +699,24 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           </span>
         )}
       </div>
+      {/* Prévia em bolhas: como o cliente vai receber (cada balão = uma mensagem). */}
+      {hasBubbleMarker && !internalMode && splitBubbles && (
+        <div className="mb-2 rounded-xl border border-zinc-200 bg-[#efeae2] px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-1.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+            Prévia — o cliente recebe {bubbles.length} mensagens separadas. Para mudar, edite os <code className="rounded bg-white/70 px-1 dark:bg-zinc-800">|||</code> no texto.
+          </div>
+          <div className="flex max-h-[38vh] flex-col items-end gap-1.5 overflow-y-auto pr-1">
+            {bubbles.map((b, i) => (
+              <div key={i} className="flex max-w-[85%] items-start gap-1.5">
+                <span className="mt-1 shrink-0 text-[10px] font-semibold tabular-nums text-zinc-400">{i + 1}</span>
+                <div className="whitespace-pre-wrap break-words rounded-lg rounded-tr-sm bg-[#d9fdd3] px-2.5 py-1.5 text-[13px] leading-snug text-zinc-800 shadow-sm dark:bg-emerald-900/60 dark:text-zinc-100">
+                  {b}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <input
         ref={fileInputRef}
         type="file"
