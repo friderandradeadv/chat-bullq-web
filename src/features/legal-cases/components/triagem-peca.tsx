@@ -83,14 +83,30 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
   };
 
   /* enquanto o Mac trabalha, o card acompanha — e para de perguntar quando
-     termina, para não ficar batendo no hub para sempre */
+     termina, para não ficar batendo no hub para sempre.
+
+     🚨 IMPASSE MEDIDO EM 11/11/2026: o card só perguntava enquanto JÁ SABIA
+     que havia trabalho (`naFila`). Com o drawer aberto e nenhum estado em
+     cache, `naFila` era falso, o polling não ligava, e a triagem fechava sem
+     o card ficar sabendo — o botão de montar só aparecia depois de recarregar
+     a página. O advogado via a barra verde dizer "pronta" e o bloco abaixo
+     continuar oferecendo "Rodar triagem".
+
+     Então ele também pergunta quando NÃO TEM estado nenhum: é exatamente a
+     situação em que não dá para saber se há trabalho. Com teto, para não
+     bater no hub para sempre num card que de fato nunca teve triagem. */
+  const [tentativas, setTentativas] = useState(0);
   useEffect(() => {
-    if (!naFila || !caseId) return;
+    if (!caseId) return;
+    const semEstado = !est?.status;
+    if (!naFila && !semEstado) return;
+    if (semEstado && !naFila && tentativas >= 40) return;   // ~5 min
     const t = setInterval(() => {
       qc.invalidateQueries({ queryKey: ['triagem', caseId] });
-    }, 5000);
+      if (!naFila) setTentativas((n) => n + 1);
+    }, naFila ? 5000 : 8000);
     return () => clearInterval(t);
-  }, [naFila, caseId, qc]);
+  }, [naFila, caseId, qc, est?.status, tentativas]);
 
   /* a triagem é desta ação? se o card trocou de classe, o relatório velho
      não serve — mostrar relatório de outra peça seria pior que não mostrar */
