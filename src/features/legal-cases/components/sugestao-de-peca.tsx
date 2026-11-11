@@ -287,7 +287,15 @@ export function SugestaoDePeca({ caseId, acao, recorte, acaoInicial }: {
        dos autos) na lista faria escolher um caminho que não leva a lugar
        nenhum — e o estado vem do catálogo do servidor, não de lista escrita
        aqui, que envelheceria sozinha. */
-    const opcoes = (data ?? []).filter((f) => f.estado !== 'nao-e-peca');
+    /* 🚨 EM ORDEM ALFABÉTICA (11/11/2026, pedido do escritório). A lista vinha
+       na ordem do catálogo da API, que é a ordem em que as famílias foram
+       escritas — boa para quem mantém o código, inútil para quem procura uma
+       peça numa lista de vinte. `localeCompare` com 'pt-BR' para "Ação" e
+       "Agravo" não brigarem por causa do acento. */
+    const opcoes = (data ?? [])
+      .filter((f) => f.estado !== 'nao-e-peca')
+      .slice()
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
     return (
       <div className="rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
         <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
