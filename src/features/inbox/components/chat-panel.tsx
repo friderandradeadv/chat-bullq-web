@@ -292,14 +292,28 @@ function matchSingleUrl(text: string): string | null {
   return m ? m[1] : null;
 }
 
-// Formatação estilo WhatsApp: *negrito*  _itálico_  ~tachado~  ```monoespaçado```
-// (delimitador só vale colado ao conteúdo, sem espaço logo após a abertura nem
-// antes do fechamento — igual ao WhatsApp; espaço adjacente = texto literal)
-const WA_TOKEN_REGEX = /(```[\s\S]+?```|\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~)/g;
+// Formatação estilo WhatsApp: *negrito*  _itálico_  ~tachado~  `código`  ```monoespaçado```
+// Regras de borda iguais às do WhatsApp: a abertura não pode vir colada a letra/número
+// antes nem a espaço depois; o fechamento não pode vir depois de espaço nem colado a
+// letra/número depois. Por isso a regra mora NA regex (lookbehind/lookahead): um "* "
+// solto (marcador de lista) não casa e não engole o par verdadeiro que vem adiante.
+const WA_EDGE_OPEN = '(?<![\\p{L}\\p{N}])';
+const WA_EDGE_CLOSE = '(?![\\p{L}\\p{N}])';
+const waPair = (d: string) => {
+  const e = d === '*' ? '\\*' : d; // no modo /u, só o * pode (e precisa) ser escapado
+  return `${WA_EDGE_OPEN}${e}(?=[^\\s${d}])[^${d}\\n]+?(?<=\\S)${e}${WA_EDGE_CLOSE}`;
+};
+const WA_TOKEN_SOURCE = [
+  '```[\\s\\S]+?```',
+  '`[^`\\n]+`',
+  waPair('*'),
+  waPair('_'),
+  waPair('~'),
+].join('|');
 
 function renderWhatsappFormatting(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const regex = new RegExp(WA_TOKEN_REGEX.source, 'g');
+  const regex = new RegExp(WA_TOKEN_SOURCE, 'gu');
   let lastIndex = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -307,32 +321,66 @@ function renderWhatsappFormatting(text: string, keyPrefix: string): ReactNode[] 
     if (m.index > lastIndex) nodes.push(text.slice(lastIndex, m.index));
     const token = m[0];
     const key = `${keyPrefix}-f${i++}`;
-    const mono = token.startsWith('```');
-    const inner = mono ? token.slice(3, -3) : token.slice(1, -1);
-    // espaço logo após a abertura ou antes do fechamento → não formata (igual WhatsApp)
-    if (!mono && (/^\s/.test(inner) || /\s$/.test(inner))) {
-      nodes.push(token);
-    } else if (mono) {
+    if (token.startsWith('```') || token.startsWith('`')) {
+      const inner = token.startsWith('```') ? token.slice(3, -3) : token.slice(1, -1);
       nodes.push(
         <code key={key} className="rounded bg-black/10 px-1 font-mono text-[0.85em] dark:bg-white/10">
           {inner}
         </code>,
       );
-    } else if (token.startsWith('*')) {
-      nodes.push(
-        <strong key={key} className="font-semibold">
-          {renderWhatsappFormatting(inner, key)}
-        </strong>,
-      );
-    } else if (token.startsWith('_')) {
-      nodes.push(<em key={key}>{renderWhatsappFormatting(inner, key)}</em>);
     } else {
-      nodes.push(<del key={key}>{renderWhatsappFormatting(inner, key)}</del>);
+      const inner = token.slice(1, -1);
+      const children = renderWhatsappFormatting(inner, key);
+      if (token.startsWith('*')) nodes.push(<strong key={key} className="font-semibold">{children}</strong>);
+      else if (token.startsWith('_')) nodes.push(<em key={key}>{children}</em>);
+      else nodes.push(<del key={key}>{children}</del>);
     }
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
   return nodes;
+}
+
+// Blocos de linha do WhatsApp: "* " ou "- " = lista com marcador, "> " = citação.
+// (Lista numerada "1. " o WhatsApp mostra como está — já sai certa.)
+function renderWhatsappLines(text: string, isOutbound: boolean): ReactNode[] {
+  // bloco ``` atravessa linhas: aí não se mexe em linha nenhuma
+  if (text.includes('```')) return renderInlineTextWithLinks(text, isOutbound);
+  const lines = text.split('\n');
+  return lines.map((line, idx) => {
+    const sep = idx < lines.length - 1 ? '\n' : '';
+    const bullet = line.match(/^(\s*)[*-] (.*)$/);
+    if (bullet) {
+      return (
+        <Fragment key={idx}>
+          {bullet[1]}
+          <span className="select-none">•</span> {renderInlineTextWithLinks(bullet[2], isOutbound)}
+          {sep}
+        </Fragment>
+      );
+    }
+    const quote = line.match(/^> ?(.*)$/);
+    if (quote) {
+      return (
+        <Fragment key={idx}>
+          <span
+            className={`inline-block border-l-[3px] pl-2 ${
+              isOutbound ? 'border-emerald-600/50 text-zinc-600 dark:text-zinc-200' : 'border-zinc-400 text-zinc-600 dark:text-zinc-300'
+            }`}
+          >
+            {renderInlineTextWithLinks(quote[1], isOutbound)}
+          </span>
+          {sep}
+        </Fragment>
+      );
+    }
+    return (
+      <Fragment key={idx}>
+        {renderInlineTextWithLinks(line, isOutbound)}
+        {sep}
+      </Fragment>
+    );
+  });
 }
 
 function renderInlineTextWithLinks(text: string, isOutbound: boolean) {
@@ -373,7 +421,7 @@ function MessageText({
   }
   return (
     <p className={`whitespace-pre-wrap wrap-break-word text-sm ${className}`}>
-      {renderInlineTextWithLinks(text, isOutbound)}
+      {renderWhatsappLines(text, isOutbound)}
     </p>
   );
 }
