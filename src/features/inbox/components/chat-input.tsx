@@ -23,6 +23,15 @@ const QR_ATT_ICON: Record<QuickReplyAttachment['type'], typeof FileText> = {
   IMAGE: ImageIcon,
 };
 
+/** Separa o texto nas bolhas marcadas com `|||` (mesma regra do envio do robô). */
+function partirEmBolhas(t: string): string[] {
+  if (!t.includes('|||')) return [t.trim()].filter(Boolean);
+  return t
+    .split(/\n?\|\|\|\n?/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+}
+
 export interface ChatInputHandle {
   /** Empilha arquivos no preview do compositor (usado pelo drag & drop). */
   addFiles: (files: File[]) => void;
@@ -116,6 +125,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [templateScheduleAt, setTemplateScheduleAt] = useState<Date | null>(null);
   const [internalMode, setInternalMode] = useState(false);
   const [signatureOn, setSignatureOn] = useState(false);
+  /** Rascunho do robô vem com `|||` marcando as bolhas: enviar uma a uma (padrão) ou tudo junto. */
+  const [splitBubbles, setSplitBubbles] = useState(true);
+  const bubbles = useMemo(() => partirEmBolhas(text), [text]);
+  const hasBubbleMarker = bubbles.length > 1;
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -337,6 +350,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
       addFiles,
       setText: (t: string) => {
         setText(t);
+        setSplitBubbles(true);
         setTimeout(() => textareaRef.current?.focus(), 0);
       },
     }),
@@ -396,6 +410,35 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     const trimmed = text.trim();
     if (!trimmed || isSending) return;
     setIsSending(true);
+    const assinar = (t: string) =>
+      signatureOn && signatureName && !internalMode ? `*${signatureName}:*\n${t}` : t;
+    // Texto com `|||` (rascunho do robô): o marcador NUNCA vai ao cliente.
+    if (hasBubbleMarker && !internalMode) {
+      try {
+        if (!splitBubbles) {
+          await onSend(assinar(bubbles.join('\n\n')));
+        } else {
+          for (let i = 0; i < bubbles.length; i++) {
+            try {
+              await onSend(i === 0 ? assinar(bubbles[i]) : bubbles[i]);
+            } catch (err: any) {
+              // As que já saíram não voltam ao compositor (não duplicar no reenvio).
+              setText(bubbles.slice(i).join('\n|||\n'));
+              toast.error(
+                `${i > 0 ? `${i} de ${bubbles.length} bolhas enviadas. ` : ''}` +
+                  (err?.response?.data?.message || err?.message || 'Erro ao enviar a mensagem'),
+              );
+              return;
+            }
+          }
+        }
+        setText('');
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
     try {
       if (internalMode && onSendInternal) {
         await onSendInternal(trimmed);
@@ -413,7 +456,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     } finally {
       setIsSending(false);
     }
-  }, [pendingAtts.length, onSendRemoteAttachment, sendQuickAttachments, pending.length, handleSendPending, text, isSending, internalMode, onSend, onSendInternal, signatureOn, signatureName]);
+  }, [pendingAtts.length, onSendRemoteAttachment, sendQuickAttachments, pending.length, handleSendPending, text, isSending, internalMode, onSend, onSendInternal, signatureOn, signatureName, hasBubbleMarker, splitBubbles, bubbles]);
 
   const insertEmoji = (emoji: string) => {
     setText((t) => t + emoji);
@@ -631,6 +674,22 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
             <PenLine className="h-3 w-3" /> Assinando como <span className="font-semibold">{signatureName}:</span>
           </span>
+        )}
+        {hasBubbleMarker && !internalMode && (
+          <button
+            type="button"
+            onClick={() => setSplitBubbles((v) => !v)}
+            title={splitBubbles ? 'Cada trecho entre ||| sai como uma mensagem separada' : 'Tudo sai numa mensagem só (os ||| viram linha em branco)'}
+            className={`inline-flex items-center gap-1.5 text-[12px] font-medium transition-colors ${
+              splitBubbles ? 'text-primary' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
+            }`}
+          >
+            <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${splitBubbles ? 'bg-primary' : 'bg-zinc-300 dark:bg-zinc-600'}`}>
+              <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${splitBubbles ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            </span>
+            <MessageSquareText className="h-3.5 w-3.5" />
+            {splitBubbles ? `Enviar em ${bubbles.length} bolhas` : 'Enviar numa bolha só'}
+          </button>
         )}
         <div className="flex-1" />
         {sendingFrom && (
