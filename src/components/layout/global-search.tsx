@@ -17,6 +17,31 @@ const onlyDigits = (s: string) => s.replace(/\D/g, '');
 // Busca sem acento: a regra mora em `lib/names`, não aqui. Ver `dobraParaBusca`.
 const dobra = dobraParaBusca;
 
+// Para comparar, pontuação vira espaço: "frider andrade" casa "FRIDER ANDRADE - ADVOGADOS"
+// e "frider-andrade" casa "Frider Andrade".
+const limpa = (s: string | null | undefined) =>
+  dobra(s).replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Relevância de um texto para a busca (menor = melhor; null = não casa).
+ * Sem isso, o corte em 6 pegava os 6 PRIMEIROS da lista: "frider andrade" casava
+ * dezenas de "MATHEUS FRIDER ANDRADE x ..." e o processo cujo título COMEÇA com
+ * o termo ficava de fora (11/11/2026).
+ *   0 começa com o termo · 1 termo no início de uma palavra · 2 termo no meio
+ *   3 todas as palavras presentes, em qualquer ordem
+ */
+const pontua = (texto: string, q: string, tokens: string[]): number | null => {
+  if (!texto || !q) return null;
+  if (texto.startsWith(q)) return 0;
+  if ((' ' + texto).includes(' ' + q)) return 1;
+  if (texto.includes(q)) return 2;
+  if (tokens.length > 1 && tokens.every((t) => texto.includes(t))) return 3;
+  return null;
+};
+
+const melhor = (...ps: (number | null)[]): number | null =>
+  ps.reduce<number | null>((a, b) => (b === null ? a : a === null ? b : Math.min(a, b)), null);
+
 /**
  * Busca global central (estilo Astrea): barra fixa no topo de todas as telas.
  * Procura PROCESSOS (título, nº CNJ, partes) e CLIENTES (nome, documento) usando
@@ -60,26 +85,40 @@ export function GlobalSearch() {
   }, []);
 
   const results = useMemo<Result[]>(() => {
-    const q = dobra(query.trim());
-    if (q.length < 2) return [];
-    const qd = onlyDigits(q);
-    const caseHits: Result[] = (casesQ.data ?? [])
-      .filter((c) => {
-        const byText = dobra(c.title).includes(q)
-          || (c.parties ?? []).some((p) => dobra(p.name).includes(q));
-        const byCnj = qd.length >= 3 && onlyDigits(c.cnjNumber ?? '').includes(qd);
-        return byText || byCnj;
-      })
-      .slice(0, 6)
-      .map((c) => ({ kind: 'case', id: c.id, title: c.title, subtitle: c.cnjNumber ?? c.area ?? null, href: `/processos/${c.id}`, cnj: c.cnjNumber ?? null }));
-    const clientHits: Result[] = (clientsQ.data ?? [])
-      .filter((c) => {
-        const byText = dobra(c.name).includes(q);
-        const byDoc = qd.length >= 3 && onlyDigits(c.document ?? '').includes(qd);
-        return byText || byDoc;
-      })
-      .slice(0, 6)
-      .map((c) => ({ kind: 'client', id: c.partyId, title: c.name, subtitle: c.document ?? `${c.cases} processo(s)`, href: `/clientes/${c.partyId}` }));
+    const bruto = dobra(query.trim());
+    if (bruto.length < 2) return [];
+    const q = limpa(bruto);
+    const tokens = q.split(' ').filter(Boolean);
+    const qd = onlyDigits(bruto);
+    // Número puro (CNJ, CPF) casa pelos dígitos; texto casa pelo texto limpo.
+    const soDigitos = q.length > 0 && qd.length === q.replace(/ /g, '').length;
+
+    // Ordena por relevância ANTES de cortar; empate mantém a ordem da lista.
+    const rankeia = <T,>(itens: T[], nota: (it: T) => number | null) =>
+      itens
+        .map((it, i) => ({ it, i, n: nota(it) }))
+        .filter((x): x is { it: T; i: number; n: number } => x.n !== null)
+        .sort((a, b) => a.n - b.n || a.i - b.i)
+        .slice(0, 6)
+        .map((x) => x.it);
+
+    const caseHits: Result[] = rankeia(casesQ.data ?? [], (c) => {
+      const porCnj = qd.length >= 3 && onlyDigits(c.cnjNumber ?? '').includes(qd) ? 0 : null;
+      if (soDigitos) return porCnj;
+      const porTitulo = pontua(limpa(c.title), q, tokens);
+      // Parte casa um pouco abaixo do título (o título é o que se vê na lista).
+      const porParte = melhor(...(c.parties ?? []).map((p) => {
+        const n = pontua(limpa(p.name), q, tokens);
+        return n === null ? null : n + 0.5;
+      }));
+      return melhor(porTitulo, porParte, porCnj);
+    }).map((c) => ({ kind: 'case', id: c.id, title: c.title, subtitle: c.cnjNumber ?? c.area ?? null, href: `/processos/${c.id}`, cnj: c.cnjNumber ?? null }));
+
+    const clientHits: Result[] = rankeia(clientsQ.data ?? [], (c) => {
+      const porDoc = qd.length >= 3 && onlyDigits(c.document ?? '').includes(qd) ? 0 : null;
+      if (soDigitos) return porDoc;
+      return melhor(pontua(limpa(c.name), q, tokens), porDoc);
+    }).map((c) => ({ kind: 'client', id: c.partyId, title: c.name, subtitle: c.document ?? `${c.cases} processo(s)`, href: `/clientes/${c.partyId}` }));
     return [...caseHits, ...clientHits];
   }, [query, casesQ.data, clientsQ.data]);
 
