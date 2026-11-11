@@ -13,6 +13,7 @@ import {
   suportaMoverNoDisco,
   moverParaAPastaDoCliente,
   removerSubpastasVazias,
+  acharSubpasta,
   guardarPasta,
   lerPasta,
   permissaoDeEscrita,
@@ -737,7 +738,7 @@ export function ArquivarPecaModal({
         if (mesa && (i as any).daMesa) {
           try {
             const sub = (i as any).sub ?? null;
-            const dono = sub ? await mesa.getDirectoryHandle(sub) : mesa;
+            const dono = sub ? await acharSubpasta(mesa, sub) : mesa;
             f = await (await dono.getFileHandle(i.nome)).getFile();
           } catch {
             /* some do disco entre listar e enviar: fica o retrato antigo */
@@ -790,9 +791,13 @@ export function ArquivarPecaModal({
         const saiu: string[] = [];
         const ficou: string[] = [];
         const subsMexidas = new Set<string>();
+        // Cada um que FICA leva o motivo. Antes ficava só o nome, e o PDF da
+        // MARIA DE FÁTIMA continuou em PROTOCOLO depois de arquivado, em
+        // 11/11/2026, sem que desse para saber se foi o Drive, a origem ou o
+        // disco — o advogado repetiu o arquivamento e o Drive ganhou `b)` e `c)`.
         for (const i of itens) {
           if (!confirmados.has(nomeFinal(i))) {
-            ficou.push(i.nome);
+            ficou.push(`${i.nome} (o Drive não confirmou "${nomeFinal(i)}")`);
             continue;
           }
           // APAGAR é o passo sem volta: `removeEntry` não tem lixeira. Se não
@@ -801,16 +806,16 @@ export function ArquivarPecaModal({
           // repetido apagava o arquivo do OUTRO cliente.
           const sub = origemNaMesa(i);
           if (sub === undefined) {
-            ficou.push(i.nome);
+            ficou.push(`${i.nome} (não está na pasta deste cliente em ${mesaNome})`);
             continue;
           }
           try {
-            const dono = sub ? await mesa.getDirectoryHandle(sub) : mesa;
+            const dono = sub ? await acharSubpasta(mesa, sub) : mesa;
             await dono.removeEntry(i.nome);
             saiu.push(i.nome);
             if (sub) subsMexidas.add(sub);
-          } catch {
-            ficou.push(i.nome);
+          } catch (e: any) {
+            ficou.push(`${i.nome} (${e?.message || e?.name || 'o disco recusou'})`);
           }
         }
         // Pasta de cliente que ficou vazia é pendência resolvida: sai também.
@@ -818,7 +823,9 @@ export function ArquivarPecaModal({
         // foi arquivado.
         const pastas = await removerSubpastasVazias(mesa, subsMexidas);
         if (saiu.length) toast.success(`${saiu.length} arquivo(s) saíram de ${mesaNome}.`);
-        if (ficou.length) toast.warning(`Ficaram em ${mesaNome}: ${ficou.join(', ')}`);
+        // Fica na tela até ser lido: com 4s o motivo sumia antes do olho chegar.
+        if (ficou.length)
+          toast.warning(`Ficaram em ${mesaNome}: ${ficou.join('; ')}`, { duration: 30_000 });
         if (pastas.ficaram.length)
           toast.warning(
             `Apague à mão em ${mesaNome}: ${pastas.ficaram

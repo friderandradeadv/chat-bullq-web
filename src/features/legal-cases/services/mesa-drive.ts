@@ -92,11 +92,16 @@ const norm = (s: string) => s.normalize('NFC').trim().toLowerCase();
  * pasta simplesmente "não existe" — foi assim que uma varredura do acervo achou
  * ZERO cliente sem dar erro nenhum.
  */
-async function acharSubpasta(dir: any, nome: string, criar = false): Promise<any> {
+export async function acharSubpasta(dir: any, nome: string, criar = false): Promise<any> {
   try {
     return await dir.getDirectoryHandle(nome, { create: criar });
-  } catch (e: any) {
-    if (e?.name !== 'NotFoundError' && !criar) throw e;
+  } catch {
+    // Qualquer recusa cai na varredura, não só o NotFoundError. O Chromium
+    // RECUSA com TypeError o nome que termina em espaço ou ponto (regra de nome
+    // portátil) — e há pasta de cliente assim no Drive, de onde a PROTOCOLO
+    // herda o nome. Pedir pelo nome falhava; a pasta vinda da própria
+    // listagem abre. Era o "subiu para o Drive e não saiu da Mesa" do NELIO,
+    // 11/11/2026.
   }
   const alvo = norm(nome);
   for await (const [n, h] of dir.entries()) {
