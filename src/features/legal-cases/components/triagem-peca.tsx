@@ -70,7 +70,7 @@ export function TriagemPeca({ caseId, acao, rotulo, monta}: {
   const montarPeca = async () => {
     setMontando(true);
     try {
-      const { data } = await api.post(`/legal-cases/${caseId}/peca/montar`, {});
+      const { data } = await api.post(`/legal-cases/${caseId}/peca/montar`, { acao });
       const r = (data?.data ?? data) as { ok?: boolean; motivo?: string };
       if (r?.ok === false) { toast.error(r.motivo ?? 'não consegui pedir a montagem'); return; }
       toast.success('Na fila do Mac. Ele monta a contrarrazão e entrega na Mesa.');
