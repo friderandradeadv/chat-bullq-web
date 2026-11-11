@@ -511,7 +511,8 @@ export function SugestaoDePeca({ caseId, acao, recorte, acaoInicial }: {
       {/* 🚨 o botão só aparece onde HÁ triagem — e é o catálogo do hub que diz
           quais são, não uma lista escrita aqui, que envelheceria sozinha */}
       {familia?.estado === 'triagem' && (
-        <TriagemPeca caseId={caseId} acao={familia.acao} rotulo={familia.rotulo} />
+        <TriagemPeca caseId={caseId} acao={familia.acao} rotulo={familia.rotulo}
+                     monta={familia.monta} />
       )}
       {familia?.acao === 'replica' && (
         <div className="mt-2.5"><DossieReplica caseId={caseId} sempreVisivel /></div>

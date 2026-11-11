@@ -26,9 +26,9 @@ type Estado = {
   podeMontar?: boolean | null; rotuloMontagem?: string | null;
 };
 
-export function TriagemPeca({ caseId, acao, rotulo }: {
+export function TriagemPeca({ caseId, acao, rotulo, monta}: {
   caseId: string; acao: string; rotulo: string;
-}) {
+  monta?: { rotulo: string } | null}) {
   const qc = useQueryClient();
   const [pedindo, setPedindo] = useState(false);
   const [aberto, setAberto] = useState(false);
@@ -113,6 +113,19 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
   const desteAcao = !est?.acao || est.acao === acao;
   const mostra = desteAcao ? est : null;
 
+  /* 🚨 QUEM SABE A FAMÍLIA É O CARD, NÃO O REGISTRO DA TRIAGEM (11/11/2026).
+     O `podeMontar` da API se apoia em `triagem.acao` — que só existe DEPOIS de
+     a triagem rodar. Num card novo não havia ação gravada, a API não achava a
+     família no catálogo e o botão de montar não nascia: o advogado via só
+     "Rodar triagem", que é exatamente o segundo passo que o escritório mandou
+     eliminar. O card, esse, já sabe: a publicação sugere a família.
+
+     O que barra continua sendo medição: `cabe === false` é a triagem dizendo
+     que a peça não existe, e aí não há botão. Durante a leitura também não,
+     para não enfileirar duas montagens. */
+  const podeMontar = Boolean(monta) && mostra?.cabe !== false && !naFila;
+  const rotuloMontar = monta?.rotulo ?? mostra?.rotuloMontagem ?? 'Montar a peça';
+
   const pedir = async () => {
     setPedindo(true);
     try {
@@ -175,7 +188,7 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
           </p>
           {mostra?.resumo && <p className="mt-0.5">{mostra.resumo}</p>}
 
-          {mostra?.podeMontar && (
+          {podeMontar && (
             <>
               <button
                 onClick={montarPeca}
@@ -185,7 +198,7 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
                            disabled:opacity-50 hover:bg-emerald-800"
               >
                 {montando ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                {montando ? 'pedindo…' : (mostra.rotuloMontagem ?? 'Montar a peça')}
+                {montando ? 'pedindo…' : rotuloMontar}
               </button>
               {/* 🚨 o que o Mac NÃO faz tem de estar escrito aqui, não só no
                   relatório: ele repõe as teses que têm bloco na prateleira, e
