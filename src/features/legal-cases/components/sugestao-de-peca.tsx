@@ -37,6 +37,13 @@ type Familia = {
      DECISÃO e mede o vício, em contrarrazões lê o RECURSO ADVERSO e escolhe
      entre cinco modelos. Quando a família manda o seu, é o dela que vale. */
   selo?: string;
+  /* 🚨 A FAMÍLIA QUE MONTA NÃO OFERECE A IA. O catálogo da API traz este par
+     desde 10/11/2026 (`monta: { rotulo }`), e é ele que acende o botão de
+     montagem no card. O tipo do front não o declarava, então o card não tinha
+     como saber que a família tem montador — e seguia mostrando o gerador por
+     IA ao lado dele. Regra da casa: havendo modelo, nenhuma IA escreve a
+     peça. */
+  monta?: { rotulo: string } | null;
   situacoes?: Situacao[];
 };
 
@@ -480,8 +487,16 @@ export function SugestaoDePeca({ caseId, acao, recorte, acaoInicial }: {
         </div>
       )}
 
-      {/* o gerador por IA do hub, para os 3 tipos que o DTO aceita */}
-      {acaoEfetiva && tipoDaAcao(acaoEfetiva) && (
+      {/* 🚨 HAVENDO MONTADOR, A IA NÃO ESCREVE A PEÇA (11/11/2026). Regra do
+          escritório, e o card a contrariava: na apelação apareciam TRÊS
+          caminhos ao mesmo tempo — "Gerar a peça por IA", "Rodar triagem" e,
+          depois dela, "Montar a apelação". Três botões para uma peça só é
+          convite a escolher o errado, e o errado aqui é o que ignora a
+          biblioteca de modelos do escritório.
+
+          O gerador por IA continua, e é o certo, para a família que NÃO tem
+          montador: ali não há modelo a seguir. */}
+      {acaoEfetiva && tipoDaAcao(acaoEfetiva) && !familia?.monta && (
         <GerarPecaIA caseId={caseId} acao={acaoEfetiva} instrucao={texto || undefined} />
       )}
 
