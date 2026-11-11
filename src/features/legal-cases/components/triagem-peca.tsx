@@ -156,7 +156,7 @@ export function TriagemPeca({ caseId, acao, rotulo, monta}: {
             convite a clicar no errado. Ele volta a aparecer quando NÃO dá para
             montar (não cabe, ou família sem montador), que é quando reler os
             autos ainda é um ato em si. */}
-        {!mostra?.podeMontar && (
+        {!podeMontar && (
         <button
           onClick={pedir}
           disabled={pedindo || naFila}
@@ -188,30 +188,40 @@ export function TriagemPeca({ caseId, acao, rotulo, monta}: {
           </p>
           {mostra?.resumo && <p className="mt-0.5">{mostra.resumo}</p>}
 
-          {podeMontar && (
-            <>
-              <button
-                onClick={montarPeca}
-                disabled={montando}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-700
-                           px-2.5 py-1 text-[11px] font-semibold text-white
-                           disabled:opacity-50 hover:bg-emerald-800"
-              >
-                {montando ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                {montando ? 'pedindo…' : rotuloMontar}
-              </button>
-              {/* 🚨 o que o Mac NÃO faz tem de estar escrito aqui, não só no
-                  relatório: ele repõe as teses que têm bloco na prateleira, e
-                  hoje são 6 das 10. As outras continuam sendo do advogado. */}
-              <p className="mt-1 text-[10px] leading-4 opacity-80">
-                Ele monta os capítulos que têm bloco na biblioteca e diz, no card, quais
-                teses ficaram sem. O que você escreveu em “O que você quer nesta peça?”
-                só tira capítulo, nunca escreve texto.
-              </p>
-            </>
-          )}
         </div>
       )}
+      {/* 🚨 O BOTÃO DE MONTAR NÃO MORA DENTRO DO RESULTADO (11/11/2026).
+          Ele estava aninhado na caixa `jaRodou`, desenhada só DEPOIS de a
+          triagem fechar — então, num card novo, a condição podia ser
+          verdadeira e ninguém via o botão. A condição estava certa; errada
+          estava a CASA dela.
+
+          Fora da caixa ele aparece desde o primeiro acesso: o clique refaz a
+          triagem e monta em seguida. Tendo ela rodado e dito que NÃO cabe,
+          `podeMontar` é falso e o botão não nasce. */}
+      {podeMontar && (
+        <>
+          <button
+            onClick={montarPeca}
+            disabled={montando}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-emerald-700
+                       px-2.5 py-1 text-[11px] font-semibold text-white
+                       disabled:opacity-50 hover:bg-emerald-800"
+          >
+            {montando ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {montando ? 'pedindo…' : rotuloMontar}
+          </button>
+          {/* 🚨 o que o Mac NÃO faz tem de estar escrito aqui, não só no
+              relatório: ele repõe as teses que têm bloco na prateleira, e
+              hoje são 6 das 10. As outras continuam sendo do advogado. */}
+          <p className="mt-1 text-[10px] leading-4 opacity-80">
+            Ele monta os capítulos que têm bloco na biblioteca e diz, no card, quais
+            teses ficaram sem. O que você escreveu em “O que você quer nesta peça?”
+            só tira capítulo, nunca escreve texto.
+          </p>
+        </>
+      )}
+
 
       {jaRodou && mostra?.relatorio && (
         <>
