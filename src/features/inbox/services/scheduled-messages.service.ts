@@ -2,6 +2,8 @@ import { api } from '@/lib/api';
 
 export type ScheduledMessageStatus =
   | 'PENDING'
+  /** Segurada: o disparador passa reto até alguém retomar. Texto e data ficam. */
+  | 'PAUSED'
   | 'SENDING'
   | 'SENT'
   | 'CANCELED'
@@ -103,5 +105,17 @@ export const scheduledMessagesService = {
 
   async cancel(id: string): Promise<void> {
     await api.delete(`/scheduled-messages/${id}`);
+  },
+
+  async setPaused(id: string, paused: boolean): Promise<void> {
+    await api.post(`/scheduled-messages/${id}/${paused ? 'pause' : 'resume'}`);
+  },
+
+  /** Pausa ou retoma todas as agendadas da conversa. Devolve quantas mudaram. */
+  async setPausedConversation(conversationId: string, paused: boolean): Promise<number> {
+    const { data } = await api.post(
+      `/scheduled-messages/conversation/${conversationId}/${paused ? 'pause' : 'resume'}`,
+    );
+    return data?.data?.count ?? 0;
   },
 };

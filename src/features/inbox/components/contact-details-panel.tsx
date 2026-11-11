@@ -3127,6 +3127,7 @@ function ScheduledStatusBadge({ status }: { status: ScheduledMessage['status'] }
     FAILED: { label: 'Falhou', cls: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400' },
     SENDING: { label: 'Enviando', cls: 'bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400' },
     PENDING: { label: 'Pendente', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' },
+    PAUSED: { label: 'Pausada', cls: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200' },
   };
   const s = map[status] ?? map.PENDING;
   return <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.label}</span>;
@@ -3144,8 +3145,9 @@ function ScheduledTab({ conversationId }: { conversationId: string }) {
   const [editWhen, setEditWhen] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
-  const pending = items.filter((i) => i.status === 'PENDING');
-  const history = items.filter((i) => i.status !== 'PENDING');
+  // Pausada ainda é "próxima": não saiu e pode voltar a sair.
+  const pending = items.filter((i) => i.status === 'PENDING' || i.status === 'PAUSED');
+  const history = items.filter((i) => i.status !== 'PENDING' && i.status !== 'PAUSED');
   const invalidate = () => qc.invalidateQueries({ queryKey: ['scheduled-messages', conversationId] });
 
   const fmt = (iso: string) =>
@@ -3170,6 +3172,20 @@ function ScheduledTab({ conversationId }: { conversationId: string }) {
       invalidate();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Erro ao salvar');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const togglePause = async (m: ScheduledMessage) => {
+    const pausar = m.status !== 'PAUSED';
+    setBusy(m.id);
+    try {
+      await scheduledMessagesService.setPaused(m.id, pausar);
+      toast.success(pausar ? 'Envio pausado' : 'Envio retomado');
+      invalidate();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao pausar');
     } finally {
       setBusy(null);
     }
@@ -3248,12 +3264,20 @@ function ScheduledTab({ conversationId }: { conversationId: string }) {
                 <>
                   <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
                     <Clock className="h-3 w-3" /> {fmt(m.scheduledAt)}
+                    {m.status === 'PAUSED' && <ScheduledStatusBadge status="PAUSED" />}
                   </div>
                   <p className="whitespace-pre-wrap break-words text-sm text-zinc-700 dark:text-zinc-200">{m.content?.text}</p>
                   <ScheduledAnexos anexos={m.anexos} />
                   <div className="mt-1.5 flex gap-3">
                     <button onClick={() => startEdit(m)} className="text-[11px] font-medium text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
                       Editar
+                    </button>
+                    <button
+                      onClick={() => togglePause(m)}
+                      disabled={busy === m.id}
+                      className="text-[11px] font-medium text-zinc-500 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
+                    >
+                      {m.status === 'PAUSED' ? 'Retomar' : 'Pausar'}
                     </button>
                     <button
                       onClick={() => cancel(m.id)}

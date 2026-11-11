@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, X, ChevronDown, Pencil, Trash2, Loader2, CalendarClock, Paperclip, FileText } from 'lucide-react';
+import { Clock, X, ChevronDown, Pencil, Trash2, Loader2, CalendarClock, Paperclip, FileText, Pause, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   scheduledMessagesService,
@@ -88,44 +88,69 @@ export function ScheduledMessagesBar({ conversationId }: { conversationId: strin
     refetchInterval: 30_000,
   });
 
+  // Pausada continua na lista (não saiu e pode voltar a sair), mas não conta
+  // para o "próxima mensagem em…": quem está segurada não tem hora de sair.
   const pending = useMemo(
     () =>
       (data ?? [])
-        .filter((m) => m.status === 'PENDING')
+        .filter((m) => m.status === 'PENDING' || m.status === 'PAUSED')
         .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()),
     [data],
   );
+  const ativas = pending.filter((m) => m.status === 'PENDING');
+  const pausadas = pending.length - ativas.length;
 
-  // Tick de 1s só enquanto houver agendamento (pro contador ao vivo).
+  // Tick de 1s só enquanto houver envio de verdade correndo (pro contador ao vivo).
   useEffect(() => {
-    if (pending.length === 0) return;
+    if (ativas.length === 0) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [pending.length]);
+  }, [ativas.length]);
 
   if (pending.length === 0) return null;
 
-  const next = pending[0];
+  const next = ativas[0];
+  const tudoPausado = !next;
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 border-b border-sky-100 bg-sky-50 px-4 py-2 text-[13px] dark:border-sky-900/40 dark:bg-sky-950/30">
-        <span className="flex min-w-0 items-center gap-2 text-sky-700 dark:text-sky-300">
-          <Clock className="h-4 w-4 shrink-0" />
-          <span className="truncate">
-            Sua próxima mensagem será enviada em{' '}
-            <strong className="tabular-nums">{countdown(next.scheduledAt, now)}</strong>
-            {(next.anexos?.length ?? 0) > 0 && (
-              <span className="ml-1.5 inline-flex items-center gap-1 align-middle" title={next.anexos!.map((a) => a.nome).join(', ')}>
-                <Paperclip className="h-3.5 w-3.5" />
-                {next.anexos!.length === 1 ? next.anexos![0].nome : `${next.anexos!.length} anexos`}
-              </span>
-            )}
+      <div
+        className={`flex items-center justify-between gap-3 border-b px-4 py-2 text-[13px] ${
+          tudoPausado
+            ? 'border-amber-100 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30'
+            : 'border-sky-100 bg-sky-50 dark:border-sky-900/40 dark:bg-sky-950/30'
+        }`}
+      >
+        {tudoPausado ? (
+          <span className="flex min-w-0 items-center gap-2 text-amber-800 dark:text-amber-300">
+            <Pause className="h-4 w-4 shrink-0" />
+            <span className="truncate">
+              Envios pausados: <strong>{pausadas}</strong> {pausadas === 1 ? 'mensagem segurada' : 'mensagens seguradas'}
+            </span>
           </span>
-        </span>
+        ) : (
+          <span className="flex min-w-0 items-center gap-2 text-sky-700 dark:text-sky-300">
+            <Clock className="h-4 w-4 shrink-0" />
+            <span className="truncate">
+              Sua próxima mensagem será enviada em{' '}
+              <strong className="tabular-nums">{countdown(next.scheduledAt, now)}</strong>
+              {(next.anexos?.length ?? 0) > 0 && (
+                <span className="ml-1.5 inline-flex items-center gap-1 align-middle" title={next.anexos!.map((a) => a.nome).join(', ')}>
+                  <Paperclip className="h-3.5 w-3.5" />
+                  {next.anexos!.length === 1 ? next.anexos![0].nome : `${next.anexos!.length} anexos`}
+                </span>
+              )}
+              {pausadas > 0 && <span className="ml-1.5 text-sky-600/80 dark:text-sky-300/70">· {pausadas} pausada{pausadas === 1 ? '' : 's'}</span>}
+            </span>
+          </span>
+        )}
         <button
           onClick={() => setOpen(true)}
-          className="shrink-0 rounded-full bg-sky-100 px-3 py-1 text-[12px] font-semibold text-sky-700 transition-colors hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:hover:bg-sky-900/60"
+          className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
+            tudoPausado
+              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60'
+              : 'bg-sky-100 text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-200 dark:hover:bg-sky-900/60'
+          }`}
         >
           Agendamentos {pending.length}
         </button>
@@ -133,6 +158,7 @@ export function ScheduledMessagesBar({ conversationId }: { conversationId: strin
 
       {open && (
         <ScheduledMessagesModal
+          conversationId={conversationId}
           items={pending}
           onClose={() => setOpen(false)}
           onChanged={() =>
@@ -145,14 +171,52 @@ export function ScheduledMessagesBar({ conversationId }: { conversationId: strin
 }
 
 function ScheduledMessagesModal({
+  conversationId,
   items,
   onClose,
   onChanged,
 }: {
+  conversationId: string;
   items: ScheduledMessage[];
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const [busyAll, setBusyAll] = useState(false);
+  const temAtiva = items.some((m) => m.status === 'PENDING');
+
+  /**
+   * Um botão só: havendo alguma correndo, pausa todas; estando todas seguradas,
+   * retoma todas. Retomar o que já passou da hora solta na hora — então pergunta.
+   */
+  const toggleAll = async () => {
+    const pausar = temAtiva;
+    if (!pausar) {
+      const vencidas = items.filter((m) => new Date(m.scheduledAt).getTime() <= Date.now()).length;
+      if (
+        vencidas > 0 &&
+        !window.confirm(
+          `${vencidas === 1 ? '1 mensagem já passou' : `${vencidas} mensagens já passaram`} do horário e ${vencidas === 1 ? 'sai' : 'saem'} em até 1 minuto ao retomar. Retomar mesmo assim?`,
+        )
+      ) {
+        return;
+      }
+    }
+    setBusyAll(true);
+    try {
+      const n = await scheduledMessagesService.setPausedConversation(conversationId, pausar);
+      toast.success(
+        pausar
+          ? `${n} ${n === 1 ? 'envio pausado' : 'envios pausados'}`
+          : `${n} ${n === 1 ? 'envio retomado' : 'envios retomados'}`,
+      );
+      onChanged();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao pausar');
+    } finally {
+      setBusyAll(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
@@ -166,6 +230,18 @@ function ScheduledMessagesModal({
               Mensagens Agendadas ({items.length})
             </h3>
           </div>
+          <button
+            onClick={toggleAll}
+            disabled={busyAll}
+            className={`ml-auto mr-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition-colors disabled:opacity-50 ${
+              temAtiva
+                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60'
+                : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:hover:bg-emerald-900/60'
+            }`}
+          >
+            {busyAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : temAtiva ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {temAtiva ? 'Pausar todas' : 'Retomar todas'}
+          </button>
           <button onClick={onClose} className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
             <X className="h-4 w-4" />
           </button>
@@ -193,6 +269,25 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
    * `content.template`, deixando a agendada sem HSM para disparar.
    */
   const isTemplate = item.type === 'TEMPLATE';
+
+  const pausada = item.status === 'PAUSED';
+  const vencida = new Date(item.scheduledAt).getTime() <= Date.now();
+
+  const togglePause = async () => {
+    if (pausada && vencida && !window.confirm('O horário desta mensagem já passou: ao retomar, ela sai em até 1 minuto. Retomar mesmo assim?')) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await scheduledMessagesService.setPaused(item.id, !pausada);
+      toast.success(pausada ? 'Envio retomado' : 'Envio pausado');
+      onChanged();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao pausar');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const cancel = async () => {
     setBusy(true);
@@ -287,10 +382,15 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
   }
 
   return (
-    <div className="relative rounded-xl bg-emerald-50 p-3 dark:bg-emerald-900/15">
+    <div className={`relative rounded-xl p-3 ${pausada ? 'bg-zinc-100 dark:bg-zinc-800/60' : 'bg-emerald-50 dark:bg-emerald-900/15'}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="whitespace-pre-wrap break-words text-sm text-zinc-800 dark:text-zinc-100">
+            {pausada && (
+              <span className="mr-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                <Pause className="h-2.5 w-2.5" /> Pausada
+              </span>
+            )}
             {item.type === 'TEMPLATE' && (
               <span className="mr-1.5 inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-primary">
                 Template
@@ -320,6 +420,13 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
                   Editar mensagem
                 </button>
                 <button
+                  onClick={() => { setMenuOpen(false); togglePause(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  {pausada ? <Play className="h-3.5 w-3.5 text-zinc-500" /> : <Pause className="h-3.5 w-3.5 text-zinc-500" />}
+                  {pausada ? 'Retomar envio' : 'Pausar envio'}
+                </button>
+                <button
                   onClick={() => { setMenuOpen(false); cancel(); }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                 >
@@ -331,9 +438,10 @@ function ScheduledBubble({ item, onChanged }: { item: ScheduledMessage; onChange
           )}
         </div>
       </div>
-      <div className="mt-1.5 flex items-center gap-1 text-[11px] text-emerald-700/70 dark:text-emerald-400/70">
+      <div className={`mt-1.5 flex items-center gap-1 text-[11px] ${pausada ? 'text-zinc-500 dark:text-zinc-400' : 'text-emerald-700/70 dark:text-emerald-400/70'}`}>
         <Clock className="h-3 w-3" />
         {fullStamp(item.scheduledAt)}
+        {pausada && vencida && <span className="ml-1 text-amber-700 dark:text-amber-400">· horário já passou: ao retomar, sai em até 1 min</span>}
       </div>
     </div>
   );
