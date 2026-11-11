@@ -285,6 +285,11 @@ export function ConversationHeader({ conversation, onUpdate, panelOpen = true, o
                           ? 'IA forçada nesta conversa (sobrepõe global)'
                           : 'IA pausada nesta conversa',
                     );
+                    // Ligar a IA muda a ABA (Ativos/Pendentes → AI). Quem clicou
+                    // vê na hora, como no "Aceitar"; o evento em tempo real
+                    // cobre as outras telas.
+                    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                    queryClient.invalidateQueries({ queryKey: ['conversation-counts'] });
                   }}
                   onEngage={async () => {
                     await handleAction(async () => {
