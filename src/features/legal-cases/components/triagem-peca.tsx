@@ -118,6 +118,16 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
         <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
           <FileSearch className="h-3.5 w-3.5" /> Triagem de {rotulo.toLowerCase()}
         </p>
+        {/* 🚨 UM BOTÃO SÓ QUANDO DÁ PARA MONTAR (11/11/2026, determinação do
+            escritório: "tem que ter um botão só, de montar a contrarrazão, que
+            já lê o dossiê, autos, etc"). Desde hoje o montar refaz a cadeia
+            inteira — renova os autos passados de 24h, relê, roda a triagem e
+            só então monta. Com isso o "Rodar de novo" virou um segundo
+            caminho para a mesma coisa, e dois botões que fazem o mesmo é
+            convite a clicar no errado. Ele volta a aparecer quando NÃO dá para
+            montar (não cabe, ou família sem montador), que é quando reler os
+            autos ainda é um ato em si. */}
+        {!mostra?.podeMontar && (
         <button
           onClick={pedir}
           disabled={pedindo || naFila}
@@ -126,6 +136,7 @@ export function TriagemPeca({ caseId, acao, rotulo }: {
           {(pedindo || naFila) && <Loader2 className="h-3 w-3 animate-spin" />}
           {naFila ? 'lendo os autos…' : jaRodou ? 'Rodar de novo' : 'Rodar triagem'}
         </button>
+        )}
       </div>
 
       {naFila && mostra?.etapa && (
