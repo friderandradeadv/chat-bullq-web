@@ -16,11 +16,12 @@
  * homônimo: aqui o número aparece em cada linha, e quem tem CPF conferido vem
  * marcado e em primeiro lugar.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { BadgeCheck, Loader2, MapPin, MessageSquare, Phone, Search, ShieldAlert, UserCircle2, X } from 'lucide-react';
 import { legalCasesService } from '@/features/legal-cases/services/legal-cases.service';
+import { contactsService } from '@/features/contacts/services/contacts.service';
 
 /** 558198679677 vira +55 81 9867-9677: número que não se lê não serve de conferência. */
 function telefoneLegivel(t: string | null): string {
@@ -55,6 +56,42 @@ export function VincularContatoCliente({
   const [escolhido, setEscolhido] = useState<string | null>(null);
   const [filtro, setFiltro] = useState('');
   const [verTodos, setVerTodos] = useState(false);
+
+  /**
+   * 🚨 PESQUISAR NAS CONVERSAS (12/11/2026). Pedido do escritório, com a janela
+   * da LEONILDA MARIO SILVA vazia: *"quero vincular uns clientes sem whatsapp,
+   * pesquisando nas conversas"*. Os candidatos acima só existem quando o nome
+   * ou o CPF casam; o cliente que conversa com outro nome no WhatsApp (o da
+   * filha, um apelido) nunca aparecia, e a tela não deixava procurar.
+   *
+   * A busca é a mesma do inbox (nome ou telefone). Nada se vincula sozinho: o
+   * resultado vira um clique do advogado, com o telefone na linha para ele
+   * conferir — a regra "nunca por nome" é sobre o AUTOMÁTICO.
+   */
+  const [busca, setBusca] = useState('');
+  const [achados, setAchados] = useState<{ id: string; nome: string | null; telefone: string | null }[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  useEffect(() => {
+    const q = busca.trim();
+    if (q.length < 3) { setAchados([]); setBuscando(false); return; }
+    let vivo = true;
+    setBuscando(true);
+    const t = setTimeout(async () => {
+      try {
+        const { contacts } = await contactsService.list({ search: q, limit: '20' });
+        if (vivo) {
+          setAchados((contacts ?? [])
+            .filter((c: any) => c.phone)
+            .map((c: any) => ({ id: c.id, nome: c.name ?? null, telefone: c.phone ?? null })));
+        }
+      } catch {
+        if (vivo) setAchados([]);
+      } finally {
+        if (vivo) setBuscando(false);
+      }
+    }, 300);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [busca]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['cliente-contatos-candidatos', caseId],
@@ -219,6 +256,54 @@ export function VincularContatoCliente({
                 mostrar os outros {escondidos}
               </button>
             )}
+
+            {/* A BUSCA NAS CONVERSAS: vale com e sem candidato. */}
+            <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                <input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="pesquisar nas conversas: nome ou telefone…"
+                  className="h-8 w-full rounded-lg border border-zinc-300 bg-white pl-7 pr-7 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+                {buscando && <Loader2 className="absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-zinc-400" />}
+              </div>
+              {busca.trim().length >= 3 && !buscando && achados.length === 0 && (
+                <p className="mt-1.5 text-center text-[11px] text-zinc-500">Nenhuma conversa com “{busca.trim()}”.</p>
+              )}
+              {achados.length > 0 && (
+                <div className="mt-1.5 flex max-h-[30vh] flex-col gap-1.5 overflow-y-auto">
+                  {achados.map((c) => {
+                    const ativo = escolhido === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => setEscolhido(c.id)}
+                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition ${
+                          ativo
+                            ? 'border-[#228BE6] bg-[#228BE6]/5'
+                            : 'border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800'}`}
+                      >
+                        <MessageSquare className="h-4 w-4 shrink-0 text-zinc-400" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                            {c.nome || 'sem nome no cadastro'}
+                          </p>
+                          <p className="mt-0.5 flex items-center gap-1 font-mono text-xs text-zinc-600 dark:text-zinc-300">
+                            <Phone className="h-3 w-3 shrink-0 text-zinc-400" />
+                            {telefoneLegivel(c.telefone)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+                          escolha sua
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div className="mt-4 flex items-center justify-between gap-2">
               <p className="text-[11px] leading-3 text-zinc-400">
