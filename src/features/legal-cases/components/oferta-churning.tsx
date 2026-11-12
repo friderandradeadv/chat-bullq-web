@@ -59,6 +59,25 @@ type Achado = {
   contratos: number;
   /** Outros grupos com indício de reciclagem — cada um é uma conversa própria. */
   outrosGrupos: number;
+  /**
+   * 🚨 QUEM VAI JUNTO NO POLO PASSIVO (12/11/2026). Ordem do escritório: *"o
+   * leitor deve fazer direto pelo hub, saber qual ação montar, cadeia,
+   * litisconsórcio"*.
+   *
+   * O plano de ação já decidia isto e a tela jogava fora: ele une numa cadeia
+   * só os grupos ligados pelo mesmo contrato (originação e cessão) e devolve
+   * âncora + litisconsortes. No HISCON do BRAZ são TRÊS sob o Santander (Facta,
+   * Banco Pine e Daycoval), e eu só os vi rodando um script à mão — o advogado,
+   * olhando a tela, não tinha como saber.
+   *
+   * Fatiar cadeia é o que se extingue por fragmentação artificial, então isto
+   * não é enfeite: é o que decide se a ação nasce certa.
+   */
+  litisconsortes: string[];
+  /** O que o plano manda fazer com este grupo: AJUIZAR, REPOSICIONAR_TESE… */
+  veredito: string | null;
+  /** Averbações do grupo, como o plano as conta. */
+  averbacoes: number | null;
 };
 
 /**
@@ -138,6 +157,10 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       dinheiro: alvo?.dinheiro ?? null,
       contratos,
       outrosGrupos: Math.max(0, quantosGrupos - 1),
+      litisconsortes: (alvo?.litisconsortes ?? []).map((x: unknown) => String(x ?? '').trim())
+        .filter(Boolean),
+      veredito: alvo?.veredito ?? null,
+      averbacoes: typeof alvo?.averbacoes === 'number' ? alvo.averbacoes : null,
     };
     setAchado(a);
     // 🚨 O TEXTO VEM DA RESPOSTA, não daqui. Compor aqui para "mostrar logo" era
@@ -204,6 +227,13 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
     const doBanco: Achado = {
       grupo: String((oferta as any).grupo ?? ''),
       instituicoes: [],
+      // ⚠️ A OFERTA GUARDADA NÃO TEM LITISCONSORTE. Ela grava status, grupo,
+      // indícios e dinheiro — quem conhece a cadeia é o plano de ação, e ele só
+      // roda ao reler o HISCON. Então aqui fica VAZIO, nunca um palpite: a
+      // ficha mostra "+N" apenas quando o dado foi medido agora.
+      litisconsortes: [],
+      veredito: null,
+      averbacoes: null,
       indicios: [],
       dinheiro: (oferta as any).dinheiro ?? null,
       contratos: 0,
@@ -236,7 +266,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
       const acoes: any[] = r?.planoAcao?.acoes ?? [];
 
       if (!doChurning.length || !acoes.length) {
-        setAchado({ grupo: '', instituicoes: [], indicios: [], dinheiro: null, contratos: 0, outrosGrupos: 0 });
+        setAchado({ grupo: '', instituicoes: [], indicios: [], dinheiro: null, contratos: 0, outrosGrupos: 0, litisconsortes: [], veredito: null, averbacoes: null });
         toast.message('Sem indício de reciclagem de contratos neste HISCON.');
         return;
       }
@@ -252,7 +282,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
           Number(b.veredito === 'AJUIZAR') - Number(a.veredito === 'AJUIZAR') || peso(b) - peso(a),
       );
       if (!ordenadas.length) {
-        setAchado({ grupo: '', instituicoes: [], indicios: [], dinheiro: null, contratos: 0, outrosGrupos: 0 });
+        setAchado({ grupo: '', instituicoes: [], indicios: [], dinheiro: null, contratos: 0, outrosGrupos: 0, litisconsortes: [], veredito: null, averbacoes: null });
         setGrupos([]);
         toast.message('Sem indício de reciclagem de contratos neste HISCON.');
         return;
@@ -660,6 +690,12 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                         const nome = g.grupo ?? (g.instituicoes ?? [])[0] ?? '—';
                         const n = (g.indicios ?? []).filter((x: any) => IDS_CHURNING.has(x.id)).length;
                         const ativo = achado.grupo === nome;
+                        // 🚨 QUEM VAI JUNTO APARECE NA FICHA (12/11/2026). Era
+                        // dado que o plano já tinha e a tela descartava: no
+                        // HISCON do BRAZ, três litisconsortes do Santander que
+                        // só se viam rodando um script à mão.
+                        const juntos: string[] = (g.litisconsortes ?? [])
+                          .map((x: unknown) => String(x ?? '').trim()).filter(Boolean);
                         return (
                           <span key={nome} className="inline-flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
                           {/* 🚨 DUAS AÇÕES, DOIS CONTROLES. A caixa decide se o
@@ -686,9 +722,16 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                           <button
                             onClick={() => aplicarGrupo(g, indiciosDoHiscon, grupos.length)}
                             disabled={analisando}
-                            title={g.veredito === 'AJUIZAR'
-                              ? `${nome}: ${n} indício(s). O plano de ação manda ajuizar.`
-                              : `${nome}: ${n} indício(s). O plano de ação NÃO manda ajuizar este — confira antes de ofertar.`}
+                            title={[
+                              `${nome}: ${n} indício(s)`
+                              + (typeof g.averbacoes === 'number' ? `, ${g.averbacoes} averbação(ões)` : ''),
+                              g.veredito === 'AJUIZAR'
+                                ? 'O plano de ação manda AJUIZAR.'
+                                : 'O plano de ação NÃO manda ajuizar este, confira antes de ofertar.',
+                              juntos.length
+                                ? `Vão JUNTOS no polo passivo (mesma cadeia): ${juntos.join(', ')}.`
+                                : 'Sem litisconsorte: a cadeia deste grupo não se liga a outro.',
+                            ].join(' ')}
                             className={`px-2 py-1 text-[10px] font-semibold disabled:opacity-50 ${
                               ativo
                                 ? 'bg-[#CF3B2E] text-white'
@@ -698,12 +741,39 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                             }`}
                           >
                             {nome} · {n}
+                            {juntos.length > 0 && (
+                              <span className="ml-1 font-bold text-[#CF3B2E] dark:text-[#ff8c7f]">
+                                +{juntos.length}
+                              </span>
+                            )}
                           </button>
                           </span>
                         );
                       })}
                     </div>
                   </div>
+                )}
+                {/* 🚨 O POLO PASSIVO DA AÇÃO, À VISTA (12/11/2026). Ordem do
+                    escritório: o leitor tem de dizer, pelo hub, qual ação
+                    montar e com quem. O plano já decide a cadeia; faltava
+                    mostrar. Sem isto o advogado monta contra a âncora e o
+                    litisconsorte fica de fora, que é fragmentação da mesma
+                    cadeia negocial. */}
+                {achado.grupo && achado.litisconsortes.length > 0 && (
+                  <p className="mt-1 rounded-md border border-[#CF3B2E]/30 bg-[#CF3B2E]/5 px-2 py-1 text-[11px] leading-4 text-[#101820] dark:border-[#ff8c7f]/30 dark:bg-[#ff8c7f]/10 dark:text-zinc-200">
+                    <span className="font-semibold">Polo passivo desta ação:</span>{' '}
+                    {achado.grupo} com {achado.litisconsortes.join(', ')}.{' '}
+                    <span className="text-[#48626f] dark:text-zinc-400">
+                      Mesma cadeia, ligada pelo mesmo contrato. Vão juntos na ação, não em ações
+                      separadas.
+                    </span>
+                  </p>
+                )}
+                {achado.grupo && achado.veredito && achado.veredito !== 'AJUIZAR' && (
+                  <p className="mt-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
+                    O plano de ação <span className="font-semibold">não manda ajuizar</span> este
+                    grupo. Confira antes de ofertar.
+                  </p>
                 )}
                 <ul className="mt-1 space-y-0.5">
                   {achado.indicios.slice(0, 6).map((i) => (
