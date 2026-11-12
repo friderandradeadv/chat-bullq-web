@@ -741,8 +741,22 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                             }`}
                           >
                             {nome} · {n}
+                            {/* 🚨 VERMELHO SOBRE VERMELHO SOME (12/11/2026). O
+                                `+N` nasceu com a cor da casa cravada, e o chip
+                                ATIVO tem fundo dessa mesma cor: justo a ficha
+                                que está aberta era a única que escondia quantos
+                                vão juntos. Medido no card do BRAZ: o chip do BRB
+                                lia "BRB · 8", sem marca nenhuma, enquanto a linha
+                                logo abaixo dizia "Polo passivo desta ação: BRB com
+                                Agibank". Quem olha o chip conclui que o grupo vai
+                                sozinho, e monta a ação contra um réu só. A cor do
+                                destaque acompanha o fundo, nunca o contrário. */}
                             {juntos.length > 0 && (
-                              <span className="ml-1 font-bold text-[#CF3B2E] dark:text-[#ff8c7f]">
+                              <span
+                                className={`ml-1 font-bold ${
+                                  ativo ? 'text-white' : 'text-[#CF3B2E] dark:text-[#ff8c7f]'
+                                }`}
+                              >
                                 +{juntos.length}
                               </span>
                             )}
