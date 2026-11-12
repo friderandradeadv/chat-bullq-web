@@ -239,6 +239,30 @@ export function RefinBoard() {
   };
   const parar = useRef(false);
 
+  /**
+   * 🚨 QUANTOS SAEM NESTE CLIQUE, E QUAIS (12/11/2026). Ordem do escritório:
+   * *"quero poder selecionar quantas eu quero disparar, quero também selecionar
+   * cards em lote para fazer ações em lote. inclusive disparar mensagens"*.
+   *
+   * O "teto/dia" continua sendo a TRAVA do número (quantas conversas o 7315
+   * reabre por dia); o "quantos" é a escolha DESTE clique, sempre abaixo dela.
+   * Vazio = todos os que cabem no teto. E a seleção escolhe QUEM: com cards
+   * marcados, o disparo vai só a eles, com as mesmas travas de sempre (teto do
+   * dia, ordem por temperatura, ritmo sorteado, conferência card a card).
+   */
+  const [quantos, setQuantos] = useState<number | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const alternar = (id: string) => setSelecionados((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const marcarTodos = (ids: string[], marcar: boolean) => setSelecionados((s) => {
+    const n = new Set(s);
+    for (const id of ids) { if (marcar) n.add(id); else n.delete(id); }
+    return n;
+  });
+
   // Quadro × lista, lembrado no navegador como no quadro do Churning.
   const [modo, setModo] = useState<'quadro' | 'lista'>('quadro');
   useEffect(() => {
@@ -331,15 +355,20 @@ export function RefinBoard() {
   };
 
   /** Os que o botão "Disparar" alcança: oferta viva, com WhatsApp, fora do ensaio. */
-  const disparaveis = itens.filter(
-    (i) => i.oferecivel && aberta(i) && !i.reanalisar && i.temConversa && !i.ensaio,
-  );
+  const podeDisparar = (i: Item) => i.oferecivel && aberta(i) && !i.reanalisar && i.temConversa && !i.ensaio;
+  const disparaveis = itens.filter(podeDisparar);
+  const marcados = itens.filter((i) => selecionados.has(i.caseId));
+  const marcadosDisparaveis = marcados.filter(podeDisparar);
   /**
    * Quantos REALMENTE saem neste clique: a fila, cortada pela sobra do dia.
    * É esta a conta que o rótulo mostra — o teto sozinho prometeria demais
    * quando parte do dia já foi gasta.
    */
-  const vaoSair = Math.max(0, Math.min(regime?.sobra ?? disparaveis.length, disparaveis.length));
+  const vaoSair = Math.max(0, Math.min(
+    regime?.sobra ?? disparaveis.length,
+    disparaveis.length,
+    quantos ?? Number.POSITIVE_INFINITY,
+  ));
 
 
   /**
@@ -348,7 +377,12 @@ export function RefinBoard() {
    * ao advogado tudo o que ele precisa aceitar antes — inclusive a afirmação
    * que a inicial contra a Meta faz ao juízo.
    */
-  const dispararFila = async () => {
+  const dispararFila = async (base: Item[] = disparaveis, limite: number | null = quantos) => {
+    const alvosDoClique = base.filter(podeDisparar);
+    if (!alvosDoClique.length) {
+      toast.error('Nenhum dos escolhidos pode receber a oferta agora (sem oferta pronta, sem WhatsApp ou já enviada).');
+      return;
+    }
     const regime = await legalCasesService.regimeDoDisparo().catch(() => null);
     if (!regime) {
       toast.error('Não consegui medir o teto do dia no servidor. Sem isso eu não disparo.');
@@ -365,18 +399,24 @@ export function RefinBoard() {
     // e de aceite MEDIDA, antes de encostar nos frios. Parou no meio? Queimou
     // os mais seguros, não os frágeis.
     const fila = await legalCasesService
-      .filaPorTemperatura(disparaveis.map((i) => i.caseId))
+      .filaPorTemperatura(alvosDoClique.map((i) => i.caseId))
       .catch(() => null);
     if (!fila) {
       toast.error('Não consegui medir a temperatura das conversas. Sem isso eu não ordeno o lote.');
       return;
     }
     const posicao = new Map(fila.ordem.map((id, i) => [id, i]));
-    const emOrdem = [...disparaveis].sort(
+    const emOrdem = [...alvosDoClique].sort(
       (a, b) => (posicao.get(a.caseId) ?? 1e9) - (posicao.get(b.caseId) ?? 1e9),
     );
 
-    const cabem = Math.max(0, Math.min(regime.sobra, emOrdem.length));
+    const cabemNoTeto = Math.max(0, Math.min(regime.sobra, emOrdem.length));
+    // O "quantos" só encolhe: nunca passa do que o teto do dia deixa.
+    const cabem = limite != null ? Math.min(cabemNoTeto, Math.max(0, Math.floor(limite))) : cabemNoTeto;
+    if (cabem === 0 && cabemNoTeto > 0) {
+      toast.error('O "quantos" está em zero: diga quantas ofertas quer mandar neste clique.');
+      return;
+    }
     if (cabem === 0) {
       toast.error(
         `O teto da campanha já foi gasto hoje: ${regime.campanha} de ${regime.tetoDaCampanha} conversas. `
@@ -392,7 +432,12 @@ export function RefinBoard() {
       + `RITMO: um cliente a cada ${Math.round(regime.pausaMinMs / 1000)}–`
       + `${Math.round(regime.pausaMaxMs / 1000)} segundos, sorteado. Leva cerca de ${minutos} min.\n`
       + `TETO DA CAMPANHA: ${regime.tetoDaCampanha} conversas por dia (já foram ${regime.campanha} hoje). `
-      + `${emOrdem.length - cabem > 0 ? `${emOrdem.length - cabem} ficam para os próximos dias.` : 'Cabem todos.'}\n`
+      + `${emOrdem.length - cabem > 0
+        ? (cabem < cabemNoTeto
+          ? `Você escolheu ${cabem}: os outros ${emOrdem.length - cabem} ficam na fila.`
+          : `${emOrdem.length - cabem} ficam para os próximos dias.`)
+        : 'Cabem todos.'}\n`
+      + (base !== disparaveis ? `SÓ OS SELECIONADOS: ${alvosDoClique.length} dos ${base.length} marcados podem receber.\n` : '')
       + 'É o p75 de conversas que este WhatsApp toca num dia normal. Muda no quadro.\n\n'
       + `TEMPERATURA: sai do mais quente para o mais frio. ${fila.faixas.quentes} falaram `
       + `com você nos últimos 30 dias, ${fila.faixas.mornos} entre 31 e 90, e `
@@ -423,7 +468,7 @@ export function RefinBoard() {
     const r = await dispararEmLote({
       // A fila INTEIRA, já ordenada: quem corta pelo teto é o laço, e é ele
       // que sabe dizer quantos ficaram para amanhã.
-      alvos: emOrdem.map((i) => ({ caseId: i.caseId, cliente: i.cliente })),
+      alvos: emOrdem.slice(0, cabem).map((i) => ({ caseId: i.caseId, cliente: i.cliente })),
       regime,
       conferir: (id) => legalCasesService.conferirOfertaRefin(id),
       lerTexto: (caso) => String(caso?.metadata?.ofertaRefin?.mensagem ?? ''),
@@ -432,6 +477,7 @@ export function RefinBoard() {
       parar,
     });
     setDisparando(null);
+    if (base !== disparaveis) setSelecionados(new Set());
     refetch();
     void lerRegime();
     // 🚨 PAROU SOZINHO É ERRO, NÃO SUCESSO. Antes isto dizia "parado por você"
@@ -527,6 +573,21 @@ export function RefinBoard() {
               />
             </label>
           ) : null}
+          {!disparando && !analisando && disparaveis.length ? (
+            <label
+              title="Quantas ofertas saem NESTE clique. Vazio = todas as que cabem no teto do dia. Nunca passa do teto."
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-200 px-2 text-[11px] text-red-700 dark:border-red-900 dark:text-red-400"
+            >
+              quantos
+              <input
+                type="number" min={0} max={500}
+                placeholder="todos"
+                value={quantos ?? ''}
+                onChange={(e) => setQuantos(e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value))))}
+                className="w-12 rounded border border-red-200 bg-white px-1 py-0.5 text-center text-[11px] dark:border-red-900 dark:bg-zinc-900 dark:text-zinc-100"
+              />
+            </label>
+          ) : null}
           {disparando ? (
             <button onClick={() => { parar.current = true; }}
               className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-300 px-2 text-xs font-semibold text-red-700 dark:border-red-800 dark:text-red-400">
@@ -539,7 +600,7 @@ export function RefinBoard() {
             </button>
           ) : !analisando && disparaveis.length ? (
             <button
-              onClick={dispararFila}
+              onClick={() => dispararFila()}
               disabled={vaoSair === 0}
               title={vaoSair === 0
                 ? 'O teto do dia já foi gasto. Mude o teto ao lado, ou volte amanhã.'
@@ -548,7 +609,7 @@ export function RefinBoard() {
             >
               <Send className="h-3.5 w-3.5" />
               {vaoSair === 0
-                ? 'teto do dia gasto'
+                ? (quantos === 0 ? 'quantos = 0' : 'teto do dia gasto')
                 : vaoSair < disparaveis.length
                   ? `Disparar ${vaoSair} (de ${disparaveis.length})`
                   : `Disparar ${vaoSair}`}
@@ -621,11 +682,56 @@ export function RefinBoard() {
         </div>
       </div>
 
+      {selecionados.size > 0 && (
+        <div className="mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#cfe0ed] bg-[#f3f7fa] px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-900">
+          <span className="font-semibold text-[#101820] dark:text-zinc-100">
+            {selecionados.size} selecionado{selecionados.size === 1 ? '' : 's'}
+          </span>
+          {!disparando && !analisando && (
+            <button
+              onClick={() => dispararFila(marcados, quantos)}
+              disabled={!marcadosDisparaveis.length}
+              title={marcadosDisparaveis.length
+                ? 'Manda a oferta gravada só aos selecionados que podem recebê-la, com o teto, a ordem por temperatura e o ritmo de sempre.'
+                : 'Nenhum selecionado está com oferta pronta e WhatsApp ligado.'}
+              className="inline-flex h-7 items-center gap-1 rounded-lg bg-red-600 px-2 font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              <Send className="h-3.5 w-3.5" /> Disparar oferta a {marcadosDisparaveis.length}
+              {marcadosDisparaveis.length < marcados.length ? ` (de ${marcados.length})` : ''}
+            </button>
+          )}
+          {!disparando && !analisando && (
+            <button
+              onClick={() => {
+                const ok = window.confirm(
+                  `Reler o HISCON dos ${marcados.length} selecionado(s)?\n\n`
+                  + 'Quem já está em OFERTA PRONTA pode SAIR dela, se o HISCON sumiu da pasta.\n'
+                  + 'Um documento por cliente, um de cada vez. Não envia nada.',
+                );
+                if (ok) void analisarFila(marcados.filter((i) => !i.ensaio)).then(() => setSelecionados(new Set()));
+              }}
+              className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#cfe0ed] bg-white px-2 font-semibold text-[#48626f] hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            >
+              <ScanSearch className="h-3.5 w-3.5" /> Reler HISCON
+            </button>
+          )}
+          <button
+            onClick={() => setSelecionados(new Set())}
+            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[#48626f] hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          >
+            <X className="h-3.5 w-3.5" /> Limpar
+          </button>
+        </div>
+      )}
+
       {isLoading ? (
         <p className="p-4 text-sm text-[#48626f] dark:text-zinc-400">Lendo a carteira…</p>
       ) : modo === 'lista' ? (
         <ListaDeOfertas
           itens={itens}
+          selecionados={selecionados}
+          onSelecionar={alternar}
+          onMarcarTodos={marcarTodos}
           onAbrir={setOferta}
           onVincular={(caseId, cliente) => setVincular({ caseId, cliente })}
         />
@@ -636,6 +742,15 @@ export function RefinBoard() {
             return (
               <div key={col.chave} className="flex w-[310px] shrink-0 flex-col">
                 <div className="flex items-center gap-1.5 px-1 pb-2">
+                  {lista.length > 0 && (
+                    <input
+                      type="checkbox"
+                      title="Selecionar todos desta coluna"
+                      checked={lista.every((o) => selecionados.has(o.caseId))}
+                      onChange={(e) => marcarTodos(lista.map((o) => o.caseId), e.target.checked)}
+                      className="h-3.5 w-3.5 cursor-pointer accent-[rgb(25,118,210)]"
+                    />
+                  )}
                   <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: ACCENT }}>{col.titulo}</h2>
                   <span className="text-xs font-semibold text-[#48626f] dark:text-zinc-400">{lista.length}</span>
                 </div>
@@ -649,6 +764,8 @@ export function RefinBoard() {
                     <CardDaOferta
                       key={o.caseId}
                       o={o}
+                      selecionado={selecionados.has(o.caseId)}
+                      onSelecionar={() => alternar(o.caseId)}
                       onAbrir={() => setOferta(o.caseId)}
                       onVincular={() => setVincular({ caseId: o.caseId, cliente: o.cliente })}
                     />
@@ -734,7 +851,9 @@ function Acao({ o }: { o: Item }) {
     : <span className="text-amber-700 dark:text-amber-400">ação perdida</span>;
 }
 
-function CardDaOferta({ o, onAbrir, onVincular }: { o: Item; onAbrir: () => void; onVincular: () => void }) {
+function CardDaOferta({ o, selecionado, onSelecionar, onAbrir, onVincular }: {
+  o: Item; selecionado: boolean; onSelecionar: () => void; onAbrir: () => void; onVincular: () => void;
+}) {
   return (
     // NÃO é <button>: dentro há o botão de vincular o WhatsApp.
     <div
@@ -742,9 +861,21 @@ function CardDaOferta({ o, onAbrir, onVincular }: { o: Item; onAbrir: () => void
       tabIndex={0}
       onClick={onAbrir}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } }}
-      className="cursor-pointer rounded-lg border border-[#cfe0ed] bg-white p-3 text-left shadow-sm transition hover:shadow-md dark:border-transparent dark:bg-[#1E2226]"
+      className={`cursor-pointer rounded-lg border bg-white p-3 text-left shadow-sm transition hover:shadow-md dark:bg-[#1E2226] ${
+        selecionado ? 'border-[rgb(25,118,210)] ring-1 ring-[rgb(25,118,210)]' : 'border-[#cfe0ed] dark:border-transparent'}`}
     >
-      <p className="line-clamp-2 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{o.cliente}</p>
+      <div className="flex items-start gap-2">
+        <p className="line-clamp-2 flex-1 text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{o.cliente}</p>
+        <input
+          type="checkbox"
+          aria-label={`Selecionar ${o.cliente}`}
+          checked={selecionado}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onChange={onSelecionar}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[rgb(25,118,210)]"
+        />
+      </div>
       <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {o.reu ?? 'sem réu'} · <Acao o={o} /></p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Teses o={o} />
@@ -796,8 +927,10 @@ function CardDaOferta({ o, onAbrir, onVincular }: { o: Item; onAbrir: () => void
 }
 
 /** A mesma oferta em linha, para percorrer cem. */
-function ListaDeOfertas({ itens, onAbrir, onVincular }: {
-  itens: Item[]; onAbrir: (id: string) => void; onVincular: (caseId: string, cliente: string) => void;
+function ListaDeOfertas({ itens, selecionados, onSelecionar, onMarcarTodos, onAbrir, onVincular }: {
+  itens: Item[]; selecionados: Set<string>; onSelecionar: (id: string) => void;
+  onMarcarTodos: (ids: string[], marcar: boolean) => void;
+  onAbrir: (id: string) => void; onVincular: (caseId: string, cliente: string) => void;
 }) {
   if (!itens.length) {
     return <p className="p-4 text-sm text-[#48626f] dark:text-zinc-400">Nenhum card de RMC/RCC perdida ou extinta.</p>;
@@ -808,7 +941,16 @@ function ListaDeOfertas({ itens, onAbrir, onVincular }: {
       <table className="w-full border-separate border-spacing-0 text-sm">
         <thead className="sticky top-0 z-10">
           <tr className="bg-[#f3f7fa] text-left text-[10px] font-bold uppercase tracking-wide text-[#48626f] dark:bg-zinc-900 dark:text-zinc-400">
-            <th className="rounded-l-lg px-2.5 py-2">Cliente</th>
+            <th className="rounded-l-lg py-2 pl-2.5">
+              <input
+                type="checkbox"
+                aria-label="Selecionar todos"
+                checked={itens.length > 0 && itens.every((o) => selecionados.has(o.caseId))}
+                onChange={(e) => onMarcarTodos(itens.map((o) => o.caseId), e.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-[rgb(25,118,210)]"
+              />
+            </th>
+            <th className="px-2.5 py-2">Cliente</th>
             <th className="px-2.5 py-2">Ação perdida</th>
             <th className="px-2.5 py-2">Teses</th>
             <th className="px-2.5 py-2 text-right" title="Refin: dobro dos descontos + dano moral. Não soma o churning.">Refin</th>
@@ -819,7 +961,17 @@ function ListaDeOfertas({ itens, onAbrir, onVincular }: {
         <tbody>
           {itens.map((o) => (
             <tr key={o.caseId} onClick={() => onAbrir(o.caseId)}
-              className="cursor-pointer border-b border-[#eef3f7] hover:bg-[#f8fbfd] dark:border-zinc-800 dark:hover:bg-zinc-800/50">
+              className={`cursor-pointer border-b border-[#eef3f7] hover:bg-[#f8fbfd] dark:border-zinc-800 dark:hover:bg-zinc-800/50 ${
+                selecionados.has(o.caseId) ? 'bg-[#eaf3fb] dark:bg-zinc-800/70' : ''}`}>
+              <td className="py-2 pl-2.5" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  aria-label={`Selecionar ${o.cliente}`}
+                  checked={selecionados.has(o.caseId)}
+                  onChange={() => onSelecionar(o.caseId)}
+                  className="h-3.5 w-3.5 cursor-pointer accent-[rgb(25,118,210)]"
+                />
+              </td>
               <td className="px-2.5 py-2">
                 <p className="font-semibold uppercase leading-4 text-[#101820] dark:text-zinc-100">{o.cliente}</p>
                 {o.reanalisar && <p className="text-[10px] font-semibold text-red-700 dark:text-red-400">churning já saiu por outro card</p>}
