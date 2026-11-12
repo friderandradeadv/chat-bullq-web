@@ -263,6 +263,58 @@ export function RefinBoard() {
     return n;
   });
 
+  /**
+   * 🚨 ARRASTAR O CARD ENTRE AS COLUNAS (12/11/2026). Ordem do escritório: *"me
+   * deixe mover e arrastar os cards"*. Revoga a regra do cabeçalho ("não se
+   * arrasta card"), com uma condição que ela tinha razão em proteger: aqui
+   * mudar de coluna FAZ coisa no servidor (`registrarOfertaRefin`).
+   *
+   * Só três colunas são escolha do advogado, porque só elas são STATUS:
+   *   ENVIADA   marca enviada SEM mandar mensagem, cria o card de Refin e liga
+   *             o atendimento do robô (e o card de churning, se houver);
+   *   ACEITOU   registra o aceite (e pode levar o card a Montar inicial);
+   *   RECUSADA  arquiva o card de Refin.
+   * As outras são MEDIDAS (HISCON lido, honorários fechados) e não se arrastam
+   * para dentro: soltar ali explica por quê. Cada soltura pede confirmação
+   * dizendo o efeito, porque nenhum dos três se desfaz por arrasto.
+   */
+  const [arrastando, setArrastando] = useState<string | null>(null);
+  const [sobre, setSobre] = useState<string | null>(null);
+  const STATUS_DA_COLUNA: Record<string, 'enviada' | 'aceita' | 'recusada'> = {
+    enviada: 'enviada', aceita: 'aceita', recusada: 'recusada',
+  };
+  const EFEITO: Record<string, string> = {
+    enviada: 'Marca a oferta como ENVIADA, mas NÃO manda mensagem nenhuma (use quando você já mandou por fora).\n\n'
+      + 'Cria o card de Refin na proposta e LIGA o atendimento do robô para este cliente, como se a oferta tivesse saído pelo quadro.',
+    aceita: 'Registra que o cliente ACEITOU a revisão. Se a senha gov, os extratos e os honorários já estiverem ok, o card de Refin vai para Montar inicial.',
+    recusada: 'Registra que o cliente RECUSOU. O card de Refin, se existir, é ARQUIVADO.',
+  };
+  const soltar = async (caseId: string, chave: string) => {
+    setArrastando(null);
+    setSobre(null);
+    const o = itens.find((i) => i.caseId === caseId);
+    if (!o) return;
+    const col = COLUNAS.find((c) => c.chave === chave);
+    if (col?.de(o)) return; // soltou na própria coluna
+    const status = STATUS_DA_COLUNA[chave];
+    if (!status) {
+      toast.error(chave === 'honorarios'
+        ? 'FECHOU OS HONORÁRIOS não se arrasta: o card vai para lá sozinho quando o contrato é assinado ou a entrada é cobrada.'
+        : `${col?.titulo ?? 'Esta coluna'} não se arrasta: ela sai da leitura do HISCON. Use "Reler HISCON".`,
+        { duration: 9000 });
+      return;
+    }
+    if (!o.oferecivel && !o.cardRefin) {
+      toast.error('Este cliente não tem oferta medida (refin ou churning): não há o que marcar.');
+      return;
+    }
+    const ok = window.confirm(`Mover ${o.cliente} para ${col?.titulo}?\n\n${EFEITO[status]}`);
+    if (!ok) return;
+    await legalCasesService.registrarOfertaRefin(caseId, { status })
+      .then(() => { toast.success(`${o.cliente.split(' ')[0]}: ${col?.titulo}`); refetch(); })
+      .catch((e: any) => toast.error(e?.response?.data?.message || 'Não consegui mover o card.', { duration: 12000 }));
+  };
+
   // Quadro × lista, lembrado no navegador como no quadro do Churning.
   const [modo, setModo] = useState<'quadro' | 'lista'>('quadro');
   useEffect(() => {
@@ -740,7 +792,16 @@ export function RefinBoard() {
           {COLUNAS.map((col) => {
             const lista = itens.filter(col.de);
             return (
-              <div key={col.chave} className="flex w-[310px] shrink-0 flex-col">
+              <div
+                key={col.chave}
+                onDragOver={(e) => { if (arrastando) { e.preventDefault(); setSobre(col.chave); } }}
+                onDragLeave={() => setSobre((s) => (s === col.chave ? null : s))}
+                onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain') || arrastando; if (id) void soltar(id, col.chave); }}
+                className={`flex w-[310px] shrink-0 flex-col rounded-lg transition ${
+                  sobre === col.chave
+                    ? (STATUS_DA_COLUNA[col.chave] ? 'bg-[rgb(25,118,210)]/10 ring-2 ring-[rgb(25,118,210)]' : 'bg-red-50 ring-2 ring-red-300 dark:bg-red-950/30')
+                    : ''}`}
+              >
                 <div className="flex items-center gap-1.5 px-1 pb-2">
                   {lista.length > 0 && (
                     <input
@@ -766,6 +827,8 @@ export function RefinBoard() {
                       o={o}
                       selecionado={selecionados.has(o.caseId)}
                       onSelecionar={() => alternar(o.caseId)}
+                      onArrastar={(id) => setArrastando(id)}
+                      onSoltarFim={() => { setArrastando(null); setSobre(null); }}
                       onAbrir={() => setOferta(o.caseId)}
                       onVincular={() => setVincular({ caseId: o.caseId, cliente: o.cliente })}
                     />
@@ -851,17 +914,21 @@ function Acao({ o }: { o: Item }) {
     : <span className="text-amber-700 dark:text-amber-400">ação perdida</span>;
 }
 
-function CardDaOferta({ o, selecionado, onSelecionar, onAbrir, onVincular }: {
+function CardDaOferta({ o, selecionado, onSelecionar, onAbrir, onVincular, onArrastar, onSoltarFim }: {
   o: Item; selecionado: boolean; onSelecionar: () => void; onAbrir: () => void; onVincular: () => void;
+  onArrastar: (id: string) => void; onSoltarFim: () => void;
 }) {
   return (
     // NÃO é <button>: dentro há o botão de vincular o WhatsApp.
     <div
       role="button"
       tabIndex={0}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.setData('text/plain', o.caseId); e.dataTransfer.effectAllowed = 'move'; onArrastar(o.caseId); }}
+      onDragEnd={onSoltarFim}
       onClick={onAbrir}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(); } }}
-      className={`cursor-pointer rounded-lg border bg-white p-3 text-left shadow-sm transition hover:shadow-md dark:bg-[#1E2226] ${
+      className={`cursor-grab rounded-lg border bg-white p-3 active:cursor-grabbing text-left shadow-sm transition hover:shadow-md dark:bg-[#1E2226] ${
         selecionado ? 'border-[rgb(25,118,210)] ring-1 ring-[rgb(25,118,210)]' : 'border-[#cfe0ed] dark:border-transparent'}`}
     >
       <div className="flex items-start gap-2">
