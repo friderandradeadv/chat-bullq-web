@@ -6,6 +6,7 @@ import { Copy, Eye, EyeOff, ExternalLink, KeyRound, Download, Loader2 } from 'lu
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { legalCasesService, type CaseDetail } from '@/features/legal-cases/services/legal-cases.service';
+import { progressoDaColeta } from '@/features/legal-cases/documentos-da-coleta';
 
 /**
  * Atalho de coleta no Meu INSS.
@@ -281,6 +282,36 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
               parece pronto. A inicial sairia "em aberto" e o dobro se perderia
               (ANTÔNIA BRAGA VILELA, 29/09/2026 — contrato 06/2017, HISCRE desde
               01/2021). Verde só com os quatro E com o alcance conferido. */}
+          {/* 🚨 A BARRA TAMBÉM AQUI DENTRO (13/11/2026). Ela nasceu no card do
+              kanban e, de dentro do painel, ele perguntou: *"cadê a barra de
+              progresso?"*. O estado é o mesmo e o número é o mesmo — o do
+              módulo que decide se o card anda. Duas telas contando a mesma
+              coisa com números diferentes seria pior do que não ter barra. */}
+          {(() => {
+            const pr = progressoDaColeta(
+              coleta.naPasta?.length ? coleta.naPasta : coleta.arquivos,
+            );
+            const curto = String(coleta.alcance ?? '') === 'curto';
+            const verde = pr.completa && !curto;
+            return (
+              <div className="mt-1.5">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      verde ? 'bg-emerald-600' : pr.tem === 0 ? 'bg-rose-500' : 'bg-amber-500'
+                    }`}
+                    style={{ width: `${Math.round((pr.tem / Math.max(1, pr.de)) * 100)}%` }}
+                  />
+                </div>
+                <p className="mt-0.5 text-[10px] font-medium leading-3 text-[#48626f] dark:text-zinc-400">
+                  {pr.tem} de {pr.de} documentos na pasta
+                  {pr.faltam.length ? ` · falta ${pr.faltam.join(', ')}` : ''}
+                  {curto ? ' · HISCRE não alcança a contratação' : ''}
+                </p>
+              </div>
+            );
+          })()}
+
           {coleta.avisoAlcance && (
             <p className="mt-1 rounded-md bg-rose-50 px-2 py-1 text-[11px] leading-4 font-medium text-rose-800 dark:bg-rose-900/25 dark:text-rose-300">
               ⚠ {coleta.avisoAlcance}
