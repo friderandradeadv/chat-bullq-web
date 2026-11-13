@@ -647,23 +647,34 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
         const pct = pr ? Math.round((pr.tem / Math.max(1, pr.de)) * 100) : 0;
         // 🚨 A COR SAI DO ESTADO MEDIDO, não do otimismo: vermelho só quando
         // depende de um ato dele; verde só com as vagas todas preenchidas.
+        // 🚨 O FRACASSO VENCE A CONTAGEM (13/11/2026). Estava ao contrário:
+        // `completa` era testado ANTES de `falhou`, então um card cuja última
+        // coleta morreu aparecia VERDE, "leitura concluída", só porque a pasta
+        // guardava três arquivos de uma rodada anterior. Visto no quadro do
+        // BRAZ, com o painel dizendo "Não coletei" na mesma tela. Palavras
+        // dele: *"precisa melhorar isso, ficar nítido"*.
         const tom = esperandoLogin
           ? 'bg-[#c22e00] text-white'
           : emFila
             ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
-            : completa
-              ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
-              : falhou
-                ? 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-300'
+            : falhou
+              ? 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-300'
+              : completa
+                ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
                 : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300';
         const texto = esperandoLogin
           ? 'Coleta parada: entre no gov.br deste cliente'
           : emFila
             ? (c.coletaEsperando?.etapa ? `Coletando: ${c.coletaEsperando.etapa}` : 'Coleta na fila')
-            : completa
-              ? 'Leitura concluída — documentos na pasta'
-              : falhou
-                ? `Coleta falhou, peça de novo — falta ${(pr?.faltam ?? []).join(', ')}`
+            : falhou
+              // Com a pasta cheia, o recado muda: não falta documento, falta
+              // a rodada ter dado certo. Dizer "falta HISCON" com o HISCON lá
+              // dentro mandaria o advogado procurar o que já tem.
+              ? (completa
+                ? 'Coleta falhou, peça de novo — a pasta tem o que já foi coletado antes'
+                : `Coleta falhou, peça de novo — falta ${(pr?.faltam ?? []).join(', ')}`)
+              : completa
+                ? 'Leitura concluída — documentos na pasta'
                 : `Faltou ${(pr?.faltam ?? []).join(', ')}`;
         return (
           <div
@@ -672,7 +683,7 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
             className={`mt-1.5 rounded px-1.5 py-1 ${tom}`}
           >
             <p className="flex items-start gap-1 text-[11px] font-semibold leading-4">
-              {completa && !emFila
+              {completa && !emFila && !falhou
                 ? <Check className="mt-px h-3 w-3 shrink-0" />
                 : <KeyRound className="mt-px h-3 w-3 shrink-0" />}
               <span className="line-clamp-2">{texto}</span>
@@ -682,7 +693,7 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
                 {/* A BARRA. Três vagas: HISCON, HISCRE e a prova de renda. */}
                 <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-black/15 dark:bg-white/15">
                   <div
-                    className={`h-full rounded-full transition-all ${completa ? 'bg-emerald-600' : esperandoLogin ? 'bg-white' : falhou ? 'bg-rose-600' : 'bg-amber-600'}`}
+                    className={`h-full rounded-full transition-all ${falhou ? 'bg-rose-600' : completa ? 'bg-emerald-600' : esperandoLogin ? 'bg-white' : 'bg-amber-600'}`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>

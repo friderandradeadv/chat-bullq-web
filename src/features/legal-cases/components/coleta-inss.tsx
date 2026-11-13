@@ -292,7 +292,10 @@ export function ColetaInss({ parties, caseId, coleta, nb }: {
               coleta.naPasta?.length ? coleta.naPasta : coleta.arquivos,
             );
             const curto = String(coleta.alcance ?? '') === 'curto';
-            const verde = pr.completa && !curto;
+            // 🚨 VERDE É SOBRE A ÚLTIMA RODADA, NÃO SÓ SOBRE A CONTAGEM. Pasta
+            // cheia de uma coleta anterior + rodada que falhou agora não é
+            // "concluída": é "peça de novo". Ver a mesma regra no quadro.
+            const verde = pr.completa && !curto && coleta.status !== 'falhou';
             return (
               <div className="mt-1.5">
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
