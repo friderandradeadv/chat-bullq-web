@@ -638,6 +638,12 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
         const esperandoLogin = c.coletaEsperando?.esperando === 'login';
         const emFila = !!c.coletaEsperando;
         const completa = !!pr && pr.tem >= pr.de;
+        // 🚨 COLETA QUE FALHOU NÃO É LISTA DE AFAZERES (13/11/2026). Medido no
+        // acervo: dos 14 cards com coleta, 5 estão em `falhou` e com ZERO
+        // arquivo — e a faixa dizia "Faltou HISCON, HISCRE…", que se lê como
+        // pendência comum. São coletas que morreram e ninguém refez; a tela
+        // precisa dizer isso, e dizer o que fazer.
+        const falhou = pr?.status === 'falhou';
         const pct = pr ? Math.round((pr.tem / Math.max(1, pr.de)) * 100) : 0;
         // 🚨 A COR SAI DO ESTADO MEDIDO, não do otimismo: vermelho só quando
         // depende de um ato dele; verde só com as vagas todas preenchidas.
@@ -647,14 +653,18 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
             ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300'
             : completa
               ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
-              : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300';
+              : falhou
+                ? 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-300'
+                : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300';
         const texto = esperandoLogin
           ? 'Coleta parada: entre no gov.br deste cliente'
           : emFila
             ? (c.coletaEsperando?.etapa ? `Coletando: ${c.coletaEsperando.etapa}` : 'Coleta na fila')
             : completa
               ? 'Leitura concluída — documentos na pasta'
-              : `Faltou ${(pr?.faltam ?? []).join(', ')}`;
+              : falhou
+                ? `Coleta falhou, peça de novo — falta ${(pr?.faltam ?? []).join(', ')}`
+                : `Faltou ${(pr?.faltam ?? []).join(', ')}`;
         return (
           <div
             title={c.coletaEsperando?.recado
@@ -672,7 +682,7 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
                 {/* A BARRA. Três vagas: HISCON, HISCRE e a prova de renda. */}
                 <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-black/15 dark:bg-white/15">
                   <div
-                    className={`h-full rounded-full transition-all ${completa ? 'bg-emerald-600' : esperandoLogin ? 'bg-white' : 'bg-amber-600'}`}
+                    className={`h-full rounded-full transition-all ${completa ? 'bg-emerald-600' : esperandoLogin ? 'bg-white' : falhou ? 'bg-rose-600' : 'bg-amber-600'}`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
