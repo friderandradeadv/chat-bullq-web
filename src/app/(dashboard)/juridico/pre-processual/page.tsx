@@ -12,7 +12,7 @@ import {
   useSensoresKanban, colisaoKanban, medicaoKanban, pousoKanban, classeCartaoArrastado, RolagemNoArraste,
   pintarAgora, indiceDeQueda, yDoPonteiro, useVaoKanban, comVao, estiloDoVao, type VaoKanban,
 } from '@/features/legal-cases/lib/kanban-dnd';
-import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles, Recycle, Wallet, CreditCard } from 'lucide-react';
+import { Workflow, Search, RefreshCw, User, FileCheck2, X, LayoutGrid, List, Scale, Copy, CalendarClock, Clock, Plus, Upload, Loader2, Sparkles, Recycle, Wallet, CreditCard, KeyRound} from 'lucide-react';
 import { toast } from 'sonner';
 import { BarraProgresso } from '@/features/legal-cases/components/barra-progresso';
 import { api } from '@/lib/api';
@@ -171,7 +171,15 @@ export default function PreProcessualPage() {
   // para os sete quadros — o porquê de cada escolha está lá.
   const sensors = useSensoresKanban();
 
-  const { data, isLoading, isFetching } = useQuery({ queryKey: KEY, queryFn: () => legalCasesService.kanban({ lane: 'pre' }), refetchInterval: 60_000 });
+  // 🚨 TEMPO REAL SÓ ENQUANTO HÁ O QUE ACOMPANHAR. Com coleta na fila o quadro
+  // se atualiza de 10 em 10 segundos, que é o passo do vigia; parado, volta aos
+  // 60. Polling fixo rápido seria tráfego o dia inteiro para nada.
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: KEY,
+    queryFn: () => legalCasesService.kanban({ lane: 'pre' }),
+    refetchInterval: (q) =>
+      ((q.state.data as any[] | undefined) ?? []).some((x: any) => x?.coletaEsperando) ? 10_000 : 60_000,
+  });
   // Só as fases DESTE quadro. `boardOfPhase` isola cada trilha por prefixo — banco_*
   // (Fase Bancária), plan_* (Planejamento), repb_* (REPB) e inss_admin (INSS) têm
   // board próprio e NÃO podem aparecer aqui. Usar o helper (em vez de listar prefixo
@@ -611,6 +619,29 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
       {/* Cliente × parte adversa (banco) */}
       <p className="mt-2 line-clamp-2 min-h-[2.5rem] break-words text-sm font-semibold uppercase leading-5 text-[#101820] dark:text-zinc-100">{(c.client ?? c.title)?.toUpperCase()}</p>
       {c.opponent && <p className="mt-0.5 truncate text-xs text-[#48626f] dark:text-zinc-400">× {c.opponent}</p>}
+      {/* 🚨 A COLETA TRAVADA GRITA AQUI (13/11/2026). Pedido dele: *"quando
+          acontecer isso precisa me avisar lá no kanban, quero em tempo real"*.
+          O vigia tenta de 15 em 15 segundos e, sem isto, falha calado — o
+          recado vivia só no painel dentro do card. */}
+      {c.coletaEsperando && (
+        <p
+          title={c.coletaEsperando.recado ?? 'Coleta no Meu INSS em andamento'}
+          className={`mt-1.5 flex items-start gap-1 rounded px-1.5 py-1 text-[11px] font-semibold leading-4 ${
+            c.coletaEsperando.esperando === 'login'
+              ? 'bg-[#c22e00] text-white'
+              : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+          }`}
+        >
+          <KeyRound className="mt-px h-3 w-3 shrink-0" />
+          <span className="line-clamp-2">
+            {c.coletaEsperando.esperando === 'login'
+              ? 'Coleta parada: entre no gov.br deste cliente'
+              : c.coletaEsperando.etapa
+                ? `Coletando: ${c.coletaEsperando.etapa}`
+                : 'Coleta na fila'}
+          </span>
+        </p>
+      )}
       {/* Nº processo (copiável) */}
       {c.cnj && (
         <p className="mt-2 flex items-center gap-1 text-[11px] text-[#48626f] dark:text-zinc-500">
