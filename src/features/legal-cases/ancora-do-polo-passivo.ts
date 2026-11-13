@@ -53,6 +53,26 @@ export function comOutros(nome: string): string {
  * BANCO SANTANDER S/A e OUTROS, padrão para todos"*. Ação com litisconsorte não
  * se nomeia pelo primeiro réu como se ele fosse o único.
  */
+/**
+ * O TÍTULO DA AÇÃO COMO ELE DEVE SER LIDO, com o "E OUTROS" quando cabe.
+ *
+ * 🚨 13/11/2026: *"na aba do processo também tinha que aparecer e OUTROS"*. O
+ * cabeçalho imprime `case.title`, e o título GRAVADO só traz o sufixo nos cards
+ * que nasceram depois da regra — os 119 do acervo não trazem. Calcular na hora,
+ * a partir dos réus, alcança os antigos sem renomear nada.
+ *
+ * ⚠️ Só mexe em título que tenha " x ": sem o separador, não é "AUTOR x RÉU" e
+ * acrescentar "E OUTROS" ao fim seria escrever no lugar errado.
+ */
+export function tituloDaAcao<T extends ParteDoPolo>(
+  title: string | null | undefined,
+  parties: T[] | null | undefined,
+): string {
+  const t = String(title ?? '').trim();
+  if (!t || !/\s+x\s+/i.test(t) || RE_E_OUTROS.test(t)) return t;
+  return litisconsortesDoPolo(parties, t).length ? comOutros(t) : t;
+}
+
 export function nomeDoPoloPassivo<T extends ParteDoPolo>(
   parties: T[] | null | undefined,
   title?: string | null,

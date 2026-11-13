@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { tituloDaAcao } from '@/features/legal-cases/ancora-do-polo-passivo';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -194,7 +195,9 @@ export default function ProcessoDetailPage() {
       <div className="px-4 pt-3 lg:px-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{c.title}</h1>
+            {/* 🚨 O "E OUTROS" sai dos RÉUS, não do título gravado: assim os
+                cards antigos também o mostram, sem renomear nada. */}
+            <h1 className="text-2xl font-medium text-[#202124] dark:text-zinc-100">{tituloDaAcao(c.title, c.parties)}</h1>
             {/* Veio do DJEN sem partes identificáveis (nota administrativa / Projudi) → cadastro pendente.
                 Só enquanto SEGUIR sem partes: assim que ganha cliente/réu (manual ou herdado do apenso),
                 o badge some — antes ele ficava eterno porque a flag nunca era limpa. */}
