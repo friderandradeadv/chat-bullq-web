@@ -317,6 +317,8 @@ export interface KanbanCard {
    * se o pedido já saiu ao cliente, porque a conduta muda (pedir × cobrar).
    */
   extratoPendente?: { pedidoEm: string | null; agendadoPara?: string | null } | null;
+  /** Avanço da coleta no Meu INSS: vagas preenchidas, o que falta e o alcance do HISCRE. */
+  coletaProgresso?: { tem: number; de: number; faltam: string[]; status: string; quando: string | null; alcance: string | null } | null;
   /** Coleta no Meu INSS parada esperando ato do advogado (login no gov.br). */
   coletaEsperando?: { desde: string | null; recado: string | null; esperando: string | null; etapa: string | null } | null;
   tags: { id: string; name: string; color: string }[];
