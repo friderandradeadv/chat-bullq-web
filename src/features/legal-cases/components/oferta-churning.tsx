@@ -38,6 +38,16 @@ const IDS_CHURNING = new Set([
   'GAP_EMPRESTADO_LIBERADO',
 ]);
 
+/**
+ * A frase da recusa, num lugar só: ela sai no toast e na tela, e as duas têm
+ * de dizer a MESMA coisa. Diverge uma vez e o advogado deixa de confiar na que
+ * aparecer primeiro.
+ */
+const RECUSA_DO_CARD_DE_ACAO =
+  'Este card já é uma AÇÃO, desmembrada do card do cliente. Aceitar um grupo aqui '
+  + 'acrescentaria réu de outra cadeia ao polo passivo desta ação, e a montagem soma por '
+  + 'todos os réus do card. Os outros grupos nascem pelo card do CLIENTE, não por este.';
+
 const brl = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
 
@@ -133,6 +143,31 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    * silêncio esconderia um grupo inteiro do caso.
    */
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
+
+  /**
+   * ESTE CARD É UMA AÇÃO, OU É O CARD DO CLIENTE?
+   *
+   * 🚨 12/11/2026 — QUASE NASCEU RÉU DE OUTRA CADEIA DENTRO DE UMA AÇÃO.
+   *
+   * No card do BRAZ, já com `BANCO SANTANDER S/A` no polo passivo e parado em
+   * informações faltantes, o painel reanalisou o HISCON e ofereceu os outros
+   * sete grupos com o mesmo botão de sempre. Clicar em "Aceitar os marcados"
+   * ali gravaria BRB, Crefisa e BTG como réus DESTA ação — e a montagem,
+   * desde o conserto de hoje de manhã, recorta e soma por TODOS os réus do
+   * card (`reuDaAcao`). A inicial do Santander sairia somando contrato de três
+   * bancos que não são dela. Nada na tela acusaria: o aceite dá certo, os
+   * valores fecham, e o erro só aparece na peça.
+   *
+   * ⚠️ A MARCA É `desmembradoDe`, NÃO "tem réu". O card do cliente também
+   * guarda réus (é `gravarReus` que escreve neles) e PRECISA continuar
+   * aceitando grupo novo: `gerarIniciais` não arquiva o pai no churning, de
+   * propósito, porque o mesmo HISCON rende uma oferta por grupo econômico.
+   * Quem nasce como ação é que carrega `metadata.desmembradoDe` — e esse não
+   * oferta mais nada, só mostra.
+   */
+  const ehCardDeAcao = Boolean((caso.metadata as any)?.desmembradoDe);
+  const reuDesteCard = (((caso.metadata as any)?.contratos ?? []) as any[])
+    .map((c: any) => String(c?.reu ?? '').trim()).filter(Boolean);
 
   /**
    * Põe UM grupo na tela: recorta os indícios dele, monta o texto ao cliente e
@@ -449,6 +484,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    * fica separado do "Aceitou" do grupo da vez.
    */
   const aceitarMarcados = async () => {
+    if (ehCardDeAcao) { toast.error(RECUSA_DO_CARD_DE_ACAO); return; }
     setRegistrando(true);
     try {
       const escolhidos = grupos.filter((g: any) =>
@@ -482,6 +518,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
   };
 
   const responder = async (status: 'aceita' | 'recusada') => {
+    if (status === 'aceita' && ehCardDeAcao) { toast.error(RECUSA_DO_CARD_DE_ACAO); return; }
     setRegistrando(true);
     try {
       if (status === 'aceita' && achado?.instituicoes?.length) {
@@ -601,10 +638,13 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                 cliente é o advogado, não a tela. */}
             {(enviada || !!achado?.instituicoes?.length) && (
               <>
-                <button type="button" onClick={() => responder('aceita')} disabled={registrando}
-                  title={enviada
-                    ? 'Registra o aceite e põe os réus deste grupo em "Contratos a impugnar".'
-                    : 'A conversa aconteceu por fora? Registra o aceite deste grupo do mesmo jeito e põe os réus em "Contratos a impugnar".'}
+                <button type="button" onClick={() => responder('aceita')}
+                  disabled={registrando || ehCardDeAcao}
+                  title={ehCardDeAcao
+                    ? RECUSA_DO_CARD_DE_ACAO
+                    : enviada
+                      ? 'Registra o aceite e põe os réus deste grupo em "Contratos a impugnar".'
+                      : 'A conversa aconteceu por fora? Registra o aceite deste grupo do mesmo jeito e põe os réus em "Contratos a impugnar".'}
                   className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
                   <Check className="h-3 w-3" /> Cliente aceitou
                 </button>
@@ -634,6 +674,20 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
               </>
             )}
           </div>
+
+          {/* 🚨 O BOTÃO DESABILITADO TEM DE DIZER POR QUÊ. Botão cinza sem
+              explicação é o mesmo "vazio lido como limpo" que esta casa já
+              pagou: o advogado conclui que a tela quebrou e vai gravar o réu
+              à mão, que é exatamente o estrago que a trava evita. */}
+          {ehCardDeAcao && (
+            <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              <span className="font-semibold">Aqui não se aceita grupo novo.</span>{' '}
+              {RECUSA_DO_CARD_DE_ACAO}
+              {reuDesteCard.length > 0 && (
+                <> Polo passivo desta ação: <span className="font-semibold">{reuDesteCard.join(', ')}</span>.</>
+              )}
+            </p>
+          )}
 
           {achado && achado.indicios.length === 0 && (
             <p className="mt-2 rounded-lg border border-[#cfe0ed] bg-white px-2 py-1.5 text-[11px] leading-4 text-[#48626f] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
@@ -676,10 +730,12 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                           rótulo, quantas ações está aceitando. */}
                       <button
                         onClick={() => aceitarMarcados()}
-                        disabled={registrando || analisando || marcados.size === 0}
-                        title={`Grava os réus dos ${marcados.size} grupo(s) marcados em "Contratos a impugnar" de uma vez. `
-                          + 'Cada grupo continua virando uma ação separada. Comece marcado só o que o plano manda ajuizar; '
-                          + 'marque os outros se você decidir entrar com eles.'}
+                        disabled={registrando || analisando || marcados.size === 0 || ehCardDeAcao}
+                        title={ehCardDeAcao
+                          ? RECUSA_DO_CARD_DE_ACAO
+                          : `Grava os réus dos ${marcados.size} grupo(s) marcados em "Contratos a impugnar" de uma vez. `
+                            + 'Cada grupo continua virando uma ação separada. Comece marcado só o que o plano manda ajuizar; '
+                            + 'marque os outros se você decidir entrar com eles.'}
                         className="rounded-lg border border-emerald-500 px-2 py-1 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950"
                       >
                         Aceitar os {marcados.size} marcados
