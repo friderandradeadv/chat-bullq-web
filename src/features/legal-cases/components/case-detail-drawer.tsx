@@ -9,7 +9,7 @@ import { FileSearch,
   X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, AlertTriangle, Loader2, ShieldCheck, Gavel,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ancoraDoPoloPassivo, litisconsortesDoPolo } from '@/features/legal-cases/ancora-do-polo-passivo';
+import { ancoraDoPoloPassivo, litisconsortesDoPolo, nomeDoPoloPassivo } from '@/features/legal-cases/ancora-do-polo-passivo';
 import { contactsService } from '@/features/contacts/services/contacts.service';
 import {
   legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef, type PartyDetail, type CaseDetail, type ViabilidadeAnalise,
@@ -339,7 +339,7 @@ export function CaseDetailDrawer({
               {/* Produto/Área como etiquetas editáveis (✕ remove, + adiciona) — grava
                   em Case.area; a área jurídica (2º badge do card) deriva disso. */}
               {c && <ProdutoTags caseId={c.id} area={c.area} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
-              {adversa && <span className="inline-flex items-center gap-1 rounded-full bg-[#f1f3f4] px-2 py-1 text-[10px] font-semibold text-[#48626f] dark:bg-zinc-800 dark:text-zinc-300">× {adversa.name}</span>}
+              {adversa && <span title={demaisAdversas.length ? `Polo passivo: ${[adversa, ...demaisAdversas].map((p) => p.name).join(', ')}` : adversa.name} className="inline-flex items-center gap-1 rounded-full bg-[#f1f3f4] px-2 py-1 text-[10px] font-semibold text-[#48626f] dark:bg-zinc-800 dark:text-zinc-300">× {nomeDoPoloPassivo(c?.parties, c?.title)}</span>}
             </div>
             {/* Etiquetas jurídicas importadas do Astrea (Bancário, RMC/RCC, nome do
                 escritório…) poluíam o topo do card e duplicavam o produto/área — ocultas. */}

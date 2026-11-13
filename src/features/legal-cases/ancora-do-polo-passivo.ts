@@ -21,6 +21,9 @@ export interface ParteDoPolo {
   createdAt?: string | Date | null;
 }
 
+/** O sufixo forense, em qualquer caixa. */
+const RE_E_OUTROS = /\s+E\s+OUTROS\.?$/i;
+
 const chave = (s: unknown) =>
   String(s ?? '')
     .normalize('NFD')
@@ -33,7 +36,30 @@ const chave = (s: unknown) =>
 export function reuDoTitulo(title?: string | null): string {
   const t = String(title ?? '');
   const m = /\s+x\s+/i.exec(t);
-  return m ? t.slice(m.index + m[0].length).trim() : '';
+  // O "E OUTROS" é do nome da AÇÃO, não do banco: sai antes de comparar.
+  return m ? t.slice(m.index + m[0].length).replace(RE_E_OUTROS, '').trim() : '';
+}
+
+/** Acrescenta " E OUTROS" a um nome que ainda não o tenha. */
+export function comOutros(nome: string): string {
+  const n = String(nome ?? '').trim();
+  return RE_E_OUTROS.test(n) ? n : `${n} E OUTROS`;
+}
+
+/**
+ * O NOME DO POLO PASSIVO NO PADRÃO FORENSE: "FULANO S/A E OUTROS".
+ *
+ * 🚨 Ordem do escritório (13/11/2026): *"no cadastro nome tem que ser tipo
+ * BANCO SANTANDER S/A e OUTROS, padrão para todos"*. Ação com litisconsorte não
+ * se nomeia pelo primeiro réu como se ele fosse o único.
+ */
+export function nomeDoPoloPassivo<T extends ParteDoPolo>(
+  parties: T[] | null | undefined,
+  title?: string | null,
+): string | null {
+  const ancora = ancoraDoPoloPassivo(parties, title);
+  if (!ancora) return null;
+  return litisconsortesDoPolo(parties, title).length ? comOutros(ancora.name) : ancora.name;
 }
 
 export function ancoraDoPoloPassivo<T extends ParteDoPolo>(
