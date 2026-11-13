@@ -167,6 +167,21 @@ export function CaseDetailDrawer({
   const pf = (c?.metadata as any)?.pipefy ?? {};
   const cliente = c?.parties?.find((p) => p.role === 'CLIENT') ?? null;
   const adversa = c?.parties?.find((p) => p.role === 'OPPONENT') ?? null;
+  /**
+   * 🚨 A FICHA MOSTRAVA UM RÉU DE UMA AÇÃO QUE TEM QUATRO (13/11/2026).
+   *
+   * `find` pega o primeiro e descarta o resto, e com um réu ou com quatro a
+   * tela ficava idêntica. Na ação do BRAZ contra o Santander, nascida com a
+   * cadeia inteira no polo passivo, a ficha dizia só `BANCO SANTANDER
+   * (BRASIL) S.A.` — e foi preciso abrir o processo para saber quem mais
+   * respondia. Ordem do escritório: o leitor tem de saber pelo hub qual ação
+   * montar e com quem.
+   *
+   * ⚠️ Os demais entram como LEITURA, não como edição. Litisconsorte nasce do
+   * plano de ação, que lê a cadeia no HISCON; botão de apagar aqui faria sair
+   * do polo passivo, com um clique, quem o desmembramento pôs lá por medida.
+   */
+  const demaisAdversas = (c?.parties ?? []).filter((p) => p.role === 'OPPONENT').slice(1);
   const phaseKey = (c as any)?.legalPhase as string | undefined;
   // Conta do cliente para o repasse. `contaSalva` guarda o retorno do PATCH pra
   // refletir na hora, sem esperar o refetch da ficha.
@@ -433,7 +448,7 @@ export function CaseDetailDrawer({
                 {/* Parte adversa (editável). REPB = vários bancos réus; demais = 1 adversa. */}
                 {phaseKey?.startsWith('repb_')
                   ? <BancosReusEditor caseId={c.id} parties={c.parties} malotes={((c.metadata as any)?.faseData?.repb_malotes?.lista ?? []) as any[]} focusBankId={focusBankId} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />
-                  : <AdversaEditor caseId={c.id} adversa={adversa} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
+                  : <AdversaEditor caseId={c.id} adversa={adversa} demais={demaisAdversas} onChanged={() => qc.invalidateQueries({ queryKey: ['legal-cases'] })} />}
 
                 {/* REPB: modelos de malote copiáveis + gerar peças por IA. */}
                 {phaseKey?.startsWith('repb_') && <div className="mt-3"><RepbModelosMalote /></div>}
@@ -1108,7 +1123,9 @@ function ClienteFinanceiro({ nome, contactId }: { nome: string; contactId?: stri
 }
 
 // Cadastro/edição da parte adversa (cria/edita/remove a party role=OPPONENT).
-function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa: PartyDetail | null; onChanged: () => void }) {
+function AdversaEditor({ caseId, adversa, demais = [], onChanged }: {
+  caseId: string; adversa: PartyDetail | null; demais?: PartyDetail[]; onChanged: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(adversa?.name ?? '');
   const [doc, setDoc] = useState(maskCpfCnpj(adversa?.document ?? ''));
@@ -1165,6 +1182,19 @@ function AdversaEditor({ caseId, adversa, onChanged }: { caseId: string; adversa
         <button onClick={() => setEditing(true)} className="mt-1.5 inline-flex items-center gap-1 rounded border border-dashed border-[#cfe0ed] px-3 py-2 text-xs font-medium text-[#005efc] hover:bg-[#005efc]/5 dark:border-zinc-700">
           <Plus className="h-3.5 w-3.5" /> Cadastrar parte adversa
         </button>
+      )}
+      {/* O RESTO DO POLO PASSIVO. Quem vai junto na mesma ação, por ter a
+          mesma cadeia de contratos, aparece aqui e não em card próprio. */}
+      {demais.length > 0 && (
+        <p className="mt-1.5 rounded border border-[#CF3B2E]/30 bg-[#CF3B2E]/5 px-3 py-2 text-[11px] leading-4 text-[#101820] dark:border-[#ff8c7f]/30 dark:bg-[#ff8c7f]/10 dark:text-zinc-200">
+          <span className="font-semibold">
+            {demais.length === 1 ? 'Litisconsorte' : 'Litisconsortes'} no polo passivo:
+          </span>{' '}
+          {demais.map((p) => p.name).join(', ')}.{' '}
+          <span className="text-[#48626f] dark:text-zinc-400">
+            Mesma cadeia de contratos, por isso respondem na mesma ação.
+          </span>
+        </p>
       )}
     </div>
   );
