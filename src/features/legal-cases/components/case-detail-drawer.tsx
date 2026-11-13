@@ -9,6 +9,7 @@ import { FileSearch,
   X, Scale, Phone, ExternalLink, AlarmClock, CalendarClock, Newspaper, Paperclip, User, ArrowRight, ChevronUp, ChevronDown, Check, Pencil, Trash2, Plus, Sparkles, Upload, Calculator, AlertTriangle, Loader2, ShieldCheck, Gavel,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ancoraDoPoloPassivo, litisconsortesDoPolo } from '@/features/legal-cases/ancora-do-polo-passivo';
 import { contactsService } from '@/features/contacts/services/contacts.service';
 import {
   legalCasesService, type KanbanPhase, type MovementItem, type PublicationRef, type PartyDetail, type CaseDetail, type ViabilidadeAnalise,
@@ -166,7 +167,10 @@ export function CaseDetailDrawer({
 
   const pf = (c?.metadata as any)?.pipefy ?? {};
   const cliente = c?.parties?.find((p) => p.role === 'CLIENT') ?? null;
-  const adversa = c?.parties?.find((p) => p.role === 'OPPONENT') ?? null;
+  // 🚨 A ÂNCORA, NÃO O PRIMEIRO QUE VIER (13/11/2026). Ver
+  // `ancora-do-polo-passivo.ts`: com cinco réus na mesma ação, o `find`
+  // mostrava um litisconsorte e o título do card dizia outro banco.
+  const adversa = ancoraDoPoloPassivo(c?.parties, c?.title) ?? null;
   /**
    * 🚨 A FICHA MOSTRAVA UM RÉU DE UMA AÇÃO QUE TEM QUATRO (13/11/2026).
    *
@@ -181,7 +185,7 @@ export function CaseDetailDrawer({
    * plano de ação, que lê a cadeia no HISCON; botão de apagar aqui faria sair
    * do polo passivo, com um clique, quem o desmembramento pôs lá por medida.
    */
-  const demaisAdversas = (c?.parties ?? []).filter((p) => p.role === 'OPPONENT').slice(1);
+  const demaisAdversas = litisconsortesDoPolo(c?.parties, c?.title);
   const phaseKey = (c as any)?.legalPhase as string | undefined;
   // Conta do cliente para o repasse. `contaSalva` guarda o retorno do PATCH pra
   // refletir na hora, sem esperar o refetch da ficha.
