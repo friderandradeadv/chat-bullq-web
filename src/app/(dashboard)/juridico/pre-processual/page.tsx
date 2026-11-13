@@ -177,8 +177,18 @@ export default function PreProcessualPage() {
   const { data, isLoading, isFetching } = useQuery({
     queryKey: KEY,
     queryFn: () => legalCasesService.kanban({ lane: 'pre' }),
-    refetchInterval: (q) =>
-      ((q.state.data as any[] | undefined) ?? []).some((x: any) => x?.coletaEsperando) ? 10_000 : 60_000,
+    // 🚨 `kanban()` DEVOLVE OBJETO, NÃO LISTA (13/11/2026). A primeira versão
+    // fez `((data as any[]) ?? []).some(...)`: como o objeto não é nulo, o `??`
+    // não entra, `.some` não existe nele e o TypeError estourava DENTRO do
+    // React Query a cada cálculo de intervalo — o quadro inteiro morria ao
+    // abrir. O `as any[]` foi o que calou o compilador; o tipo certo é
+    // `KanbanData`, e os cards vivem em `.cards`.
+    refetchInterval: (q) => {
+      const cards = (q.state.data as { cards?: unknown[] } | undefined)?.cards ?? [];
+      return cards.some((x) => (x as { coletaEsperando?: unknown })?.coletaEsperando)
+        ? 10_000
+        : 60_000;
+    },
   });
   // Só as fases DESTE quadro. `boardOfPhase` isola cada trilha por prefixo — banco_*
   // (Fase Bancária), plan_* (Planejamento), repb_* (REPB) e inss_admin (INSS) têm
