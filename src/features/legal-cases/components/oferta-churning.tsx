@@ -416,8 +416,23 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
    * Aceitar e cair direto em MONTAR INICIAL pulava a coleta: a peça seria
    * montada com a procuração velha e sem o comprovante do ano.
    */
+  /**
+   * 🚨 O CARD DO CLIENTE NÃO SE ARQUIVA NO ACEITE (13/11/2026).
+   *
+   * `gerarIniciais` arquiva o pai por padrão, e está certo no intake comum: ele
+   * cumpriu o papel. No churning não — e o comentário que governa isso já está
+   * escrito no serviço: *"o mesmo card rende uma oferta por grupo econômico, e
+   * arquivá-lo no primeiro aceite tornaria os demais grupos inalcançáveis"*.
+   * A tela é que chamava sem a opção.
+   *
+   * Medido no BRAZ: aceitos 4 dos 8 grupos, o card do cliente foi arquivado e
+   * os outros quatro (BNP Paribas, Parati, Banrisul e Caixa) ficaram sem porta
+   * de entrada — a ficha deles só existe dentro deste painel, e o painel vive
+   * no card que acabou de sumir. Pior ainda com a trava de hoje: nos filhos o
+   * aceite é recusado, de propósito, então não havia mais onde ofertar.
+   */
   const criarCardsDosReus = async () => {
-    const r = await legalCasesService.gerarIniciais(caso.id, 'info_faltantes');
+    const r = await legalCasesService.gerarIniciais(caso.id, 'info_faltantes', false);
     return r?.criados ?? 0;
   };
 
@@ -546,7 +561,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         `${escolhidos.length} grupo(s) aceito(s). `
         + (criados
           ? `${criados} card(s) de AÇÃO criados em INFORMAÇÕES FALTANTES, com o dossiê do caso — o agente assume a coleta dos documentos (os litisconsortes vão no polo passivo, não em card próprio).`
-            + ' Este card foi arquivado e virou o registro do desmembramento.'
+            + ' Este card do cliente CONTINUA aqui: é por ele que você oferta os grupos que sobraram.'
           : 'Nenhum card novo: os réus já tinham card.'),
         { duration: 10000 },
       );
@@ -593,7 +608,7 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         toast.success(
           criados
             ? `Card da ação criado em Montar inicial: ${alvo}.`
-              + ' Este card foi arquivado e virou o registro do desmembramento.'
+              + ' Este card do cliente CONTINUA aqui: é por ele que você oferta os grupos que sobraram.'
             : `${alvo} já tinha card — nada novo foi criado.`,
           { duration: 10000 },
         );
@@ -760,7 +775,8 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
                         {grupos.length} grupos com indício de reciclagem. Marque na caixa quais
                         entram com ação; clique no nome para ver os números de cada um. Em itálico,
                         os que o plano de ação não manda ajuizar. <strong>Marque todos os que quiser
-                        de uma vez</strong>: ao aceitar, os cards nascem e este aqui é arquivado.
+                        de uma vez</strong>: ao aceitar, os cards das ações nascem e este card do
+                        cliente continua aqui, para ofertar os que sobraram.
                       </p>
                       {/* 🚨 ATALHO PARA QUANDO A CONVERSA JÁ ACONTECEU POR FORA.
                           Pedido do advogado no JOSÉ BATISTA: "no caso dele eu já
