@@ -1151,10 +1151,29 @@ function AdversaEditor({ caseId, adversa, demais = [], onChanged }: {
     try { await legalCasesService.removeParty(adversa.id); toast.success('Parte adversa removida'); onChanged(); }
     catch { toast.error('Erro ao remover'); } finally { setBusy(false); }
   };
+  /**
+   * 🚨 TIRAR LITISCONSORTE É TIRAR RÉU DA AÇÃO, e a pergunta tem de dizer isso.
+   * Eles entram pela cadeia que o plano lê no HISCON; quem sai daqui sai do polo
+   * passivo da inicial, e fatiar a mesma cadeia é o que o TJSP extingue por
+   * fragmentação artificial.
+   */
+  const removerLitisconsorte = async (p: PartyDetail) => {
+    if (!confirm(`Tirar ${p.name} do polo passivo desta ação?\n\nEle entrou por estar na mesma cadeia de contratos. Saindo daqui, a inicial deixa de pedir contra ele.`)) return;
+    setBusy(true);
+    try { await legalCasesService.removeParty(p.id); toast.success('Réu removido do polo passivo'); onChanged(); }
+    catch { toast.error('Erro ao remover'); } finally { setBusy(false); }
+  };
 
   return (
     <div className="mt-4">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">Cadastro da parte adversa</p>
+      {/* 🚨 O RÓTULO CONTA OS RÉUS (13/11/2026). Dizia "parte adversa", no
+          singular, com quatro litisconsortes logo abaixo numa nota — e o
+          advogado leu a nota como sugestão, não como polo passivo: *"não é pra
+          já incluir os litisconsortes?"*. Eles JÁ estavam incluídos, como
+          partes do processo; era a tela que os tratava como rodapé. */}
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#48626f]">
+        {demais.length > 0 ? `Polo passivo da ação · ${demais.length + 1} réus` : 'Cadastro da parte adversa'}
+      </p>
       {editing ? (
         <div className="mt-1.5 space-y-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
           <OpponentCombobox
@@ -1187,17 +1206,28 @@ function AdversaEditor({ caseId, adversa, demais = [], onChanged }: {
           <Plus className="h-3.5 w-3.5" /> Cadastrar parte adversa
         </button>
       )}
-      {/* O RESTO DO POLO PASSIVO. Quem vai junto na mesma ação, por ter a
-          mesma cadeia de contratos, aparece aqui e não em card próprio. */}
+      {/* O RESTO DO POLO PASSIVO, COMO CADASTRO E NÃO COMO NOTA. Cada um é réu
+          da mesma ação, por estar na mesma cadeia de contratos; a diferença
+          para o primeiro é só que ele dá nome à ação, à pasta e à peça. */}
+      {demais.map((p) => (
+        <article key={p.id} className="mt-1.5 flex items-start justify-between gap-2 rounded border border-[#cfe0ed] p-3 dark:border-zinc-800">
+          <div className="min-w-0">
+            <span className="text-sm font-medium text-black dark:text-zinc-100">{p.name}</span>
+            <span className="ml-2 rounded-full bg-[#CF3B2E]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#CF3B2E] dark:bg-[#ff8c7f]/15 dark:text-[#ff8c7f]">
+              litisconsorte
+            </span>
+            {p.document && <p className="mt-1 text-xs text-[#48626f] dark:text-zinc-400">CNPJ: {p.document}</p>}
+          </div>
+          <button onClick={() => removerLitisconsorte(p)} disabled={busy} title="Tirar do polo passivo"
+            className="shrink-0 rounded p-1 text-zinc-400 hover:text-rose-500">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </article>
+      ))}
       {demais.length > 0 && (
-        <p className="mt-1.5 rounded border border-[#CF3B2E]/30 bg-[#CF3B2E]/5 px-3 py-2 text-[11px] leading-4 text-[#101820] dark:border-[#ff8c7f]/30 dark:bg-[#ff8c7f]/10 dark:text-zinc-200">
-          <span className="font-semibold">
-            {demais.length === 1 ? 'Litisconsorte' : 'Litisconsortes'} no polo passivo:
-          </span>{' '}
-          {demais.map((p) => p.name).join(', ')}.{' '}
-          <span className="text-[#48626f] dark:text-zinc-400">
-            Mesma cadeia de contratos, por isso respondem na mesma ação.
-          </span>
+        <p className="mt-1 text-[11px] leading-4 text-[#48626f] dark:text-zinc-400">
+          Mesma cadeia de contratos, por isso respondem na mesma ação, e não em ações separadas.
+          O primeiro dá nome à ação, à pasta e à peça.
         </p>
       )}
     </div>
