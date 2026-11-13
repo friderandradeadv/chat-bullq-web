@@ -469,7 +469,47 @@ export function OfertaChurning({ caso, onMudou }: { caso: CaseDetail; onMudou?: 
         valor: null,
         beneficio: /^(AP|PM)\b/.exec(caso.title ?? '')?.[1] ?? null,
       }));
-    if (novas.length) await legalCasesService.saveContratos(caso.id, [...atuais, ...novas] as any);
+    /**
+     * 🚨 RÉU QUE JÁ ESTÁ NA LISTA AINDA PODE TER GANHADO LITISCONSORTE
+     * (12/11/2026). `jaTem` descartava a entrada inteira, e com ela a cadeia
+     * nova: a linha ficava congelada na primeira gravação.
+     *
+     * Medido no BRAZ: a linha do Santander foi escrita com a FACTA ao lado, e
+     * o plano hoje mede a cadeia em QUATRO (Santander, Facta, Pine e
+     * Daycoval). Como `gerarIniciais` cria as partes do card filho a partir
+     * desta linha, a ação nasceria contra dois bancos de uma cadeia de
+     * quatro, e os outros dois ficariam de fora do polo passivo sem ninguém
+     * perceber — o mesmo buraco que custou a repetição de indébito de manhã.
+     *
+     * ⚠️ SÓ ACRESCENTA, NUNCA TIRA. Litisconsorte que o advogado pôs à mão não
+     * some porque o plano não o viu nesta leitura: a lista é a UNIÃO das duas,
+     * e quem retira réu do polo passivo é ele, não a tela.
+     */
+    const ja = new Map(entradas.map((e) => [e.reu.toUpperCase().trim(), e]));
+    let cresceu = 0;
+    const revistos = atuais.map((c: any) => {
+      const e = ja.get(String(c?.reu ?? '').toUpperCase().trim());
+      if (!e) return c;
+      const antes: string[] = (c?.litisconsortes ?? []).map((x: any) => String(x ?? '').toUpperCase().trim())
+        .filter(Boolean);
+      const uniao = Array.from(new Set([
+        ...antes,
+        ...(e.litisconsortes ?? []).map((x) => x.toUpperCase().trim()).filter(Boolean),
+      ]));
+      if (uniao.length === antes.length) return c;
+      cresceu += uniao.length - antes.length;
+      return { ...c, litisconsortes: uniao };
+    });
+    if (novas.length || cresceu) {
+      await legalCasesService.saveContratos(caso.id, [...revistos, ...novas] as any);
+    }
+    if (cresceu) {
+      toast.info(
+        `${cresceu} litisconsorte(s) acrescentado(s) ao polo passivo de réu que já estava na lista. `
+        + 'A cadeia que o plano mede cresceu desde a primeira gravação.',
+        { duration: 8000 },
+      );
+    }
     return novas.length;
   };
 
