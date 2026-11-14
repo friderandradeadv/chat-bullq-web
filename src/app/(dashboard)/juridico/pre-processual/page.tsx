@@ -645,6 +645,20 @@ function Card({ c, terminal, novo, isNovos, bulk, colIds, onOpen, onProtocolar, 
         // precisa dizer isso, e dizer o que fazer.
         const falhou = pr?.status === 'falhou';
         const pct = pr ? Math.round((pr.tem / Math.max(1, pr.de)) * 100) : 0;
+        // 🚨 O VERDE SÓ VIVE EM INFORMAÇÕES FALTANTES (13/11/2026). Ordem dele:
+        // *"essa parte de leitura concluída pode ficar só no docs faltantes"*.
+        //
+        // A faixa existe para responder UMA pergunta: falta documento para este
+        // card andar? Depois que ele andou — montar inicial, revisão, protocolo
+        // — a resposta já não interessa, e três cards do BRAZ em REVISÃO INICIAL
+        // carregavam "3 de 3 documentos" ocupando metade da altura do card.
+        //
+        // ⚠️ O ALARME NÃO SE CALA JUNTO. Coleta na fila, parada esperando o
+        // login ou que FALHOU continua aparecendo em qualquer fase: foi pedido
+        // em 13/11 ("quero em tempo real") e some de vista é exatamente o que
+        // não pode. Quem sai de cena é só o aviso de sucesso, que é o único
+        // que não pede ação de ninguém.
+        if (completa && !falhou && !emFila && c.phase !== 'info_faltantes') return null;
         // 🚨 A COR SAI DO ESTADO MEDIDO, não do otimismo: vermelho só quando
         // depende de um ato dele; verde só com as vagas todas preenchidas.
         // 🚨 O FRACASSO VENCE A CONTAGEM (13/11/2026). Estava ao contrário:

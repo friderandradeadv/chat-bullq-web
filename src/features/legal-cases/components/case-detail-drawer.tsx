@@ -1739,8 +1739,48 @@ function InicialActions({ caseId, jg, docs, area, calculo, clienteNome, onChange
           { duration: 8000 },
         );
       }
-      for (const p of r.pastas ?? []) window.open(p.webViewLink, '_blank', 'noopener');
-      if (!r.pastas?.length && r.webViewLink) window.open(r.webViewLink, '_blank', 'noopener');
+      // 🚨 NADA DE ABRIR ABA SOZINHO (13/11/2026). Ordem dele, depois de a
+      // montagem do BRAZ abrir o Drive na cara: *"abriu o drive sozinho"* —
+      // *"sim, deixe só card"*. É a mesma regra que ele já tinha dado sobre o
+      // agente do Meu INSS: *"não quero que você fique abrindo por conta, deve
+      // abrir com o clique"*.
+      //
+      // A pasta não some: vira LINK no aviso, e quem decide abrir é ele. Com
+      // mais de uma pasta, um link para cada — `window.open` em laço abria N
+      // abas de uma vez, que é o pior caso.
+      const paraAbrir: { nome: string; link: string }[] = [
+        ...(r.pastas ?? [])
+          .filter((p: any) => p.webViewLink)
+          .map((p: any) => ({ nome: p.nome ?? 'Pasta do processo', link: p.webViewLink })),
+        ...(!r.pastas?.length && r.webViewLink
+          ? [{ nome: 'Pasta no Drive', link: r.webViewLink }]
+          : []),
+      ];
+      if (paraAbrir.length) {
+        toast.success(
+          paraAbrir.length === 1
+            ? 'Pasta pronta no Drive.'
+            : `${paraAbrir.length} pastas prontas no Drive.`,
+          {
+            duration: 15000,
+            description: (
+              <span className="flex flex-col gap-0.5">
+                {paraAbrir.map((x) => (
+                  <a
+                    key={x.link}
+                    href={x.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:no-underline"
+                  >
+                    {x.nome}
+                  </a>
+                ))}
+              </span>
+            ),
+          },
+        );
+      }
       onChanged();
     return r;
   };
